@@ -38,6 +38,12 @@ namespace
     return false;
 }
 
+[[nodiscard]] bool InvokeVisibleDxAction(HWND hwnd, const CONTROLTYPEID expectedControlType, std::wstring_view expectedName) noexcept
+{
+    const std::wstring_view label = expectedName.empty() ? std::wstring_view{L"Preferences visible DX action"} : expectedName;
+    return InvokeVisibleDescendantByNameWithMessagePump(hwnd, expectedControlType, expectedName, label);
+}
+
 [[nodiscard]] static bool WaitForPreferencesKeyboardVisibleRowChordByCommandId(std::wstring_view commandId,
                                                                                std::wstring_view expectedText,
                                                                                std::wstring& outChordText) noexcept
@@ -95,6 +101,29 @@ namespace
     }
 
     return L"Unknown";
+}
+
+[[nodiscard]] static std::wstring DescribeHotPathsSnapshot(const PreferencesDebugSnapshot& snapshot)
+{
+    return std::format(L"category={}, title='{}', focus={}, rootVisible={}, rootEnabled={}, knownControls={}, knownFocusable={}, "
+                       L"firstPathFocusable={}, firstBrowseFocusable={}, firstLabelFocusable={}, firstShowInMenuFocusable={}, "
+                       L"secondPathFocusable={}, openPrefsFocusable={}, pageChildren={}, renderedDxHosts={}, resizeFailures={}",
+                       static_cast<int>(snapshot.currentCategory),
+                       snapshot.pageTitle,
+                       HotPathsFocusTargetName(snapshot.hotPathsFocusTarget),
+                       snapshot.hotPathsContentRootVisible ? L"true" : L"false",
+                       snapshot.hotPathsContentRootEnabled ? L"true" : L"false",
+                       snapshot.hotPathsKnownControlCount,
+                       snapshot.hotPathsKnownFocusableCount,
+                       snapshot.hotPathsFirstPathFocusable ? L"true" : L"false",
+                       snapshot.hotPathsFirstBrowseFocusable ? L"true" : L"false",
+                       snapshot.hotPathsFirstLabelFocusable ? L"true" : L"false",
+                       snapshot.hotPathsFirstShowInMenuFocusable ? L"true" : L"false",
+                       snapshot.hotPathsSecondPathFocusable ? L"true" : L"false",
+                       snapshot.hotPathsOpenPrefsFocusable ? L"true" : L"false",
+                       snapshot.visibleCurrentPageChildWindowCount,
+                       snapshot.currentPageRenderedDxHostCount,
+                       snapshot.currentPageDxHostResizeFailureCount);
 }
 
 [[nodiscard]] static bool WaitForPreferencesKeyboardSelectedCommandId(std::wstring_view expectedCommandId, PreferencesKeyboardDebugSnapshot& outState) noexcept
@@ -159,7 +188,7 @@ namespace
             return false;
         }
 
-        state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, std::format(L"Failed to focus the Preferences category host during {}.", context));
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), std::format(L"Failed to focus the Preferences category host during {}.", context));
         PumpPendingMessages();
 
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryHotPaths),
@@ -284,6 +313,8 @@ namespace
 {
     using namespace std::chrono_literals;
 
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"hot_paths_live: start");
+
     if (! mainWindow || IsWindow(mainWindow) == FALSE)
     {
         state.Require(false, L"Main window handle invalid.");
@@ -303,6 +334,7 @@ namespace
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_FILE_PREFERENCES, 0), 0);
     prefs = waitForPreferencesWindow();
     state.Require(prefs != nullptr && IsWindow(prefs) != FALSE, L"Preferences window did not open for Hot Paths live interaction test.");
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"hot_paths_live: opened preferences");
     if (! prefs || IsWindow(prefs) == FALSE)
     {
         return false;
@@ -353,17 +385,21 @@ namespace
             return false;
         }
 
-        state.Require(SetFocus(treeHost) == treeHost, L"Failed to focus the Preferences category host for Hot Paths live interaction test.");
+        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Hot Paths live interaction test.");
         PumpPendingMessages();
 
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryHotPaths),
                       L"Failed to select the Preferences Hot Paths category for Hot Paths live interaction test.");
         PumpPendingMessages();
 
-        state.Require(waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept
+        const bool pageReady = waitForSnapshot(
+            [](const PreferencesDebugSnapshot& value) noexcept
         { return value.currentCategory == kPrefCategoryHotPaths && value.currentPageDxHostResizeFailureCount == 0u; },
-                                      outSnapshot),
-                      L"Preferences Hot Paths page did not settle to the active DX surface before live interaction validation.");
+            outSnapshot);
+        state.Require(pageReady,
+                      std::format(L"Preferences Hot Paths page did not settle to the active DX surface before live interaction validation; {}.",
+                                  DescribeHotPathsSnapshot(outSnapshot)));
+        SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"hot_paths_live: navigated hot paths");
         return state.failure.empty();
     };
 
@@ -418,7 +454,8 @@ namespace
             const HWND activePage = DebugGetPreferencesActivePageHandle();
             if (activePage && IsWindow(activePage) != FALSE)
             {
-                const auto valueState = CollectVisibleDescendantValuePatternStateByName(activePage, UIA_EditControlTypeId, expectedName);
+                const auto valueState = CollectVisibleDescendantValuePatternStateByNameWithMessagePump(
+                    activePage, UIA_EditControlTypeId, expectedName, L"Preferences Hot Paths live edit value poll");
                 if (valueState.has_value() && valueState->value == expectedValue)
                 {
                     return true;
@@ -434,11 +471,13 @@ namespace
             return false;
         }
 
-        const auto valueState = CollectVisibleDescendantValuePatternStateByName(activePage, UIA_EditControlTypeId, expectedName);
+        const auto valueState = CollectVisibleDescendantValuePatternStateByNameWithMessagePump(
+            activePage, UIA_EditControlTypeId, expectedName, L"Preferences Hot Paths live final edit value read");
         return valueState.has_value() && valueState->value == expectedValue;
     };
 
-    const auto initialValueState = CollectVisibleDescendantValuePatternState(getActivePage(), UIA_EditControlTypeId);
+    const auto initialValueState =
+        CollectVisibleDescendantValuePatternStateWithMessagePump(getActivePage(), UIA_EditControlTypeId, L"Preferences Hot Paths initial edit read");
     state.Require(initialValueState.has_value(), L"Preferences Hot Paths page should expose a visible DX edit descendant during live interaction validation.");
     if (! initialValueState.has_value())
     {
@@ -495,20 +534,27 @@ namespace
     const std::wstring editName         = initialValueState->name;
     const std::wstring initialEditValue = initialValueState->value;
 
-    state.Require(SetVisibleDescendantValueByName(getActivePage(), UIA_EditControlTypeId, editName, editedValue),
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"hot_paths_live: before first edit set");
+    state.Require(SetVisibleDescendantValueByNameWithMessagePump(
+                      getActivePage(), UIA_EditControlTypeId, editName, editedValue, L"Preferences Hot Paths discard edit mutation"),
                   L"Preferences Hot Paths page visible DX edit did not accept live UIA ValuePattern mutation during shell Cancel discard validation.");
     state.Require(waitForEditValue(editName, editedValue),
                   L"Preferences Hot Paths page visible DX edit did not settle to the edited value during shell Cancel discard validation.");
-    state.Require(InvokeVisibleDescendantByName(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText),
-                  L"Preferences shell visible DX Cancel action did not expose live UIA InvokePattern interaction during Hot Paths discard validation.");
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"hot_paths_live: before cancel invoke");
+    state.Require(
+        InvokeVisibleDescendantByNameWithMessagePump(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText, L"Preferences Hot Paths discard Cancel"),
+        L"Preferences shell visible DX Cancel action did not expose live UIA InvokePattern interaction during Hot Paths discard validation.");
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"hot_paths_live: after cancel invoke");
     state.Require(
         WaitForWindowClosed(prefs, SelfTest::Scale(3000ms)),
         L"Preferences dialog did not close after live UIA InvokePattern interaction on the visible DX Cancel action during Hot Paths discard validation.");
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"hot_paths_live: closed after cancel");
     prefs = nullptr;
 
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_FILE_PREFERENCES, 0), 0);
     prefs = waitForPreferencesWindow();
     state.Require(prefs != nullptr && IsWindow(prefs) != FALSE, L"Preferences window did not reopen for Hot Paths restored live interaction validation.");
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"hot_paths_live: reopened preferences");
     if (! prefs || IsWindow(prefs) == FALSE)
     {
         return false;
@@ -526,14 +572,19 @@ namespace
         return false;
     }
 
-    state.Require(SetVisibleDescendantValueByName(getActivePage(), UIA_EditControlTypeId, editName, editedValue),
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"hot_paths_live: before second edit set");
+    state.Require(SetVisibleDescendantValueByNameWithMessagePump(
+                      getActivePage(), UIA_EditControlTypeId, editName, editedValue, L"Preferences Hot Paths reopened edit mutation"),
                   L"Preferences Hot Paths page visible DX edit did not accept live UIA ValuePattern mutation.");
     state.Require(waitForEditValue(editName, editedValue),
                   L"Preferences Hot Paths page visible DX edit did not settle to the edited value after live UIA mutation.");
-    state.Require(SetVisibleDescendantValueByName(getActivePage(), UIA_EditControlTypeId, editName, initialEditValue),
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"hot_paths_live: before edit restore");
+    state.Require(SetVisibleDescendantValueByNameWithMessagePump(
+                      getActivePage(), UIA_EditControlTypeId, editName, initialEditValue, L"Preferences Hot Paths reopened edit restore"),
                   L"Preferences Hot Paths page visible DX edit did not accept restoration through live UIA ValuePattern.");
     state.Require(waitForEditValue(editName, initialEditValue),
                   L"Preferences Hot Paths page visible DX edit did not restore its original value after live UIA mutation.");
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"hot_paths_live: restored edit");
 
     snapshot = {};
     state.Require(DebugGetPreferencesDialogSnapshot(snapshot), L"Failed to capture Preferences snapshot after Hot Paths live interaction validation.");
@@ -547,6 +598,7 @@ namespace
                   std::format(L"Preferences Hot Paths live interaction should not expose a visible pane host; saw {} visible pane hosts.",
                               snapshot.visiblePaneWindowCount));
 
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"hot_paths_live: finished");
     return state.failure.empty();
 }
 
@@ -616,7 +668,7 @@ namespace
             return false;
         }
 
-        state.Require(SetFocus(treeHost) == treeHost, L"Failed to focus the Preferences category host for Hot Paths open-preferences toggle validation.");
+        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Hot Paths open-preferences toggle validation.");
         PumpPendingMessages();
 
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryHotPaths),
@@ -701,6 +753,8 @@ namespace
 {
     using namespace std::chrono_literals;
 
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"hot_paths_browse: start");
+
     if (! mainWindow || IsWindow(mainWindow) == FALSE)
     {
         state.Require(false, L"Main window handle invalid.");
@@ -734,6 +788,7 @@ namespace
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_FILE_PREFERENCES, 0), 0);
     prefs = waitForPreferencesWindow();
     state.Require(prefs != nullptr && IsWindow(prefs) != FALSE, L"Preferences window did not open for Hot Paths browse interaction test.");
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"hot_paths_browse: opened preferences");
     if (! prefs || IsWindow(prefs) == FALSE)
     {
         return false;
@@ -814,7 +869,7 @@ namespace
             return false;
         }
 
-        state.Require(SetFocus(targetCategoryTreeHost) == targetCategoryTreeHost,
+        state.Require(FocusWindowAndWait(targetCategoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
                       L"Failed to focus the Preferences category host while reopening Hot Paths browse interaction test.");
         if (! state.failure.empty())
         {
@@ -837,7 +892,7 @@ namespace
         }, outSnapshot);
     };
 
-    state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Hot Paths browse interaction test.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Hot Paths browse interaction test.");
     PumpPendingMessages();
 
     state.Require(DebugSelectPreferencesCategory(kPrefCategoryHotPaths),
@@ -845,10 +900,13 @@ namespace
     PumpPendingMessages();
 
     PreferencesDebugSnapshot snapshot{};
-    state.Require(waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept
+    const bool pageReady = waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept
     { return value.currentCategory == kPrefCategoryHotPaths && value.currentPageDxHostResizeFailureCount == 0u; },
-                                  snapshot),
-                  L"Preferences Hot Paths page did not settle to the active DX surface before browse interaction validation.");
+                                           snapshot);
+    state.Require(pageReady,
+                  std::format(L"Preferences Hot Paths page did not settle to the active DX surface before browse interaction validation; {}.",
+                              DescribeHotPathsSnapshot(snapshot)));
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"hot_paths_browse: navigated hot paths");
     if (! state.failure.empty())
     {
         return false;
@@ -894,8 +952,10 @@ namespace
 
     const auto clearBrowseOverride = wil::scope_exit([]() noexcept { static_cast<void>(DebugSetPreferencesHotPathsNextBrowsePath({})); });
     state.Require(DebugCancelPreferencesHotPathsNextBrowse(), L"Failed to seed the debug Hot Paths browse cancel result for browse interaction validation.");
-    state.Require(InvokeVisibleDescendantByName(activePage, UIA_ButtonControlTypeId, browseButtonText),
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"hot_paths_browse: before cancel-path browse invoke");
+    state.Require(InvokeVisibleDescendantByNameWithMessagePump(activePage, UIA_ButtonControlTypeId, browseButtonText, L"Hot Paths cancel-path Browse action"),
                   L"Failed to invoke the visible Preferences Hot Paths Browse button through live UIA cancel-path interaction.");
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"hot_paths_browse: after cancel-path browse invoke");
     state.Require(waitForEditValue(pathLabelText, initialPathValue),
                   L"Preferences Hot Paths visible DX Browse cancel path should preserve the original visible Path field value.");
     state.Require(waitForSnapshot(
@@ -914,8 +974,10 @@ namespace
     state.Require(DebugSetPreferencesHotPathsNextBrowsePath(browseTarget.native()),
                   L"Failed to seed the debug Hot Paths browse result for browse interaction validation.");
 
-    state.Require(InvokeVisibleDescendantByName(activePage, UIA_ButtonControlTypeId, browseButtonText),
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"hot_paths_browse: before browse invoke");
+    state.Require(InvokeVisibleDescendantByNameWithMessagePump(activePage, UIA_ButtonControlTypeId, browseButtonText, L"Hot Paths Browse action"),
                   L"Failed to invoke the visible Preferences Hot Paths Browse button through live UIA interaction.");
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"hot_paths_browse: after browse invoke");
     state.Require(waitForEditValue(pathLabelText, browseTarget.native()),
                   L"Preferences Hot Paths visible DX Browse action did not update the visible Path field to the browsed directory.");
     state.Require(waitForSnapshot(
@@ -940,8 +1002,11 @@ namespace
 
     const auto getShellHost = [&]() noexcept { return DebugGetPreferencesShellHostHandle(); };
 
-    state.Require(InvokeVisibleDescendantByName(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText),
-                  L"Failed to invoke the shared Preferences shell Cancel button after Hot Paths browse interaction.");
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"hot_paths_browse: before shell cancel invoke");
+    state.Require(
+        InvokeVisibleDescendantByNameWithMessagePump(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText, L"Hot Paths browse shell Cancel action"),
+        L"Failed to invoke the shared Preferences shell Cancel button after Hot Paths browse interaction.");
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"hot_paths_browse: after shell cancel invoke");
     state.Require(WaitForWindowClosed(prefs, SelfTest::Scale(3000ms)), L"Preferences window did not close after Hot Paths browse discard interaction.");
     if (! state.failure.empty())
     {
@@ -951,6 +1016,7 @@ namespace
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_FILE_PREFERENCES, 0), 0);
     prefs = waitForPreferencesWindow();
     state.Require(prefs != nullptr && IsWindow(prefs) != FALSE, L"Preferences window did not reopen for Hot Paths browse discard validation.");
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"hot_paths_browse: reopened preferences");
     if (! prefs || IsWindow(prefs) == FALSE)
     {
         return false;
@@ -988,8 +1054,11 @@ namespace
 
     state.Require(DebugSetPreferencesHotPathsNextBrowsePath(browseTarget.native()),
                   L"Failed to reseed the debug Hot Paths browse result for reopened browse interaction validation.");
-    state.Require(InvokeVisibleDescendantByName(reopenedActivePage, UIA_ButtonControlTypeId, browseButtonText),
-                  L"Failed to invoke the visible Preferences Hot Paths Browse button through reopened live UIA interaction.");
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"hot_paths_browse: before reopened browse invoke");
+    state.Require(
+        InvokeVisibleDescendantByNameWithMessagePump(reopenedActivePage, UIA_ButtonControlTypeId, browseButtonText, L"Hot Paths reopened Browse action"),
+        L"Failed to invoke the visible Preferences Hot Paths Browse button through reopened live UIA interaction.");
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"hot_paths_browse: after reopened browse invoke");
     state.Require(waitForEditValue(pathLabelText, browseTarget.native()),
                   L"Preferences Hot Paths reopened visible DX Browse action did not update the visible Path field to the browsed directory.");
     state.Require(waitForSnapshot(
@@ -1001,6 +1070,7 @@ namespace
                       snapshot),
                   L"Preferences Hot Paths reopened visible DX Browse action did not preserve the shared page state.");
 
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"hot_paths_browse: finished");
     return state.failure.empty();
 }
 
@@ -1070,22 +1140,24 @@ namespace
             return false;
         }
 
-        state.Require(SetFocus(treeHost) == treeHost, L"Failed to focus the Preferences category host for Hot Paths tab-traversal validation.");
+        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Hot Paths tab-traversal validation.");
         PumpPendingMessages();
 
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryHotPaths),
                       L"Failed to select the Preferences Hot Paths category for tab-traversal validation.");
         PumpPendingMessages();
 
-        state.Require(waitForSnapshot(
-                          [](const PreferencesDebugSnapshot& value) noexcept
+        const bool pageReady = waitForSnapshot(
+            [](const PreferencesDebugSnapshot& value) noexcept
         {
             return value.currentCategory == kPrefCategoryHotPaths && value.createdPaneWindowCount == 0u && value.visiblePaneWindowCount == 0u &&
                    value.visibleCurrentPageChildWindowCount <= 1u && value.currentPageRenderedDxHostCount <= 1u &&
                    value.currentPageDxHostResizeFailureCount == 0u;
         },
-                          outSnapshot),
-                      L"Preferences Hot Paths page did not settle before tab-traversal validation.");
+            outSnapshot);
+        state.Require(pageReady,
+                      std::format(L"Preferences Hot Paths page did not settle before tab-traversal validation; {}.",
+                                  DescribeHotPathsSnapshot(outSnapshot)));
         return state.failure.empty();
     };
 
@@ -1139,15 +1211,17 @@ namespace
 
     state.Require(DebugFocusPreferencesHotPathsFirstPathField(),
                   L"Failed to focus the first visible Preferences Hot Paths field before tab-traversal validation.");
-    state.Require(waitForSnapshot(
-                      [](const PreferencesDebugSnapshot& value) noexcept
+    const bool firstFieldFocused = waitForSnapshot(
+        [](const PreferencesDebugSnapshot& value) noexcept
     {
         return value.currentCategory == kPrefCategoryHotPaths && value.hotPathsFocusTarget == PreferencesHotPathsDebugFocusTarget::FirstPathField &&
                value.createdPaneWindowCount == 0u && value.visiblePaneWindowCount == 0u && value.visibleCurrentPageChildWindowCount <= 1u &&
                value.currentPageRenderedDxHostCount <= 1u && value.currentPageDxHostResizeFailureCount == 0u;
     },
-                      snapshot),
-                  L"Preferences Hot Paths first visible field did not take focus before tab-traversal validation.");
+        snapshot);
+    state.Require(firstFieldFocused,
+                  std::format(L"Preferences Hot Paths first visible field did not take focus before tab-traversal validation; {}.",
+                              DescribeHotPathsSnapshot(snapshot)));
     if (! state.failure.empty())
     {
         return false;
@@ -1217,7 +1291,8 @@ namespace
         state.Require(reachedExpectedFocus,
                       std::format(L"Preferences Hot Paths {} focus target not reached during tab traversal; expected {}, saw {}; category={}, "
                                   L"native focus before=0x{:X}, after=0x{:X}, active page before=0x{:X}, after=0x{:X}, "
-                                  L"active DX host before=0x{:X}, after=0x{:X}, page children={}, rendered DX hosts={}, resize failures={}.",
+                                  L"active DX host before=0x{:X}, after=0x{:X}, page children={}, rendered DX hosts={}, resize failures={}, "
+                                  L"hotPathsControls='{}'.",
                                   label,
                                   HotPathsFocusTargetName(expectedTarget),
                                   HotPathsFocusTargetName(snapshot.hotPathsFocusTarget),
@@ -1230,7 +1305,8 @@ namespace
                                   reinterpret_cast<uintptr_t>(activeDxAfter),
                                   snapshot.visibleCurrentPageChildWindowCount,
                                   snapshot.currentPageRenderedDxHostCount,
-                                  snapshot.currentPageDxHostResizeFailureCount));
+                                  snapshot.currentPageDxHostResizeFailureCount,
+                                  DescribeHotPathsSnapshot(snapshot)));
     };
 
     sendTab(false, PreferencesHotPathsDebugFocusTarget::FirstBrowseButton, L"first Browse button");
@@ -1334,7 +1410,7 @@ namespace
         return pagePatternStats;
     };
 
-    state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Hot Paths round-trip test.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Hot Paths round-trip test.");
     PumpPendingMessages();
 
     state.Require(DebugSelectPreferencesCategory(kPrefCategoryHotPaths), L"Failed to select the Preferences Hot Paths category for Hot Paths round-trip test.");
@@ -1379,7 +1455,7 @@ namespace
     state.Require(
         hotPathsPagePatternStats->editControlCount + hotPathsPagePatternStats->checkBoxControlCount + hotPathsPagePatternStats->radioButtonControlCount > 0u,
         L"Preferences Hot Paths page should expose visible input descendants before round-trip navigation.");
-    state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to refocus the Preferences category host before leaving Hot Paths for General.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to refocus the Preferences category host before leaving Hot Paths for General.");
     if (! state.failure.empty())
     {
         return false;
@@ -1411,7 +1487,7 @@ namespace
                   std::format(L"Leaving Hot Paths should restore General without recreating a pane-host child window; saw {} created pane hosts.",
                               snapshot.createdPaneWindowCount));
 
-    state.Require(SetFocus(categoryTreeHost) == categoryTreeHost,
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
                   L"Failed to refocus the Preferences category host before returning from General to Hot Paths.");
     if (! state.failure.empty())
     {
@@ -1530,7 +1606,7 @@ namespace
             return false;
         }
 
-        state.Require(SetFocus(treeHost) == treeHost, L"Failed to focus the Preferences category host for Hot Paths theme-cycle validation.");
+        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Hot Paths theme-cycle validation.");
         PumpPendingMessages();
 
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryHotPaths),
@@ -1759,7 +1835,7 @@ namespace
             return false;
         }
 
-        state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, std::format(L"Failed to focus the Preferences category host during {}.", context));
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), std::format(L"Failed to focus the Preferences category host during {}.", context));
         PumpPendingMessages();
 
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryKeyboard),
@@ -1994,7 +2070,7 @@ namespace
         return pagePatternStats;
     };
 
-    state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Keyboard round-trip test.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Keyboard round-trip test.");
     PumpPendingMessages();
 
     state.Require(DebugSelectPreferencesCategory(kPrefCategoryKeyboard),
@@ -2035,7 +2111,7 @@ namespace
 
     state.Require(keyboardPagePatternStats->editControlCount + keyboardPagePatternStats->comboBoxControlCount > 0u,
                   L"Preferences Keyboard page should expose visible edit or combo descendants before round-trip navigation.");
-    state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to refocus the Preferences category host before leaving Keyboard for General.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to refocus the Preferences category host before leaving Keyboard for General.");
     if (! state.failure.empty())
     {
         return false;
@@ -2066,7 +2142,7 @@ namespace
     state.Require(snapshot.createdPaneWindowCount == 0u,
                   L"Preferences should restore General without recreating a pane-host child window after leaving Keyboard.");
 
-    state.Require(SetFocus(categoryTreeHost) == categoryTreeHost,
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
                   L"Failed to refocus the Preferences category host before returning from General to Keyboard.");
     if (! state.failure.empty())
     {
@@ -2115,6 +2191,60 @@ namespace
     return state.failure.empty();
 }
 
+[[nodiscard]] std::wstring_view KeyboardFocusTargetName(const PreferencesKeyboardDebugFocusTarget target) noexcept
+{
+    switch (target)
+    {
+        case PreferencesKeyboardDebugFocusTarget::None: return L"None";
+        case PreferencesKeyboardDebugFocusTarget::SearchField: return L"SearchField";
+        case PreferencesKeyboardDebugFocusTarget::ScopeCombo: return L"ScopeCombo";
+        case PreferencesKeyboardDebugFocusTarget::ShortcutsGrid: return L"ShortcutsGrid";
+        case PreferencesKeyboardDebugFocusTarget::AssignButton: return L"AssignButton";
+        case PreferencesKeyboardDebugFocusTarget::RemoveButton: return L"RemoveButton";
+        case PreferencesKeyboardDebugFocusTarget::ResetButton: return L"ResetButton";
+        case PreferencesKeyboardDebugFocusTarget::ImportButton: return L"ImportButton";
+        case PreferencesKeyboardDebugFocusTarget::ExportButton: return L"ExportButton";
+    }
+
+    return L"Unknown";
+}
+
+[[nodiscard]] std::wstring FormatKeyboardThemeCycleSnapshot(const PreferencesDebugSnapshot& value,
+                                                            const AppTheme& expectedTheme,
+                                                            const size_t expectedRowCount)
+{
+    return std::format(
+        L"expected(dark={}, highContrast={}, rainbow={}, rows={}), actual(category={}, dark={}, highContrast={}, rainbow={}, rows={}, visibleRows={}, "
+        L"visibleColumns={}, visibleCells={}, captureActive={}, focus={}, search='{}', hint='{}', layout='{}', visiblePageChildren={}, createdPaneWindows={}, "
+        L"visiblePaneWindows={}, pageResizeFailures={}, listResizeFailures={}, listResizeCount={}, listRenderCount={}, pageRenderTotal={}, pageTitle='{}')",
+        expectedTheme.dark,
+        expectedTheme.highContrast,
+        expectedTheme.menu.rainbowMode,
+        expectedRowCount,
+        static_cast<int>(value.currentCategory),
+        value.themeDark,
+        value.themeHighContrast,
+        value.themeRainbow,
+        value.keyboardListRowCount,
+        value.keyboardListVisibleRowCount,
+        value.keyboardListVisibleColumnCount,
+        value.keyboardListVisibleCellCount,
+        value.keyboardCaptureActive,
+        KeyboardFocusTargetName(value.keyboardFocusTarget),
+        value.keyboardSearchText,
+        value.keyboardHintText,
+        value.keyboardListColumnLayoutText,
+        value.visibleCurrentPageChildWindowCount,
+        value.createdPaneWindowCount,
+        value.visiblePaneWindowCount,
+        value.currentPageDxHostResizeFailureCount,
+        value.keyboardListResizeFailureCount,
+        value.keyboardListResizeCount,
+        value.keyboardListRenderCount,
+        value.currentPageDxHostRenderCountTotal,
+        value.pageTitle);
+}
+
 [[nodiscard]] bool TestPreferencesDialogKeyboardThemeCycleKeepsSurfaceLegible(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
@@ -2135,7 +2265,7 @@ namespace
     const Common::Settings::Settings baselineSettings = g_settings;
     const auto restoreSettings                        = wil::scope_exit([&]() noexcept { g_settings = baselineSettings; });
 
-    g_settings.shortcuts.emplace(ShortcutDefaults::CreateDefaultShortcuts());
+    g_settings.shortcuts = ShortcutDefaults::CreateDefaultShortcuts();
 
     const auto waitForPreferencesWindow = [&]() noexcept
     { return WaitForWindow([] noexcept { return GetPreferencesDialogHandle(); }, SelfTest::Scale(3000ms)); };
@@ -2198,7 +2328,7 @@ namespace
             return false;
         }
 
-        state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Keyboard theme-cycle validation.");
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Keyboard theme-cycle validation.");
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryKeyboard), L"Failed to select the Preferences Keyboard category for theme-cycle validation.");
         PumpPendingMessages();
 
@@ -2224,15 +2354,17 @@ namespace
 
     const size_t baselineRowCount = snapshot.keyboardListRowCount;
 
-    state.Require(waitForSnapshot(
-                      [&](const PreferencesDebugSnapshot& value) noexcept
+    const bool baselineThemeSettled = waitForSnapshot(
+        [&](const PreferencesDebugSnapshot& value) noexcept
     {
         return value.currentCategory == kPrefCategoryKeyboard && value.themeDark && ! value.themeHighContrast && ! value.themeRainbow &&
                value.keyboardListRowCount == baselineRowCount && ! value.keyboardCaptureActive && value.currentPageDxHostResizeFailureCount == 0u &&
                value.visibleCurrentPageChildWindowCount <= 1u;
     },
-                      snapshot),
-                  L"Preferences Keyboard page did not settle to the baseline dark theme-cycle state.");
+        snapshot);
+    state.Require(baselineThemeSettled,
+                  std::format(L"Preferences Keyboard page did not settle to the baseline dark theme-cycle state: {}.",
+                              FormatKeyboardThemeCycleSnapshot(snapshot, initialTheme, baselineRowCount)));
     if (! state.failure.empty())
     {
         return false;
@@ -2392,7 +2524,7 @@ namespace
     const Common::Settings::Settings baselineSettings = g_settings;
     const auto restoreSettings                        = wil::scope_exit([&]() noexcept { g_settings = baselineSettings; });
 
-    g_settings.shortcuts.emplace(ShortcutDefaults::CreateDefaultShortcuts());
+    g_settings.shortcuts = ShortcutDefaults::CreateDefaultShortcuts();
     bool mutatedBinding = false;
     for (auto& binding : g_settings.shortcuts->functionBar)
     {
@@ -2463,7 +2595,7 @@ namespace
             return false;
         }
 
-        state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Keyboard tab-traversal validation.");
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Keyboard tab-traversal validation.");
 
         if (waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept {
             return value.currentCategory == kPrefCategoryKeyboard && value.keyboardListRowCount > 0u && value.currentPageDxHostResizeFailureCount == 0u;
@@ -2475,7 +2607,7 @@ namespace
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryKeyboard),
                       L"Failed to select the Preferences Keyboard category during tab-traversal validation.");
         PumpPendingMessages();
-        state.Require(SetFocus(categoryTreeHost) == categoryTreeHost,
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
                       L"Failed to restore focus to the Preferences category host after selecting Keyboard during tab-traversal validation.");
 
         state.Require(waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept
@@ -2652,7 +2784,7 @@ namespace
         return DebugGetPreferencesDialogSnapshot(outSnapshot) && predicate(outSnapshot);
     };
 
-    state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Keyboard search round-trip test.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Keyboard search round-trip test.");
     state.Require(DebugSelectPreferencesCategory(kPrefCategoryKeyboard),
                   L"Failed to select the Preferences Keyboard category for retained-search round-trip validation.");
     PumpPendingMessages();
@@ -2768,7 +2900,7 @@ namespace
         return DebugGetPreferencesDialogSnapshot(outSnapshot) && predicate(outSnapshot);
     };
 
-    state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Keyboard deferred-search test.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Keyboard deferred-search test.");
     state.Require(DebugSelectPreferencesCategory(kPrefCategoryKeyboard), L"Failed to select the Preferences Keyboard category for deferred-search validation.");
     PumpPendingMessages();
 
@@ -2799,6 +2931,8 @@ namespace
 {
     using namespace std::chrono_literals;
 
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"keyboard_live_search: start");
+
     if (! mainWindow || IsWindow(mainWindow) == FALSE)
     {
         state.Require(false, L"Main window handle invalid.");
@@ -2818,6 +2952,7 @@ namespace
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_FILE_PREFERENCES, 0), 0);
     prefs = waitForPreferencesWindow();
     state.Require(prefs != nullptr && IsWindow(prefs) != FALSE, L"Preferences window did not open for Keyboard live search interaction test.");
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"keyboard_live_search: opened preferences");
     if (! prefs || IsWindow(prefs) == FALSE)
     {
         return false;
@@ -2995,6 +3130,7 @@ namespace
     {
         return false;
     }
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"keyboard_live_search: navigated keyboard");
 
     state.Require(snapshot.pageTitle == LoadStringResource(nullptr, IDS_PREFS_CAT_KEYBOARD),
                   L"Preferences Keyboard page title did not settle before live search interaction validation.");
@@ -3044,8 +3180,10 @@ namespace
 
     const std::wstring editName         = initialValueState->name;
     const std::wstring initialEditValue = initialValueState->value;
-    state.Require(SetVisibleDescendantValueByName(activePage, UIA_EditControlTypeId, editName, kSearchText),
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"keyboard_live_search: before first search set");
+    state.Require(SetVisibleDescendantValueByNameWithMessagePump(activePage, UIA_EditControlTypeId, editName, kSearchText, L"Keyboard first search set"),
                   L"Preferences Keyboard page visible DX search edit did not accept live UIA ValuePattern mutation during shell Cancel discard validation.");
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"keyboard_live_search: after first search set");
     state.Require(waitForEditValue(editName, kSearchText),
                   std::format(L"Preferences Keyboard page visible DX search edit did not settle to the edited value during shell Cancel discard validation.{}",
                               describeKeyboardLiveSearchState(editName)));
@@ -3062,17 +3200,22 @@ namespace
         return false;
     }
 
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"keyboard_live_search: before shell cancel invoke");
     state.Require(
-        InvokeVisibleDescendantByName(getShellHost(), UIA_ButtonControlTypeId, shellCancelButtonText),
+        InvokeVisibleDescendantByNameWithMessagePump(
+            getShellHost(), UIA_ButtonControlTypeId, shellCancelButtonText, L"Keyboard live-search shell Cancel action"),
         L"Preferences shell visible DX Cancel action did not expose live UIA InvokePattern interaction during Keyboard live search discard validation.");
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"keyboard_live_search: after shell cancel invoke");
     state.Require(WaitForWindowClosed(prefs, SelfTest::Scale(3000ms)),
                   L"Preferences dialog did not close after live UIA InvokePattern interaction on the visible DX Cancel action during Keyboard live search "
                   L"discard validation.");
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"keyboard_live_search: closed after cancel");
     prefs = nullptr;
 
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_FILE_PREFERENCES, 0), 0);
     prefs = waitForPreferencesWindow();
     state.Require(prefs != nullptr && IsWindow(prefs) != FALSE, L"Preferences window did not reopen for Keyboard live search discard validation.");
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"keyboard_live_search: reopened preferences");
     if (! prefs || IsWindow(prefs) == FALSE)
     {
         return false;
@@ -3082,6 +3225,7 @@ namespace
     {
         return false;
     }
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"keyboard_live_search: navigated keyboard after reopen");
 
     state.Require(
         waitForEditValue(editName, initialEditValue),
@@ -3109,8 +3253,11 @@ namespace
         return false;
     }
 
-    state.Require(SetVisibleDescendantValueByName(reopenedActivePage, UIA_EditControlTypeId, editName, kSearchText),
-                  L"Preferences Keyboard page visible DX search edit did not accept live UIA ValuePattern mutation after shell Cancel reopen.");
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"keyboard_live_search: before second search set");
+    state.Require(
+        SetVisibleDescendantValueByNameWithMessagePump(reopenedActivePage, UIA_EditControlTypeId, editName, kSearchText, L"Keyboard second search set"),
+        L"Preferences Keyboard page visible DX search edit did not accept live UIA ValuePattern mutation after shell Cancel reopen.");
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"keyboard_live_search: after second search set");
     state.Require(waitForEditValue(editName, kSearchText),
                   std::format(L"Preferences Keyboard page visible DX search edit did not settle to the edited value after shell Cancel reopen.{}",
                               describeKeyboardLiveSearchState(editName)));
@@ -3127,8 +3274,11 @@ namespace
         return false;
     }
 
-    state.Require(SetVisibleDescendantValueByName(DebugGetPreferencesActivePageHandle(), UIA_EditControlTypeId, editName, initialEditValue),
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"keyboard_live_search: before search restore");
+    state.Require(SetVisibleDescendantValueByNameWithMessagePump(
+                      DebugGetPreferencesActivePageHandle(), UIA_EditControlTypeId, editName, initialEditValue, L"Keyboard search restore"),
                   L"Preferences Keyboard page visible DX search edit did not accept restoration through live UIA ValuePattern.");
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"keyboard_live_search: after search restore");
     state.Require(waitForEditValue(editName, initialEditValue),
                   std::format(L"Preferences Keyboard page visible DX search edit did not restore its original value after live UIA mutation.{}",
                               describeKeyboardLiveSearchState(editName)));
@@ -3145,6 +3295,7 @@ namespace
         return false;
     }
 
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"keyboard_live_search: finished");
     return VerifyPreferencesGridSelectionPattern(prefs, state, L"Keyboard", snapshot.keyboardListRowCount, [](const size_t rowIndex) noexcept {
         return DebugSelectPreferencesKeyboardListRow(rowIndex);
     });
@@ -3160,6 +3311,11 @@ namespace
         return false;
     }
 
+    if (! PrepareMainWindowForIsolatedUiCase(mainWindow, state, L"Preferences Keyboard reset live interaction validation"))
+    {
+        return false;
+    }
+
     if (const HWND existing = GetPreferencesDialogHandle(); existing && IsWindow(existing) != FALSE)
     {
         PostMessageW(existing, WM_CLOSE, 0, 0);
@@ -3170,7 +3326,7 @@ namespace
     const Common::Settings::Settings baselineSettings = g_settings;
     const auto restoreSettings                        = wil::scope_exit([&]() noexcept { g_settings = baselineSettings; });
 
-    g_settings.shortcuts.emplace(ShortcutDefaults::CreateDefaultShortcuts());
+    g_settings.shortcuts = ShortcutDefaults::CreateDefaultShortcuts();
     bool mutatedBinding = false;
     for (auto& binding : g_settings.shortcuts->functionBar)
     {
@@ -3260,7 +3416,7 @@ namespace
             return false;
         }
 
-        state.Require(SetFocus(targetCategoryTreeHost) == targetCategoryTreeHost,
+        state.Require(FocusWindowAndWait(targetCategoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
                       L"Failed to focus the Preferences category host for Keyboard reset interaction test.");
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryKeyboard),
                       L"Failed to select the Preferences Keyboard category for reset interaction validation.");
@@ -3340,7 +3496,7 @@ namespace
         return false;
     }
 
-    state.Require(InvokeVisibleDescendantByName(activePage, UIA_ButtonControlTypeId, resetButtonText),
+    state.Require(InvokeVisibleDxAction(activePage, UIA_ButtonControlTypeId, resetButtonText),
                   L"Failed to invoke the visible Preferences Keyboard Reset Defaults button through live UIA interaction.");
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
@@ -3363,7 +3519,7 @@ namespace
         return false;
     }
 
-    state.Require(InvokeVisibleDescendantByName(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText),
+    state.Require(InvokeVisibleDxAction(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText),
                   L"Preferences shell visible DX Cancel action did not expose live UIA InvokePattern interaction during Keyboard reset discard validation.");
     state.Require(
         WaitForWindowClosed(prefs, SelfTest::Scale(3000ms)),
@@ -3412,7 +3568,7 @@ namespace
         return false;
     }
 
-    state.Require(InvokeVisibleDescendantByName(reopenedActivePage, UIA_ButtonControlTypeId, resetButtonText),
+    state.Require(InvokeVisibleDxAction(reopenedActivePage, UIA_ButtonControlTypeId, resetButtonText),
                   L"Failed to invoke the visible Preferences Keyboard Reset Defaults button through live UIA interaction after shell Cancel reopen.");
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
@@ -3462,7 +3618,7 @@ namespace
     const Common::Settings::Settings baselineSettings = g_settings;
     const auto restoreSettings                        = wil::scope_exit([&]() noexcept { g_settings = baselineSettings; });
 
-    g_settings.shortcuts.emplace(ShortcutDefaults::CreateDefaultShortcuts());
+    g_settings.shortcuts = ShortcutDefaults::CreateDefaultShortcuts();
     bool mutatedBinding = false;
     for (auto& binding : g_settings.shortcuts->functionBar)
     {
@@ -3579,7 +3735,7 @@ namespace
             return false;
         }
 
-        state.Require(SetFocus(targetCategoryTreeHost) == targetCategoryTreeHost,
+        state.Require(FocusWindowAndWait(targetCategoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
                       L"Failed to focus the Preferences category host for Keyboard export interaction test.");
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryKeyboard),
                       L"Failed to select the Preferences Keyboard category for export interaction validation.");
@@ -3649,7 +3805,7 @@ namespace
     }
 
     state.Require(DebugCancelPreferencesKeyboardNextBrowse(), L"Failed to seed the debug Keyboard browse cancel result for export interaction validation.");
-    state.Require(InvokeVisibleDescendantByName(activePage, UIA_ButtonControlTypeId, exportButtonText),
+    state.Require(InvokeVisibleDxAction(activePage, UIA_ButtonControlTypeId, exportButtonText),
                   L"Failed to invoke the visible Preferences Keyboard Export button through live UIA cancel-path interaction.");
     state.Require(! SelfTest::PathExists(exportPath), L"Preferences Keyboard visible DX Export cancel path should not create an exported shortcuts file.");
     state.Require(waitForSnapshot(
@@ -3668,7 +3824,7 @@ namespace
 
     state.Require(DebugSetPreferencesKeyboardNextBrowsePath(exportPath.native()),
                   L"Failed to seed the debug Keyboard browse result for export interaction validation.");
-    state.Require(InvokeVisibleDescendantByName(activePage, UIA_ButtonControlTypeId, exportButtonText),
+    state.Require(InvokeVisibleDxAction(activePage, UIA_ButtonControlTypeId, exportButtonText),
                   L"Failed to invoke the visible Preferences Keyboard Export button through live UIA interaction.");
 
     std::string exportedJson;
@@ -3693,7 +3849,7 @@ namespace
         return false;
     }
 
-    state.Require(InvokeVisibleDescendantByName(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText),
+    state.Require(InvokeVisibleDxAction(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText),
                   L"Preferences shell visible DX Cancel action did not expose live UIA InvokePattern interaction during Keyboard export reopen validation.");
     state.Require(
         WaitForWindowClosed(prefs, SelfTest::Scale(3000ms)),
@@ -3747,7 +3903,7 @@ namespace
         return false;
     }
 
-    state.Require(InvokeVisibleDescendantByName(reopenedActivePage, UIA_ButtonControlTypeId, exportButtonText),
+    state.Require(InvokeVisibleDxAction(reopenedActivePage, UIA_ButtonControlTypeId, exportButtonText),
                   L"Failed to invoke the visible Preferences Keyboard Export button through live UIA interaction after shell Cancel reopen.");
 
     const auto waitForReopenedExport = [&](std::string& outJson) noexcept
@@ -3806,7 +3962,7 @@ namespace
     const Common::Settings::Settings baselineSettings = g_settings;
     const auto restoreSettings                        = wil::scope_exit([&]() noexcept { g_settings = baselineSettings; });
 
-    g_settings.shortcuts.emplace(ShortcutDefaults::CreateDefaultShortcuts());
+    g_settings.shortcuts = ShortcutDefaults::CreateDefaultShortcuts();
     bool mutatedBinding = false;
     for (auto& binding : g_settings.shortcuts->functionBar)
     {
@@ -3906,7 +4062,7 @@ namespace
             return false;
         }
 
-        state.Require(SetFocus(targetCategoryTreeHost) == targetCategoryTreeHost,
+        state.Require(FocusWindowAndWait(targetCategoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
                       L"Failed to focus the Preferences category host while reopening Keyboard import interaction test.");
         if (! state.failure.empty())
         {
@@ -3926,7 +4082,7 @@ namespace
             outSnapshot);
     };
 
-    state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Keyboard import interaction test.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Keyboard import interaction test.");
     state.Require(DebugSelectPreferencesCategory(kPrefCategoryKeyboard),
                   L"Failed to select the Preferences Keyboard category for import interaction validation.");
     PumpPendingMessages();
@@ -3989,7 +4145,7 @@ namespace
     }
 
     state.Require(DebugCancelPreferencesKeyboardNextBrowse(), L"Failed to seed the debug Keyboard browse cancel result for import interaction validation.");
-    state.Require(InvokeVisibleDescendantByName(activePage, UIA_ButtonControlTypeId, importButtonText),
+    state.Require(InvokeVisibleDxAction(activePage, UIA_ButtonControlTypeId, importButtonText),
                   L"Failed to invoke the visible Preferences Keyboard Import button through live UIA cancel-path interaction.");
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
@@ -4015,7 +4171,7 @@ namespace
 
     state.Require(DebugSetPreferencesKeyboardNextBrowsePath(importPath.native()),
                   L"Failed to seed the debug Keyboard browse result for import interaction validation.");
-    state.Require(InvokeVisibleDescendantByName(activePage, UIA_ButtonControlTypeId, importButtonText),
+    state.Require(InvokeVisibleDxAction(activePage, UIA_ButtonControlTypeId, importButtonText),
                   L"Failed to invoke the visible Preferences Keyboard Import button through live UIA interaction.");
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
@@ -4048,7 +4204,7 @@ namespace
 
     const auto getShellHost = [&]() noexcept { return DebugGetPreferencesShellHostHandle(); };
 
-    state.Require(InvokeVisibleDescendantByName(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText),
+    state.Require(InvokeVisibleDxAction(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText),
                   L"Failed to invoke the shared Preferences shell Cancel button after Keyboard import interaction.");
     state.Require(WaitForWindowClosed(prefs, SelfTest::Scale(3000ms)), L"Preferences window did not close after Keyboard import discard interaction.");
     if (! state.failure.empty())
@@ -4096,7 +4252,7 @@ namespace
 
     state.Require(DebugSetPreferencesKeyboardNextBrowsePath(importPath.native()),
                   L"Failed to reseed the debug Keyboard browse result for reopened import interaction validation.");
-    state.Require(InvokeVisibleDescendantByName(reopenedActivePage, UIA_ButtonControlTypeId, importButtonText),
+    state.Require(InvokeVisibleDxAction(reopenedActivePage, UIA_ButtonControlTypeId, importButtonText),
                   L"Failed to invoke the visible Preferences Keyboard Import button through reopened live UIA interaction.");
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
@@ -4134,7 +4290,7 @@ namespace
     const Common::Settings::Settings baselineSettings = g_settings;
     const auto restoreSettings                        = wil::scope_exit([&]() noexcept { g_settings = baselineSettings; });
 
-    g_settings.shortcuts.emplace(ShortcutDefaults::CreateDefaultShortcuts());
+    g_settings.shortcuts = ShortcutDefaults::CreateDefaultShortcuts();
     bool mutatedBinding = false;
     for (auto& binding : g_settings.shortcuts->functionBar)
     {
@@ -4215,7 +4371,7 @@ namespace
             return false;
         }
 
-        state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Keyboard remove interaction test.");
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Keyboard remove interaction test.");
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryKeyboard),
                       L"Failed to select the Preferences Keyboard category for remove interaction validation.");
         PumpPendingMessages();
@@ -4288,7 +4444,7 @@ namespace
         return false;
     }
 
-    state.Require(InvokeVisibleDescendantByName(activePage, UIA_ButtonControlTypeId, removeButtonText),
+    state.Require(InvokeVisibleDxAction(activePage, UIA_ButtonControlTypeId, removeButtonText),
                   L"Failed to invoke the visible Preferences Keyboard Remove button through live UIA interaction.");
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
@@ -4311,7 +4467,7 @@ namespace
         return false;
     }
 
-    state.Require(InvokeVisibleDescendantByName(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText),
+    state.Require(InvokeVisibleDxAction(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText),
                   L"Preferences shell visible DX Cancel action did not expose live UIA InvokePattern interaction during Keyboard remove discard validation.");
     state.Require(WaitForWindowClosed(prefs, SelfTest::Scale(3000ms)),
                   L"Preferences dialog did not close after live UIA InvokePattern interaction on the visible DX Cancel action during Keyboard remove discard "
@@ -4360,7 +4516,7 @@ namespace
         return false;
     }
 
-    state.Require(InvokeVisibleDescendantByName(reopenedActivePage, UIA_ButtonControlTypeId, removeButtonText),
+    state.Require(InvokeVisibleDxAction(reopenedActivePage, UIA_ButtonControlTypeId, removeButtonText),
                   L"Failed to invoke the visible Preferences Keyboard Remove button through live UIA interaction after shell Cancel reopen.");
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
@@ -4458,7 +4614,7 @@ namespace
             return false;
         }
 
-        state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Keyboard assign interaction test.");
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Keyboard assign interaction test.");
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryKeyboard),
                       L"Failed to select the Preferences Keyboard category for assign interaction validation.");
         PumpPendingMessages();
@@ -4532,7 +4688,7 @@ namespace
         return false;
     }
 
-    state.Require(InvokeVisibleDescendantByName(activePage, UIA_ButtonControlTypeId, assignButtonText),
+    state.Require(InvokeVisibleDxAction(activePage, UIA_ButtonControlTypeId, assignButtonText),
                   L"Failed to invoke the visible Preferences Keyboard Assign button through live UIA interaction.");
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
@@ -4549,7 +4705,7 @@ namespace
     }
 
     state.Require(
-        InvokeVisibleDescendantByName(getShellHost(), UIA_ButtonControlTypeId, shellCancelButtonText),
+        InvokeVisibleDxAction(getShellHost(), UIA_ButtonControlTypeId, shellCancelButtonText),
         L"Preferences shell visible DX Cancel action did not expose live UIA InvokePattern interaction during Keyboard assign capture discard validation.");
     state.Require(WaitForWindowClosed(prefs, SelfTest::Scale(3000ms)),
                   L"Preferences dialog did not close after live UIA InvokePattern interaction on the visible DX Cancel action during Keyboard assign capture "
@@ -4598,7 +4754,7 @@ namespace
         return false;
     }
 
-    state.Require(InvokeVisibleDescendantByName(reopenedActivePage, UIA_ButtonControlTypeId, assignButtonText),
+    state.Require(InvokeVisibleDxAction(reopenedActivePage, UIA_ButtonControlTypeId, assignButtonText),
                   L"Failed to invoke the visible Preferences Keyboard Assign button through live UIA interaction after shell Cancel reopen.");
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
@@ -4614,7 +4770,7 @@ namespace
         return false;
     }
 
-    state.Require(InvokeVisibleDescendantByName(reopenedActivePage, UIA_ButtonControlTypeId, cancelButtonText),
+    state.Require(InvokeVisibleDxAction(reopenedActivePage, UIA_ButtonControlTypeId, cancelButtonText),
                   L"Failed to invoke the visible Preferences Keyboard capture Cancel button through live UIA interaction after shell Cancel reopen.");
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
@@ -4649,7 +4805,7 @@ namespace
     const Common::Settings::Settings baselineSettings = g_settings;
     const auto restoreSettings                        = wil::scope_exit([&]() noexcept { g_settings = baselineSettings; });
 
-    g_settings.shortcuts.emplace(ShortcutDefaults::CreateDefaultShortcuts());
+    g_settings.shortcuts = ShortcutDefaults::CreateDefaultShortcuts();
     bool mutatedBinding = false;
     for (auto& binding : g_settings.shortcuts->functionBar)
     {
@@ -4735,7 +4891,7 @@ namespace
             return false;
         }
 
-        state.Require(SetFocus(targetCategoryTreeHost) == targetCategoryTreeHost,
+        state.Require(FocusWindowAndWait(targetCategoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
                       L"Failed to focus the Preferences category host for Keyboard assign-commit interaction test.");
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryKeyboard),
                       L"Failed to select the Preferences Keyboard category for assign-commit interaction validation.");
@@ -4808,7 +4964,7 @@ namespace
         return false;
     }
 
-    state.Require(InvokeVisibleDescendantByName(activePage, UIA_ButtonControlTypeId, assignEllipsisButtonText),
+    state.Require(InvokeVisibleDxAction(activePage, UIA_ButtonControlTypeId, assignEllipsisButtonText),
                   L"Failed to invoke the visible Preferences Keyboard Assign... button through live UIA interaction.");
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
@@ -4842,7 +4998,7 @@ namespace
         return false;
     }
 
-    state.Require(InvokeVisibleDescendantByName(activePage, UIA_ButtonControlTypeId, assignButtonText),
+    state.Require(InvokeVisibleDxAction(activePage, UIA_ButtonControlTypeId, assignButtonText),
                   L"Failed to invoke the visible Preferences Keyboard capture Assign button through live UIA interaction.");
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
@@ -4867,7 +5023,7 @@ namespace
     }
 
     state.Require(
-        InvokeVisibleDescendantByName(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText),
+        InvokeVisibleDxAction(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText),
         L"Preferences shell visible DX Cancel action did not expose live UIA InvokePattern interaction during Keyboard assign-commit discard validation.");
     state.Require(WaitForWindowClosed(prefs, SelfTest::Scale(3000ms)),
                   L"Preferences dialog did not close after live UIA InvokePattern interaction on the visible DX Cancel action during Keyboard assign-commit "
@@ -4917,7 +5073,7 @@ namespace
         return false;
     }
 
-    state.Require(InvokeVisibleDescendantByName(reopenedActivePage, UIA_ButtonControlTypeId, assignEllipsisButtonText),
+    state.Require(InvokeVisibleDxAction(reopenedActivePage, UIA_ButtonControlTypeId, assignEllipsisButtonText),
                   L"Failed to invoke the visible Preferences Keyboard Assign... button through live UIA interaction after shell Cancel reopen.");
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
@@ -4951,7 +5107,7 @@ namespace
         return false;
     }
 
-    state.Require(InvokeVisibleDescendantByName(reopenedActivePage, UIA_ButtonControlTypeId, assignButtonText),
+    state.Require(InvokeVisibleDxAction(reopenedActivePage, UIA_ButtonControlTypeId, assignButtonText),
                   L"Failed to invoke the visible Preferences Keyboard capture Assign button through live UIA interaction after shell Cancel reopen.");
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
@@ -4994,7 +5150,7 @@ namespace
     const Common::Settings::Settings baselineSettings = g_settings;
     const auto restoreSettings                        = wil::scope_exit([&]() noexcept { g_settings = baselineSettings; });
 
-    g_settings.shortcuts.emplace(ShortcutDefaults::CreateDefaultShortcuts());
+    g_settings.shortcuts = ShortcutDefaults::CreateDefaultShortcuts();
     bool mutatedBinding = false;
     for (auto& binding : g_settings.shortcuts->functionBar)
     {
@@ -5064,7 +5220,7 @@ namespace
             return false;
         }
 
-        state.Require(SetFocus(targetCategoryTreeHost) == targetCategoryTreeHost,
+        state.Require(FocusWindowAndWait(targetCategoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
                       L"Failed to focus the Preferences category host for Keyboard capture-preview validation.");
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryKeyboard),
                       L"Failed to select the Preferences Keyboard category for capture-preview validation.");
@@ -5183,7 +5339,7 @@ namespace
         return false;
     }
 
-    state.Require(InvokeVisibleDescendantByName(activePage, UIA_ButtonControlTypeId, assignEllipsisButtonText),
+    state.Require(InvokeVisibleDxAction(activePage, UIA_ButtonControlTypeId, assignEllipsisButtonText),
                   L"Failed to invoke the visible Preferences Keyboard Assign... button through live UIA interaction for capture-preview validation.");
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
@@ -5228,7 +5384,7 @@ namespace
         return false;
     }
 
-    state.Require(InvokeVisibleDescendantByName(activePage, UIA_ButtonControlTypeId, assignButtonText),
+    state.Require(InvokeVisibleDxAction(activePage, UIA_ButtonControlTypeId, assignButtonText),
                   L"Failed to invoke the visible Preferences Keyboard Assign button through live UIA interaction after the preview updated.");
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
@@ -5260,7 +5416,7 @@ namespace
         return false;
     }
 
-    state.Require(InvokeVisibleDescendantByName(shellHost, UIA_ButtonControlTypeId, cancelButtonText),
+    state.Require(InvokeVisibleDxAction(shellHost, UIA_ButtonControlTypeId, cancelButtonText),
                   L"Preferences shell visible DX Cancel action did not expose live UIA InvokePattern interaction during capture-preview discard validation.");
     state.Require(WaitForWindowClosed(prefs, SelfTest::Scale(3000ms)),
                   L"Preferences dialog did not close after invoking the shared shell Cancel action during capture-preview discard validation.");
@@ -5309,7 +5465,7 @@ namespace
         return false;
     }
 
-    state.Require(InvokeVisibleDescendantByName(reopenedActivePage, UIA_ButtonControlTypeId, assignEllipsisButtonText),
+    state.Require(InvokeVisibleDxAction(reopenedActivePage, UIA_ButtonControlTypeId, assignEllipsisButtonText),
                   L"Failed to invoke the visible Preferences Keyboard Assign... button through live UIA interaction after shell Cancel reopen for "
                   L"capture-preview validation.");
     state.Require(
@@ -5349,7 +5505,7 @@ namespace
         return false;
     }
 
-    state.Require(InvokeVisibleDescendantByName(reopenedActivePage, UIA_ButtonControlTypeId, assignButtonText),
+    state.Require(InvokeVisibleDxAction(reopenedActivePage, UIA_ButtonControlTypeId, assignButtonText),
                   L"Failed to invoke the visible Preferences Keyboard Assign button through live UIA interaction after shell Cancel reopen.");
     state.Require(
         waitForSnapshot(
@@ -5394,7 +5550,7 @@ namespace
     const Common::Settings::Settings baselineSettings = g_settings;
     const auto restoreSettings                        = wil::scope_exit([&]() noexcept { g_settings = baselineSettings; });
 
-    g_settings.shortcuts.emplace(ShortcutDefaults::CreateDefaultShortcuts());
+    g_settings.shortcuts = ShortcutDefaults::CreateDefaultShortcuts();
     bool mutatedTargetBinding = false;
     for (auto& binding : g_settings.shortcuts->functionBar)
     {
@@ -5490,7 +5646,7 @@ namespace
             return false;
         }
 
-        state.Require(SetFocus(targetCategoryTreeHost) == targetCategoryTreeHost,
+        state.Require(FocusWindowAndWait(targetCategoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
                       L"Failed to focus the Preferences category host for Keyboard replace-assign interaction test.");
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryKeyboard),
                       L"Failed to select the Preferences Keyboard category for replace-assign interaction validation.");
@@ -5588,7 +5744,7 @@ namespace
         return false;
     }
 
-    state.Require(InvokeVisibleDescendantByName(activePage, UIA_ButtonControlTypeId, assignEllipsisButtonText),
+    state.Require(InvokeVisibleDxAction(activePage, UIA_ButtonControlTypeId, assignEllipsisButtonText),
                   L"Failed to invoke the visible Preferences Keyboard Assign... button through live UIA interaction for replace validation.");
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
@@ -5622,7 +5778,7 @@ namespace
         return false;
     }
 
-    state.Require(InvokeVisibleDescendantByName(activePage, UIA_ButtonControlTypeId, replaceButtonText),
+    state.Require(InvokeVisibleDxAction(activePage, UIA_ButtonControlTypeId, replaceButtonText),
                   L"Failed to invoke the visible Preferences Keyboard Replace button through live UIA interaction.");
     state.Require(
         waitForSnapshot(
@@ -5672,7 +5828,7 @@ namespace
     }
 
     state.Require(
-        InvokeVisibleDescendantByName(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText),
+        InvokeVisibleDxAction(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText),
         L"Preferences shell visible DX Cancel action did not expose live UIA InvokePattern interaction during Keyboard replace-assign discard validation.");
     state.Require(WaitForWindowClosed(prefs, SelfTest::Scale(3000ms)),
                   L"Preferences dialog did not close after live UIA InvokePattern interaction on the visible DX Cancel action during Keyboard replace-assign "
@@ -5768,7 +5924,7 @@ namespace
     }
 
     state.Require(
-        InvokeVisibleDescendantByName(reopenedActivePage, UIA_ButtonControlTypeId, assignEllipsisButtonText),
+        InvokeVisibleDxAction(reopenedActivePage, UIA_ButtonControlTypeId, assignEllipsisButtonText),
         L"Failed to invoke the visible Preferences Keyboard Assign... button through live UIA interaction after shell Cancel reopen for replace validation.");
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
@@ -5802,7 +5958,7 @@ namespace
         return false;
     }
 
-    state.Require(InvokeVisibleDescendantByName(reopenedActivePage, UIA_ButtonControlTypeId, replaceButtonText),
+    state.Require(InvokeVisibleDxAction(reopenedActivePage, UIA_ButtonControlTypeId, replaceButtonText),
                   L"Failed to invoke the visible Preferences Keyboard Replace button through live UIA interaction after shell Cancel reopen.");
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
@@ -5871,7 +6027,7 @@ namespace
     const Common::Settings::Settings baselineSettings = g_settings;
     const auto restoreSettings                        = wil::scope_exit([&]() noexcept { g_settings = baselineSettings; });
 
-    g_settings.shortcuts.emplace(ShortcutDefaults::CreateDefaultShortcuts());
+    g_settings.shortcuts = ShortcutDefaults::CreateDefaultShortcuts();
     bool mutatedConflictBinding = false;
     for (auto& binding : g_settings.shortcuts->functionBar)
     {
@@ -5954,7 +6110,7 @@ namespace
             return false;
         }
 
-        state.Require(SetFocus(targetCategoryTreeHost) == targetCategoryTreeHost,
+        state.Require(FocusWindowAndWait(targetCategoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
                       L"Failed to focus the Preferences category host for Keyboard swap-assign interaction test.");
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryKeyboard),
                       L"Failed to select the Preferences Keyboard category for swap-assign interaction validation.");
@@ -6030,7 +6186,7 @@ namespace
         return false;
     }
 
-    state.Require(InvokeVisibleDescendantByName(activePage, UIA_ButtonControlTypeId, assignEllipsisButtonText),
+    state.Require(InvokeVisibleDxAction(activePage, UIA_ButtonControlTypeId, assignEllipsisButtonText),
                   L"Failed to invoke the visible Preferences Keyboard Assign... button through live UIA interaction for swap validation.");
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
@@ -6064,7 +6220,7 @@ namespace
         return false;
     }
 
-    state.Require(InvokeVisibleDescendantByName(activePage, UIA_ButtonControlTypeId, swapButtonText),
+    state.Require(InvokeVisibleDxAction(activePage, UIA_ButtonControlTypeId, swapButtonText),
                   L"Failed to invoke the visible Preferences Keyboard Swap button through live UIA interaction.");
     state.Require(
         waitForSnapshot(
@@ -6115,7 +6271,7 @@ namespace
     }
 
     state.Require(
-        InvokeVisibleDescendantByName(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText),
+        InvokeVisibleDxAction(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText),
         L"Preferences shell visible DX Cancel action did not expose live UIA InvokePattern interaction during Keyboard swap-assign discard validation.");
     state.Require(WaitForWindowClosed(prefs, SelfTest::Scale(3000ms)),
                   L"Preferences dialog did not close after live UIA InvokePattern interaction on the visible DX Cancel action during Keyboard swap-assign "
@@ -6209,7 +6365,7 @@ namespace
     }
 
     state.Require(
-        InvokeVisibleDescendantByName(reopenedActivePage, UIA_ButtonControlTypeId, assignEllipsisButtonText),
+        InvokeVisibleDxAction(reopenedActivePage, UIA_ButtonControlTypeId, assignEllipsisButtonText),
         L"Failed to invoke the visible Preferences Keyboard Assign... button through live UIA interaction after shell Cancel reopen for swap validation.");
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
@@ -6243,7 +6399,7 @@ namespace
         return false;
     }
 
-    state.Require(InvokeVisibleDescendantByName(reopenedActivePage, UIA_ButtonControlTypeId, swapButtonText),
+    state.Require(InvokeVisibleDxAction(reopenedActivePage, UIA_ButtonControlTypeId, swapButtonText),
                   L"Failed to invoke the visible Preferences Keyboard Swap button through live UIA interaction after shell Cancel reopen.");
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept

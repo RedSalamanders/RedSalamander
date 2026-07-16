@@ -219,6 +219,7 @@ enum FileSystemSearchWarningFlags : uint32_t
     FILESYSTEM_SEARCH_WARNING_OVERFLOW              = 0x8,
     FILESYSTEM_SEARCH_WARNING_SERVICE_UNAVAILABLE   = 0x10,
     FILESYSTEM_SEARCH_WARNING_REGEX_REJECTED        = 0x20,
+    FILESYSTEM_SEARCH_WARNING_SERVICE_ROOT_REJECTED = 0x40,
 };
 
 enum FileSystemSearchPhase : uint32_t
@@ -531,6 +532,8 @@ interface __declspec(uuid("12519afa-30e7-4e3a-9db2-7990c4be9a21")) __declspec(no
 // Notes:
 // - The reader is read-only.
 // - Implementations MUST be safe for large files (64-bit offsets/sizes).
+// - Read returns S_OK with *bytesRead == 0 only at end-of-file or when bytesToRead == 0.
+// - On success, *bytesRead MUST NOT exceed bytesToRead. Hosts reject a larger value as invalid provider data.
 interface __declspec(uuid("b1d0c2b8-0e37-4d6f-8c2c-2cc4f0d1c6b8")) __declspec(novtable) IFileReader : public IUnknown
 {
     virtual HRESULT STDMETHODCALLTYPE GetSize(uint64_t* sizeBytes) noexcept                                            = 0;
@@ -542,11 +545,30 @@ interface __declspec(uuid("b1d0c2b8-0e37-4d6f-8c2c-2cc4f0d1c6b8")) __declspec(no
 // Notes:
 // - Implementations MUST be safe for large files (64-bit offsets/sizes).
 // - Implementations MUST tolerate being released without Commit() (treat as abort / best-effort cleanup).
+// - Overwrite-capable implementations SHOULD preserve any pre-existing destination until Commit() succeeds.
+// - On success, *bytesWritten MUST NOT exceed bytesToWrite. Hosts reject a larger value as invalid provider data.
 interface __declspec(uuid("b6f0a9e1-8c8b-4b72-9f3e-2f2b4b8b9c41")) __declspec(novtable) IFileWriter : public IUnknown
 {
     virtual HRESULT STDMETHODCALLTYPE GetPosition(uint64_t* positionBytes) noexcept                                               = 0;
     virtual HRESULT STDMETHODCALLTYPE Write(const void* buffer, unsigned long bytesToWrite, unsigned long* bytesWritten) noexcept = 0;
     virtual HRESULT STDMETHODCALLTYPE Commit() noexcept                                                                           = 0;
+};
+
+// Optional writer contract used by streaming destinations that must know the final object size
+// before accepting the first byte (for example, chunked cloud upload sessions).
+// The host calls SetExpectedSize immediately after CreateFileWriter and before Write.
+// Implementations that expose this interface MUST reject a different byte count at Commit.
+interface __declspec(uuid("24719c4b-0b51-4d63-93aa-4c697eb8a732")) __declspec(novtable) IFileWriterExpectedSize : public IUnknown
+{
+    virtual HRESULT STDMETHODCALLTYPE SetExpectedSize(uint64_t sizeBytes) noexcept = 0;
+};
+
+// Optional filesystem capability for destinations whose writer Commit atomically publishes the
+// requested path. The host uses this explicit contract to avoid a temp-name rename/copy; it never
+// infers the capability from provider IDs or temporary-path spelling.
+interface __declspec(uuid("bcf04a7a-9c62-4aa8-9847-d756cf432669")) __declspec(novtable) IFileSystemAtomicWriter : public IUnknown
+{
+    virtual HRESULT STDMETHODCALLTYPE SupportsAtomicWriterCommit(const wchar_t* path, FileSystemFlags flags, BOOL* supported) noexcept = 0;
 };
 
 struct FileSystemBasicInformation

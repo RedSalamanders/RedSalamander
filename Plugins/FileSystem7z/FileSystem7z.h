@@ -27,6 +27,7 @@
 #include "PlugInterfaces/DriveInfo.h"
 #include "PlugInterfaces/FileSystem.h"
 #include "PlugInterfaces/Informations.h"
+#include "PackedFileInfoBuffer.h"
 
 class FilesInformation7z final : public IFilesInformation
 {
@@ -60,15 +61,8 @@ public:
     HRESULT BuildFromEntries(std::vector<Entry> entries) noexcept;
 
 private:
-    static size_t ComputeEntrySizeBytes(std::wstring_view name) noexcept;
-    static size_t AlignUp(size_t value, size_t alignment) noexcept;
-
-    HRESULT LocateEntry(unsigned long index, FileInfo** ppEntry) const noexcept;
-
     std::atomic_ulong _refCount{1};
-    std::vector<std::byte> _buffer;
-    unsigned long _count     = 0;
-    unsigned long _usedBytes = 0;
+    Common::Plugins::PackedFileInfoBuffer _packedBuffer;
 };
 
 class FileSystem7z final : public IFileSystem,

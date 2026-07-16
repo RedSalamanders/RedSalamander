@@ -25,11 +25,16 @@ param(
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $sanitizedEnvironmentScript = Join-Path $PSScriptRoot 'SanitizedEnvironment.ps1'
+$artifactOperationLockScript = Join-Path $PSScriptRoot 'ArtifactOperationLock.ps1'
 if (-not (Test-Path $sanitizedEnvironmentScript)) {
     throw "Sanitized environment helper not found: $sanitizedEnvironmentScript"
 }
 
 . $sanitizedEnvironmentScript
+if (-not (Test-Path $artifactOperationLockScript)) {
+    throw "Artifact operation lock helper not found: $artifactOperationLockScript"
+}
+. $artifactOperationLockScript
 
 function Resolve-MSBuildPath {
     if (-not [string]::IsNullOrWhiteSpace($MSBuildPath)) {
@@ -81,22 +86,52 @@ function Resolve-MSBuildPath {
     throw "Unable to locate MSBuild.exe."
 }
 
-$resolvedMsbuildPath = Resolve-MSBuildPath
-$psi = New-RSProcessStartInfo `
-    -FilePath $resolvedMsbuildPath `
-    -Arguments $MSBuildArguments `
-    -WorkingDirectory $repoRoot
-
-$process = [System.Diagnostics.Process]::Start($psi)
-if (-not $process) {
-    throw "Failed to start MSBuild: $resolvedMsbuildPath"
+$configuration = ''
+$platform = ''
+$target = 'direct-msbuild'
+foreach ($argument in $MSBuildArguments) {
+    if ($argument -match '^(?i)/p:Configuration=(?<value>.+)$') {
+        $configuration = $Matches.value.Trim('"')
+    }
+    elseif ($argument -match '^(?i)/p:Platform=(?<value>.+)$') {
+        $platform = $Matches.value.Trim('"')
+    }
+    elseif ($target -eq 'direct-msbuild' -and $argument -notmatch '^[/-]') {
+        $target = $argument
+    }
 }
 
+$artifactOperationLock = $null
 try {
-    $process.WaitForExit()
-    $global:LASTEXITCODE = $process.ExitCode
-    exit $process.ExitCode
+    $artifactOperationLock = Enter-RSArtifactOperationLock `
+        -RepoRoot $repoRoot `
+        -Operation "direct MSBuild $target $configuration|$platform" `
+        -Scope @{
+            kind = 'build'
+            target = $target
+            configuration = $configuration
+            platform = $platform
+        }
+
+    if ($artifactOperationLock.WasAbandoned) {
+        [void](Set-RSArtifactOperationContaminated `
+                -RepoRoot $repoRoot `
+                -Reason 'The previous build/test owner exited without clearing the exclusive artifact-operation lock.' `
+                -AbandonedOwner $artifactOperationLock.AbandonedOwner)
+    }
+    if (Test-RSArtifactOperationContaminated -RepoRoot $repoRoot) {
+        $markerPath = Get-RSArtifactContaminationMarkerPath -RepoRoot $repoRoot
+        throw "Direct MSBuild cannot repair contaminated shared artifacts. Run a matching full-solution build.ps1 -Rebuild first. Marker: $markerPath"
+    }
+
+    Assert-RSNoResidualArtifactToolProcesses -RepoRoot $repoRoot
+    $resolvedMsbuildPath = Resolve-MSBuildPath
+    $exitCode = Invoke-RSProcess `
+        -FilePath $resolvedMsbuildPath `
+        -Arguments $MSBuildArguments `
+        -WorkingDirectory $repoRoot
+    exit $exitCode
 }
 finally {
-    $process.Dispose()
+    Exit-RSArtifactOperationLock -Lock $artifactOperationLock
 }

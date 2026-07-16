@@ -17,8 +17,8 @@ inline constexpr uint32_t kDefaultSnippetCharacters   = 160u;
 inline constexpr size_t kDefaultReadChunkBytes        = 256u * 1024u;
 inline constexpr size_t kDefaultLiteralChunkChars     = 32u * 1024u;
 inline constexpr size_t kMaxRegexContentCharacters    = 5u * 1024u * 1024u;
-inline constexpr size_t kMaxRegexPatternLength         = 1000u;
-inline constexpr size_t kMaxRegexGroupDepth            = 20u;
+inline constexpr size_t kMaxRegexPatternLength        = 1000u;
+inline constexpr size_t kMaxRegexGroupDepth           = 20u;
 
 enum class DecodedTextEncoding : uint32_t
 {

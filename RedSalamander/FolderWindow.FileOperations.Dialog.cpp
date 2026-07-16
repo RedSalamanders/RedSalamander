@@ -236,15 +236,17 @@ void FolderWindow::FileOperationState::EnsurePopupVisible() noexcept
         Debug::Perf::Emit(L"FileOps.InfoTask.EnsurePopupVisibleUs", L"", PerfElapsedUs(startedUs), 1u, 0u, E_HANDLE);
         return;
     }
-    const uint64_t redrawStartedUs = capturePerf ? PerfNowUs() : 0u;
-    RedrawWindow(popup, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW);
-    const uint64_t redrawUs = capturePerf ? PerfElapsedUs(redrawStartedUs) : 0u;
+    const uint64_t invalidateStartedUs = capturePerf ? PerfNowUs() : 0u;
+    // Do not force a synchronous paint from StartOperation. Popup rendering can
+    // create D2D targets and update non-client chrome, which may re-enter paint.
+    InvalidateRect(popup, nullptr, FALSE);
+    const uint64_t invalidateUs = capturePerf ? PerfElapsedUs(invalidateStartedUs) : 0u;
     if (capturePerf)
     {
         Debug::Perf::Emit(L"FileOps.InfoTask.EnsurePopupVisible.CreateUs", L"", createUs, 1u, 1u, S_OK);
         Debug::Perf::Emit(L"FileOps.InfoTask.EnsurePopupVisible.ShowWindowUs", L"", showUs, 1u, 1u, S_OK);
         Debug::Perf::Emit(L"FileOps.InfoTask.EnsurePopupVisible.SetWindowPosUs", L"", positionUs, 1u, 1u, S_OK);
-        Debug::Perf::Emit(L"FileOps.InfoTask.EnsurePopupVisible.RedrawWindowUs", L"", redrawUs, 1u, 1u, S_OK);
+        Debug::Perf::Emit(L"FileOps.InfoTask.EnsurePopupVisible.InvalidateUs", L"", invalidateUs, 1u, 1u, S_OK);
     }
     Debug::Perf::Emit(L"FileOps.InfoTask.EnsurePopupVisibleUs", L"", PerfElapsedUs(startedUs), 1u, 1u, S_OK);
 }

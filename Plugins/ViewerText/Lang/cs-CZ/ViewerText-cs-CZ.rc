@@ -321,6 +321,8 @@ BEGIN
     IDS_VIEWERTEXT_CAPTION_ERROR "Prohlížeč"
     IDS_VIEWERTEXT_ERR_OPEN_FAILED "Soubor se nepodařilo otevřít."
     IDS_VIEWERTEXT_ERR_SAVE_FAILED "Soubor se nepodařilo uložit."
+    IDS_VIEWERTEXT_ERR_SAVE_LOADING "Před uložením počkejte, až se soubor dokončí načítat."
+    IDS_VIEWERTEXT_ERR_SAVE_STREAM_CONVERT "Tento soubor je načten pouze částečně. Chcete-li jej uložit bez převodu, zvolte Zachovat původní kódování."
 
     IDS_VIEWERTEXT_DIALOG_OPEN_TITLE "Otevřít soubor"
     IDS_VIEWERTEXT_DIALOG_SAVE_TITLE "Uložit soubor jako"
@@ -371,4 +373,5 @@ IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_ADDED_FILE "[žádný soubor na levé straně:
 IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_DELETED_FILE "[žádný soubor na pravé straně: oprava tento soubor smaže]"
 IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_TOO_LARGE "[nezměněné řádky skryté: odkazovaný soubor je příliš velký na rozbalení]"
 IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_BINARY "[nezměněné řádky skryté: odkazovaný soubor je binární]"
+IDS_VIEWERTEXT_MSG_HEX_COPY_TRUNCATED "Výběr byl příliš velký. Bylo zkopírováno pouze prvních 256 KiB."
 END

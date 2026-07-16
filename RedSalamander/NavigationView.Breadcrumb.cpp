@@ -565,8 +565,7 @@ void NavigationView::RenderBreadcrumbs()
 
         const bool lastSegment = i == (_segments.size() - 1);
 
-        ID2D1SolidColorBrush* textBrush =
-            (! _embeddedDestinationMode && ! segment.isEllipsis && lastSegment) ? _accentBrush.get() : _textBrush.get();
+        ID2D1SolidColorBrush* textBrush = (! _embeddedDestinationMode && ! segment.isEllipsis && lastSegment) ? _accentBrush.get() : _textBrush.get();
 
         if (! _embeddedDestinationMode && ! segment.isEllipsis && _theme.rainbowMode && _rainbowBrush)
         {

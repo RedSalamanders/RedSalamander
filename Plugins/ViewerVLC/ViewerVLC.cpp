@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cwctype>
@@ -9,6 +10,7 @@
 #include <limits>
 #include <optional>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <commdlg.h>
@@ -17,6 +19,7 @@
 #include <dwmapi.h>
 #include <dwrite.h>
 #include <shellapi.h>
+#include <shlobj_core.h>
 #include <winreg.h>
 
 #include <yyjson.h>
@@ -25,6 +28,7 @@
 #include "Helpers.h"
 #include "Win32CallbackHelpers.h"
 #include "WindowMessages.h"
+#include "ViewerTitleBarTheme.h"
 #include "WindowSizing.h"
 
 #include "resource.h"
@@ -36,6 +40,7 @@ namespace Typography = RedSalamander::DxUi::Typography;
 #pragma comment(lib, "Dwmapi.lib")
 #pragma comment(lib, "d2d1.lib")
 #pragma comment(lib, "dwrite.lib")
+#pragma comment(lib, "Shell32.lib")
 
 // libVLC forward declarations (loaded dynamically; no headers required).
 struct libvlc_instance_t;
@@ -71,6 +76,8 @@ constexpr wchar_t kHudGlyphSnapshot                  = static_cast<wchar_t>(0xE7
 constexpr wchar_t kHudGlyphVolume                    = static_cast<wchar_t>(0xE767);
 constexpr wchar_t kHudGlyphMute                      = static_cast<wchar_t>(0xE74F);
 const int kViewerVlcModuleAnchor                     = 0;
+std::atomic_uint64_t g_nextViewerVlcWindowIdentity{1};
+std::atomic_uint64_t g_asyncResultPostFailures{0};
 
 constexpr char kViewerVlcSchemaJson[] = R"json(
 {
@@ -176,7 +183,7 @@ constexpr char kViewerVlcSchemaJson[] = R"json(
       "label": "Extra VLC arguments",
       "type": "text",
       "default": "",
-      "description": "Additional libVLC options (space-separated). Example: --no-sub-autodetect-file"
+      "description": "Trusted-user libVLC options (space-separated). Plugin/search/module-loading overrides are rejected. Example: --no-sub-autodetect-file"
     },
     {
       "key": "lastVolumePercent",
@@ -212,13 +219,10 @@ template <typename T> [[nodiscard]] bool TryLoadProc(HMODULE module, const char*
     return out != nullptr;
 }
 
-[[nodiscard]] COLORREF ColorRefFromArgb(uint32_t argb) noexcept
-{
-    const BYTE r = static_cast<BYTE>((argb >> 16) & 0xFFu);
-    const BYTE g = static_cast<BYTE>((argb >> 8) & 0xFFu);
-    const BYTE b = static_cast<BYTE>(argb & 0xFFu);
-    return RGB(r, g, b);
-}
+using Common::Colors::BlendColorRefTruncate;
+using Common::Colors::ColorRefFromArgb;
+using Common::Colors::ColorRefFromHsvClampedNegativeHueToZero;
+using Common::Colors::StableVisualHash32Utf16V1;
 
 #ifdef ENABLE_TESTS
 [[nodiscard]] uint32_t OpaqueArgbFromColorRef(COLORREF color) noexcept
@@ -228,116 +232,15 @@ template <typename T> [[nodiscard]] bool TryLoadProc(HMODULE module, const char*
 }
 #endif
 
-[[nodiscard]] COLORREF BlendColor(COLORREF under, COLORREF over, uint8_t alpha) noexcept
-{
-    const uint32_t inv = static_cast<uint32_t>(255u - alpha);
-
-    const uint32_t ur = static_cast<uint32_t>(GetRValue(under));
-    const uint32_t ug = static_cast<uint32_t>(GetGValue(under));
-    const uint32_t ub = static_cast<uint32_t>(GetBValue(under));
-
-    const uint32_t or_ = static_cast<uint32_t>(GetRValue(over));
-    const uint32_t og  = static_cast<uint32_t>(GetGValue(over));
-    const uint32_t ob  = static_cast<uint32_t>(GetBValue(over));
-
-    const uint8_t r = static_cast<uint8_t>((ur * inv + or_ * static_cast<uint32_t>(alpha)) / 255u);
-    const uint8_t g = static_cast<uint8_t>((ug * inv + og * static_cast<uint32_t>(alpha)) / 255u);
-    const uint8_t b = static_cast<uint8_t>((ub * inv + ob * static_cast<uint32_t>(alpha)) / 255u);
-    return RGB(r, g, b);
-}
-
-[[nodiscard]] COLORREF ContrastingTextColor(COLORREF background) noexcept
-{
-    const uint32_t r    = static_cast<uint32_t>(GetRValue(background));
-    const uint32_t g    = static_cast<uint32_t>(GetGValue(background));
-    const uint32_t b    = static_cast<uint32_t>(GetBValue(background));
-    const uint32_t luma = (r * 299u + g * 587u + b * 114u) / 1000u;
-    return luma < 128u ? RGB(255, 255, 255) : RGB(0, 0, 0);
-}
-
-[[nodiscard]] uint32_t StableHash32(std::wstring_view text) noexcept
-{
-    uint32_t hash = 2166136261u;
-    for (wchar_t ch : text)
-    {
-        hash ^= static_cast<uint32_t>(ch);
-        hash *= 16777619u;
-    }
-    return hash;
-}
-
-[[nodiscard]] COLORREF ColorFromHSV(float hueDegrees, float saturation, float value) noexcept
-{
-    const float h = std::fmod(std::max(0.0f, hueDegrees), 360.0f);
-    const float s = std::clamp(saturation, 0.0f, 1.0f);
-    const float v = std::clamp(value, 0.0f, 1.0f);
-
-    const float c = v * s;
-    const float x = c * (1.0f - std::fabs(std::fmod(h / 60.0f, 2.0f) - 1.0f));
-    const float m = v - c;
-
-    float rf = 0.0f;
-    float gf = 0.0f;
-    float bf = 0.0f;
-
-    if (h < 60.0f)
-    {
-        rf = c;
-        gf = x;
-        bf = 0.0f;
-    }
-    else if (h < 120.0f)
-    {
-        rf = x;
-        gf = c;
-        bf = 0.0f;
-    }
-    else if (h < 180.0f)
-    {
-        rf = 0.0f;
-        gf = c;
-        bf = x;
-    }
-    else if (h < 240.0f)
-    {
-        rf = 0.0f;
-        gf = x;
-        bf = c;
-    }
-    else if (h < 300.0f)
-    {
-        rf = x;
-        gf = 0.0f;
-        bf = c;
-    }
-    else
-    {
-        rf = c;
-        gf = 0.0f;
-        bf = x;
-    }
-
-    const auto toByte = [](float v01) noexcept
-    {
-        const float scaled = std::clamp(v01 * 255.0f, 0.0f, 255.0f);
-        return static_cast<BYTE>(std::lround(scaled));
-    };
-
-    const BYTE r = toByte(rf + m);
-    const BYTE g = toByte(gf + m);
-    const BYTE b = toByte(bf + m);
-    return RGB(r, g, b);
-}
-
 [[nodiscard]] COLORREF ResolveAccentColor(const ViewerTheme& theme, std::wstring_view seed) noexcept
 {
     if (theme.rainbowMode)
     {
-        const uint32_t h = StableHash32(seed);
+        const uint32_t h = StableVisualHash32Utf16V1(seed);
         const float hue  = static_cast<float>(h % 360u);
         const float sat  = theme.darkBase ? 0.70f : 0.55f;
         const float val  = theme.darkBase ? 0.95f : 0.85f;
-        return ColorFromHSV(hue, sat, val);
+        return ColorRefFromHsvClampedNegativeHueToZero(hue, sat, val);
     }
 
     return ColorRefFromArgb(theme.accentArgb);
@@ -388,7 +291,7 @@ struct LoadingSpinnerVisualSpec
     spec.rainbowMode       = themed && theme && theme->rainbowMode != FALSE && theme->highContrast == FALSE;
     if (spec.rainbowMode)
     {
-        spec.rainbowHue        = static_cast<float>(StableHash32(seed) % 360u);
+        spec.rainbowHue        = static_cast<float>(StableVisualHash32Utf16V1(seed) % 360u);
         spec.rainbowSaturation = (theme && theme->darkBase != FALSE) ? 0.78f : 0.66f;
         spec.rainbowValue      = (theme && theme->darkBase != FALSE) ? 1.0f : 0.90f;
     }
@@ -408,7 +311,7 @@ struct LoadingSpinnerVisualSpec
     {
         hue -= 360.0f;
     }
-    return ColorFromHSV(hue, spec.rainbowSaturation, spec.rainbowValue);
+    return ColorRefFromHsvClampedNegativeHueToZero(hue, spec.rainbowSaturation, spec.rainbowValue);
 }
 
 struct HudLayout
@@ -484,49 +387,12 @@ struct HudLayout
 
 [[nodiscard]] std::wstring Utf16FromUtf8(std::string_view text) noexcept
 {
-    if (text.empty() || text.size() > static_cast<size_t>((std::numeric_limits<int>::max)()))
-    {
-        return {};
-    }
-
-    const int required = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0);
-    if (required <= 0)
-    {
-        return {};
-    }
-
-    std::wstring result(static_cast<size_t>(required), L'\0');
-    const int written = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), result.data(), required);
-    if (written != required)
-    {
-        return {};
-    }
-
-    return result;
+    return Common::Strings::Utf16FromUtf8StrictOrEmpty(text);
 }
 
 [[nodiscard]] std::string Utf8FromUtf16(std::wstring_view text) noexcept
 {
-    if (text.empty() || text.size() > static_cast<size_t>((std::numeric_limits<int>::max)()))
-    {
-        return {};
-    }
-
-    const int required = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
-    if (required <= 0)
-    {
-        return {};
-    }
-
-    std::string result(static_cast<size_t>(required), '\0');
-    const int written =
-        WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), result.data(), required, nullptr, nullptr);
-    if (written != required)
-    {
-        return {};
-    }
-
-    return result;
+    return Common::Strings::Utf8FromUtf16StrictOrEmpty(text);
 }
 
 [[nodiscard]] bool IsRegularFile(const std::filesystem::path& path) noexcept
@@ -558,16 +424,19 @@ struct HudLayout
         return {};
     }
 
-    if (IsRegularFile(input))
+    std::filesystem::path installDir = input;
+    if (IsRegularFile(installDir))
     {
-        const std::wstring ext = input.extension().wstring();
+        const std::wstring ext = installDir.extension().wstring();
         if (_wcsicmp(ext.c_str(), L".exe") == 0 || _wcsicmp(ext.c_str(), L".dll") == 0)
         {
-            return input.parent_path();
+            installDir = installDir.parent_path();
         }
     }
 
-    return input;
+    std::error_code ec;
+    const std::filesystem::path absolute = std::filesystem::absolute(installDir, ec);
+    return ec ? std::filesystem::path{} : absolute.lexically_normal();
 }
 
 [[nodiscard]] bool IsVlcInstallDir(const std::filesystem::path& path) noexcept
@@ -638,33 +507,14 @@ struct HudLayout
     return std::filesystem::path(buffer);
 }
 
-[[nodiscard]] std::optional<std::filesystem::path> TryGetEnvPath(const wchar_t* var) noexcept
+[[nodiscard]] std::optional<std::filesystem::path> TryGetKnownFolderPath(REFKNOWNFOLDERID folderId) noexcept
 {
-    if (! var || var[0] == L'\0')
+    wil::unique_cotaskmem_string path;
+    if (FAILED(SHGetKnownFolderPath(folderId, KF_FLAG_DEFAULT, nullptr, path.put())) || ! path || path.get()[0] == L'\0')
     {
         return std::nullopt;
     }
-
-    const DWORD required = GetEnvironmentVariableW(var, nullptr, 0);
-    if (required == 0 || required > 32768)
-    {
-        return std::nullopt;
-    }
-
-    std::wstring value(static_cast<size_t>(required), L'\0');
-    const DWORD written = GetEnvironmentVariableW(var, value.data(), required);
-    if (written == 0 || written >= required)
-    {
-        return std::nullopt;
-    }
-
-    value.resize(static_cast<size_t>(written));
-    if (value.empty())
-    {
-        return std::nullopt;
-    }
-
-    return std::filesystem::path(value);
+    return std::filesystem::path(path.get());
 }
 
 [[nodiscard]] std::optional<std::filesystem::path> AutoDetectVlcInstallDir() noexcept
@@ -699,7 +549,7 @@ struct HudLayout
         }
     }
 
-    if (const auto programFiles = TryGetEnvPath(L"ProgramFiles"); programFiles.has_value())
+    if (const auto programFiles = TryGetKnownFolderPath(FOLDERID_ProgramFiles); programFiles.has_value())
     {
         const std::filesystem::path dir = programFiles.value() / L"VideoLAN" / L"VLC";
         if (IsVlcInstallDir(dir))
@@ -708,28 +558,12 @@ struct HudLayout
         }
     }
 
-    if (const auto programFilesX86 = TryGetEnvPath(L"ProgramFiles(x86)"); programFilesX86.has_value())
+    if (const auto programFilesX86 = TryGetKnownFolderPath(FOLDERID_ProgramFilesX86); programFilesX86.has_value())
     {
         const std::filesystem::path dir = programFilesX86.value() / L"VideoLAN" / L"VLC";
         if (IsVlcInstallDir(dir))
         {
             return dir;
-        }
-    }
-
-    const DWORD probe = SearchPathW(nullptr, L"vlc.exe", nullptr, 0, nullptr, nullptr);
-    if (probe > 0 && probe < 32768)
-    {
-        std::wstring buffer(static_cast<size_t>(probe + 1), L'\0');
-        const DWORD written = SearchPathW(nullptr, L"vlc.exe", nullptr, probe + 1, buffer.data(), nullptr);
-        if (written > 0)
-        {
-            buffer.resize(static_cast<size_t>(written));
-            const std::filesystem::path dir = NormalizeVlcInstallPath(std::filesystem::path(buffer));
-            if (IsVlcInstallDir(dir))
-            {
-                return dir;
-            }
         }
     }
 
@@ -781,9 +615,118 @@ struct HudLayout
     return false;
 }
 
-[[nodiscard]] std::vector<std::string> SplitVlcArgs(std::string_view text) noexcept
+[[nodiscard]] constexpr char AsciiLower(const char value) noexcept
 {
-    std::vector<std::string> args;
+    return value >= 'A' && value <= 'Z' ? static_cast<char>(value + ('a' - 'A')) : value;
+}
+
+[[nodiscard]] bool EqualsAsciiIgnoreCase(std::string_view left, std::string_view right) noexcept
+{
+    if (left.size() != right.size())
+    {
+        return false;
+    }
+
+    for (size_t index = 0; index < left.size(); ++index)
+    {
+        if (AsciiLower(left[index]) != AsciiLower(right[index]))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+[[nodiscard]] bool IsValidVlcModuleToken(std::string_view value, bool allowEmpty) noexcept
+{
+    if (value.empty())
+    {
+        return allowEmpty;
+    }
+    if (value.size() > 64 || value.front() == '-' || value.front() == '.')
+    {
+        return false;
+    }
+
+    return std::ranges::all_of(value, [](const char ch) noexcept
+    {
+        return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '-' || ch == '.';
+    });
+}
+
+[[nodiscard]] bool IsAllowedAvcodecHardware(std::string_view value) noexcept
+{
+    static constexpr std::array<std::string_view, 4> kAllowed{{"any", "none", "dxva2", "d3d11va"}};
+    return std::ranges::any_of(kAllowed, [value](const std::string_view allowed) noexcept { return EqualsAsciiIgnoreCase(value, allowed); });
+}
+
+[[nodiscard]] bool IsAllowedAudioVisualization(std::string_view value) noexcept
+{
+    static constexpr std::array<std::string_view, 9> kAllowed{{"off", "any", "projectm", "spectrometer", "spectrum", "vumeter", "goom", "glspectrum", "visual"}};
+    return std::ranges::any_of(kAllowed, [value](const std::string_view allowed) noexcept { return EqualsAsciiIgnoreCase(value, allowed); });
+}
+
+[[nodiscard]] bool IsDangerousVlcExtraOption(std::string_view key) noexcept
+{
+    if (key.size() > 3u && EqualsAsciiIgnoreCase(key.substr(0u, 3u), "no-"))
+    {
+        key.remove_prefix(3u);
+    }
+
+    static constexpr std::array<std::string_view, 32> kDenied{{
+        "plugin-path", "plugins-cache", "reset-plugins-cache", "config", "vlm-conf", "module", "intf", "extraintf", "control", "lua", "sout",
+        "codec", "dec-dev", "demux", "access", "stream-filter", "video-filter", "audio-filter", "sub-filter", "services-discovery", "keystore", "input-slave",
+        "plugins-scan", "ignore-config", "http", "rc", "telnet", "sub-source", "video-splitter", "logfile", "file-logging", "pidfile",
+    }};
+
+    if (EqualsAsciiIgnoreCase(key, "vout") || EqualsAsciiIgnoreCase(key, "aout") || EqualsAsciiIgnoreCase(key, "avcodec-hw") ||
+        EqualsAsciiIgnoreCase(key, "audio-visual"))
+    {
+        return true;
+    }
+
+    return std::ranges::any_of(kDenied, [key](const std::string_view denied) noexcept
+    {
+        if (key.size() < denied.size())
+        {
+            return false;
+        }
+        if (! EqualsAsciiIgnoreCase(key.substr(0, denied.size()), denied))
+        {
+            return false;
+        }
+        return key.size() == denied.size() || key[denied.size()] == '-';
+    });
+}
+
+[[nodiscard]] bool ValidateVlcExtraArgument(std::string_view argument) noexcept
+{
+    if (argument.size() < 3 || argument.size() > 512 || ! argument.starts_with("--"))
+    {
+        return false;
+    }
+    if (std::ranges::any_of(argument, [](const char ch) noexcept { return static_cast<unsigned char>(ch) < 0x20u || ch == 0x7f; }))
+    {
+        return false;
+    }
+
+    const size_t equals = argument.find('=');
+    const std::string_view key = argument.substr(2, equals == std::string_view::npos ? std::string_view::npos : equals - 2);
+    if (key.empty() || ! std::ranges::all_of(key, [](const char ch) noexcept
+        { return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-'; }))
+    {
+        return false;
+    }
+    return ! IsDangerousVlcExtraOption(key);
+}
+
+[[nodiscard]] bool SplitVlcArgs(std::string_view text, std::vector<std::string>& args) noexcept
+{
+    args.clear();
+    if (text.size() > 4096)
+    {
+        return false;
+    }
     std::string current;
     bool inQuotes  = false;
     char quoteChar = '\0';
@@ -793,6 +736,10 @@ struct HudLayout
     {
         if (! current.empty())
         {
+            if (args.size() >= 64)
+            {
+                return;
+            }
             args.push_back(std::move(current));
             current.clear();
         }
@@ -842,13 +789,33 @@ struct HudLayout
         current.push_back(ch);
     }
 
-    if (escaping)
+    if (escaping || inQuotes)
     {
-        current.push_back('\\');
+        return false;
     }
 
     flush();
-    return args;
+    if (! current.empty() || args.size() > 64)
+    {
+        return false;
+    }
+    return std::ranges::all_of(args, ValidateVlcExtraArgument);
+}
+
+[[nodiscard]] bool IsValidVlcConfiguration(const std::string_view avcodecHw,
+                                           const std::string_view videoOutput,
+                                           const std::string_view audioOutput,
+                                           const std::string_view audioVisualization,
+                                           const std::string_view extraArgs) noexcept
+{
+    if (! IsAllowedAvcodecHardware(avcodecHw) || ! IsValidVlcModuleToken(videoOutput, true) || ! IsValidVlcModuleToken(audioOutput, true) ||
+        ! IsAllowedAudioVisualization(audioVisualization))
+    {
+        return false;
+    }
+
+    std::vector<std::string> parsed;
+    return SplitVlcArgs(extraArgs, parsed);
 }
 
 [[nodiscard]] std::wstring FormatDurationMs(libvlc_time_t ms) noexcept
@@ -902,22 +869,7 @@ struct VlcState
     VlcState(VlcState&&)                 = delete;
     VlcState& operator=(const VlcState&) = delete;
     VlcState& operator=(VlcState&&)      = delete;
-
-    ~VlcState()
-    {
-        if (! dllDirectoryWasSet)
-        {
-            return;
-        }
-
-        if (previousDllDirectory.empty())
-        {
-            SetDllDirectoryW(nullptr);
-            return;
-        }
-
-        SetDllDirectoryW(previousDllDirectory.c_str());
-    }
+    ~VlcState()                          = default;
 
     wil::unique_hmodule module;
 
@@ -984,11 +936,15 @@ struct VlcState
     std::unique_ptr<libvlc_media_t, MediaDeleter> media{nullptr, {}};
     std::unique_ptr<libvlc_media_player_t, PlayerDeleter> player{nullptr, {}};
 
-    std::wstring previousDllDirectory;
-    bool dllDirectoryWasSet = false;
-
     std::filesystem::path installDir;
     std::string instanceArgsKey;
+    std::unique_ptr<VlcState> deferredCleanupNext;
+    uint64_t cleanupRequestId      = 0u;
+    uint64_t cleanupWindowIdentity = 0u;
+#ifdef ENABLE_TESTS
+    uint32_t cleanupDelayMs = 0u;
+    std::shared_ptr<wil::unique_handle> cleanupReleaseGate;
+#endif
 };
 
 struct ViewerVLC::VlcLoadSpec
@@ -1005,12 +961,27 @@ struct ViewerVLC::VlcAsyncLoadResult
     VlcAsyncLoadResult(VlcAsyncLoadResult&&)                 = delete;
     VlcAsyncLoadResult& operator=(const VlcAsyncLoadResult&) = delete;
     VlcAsyncLoadResult& operator=(VlcAsyncLoadResult&&)      = delete;
+    ~VlcAsyncLoadResult()
+    {
+        if (state && owner)
+        {
+            state->cleanupRequestId      = requestId;
+            state->cleanupWindowIdentity = windowIdentity;
+            owner->DeferVlcStateCleanup(std::move(state));
+        }
+    }
 
-    uint64_t generation = 0;
+    wil::unique_hmodule moduleKeepAlive;
+    uint64_t requestId      = 0;
+    uint64_t windowIdentity = 0;
     std::filesystem::path path;
     wil::com_ptr<IViewer> self;
+    ViewerVLC* owner = nullptr;
     std::unique_ptr<VlcState> state;
     std::wstring error;
+    bool reuseExisting = false;
+    HRESULT hr         = E_FAIL;
+    uint64_t elapsedUs = 0;
 };
 
 struct ViewerVLC::VlcAsyncLoadWork
@@ -1023,51 +994,70 @@ struct ViewerVLC::VlcAsyncLoadWork
 
     wil::unique_hmodule moduleKeepAlive;
     wil::com_ptr<IViewer> self;
-    HWND hwnd           = nullptr;
-    uint64_t generation = 0;
+    ViewerVLC* owner         = nullptr;
+    HWND hwnd              = nullptr;
+    uint64_t requestId      = 0;
+    uint64_t windowIdentity = 0;
     std::filesystem::path path;
-    VlcLoadSpec spec;
+    ViewerVlcConfig config;
+    std::filesystem::path reusableInstallDir;
+    std::string reusableInstanceArgsKey;
+    bool hasReusableInstance = false;
+#ifdef ENABLE_TESTS
+    uint32_t delayMs = 0;
+    bool failCompletionPost = false;
+#endif
+};
+
+struct ViewerVLC::VlcAsyncCloseResult
+{
+    VlcAsyncCloseResult()                                      = default;
+    VlcAsyncCloseResult(const VlcAsyncCloseResult&)            = delete;
+    VlcAsyncCloseResult(VlcAsyncCloseResult&&)                 = delete;
+    VlcAsyncCloseResult& operator=(const VlcAsyncCloseResult&) = delete;
+    VlcAsyncCloseResult& operator=(VlcAsyncCloseResult&&)      = delete;
+
+    wil::unique_hmodule moduleKeepAlive;
+    wil::com_ptr<IViewer> self;
+    HWND hwnd               = nullptr;
+    uint64_t requestId      = 0;
+    uint64_t windowIdentity = 0;
+    uint64_t elapsedUs      = 0;
+};
+
+struct ViewerVLC::VlcAsyncCloseWork
+{
+    VlcAsyncCloseWork()                                    = default;
+    VlcAsyncCloseWork(const VlcAsyncCloseWork&)            = delete;
+    VlcAsyncCloseWork(VlcAsyncCloseWork&&)                 = delete;
+    VlcAsyncCloseWork& operator=(const VlcAsyncCloseWork&) = delete;
+    VlcAsyncCloseWork& operator=(VlcAsyncCloseWork&&)      = delete;
+
+    wil::unique_hmodule moduleKeepAlive;
+    wil::com_ptr<IViewer> self;
+    ViewerVLC* owner          = nullptr;
+    HWND hwnd               = nullptr;
+    uint64_t requestId      = 0;
+    uint64_t windowIdentity = 0;
+    std::unique_ptr<VlcState> state;
+#ifdef ENABLE_TESTS
+    uint32_t delayMs = 0;
+    std::shared_ptr<wil::unique_handle> releaseGate;
+    bool failCompletionPost = false;
+#endif
 };
 
 namespace
 {
-struct VlcPlayerCleanupWork final
-{
-    VlcPlayerCleanupWork()                                       = default;
-    VlcPlayerCleanupWork(const VlcPlayerCleanupWork&)            = delete;
-    VlcPlayerCleanupWork(VlcPlayerCleanupWork&&)                 = delete;
-    VlcPlayerCleanupWork& operator=(const VlcPlayerCleanupWork&) = delete;
-    VlcPlayerCleanupWork& operator=(VlcPlayerCleanupWork&&)      = delete;
-
-    wil::unique_hmodule moduleKeepAlive;
-    wil::unique_hmodule vlcModuleKeepAlive;
-    std::unique_ptr<libvlc_instance_t, VlcState::InstanceDeleter> instanceRef{nullptr, {}};
-    std::unique_ptr<libvlc_media_t, VlcState::MediaDeleter> media{nullptr, {}};
-    std::unique_ptr<libvlc_media_player_t, VlcState::PlayerDeleter> player{nullptr, {}};
-    void(__cdecl* stop)(libvlc_media_player_t*) = nullptr;
-#ifdef ENABLE_TESTS
-    uint32_t delayMs = 0;
-#endif
-};
-
-struct VlcStateCleanupWork final
-{
-    VlcStateCleanupWork()                                      = default;
-    VlcStateCleanupWork(const VlcStateCleanupWork&)            = delete;
-    VlcStateCleanupWork(VlcStateCleanupWork&&)                 = delete;
-    VlcStateCleanupWork& operator=(const VlcStateCleanupWork&) = delete;
-    VlcStateCleanupWork& operator=(VlcStateCleanupWork&&)      = delete;
-
-    wil::unique_hmodule moduleKeepAlive;
-    std::unique_ptr<VlcState> state;
-#ifdef ENABLE_TESTS
-    uint32_t delayMs = 0;
-#endif
-};
+constexpr DWORD kVlcModuleLoadFlags = LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS;
 
 #ifdef ENABLE_TESTS
-void ApplyDebugStopDelay(const uint32_t delayMs) noexcept
+void ApplyDebugStopDelay(const uint32_t delayMs, const std::shared_ptr<wil::unique_handle>& releaseGate = {}) noexcept
 {
+    if (releaseGate && releaseGate->get())
+    {
+        static_cast<void>(WaitForSingleObject(releaseGate->get(), 30'000u));
+    }
     if (delayMs != 0)
     {
         Sleep(delayMs);
@@ -1075,153 +1065,171 @@ void ApplyDebugStopDelay(const uint32_t delayMs) noexcept
 }
 #endif
 
-wil::unique_hmodule KeepLibVlcModuleLoaded(const std::filesystem::path& installDir) noexcept
+void NotifyVlcAsyncFallback(HWND hwnd, const uint64_t windowIdentity) noexcept
 {
-    if (installDir.empty())
-    {
-        return {};
-    }
-
-    wil::unique_hmodule module(LoadLibraryW((installDir / L"libvlc.dll").c_str()));
-    if (! module)
-    {
-        Debug::Warning(L"ViewerVLC: failed to pin libvlc.dll while retiring playback state.");
-    }
-    return module;
-}
-
-void RestoreVlcDllDirectory(VlcState& state) noexcept
-{
-    if (! state.dllDirectoryWasSet)
+    if (hwnd == nullptr || windowIdentity == 0u || IsWindow(hwnd) == FALSE)
     {
         return;
     }
 
-    if (state.previousDllDirectory.empty())
-    {
-        SetDllDirectoryW(nullptr);
-    }
-    else
-    {
-        SetDllDirectoryW(state.previousDllDirectory.c_str());
-    }
-    state.previousDllDirectory.clear();
-    state.dllDirectoryWasSet = false;
+    DWORD_PTR ignored = 0u;
+    static_cast<void>(SendMessageTimeoutW(hwnd,
+                                          WndMsg::kViewerVlcAsyncFallbackReady,
+                                          static_cast<WPARAM>(windowIdentity),
+                                          0,
+                                          SMTO_ABORTIFHUNG | SMTO_BLOCK,
+                                          100u,
+                                          &ignored));
 }
 
-void CleanupVlcPlayer(std::unique_ptr<VlcPlayerCleanupWork> work) noexcept
+
+} // namespace
+
+bool ViewerVLC::EnsureVlcCleanupDispatcher() noexcept
 {
+    if (_cleanupDispatcherWork)
+    {
+        return true;
+    }
+
+    wil::unique_hmodule modulePin = AcquireModuleReferenceFromAddress(&kViewerVlcModuleAnchor);
+    if (! modulePin)
+    {
+        Debug::Error(L"ViewerVLC: failed to pin the plugin module for the cleanup dispatcher.");
+        return false;
+    }
+
+    wil::unique_threadpool_work_nowait work(CreateThreadpoolWork(&ViewerVLC::VlcCleanupDispatcherCallback, this, nullptr));
     if (! work)
     {
-        return;
+        Debug::ErrorWithLastError(L"ViewerVLC: CreateThreadpoolWork failed for the cleanup dispatcher.");
+        return false;
     }
 
-    static_cast<void>(work->moduleKeepAlive);
-    static_cast<void>(work->vlcModuleKeepAlive);
-
-#ifdef ENABLE_TESTS
-    ApplyDebugStopDelay(work->delayMs);
-#endif
-
-    if (work->player && work->stop)
-    {
-        work->stop(work->player.get());
-    }
-    work->player.reset();
-    work->media.reset();
-    work->instanceRef.reset();
+    _cleanupDispatcherModulePin = std::move(modulePin);
+    _cleanupDispatcherWork      = std::move(work);
+    return true;
 }
 
-void CleanupVlcState(std::unique_ptr<VlcStateCleanupWork> work) noexcept
+void ViewerVLC::ScheduleVlcCleanupDispatcher() noexcept
 {
-    if (! work)
+    bool submit = false;
+    {
+        std::lock_guard lock(_cleanupDispatcherMutex);
+        if (! _cleanupDispatcherWork || _cleanupDispatcherScheduled || (_deferredCleanupHead == nullptr && _syntheticCleanupCount == 0u))
+        {
+            return;
+        }
+
+        _cleanupDispatcherScheduled = true;
+        AddRef(); // Balanced by the dispatcher callback after it has stopped touching this object.
+        submit = true;
+    }
+
+    if (submit)
+    {
+        SubmitThreadpoolWork(_cleanupDispatcherWork.get());
+    }
+}
+
+void CALLBACK ViewerVLC::VlcCleanupDispatcherCallback(PTP_CALLBACK_INSTANCE instance, void* context, PTP_WORK /*work*/) noexcept
+{
+    auto* self = static_cast<ViewerVLC*>(context);
+    if (self == nullptr)
     {
         return;
     }
 
-    static_cast<void>(work->moduleKeepAlive);
-    VlcState* state = work->state.get();
-    if (state && state->player)
+    wil::unique_hmodule callbackPin = AcquireModuleReferenceFromAddress(&kViewerVlcModuleAnchor);
+    if (! callbackPin)
     {
+        std::terminate();
+    }
+    TransferModulePinToCallbackReturn(instance, callbackPin);
+
+    bool completedAny = false;
+    for (;;)
+    {
+        std::unique_ptr<VlcState> state;
+        uint64_t requestId      = 0u;
+        uint64_t windowIdentity = 0u;
 #ifdef ENABLE_TESTS
-        ApplyDebugStopDelay(work->delayMs);
+        uint32_t delayMs = 0u;
+        std::shared_ptr<wil::unique_handle> releaseGate;
 #endif
-        if (state->libvlc_media_player_stop)
+        bool synthetic          = false;
+        {
+            std::lock_guard lock(self->_cleanupDispatcherMutex);
+            if (self->_deferredCleanupHead)
+            {
+                state = std::move(self->_deferredCleanupHead);
+                self->_deferredCleanupHead = std::move(state->deferredCleanupNext);
+                requestId                  = state->cleanupRequestId;
+                windowIdentity             = state->cleanupWindowIdentity;
+#ifdef ENABLE_TESTS
+                delayMs     = state->cleanupDelayMs;
+                releaseGate = std::move(state->cleanupReleaseGate);
+#endif
+            }
+            else if (self->_syntheticCleanupCount != 0u)
+            {
+                --self->_syntheticCleanupCount;
+                synthetic      = true;
+                requestId      = self->_syntheticCleanupRequestId;
+                windowIdentity = self->_syntheticCleanupWindowIdentity;
+#ifdef ENABLE_TESTS
+                delayMs     = self->_syntheticCleanupDelayMs;
+                releaseGate = std::exchange(self->_syntheticCleanupReleaseGate, std::shared_ptr<wil::unique_handle>{});
+#endif
+            }
+            else
+            {
+                self->_cleanupDispatcherScheduled = false;
+                break;
+            }
+        }
+
+#ifdef ENABLE_TESTS
+        ApplyDebugStopDelay(delayMs, releaseGate);
+#endif
+        const auto startedAt = std::chrono::steady_clock::now();
+        if (state && state->player && state->libvlc_media_player_stop)
         {
             state->libvlc_media_player_stop(state->player.get());
         }
-        state->player.reset();
+        state.reset();
+
+        if (! synthetic)
+        {
+            static_cast<void>(self->_deferredCleanupCount.fetch_sub(1u, std::memory_order_acq_rel));
+        }
+        else
+        {
+            self->_syntheticCleanupPending.store(false, std::memory_order_release);
+        }
+
+        self->RecordAsyncFallbackCompletion(AsyncFallbackCompletion{.kind = AsyncFallbackKind::Cleanup,
+                                                                     .requestId = requestId,
+                                                                     .windowIdentity = windowIdentity,
+                                                                     .hr = S_OK});
+        Debug::Perf::Emit(L"viewer.vlc.cleanup_us",
+                          synthetic ? L"dispatcher-synthetic" : L"dispatcher-stop-release",
+                          Debug::Perf::ElapsedUs(startedAt),
+                          requestId,
+                          windowIdentity,
+                          S_OK);
+        completedAny = true;
     }
-    if (state)
+
+    if (completedAny)
     {
-        state->media.reset();
+        const HWND notifyWindow       = self->_cleanupNotifyWindow.load(std::memory_order_acquire);
+        const uint64_t notifyIdentity = self->_cleanupNotifyIdentity.load(std::memory_order_acquire);
+        NotifyVlcAsyncFallback(notifyWindow, notifyIdentity);
     }
-    work->state.reset();
+
+    static_cast<void>(self->Release());
 }
-
-void QueueVlcPlayerCleanup(std::unique_ptr<VlcPlayerCleanupWork> work) noexcept
-{
-    if (! work)
-    {
-        return;
-    }
-
-    const BOOL queued = TrySubmitThreadpoolCallback([](PTP_CALLBACK_INSTANCE /*instance*/, void* context) noexcept {
-        CleanupVlcPlayer(std::unique_ptr<VlcPlayerCleanupWork>(static_cast<VlcPlayerCleanupWork*>(context)));
-    }, work.get(), nullptr);
-
-    if (queued == 0)
-    {
-        Debug::Warning(L"ViewerVLC: failed to queue async player cleanup; falling back to synchronous cleanup.");
-        CleanupVlcPlayer(std::move(work));
-        return;
-    }
-
-    static_cast<void>(work.release());
-}
-
-void QueueVlcStateCleanup(std::unique_ptr<VlcStateCleanupWork> work) noexcept
-{
-    if (! work)
-    {
-        return;
-    }
-
-    const BOOL queued = TrySubmitThreadpoolCallback([](PTP_CALLBACK_INSTANCE /*instance*/, void* context) noexcept {
-        CleanupVlcState(std::unique_ptr<VlcStateCleanupWork>(static_cast<VlcStateCleanupWork*>(context)));
-    }, work.get(), nullptr);
-
-    if (queued == 0)
-    {
-        Debug::Warning(L"ViewerVLC: failed to queue async VLC state cleanup; falling back to synchronous cleanup.");
-        CleanupVlcState(std::move(work));
-        return;
-    }
-
-    static_cast<void>(work.release());
-}
-
-#ifdef ENABLE_TESTS
-void QueueDebugVlcStopDelay(uint32_t delayMs) noexcept
-{
-    if (delayMs == 0)
-    {
-        return;
-    }
-
-    std::unique_ptr<VlcPlayerCleanupWork> work(new (std::nothrow) VlcPlayerCleanupWork{});
-    if (! work)
-    {
-        ApplyDebugStopDelay(delayMs);
-        return;
-    }
-
-    work->moduleKeepAlive = AcquireModuleReferenceFromAddress(&kViewerVlcModuleAnchor);
-    work->delayMs         = delayMs;
-    QueueVlcPlayerCleanup(std::move(work));
-}
-#endif
-} // namespace
 
 ViewerVLC::ViewerVLC()
 {
@@ -1240,7 +1248,14 @@ ViewerVLC::ViewerVLC()
     static_cast<void>(SetConfiguration(nullptr));
 }
 
-ViewerVLC::~ViewerVLC() = default;
+ViewerVLC::~ViewerVLC()
+{
+    if (_vlc || _deferredCleanupCount.load(std::memory_order_acquire) != 0u || _syntheticCleanupPending.load(std::memory_order_acquire))
+    {
+        // A libVLC-owning state must only reach destruction through an asynchronous cleanup callback.
+        std::terminate();
+    }
+}
 
 void ViewerVLC::SetHost(IHost* host) noexcept
 {
@@ -1338,6 +1353,25 @@ HRESULT STDMETHODCALLTYPE ViewerVLC::SetConfiguration(const char* configurationJ
     uint32_t lastVolumePercent = 100;
     bool muted                 = false;
 
+    const auto readClampedUint = [](yyjson_val* value, const uint32_t minimum, const uint32_t maximum, const uint32_t fallback) noexcept
+    {
+        if (value == nullptr)
+        {
+            return fallback;
+        }
+        if (yyjson_is_sint(value))
+        {
+            const int64_t raw = yyjson_get_sint(value);
+            return static_cast<uint32_t>(std::clamp<int64_t>(raw, static_cast<int64_t>(minimum), static_cast<int64_t>(maximum)));
+        }
+        if (yyjson_is_uint(value))
+        {
+            const uint64_t raw = yyjson_get_uint(value);
+            return static_cast<uint32_t>(std::clamp<uint64_t>(raw, minimum, maximum));
+        }
+        return fallback;
+    };
+
     if (configurationJsonUtf8 != nullptr && configurationJsonUtf8[0] != '\0')
     {
         yyjson_doc* doc = yyjson_read(configurationJsonUtf8, strlen(configurationJsonUtf8), YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM);
@@ -1391,20 +1425,17 @@ HRESULT STDMETHODCALLTYPE ViewerVLC::SetConfiguration(const char* configurationJ
 
                 if (yyjson_val* v = yyjson_obj_get(root, "fileCachingMs"); v && (yyjson_is_sint(v) || yyjson_is_uint(v)))
                 {
-                    const int64_t raw = yyjson_is_sint(v) ? yyjson_get_sint(v) : static_cast<int64_t>(yyjson_get_uint(v));
-                    fileCachingMs     = static_cast<uint32_t>(std::clamp<int64_t>(raw, 0, 60'000));
+                    fileCachingMs = readClampedUint(v, 0u, 60'000u, fileCachingMs);
                 }
 
                 if (yyjson_val* v = yyjson_obj_get(root, "networkCachingMs"); v && (yyjson_is_sint(v) || yyjson_is_uint(v)))
                 {
-                    const int64_t raw = yyjson_is_sint(v) ? yyjson_get_sint(v) : static_cast<int64_t>(yyjson_get_uint(v));
-                    networkCachingMs  = static_cast<uint32_t>(std::clamp<int64_t>(raw, 0, 60'000));
+                    networkCachingMs = readClampedUint(v, 0u, 60'000u, networkCachingMs);
                 }
 
                 if (yyjson_val* v = yyjson_obj_get(root, "defaultPlaybackRatePercent"); v && (yyjson_is_sint(v) || yyjson_is_uint(v)))
                 {
-                    const int64_t raw          = yyjson_is_sint(v) ? yyjson_get_sint(v) : static_cast<int64_t>(yyjson_get_uint(v));
-                    defaultPlaybackRatePercent = static_cast<uint32_t>(std::clamp<int64_t>(raw, 25, 400));
+                    defaultPlaybackRatePercent = readClampedUint(v, 25u, 400u, defaultPlaybackRatePercent);
                 }
 
                 if (yyjson_val* v = yyjson_obj_get(root, "avcodecHw"); v && yyjson_is_str(v))
@@ -1449,8 +1480,7 @@ HRESULT STDMETHODCALLTYPE ViewerVLC::SetConfiguration(const char* configurationJ
 
                 if (yyjson_val* v = yyjson_obj_get(root, "lastVolumePercent"); v && (yyjson_is_sint(v) || yyjson_is_uint(v)))
                 {
-                    const int64_t raw = yyjson_is_sint(v) ? yyjson_get_sint(v) : static_cast<int64_t>(yyjson_get_uint(v));
-                    lastVolumePercent = static_cast<uint32_t>(std::clamp<int64_t>(raw, 0, 100));
+                    lastVolumePercent = readClampedUint(v, 0u, 100u, lastVolumePercent);
                 }
 
                 if (yyjson_val* v = yyjson_obj_get(root, "muted"); v)
@@ -1470,6 +1500,12 @@ HRESULT STDMETHODCALLTYPE ViewerVLC::SetConfiguration(const char* configurationJ
                 }
             }
         }
+    }
+
+    if (! IsValidVlcConfiguration(avcodecHw, videoOutput, audioOutput, audioVisualization, extraArgs))
+    {
+        Debug::Warning(L"ViewerVLC: rejected unsafe or malformed VLC option configuration.");
+        return E_INVALIDARG;
     }
 
     _config.vlcInstallPath             = std::filesystem::path(vlcInstallPath);
@@ -1898,6 +1934,18 @@ LRESULT ViewerVLC::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
             OnAsyncVlcLoadComplete(std::move(result));
             return 0;
         }
+        case WndMsg::kViewerVlcAsyncCloseComplete:
+        {
+            auto result = TakeMessagePayload<VlcAsyncCloseResult>(lp);
+            OnAsyncVlcCloseComplete(std::move(result));
+            return 0;
+        }
+        case WndMsg::kViewerVlcAsyncFallbackReady:
+            if (static_cast<uint64_t>(wp) == _windowIdentity)
+            {
+                DrainAsyncFallbackCompletions();
+            }
+            return 0;
 #ifdef ENABLE_TESTS
         case WndMsg::kViewerVlcDebugGetSnapshot:
         {
@@ -1912,6 +1960,9 @@ LRESULT ViewerVLC::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
             snapshot->loadingVisible = _loadingUiVisible;
             snapshot->missingVisible = _missingUiVisible;
             snapshot->hasVideoChild  = _hVideo && IsWindow(_hVideo.get()) != FALSE;
+            snapshot->vlcModuleLoaded   = _vlc && _vlc->module;
+            snapshot->vlcInstanceLoaded = _vlc && _vlc->instance;
+            snapshot->vlcPlayerCreated  = _vlc && _vlc->player;
             if (snapshot->hasVideoChild)
             {
                 const LONG_PTR style               = GetWindowLongPtrW(_hVideo.get(), GWL_STYLE);
@@ -1949,6 +2000,23 @@ LRESULT ViewerVLC::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
                 snapshot->loadingSpinnerFirstDotArgb      = OpaqueArgbFromColorRef(ResolveLoadingSpinnerDotColor(spinner, 0));
                 snapshot->loadingSpinnerSecondDotArgb     = OpaqueArgbFromColorRef(ResolveLoadingSpinnerDotColor(spinner, 1));
             }
+
+            snapshot->windowIdentity          = _windowIdentity;
+            snapshot->loadRequestId           = _asyncOpenGeneration;
+            snapshot->pendingLoadWorkCount    = _pendingLoadWorkCount;
+            snapshot->loadQueueAccepted       = _loadQueueAccepted;
+            snapshot->loadQueueRejected       = _loadQueueRejected;
+            snapshot->staleLoadResults        = _staleLoadResults;
+            snapshot->cleanupCompletions      = _cleanupCompletions;
+            snapshot->deferredCleanupCount    = _deferredCleanupCount.load(std::memory_order_acquire) +
+                                                (_syntheticCleanupPending.load(std::memory_order_acquire) ? 1u : 0u);
+            snapshot->cleanupDeferrals        = _cleanupDeferrals.load(std::memory_order_acquire);
+            snapshot->cleanupSubmitFailures   = _cleanupSubmitFailures;
+            snapshot->cleanupAllocationFailures = _cleanupAllocationFailures;
+            snapshot->asyncResultPostFailures = g_asyncResultPostFailures.load(std::memory_order_acquire);
+            snapshot->loadPostFallbacks       = _loadPostFallbacks;
+            snapshot->cleanupPostFallbacks    = _cleanupPostFallbacks;
+            snapshot->closePending            = _closePending;
 
             const SIZE snapshotSize  = ComputeSnapshotSize();
             snapshot->snapshotWidth  = snapshotSize.cx;
@@ -2023,7 +2091,36 @@ LRESULT ViewerVLC::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
                 return FALSE;
             }
 
+            std::shared_ptr<wil::unique_handle> releaseGate;
+            if (delay->releaseGate)
+            {
+                wil::unique_handle duplicate;
+                const HANDLE process = GetCurrentProcess();
+                if (DuplicateHandle(process, delay->releaseGate, process, duplicate.put(), SYNCHRONIZE, FALSE, 0u) == FALSE)
+                {
+                    return FALSE;
+                }
+                releaseGate = std::make_shared<wil::unique_handle>(std::move(duplicate));
+            }
+
             _debugStopDelayMs = std::min<uint32_t>(delay->delayMs, 10'000u);
+            _debugStopReleaseGate = std::move(releaseGate);
+            return TRUE;
+        }
+        case WndMsg::kViewerVlcDebugSetAsyncControl:
+        {
+            const auto* control = reinterpret_cast<const WndMsg::ViewerVlcDebugAsyncControl*>(lp);
+            if (! control)
+            {
+                return FALSE;
+            }
+
+            _debugLoadDelayMs        = std::min<uint32_t>(control->loadDelayMs, 10'000u);
+            _debugFailNextLoadSubmit = control->failNextLoadSubmit;
+            _debugFailNextLoadCompletionPost  = control->failNextLoadCompletionPost;
+            _debugFailNextCloseCompletionPost = control->failNextCloseCompletionPost;
+            _debugFailNextCleanupSubmit       = control->failNextCleanupSubmit;
+            _debugFailNextCleanupAllocation   = control->failNextCleanupAllocation;
             return TRUE;
         }
 #endif
@@ -2392,6 +2489,8 @@ LRESULT ViewerVLC::SeekPreviewProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) no
 void ViewerVLC::OnCreate(HWND hwnd) noexcept
 {
     InitPostedPayloadWindow(hwnd);
+    _cleanupNotifyWindow.store(hwnd, std::memory_order_release);
+    _cleanupNotifyIdentity.store(_windowIdentity, std::memory_order_release);
 
     if (RegisterVideoClass(g_hInstance))
     {
@@ -2430,13 +2529,34 @@ void ViewerVLC::OnDestroy() noexcept
 {
     ++_asyncOpenGeneration;
     SetLoadingUiVisible(false);
-    RetireVlcStateAsync(std::move(_vlc), true);
+    if (! _destroyingAfterCleanup)
+    {
+        if (_vlc)
+        {
+            RetireVlcStateAsync(std::move(_vlc), false);
+        }
+#ifdef ENABLE_TESTS
+        else if (_debugStopDelayMs != 0u || _debugStopReleaseGate)
+        {
+            if (! TryQueueVlcStateCleanup(_vlc))
+            {
+                DeferSyntheticVlcCleanup();
+            }
+        }
+#endif
+    }
 
-    NotifyViewerClosed();
+    if (! _closeNotificationSent)
+    {
+        _closeNotificationSent = true;
+        NotifyViewerClosed();
+    }
 }
 
 LRESULT ViewerVLC::OnNcDestroy(HWND hwnd, WPARAM wp, LPARAM lp) noexcept
 {
+    _cleanupNotifyWindow.store(nullptr, std::memory_order_release);
+    _cleanupNotifyIdentity.store(0u, std::memory_order_release);
     OnDestroy();
     static_cast<void>(DrainPostedPayloadsForWindow(hwnd));
 
@@ -2494,6 +2614,18 @@ LRESULT ViewerVLC::OnNcDestroy(HWND hwnd, WPARAM wp, LPARAM lp) noexcept
     _loadingUiActive    = false;
     _loadingUiVisible   = false;
     _loadingStartedTick = 0;
+    _windowIdentity           = 0;
+    _closePending             = false;
+    _destroyingAfterCleanup   = false;
+    _pendingLoadWorkCount     = 0;
+    _pendingCloseCleanupCount = 0;
+    {
+        std::lock_guard lock(_asyncFallbackMutex);
+        _asyncFallbackLoadCount    = 0;
+        _asyncFallbackCleanupCount = 0;
+        _asyncFallbackNewestLoad   = {};
+        _asyncFallbackNewestCleanup = {};
+    }
 
     Release();
     return DefWindowProcW(hwnd, WM_NCDESTROY, wp, lp);
@@ -2517,6 +2649,16 @@ HRESULT STDMETHODCALLTYPE ViewerVLC::Open(const ViewerOpenContext* context) noex
         return E_INVALIDARG;
     }
 
+    if (_closePending)
+    {
+        return HRESULT_FROM_WIN32(ERROR_BUSY);
+    }
+
+    if (! EnsureVlcCleanupDispatcher())
+    {
+        return E_OUTOFMEMORY;
+    }
+
     const std::filesystem::path path(context->focusedPath);
     _currentPath = path;
 
@@ -2531,6 +2673,10 @@ HRESULT STDMETHODCALLTYPE ViewerVLC::Open(const ViewerOpenContext* context) noex
     if (ShouldRecreateViewerWindow(embeddedMode, embeddedParent))
     {
         static_cast<void>(Close());
+        if (_hWnd)
+        {
+            return HRESULT_FROM_WIN32(ERROR_BUSY);
+        }
     }
     _embeddedFocusReturnWindow = embeddedFocusReturnWindow;
 
@@ -2569,9 +2715,13 @@ HRESULT STDMETHODCALLTYPE ViewerVLC::Open(const ViewerOpenContext* context) noex
 
         const std::wstring caption = embeddedMode ? std::wstring{} : LoadStringResource(g_hInstance, IDS_VIEWERVLC_WINDOW_CAPTION);
         const DWORD style          = embeddedMode ? (WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS) : (WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN);
+        _windowIdentity            = g_nextViewerVlcWindowIdentity.fetch_add(1, std::memory_order_relaxed);
+        _closeNotificationSent     = false;
+        _destroyingAfterCleanup    = false;
         HWND window = CreateWindowExW(0, kClassName, caption.c_str(), style, x, y, w, h, embeddedMode ? embeddedParent : nullptr, nullptr, g_hInstance, this);
         if (! window)
         {
+            _windowIdentity = 0;
             const DWORD lastError = Debug::ErrorWithLastError(L"ViewerVLC: CreateWindowExW failed.");
             return HRESULT_FROM_WIN32(lastError);
         }
@@ -2630,9 +2780,7 @@ HRESULT STDMETHODCALLTYPE ViewerVLC::Close() noexcept
 {
     AddRef();
     const auto releaseSelf = wil::scope_exit([&]() noexcept { Release(); });
-    _hWnd.reset();
-    _embeddedMode              = false;
-    _embeddedFocusReturnWindow = nullptr;
+    BeginDeferredClose();
     return S_OK;
 }
 
@@ -2671,40 +2819,8 @@ void ViewerVLC::ApplyTitleBarTheme(bool windowActive) noexcept
         return;
     }
 
-    static constexpr DWORD kDwmwaUseImmersiveDarkMode19 = 19u;
-    static constexpr DWORD kDwmwaUseImmersiveDarkMode20 = 20u;
-    static constexpr DWORD kDwmwaBorderColor            = 34u;
-    static constexpr DWORD kDwmwaCaptionColor           = 35u;
-    static constexpr DWORD kDwmwaTextColor              = 36u;
-    static constexpr DWORD kDwmColorDefault             = 0xFFFFFFFFu;
-
-    const BOOL darkMode = (_theme.darkMode && ! _theme.highContrast) ? TRUE : FALSE;
-    DwmSetWindowAttribute(_hWnd.get(), kDwmwaUseImmersiveDarkMode20, &darkMode, sizeof(darkMode));
-    DwmSetWindowAttribute(_hWnd.get(), kDwmwaUseImmersiveDarkMode19, &darkMode, sizeof(darkMode));
-
-    DWORD borderValue  = kDwmColorDefault;
-    DWORD captionValue = kDwmColorDefault;
-    DWORD textValue    = kDwmColorDefault;
-    if (! _theme.highContrast && _theme.rainbowMode)
-    {
-        std::wstring_view seed = _currentPath.empty() ? std::wstring_view(L"title") : std::wstring_view(_currentPath.native());
-        COLORREF accent        = ResolveAccentColor(_theme, seed);
-        if (! windowActive)
-        {
-            static constexpr uint8_t kInactiveTitleBlendAlpha = 223u; // ~7/8 toward background
-            const COLORREF bg                                 = ColorRefFromArgb(_theme.backgroundArgb);
-            accent                                            = BlendColor(accent, bg, kInactiveTitleBlendAlpha);
-        }
-
-        const COLORREF text = ContrastingTextColor(accent);
-        borderValue         = static_cast<DWORD>(accent);
-        captionValue        = static_cast<DWORD>(accent);
-        textValue           = static_cast<DWORD>(text);
-    }
-
-    DwmSetWindowAttribute(_hWnd.get(), kDwmwaBorderColor, &borderValue, sizeof(borderValue));
-    DwmSetWindowAttribute(_hWnd.get(), kDwmwaCaptionColor, &captionValue, sizeof(captionValue));
-    DwmSetWindowAttribute(_hWnd.get(), kDwmwaTextColor, &textValue, sizeof(textValue));
+    const std::wstring_view seed = _currentPath.empty() ? std::wstring_view(L"title") : std::wstring_view(_currentPath.native());
+    RedSalamander::ViewerChrome::ApplyTitleBarTheme(_hWnd.get(), _theme, windowActive, seed);
 }
 
 void ViewerVLC::CreateOrUpdateWindowBackgroundBrush() noexcept
@@ -3142,6 +3258,12 @@ void ViewerVLC::SetFullscreen(bool enabled) noexcept
 
 void ViewerVLC::OnTimer(UINT_PTR timerId) noexcept
 {
+    DrainAsyncFallbackCompletions();
+    if (! _hWnd)
+    {
+        return;
+    }
+
     if (timerId == kLoadingTimerId)
     {
         if (! _loadingUiActive || ! _hWnd)
@@ -3823,8 +3945,8 @@ void ViewerVLC::OnSeekPreviewPaint(HWND hwnd) noexcept
     const std::wstring_view seed = _currentPath.empty() ? std::wstring_view(L"ViewerVLC") : std::wstring_view(_currentPath.native());
     const COLORREF accent        = themed ? ResolveAccentColor(_theme, seed) : GetSysColor(COLOR_HIGHLIGHT);
 
-    const COLORREF cardBg = themed ? BlendColor(windowBg, windowFg, 18u) : GetSysColor(COLOR_WINDOW);
-    const COLORREF border = themed ? BlendColor(cardBg, accent, 92u) : GetSysColor(COLOR_HIGHLIGHT);
+    const COLORREF cardBg = themed ? BlendColorRefTruncate(windowBg, windowFg, 18u) : GetSysColor(COLOR_WINDOW);
+    const COLORREF border = themed ? BlendColorRefTruncate(cardBg, accent, 92u) : GetSysColor(COLOR_HIGHLIGHT);
 
     wil::com_ptr<ID2D1SolidColorBrush> brushBg;
     wil::com_ptr<ID2D1SolidColorBrush> brushBorder;
@@ -4365,23 +4487,23 @@ void ViewerVLC::OnHudPaint(HWND hwnd) noexcept
     const COLORREF accent        = themed ? ResolveAccentColor(_theme, seed) : GetSysColor(COLOR_HIGHLIGHT);
 
     const uint8_t dimA       = static_cast<uint8_t>(std::lround(std::clamp(_hudOpacity, 0.0f, 1.0f) * 255.0f));
-    const COLORREF fgDim     = BlendColor(bg, fg, dimA);
-    const COLORREF accentDim = BlendColor(bg, accent, dimA);
+    const COLORREF fgDim     = BlendColorRefTruncate(bg, fg, dimA);
+    const COLORREF accentDim = BlendColorRefTruncate(bg, accent, dimA);
 
-    const COLORREF border    = themed ? BlendColor(bg, fg, 64u) : GetSysColor(COLOR_WINDOWFRAME);
-    const COLORREF borderDim = BlendColor(bg, border, dimA);
+    const COLORREF border    = themed ? BlendColorRefTruncate(bg, fg, 64u) : GetSysColor(COLOR_WINDOWFRAME);
+    const COLORREF borderDim = BlendColorRefTruncate(bg, border, dimA);
 
-    const COLORREF hoverFill     = BlendColor(bg, accent, 34u);
-    const COLORREF hoverFillDim  = BlendColor(bg, hoverFill, dimA);
-    const COLORREF pressFill     = BlendColor(bg, accent, 56u);
-    const COLORREF pressFillDim  = BlendColor(bg, pressFill, dimA);
-    const COLORREF buttonFill    = themed ? BlendColor(bg, fg, 18u) : GetSysColor(COLOR_BTNFACE);
-    const COLORREF buttonFillDim = BlendColor(bg, buttonFill, dimA);
-    const COLORREF mutedFill     = BlendColor(bg, accent, 44u);
-    const COLORREF mutedFillDim  = BlendColor(bg, mutedFill, dimA);
+    const COLORREF hoverFill     = BlendColorRefTruncate(bg, accent, 34u);
+    const COLORREF hoverFillDim  = BlendColorRefTruncate(bg, hoverFill, dimA);
+    const COLORREF pressFill     = BlendColorRefTruncate(bg, accent, 56u);
+    const COLORREF pressFillDim  = BlendColorRefTruncate(bg, pressFill, dimA);
+    const COLORREF buttonFill    = themed ? BlendColorRefTruncate(bg, fg, 18u) : GetSysColor(COLOR_BTNFACE);
+    const COLORREF buttonFillDim = BlendColorRefTruncate(bg, buttonFill, dimA);
+    const COLORREF mutedFill     = BlendColorRefTruncate(bg, accent, 44u);
+    const COLORREF mutedFillDim  = BlendColorRefTruncate(bg, mutedFill, dimA);
 
     const uint8_t disabledA   = static_cast<uint8_t>(std::lround(static_cast<float>(dimA) * 0.55f));
-    const COLORREF fgDisabled = BlendColor(bg, fg, disabledA);
+    const COLORREF fgDisabled = BlendColorRefTruncate(bg, fg, disabledA);
 
     wil::com_ptr<ID2D1SolidColorBrush> brushText;
     wil::com_ptr<ID2D1SolidColorBrush> brushTextDisabled;
@@ -4609,10 +4731,10 @@ void ViewerVLC::OnOverlayPaint(HWND hwnd) noexcept
 
     const std::wstring_view seed = _currentPath.empty() ? std::wstring_view(L"ViewerVLC") : std::wstring_view(_currentPath.native());
     const COLORREF accent        = themed ? ResolveAccentColor(_theme, seed) : GetSysColor(COLOR_HIGHLIGHT);
-    const COLORREF border        = themed ? BlendColor(cardBg, accent, 92u) : GetSysColor(COLOR_HIGHLIGHT);
+    const COLORREF border        = themed ? BlendColorRefTruncate(cardBg, accent, 92u) : GetSysColor(COLOR_HIGHLIGHT);
 
     const COLORREF linkFg    = themed ? accent : GetSysColor(COLOR_HOTLIGHT);
-    const COLORREF linkFgHot = themed ? BlendColor(linkFg, cardFg, 96u) : GetSysColor(COLOR_HIGHLIGHT);
+    const COLORREF linkFgHot = themed ? BlendColorRefTruncate(linkFg, cardFg, 96u) : GetSysColor(COLOR_HIGHLIGHT);
 
     const int stripeW = px(6);
     const int padding = px(16);
@@ -4732,7 +4854,7 @@ void ViewerVLC::OnOverlayPaint(HWND hwnd) noexcept
         const float centerY                    = static_cast<float>(contentRc.top) + spinner.topInsetPx;
 
         wil::com_ptr<ID2D1SolidColorBrush> brushHalo;
-        _overlayRenderTarget->CreateSolidColorBrush(ColorFFromColorRef(BlendColor(cardBg, accent, 44u)), brushHalo.put());
+        _overlayRenderTarget->CreateSolidColorBrush(ColorFFromColorRef(BlendColorRefTruncate(cardBg, accent, 44u)), brushHalo.put());
         if (brushHalo)
         {
             const D2D1_ELLIPSE halo{D2D1::Point2F(centerX, centerY), spinner.haloRadiusPx, spinner.haloRadiusPx};
@@ -4748,7 +4870,7 @@ void ViewerVLC::OnOverlayPaint(HWND hwnd) noexcept
             const float dotR       = spinner.dotRadiusPx + ((spinner.activeDotRadiusPx - spinner.dotRadiusPx) * freshness);
             const COLORREF dotBase = ResolveLoadingSpinnerDotColor(spinner, i);
             wil::com_ptr<ID2D1SolidColorBrush> brushDot;
-            _overlayRenderTarget->CreateSolidColorBrush(ColorFFromColorRef(BlendColor(cardBg, dotBase, alpha)), brushDot.put());
+            _overlayRenderTarget->CreateSolidColorBrush(ColorFFromColorRef(BlendColorRefTruncate(cardBg, dotBase, alpha)), brushDot.put());
             if (brushDot)
             {
                 const D2D1_ELLIPSE dot{D2D1::Point2F(centerX + static_cast<float>(std::cos(angle)) * spinner.orbitPx,
@@ -4892,15 +5014,21 @@ std::wstring ViewerVLC::GetOverlayLinkUrl() const
     return L"https://www.videolan.org/vlc/";
 }
 
-bool ViewerVLC::BuildVlcLoadSpec(VlcLoadSpec& spec, std::wstring& outError) const noexcept
+bool ViewerVLC::BuildVlcLoadSpec(const ViewerVlcConfig& config, VlcLoadSpec& spec, std::wstring& outError) noexcept
 {
     outError.clear();
     spec = {};
 
-    std::filesystem::path installDir;
-    if (! _config.vlcInstallPath.empty())
+    if (! IsValidVlcConfiguration(config.avcodecHw, config.videoOutput, config.audioOutput, config.audioVisualization, config.extraArgs))
     {
-        const std::filesystem::path configured = NormalizeVlcInstallPath(_config.vlcInstallPath);
+        outError = LoadStringResource(g_hInstance, IDS_VIEWERVLC_DETAILS_CONFIGURATION_REJECTED);
+        return false;
+    }
+
+    std::filesystem::path installDir;
+    if (! config.vlcInstallPath.empty())
+    {
+        const std::filesystem::path configured = NormalizeVlcInstallPath(config.vlcInstallPath);
         if (IsVlcInstallDir(configured))
         {
             installDir = configured;
@@ -4911,7 +5039,7 @@ bool ViewerVLC::BuildVlcLoadSpec(VlcLoadSpec& spec, std::wstring& outError) cons
         }
     }
 
-    if (installDir.empty() && _config.autoDetectVlc)
+    if (installDir.empty() && config.autoDetectVlc)
     {
         const auto detected = AutoDetectVlcInstallDir();
         if (detected.has_value())
@@ -4929,49 +5057,47 @@ bool ViewerVLC::BuildVlcLoadSpec(VlcLoadSpec& spec, std::wstring& outError) cons
         return false;
     }
 
-    const std::string pluginPathUtf8 = Utf8FromUtf16((installDir / L"plugins").wstring());
-
     spec.installDir = installDir;
     spec.argStorage.reserve(16);
     spec.argStorage.emplace_back("--no-video-title-show");
-    if (_config.quiet)
+    if (config.quiet)
     {
         spec.argStorage.emplace_back("--quiet");
     }
 
-    if (! pluginPathUtf8.empty())
+    if (config.fileCachingMs > 0)
     {
-        spec.argStorage.push_back(std::format("--plugin-path={}", pluginPathUtf8));
+        spec.argStorage.push_back(std::format("--file-caching={}", config.fileCachingMs));
     }
 
-    if (_config.fileCachingMs > 0)
+    if (config.networkCachingMs > 0)
     {
-        spec.argStorage.push_back(std::format("--file-caching={}", _config.fileCachingMs));
+        spec.argStorage.push_back(std::format("--network-caching={}", config.networkCachingMs));
     }
 
-    if (_config.networkCachingMs > 0)
+    if (! config.avcodecHw.empty())
     {
-        spec.argStorage.push_back(std::format("--network-caching={}", _config.networkCachingMs));
+        spec.argStorage.push_back(std::format("--avcodec-hw={}", config.avcodecHw));
     }
 
-    if (! _config.avcodecHw.empty())
+    if (! config.videoOutput.empty())
     {
-        spec.argStorage.push_back(std::format("--avcodec-hw={}", _config.avcodecHw));
+        spec.argStorage.push_back(std::format("--vout={}", config.videoOutput));
     }
 
-    if (! _config.videoOutput.empty())
+    if (! config.audioOutput.empty())
     {
-        spec.argStorage.push_back(std::format("--vout={}", _config.videoOutput));
+        spec.argStorage.push_back(std::format("--aout={}", config.audioOutput));
     }
 
-    if (! _config.audioOutput.empty())
+    if (! config.extraArgs.empty())
     {
-        spec.argStorage.push_back(std::format("--aout={}", _config.audioOutput));
-    }
-
-    if (! _config.extraArgs.empty())
-    {
-        const auto extra = SplitVlcArgs(_config.extraArgs);
+        std::vector<std::string> extra;
+        if (! SplitVlcArgs(config.extraArgs, extra))
+        {
+            outError = LoadStringResource(g_hInstance, IDS_VIEWERVLC_DETAILS_CONFIGURATION_REJECTED);
+            return false;
+        }
         for (const auto& a : extra)
         {
             if (! a.empty())
@@ -5000,24 +5126,11 @@ std::unique_ptr<VlcState> ViewerVLC::LoadVlcState(const VlcLoadSpec& spec, std::
 
     const std::filesystem::path dllPath = spec.installDir / L"libvlc.dll";
 
-    const DWORD prevNeeded = GetDllDirectoryW(0, nullptr);
-    if (prevNeeded > 0 && prevNeeded < 32768)
-    {
-        std::wstring prev(static_cast<size_t>(prevNeeded), L'\0');
-        const DWORD prevWritten = GetDllDirectoryW(prevNeeded, prev.data());
-        if (prevWritten > 0 && prevWritten < prevNeeded)
-        {
-            prev.resize(static_cast<size_t>(prevWritten));
-            state->previousDllDirectory = std::move(prev);
-        }
-    }
-    state->dllDirectoryWasSet = SetDllDirectoryW(spec.installDir.c_str()) != 0;
-
-    HMODULE module = LoadLibraryW(dllPath.c_str());
+    HMODULE module = LoadLibraryExW(dllPath.c_str(), nullptr, kVlcModuleLoadFlags);
     if (! module)
     {
         const DWORD lastError = GetLastError();
-        outError              = std::format(L"Failed to load '{}' (Win32: {}).", dllPath.wstring(), lastError);
+        outError              = FormatStringResource(g_hInstance, IDS_VIEWERVLC_DETAILS_LOAD_DLL_FAILED_FMT, dllPath.wstring(), lastError);
         return nullptr;
     }
 
@@ -5075,39 +5188,143 @@ std::unique_ptr<VlcState> ViewerVLC::LoadVlcState(const VlcLoadSpec& spec, std::
     return state;
 }
 
-void ViewerVLC::BeginAsyncVlcLoad(const std::filesystem::path& path, VlcLoadSpec&& spec) noexcept
+void ViewerVLC::BeginAsyncVlcLoad(const std::filesystem::path& path) noexcept
 {
-    if (! _hWnd)
+    if (! _hWnd || _closePending)
     {
         return;
     }
 
-    RetireVlcStateAsync(std::move(_vlc), true);
     SetMissingUiVisible(false, {});
     SetLoadingUiVisible(true);
 
     auto work             = std::make_unique<VlcAsyncLoadWork>();
     work->moduleKeepAlive = AcquireModuleReferenceFromAddress(&kViewerVlcModuleAnchor);
+    if (! work->moduleKeepAlive)
+    {
+        ++_loadQueueRejected;
+        SetLoadingUiVisible(false);
+        SetMissingUiVisible(true, LoadStringResource(g_hInstance, IDS_VIEWERVLC_DETAILS_ASYNC_SUBMIT_FAILED));
+        Debug::Perf::Emit(L"viewer.vlc.queue",
+                          L"module-pin-failed",
+                          0u,
+                          _asyncOpenGeneration,
+                          _windowIdentity,
+                          HRESULT_FROM_WIN32(ERROR_MOD_NOT_FOUND));
+        return;
+    }
     work->self            = static_cast<IViewer*>(this);
+    work->owner           = this;
     work->hwnd            = _hWnd.get();
-    work->generation      = ++_asyncOpenGeneration;
+    work->requestId       = ++_asyncOpenGeneration;
+    work->windowIdentity  = _windowIdentity;
     work->path            = path;
-    work->spec            = std::move(spec);
+    work->config          = _config;
+    if (_vlc && _vlc->instance && _vlc->module)
+    {
+        work->reusableInstallDir      = _vlc->installDir;
+        work->reusableInstanceArgsKey = _vlc->instanceArgsKey;
+        work->hasReusableInstance     = true;
+    }
+#ifdef ENABLE_TESTS
+    work->delayMs            = _debugLoadDelayMs;
+    work->failCompletionPost = std::exchange(_debugFailNextLoadCompletionPost, false);
+    const bool forceSubmitFailure = std::exchange(_debugFailNextLoadSubmit, false);
+#else
+    constexpr bool forceSubmitFailure = false;
+#endif
+    ++_pendingLoadWorkCount;
 
-    const BOOL queued = TrySubmitThreadpoolCallback(
-        [](PTP_CALLBACK_INSTANCE /*instance*/, void* context) noexcept
+    const BOOL queued = forceSubmitFailure ? FALSE : TrySubmitThreadpoolCallback(
+        [](PTP_CALLBACK_INSTANCE instance, void* context) noexcept
     {
         std::unique_ptr<VlcAsyncLoadWork> work(static_cast<VlcAsyncLoadWork*>(context));
-        static_cast<void>(work->moduleKeepAlive);
-
-        auto result        = std::make_unique<VlcAsyncLoadResult>();
-        result->generation = work->generation;
-        result->path       = work->path;
-        result->self       = work->self;
-        result->state      = LoadVlcState(work->spec, result->error);
-
-        if (! work->hwnd || IsWindow(work->hwnd) == FALSE || ! PostMessagePayload(work->hwnd, WndMsg::kViewerVlcAsyncOpenComplete, 0, std::move(result)))
+        if (work && work->moduleKeepAlive)
         {
+            TransferModulePinToCallbackReturn(instance, work->moduleKeepAlive);
+        }
+
+        const auto startedAt = std::chrono::steady_clock::now();
+#ifdef ENABLE_TESTS
+        ApplyDebugStopDelay(work->delayMs);
+#endif
+
+        auto result            = std::make_unique<VlcAsyncLoadResult>();
+        result->moduleKeepAlive = AcquireModuleReferenceFromAddress(&kViewerVlcModuleAnchor);
+        result->requestId      = work->requestId;
+        result->windowIdentity = work->windowIdentity;
+        result->path           = work->path;
+        result->self           = work->self;
+        result->owner          = work->owner;
+
+        std::error_code ec;
+        if (! std::filesystem::exists(work->path, ec) || ! std::filesystem::is_regular_file(work->path, ec))
+        {
+            result->error = LoadStringResource(g_hInstance, IDS_VIEWERVLC_DETAILS_PATH_NOT_LOCAL_FILE);
+            result->hr    = HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
+        }
+        else
+        {
+            VlcLoadSpec spec{};
+            if (! BuildVlcLoadSpec(work->config, spec, result->error))
+            {
+                result->hr = HRESULT_FROM_WIN32(ERROR_MOD_NOT_FOUND);
+            }
+            else
+            {
+                result->reuseExisting = work->hasReusableInstance && work->reusableInstallDir == spec.installDir &&
+                                        work->reusableInstanceArgsKey == spec.instanceArgsKey;
+                if (result->reuseExisting)
+                {
+                    result->hr = S_OK;
+                }
+                else
+                {
+                    result->state = LoadVlcState(spec, result->error);
+                    result->hr    = result->state ? S_OK : HRESULT_FROM_WIN32(ERROR_MOD_NOT_FOUND);
+                }
+            }
+        }
+
+        result->elapsedUs = Debug::Perf::ElapsedUs(startedAt);
+        Debug::Perf::Emit(L"viewer.vlc.load_us", L"worker", result->elapsedUs, result->requestId, result->windowIdentity, result->hr);
+
+#ifdef ENABLE_TESTS
+        const bool forceCompletionPostFailure = work->failCompletionPost;
+#else
+        constexpr bool forceCompletionPostFailure = false;
+#endif
+        const HRESULT completionHr = result->hr;
+        if (! result->moduleKeepAlive)
+        {
+            result.reset();
+            g_asyncResultPostFailures.fetch_add(1, std::memory_order_acq_rel);
+            if (work->owner)
+            {
+                work->owner->RecordAsyncFallbackCompletion(
+                    AsyncFallbackCompletion{.kind = AsyncFallbackKind::Load,
+                                            .requestId = work->requestId,
+                                            .windowIdentity = work->windowIdentity,
+                                            .hr = HRESULT_FROM_WIN32(ERROR_MOD_NOT_FOUND)});
+            }
+            NotifyVlcAsyncFallback(work->hwnd, work->windowIdentity);
+            Debug::Warning(L"ViewerVLC: could not pin the module for the async VLC initialization result.");
+            return;
+        }
+        const bool posted = ! forceCompletionPostFailure && PostMessagePayload(work->hwnd, WndMsg::kViewerVlcAsyncOpenComplete, 0, std::move(result));
+        if (! posted)
+        {
+            result.reset();
+            g_asyncResultPostFailures.fetch_add(1, std::memory_order_acq_rel);
+            if (work->owner)
+            {
+                work->owner->RecordAsyncFallbackCompletion(
+                    AsyncFallbackCompletion{.kind = AsyncFallbackKind::Load,
+                                            .requestId = work->requestId,
+                                            .windowIdentity = work->windowIdentity,
+                                            .hr = completionHr});
+            }
+            NotifyVlcAsyncFallback(work->hwnd, work->windowIdentity);
             Debug::Warning(L"ViewerVLC: Failed to post async VLC initialization result.");
         }
     },
@@ -5116,29 +5333,84 @@ void ViewerVLC::BeginAsyncVlcLoad(const std::filesystem::path& path, VlcLoadSpec
 
     if (queued == 0)
     {
-        SetLoadingUiVisible(false);
-        std::wstring error;
-        _vlc = LoadVlcState(work->spec, error);
-        if (! _vlc)
+        ++_loadQueueRejected;
+        Debug::Perf::Emit(L"viewer.vlc.queue", L"submit-failed", 0u, work->requestId, work->windowIdentity, HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_MEMORY));
+        if (_pendingLoadWorkCount > 0)
         {
-            SetMissingUiVisible(true, error);
-            return;
+            --_pendingLoadWorkCount;
         }
-        static_cast<void>(StartPlaybackWithLoadedVlc(path));
+        SetLoadingUiVisible(false);
+        SetMissingUiVisible(true, LoadStringResource(g_hInstance, IDS_VIEWERVLC_DETAILS_ASYNC_SUBMIT_FAILED));
         return;
     }
 
+    ++_loadQueueAccepted;
+    Debug::Perf::Emit(L"viewer.vlc.queue", L"accepted", 0u, work->requestId, work->windowIdentity, S_OK);
     static_cast<void>(work.release());
 }
 
 void ViewerVLC::OnAsyncVlcLoadComplete(std::unique_ptr<VlcAsyncLoadResult> result) noexcept
 {
-    if (! result || result->generation != _asyncOpenGeneration)
+    if (! result)
     {
         return;
     }
 
+    const bool sameWindow = result->self.get() == static_cast<IViewer*>(this) && result->windowIdentity != 0 && result->windowIdentity == _windowIdentity &&
+                            _hWnd && IsWindow(_hWnd.get()) != FALSE;
+    if (! sameWindow)
+    {
+        ++_staleLoadResults;
+        Debug::Perf::Emit(L"viewer.vlc.queue", L"stale-window", result->elapsedUs, result->requestId, result->windowIdentity, result->hr);
+        RetireVlcStateAsync(std::move(result->state), false);
+        return;
+    }
+
+    if (_pendingLoadWorkCount > 0)
+    {
+        --_pendingLoadWorkCount;
+    }
+
+    if (_closePending || result->requestId != _asyncOpenGeneration)
+    {
+        ++_staleLoadResults;
+        Debug::Perf::Emit(L"viewer.vlc.queue", _closePending ? L"closed" : L"stale-request", result->elapsedUs, result->requestId, result->windowIdentity, result->hr);
+        if (_closePending && result->state)
+        {
+            _vlc = std::move(result->state);
+            if (! TryQueueDeferredCloseCleanup() && _hWnd)
+            {
+                EnsureVlcCleanupProgress();
+            }
+        }
+        else
+        {
+            RetireVlcStateAsync(std::move(result->state), false);
+        }
+        CompleteCloseAfterCleanup();
+        return;
+    }
+
     SetLoadingUiVisible(false);
+
+    if (result->reuseExisting)
+    {
+        if (_vlc && _vlc->instance && _vlc->module)
+        {
+            _isAudioFile = IsAudioExtension(result->path.extension().wstring());
+            static_cast<void>(StartPlaybackWithLoadedVlc(result->path));
+            return;
+        }
+
+        Debug::Perf::Emit(L"viewer.vlc.queue",
+                          L"reuse-retired-retry-full-load",
+                          result->elapsedUs,
+                          result->requestId,
+                          result->windowIdentity,
+                          HRESULT_FROM_WIN32(ERROR_RETRY));
+        BeginAsyncVlcLoad(result->path);
+        return;
+    }
 
     if (! result->state)
     {
@@ -5148,7 +5420,455 @@ void ViewerVLC::OnAsyncVlcLoadComplete(std::unique_ptr<VlcAsyncLoadResult> resul
 
     RetireVlcStateAsync(std::move(_vlc), true);
     _vlc = std::move(result->state);
+    _isAudioFile = IsAudioExtension(result->path.extension().wstring());
     static_cast<void>(StartPlaybackWithLoadedVlc(result->path));
+}
+
+void ViewerVLC::BeginDeferredClose() noexcept
+{
+    const auto startedAt = std::chrono::steady_clock::now();
+    if (! _hWnd || _closePending)
+    {
+        return;
+    }
+
+    _closePending = true;
+    ++_closeRequestId;
+    ++_asyncOpenGeneration;
+
+    if (_uiTimerId != 0)
+    {
+        static_cast<void>(KillTimer(_hWnd.get(), _uiTimerId));
+        _uiTimerId = 0;
+    }
+    if (_hHud && _hudAnimTimerId != 0)
+    {
+        static_cast<void>(KillTimer(_hHud.get(), _hudAnimTimerId));
+        _hudAnimTimerId = 0;
+    }
+    SetLoadingUiVisible(false);
+    if (HWND capture = GetCapture(); capture && (capture == _hWnd.get() || IsChild(_hWnd.get(), capture) != FALSE))
+    {
+        static_cast<void>(ReleaseCapture());
+    }
+    _hudSeekDragging   = false;
+    _hudVolumeDragging = false;
+    _hudPressed        = HudPart::None;
+    _hudHot            = HudPart::None;
+    ClearSeekPreview();
+    RemoveVideoChildWheelForwarding();
+
+    if (_isFullscreen)
+    {
+        SetFullscreen(false);
+    }
+    if (_hSeekPreview)
+    {
+        ShowWindow(_hSeekPreview.get(), SW_HIDE);
+    }
+    if (_hMissingOverlay)
+    {
+        ShowWindow(_hMissingOverlay.get(), SW_HIDE);
+    }
+    if (_hHud)
+    {
+        ShowWindow(_hHud.get(), SW_HIDE);
+    }
+    if (_hVideo)
+    {
+        ShowWindow(_hVideo.get(), SW_HIDE);
+    }
+    ShowWindow(_hWnd.get(), SW_HIDE);
+
+    bool needsCleanup = _vlc != nullptr || _deferredCleanupCount.load(std::memory_order_acquire) != 0u ||
+                        _syntheticCleanupPending.load(std::memory_order_acquire);
+#ifdef ENABLE_TESTS
+    needsCleanup = needsCleanup || _debugStopDelayMs != 0 || _debugStopReleaseGate;
+#endif
+    if (needsCleanup)
+    {
+        static_cast<void>(TryQueueDeferredCloseCleanup());
+    }
+
+    Debug::Perf::Emit(L"viewer.vlc.close_ui_us",
+                      L"return",
+                      Debug::Perf::ElapsedUs(startedAt),
+                      _pendingLoadWorkCount,
+                      _pendingCloseCleanupCount,
+                      S_OK);
+    EnsureVlcCleanupProgress();
+    CompleteCloseAfterCleanup();
+}
+
+bool ViewerVLC::TryQueueDeferredCloseCleanup() noexcept
+{
+    bool currentQueued = true;
+    bool needsCurrentCleanup = _vlc != nullptr;
+#ifdef ENABLE_TESTS
+    needsCurrentCleanup = needsCurrentCleanup ||
+                          (_closePending && (_debugStopDelayMs != 0 || _debugStopReleaseGate) &&
+                           ! _syntheticCleanupPending.load(std::memory_order_acquire));
+#endif
+    if (needsCurrentCleanup)
+    {
+        if (_vlc)
+        {
+            _vlc->cleanupRequestId      = _closeRequestId;
+            _vlc->cleanupWindowIdentity = _cleanupNotifyIdentity.load(std::memory_order_acquire);
+#ifdef ENABLE_TESTS
+            _vlc->cleanupDelayMs      = _debugStopDelayMs;
+            _vlc->cleanupReleaseGate  = _debugStopReleaseGate;
+#endif
+        }
+        currentQueued = TryQueueVlcStateCleanup(_vlc);
+        if (currentQueued)
+        {
+            _syntheticCleanupPending.store(false, std::memory_order_release);
+        }
+        else
+        {
+            if (_vlc)
+            {
+                DeferVlcStateCleanup(std::move(_vlc));
+            }
+            else
+            {
+                DeferSyntheticVlcCleanup();
+            }
+        }
+    }
+
+    const bool deferredQueued = ScheduleDeferredVlcStateCleanup();
+    EnsureVlcCleanupProgress();
+    return currentQueued && deferredQueued;
+}
+
+bool ViewerVLC::TryQueueVlcStateCleanup(std::unique_ptr<VlcState>& state) noexcept
+{
+    if (! _hWnd)
+    {
+        return false;
+    }
+#ifndef ENABLE_TESTS
+    if (! state)
+    {
+        return true;
+    }
+#else
+    if (! state && _debugStopDelayMs == 0 && ! _debugStopReleaseGate)
+    {
+        return true;
+    }
+#endif
+
+#ifdef ENABLE_TESTS
+    const uint32_t cleanupDelayMs = state ? state->cleanupDelayMs : _debugStopDelayMs;
+    const std::shared_ptr<wil::unique_handle> cleanupReleaseGate =
+        (state && state->cleanupReleaseGate) ? state->cleanupReleaseGate : _debugStopReleaseGate;
+#endif
+
+    bool forceAllocationFailure = false;
+#ifdef ENABLE_TESTS
+    forceAllocationFailure = std::exchange(_debugFailNextCleanupAllocation, false);
+#endif
+    auto work = forceAllocationFailure ? std::unique_ptr<VlcAsyncCloseWork>{}
+                                       : std::unique_ptr<VlcAsyncCloseWork>(new (std::nothrow) VlcAsyncCloseWork{});
+    if (! work)
+    {
+        ++_cleanupAllocationFailures;
+        Debug::Perf::Emit(L"viewer.vlc.queue",
+                          L"cleanup-allocation-failed",
+                          0u,
+                          _closeRequestId,
+                          _windowIdentity,
+                          E_OUTOFMEMORY);
+        return false;
+    }
+
+    work->moduleKeepAlive = AcquireModuleReferenceFromAddress(&kViewerVlcModuleAnchor);
+    if (! work->moduleKeepAlive)
+    {
+        ++_cleanupAllocationFailures;
+        Debug::Perf::Emit(L"viewer.vlc.queue",
+                          L"cleanup-module-pin-failed",
+                          0u,
+                          _closeRequestId,
+                          _windowIdentity,
+                          HRESULT_FROM_WIN32(ERROR_MOD_NOT_FOUND));
+        return false;
+    }
+    work->self            = static_cast<IViewer*>(this);
+    work->owner           = this;
+    work->hwnd            = _hWnd.get();
+    work->requestId       = _closeRequestId;
+    work->windowIdentity  = _windowIdentity;
+    work->state           = std::move(state);
+#ifdef ENABLE_TESTS
+    work->delayMs            = cleanupDelayMs;
+    work->releaseGate        = cleanupReleaseGate;
+    work->failCompletionPost = std::exchange(_debugFailNextCloseCompletionPost, false);
+#endif
+
+    bool forceSubmitFailure = false;
+#ifdef ENABLE_TESTS
+    forceSubmitFailure = std::exchange(_debugFailNextCleanupSubmit, false);
+#endif
+    const BOOL queued = forceSubmitFailure ? FALSE : TrySubmitThreadpoolCallback(
+        [](PTP_CALLBACK_INSTANCE instance, void* context) noexcept
+    {
+        std::unique_ptr<VlcAsyncCloseWork> work(static_cast<VlcAsyncCloseWork*>(context));
+        if (work && work->moduleKeepAlive)
+        {
+            TransferModulePinToCallbackReturn(instance, work->moduleKeepAlive);
+        }
+        const auto startedAt = std::chrono::steady_clock::now();
+
+#ifdef ENABLE_TESTS
+        ApplyDebugStopDelay(work->delayMs, work->releaseGate);
+#endif
+        if (work->state && work->state->player && work->state->libvlc_media_player_stop)
+        {
+            work->state->libvlc_media_player_stop(work->state->player.get());
+        }
+        work->state.reset();
+
+        auto result            = std::make_unique<VlcAsyncCloseResult>();
+        result->moduleKeepAlive = AcquireModuleReferenceFromAddress(&kViewerVlcModuleAnchor);
+        result->self           = work->self;
+        result->hwnd           = work->hwnd;
+        result->requestId      = work->requestId;
+        result->windowIdentity = work->windowIdentity;
+        result->elapsedUs      = Debug::Perf::ElapsedUs(startedAt);
+        Debug::Perf::Emit(L"viewer.vlc.cleanup_us", L"stop-release", result->elapsedUs, result->requestId, result->windowIdentity, S_OK);
+
+#ifdef ENABLE_TESTS
+        const bool forceCompletionPostFailure = work->failCompletionPost;
+#else
+        constexpr bool forceCompletionPostFailure = false;
+#endif
+        if (! result->moduleKeepAlive)
+        {
+            result.reset();
+            g_asyncResultPostFailures.fetch_add(1, std::memory_order_acq_rel);
+            if (work->owner)
+            {
+                work->owner->RecordAsyncFallbackCompletion(
+                    AsyncFallbackCompletion{.kind = AsyncFallbackKind::Cleanup,
+                                            .requestId = work->requestId,
+                                            .windowIdentity = work->windowIdentity,
+                                            .hr = HRESULT_FROM_WIN32(ERROR_MOD_NOT_FOUND)});
+            }
+            NotifyVlcAsyncFallback(work->hwnd, work->windowIdentity);
+            Debug::Warning(L"ViewerVLC: could not pin the module for the async close result.");
+            return;
+        }
+        const bool posted = ! forceCompletionPostFailure && PostMessagePayload(work->hwnd, WndMsg::kViewerVlcAsyncCloseComplete, 0, std::move(result));
+        if (! posted)
+        {
+            result.reset();
+            g_asyncResultPostFailures.fetch_add(1, std::memory_order_acq_rel);
+            if (work->owner)
+            {
+                work->owner->RecordAsyncFallbackCompletion(
+                    AsyncFallbackCompletion{.kind = AsyncFallbackKind::Cleanup,
+                                            .requestId = work->requestId,
+                                            .windowIdentity = work->windowIdentity,
+                                            .hr = HRESULT_FROM_WIN32(ERROR_WRITE_FAULT)});
+            }
+            NotifyVlcAsyncFallback(work->hwnd, work->windowIdentity);
+            Debug::Warning(L"ViewerVLC: async close payload post failed; queued the identity-bound UI fallback.");
+        }
+    },
+        work.get(),
+        nullptr);
+
+    if (queued == 0)
+    {
+        state = std::move(work->state);
+        ++_cleanupSubmitFailures;
+        Debug::Perf::Emit(L"viewer.vlc.queue", L"cleanup-submit-failed", 0u, _closeRequestId, _windowIdentity, HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_MEMORY));
+        return false;
+    }
+
+    ++_pendingCloseCleanupCount;
+    Debug::Perf::Emit(L"viewer.vlc.queue", L"cleanup-accepted", 0u, _closeRequestId, _windowIdentity, S_OK);
+    static_cast<void>(work.release());
+    return true;
+}
+
+bool ViewerVLC::ScheduleDeferredVlcStateCleanup() noexcept
+{
+    ScheduleVlcCleanupDispatcher();
+    return _deferredCleanupCount.load(std::memory_order_acquire) == 0u && ! _syntheticCleanupPending.load(std::memory_order_acquire);
+}
+
+void ViewerVLC::DeferVlcStateCleanup(std::unique_ptr<VlcState> state) noexcept
+{
+    if (! state)
+    {
+        return;
+    }
+
+    {
+        std::lock_guard lock(_cleanupDispatcherMutex);
+        state->deferredCleanupNext = std::move(_deferredCleanupHead);
+        _deferredCleanupHead       = std::move(state);
+        static_cast<void>(_deferredCleanupCount.fetch_add(1u, std::memory_order_release));
+    }
+    ++_cleanupDeferrals;
+    Debug::Perf::Emit(L"viewer.vlc.queue",
+                      L"cleanup-retained-by-dispatcher",
+                      0u,
+                      _deferredCleanupCount.load(std::memory_order_acquire),
+                      _cleanupNotifyIdentity.load(std::memory_order_acquire),
+                      S_OK);
+    ScheduleVlcCleanupDispatcher();
+}
+
+void ViewerVLC::DeferSyntheticVlcCleanup() noexcept
+{
+    if (_syntheticCleanupPending.exchange(true, std::memory_order_acq_rel))
+    {
+        return;
+    }
+
+    {
+        std::lock_guard lock(_cleanupDispatcherMutex);
+        ++_syntheticCleanupCount;
+        _syntheticCleanupRequestId      = _closeRequestId;
+        _syntheticCleanupWindowIdentity = _cleanupNotifyIdentity.load(std::memory_order_acquire);
+#ifdef ENABLE_TESTS
+        _syntheticCleanupDelayMs     = _debugStopDelayMs;
+        _syntheticCleanupReleaseGate = _debugStopReleaseGate;
+#endif
+    }
+    ++_cleanupDeferrals;
+    ScheduleVlcCleanupDispatcher();
+}
+
+void ViewerVLC::EnsureVlcCleanupProgress() noexcept
+{
+    ScheduleVlcCleanupDispatcher();
+}
+
+void ViewerVLC::OnAsyncVlcCloseComplete(std::unique_ptr<VlcAsyncCloseResult> result) noexcept
+{
+    if (! result || result->self.get() != static_cast<IViewer*>(this) || result->hwnd != _hWnd.get() || result->windowIdentity != _windowIdentity ||
+        ! _hWnd)
+    {
+        Debug::Perf::Emit(L"viewer.vlc.queue", L"stale-cleanup", result ? result->elapsedUs : 0u, result ? result->requestId : 0u,
+                          result ? result->windowIdentity : 0u, HRESULT_FROM_WIN32(ERROR_CANCELLED));
+        return;
+    }
+
+    if (_pendingCloseCleanupCount > 0)
+    {
+        --_pendingCloseCleanupCount;
+    }
+    ++_cleanupCompletions;
+    static_cast<void>(ScheduleDeferredVlcStateCleanup());
+    EnsureVlcCleanupProgress();
+    CompleteCloseAfterCleanup();
+}
+
+void ViewerVLC::RecordAsyncFallbackCompletion(AsyncFallbackCompletion completion) noexcept
+{
+    std::lock_guard lock(_asyncFallbackMutex);
+    if (completion.kind == AsyncFallbackKind::Load)
+    {
+        ++_asyncFallbackLoadCount;
+        if (_asyncFallbackNewestLoad.windowIdentity == 0 || completion.requestId >= _asyncFallbackNewestLoad.requestId)
+        {
+            _asyncFallbackNewestLoad = completion;
+        }
+    }
+    else
+    {
+        ++_asyncFallbackCleanupCount;
+        _asyncFallbackNewestCleanup = completion;
+    }
+}
+
+void ViewerVLC::DrainAsyncFallbackCompletions() noexcept
+{
+    uint64_t loadCount = 0;
+    uint64_t cleanupCount = 0;
+    AsyncFallbackCompletion newestLoad{};
+    AsyncFallbackCompletion newestCleanup{};
+    {
+        std::lock_guard lock(_asyncFallbackMutex);
+        loadCount                      = std::exchange(_asyncFallbackLoadCount, 0u);
+        cleanupCount                   = std::exchange(_asyncFallbackCleanupCount, 0u);
+        newestLoad                     = std::exchange(_asyncFallbackNewestLoad, AsyncFallbackCompletion{});
+        newestCleanup                  = std::exchange(_asyncFallbackNewestCleanup, AsyncFallbackCompletion{});
+    }
+
+    if (loadCount != 0u)
+    {
+        const uint64_t retiredLoads = std::min<uint64_t>(_pendingLoadWorkCount, loadCount);
+        _pendingLoadWorkCount -= retiredLoads;
+        _loadPostFallbacks += loadCount;
+
+        const bool sameWindow = newestLoad.windowIdentity != 0 && newestLoad.windowIdentity == _windowIdentity;
+        const bool currentTerminal = sameWindow && ! _closePending && newestLoad.requestId == _asyncOpenGeneration;
+        _staleLoadResults += loadCount - (currentTerminal ? 1u : 0u);
+        if (currentTerminal)
+        {
+            SetLoadingUiVisible(false);
+            SetMissingUiVisible(true, LoadStringResource(g_hInstance, IDS_VIEWERVLC_DETAILS_ASYNC_RESULT_DELIVERY_FAILED));
+            Debug::Perf::Emit(L"viewer.vlc.queue", L"load-post-fallback-terminal", 0u, newestLoad.requestId, newestLoad.windowIdentity, newestLoad.hr);
+        }
+        else
+        {
+            const wchar_t* label = ! sameWindow ? L"post-fallback-stale-window"
+                                                : (_closePending ? L"load-post-fallback-closed" : L"load-post-fallback-stale-request");
+            Debug::Perf::Emit(L"viewer.vlc.queue", label, 0u, newestLoad.requestId, newestLoad.windowIdentity, newestLoad.hr);
+        }
+    }
+
+    if (cleanupCount != 0u)
+    {
+        if (newestCleanup.windowIdentity != 0 && newestCleanup.windowIdentity == _windowIdentity)
+        {
+            const uint64_t retiredCleanups = std::min<uint64_t>(_pendingCloseCleanupCount, cleanupCount);
+            _pendingCloseCleanupCount -= retiredCleanups;
+            _cleanupCompletions += cleanupCount;
+            _cleanupPostFallbacks += cleanupCount;
+            Debug::Perf::Emit(L"viewer.vlc.queue",
+                              L"cleanup-post-fallback-terminal",
+                              0u,
+                              newestCleanup.requestId,
+                              newestCleanup.windowIdentity,
+                              newestCleanup.hr);
+        }
+        else
+        {
+            Debug::Perf::Emit(L"viewer.vlc.queue",
+                              L"post-fallback-stale-window",
+                              0u,
+                              newestCleanup.requestId,
+                              newestCleanup.windowIdentity,
+                              newestCleanup.hr);
+        }
+    }
+
+    static_cast<void>(ScheduleDeferredVlcStateCleanup());
+    EnsureVlcCleanupProgress();
+    CompleteCloseAfterCleanup();
+}
+
+void ViewerVLC::CompleteCloseAfterCleanup() noexcept
+{
+    if (! _closePending || ! _hWnd || _pendingLoadWorkCount != 0 || _pendingCloseCleanupCount != 0 || _vlc ||
+        _deferredCleanupCount.load(std::memory_order_acquire) != 0u || _syntheticCleanupPending.load(std::memory_order_acquire))
+    {
+        return;
+    }
+
+    _destroyingAfterCleanup      = true;
+    _embeddedMode                = false;
+    _embeddedFocusReturnWindow   = nullptr;
+    _hWnd.reset();
 }
 
 bool ViewerVLC::StartPlayback(const std::filesystem::path& path) noexcept
@@ -5160,38 +5880,18 @@ bool ViewerVLC::StartPlayback(const std::filesystem::path& path) noexcept
         return false;
     }
 
-    std::error_code ec;
-    if (! std::filesystem::exists(path, ec) || ! std::filesystem::is_regular_file(path, ec))
-    {
-        RetireCurrentPlayerAsync(true);
-        SetMissingUiVisible(true, LoadStringResource(g_hInstance, IDS_VIEWERVLC_DETAILS_PATH_NOT_LOCAL_FILE));
-        return false;
-    }
-
     _hudRate = std::clamp(static_cast<float>(_config.defaultPlaybackRatePercent) / 100.0f, 0.25f, 4.0f);
-
-    std::wstring error;
-    _isAudioFile = IsAudioExtension(path.extension().wstring());
-
-    VlcLoadSpec spec{};
-    if (! BuildVlcLoadSpec(spec, error))
-    {
-        RetireCurrentPlayerAsync(true);
-        SetMissingUiVisible(true, error);
-        return false;
-    }
-
-    if (_vlc && _vlc->instance && _vlc->module && _vlc->installDir == spec.installDir && _vlc->instanceArgsKey == spec.instanceArgsKey)
-    {
-        return StartPlaybackWithLoadedVlc(path);
-    }
-
-    BeginAsyncVlcLoad(path, std::move(spec));
+    BeginAsyncVlcLoad(path);
     return true;
 }
 
 bool ViewerVLC::StartPlaybackWithLoadedVlc(const std::filesystem::path& path) noexcept
 {
+    if (_closePending)
+    {
+        return false;
+    }
+
     if (! _vlc || ! _vlc->instance || ! _vlc->libvlc_media_new_path || ! _vlc->libvlc_media_player_new_from_media || ! _vlc->libvlc_media_release ||
         ! _vlc->libvlc_media_player_release)
     {
@@ -5309,63 +6009,7 @@ void ViewerVLC::StopPlayback() noexcept
 
 void ViewerVLC::RetireCurrentPlayerAsync(bool updateUi) noexcept
 {
-    if (_hWnd && _uiTimerId != 0)
-    {
-        KillTimer(_hWnd.get(), _uiTimerId);
-        _uiTimerId = 0;
-    }
-
-    _hudSeekDragging    = false;
-    _hudVolumeDragging  = false;
-    _hudPressed         = HudPart::None;
-    _hudHot             = HudPart::None;
-    _hudDragTimeMs      = 0;
-    _seekDragWasPlaying = false;
-    ClearSeekPreview();
-    RemoveVideoChildWheelForwarding();
-
-    if (_vlc && _vlc->player)
-    {
-        std::unique_ptr<VlcPlayerCleanupWork> work(new (std::nothrow) VlcPlayerCleanupWork{});
-        if (work)
-        {
-            work->moduleKeepAlive    = AcquireModuleReferenceFromAddress(&kViewerVlcModuleAnchor);
-            work->vlcModuleKeepAlive = KeepLibVlcModuleLoaded(_vlc->installDir);
-            work->stop               = _vlc->libvlc_media_player_stop;
-            if (_vlc->libvlc_retain && _vlc->libvlc_release && _vlc->instance)
-            {
-                _vlc->libvlc_retain(_vlc->instance.get());
-                work->instanceRef.get_deleter().release = _vlc->libvlc_release;
-                work->instanceRef.reset(_vlc->instance.get());
-            }
-            work->media  = std::move(_vlc->media);
-            work->player = std::move(_vlc->player);
-#ifdef ENABLE_TESTS
-            work->delayMs = _debugStopDelayMs;
-#endif
-            QueueVlcPlayerCleanup(std::move(work));
-        }
-        else
-        {
-            if (_vlc->libvlc_media_player_stop)
-            {
-                _vlc->libvlc_media_player_stop(_vlc->player.get());
-            }
-            _vlc->player.reset();
-            _vlc->media.reset();
-        }
-    }
-#ifdef ENABLE_TESTS
-    else
-    {
-        QueueDebugVlcStopDelay(_debugStopDelayMs);
-    }
-#endif
-
-    if (updateUi)
-    {
-        UpdatePlaybackUi();
-    }
+    RetireVlcStateAsync(std::move(_vlc), updateUi);
 }
 
 void ViewerVLC::RetireVlcStateAsync(std::unique_ptr<VlcState> state, bool updateUi) noexcept
@@ -5387,41 +6031,18 @@ void ViewerVLC::RetireVlcStateAsync(std::unique_ptr<VlcState> state, bool update
 
     if (state)
     {
-        RestoreVlcDllDirectory(*state);
-        std::unique_ptr<VlcStateCleanupWork> work(new (std::nothrow) VlcStateCleanupWork{});
-        if (work)
-        {
-            work->moduleKeepAlive = AcquireModuleReferenceFromAddress(&kViewerVlcModuleAnchor);
-            work->state           = std::move(state);
+        state->cleanupRequestId      = _closeRequestId;
+        state->cleanupWindowIdentity = _cleanupNotifyIdentity.load(std::memory_order_acquire);
 #ifdef ENABLE_TESTS
-            work->delayMs = _debugStopDelayMs;
+        state->cleanupDelayMs     = _debugStopDelayMs;
+        state->cleanupReleaseGate = _debugStopReleaseGate;
 #endif
-            QueueVlcStateCleanup(std::move(work));
-        }
-        else
+        if (! TryQueueVlcStateCleanup(state))
         {
-            if (state->player)
-            {
-#ifdef ENABLE_TESTS
-                ApplyDebugStopDelay(_debugStopDelayMs);
-#endif
-                if (state->libvlc_media_player_stop)
-                {
-                    state->libvlc_media_player_stop(state->player.get());
-                }
-                state->player.reset();
-            }
-            state->media.reset();
-            state.reset();
+            Debug::Warning(L"ViewerVLC: retaining playback state until asynchronous cleanup can be queued.");
+            DeferVlcStateCleanup(std::move(state));
         }
     }
-#ifdef ENABLE_TESTS
-    else
-    {
-        QueueDebugVlcStopDelay(_debugStopDelayMs);
-    }
-#endif
-
     if (updateUi)
     {
         UpdatePlaybackUi();

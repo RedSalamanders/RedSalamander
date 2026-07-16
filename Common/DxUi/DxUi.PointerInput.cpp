@@ -10,39 +10,14 @@ namespace
 {
     switch (message)
     {
-    case WM_MOUSEMOVE:
-    case WM_LBUTTONDOWN:
-    case WM_LBUTTONUP:
-    case WM_LBUTTONDBLCLK:
-    case WM_RBUTTONDOWN:
-    case WM_RBUTTONUP:
-        return true;
-    default:
-        return false;
+        case WM_MOUSEMOVE:
+        case WM_LBUTTONDOWN:
+        case WM_LBUTTONUP:
+        case WM_LBUTTONDBLCLK:
+        case WM_RBUTTONDOWN:
+        case WM_RBUTTONUP: return true;
+        default: return false;
     }
-}
-
-[[nodiscard]] PointerInputEvent BuildBaseEvent(
-    HWND targetHwnd,
-    UINT message,
-    WPARAM wParam,
-    LPARAM lParam,
-    PointerInputSource source,
-    DWORD messageTime,
-    PointerInputKind kind) noexcept
-{
-    PointerInputEvent event{};
-    event.source      = source;
-    event.kind        = kind;
-    event.targetHwnd  = targetHwnd;
-    event.rootHwnd    = targetHwnd ? GetAncestor(targetHwnd, GA_ROOT) : nullptr;
-    event.captureHwnd = GetCapture();
-    event.message     = message;
-    event.wParam      = wParam;
-    event.lParam      = lParam;
-    event.messageTime = messageTime;
-    event.wheelDelta  = (message == WM_MOUSEWHEEL) ? GET_WHEEL_DELTA_WPARAM(wParam) : 0;
-    return event;
 }
 
 void FillClientPoint(PointerInputEvent& event, HWND targetHwnd, LPARAM lParam) noexcept
@@ -71,13 +46,25 @@ void FillScreenPoint(PointerInputEvent& event, HWND targetHwnd, LPARAM lParam) n
     }
 }
 
-[[nodiscard]] std::optional<PointerInputEvent> TryBuildPointerInputEventWithMessageTime(
-    HWND targetHwnd,
-    UINT message,
-    WPARAM wParam,
-    LPARAM lParam,
-    PointerInputSource source,
-    DWORD messageTime) noexcept
+} // namespace
+
+std::optional<PointerInputKind> PointerInputKindFromMessage(UINT message) noexcept
+{
+    switch (message)
+    {
+        case WM_MOUSEMOVE: return PointerInputKind::Move;
+        case WM_MOUSELEAVE: return PointerInputKind::Leave;
+        case WM_LBUTTONDOWN: return PointerInputKind::LeftDown;
+        case WM_LBUTTONUP: return PointerInputKind::LeftUp;
+        case WM_LBUTTONDBLCLK: return PointerInputKind::LeftDoubleClick;
+        case WM_RBUTTONDOWN: return PointerInputKind::RightDown;
+        case WM_RBUTTONUP: return PointerInputKind::RightUp;
+        case WM_MOUSEWHEEL: return PointerInputKind::Wheel;
+        default: return std::nullopt;
+    }
+}
+
+std::optional<PointerInputEvent> TryBuildPointerInputEvent(HWND targetHwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
 {
     const std::optional<PointerInputKind> kind = PointerInputKindFromMessage(message);
     if (! kind.has_value())
@@ -85,7 +72,16 @@ void FillScreenPoint(PointerInputEvent& event, HWND targetHwnd, LPARAM lParam) n
         return std::nullopt;
     }
 
-    PointerInputEvent event = BuildBaseEvent(targetHwnd, message, wParam, lParam, source, messageTime, kind.value());
+    PointerInputEvent event{};
+    event.kind        = kind.value();
+    event.targetHwnd  = targetHwnd;
+    event.rootHwnd    = targetHwnd ? GetAncestor(targetHwnd, GA_ROOT) : nullptr;
+    event.captureHwnd = GetCapture();
+    event.message     = message;
+    event.wParam      = wParam;
+    event.lParam      = lParam;
+    event.messageTime = static_cast<DWORD>(GetMessageTime());
+    event.wheelDelta  = (message == WM_MOUSEWHEEL) ? GET_WHEEL_DELTA_WPARAM(wParam) : 0;
     if (IsClientPointMouseMessage(message))
     {
         FillClientPoint(event, targetHwnd, lParam);
@@ -96,48 +92,5 @@ void FillScreenPoint(PointerInputEvent& event, HWND targetHwnd, LPARAM lParam) n
     }
 
     return event;
-}
-} // namespace
-
-std::optional<PointerInputKind> PointerInputKindFromMessage(UINT message) noexcept
-{
-    switch (message)
-    {
-    case WM_MOUSEMOVE:
-        return PointerInputKind::Move;
-    case WM_MOUSELEAVE:
-        return PointerInputKind::Leave;
-    case WM_LBUTTONDOWN:
-        return PointerInputKind::LeftDown;
-    case WM_LBUTTONUP:
-        return PointerInputKind::LeftUp;
-    case WM_LBUTTONDBLCLK:
-        return PointerInputKind::LeftDoubleClick;
-    case WM_RBUTTONDOWN:
-        return PointerInputKind::RightDown;
-    case WM_RBUTTONUP:
-        return PointerInputKind::RightUp;
-    case WM_MOUSEWHEEL:
-        return PointerInputKind::Wheel;
-    default:
-        return std::nullopt;
-    }
-}
-
-std::optional<PointerInputEvent> TryBuildPointerInputEvent(
-    HWND targetHwnd,
-    UINT message,
-    WPARAM wParam,
-    LPARAM lParam,
-    PointerInputSource source) noexcept
-{
-    return TryBuildPointerInputEventWithMessageTime(targetHwnd, message, wParam, lParam, source, static_cast<DWORD>(GetMessageTime()));
-}
-
-std::optional<PointerInputEvent> TryBuildPointerInputEventFromMsg(
-    const MSG& message,
-    PointerInputSource source) noexcept
-{
-    return TryBuildPointerInputEventWithMessageTime(message.hwnd, message.message, message.wParam, message.lParam, source, message.time);
 }
 } // namespace RedSalamander::DxUi

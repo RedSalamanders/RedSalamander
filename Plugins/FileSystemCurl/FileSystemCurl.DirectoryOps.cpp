@@ -337,10 +337,11 @@ private:
 class CurlStreamingReader final : public IFileReader
 {
 public:
-    CurlStreamingReader(ConnectionInfo conn, std::wstring remotePath, uint64_t sizeBytes) noexcept
+    CurlStreamingReader(ConnectionInfo conn, std::wstring remotePath, uint64_t sizeBytes, bool sizeKnown) noexcept
         : _conn(std::move(conn)),
           _remotePath(std::move(remotePath)),
-          _sizeBytes(sizeBytes)
+          _sizeBytes(sizeBytes),
+          _sizeKnown(sizeKnown)
     {
     }
 
@@ -421,7 +422,7 @@ public:
         }
 
         *sizeBytes = _sizeBytes;
-        return S_OK;
+        return _sizeKnown ? S_OK : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
     }
 
     HRESULT STDMETHODCALLTYPE Seek(__int64 offset, unsigned long origin, uint64_t* newPosition) noexcept override
@@ -451,6 +452,10 @@ public:
         }
         else
         {
+            if (! _sizeKnown)
+            {
+                return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+            }
             base = _sizeBytes;
         }
 
@@ -521,7 +526,8 @@ public:
         }
 
         std::unique_lock lock(_mutex);
-        while (_bufferedBytes == 0)
+        const size_t desiredBufferedBytes = (std::min)(static_cast<size_t>(bytesToRead), _bufferCapacity);
+        while (_bufferedBytes < desiredBufferedBytes)
         {
             if (FAILED(_workerHr))
             {
@@ -529,7 +535,7 @@ public:
             }
             if (_eof)
             {
-                return S_OK;
+                break;
             }
             _cvReadable.wait(lock);
         }
@@ -561,6 +567,30 @@ public:
         *bytesRead = static_cast<unsigned long>(take);
         return S_OK;
     }
+
+#if defined(_DEBUG)
+    [[nodiscard]] HRESULT DebugPrimeForSelfTest(std::span<const std::byte> bytes, bool eof) noexcept
+    {
+        if (bytes.empty())
+        {
+            return E_INVALIDARG;
+        }
+
+        _buffer.reset(new (std::nothrow) std::byte[bytes.size()]);
+        if (! _buffer)
+        {
+            return E_OUTOFMEMORY;
+        }
+
+        std::memcpy(_buffer.get(), bytes.data(), bytes.size());
+        _bufferCapacity = bytes.size();
+        _readPos        = 0;
+        _writePos       = 0;
+        _bufferedBytes  = bytes.size();
+        _eof            = eof;
+        return S_OK;
+    }
+#endif
 
 private:
     ~CurlStreamingReader()
@@ -789,6 +819,7 @@ private:
     std::wstring _remotePath;
 
     uint64_t _sizeBytes = 0;
+    bool _sizeKnown     = false;
 
     std::mutex _mutex;
     std::condition_variable _cvReadable;
@@ -1203,6 +1234,60 @@ private:
 };
 } // namespace
 
+#if defined(_DEBUG)
+namespace FileSystemCurlInternal
+{
+void RunDebugCurlStreamingReaderContractSelfTests(unsigned int& passed, unsigned int& failed) noexcept
+{
+    const auto check = [&](bool condition, const wchar_t* message) noexcept
+    {
+        if (condition)
+        {
+            ++passed;
+            return;
+        }
+
+        ++failed;
+        Debug::Error(L"FileSystemCurl streaming-reader selftest failed: {}", message);
+    };
+
+    ConnectionInfo connection{};
+    wil::com_ptr<CurlStreamingReader> reader;
+    reader.attach(new (std::nothrow) CurlStreamingReader(std::move(connection), L"/selftest", 0u, false));
+    check(static_cast<bool>(reader), L"reader allocation should succeed");
+    if (! reader)
+    {
+        return;
+    }
+
+    uint64_t sizeBytes = 123u;
+    check(reader->GetSize(&sizeBytes) == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED), L"unknown size should not be reported as zero");
+
+    uint64_t position = 123u;
+    check(reader->Seek(0, FILE_END, &position) == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED), L"FILE_END seek should reject unknown size");
+
+    constexpr size_t kHintBytes = 1024u * 1024u;
+    std::vector<std::byte> fullRequest(kHintBytes, std::byte{0x5a});
+    check(SUCCEEDED(reader->DebugPrimeForSelfTest(fullRequest, false)), L"full-request test buffer should initialize");
+
+    std::vector<std::byte> output(kHintBytes);
+    unsigned long bytesRead = 0;
+    check(SUCCEEDED(reader->Read(output.data(), static_cast<unsigned long>(output.size()), &bytesRead)) && bytesRead == output.size(),
+          L"reader should fill the advertised 1 MiB request when data is available");
+
+    constexpr std::array<std::byte, 7> tail{{
+        std::byte{1}, std::byte{2}, std::byte{3}, std::byte{4}, std::byte{5}, std::byte{6}, std::byte{7}}};
+    check(SUCCEEDED(reader->DebugPrimeForSelfTest(tail, true)), L"EOF-tail test buffer should initialize");
+
+    std::array<std::byte, 16> tailOutput{};
+    bytesRead = 0;
+    check(SUCCEEDED(reader->Read(tailOutput.data(), static_cast<unsigned long>(tailOutput.size()), &bytesRead)) && bytesRead == tail.size() &&
+              std::equal(tail.begin(), tail.end(), tailOutput.begin()),
+          L"reader should return the final buffered tail before EOF");
+}
+} // namespace FileSystemCurlInternal
+#endif
+
 HRESULT STDMETHODCALLTYPE FileSystemCurl::ReadDirectoryInfo(const wchar_t* path, IFilesInformation** ppFilesInformation) noexcept
 {
     if (ppFilesInformation == nullptr)
@@ -1336,7 +1421,19 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CreateFileReader(const wchar_t* path, 
 
         if (resolved.connection.protocol != Protocol::Imap)
         {
-            auto* impl = new (std::nothrow) CurlStreamingReader(resolved.connection, resolved.remotePath, entry.sizeBytes);
+            if (! entry.sizeKnown)
+            {
+                uint64_t probedSize = 0;
+                bool probedSizeKnown = false;
+                const HRESULT probeHr = CurlProbeRemoteFileSize(resolved.connection, resolved.remotePath, probedSize, probedSizeKnown);
+                if (SUCCEEDED(probeHr) && probedSizeKnown)
+                {
+                    entry.sizeBytes = probedSize;
+                    entry.sizeKnown = true;
+                }
+            }
+
+            auto* impl = new (std::nothrow) CurlStreamingReader(resolved.connection, resolved.remotePath, entry.sizeBytes, entry.sizeKnown);
             if (! impl)
             {
                 return E_OUTOFMEMORY;

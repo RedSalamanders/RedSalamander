@@ -27,6 +27,7 @@ public:
     virtual ~RedConfigureRootController()                                    = default;
 
     virtual void ReloadWorkspaceFromFields() = 0;
+    virtual void SelectPageForTest(size_t pageIndex) = 0;
 };
 
 struct RedConfigureRootCreateResult

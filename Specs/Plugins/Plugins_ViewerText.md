@@ -96,6 +96,55 @@ Behavior:
 - built-in `ThemeMode::Rainbow` must resolve a distinct semantic diff palette through the application theme system even when no custom theme file overrides `viewer.diff.*`,
 - changing the application theme after a diff is already open must repaint the active parsed diff with the newly resolved semantic diff colors.
 
+## Save As Data-Integrity Contract
+
+`Save As` is a transactional export operation. The selected destination is never opened or truncated in place.
+
+- Saving is refused with a localized error while an open/load request is still active.
+- A streamed text document may be saved only with `Keep Original Encoding`. Re-encoding a partially loaded stream is refused with a localized actionable error before any destination artifact is created.
+- `Keep Original Encoding` acquires, sizes, and seeks a fresh `IFileReader` for the current source before creating output. It copies the complete source through bounded chunks rather than exporting only the visible text buffer, and refuses to commit when the yielded byte count differs from the acquired source size.
+- Re-encoding uses the complete in-memory document and writes conversion output in bounded chunks. It validates the target code page before creating output.
+- Both modes create a unique sibling temp in the destination directory, write only that temp, call `FlushFileBuffers`, close it, and then commit with same-volume `MoveFileExW(..., MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)`.
+- Every pre-commit failure closes and deletes only the sibling temp. Source bytes and any pre-existing destination bytes remain unchanged.
+- Same-path keep-original saves are supported. At the commit quiet point, the viewer releases its long-lived reader for the current path and reopens that reader after the rename attempt so Windows sharing rules do not turn a safe same-path save into `ERROR_ACCESS_DENIED`.
+- The production dialog path and the Debug non-dialog test seam call the same save primitive.
+
+The deterministic `ViewerPETests` case `TestViewerTextSaveAsPreservesDataOnFailures` is the regression proof. It verifies same-path keep-original, successful keep-original and UTF-8 re-encode, loading and actual streamed-re-encode refusal, injected source-open/read/encode/write/flush/commit failures, a successful-but-short source read, byte-identical source and pre-existing destination files after every failure, and absence of sibling temp remnants.
+
+## Open And Decode Reliability
+
+- Each current, non-cancelled async open request reaches exactly one terminal result. Allocation/submit failures complete on the UI path; worker failures share one scope-owned terminal dispatcher; and a payload-post failure uses a bounded no-payload failure dispatch so the loading state cannot remain active indefinitely. Results for an older request or a destroyed/reused window are stale and are ignored.
+- Every threadpool callback that pins `ViewerText.dll` transfers that `HMODULE` to `FreeLibraryWhenCallbackReturns` at callback entry. The callback context must not destroy the final owning module pin inside the callback body, because doing so can unmap the code that still has to return to the threadpool dispatcher.
+- A failed text read or decode remains a failed open. ViewerText does not automatically retry that failure as hex. Automatic hex selection is limited to the existing successful binary-content sniff when the hex surface is available.
+- An explicitly selected Hex open accepts routine successful short reads by continuing bounded reads until the requested buffer is filled or the provider returns zero bytes. Preload and refill buffers expose only the bytes actually returned; they never expose the zero-initialized remainder implied by an overstated `GetSize`. A provider count larger than the request remains a hard error.
+- Streamed UTF-8, UTF-16, and UTF-32 loads retain incomplete code units at the end of each chunk. Manual Shift-JIS (932), GBK (936), and Big5 (950) selections also retain a final unmatched DBCS lead byte and prepend it to the next chunk.
+- UTF-8 hex text renders valid non-BMP scalars as a UTF-16 surrogate pair. The formatter keeps source spans and byte-cell columns separate so the pair is drawn together without shifting selection, search, or following byte columns.
+- Conversion diagnostics capture `GetLastError()` immediately and log the same derived `HRESULT` returned by the failed open; a stale pre-conversion result code is never reported.
+
+`TestViewerTextAsyncOpenAndUtf8HexTerminalContracts` injects every terminal failure stage, including payload-post and submit failures, and verifies exactly one terminal count with `_isLoading` cleared. It also verifies U+1F600 at the first column, an interior column, and the final four bytes of a row. `TestViewerTextDecodeAndClipboardSafetyHelpers` splits representative Shift-JIS, GBK, and Big5 fixtures at every byte boundary and compares streamed decoding with the unsplit result. `TestViewerTextHexShortReadDropsPhantomTailBytes` proves an explicitly selected Hex open renders eight available bytes from a reader that advertises sixteen, without fabricating the missing tail.
+
+## Text Geometry, Huge Lines, And Streamed Navigation
+
+- A visible text span owns one DirectWrite `IDWriteTextLayout`. Text drawing, click hit-testing, selection rectangles, search highlights, dim diff-marker placement, and caret placement all query that same layout; no one-code-unit/one-fixed-column approximation may be used for those operations.
+- DirectWrite tab stops, fallback CJK/proportional glyph widths, and non-BMP clusters are therefore authoritative. A caret position is normalized away from the interior of a UTF-16 surrogate pair, and left/right movement crosses a valid pair as one stop.
+- Wrapped visual rows remain logically addressable without requiring one vector entry per row. Once a document would exceed the bounded eager-row threshold, the viewer stores one sparse summary per logical line (including pane metadata for side-by-side diffs) and derives only requested visible segments. Every logical byte/code unit remains reachable through scrolling and navigation.
+- Sparse viewport rows are addressed by the actual materialized anchor recorded for each row. Paint, hit testing, caret movement, debug targeting, line/page scrolling, and viewport reconstruction must consult those anchors; they must not infer a sparse row as `topVisualLine + rowIndex`, because DirectWrite segmentation can make adjacent materialized anchors non-contiguous.
+- A sparse side-by-side checkpoint stores independent `leftCursor` and `rightCursor` positions, in addition to its logical-line/row identity and plain-text cursor. The two pane cursors must advance by their own DirectWrite-fit segment lengths; a merged scalar such as `max(leftCursor, rightCursor)` cannot represent an unequal-width split row or restore it exactly.
+- Visible `IDWriteTextLayout` objects are held in a generation-scoped LRU cache with both entry and estimated-byte caps. Resize, font/target recreation, document replacement, or presentation rebuild invalidates the generation. Huge logical lines must never create a whole-line DirectWrite layout merely to paint a viewport.
+- Stream-window seek/read/decode/line-index work runs on a module-pinned threadpool callback against a fresh reader. Each result carries request ID plus window identity; rapid navigation is latest-wins, stale completions are ignored, and current submit/worker/post failure reaches a terminal UI state. Window destruction invalidates the identity and drains posted payloads.
+- Debug/runtime evidence exposes sparse logical-summary count, logical visual-coordinate span, materialized-row count, layout-cache entries/bytes/evictions/hits/misses, stream accepted/rejected/stale/terminal counts, worker decode/index time, UI apply time, caret/selection indices, and a DirectWrite geometry probe. `textVisualLineCountExact` is `true` only when `textVisualLineCount` is an exact row count. In sparse mode it is `false`, and `textVisualLineCount` is an upper-bound coordinate span used for bounded scrollbar/navigation addressing; callers must not present it as an exact number of physical rows.
+
+`TestViewerTextAsyncOpenAndUtf8HexTerminalContracts` is also the focused geometry/responsiveness regression. It uses tab/CJK/U+1F600 text, a one-million-code-unit streamed line under a two-entry/8-KiB layout budget, rapid navigation with stale completions, bounded paint/UI-apply timing, and close/unload while async-open and stream callbacks remain queued. It proves exact Down/Up and Page Down/Page Up caret-stop round trips over sparse wrapped rows. `TestViewerTextDiffModesAndPlaceholders` adds a single huge unequal-width side-by-side row, proves both pane cursors advance by different DirectWrite-fit deltas, and then proves line-down followed by line-up restores both pane checkpoints exactly.
+
+## Hex Clipboard Safety
+
+- Hex CSV copy computes an overflow-checked plan before loading headers, reserving CSV storage, formatting rows, or reading proportional data.
+- A single copy accepts at most 256 KiB of source bytes. A larger line selection copies the bounded prefix and shows the localized `IDS_VIEWERTEXT_MSG_HEX_COPY_TRUNCATED` warning.
+- The bound is enforced with checked integer arithmetic for files and selections up to `UINT64_MAX`; allocation failure is fatal under the repository policy and is never caught or converted into normal control flow.
+- Runtime evidence emits `viewer.hex.clipboard_accepted_bytes`, `viewer.hex.clipboard_rejected_bytes`, and `viewer.hex.clipboard_format_us`.
+
+`TestViewerTextDecodeAndClipboardSafetyHelpers` covers the largest accepted request, the first truncated request, and a `UINT64_MAX` request without performing proportional work.
+
 ## Performance Validation
 
 ViewerText diff mode treats these as protected performance scenarios:
@@ -106,6 +155,10 @@ ViewerText diff mode treats these as protected performance scenarios:
 - scroll-driven rehydration of a later unchanged-text viewport window,
 - backtracking to an already hydrated unchanged-text viewport window,
 - placeholder-row materialization when referenced files do not resolve.
+- bounded hex clipboard formatting at and immediately above the 256 KiB source-byte cap.
+- first visible paint and scrolling for a multi-million-code-unit logical line under a tiny layout-cache budget,
+- exact sparse line/page navigation round trips and independent left/right checkpointing for an unequal-width side-by-side diff row,
+- rapid streamed-window navigation, including worker decode/index time, latest-window UI apply time, stale completion count, and bounded cache/sparse-metadata growth.
 
 The authoritative Commands selftest entrypoint is `viewer_text_diff_perf`. The baseline metric family emitted by that case is `viewer.diff.*`, including `viewer.diff.open_to_first_visible_us`, `viewer.diff.visible_rows`, `viewer.diff.semantic_row_paint_us`, `viewer.diff.visible_styled_rows`, `viewer.diff.visible_context_rows`, `viewer.diff.visible_banner_rows`, `viewer.diff.theme_switch_repaint_us`, `viewer.diff.scroll_repaint_us`, `viewer.diff.hunk_jump_to_visible_us`, `viewer.diff.expand_context_us`, `viewer.diff.viewport_rehydrate_us`, `viewer.diff.viewport_backtrack_us`, `viewer.diff.deferred_rows`, `viewer.diff.referenced_bytes_read`, `viewer.diff.viewport_referenced_bytes_read`, `viewer.diff.viewport_referenced_bytes_delta`, `viewer.diff.viewport_backtrack_referenced_bytes_delta`, `viewer.diff.placeholder_rows`, and `viewer.diff.placeholder_bands`. The protected expand-context path should exercise clickable hidden-banner reveal when that banner is visible, while scroll repaint plus viewport rehydrate/backtrack evidence remains the review surface for combo-sync and bounded rebuild work.
 

@@ -17,6 +17,7 @@
 #include <mutex>
 #include <numeric>
 #include <psapi.h>
+#include <set>
 #include <shellapi.h>
 #include <string_view>
 #include <system_error>
@@ -74,30 +75,34 @@ constexpr float kMinHitAreaDip2       = 4.0f * 4.0f;
 constexpr float kTooltipMaxWidthDip   = 420.0f;
 constexpr float kTooltipMaxHeightDip  = 320.0f;
 
-constexpr double kAnimationDurationSeconds = 0.18;
+constexpr double kAnimationDurationSeconds    = 0.18;
 constexpr double kScanCompletedOverlaySeconds = 1.35;
 
-constexpr size_t kDefaultLayoutItems = 4096;
-constexpr size_t kMaxLayoutItems = 50000;
-constexpr size_t kMaxDrawItems = 50000;
-constexpr size_t kMaxDrawItemsWhileScanning = 20000;
-constexpr float kMinVisibleTileAreaDip2 = 64.0f;
+constexpr size_t kDefaultLayoutItems             = 4096;
+constexpr size_t kMaxLayoutItems                 = 50000;
+constexpr size_t kMaxDrawItems                   = 50000;
+constexpr size_t kMaxDrawItemsWhileScanning      = 20000;
+constexpr float kMinVisibleTileAreaDip2          = 64.0f;
 constexpr uint32_t kAdaptiveFileCandidateCeiling = 20000u;
-constexpr uint64_t kMaxScanCacheSnapshotBytes = 64ull * 1024ull * 1024ull;
+constexpr uint64_t kMaxScanCacheSnapshotBytes    = 64ull * 1024ull * 1024ull;
 #ifdef ENABLE_TESTS
-constexpr uint32_t kRendererFailureD3DDevice = 1u;
-constexpr uint32_t kRendererFailureD2DContext = 2u;
-constexpr uint32_t kRendererFailureSwapChain = 3u;
-constexpr uint32_t kRendererFailureResizeBuffers = 4u;
-constexpr uint32_t kRendererFailureGetBuffer = 5u;
-constexpr uint32_t kRendererFailureTargetBitmap = 6u;
-constexpr uint32_t kRendererFailureRenderTarget = 7u;
-constexpr uint32_t kRendererDiscardDestroy = 20u;
-constexpr uint32_t kRendererDiscardDpiChanged = 21u;
+constexpr wchar_t kForceSmallScanPolicyEnvVar[]    = L"REDSALAMANDER_VIEWERSPACE_FORCE_SMALL_SCAN_POLICY";
+constexpr wchar_t kTestMaxOutstandingEnvVar[]      = L"REDSALAMANDER_VIEWERSPACE_TEST_MAX_OUTSTANDING_DIRECTORIES";
+constexpr wchar_t kTestMaxRetainedDirectoriesEnvVar[] = L"REDSALAMANDER_VIEWERSPACE_TEST_MAX_RETAINED_DIRECTORIES";
+constexpr wchar_t kTestNextModelIdEnvVar[]          = L"REDSALAMANDER_VIEWERSPACE_TEST_NEXT_MODEL_ID";
+constexpr uint32_t kRendererFailureD3DDevice        = 1u;
+constexpr uint32_t kRendererFailureD2DContext       = 2u;
+constexpr uint32_t kRendererFailureSwapChain        = 3u;
+constexpr uint32_t kRendererFailureResizeBuffers    = 4u;
+constexpr uint32_t kRendererFailureGetBuffer        = 5u;
+constexpr uint32_t kRendererFailureTargetBitmap     = 6u;
+constexpr uint32_t kRendererFailureRenderTarget     = 7u;
+constexpr uint32_t kRendererDiscardDestroy          = 20u;
+constexpr uint32_t kRendererDiscardDpiChanged       = 21u;
 constexpr uint32_t kRendererDiscardStaticDeviceLost = 22u;
-constexpr uint32_t kRendererDiscardDeviceLost = 23u;
-constexpr uint32_t kRendererDiscardTheme = 25u;
-constexpr uint32_t kRendererDiscardUnknown = 26u;
+constexpr uint32_t kRendererDiscardDeviceLost       = 23u;
+constexpr uint32_t kRendererDiscardTheme            = 25u;
+constexpr uint32_t kRendererDiscardUnknown          = 26u;
 #endif
 
 [[nodiscard]] uint64_t MaxScanCacheSnapshotBytes() noexcept
@@ -107,7 +112,7 @@ constexpr uint32_t kRendererDiscardUnknown = 26u;
     const DWORD chars = GetEnvironmentVariableW(L"REDSALAMANDER_VIEWERSPACE_TEST_CACHE_CAP_BYTES", value.data(), static_cast<DWORD>(value.size()));
     if (chars > 0 && chars < value.size())
     {
-        wchar_t* end = nullptr;
+        wchar_t* end                    = nullptr;
         const unsigned long long parsed = wcstoull(value.data(), &end, 10);
         if (parsed > 0 && end != value.data())
         {
@@ -116,6 +121,103 @@ constexpr uint32_t kRendererDiscardUnknown = 26u;
     }
 #endif
     return kMaxScanCacheSnapshotBytes;
+}
+
+#ifdef ENABLE_TESTS
+[[nodiscard]] std::optional<uint32_t> ReadPositiveUint32Environment(std::wstring_view variableName) noexcept
+{
+    std::array<wchar_t, 32> value{};
+    const DWORD chars = GetEnvironmentVariableW(variableName.data(), value.data(), static_cast<DWORD>(value.size()));
+    if (chars == 0u || chars >= value.size())
+    {
+        return std::nullopt;
+    }
+
+    wchar_t* end               = nullptr;
+    const unsigned long parsed = wcstoul(value.data(), &end, 10);
+    if (parsed == 0u || end == value.data() || *end != L'\0')
+    {
+        return std::nullopt;
+    }
+    return static_cast<uint32_t>(parsed);
+}
+#endif
+
+[[nodiscard]] ViewerSpaceScan::ResourcePolicy ActiveScanResourcePolicy() noexcept
+{
+    ViewerSpaceScan::ResourcePolicy policy = ViewerSpaceScan::kProductionResourcePolicy;
+#ifdef ENABLE_TESTS
+    if (EnvironmentVariables::IsTruthyFlagSet(kForceSmallScanPolicyEnvVar))
+    {
+        policy.maxRetainedDirectories      = 4u;
+        policy.maxRetainedFileRecords      = 3u;
+        policy.maxChildReferences          = 8u;
+        policy.maxChildArenaSlots          = 32u;
+        policy.maxRetainedNameBytes        = 512u;
+        policy.maxProviderBufferBytes      = 64u * 1024u;
+        policy.maxProviderEntriesPerFolder = 32u;
+        policy.maxProviderNameBytes        = 128u;
+        policy.maxTraversalDepth           = 4u;
+        policy.maxTraversedDirectories     = 64u;
+        policy.maxOutstandingDirectories   = 32u;
+        policy.maxOutstandingPathBytes     = 8u * 1024u;
+        policy.maxPathChars                = 256u;
+    }
+    if (const std::optional<uint32_t> value = ReadPositiveUint32Environment(kTestMaxOutstandingEnvVar); value.has_value())
+    {
+        policy.maxOutstandingDirectories = value.value();
+    }
+    if (const std::optional<uint32_t> value = ReadPositiveUint32Environment(kTestMaxRetainedDirectoriesEnvVar); value.has_value())
+    {
+        policy.maxRetainedDirectories = value.value();
+    }
+#endif
+    return policy;
+}
+
+[[nodiscard]] constexpr std::wstring_view ValidationErrorDetail(ViewerSpaceScan::ValidationError error) noexcept
+{
+    using ViewerSpaceScan::ValidationError;
+    switch (error)
+    {
+        case ValidationError::None: return L"none";
+        case ValidationError::NullBuffer: return L"null-buffer";
+        case ValidationError::UsedExceedsAllocated: return L"used-exceeds-allocated";
+        case ValidationError::BufferLimit: return L"buffer-limit";
+        case ValidationError::AllocatedBufferLimit: return L"allocated-buffer-limit";
+        case ValidationError::EntryCountLimit: return L"entry-count-limit";
+        case ValidationError::CountBufferMismatch: return L"count-buffer-mismatch";
+        case ValidationError::MisalignedEntry: return L"misaligned-entry";
+        case ValidationError::TruncatedHeader: return L"truncated-header";
+        case ValidationError::InvalidNameLength: return L"invalid-name-length";
+        case ValidationError::NameLimit: return L"name-limit";
+        case ValidationError::TruncatedName: return L"truncated-name";
+        case ValidationError::InvalidNextOffset: return L"invalid-next-offset";
+        case ValidationError::UnsafeName: return L"unsafe-name";
+        case ValidationError::DuplicateName: return L"duplicate-name";
+        case ValidationError::DuplicateId: return L"duplicate-id";
+        case ValidationError::AncestorCycle: return L"ancestor-cycle";
+        case ValidationError::CountMismatch: return L"count-mismatch";
+        case ValidationError::DepthLimit: return L"depth-limit";
+        case ValidationError::TraversalLimit: return L"traversal-limit";
+        case ValidationError::OutstandingLimit: return L"outstanding-limit";
+        case ValidationError::PathLimit: return L"path-limit";
+        case ValidationError::ItemIdLimit: return L"item-id-limit";
+        default: return L"unknown";
+    }
+}
+
+uint64_t SaturatingAtomicAdd(std::atomic_uint64_t& value, uint64_t delta) noexcept
+{
+    uint64_t current = value.load(std::memory_order_relaxed);
+    for (;;)
+    {
+        const uint64_t next = ViewerSpaceScan::SaturatingAdd(current, delta);
+        if (value.compare_exchange_weak(current, next, std::memory_order_relaxed, std::memory_order_relaxed))
+        {
+            return next;
+        }
+    }
 }
 
 #ifdef ENABLE_TESTS
@@ -145,7 +247,7 @@ constexpr uint32_t kRendererDiscardUnknown = 26u;
         return static_cast<uint32_t>(kDefaultLayoutItems);
     }
 
-    const auto pixelBudget = static_cast<uint32_t>(std::ceil(projectedAreaDip2 / kMinVisibleTileAreaDip2));
+    const auto pixelBudget        = static_cast<uint32_t>(std::ceil(projectedAreaDip2 / kMinVisibleTileAreaDip2));
     const auto conservativeBudget = std::max<uint32_t>(static_cast<uint32_t>(kDefaultLayoutItems), pixelBudget);
     return std::clamp<uint32_t>(conservativeBudget, 32u, static_cast<uint32_t>(kMaxLayoutItems));
 }
@@ -318,49 +420,34 @@ struct ViewerSpaceClassBackgroundBrushState
     bool classRegistered = false;
 };
 
-ViewerSpaceClassBackgroundBrushState* g_viewerSpaceClassBackgroundBrush = []() noexcept
-{
-    auto* state = new (std::nothrow) ViewerSpaceClassBackgroundBrushState();
-    if (state == nullptr)
-    {
-        std::terminate();
-    }
-    return state;
-}();
+ViewerSpaceClassBackgroundBrushState g_viewerSpaceClassBackgroundBrush;
 std::atomic_uint32_t g_viewerSpaceWindowCount{0};
 ATOM g_viewerSpaceClassAtom = 0;
 
 void DestroyViewerSpaceClassBackgroundBrushState() noexcept
 {
-    if (g_viewerSpaceClassBackgroundBrush == nullptr)
-    {
-        return;
-    }
-
-    g_viewerSpaceClassBackgroundBrush->classRegistered = false;
-    g_viewerSpaceClassBackgroundBrush->pendingBrush.reset();
-    g_viewerSpaceClassBackgroundBrush->pendingColor = CLR_INVALID;
-    g_viewerSpaceClassBackgroundBrush->activeBrush.reset();
-    g_viewerSpaceClassBackgroundBrush->activeColor = CLR_INVALID;
-    delete g_viewerSpaceClassBackgroundBrush;
-    g_viewerSpaceClassBackgroundBrush = nullptr;
+    g_viewerSpaceClassBackgroundBrush.classRegistered = false;
+    g_viewerSpaceClassBackgroundBrush.pendingBrush.reset();
+    g_viewerSpaceClassBackgroundBrush.pendingColor = CLR_INVALID;
+    g_viewerSpaceClassBackgroundBrush.activeBrush.reset();
+    g_viewerSpaceClassBackgroundBrush.activeColor = CLR_INVALID;
 }
 
 HBRUSH GetActiveViewerSpaceClassBackgroundBrush() noexcept
 {
-    if (g_viewerSpaceClassBackgroundBrush->pendingBrush)
+    if (g_viewerSpaceClassBackgroundBrush.pendingBrush)
     {
-        return g_viewerSpaceClassBackgroundBrush->pendingBrush.get();
+        return g_viewerSpaceClassBackgroundBrush.pendingBrush.get();
     }
 
-    if (! g_viewerSpaceClassBackgroundBrush->activeBrush)
+    if (! g_viewerSpaceClassBackgroundBrush.activeBrush)
     {
-        const COLORREF fallback                        = GetSysColor(COLOR_WINDOW);
-        g_viewerSpaceClassBackgroundBrush->activeColor = fallback;
-        g_viewerSpaceClassBackgroundBrush->activeBrush.reset(CreateSolidBrush(fallback));
+        const COLORREF fallback                       = GetSysColor(COLOR_WINDOW);
+        g_viewerSpaceClassBackgroundBrush.activeColor = fallback;
+        g_viewerSpaceClassBackgroundBrush.activeBrush.reset(CreateSolidBrush(fallback));
     }
 
-    return g_viewerSpaceClassBackgroundBrush->activeBrush.get();
+    return g_viewerSpaceClassBackgroundBrush.activeBrush.get();
 }
 
 void RequestViewerSpaceClassBackgroundColor(COLORREF color) noexcept
@@ -370,7 +457,7 @@ void RequestViewerSpaceClassBackgroundColor(COLORREF color) noexcept
         return;
     }
 
-    if (g_viewerSpaceClassBackgroundBrush->pendingBrush && g_viewerSpaceClassBackgroundBrush->pendingColor == color)
+    if (g_viewerSpaceClassBackgroundBrush.pendingBrush && g_viewerSpaceClassBackgroundBrush.pendingColor == color)
     {
         return;
     }
@@ -381,23 +468,23 @@ void RequestViewerSpaceClassBackgroundColor(COLORREF color) noexcept
         return;
     }
 
-    g_viewerSpaceClassBackgroundBrush->pendingColor = color;
-    g_viewerSpaceClassBackgroundBrush->pendingBrush = std::move(brush);
+    g_viewerSpaceClassBackgroundBrush.pendingColor = color;
+    g_viewerSpaceClassBackgroundBrush.pendingBrush = std::move(brush);
 }
 
 void ApplyPendingViewerSpaceClassBackgroundBrush(HWND hwnd) noexcept
 {
-    if (! hwnd || ! g_viewerSpaceClassBackgroundBrush->pendingBrush || ! g_viewerSpaceClassBackgroundBrush->classRegistered)
+    if (! hwnd || ! g_viewerSpaceClassBackgroundBrush.pendingBrush || ! g_viewerSpaceClassBackgroundBrush.classRegistered)
     {
         return;
     }
 
-    const LONG_PTR newBrush = reinterpret_cast<LONG_PTR>(g_viewerSpaceClassBackgroundBrush->pendingBrush.get());
+    const LONG_PTR newBrush = reinterpret_cast<LONG_PTR>(g_viewerSpaceClassBackgroundBrush.pendingBrush.get());
     SetClassLongPtrW(hwnd, GCLP_HBRBACKGROUND, newBrush);
 
-    g_viewerSpaceClassBackgroundBrush->activeBrush  = std::move(g_viewerSpaceClassBackgroundBrush->pendingBrush);
-    g_viewerSpaceClassBackgroundBrush->activeColor  = g_viewerSpaceClassBackgroundBrush->pendingColor;
-    g_viewerSpaceClassBackgroundBrush->pendingColor = CLR_INVALID;
+    g_viewerSpaceClassBackgroundBrush.activeBrush  = std::move(g_viewerSpaceClassBackgroundBrush.pendingBrush);
+    g_viewerSpaceClassBackgroundBrush.activeColor  = g_viewerSpaceClassBackgroundBrush.pendingColor;
+    g_viewerSpaceClassBackgroundBrush.pendingColor = CLR_INVALID;
 }
 
 constexpr char kViewerSpaceSchemaJson[] = R"json({
@@ -495,31 +582,9 @@ uint32_t GetMaxConcurrentScansPerVolume() noexcept
     return std::clamp(value, 1u, 8u);
 }
 
-D2D1::ColorF ColorFFromArgb(uint32_t argb) noexcept
-{
-    const float a = static_cast<float>((argb >> 24) & 0xFFu) / 255.0f;
-    const float r = static_cast<float>((argb >> 16) & 0xFFu) / 255.0f;
-    const float g = static_cast<float>((argb >> 8) & 0xFFu) / 255.0f;
-    const float b = static_cast<float>((argb) & 0xFFu) / 255.0f;
-    return D2D1::ColorF(r, g, b, a);
-}
-
-COLORREF ColorRefFromArgb(uint32_t argb) noexcept
-{
-    const uint8_t r = static_cast<uint8_t>((argb >> 16) & 0xFFu);
-    const uint8_t g = static_cast<uint8_t>((argb >> 8) & 0xFFu);
-    const uint8_t b = static_cast<uint8_t>(argb & 0xFFu);
-    return RGB(r, g, b);
-}
-
-COLORREF BlendColor(COLORREF under, COLORREF over, uint8_t alpha) noexcept
-{
-    const uint32_t inv = 255u - alpha;
-    const uint32_t r   = (static_cast<uint32_t>(GetRValue(under)) * inv + static_cast<uint32_t>(GetRValue(over)) * alpha) / 255u;
-    const uint32_t g   = (static_cast<uint32_t>(GetGValue(under)) * inv + static_cast<uint32_t>(GetGValue(over)) * alpha) / 255u;
-    const uint32_t b   = (static_cast<uint32_t>(GetBValue(under)) * inv + static_cast<uint32_t>(GetBValue(over)) * alpha) / 255u;
-    return RGB(static_cast<BYTE>(r), static_cast<BYTE>(g), static_cast<BYTE>(b));
-}
+using Common::Colors::BlendColorRefTruncate;
+using Common::Colors::ColorRefFromArgb;
+using RedSalamander::DxUi::ColorFromArgb;
 
 COLORREF ChooseContrastingTextColor(COLORREF background) noexcept
 {
@@ -1125,7 +1190,7 @@ uint32_t HashU32(uint32_t value) noexcept
     return value;
 }
 
-std::wstring FormatAggregateCountsLine(uint32_t folderCount, uint32_t fileCount) noexcept
+std::wstring FormatAggregateCountsLine(uint64_t folderCount, uint64_t fileCount) noexcept
 {
     if (folderCount > 0 && fileCount > 0)
     {
@@ -1357,9 +1422,18 @@ public:
 
     Permit AcquireForKey(const std::wstring& key, std::stop_token stopToken) noexcept
     {
+        if (_shutdownRequested.load(std::memory_order_acquire))
+        {
+            return {};
+        }
+
         std::shared_ptr<VolumeEntry> entry;
         {
             std::scoped_lock lock(_mutex);
+            if (_shutdownRequested.load(std::memory_order_relaxed))
+            {
+                return {};
+            }
             auto it = _byVolume.find(key);
             if (it == _byVolume.end())
             {
@@ -1378,7 +1452,7 @@ public:
         }
 
         std::unique_lock lock(entry->mutex);
-        while (! stopToken.stop_requested())
+        while (! stopToken.stop_requested() && ! _shutdownRequested.load(std::memory_order_acquire))
         {
             const uint32_t limit = GetMaxConcurrentScansPerVolume();
             if (entry->inUse < limit)
@@ -1395,6 +1469,7 @@ public:
 
     void Shutdown() noexcept
     {
+        _shutdownRequested.store(true, std::memory_order_release);
         std::vector<std::shared_ptr<VolumeEntry>> entries;
         {
             std::scoped_lock lock(_mutex);
@@ -1446,31 +1521,41 @@ private:
 private:
     std::mutex _mutex;
     std::unordered_map<std::wstring, std::shared_ptr<VolumeEntry>> _byVolume;
+    std::atomic_bool _shutdownRequested{false};
 };
 
 std::mutex g_scanSchedulerMutex;
-std::unique_ptr<ScanScheduler> g_scanScheduler;
+std::shared_ptr<ScanScheduler> g_scanScheduler;
+bool g_scanSchedulerShutdown = false;
+std::atomic_uint64_t g_scanWorkerUnloadGates{0u};
 
-ScanScheduler& GetScanScheduler() noexcept
+std::shared_ptr<ScanScheduler> GetScanScheduler() noexcept
 {
     std::scoped_lock lock(g_scanSchedulerMutex);
+    if (g_scanSchedulerShutdown)
+    {
+        return {};
+    }
     if (! g_scanScheduler)
     {
-        g_scanScheduler = std::make_unique<ScanScheduler>();
+        g_scanScheduler = std::make_shared<ScanScheduler>();
     }
-    return *g_scanScheduler;
+    return g_scanScheduler;
 }
 
 void ShutdownScanScheduler() noexcept
 {
-    std::scoped_lock lock(g_scanSchedulerMutex);
-    if (! g_scanScheduler)
+    std::shared_ptr<ScanScheduler> scheduler;
     {
-        return;
+        std::scoped_lock lock(g_scanSchedulerMutex);
+        g_scanSchedulerShutdown = true;
+        scheduler = std::move(g_scanScheduler);
     }
 
-    g_scanScheduler->Shutdown();
-    g_scanScheduler.reset();
+    if (scheduler)
+    {
+        scheduler->Shutdown();
+    }
 }
 
 struct ScanResultCacheKey final
@@ -1490,8 +1575,9 @@ struct ScanResultCacheNode final
     uint32_t childrenStart    = 0;
     uint32_t childrenCount    = 0;
     uint32_t childrenCapacity = 0;
-    uint32_t aggregateFolders = 0;
-    uint32_t aggregateFiles   = 0;
+    uint64_t aggregateBytes   = 0;
+    uint64_t aggregateFolders = 0;
+    uint64_t aggregateFiles   = 0;
     std::wstring name;
 };
 
@@ -1737,6 +1823,11 @@ void ShutdownViewerSpaceModuleState() noexcept
     ShutdownViewerSpaceModuleStateImpl();
 }
 
+bool CanUnloadViewerSpaceModuleNow() noexcept
+{
+    return g_scanWorkerUnloadGates.load(std::memory_order_acquire) == 0u;
+}
+
 ViewerSpace::ViewerSpace()
 {
     _metaId                      = L"builtin/viewer-space";
@@ -1758,13 +1849,8 @@ ViewerSpace::ViewerSpace()
 
 ViewerSpace::~ViewerSpace()
 {
-    CancelScanAndWait();
+    AbandonScanWorkers();
     CancelScanCacheBuild();
-
-    {
-        std::scoped_lock lock(_updateMutex);
-        _pendingUpdates.clear();
-    }
 
     _fileSystem.reset();
     _hostPaneExecute.reset();
@@ -2017,18 +2103,18 @@ ATOM ViewerSpace::RegisterWndClass(HINSTANCE instance) noexcept
 {
     if (g_viewerSpaceClassAtom)
     {
-        g_viewerSpaceClassBackgroundBrush->classRegistered = true;
+        g_viewerSpaceClassBackgroundBrush.classRegistered = true;
         return g_viewerSpaceClassAtom;
     }
 
     WNDCLASSEXW wc{};
-    wc.cbSize        = sizeof(wc);
-    wc.lpfnWndProc   = &ViewerSpace::WndProcThunk;
-    wc.hInstance     = instance;
-    wc.lpszClassName = kClassName;
-    wc.hCursor       = LoadCursorW(nullptr, IDC_ARROW);
-    wc.hbrBackground = GetActiveViewerSpaceClassBackgroundBrush();
-    wc.style         = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
+    wc.cbSize              = sizeof(wc);
+    wc.lpfnWndProc         = &ViewerSpace::WndProcThunk;
+    wc.hInstance           = instance;
+    wc.lpszClassName       = kClassName;
+    wc.hCursor             = LoadCursorW(nullptr, IDC_ARROW);
+    wc.hbrBackground       = GetActiveViewerSpaceClassBackgroundBrush();
+    wc.style               = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
     g_viewerSpaceClassAtom = RegisterClassExW(&wc);
     if (g_viewerSpaceClassAtom == 0)
     {
@@ -2040,7 +2126,7 @@ ATOM ViewerSpace::RegisterWndClass(HINSTANCE instance) noexcept
     }
     if (g_viewerSpaceClassAtom)
     {
-        g_viewerSpaceClassBackgroundBrush->classRegistered = true;
+        g_viewerSpaceClassBackgroundBrush.classRegistered = true;
     }
     return g_viewerSpaceClassAtom;
 }
@@ -2057,12 +2143,12 @@ void ViewerSpace::UnregisterWndClassIfIdle() noexcept
         return;
     }
 
-    g_viewerSpaceClassAtom = 0;
-    g_viewerSpaceClassBackgroundBrush->classRegistered = false;
-    g_viewerSpaceClassBackgroundBrush->pendingBrush.reset();
-    g_viewerSpaceClassBackgroundBrush->pendingColor = CLR_INVALID;
-    g_viewerSpaceClassBackgroundBrush->activeBrush.reset();
-    g_viewerSpaceClassBackgroundBrush->activeColor = CLR_INVALID;
+    g_viewerSpaceClassAtom                             = 0;
+    g_viewerSpaceClassBackgroundBrush.classRegistered = false;
+    g_viewerSpaceClassBackgroundBrush.pendingBrush.reset();
+    g_viewerSpaceClassBackgroundBrush.pendingColor = CLR_INVALID;
+    g_viewerSpaceClassBackgroundBrush.activeBrush.reset();
+    g_viewerSpaceClassBackgroundBrush.activeColor = CLR_INVALID;
 }
 
 LRESULT CALLBACK ViewerSpace::WndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
@@ -2112,24 +2198,24 @@ LRESULT ViewerSpace::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
                 return FALSE;
             }
 
-            *snapshot                     = {};
-            snapshot->tooltipNodeId       = _tooltipNodeId;
-            snapshot->tooltipTextLength   = _tooltipText.size();
-            snapshot->tooltipAnchorXDip   = _tooltipAnchorDip.x;
-            snapshot->tooltipAnchorYDip   = _tooltipAnchorDip.y;
-            snapshot->tooltipMaxWidthDip  = kTooltipMaxWidthDip;
-            snapshot->tooltipMaxHeightDip = kTooltipMaxHeightDip;
-            snapshot->tooltipPaintCount = _tooltipPaintCount;
-            snapshot->hasRenderTarget = _renderTarget != nullptr;
-            snapshot->hasTooltipFormat = _tooltipFormat != nullptr;
-            snapshot->hoverNodeId = _hoverNodeId;
-            snapshot->hasLastMouseMoveClientPoint = _debugHasLastMouseMoveClientPoint;
-            snapshot->lastMouseMoveClientX = _debugLastMouseMoveClientPoint.x;
-            snapshot->lastMouseMoveClientY = _debugLastMouseMoveClientPoint.y;
+            *snapshot                               = {};
+            snapshot->tooltipNodeId                 = _tooltipNodeId;
+            snapshot->tooltipTextLength             = _tooltipText.size();
+            snapshot->tooltipAnchorXDip             = _tooltipAnchorDip.x;
+            snapshot->tooltipAnchorYDip             = _tooltipAnchorDip.y;
+            snapshot->tooltipMaxWidthDip            = kTooltipMaxWidthDip;
+            snapshot->tooltipMaxHeightDip           = kTooltipMaxHeightDip;
+            snapshot->tooltipPaintCount             = _tooltipPaintCount;
+            snapshot->hasRenderTarget               = _renderTarget != nullptr;
+            snapshot->hasTooltipFormat              = _tooltipFormat != nullptr;
+            snapshot->hoverNodeId                   = _hoverNodeId;
+            snapshot->hasLastMouseMoveClientPoint   = _debugHasLastMouseMoveClientPoint;
+            snapshot->lastMouseMoveClientX          = _debugLastMouseMoveClientPoint.x;
+            snapshot->lastMouseMoveClientY          = _debugLastMouseMoveClientPoint.y;
             snapshot->hasLastContextMenuScreenPoint = _debugHasLastContextMenuScreenPoint;
-            snapshot->lastContextMenuScreenX = _debugLastContextMenuScreenPoint.x;
-            snapshot->lastContextMenuScreenY = _debugLastContextMenuScreenPoint.y;
-            snapshot->lastContextMenuHitNodeId = _debugLastContextMenuHitNodeId;
+            snapshot->lastContextMenuScreenX        = _debugLastContextMenuScreenPoint.x;
+            snapshot->lastContextMenuScreenY        = _debugLastContextMenuScreenPoint.y;
+            snapshot->lastContextMenuHitNodeId      = _debugLastContextMenuHitNodeId;
             return TRUE;
         }
         case WndMsg::kViewerSpaceDebugCompareHitTesting:
@@ -2140,7 +2226,7 @@ LRESULT ViewerSpace::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
                 return FALSE;
             }
 
-            *snapshot = {};
+            *snapshot                                    = {};
             static constexpr uint32_t kMaxHitTestSamples = 256u;
             const size_t stride = _drawItems.size() > kMaxHitTestSamples ? ((_drawItems.size() + kMaxHitTestSamples - 1u) / kMaxHitTestSamples) : 1u;
             for (size_t index = 0; index < _drawItems.size() && snapshot->sampleCount < kMaxHitTestSamples; index += stride)
@@ -2164,15 +2250,15 @@ LRESULT ViewerSpace::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
                     continue;
                 }
 
-                const float xDip = (rc.left + rc.right) * 0.5f;
-                const float yDip = (rc.top + rc.bottom) * 0.5f;
-                const std::optional<uint32_t> gridHit = HitTestTreemap(xDip, yDip);
-                const uint32_t gridCandidates         = _lastHitTestCandidatesChecked;
-                uint32_t linearCandidates             = 0u;
+                const float xDip                        = (rc.left + rc.right) * 0.5f;
+                const float yDip                        = (rc.top + rc.bottom) * 0.5f;
+                const std::optional<uint32_t> gridHit   = HitTestTreemap(xDip, yDip);
+                const uint32_t gridCandidates           = _lastHitTestCandidatesChecked;
+                uint32_t linearCandidates               = 0u;
                 const std::optional<uint32_t> linearHit = HitTestTreemapLinear(xDip, yDip, linearCandidates);
 
                 snapshot->sampleCount += 1u;
-                snapshot->maxGridCandidatesChecked = std::max(snapshot->maxGridCandidatesChecked, gridCandidates);
+                snapshot->maxGridCandidatesChecked   = std::max(snapshot->maxGridCandidatesChecked, gridCandidates);
                 snapshot->maxLinearCandidatesChecked = std::max(snapshot->maxLinearCandidatesChecked, linearCandidates);
                 if (gridHit.has_value())
                 {
@@ -2210,10 +2296,10 @@ LRESULT ViewerSpace::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
                 return FALSE;
             }
 
-            *snapshot             = {};
-            snapshot->rendererMode = _renderer.d2dContext ? WndMsg::ViewerSpacePerfRendererMode::DeviceContext
-                                                           : (_renderTarget ? WndMsg::ViewerSpacePerfRendererMode::HwndRenderTarget
-                                                                            : WndMsg::ViewerSpacePerfRendererMode::None);
+            *snapshot              = {};
+            snapshot->rendererMode = _renderer.d2dContext
+                                         ? WndMsg::ViewerSpacePerfRendererMode::DeviceContext
+                                         : (_renderTarget ? WndMsg::ViewerSpacePerfRendererMode::HwndRenderTarget : WndMsg::ViewerSpacePerfRendererMode::None);
             snapshot->scanState    = [&]() noexcept
             {
                 switch (_overallState)
@@ -2244,7 +2330,17 @@ LRESULT ViewerSpace::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
                 else if (node.isDirectory)
                 {
                     snapshot->realDirectoryCount += 1u;
+                    snapshot->aggregateBytes = ViewerSpaceScan::SaturatingAdd(snapshot->aggregateBytes, node.aggregateBytes);
+                    snapshot->aggregateFolders = ViewerSpaceScan::SaturatingAdd(snapshot->aggregateFolders, node.aggregateFolders);
+                    snapshot->aggregateFiles = ViewerSpaceScan::SaturatingAdd(snapshot->aggregateFiles, node.aggregateFiles);
+                    snapshot->childReferenceCount = ViewerSpaceScan::SaturatingAdd(snapshot->childReferenceCount, static_cast<uint64_t>(node.childrenCount));
                 }
+            }
+            for (const auto& entry : _syntheticNodes)
+            {
+                const Node& node = entry.second;
+                snapshot->syntheticCount += 1u;
+                snapshot->syntheticBytes = ViewerSpaceScan::SaturatingAdd(snapshot->syntheticBytes, node.totalBytes);
             }
             snapshot->fileCandidateCount = _fileRecords.size();
             for (const FileRecord& record : _fileRecords)
@@ -2269,35 +2365,55 @@ LRESULT ViewerSpace::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
                     snapshot->culledTileCount += 1u;
                 }
             }
-            snapshot->visibleTileCount               = snapshot->drawItemCount - snapshot->culledTileCount;
-            snapshot->staticCacheGeneration          = _staticTreemapCache.generation;
-            snapshot->staticCacheHits                = _staticTreemapCache.hits;
-            snapshot->staticCacheMisses              = _staticTreemapCache.misses;
-            snapshot->staticCacheRecordCount         = _staticTreemapCache.recordCount;
-            snapshot->staticCacheBytes               = _staticTreemapCache.bytes;
-            snapshot->scanCacheSnapshotBytes         = _lastScanCacheSnapshotBytes;
-            snapshot->lastStaticCacheRecordUs        = _staticTreemapCache.lastRecordUs;
-            snapshot->lastPaintUs                    = _lastPaintUs;
-            snapshot->lastLayoutUs                   = _lastLayoutUs;
-            snapshot->lastDrainUs                    = _lastDrainUs;
-            _lastWorkingSetBytes                     = SampleCurrentWorkingSetBytes();
-            snapshot->lastWorkingSetBytes            = _lastWorkingSetBytes;
-            snapshot->lastTileDrawCount              = _lastTileDrawCount;
-            snapshot->lastTextDrawCount              = _lastTextDrawCount;
-            snapshot->lastHitTestUs                  = _lastHitTestUs;
-            snapshot->lastHitTestCandidatesChecked   = _lastHitTestCandidatesChecked;
-            snapshot->effectiveFileCandidateBudget   = _scanTopFilesPerDirectory;
-            snapshot->rendererDeviceCreateCount      = _rendererDeviceCreateCount;
-            snapshot->swapChainResizeCount           = _swapChainResizeCount;
-            snapshot->rendererBrushCreateCount       = _rendererBrushCreateCount;
-            snapshot->rendererTextFormatCreateCount  = _rendererTextFormatCreateCount;
-            snapshot->swapChainWidthPx               = _renderer.swapChainWidthPx;
-            snapshot->swapChainHeightPx              = _renderer.swapChainHeightPx;
-            snapshot->rendererFailureStage           = _rendererFailureStage;
-            snapshot->rendererFailureHr              = _rendererFailureHr;
-            snapshot->layoutGeneration               = _layoutGeneration;
-            snapshot->hitGridCellCount               = static_cast<uint32_t>(std::min<size_t>(_hitGrid.cells.size(), std::numeric_limits<uint32_t>::max()));
-            snapshot->hitGridMaxCandidatesPerCell    = _hitGrid.maxCandidatesPerCell;
+            snapshot->visibleTileCount              = snapshot->drawItemCount - snapshot->culledTileCount;
+            snapshot->staticCacheGeneration         = _staticTreemapCache.generation;
+            snapshot->staticCacheHits               = _staticTreemapCache.hits;
+            snapshot->staticCacheMisses             = _staticTreemapCache.misses;
+            snapshot->staticCacheRecordCount        = _staticTreemapCache.recordCount;
+            snapshot->staticCacheBytes              = _staticTreemapCache.bytes;
+            snapshot->scanCacheSnapshotBytes        = _lastScanCacheSnapshotBytes;
+            snapshot->lastStaticCacheRecordUs       = _staticTreemapCache.lastRecordUs;
+            snapshot->lastPaintUs                   = _lastPaintUs;
+            snapshot->lastLayoutUs                  = _lastLayoutUs;
+            snapshot->lastDrainUs                   = _lastDrainUs;
+            _lastWorkingSetBytes                    = SampleCurrentWorkingSetBytes();
+            snapshot->lastWorkingSetBytes           = _lastWorkingSetBytes;
+            snapshot->lastTileDrawCount             = _lastTileDrawCount;
+            snapshot->lastTextDrawCount             = _lastTextDrawCount;
+            snapshot->lastHitTestUs                 = _lastHitTestUs;
+            snapshot->lastHitTestCandidatesChecked  = _lastHitTestCandidatesChecked;
+            snapshot->effectiveFileCandidateBudget  = _scanTopFilesPerDirectory;
+            snapshot->rendererDeviceCreateCount     = _rendererDeviceCreateCount;
+            snapshot->swapChainResizeCount          = _swapChainResizeCount;
+            snapshot->rendererBrushCreateCount      = _rendererBrushCreateCount;
+            snapshot->rendererTextFormatCreateCount = _rendererTextFormatCreateCount;
+            snapshot->swapChainWidthPx              = _renderer.swapChainWidthPx;
+            snapshot->swapChainHeightPx             = _renderer.swapChainHeightPx;
+            snapshot->rendererFailureStage          = _rendererFailureStage;
+            snapshot->rendererFailureHr             = _rendererFailureHr;
+            snapshot->layoutGeneration              = _layoutGeneration;
+            snapshot->hitGridCellCount              = static_cast<uint32_t>(std::min<size_t>(_hitGrid.cells.size(), std::numeric_limits<uint32_t>::max()));
+            snapshot->hitGridMaxCandidatesPerCell   = _hitGrid.maxCandidatesPerCell;
+            snapshot->scannedFolders                = _scanProgressFolders;
+            snapshot->scannedFiles                  = _scanProgressFiles;
+            snapshot->childArenaSlots               = _childrenArena.size();
+            for (const ChildArenaFreeBlock& block : _childrenArenaFreeBlocks)
+            {
+                snapshot->childArenaFreeSlots = ViewerSpaceScan::SaturatingAdd(snapshot->childArenaFreeSlots, static_cast<uint64_t>(block.capacity));
+            }
+            snapshot->modelAcceptedEntries         = _lastModelAcceptedEntries;
+            snapshot->modelRejectedEntries         = _lastModelRejectedEntries;
+            snapshot->modelCappedDirectories       = _lastModelCappedDirectories;
+            snapshot->modelCappedFiles             = _lastModelCappedFiles;
+            snapshot->modelRetainedNameBytes       = _lastModelRetainedNameBytes;
+            snapshot->modelRetainedChildReferences = _lastModelRetainedChildReferences;
+            snapshot->modelTraversedDirectories    = _lastModelTraversedDirectories;
+            snapshot->modelRetainedDirectoryLimit  = _scanResourcePolicy.maxRetainedDirectories;
+            snapshot->modelRetainedFileLimit       = _scanResourcePolicy.maxRetainedFileRecords;
+            snapshot->modelChildReferenceLimit     = _scanResourcePolicy.maxChildReferences;
+            snapshot->modelChildArenaSlotLimit     = _scanResourcePolicy.maxChildArenaSlots;
+            snapshot->modelValidationError         = static_cast<uint32_t>(_lastModelValidationError);
+            snapshot->postUpdateInnerGenerationRejects = _debugPostUpdateInnerGenerationRejects.load(std::memory_order_acquire);
 
             Debug::Perf::EmitValue(L"viewer.space.model.directory_count", static_cast<uint64_t>(snapshot->realDirectoryCount));
             Debug::Perf::EmitValue(L"viewer.space.model.file_candidate_count", static_cast<uint64_t>(snapshot->fileCandidateCount));
@@ -2318,6 +2434,18 @@ LRESULT ViewerSpace::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
             {
                 InvalidateRect(_hWnd.get(), nullptr, FALSE);
             }
+            return TRUE;
+        }
+        case WndMsg::kViewerSpaceDebugPauseNextPostUpdate:
+        {
+            const auto* control = reinterpret_cast<const WndMsg::ViewerSpacePostUpdatePauseDebugControl*>(lp);
+            if (! control || ! control->enteredEvent || ! control->releaseEvent)
+            {
+                return FALSE;
+            }
+            _debugPostUpdateEnteredEvent.store(control->enteredEvent, std::memory_order_relaxed);
+            _debugPostUpdateReleaseEvent.store(control->releaseEvent, std::memory_order_relaxed);
+            _debugPauseNextPostUpdate.store(true, std::memory_order_release);
             return TRUE;
         }
         case WndMsg::kViewerSpaceDebugShowTooltipOverlay:
@@ -2471,19 +2599,24 @@ void ViewerSpace::OnNcActivate(HWND hwnd, bool windowActive) noexcept
 
 void ViewerSpace::OnDestroy()
 {
-    CancelScanAndWait();
+    AbandonScanWorkers();
     CancelScanCacheBuild();
 #ifdef ENABLE_TESTS
     _rendererFailureStage = kRendererDiscardDestroy;
     _rendererFailureHr    = 0u;
 #endif
     DiscardDirect2D();
+    _otherStrokeStyle.reset();
+    _dogEarFlapGeometry.reset();
+    _d2dFactory.reset();
+    _dwriteFactory.reset();
     _fileSystem.reset();
     _fileSystemName.clear();
     _fileSystemShortId.clear();
     _fileSystemIsWin32 = true;
 
     NotifyViewerClosed();
+    _hostPaneExecute.reset();
 }
 
 void ViewerSpace::OnSize(UINT width, UINT height) noexcept
@@ -2555,10 +2688,10 @@ void ViewerSpace::OnPaint()
     _renderTarget->BeginDraw();
     auto endDraw = wil::scope_exit([&] { drawHr = _renderTarget->EndDraw(); });
 
-    const D2D1::ColorF bg          = _hasTheme ? ColorFFromArgb(_theme.backgroundArgb) : D2D1::ColorF(D2D1::ColorF::White);
-    const D2D1::ColorF textColor   = _hasTheme ? ColorFFromArgb(_theme.textArgb) : D2D1::ColorF(D2D1::ColorF::Black);
-    const D2D1::ColorF accentColor = _hasTheme ? ColorFFromArgb(_theme.accentArgb) : D2D1::ColorF(D2D1::ColorF::CornflowerBlue);
-    const D2D1::ColorF selectionBg = _hasTheme ? ColorFFromArgb(_theme.selectionBackgroundArgb) : accentColor;
+    const D2D1::ColorF bg          = _hasTheme ? ColorFromArgb(_theme.backgroundArgb) : D2D1::ColorF(D2D1::ColorF::White);
+    const D2D1::ColorF textColor   = _hasTheme ? ColorFromArgb(_theme.textArgb) : D2D1::ColorF(D2D1::ColorF::Black);
+    const D2D1::ColorF accentColor = _hasTheme ? ColorFromArgb(_theme.accentArgb) : D2D1::ColorF(D2D1::ColorF::CornflowerBlue);
+    const D2D1::ColorF selectionBg = _hasTheme ? ColorFromArgb(_theme.selectionBackgroundArgb) : accentColor;
 
     const bool highContrast = _hasTheme && _theme.highContrast != FALSE;
     const bool rainbowMode  = _hasTheme && _theme.rainbowMode != FALSE;
@@ -2594,12 +2727,12 @@ void ViewerSpace::OnPaint()
     const float headerBottomDip = GetHeaderBottomDip();
     const D2D1_RECT_F headerRc  = D2D1::RectF(0.0f, headerTopDip, DipFromPx(_clientSize.cx), headerBottomDip);
 
-    const bool scanActive = _overallState == ScanState::Queued || _overallState == ScanState::Scanning;
-    const bool completionOverlayActive =
-        ! scanActive && _overallState == ScanState::Done && _scanCompletedSinceSeconds > 0.0 &&
-        (nowSeconds - _scanCompletedSinceSeconds) >= 0.0 && (nowSeconds - _scanCompletedSinceSeconds) < kScanCompletedOverlaySeconds;
-    uint64_t culledTileCount = 0u;
-    uint64_t textDrawCandidateCount = 0u;
+    const bool scanActive              = _overallState == ScanState::Queued || _overallState == ScanState::Scanning;
+    const bool completionOverlayActive = ! scanActive && _overallState == ScanState::Done && _scanCompletedSinceSeconds > 0.0 &&
+                                         (nowSeconds - _scanCompletedSinceSeconds) >= 0.0 &&
+                                         (nowSeconds - _scanCompletedSinceSeconds) < kScanCompletedOverlaySeconds;
+    uint64_t culledTileCount           = 0u;
+    uint64_t textDrawCandidateCount    = 0u;
     for (const DrawItem& item : _drawItems)
     {
         if (item.lod == DrawItem::Lod::Culled)
@@ -2642,7 +2775,8 @@ void ViewerSpace::OnPaint()
 #endif
         Debug::Perf::Emit(
             L"viewer.space.render.paint_us", L"static-cache-hit", paintUs, static_cast<uint64_t>(_drawItems.size()), _staticTreemapCache.hits, renderHr);
-        Debug::Perf::Emit(L"viewer.space.render.static_cache_replay_us", L"bitmap", paintUs, static_cast<uint64_t>(_drawItems.size()), _staticTreemapCache.bytes, renderHr);
+        Debug::Perf::Emit(
+            L"viewer.space.render.static_cache_replay_us", L"bitmap", paintUs, static_cast<uint64_t>(_drawItems.size()), _staticTreemapCache.bytes, renderHr);
         Debug::Perf::Emit(L"viewer.space.render.tile_draw_count", L"static-cache-hit", 0u, 0u, culledTileCount, renderHr);
         Debug::Perf::Emit(L"viewer.space.render.text_draw_count", L"static-cache-hit", 0u, 0u, textDrawCandidateCount, renderHr);
         Debug::Perf::Emit(L"viewer.space.layout.visible_tiles", L"static-cache-hit", 0u, tileDrawCount, culledTileCount, renderHr);
@@ -2959,10 +3093,7 @@ void ViewerSpace::OnPaint()
         viewBytes = viewNode->totalBytes;
     }
 
-    auto resolveItem = [&](uint32_t itemId) noexcept -> std::optional<ResolvedItem>
-    {
-        return ResolveTreemapItem(itemId);
-    };
+    auto resolveItem = [&](uint32_t itemId) noexcept -> std::optional<ResolvedItem> { return ResolveTreemapItem(itemId); };
 
     auto rectForItem = [&](const DrawItem& item) noexcept -> D2D1_RECT_F
     {
@@ -4125,7 +4256,7 @@ void ViewerSpace::OnLButtonDown(int x, int y) noexcept
         return;
     }
 
-    const uint32_t nodeId = hit.value();
+    const uint32_t nodeId                  = hit.value();
     const std::optional<ResolvedItem> node = ResolveTreemapItem(nodeId);
     if (node.has_value() && node->isDirectory && ! node->isSynthetic && ! node->isFileRecord)
     {
@@ -4153,8 +4284,8 @@ void ViewerSpace::OnLButtonDblClk(int x, int y) noexcept
 
     const uint32_t nodeId = hit.value();
 
-    const Node* realNode = TryGetRealNode(nodeId);
-    const bool isRealNode = realNode != nullptr;
+    const Node* realNode                   = TryGetRealNode(nodeId);
+    const bool isRealNode                  = realNode != nullptr;
     const std::optional<ResolvedItem> node = ResolveTreemapItem(nodeId);
     if (! node.has_value())
     {
@@ -4190,8 +4321,7 @@ void ViewerSpace::OnLButtonDblClk(int x, int y) noexcept
         uint32_t nextLimit = currentLimit;
         if (nextLimit < kMaxLayoutItems)
         {
-            nextLimit = nextLimit == 0 ? static_cast<uint32_t>(kDefaultLayoutItems) :
-                                          std::min(static_cast<uint32_t>(kMaxLayoutItems), nextLimit * 2u);
+            nextLimit = nextLimit == 0 ? static_cast<uint32_t>(kDefaultLayoutItems) : std::min(static_cast<uint32_t>(kMaxLayoutItems), nextLimit * 2u);
         }
 
         if (nextLimit != currentLimit)
@@ -4617,10 +4747,9 @@ LRESULT ViewerSpace::OnNcDestroy(HWND hwnd, WPARAM wp, LPARAM lp) noexcept
     _hWnd.release();
     SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
 
-    const LRESULT result = DefWindowProcW(hwnd, WM_NCDESTROY, wp, lp);
+    const LRESULT result               = DefWindowProcW(hwnd, WM_NCDESTROY, wp, lp);
     const uint32_t previousWindowCount = g_viewerSpaceWindowCount.load(std::memory_order_acquire);
-    if (previousWindowCount != 0 &&
-        g_viewerSpaceWindowCount.fetch_sub(1, std::memory_order_acq_rel) == 1u)
+    if (previousWindowCount != 0 && g_viewerSpaceWindowCount.fetch_sub(1, std::memory_order_acq_rel) == 1u)
     {
         UnregisterWndClassIfIdle();
     }
@@ -4636,7 +4765,7 @@ void ViewerSpace::OnTimer(UINT_PTR timerId) noexcept
         return;
     }
 
-    ReapFinishedScanWorkers(false);
+    ReapFinishedScanWorkers();
     DrainUpdates();
     MaybeRebuildLayout();
 
@@ -4776,15 +4905,15 @@ bool ViewerSpace::EnsureDirect2D(HWND hwnd) noexcept
 #endif
         D3D_FEATURE_LEVEL featureLevels[] = {D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1};
         HRESULT d3dHr                     = D3D11CreateDevice(nullptr,
-                                         D3D_DRIVER_TYPE_HARDWARE,
-                                         nullptr,
-                                         creationFlags,
-                                         featureLevels,
-                                         static_cast<UINT>(std::size(featureLevels)),
-                                         D3D11_SDK_VERSION,
-                                         _renderer.d3dDevice.addressof(),
-                                         &_renderer.featureLevel,
-                                         _renderer.d3dContext.addressof());
+                                                              D3D_DRIVER_TYPE_HARDWARE,
+                                                              nullptr,
+                                                              creationFlags,
+                                                              featureLevels,
+                                                              static_cast<UINT>(std::size(featureLevels)),
+                                                              D3D11_SDK_VERSION,
+                                                              _renderer.d3dDevice.addressof(),
+                                                              &_renderer.featureLevel,
+                                                              _renderer.d3dContext.addressof());
         if (FAILED(d3dHr))
         {
             Debug::Warning(L"ViewerSpace: Hardware D3D11CreateDevice failed, falling back to WARP: 0x{:08X}", static_cast<unsigned long>(d3dHr));
@@ -4810,13 +4939,13 @@ bool ViewerSpace::EnsureDirect2D(HWND hwnd) noexcept
 
         wil::com_ptr<IDXGIDevice> dxgiDevice;
         wil::com_ptr<IDXGIAdapter> adapter;
-        const HRESULT dxgiHr        = _renderer.d3dDevice->QueryInterface(IID_PPV_ARGS(dxgiDevice.addressof()));
-        const HRESULT adapterHr     = SUCCEEDED(dxgiHr) && dxgiDevice ? dxgiDevice->GetAdapter(adapter.addressof()) : E_FAIL;
-        const HRESULT factoryHr     = SUCCEEDED(adapterHr) && adapter ? adapter->GetParent(IID_PPV_ARGS(_renderer.dxgiFactory.addressof())) : E_FAIL;
-        const HRESULT d2dDeviceHr   = SUCCEEDED(dxgiHr) && dxgiDevice ? _d2dFactory->CreateDevice(dxgiDevice.get(), _renderer.d2dDevice.addressof()) : E_FAIL;
-        const HRESULT d2dContextHr  = SUCCEEDED(d2dDeviceHr) && _renderer.d2dDevice
-                                          ? _renderer.d2dDevice->CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE, _renderer.d2dContext.addressof())
-                                          : E_FAIL;
+        const HRESULT dxgiHr       = _renderer.d3dDevice->QueryInterface(IID_PPV_ARGS(dxgiDevice.addressof()));
+        const HRESULT adapterHr    = SUCCEEDED(dxgiHr) && dxgiDevice ? dxgiDevice->GetAdapter(adapter.addressof()) : E_FAIL;
+        const HRESULT factoryHr    = SUCCEEDED(adapterHr) && adapter ? adapter->GetParent(IID_PPV_ARGS(_renderer.dxgiFactory.addressof())) : E_FAIL;
+        const HRESULT d2dDeviceHr  = SUCCEEDED(dxgiHr) && dxgiDevice ? _d2dFactory->CreateDevice(dxgiDevice.get(), _renderer.d2dDevice.addressof()) : E_FAIL;
+        const HRESULT d2dContextHr = SUCCEEDED(d2dDeviceHr) && _renderer.d2dDevice
+                                         ? _renderer.d2dDevice->CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE, _renderer.d2dContext.addressof())
+                                         : E_FAIL;
         if (FAILED(dxgiHr) || ! dxgiDevice || FAILED(adapterHr) || ! adapter || FAILED(factoryHr) || ! _renderer.dxgiFactory || FAILED(d2dDeviceHr) ||
             ! _renderer.d2dDevice || FAILED(d2dContextHr) || ! _renderer.d2dContext)
         {
@@ -4852,9 +4981,10 @@ bool ViewerSpace::EnsureDirect2D(HWND hwnd) noexcept
         desc.SwapEffect       = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
         desc.AlphaMode        = DXGI_ALPHA_MODE_IGNORE;
 
-        const HRESULT swapHr = _renderer.dxgiFactory ? _renderer.dxgiFactory->CreateSwapChainForHwnd(
-                                                           _renderer.d3dDevice.get(), hwnd, &desc, nullptr, nullptr, _renderer.swapChain.addressof())
-                                                     : E_FAIL;
+        const HRESULT swapHr =
+            _renderer.dxgiFactory
+                ? _renderer.dxgiFactory->CreateSwapChainForHwnd(_renderer.d3dDevice.get(), hwnd, &desc, nullptr, nullptr, _renderer.swapChain.addressof())
+                : E_FAIL;
         if (FAILED(swapHr) || ! _renderer.swapChain)
         {
             Debug::Warning(L"ViewerSpace: CreateSwapChainForHwnd failed: 0x{:08X}", static_cast<unsigned long>(swapHr));
@@ -4920,11 +5050,8 @@ bool ViewerSpace::EnsureDirect2D(HWND hwnd) noexcept
             return false;
         }
 
-        const D2D1_BITMAP_PROPERTIES1 props =
-            D2D1::BitmapProperties1(D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW,
-                                    D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_IGNORE),
-                                    _dpi,
-                                    _dpi);
+        const D2D1_BITMAP_PROPERTIES1 props = D2D1::BitmapProperties1(
+            D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW, D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_IGNORE), _dpi, _dpi);
         const HRESULT bitmapHr = _renderer.d2dContext->CreateBitmapFromDxgiSurface(surface.get(), &props, _renderer.targetBitmap.addressof());
         if (FAILED(bitmapHr) || ! _renderer.targetBitmap)
         {
@@ -4951,9 +5078,9 @@ bool ViewerSpace::EnsureDirect2D(HWND hwnd) noexcept
         return false;
     }
 
-    const D2D1::ColorF bg  = _hasTheme ? ColorFFromArgb(_theme.backgroundArgb) : D2D1::ColorF(D2D1::ColorF::White);
-    const D2D1::ColorF txt = _hasTheme ? ColorFFromArgb(_theme.textArgb) : D2D1::ColorF(D2D1::ColorF::Black);
-    const D2D1::ColorF acc = _hasTheme ? ColorFFromArgb(_theme.accentArgb) : D2D1::ColorF(D2D1::ColorF::CornflowerBlue);
+    const D2D1::ColorF bg  = _hasTheme ? ColorFromArgb(_theme.backgroundArgb) : D2D1::ColorF(D2D1::ColorF::White);
+    const D2D1::ColorF txt = _hasTheme ? ColorFromArgb(_theme.textArgb) : D2D1::ColorF(D2D1::ColorF::Black);
+    const D2D1::ColorF acc = _hasTheme ? ColorFromArgb(_theme.accentArgb) : D2D1::ColorF(D2D1::ColorF::CornflowerBlue);
 
     if (! _brushBackground)
     {
@@ -5244,9 +5371,9 @@ void ViewerSpace::DiscardDirect2D() noexcept
 void ViewerSpace::InvalidateStaticTreemapCache() noexcept
 {
     _staticTreemapCache.bitmap.reset();
-    _staticTreemapCache.widthPx = 0u;
+    _staticTreemapCache.widthPx  = 0u;
     _staticTreemapCache.heightPx = 0u;
-    _staticTreemapCache.bytes = 0u;
+    _staticTreemapCache.bytes    = 0u;
     _staticTreemapCache.generation += 1u;
 }
 
@@ -5314,7 +5441,7 @@ HRESULT ViewerSpace::EnsureStaticTreemapCacheBitmap() noexcept
         return E_FAIL;
     }
 
-    const UINT width = _renderer.swapChainWidthPx;
+    const UINT width  = _renderer.swapChainWidthPx;
     const UINT height = _renderer.swapChainHeightPx;
     if (width == 0u || height == 0u)
     {
@@ -5328,38 +5455,35 @@ HRESULT ViewerSpace::EnsureStaticTreemapCacheBitmap() noexcept
 
     _staticTreemapCache.bitmap.reset();
 
-    D2D1_BITMAP_PROPERTIES1 props = D2D1::BitmapProperties1(
-        D2D1_BITMAP_OPTIONS_NONE,
-        D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_IGNORE),
-        _dpi,
-        _dpi);
+    D2D1_BITMAP_PROPERTIES1 props =
+        D2D1::BitmapProperties1(D2D1_BITMAP_OPTIONS_NONE, D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_IGNORE), _dpi, _dpi);
 
     const HRESULT hr = _renderer.d2dContext->CreateBitmap(D2D1::SizeU(width, height), nullptr, 0u, &props, _staticTreemapCache.bitmap.put());
     if (FAILED(hr))
     {
-        _staticTreemapCache.widthPx = 0u;
+        _staticTreemapCache.widthPx  = 0u;
         _staticTreemapCache.heightPx = 0u;
-        _staticTreemapCache.bytes = 0u;
+        _staticTreemapCache.bytes    = 0u;
         return hr;
     }
 
-    _staticTreemapCache.widthPx = width;
+    _staticTreemapCache.widthPx  = width;
     _staticTreemapCache.heightPx = height;
-    _staticTreemapCache.bytes = static_cast<uint64_t>(width) * static_cast<uint64_t>(height) * 4u;
+    _staticTreemapCache.bytes    = static_cast<uint64_t>(width) * static_cast<uint64_t>(height) * 4u;
     return S_OK;
 }
 
 HRESULT ViewerSpace::RecordStaticTreemapCacheFromCurrentTarget() noexcept
 {
     const auto recordStartedAt = std::chrono::steady_clock::now();
-    HRESULT hr = EnsureStaticTreemapCacheBitmap();
+    HRESULT hr                 = EnsureStaticTreemapCacheBitmap();
     if (FAILED(hr))
     {
         return hr;
     }
 
     const D2D1_RECT_U sourceRect = D2D1::RectU(0u, 0u, _staticTreemapCache.widthPx, _staticTreemapCache.heightPx);
-    hr = _staticTreemapCache.bitmap->CopyFromRenderTarget(nullptr, _renderTarget.get(), &sourceRect);
+    hr                           = _staticTreemapCache.bitmap->CopyFromRenderTarget(nullptr, _renderTarget.get(), &sourceRect);
     if (FAILED(hr))
     {
         _staticTreemapCache.bitmap.reset();
@@ -5407,7 +5531,7 @@ void ViewerSpace::PaintHoverOverlay(const D2D1::ColorF& accentColor) noexcept
 
         _brushOutline->SetColor(D2D1::ColorF(accentColor.r, accentColor.g, accentColor.b, 1.0f));
         const std::optional<ResolvedItem> node = ResolveTreemapItem(item.nodeId);
-        const bool isFileTile = node.has_value() && ! node->isDirectory && ! node->isSynthetic;
+        const bool isFileTile                  = node.has_value() && ! node->isDirectory && ! node->isSynthetic;
         if (isFileTile)
         {
             const float tileW   = std::max(0.0f, rc.right - rc.left);
@@ -5502,7 +5626,7 @@ void ViewerSpace::ApplyTitleBarTheme(HWND hwnd, bool windowActive) noexcept
         {
             static constexpr uint8_t kInactiveTitleBlendAlpha = 223u; // ~7/8 toward background
             const COLORREF bg                                 = ColorRefFromArgb(_theme.backgroundArgb);
-            accent                                            = BlendColor(accent, bg, kInactiveTitleBlendAlpha);
+            accent                                            = BlendColorRefTruncate(accent, bg, kInactiveTitleBlendAlpha);
         }
 
         const COLORREF text = ChooseContrastingTextColor(accent);
@@ -5702,12 +5826,12 @@ void ViewerSpace::PaintTooltipOverlay() noexcept
 
     const bool highContrast = _hasTheme && _theme.highContrast != FALSE;
     const bool darkMode     = _hasTheme && _theme.darkMode != FALSE;
-    D2D1::ColorF bg         = _hasTheme ? ColorFFromArgb(_theme.selectionBackgroundArgb)
+    D2D1::ColorF bg         = _hasTheme ? ColorFromArgb(_theme.selectionBackgroundArgb)
                                         : D2D1::ColorF(GetRValue(GetSysColor(COLOR_INFOBK)) / 255.0f,
                                                        GetGValue(GetSysColor(COLOR_INFOBK)) / 255.0f,
                                                        GetBValue(GetSysColor(COLOR_INFOBK)) / 255.0f,
                                                        1.0f);
-    D2D1::ColorF fg         = _hasTheme ? ColorFFromArgb(_theme.selectionTextArgb)
+    D2D1::ColorF fg         = _hasTheme ? ColorFromArgb(_theme.selectionTextArgb)
                                         : D2D1::ColorF(GetRValue(GetSysColor(COLOR_INFOTEXT)) / 255.0f,
                                                        GetGValue(GetSysColor(COLOR_INFOTEXT)) / 255.0f,
                                                        GetBValue(GetSysColor(COLOR_INFOTEXT)) / 255.0f,
@@ -5825,31 +5949,43 @@ void ViewerSpace::StartScan(std::wstring_view rootPath, bool allowCache)
 {
     const uint32_t generation = _scanGeneration.fetch_add(1) + 1;
     CancelScan();
-    ReapFinishedScanWorkers(false);
+    ReapFinishedScanWorkers();
     CancelScanCacheBuild();
     _scanCacheLastStoredGeneration = 0;
     _scanCompletedSinceSeconds     = 0.0;
     _lastScanCacheSnapshotBytes    = 0u;
+    _lastModelAcceptedEntries      = 0u;
+    _lastModelRejectedEntries      = 0u;
+    _lastModelCappedDirectories    = 0u;
+    _lastModelCappedFiles          = 0u;
+    _lastModelRetainedNameBytes    = 0u;
+    _lastModelRetainedChildReferences = 0u;
+    _lastModelTraversedDirectories = 0u;
+    _lastModelValidationError      = ViewerSpaceScan::ValidationError::None;
+    _scanResourcePolicy            = ActiveScanResourcePolicy();
+#ifdef ENABLE_TESTS
+    _debugPostUpdateInnerGenerationRejects.store(0u, std::memory_order_release);
+#endif
     _lastRectsByNode.clear();
     _pendingUpdatePostedCount.store(0u, std::memory_order_relaxed);
     _pendingUpdateCoalescedCount.store(0u, std::memory_order_relaxed);
     _pendingUpdateBytes.store(0u, std::memory_order_relaxed);
     InvalidateStaticTreemapCache();
-    _staticTreemapCache.hits = 0u;
-    _staticTreemapCache.misses = 0u;
-    _staticTreemapCache.recordCount = 0u;
+    _staticTreemapCache.hits         = 0u;
+    _staticTreemapCache.misses       = 0u;
+    _staticTreemapCache.recordCount  = 0u;
     _staticTreemapCache.lastRecordUs = 0u;
-    _openStartedAt            = std::chrono::steady_clock::now();
-    _openToFirstPaintEmitted  = false;
+    _openStartedAt                   = std::chrono::steady_clock::now();
+    _openToFirstPaintEmitted         = false;
 #ifdef ENABLE_TESTS
-    _lastPaintUs              = 0u;
-    _lastLayoutUs             = 0u;
-    _lastDrainUs              = 0u;
-    _lastWorkingSetBytes      = 0u;
-    _lastTileDrawCount        = 0u;
-    _lastTextDrawCount        = 0u;
-    _layoutGeneration         = 0u;
-    _lastHitTestUs            = 0u;
+    _lastPaintUs                  = 0u;
+    _lastLayoutUs                 = 0u;
+    _lastDrainUs                  = 0u;
+    _lastWorkingSetBytes          = 0u;
+    _lastTileDrawCount            = 0u;
+    _lastTextDrawCount            = 0u;
+    _layoutGeneration             = 0u;
+    _lastHitTestUs                = 0u;
     _lastHitTestCandidatesChecked = 0u;
 #endif
 
@@ -5887,20 +6023,21 @@ void ViewerSpace::StartScan(std::wstring_view rootPath, bool allowCache)
     std::construct_at(&_nodes, &_nodePool);
     std::construct_at(&_fileRecords, &_nodePool);
     std::construct_at(&_childrenArena, &_nodePool);
+    _childrenArenaFreeBlocks.clear();
     _nodes.resize(2u);
     _drawItems.clear();
     _hitGrid.Clear();
     _navStack.clear();
-    _layoutDirty         = true;
-    _hoverNodeId         = 0;
-    _tooltipNodeId       = 0;
+    _layoutDirty   = true;
+    _hoverNodeId   = 0;
+    _tooltipNodeId = 0;
     UpdateTooltipForHit(0);
 
     {
         std::scoped_lock lock(_updateMutex);
         _pendingUpdates.clear();
+        _pendingUpdateBytes.store(0u, std::memory_order_relaxed);
     }
-    _pendingUpdateBytes.store(0u, std::memory_order_relaxed);
 
     _scanProgressBytes    = 0;
     _scanProgressFolders  = 0;
@@ -5914,8 +6051,8 @@ void ViewerSpace::StartScan(std::wstring_view rootPath, bool allowCache)
     _headerProcessingText.clear();
 
     const uint32_t effectiveTopFilesPerDirectory = ComputeAdaptiveFileCandidateBudget();
-    _scanTopFilesPerDirectory = effectiveTopFilesPerDirectory;
-    const size_t topFilesPerDirectory = static_cast<size_t>(effectiveTopFilesPerDirectory);
+    _scanTopFilesPerDirectory                    = effectiveTopFilesPerDirectory;
+    const size_t topFilesPerDirectory            = static_cast<size_t>(effectiveTopFilesPerDirectory);
     const uint32_t scanThreads =
         _fileSystemIsWin32 ? std::clamp<uint32_t>(std::max(_config.scanThreads, DefaultWin32ScanThreads()), 1u, 16u) : std::clamp(_config.scanThreads, 1u, 16u);
 
@@ -5956,6 +6093,7 @@ void ViewerSpace::StartScan(std::wstring_view rootPath, bool allowCache)
                     node.childrenStart    = cachedNode.childrenStart;
                     node.childrenCount    = cachedNode.childrenCount;
                     node.childrenCapacity = cachedNode.childrenCapacity;
+                    node.aggregateBytes   = cachedNode.aggregateBytes;
                     node.aggregateFolders = cachedNode.aggregateFolders;
                     node.aggregateFiles   = cachedNode.aggregateFiles;
 
@@ -6061,15 +6199,53 @@ void ViewerSpace::StartScan(std::wstring_view rootPath, bool allowCache)
     UpdateHeaderTextCache();
 
     auto done                                = std::make_shared<std::atomic_bool>(false);
-    _scanWorker.done                         = done;
     wil::com_ptr<IFileSystem> scanFileSystem = _fileSystem;
     const bool fileSystemIsWin32             = _fileSystemIsWin32;
-    _scanWorker.thread =
-        std::jthread([this, generation, done, scanFileSystem, fileSystemIsWin32, scanRootPath, topFilesPerDirectory, scanThreads](std::stop_token st) noexcept
+    const ViewerSpaceScan::ResourcePolicy scanResourcePolicy = _scanResourcePolicy;
+    uint32_t initialModelNodeId = 2u;
+#ifdef ENABLE_TESTS
+    if (const std::optional<uint32_t> value = ReadPositiveUint32Environment(kTestNextModelIdEnvVar); value.has_value())
     {
-        auto markDone = wil::scope_exit([done] { done->store(true); });
-        ScanMain(st, generation, scanFileSystem, fileSystemIsWin32, scanRootPath, 1, 2, topFilesPerDirectory, scanThreads);
+        initialModelNodeId = value.value();
+    }
+#endif
+    ViewerSpace* const workerOwner = this;
+    workerOwner->AddRef();
+    auto releaseWorkerReferenceOnFailure = wil::scope_exit([workerOwner]() noexcept { workerOwner->Release(); });
+    g_scanWorkerUnloadGates.fetch_add(1u, std::memory_order_acq_rel);
+    auto releaseUnloadGateOnFailure = wil::scope_exit([]() noexcept { g_scanWorkerUnloadGates.fetch_sub(1u, std::memory_order_acq_rel); });
+
+    ScanWorker newWorker;
+    newWorker.done = done;
+    newWorker.thread =
+        std::jthread([workerOwner,
+                      generation,
+                      done,
+                      scanFileSystem = std::move(scanFileSystem),
+                      fileSystemIsWin32,
+                      scanRootPath = std::move(scanRootPath),
+                      topFilesPerDirectory,
+                      scanThreads,
+                      scanResourcePolicy,
+                      initialModelNodeId](std::stop_token st) mutable noexcept
+    {
+        auto markDone = wil::scope_exit([done]() noexcept { done->store(true, std::memory_order_release); });
+        auto releaseWorkerReference = wil::scope_exit([workerOwner]() noexcept { workerOwner->Release(); });
+        workerOwner->ScanMain(st,
+                              generation,
+                              std::move(scanFileSystem),
+                              fileSystemIsWin32,
+                              std::move(scanRootPath),
+                              1,
+                              initialModelNodeId,
+                              topFilesPerDirectory,
+                              scanThreads,
+                              scanResourcePolicy);
+        Debug::Perf::EmitCounter(L"viewer.space.scan.worker_completed");
     });
+    releaseUnloadGateOnFailure.release();
+    releaseWorkerReferenceOnFailure.release();
+    _scanWorker = std::move(newWorker);
 
     if (_hWnd)
     {
@@ -6106,6 +6282,7 @@ void ViewerSpace::CancelScanByUser() noexcept
     {
         std::scoped_lock lock(_updateMutex);
         _pendingUpdates.clear();
+        _pendingUpdateBytes.store(0u, std::memory_order_relaxed);
     }
 
     Node* root = TryGetRealNode(_rootNodeId);
@@ -6124,8 +6301,12 @@ void ViewerSpace::CancelScanByUser() noexcept
     }
 }
 
-void ViewerSpace::CancelScanAndWait() noexcept
+void ViewerSpace::AbandonScanWorkers() noexcept
 {
+    const auto abandonStartedAt = std::chrono::steady_clock::now();
+    _scanGeneration.fetch_add(1, std::memory_order_acq_rel);
+    _scanActive.store(false, std::memory_order_release);
+
     if (_scanWorker.thread.joinable())
     {
         _scanWorker.thread.request_stop();
@@ -6139,37 +6320,66 @@ void ViewerSpace::CancelScanAndWait() noexcept
         }
     }
 
-    if (_scanWorker.thread.joinable())
+    uint64_t reapedWorkers    = 0u;
+    uint64_t abandonedWorkers = 0u;
+    const auto finishWorker   = [&reapedWorkers, &abandonedWorkers](ScanWorker& worker) noexcept
     {
-        _scanWorker.thread.join();
-    }
-    _scanWorker = {};
+        if (! worker.thread.joinable())
+        {
+            worker = {};
+            return;
+        }
 
-    for (auto& worker : _retiredScanWorkers)
-    {
-        if (worker.thread.joinable())
+        if (worker.done != nullptr && worker.done->load(std::memory_order_acquire))
         {
             worker.thread.join();
+            g_scanWorkerUnloadGates.fetch_sub(1u, std::memory_order_acq_rel);
+            reapedWorkers += 1u;
         }
+        else
+        {
+            // ReadDirectoryInfo is an untrusted provider boundary with no forced-cancel contract.
+            // The worker owns a ViewerSpace reference. Intentionally retain its unload gate after
+            // detach: there is no safe point inside a std::jthread lambda at which the last module
+            // pin could be released after the callback has returned. Runtime reload is therefore
+            // quarantined for this process after an uncooperative provider forces abandonment.
+            worker.thread.detach();
+            abandonedWorkers += 1u;
+        }
+        worker = {};
+    };
+
+    finishWorker(_scanWorker);
+    for (ScanWorker& worker : _retiredScanWorkers)
+    {
+        finishWorker(worker);
     }
     _retiredScanWorkers.clear();
 
-    _scanActive.store(false);
+    {
+        std::scoped_lock lock(_updateMutex);
+        _pendingUpdates.clear();
+        _pendingUpdateBytes.store(0u, std::memory_order_relaxed);
+    }
+
+    if (reapedWorkers != 0u || abandonedWorkers != 0u)
+    {
+        Debug::Perf::EmitValue(L"viewer.space.scan.worker_reaped", reapedWorkers);
+        Debug::Perf::EmitValue(L"viewer.space.scan.worker_abandoned", abandonedWorkers);
+        Debug::Perf::EmitDurationUs(
+            L"viewer.space.close.cancel_us", Debug::Perf::ElapsedUs(abandonStartedAt), abandonedWorkers, reapedWorkers);
+    }
 }
 
-void ViewerSpace::ReapFinishedScanWorkers(bool wait) noexcept
+void ViewerSpace::ReapFinishedScanWorkers() noexcept
 {
-    if (wait)
-    {
-        CancelScanAndWait();
-        return;
-    }
 
     if (_scanWorker.thread.joinable())
     {
-        if (_scanWorker.done != nullptr && _scanWorker.done->load())
+        if (_scanWorker.done != nullptr && _scanWorker.done->load(std::memory_order_acquire))
         {
             _scanWorker.thread.join();
+            g_scanWorkerUnloadGates.fetch_sub(1u, std::memory_order_acq_rel);
             _scanWorker = {};
         }
     }
@@ -6177,9 +6387,10 @@ void ViewerSpace::ReapFinishedScanWorkers(bool wait) noexcept
     for (size_t i = 0; i < _retiredScanWorkers.size();)
     {
         ScanWorker& worker = _retiredScanWorkers[i];
-        if (worker.done != nullptr && worker.done->load() && worker.thread.joinable())
+        if (worker.done != nullptr && worker.done->load(std::memory_order_acquire) && worker.thread.joinable())
         {
             worker.thread.join();
+            g_scanWorkerUnloadGates.fetch_sub(1u, std::memory_order_acq_rel);
             _retiredScanWorkers.erase(_retiredScanWorkers.begin() + static_cast<ptrdiff_t>(i));
             continue;
         }
@@ -6195,16 +6406,116 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
                            uint32_t rootNodeId,
                            uint32_t nextNodeId,
                            size_t topFilesPerDirectory,
-                           uint32_t scanThreads) noexcept
+                           uint32_t scanThreads,
+                           ViewerSpaceScan::ResourcePolicy resourcePolicy) noexcept
 {
     static constexpr size_t kProgressUpdateStride = 384;
     static constexpr auto kProgressUpdateInterval = std::chrono::milliseconds(150);
 
     const uint32_t threadCount = std::clamp(scanThreads, 1u, 16u);
 
-    std::atomic_uint32_t nextId(nextNodeId);
-    std::atomic_uint32_t scannedFolders(0);
-    std::atomic_uint32_t scannedFiles(0);
+    struct ScanResourceTracker final
+    {
+        explicit ScanResourceTracker(ViewerSpaceScan::ResourcePolicy scanPolicy, uint64_t rootNameBytes) noexcept
+            : policy(scanPolicy), retainedNameBytes(std::min(rootNameBytes, scanPolicy.maxRetainedNameBytes))
+        {
+        }
+        ~ScanResourceTracker() = default;
+
+        ScanResourceTracker(const ScanResourceTracker&)            = delete;
+        ScanResourceTracker& operator=(const ScanResourceTracker&) = delete;
+        ScanResourceTracker(ScanResourceTracker&&)                 = delete;
+        ScanResourceTracker& operator=(ScanResourceTracker&&)      = delete;
+
+        [[nodiscard]] bool TryRetainDirectory(uint64_t nameBytes) noexcept
+        {
+            std::scoped_lock lock(mutex);
+            if (retainedDirectories >= policy.maxRetainedDirectories || retainedChildReferences >= policy.maxChildReferences ||
+                nameBytes > policy.maxRetainedNameBytes - retainedNameBytes)
+            {
+                cappedDirectories.fetch_add(1u, std::memory_order_relaxed);
+                return false;
+            }
+            retainedDirectories += 1u;
+            retainedChildReferences += 1u;
+            retainedNameBytes += nameBytes;
+            return true;
+        }
+
+        [[nodiscard]] bool TryRetainFile(uint64_t nameBytes) noexcept
+        {
+            std::scoped_lock lock(mutex);
+            if (retainedFiles >= policy.maxRetainedFileRecords || retainedChildReferences >= policy.maxChildReferences ||
+                nameBytes > policy.maxRetainedNameBytes - retainedNameBytes)
+            {
+                cappedFiles.fetch_add(1u, std::memory_order_relaxed);
+                return false;
+            }
+            retainedFiles += 1u;
+            retainedChildReferences += 1u;
+            retainedNameBytes += nameBytes;
+            return true;
+        }
+
+        [[nodiscard]] bool TryTraverseDirectories(uint64_t count) noexcept
+        {
+            if (count == 0u)
+            {
+                return true;
+            }
+            uint64_t current = traversedDirectories.load(std::memory_order_relaxed);
+            for (;;)
+            {
+                if (current > policy.maxTraversedDirectories || count > policy.maxTraversedDirectories - current)
+                {
+                    return false;
+                }
+                if (traversedDirectories.compare_exchange_weak(current, current + count, std::memory_order_relaxed, std::memory_order_relaxed))
+                {
+                    return true;
+                }
+            }
+        }
+
+        void RecordValidationFailure(ViewerSpaceScan::ValidationError error) noexcept
+        {
+            rejectedEntries.fetch_add(1u, std::memory_order_relaxed);
+            uint32_t expected = static_cast<uint32_t>(ViewerSpaceScan::ValidationError::None);
+            static_cast<void>(validationError.compare_exchange_strong(expected, static_cast<uint32_t>(error), std::memory_order_relaxed));
+        }
+
+        void Snapshot(uint64_t& outDirectories, uint64_t& outFiles, uint64_t& outChildReferences, uint64_t& outNameBytes) noexcept
+        {
+            std::scoped_lock lock(mutex);
+            outDirectories     = retainedDirectories;
+            outFiles           = retainedFiles;
+            outChildReferences = retainedChildReferences;
+            outNameBytes       = retainedNameBytes;
+        }
+
+        ViewerSpaceScan::ResourcePolicy policy{};
+        std::mutex mutex;
+        uint64_t retainedDirectories   = 1u;
+        uint64_t retainedFiles         = 0u;
+        uint64_t retainedChildReferences = 0u;
+        uint64_t retainedNameBytes     = 0u;
+        std::atomic_uint64_t acceptedEntries{0u};
+        std::atomic_uint64_t rejectedEntries{0u};
+        std::atomic_uint64_t cappedDirectories{0u};
+        std::atomic_uint64_t cappedFiles{0u};
+        std::atomic_uint64_t traversedDirectories{1u};
+        std::atomic_uint32_t validationError{static_cast<uint32_t>(ViewerSpaceScan::ValidationError::None)};
+    };
+
+    const uint64_t rootNameBytes = rootPath.size() > ((std::numeric_limits<uint64_t>::max)() / sizeof(wchar_t))
+                                       ? (std::numeric_limits<uint64_t>::max)()
+                                       : static_cast<uint64_t>(rootPath.size()) * sizeof(wchar_t);
+    ScanResourceTracker resources(resourcePolicy, rootNameBytes);
+
+    uint32_t nextModelId = nextNodeId;
+    std::atomic_uint64_t nextTraversalId(2u);
+    std::atomic_uint64_t scannedFolders(0);
+    std::atomic_uint64_t scannedFiles(0);
     std::atomic_uint64_t scannedBytes(0);
 
     const auto scanStartedAt = std::chrono::steady_clock::now();
@@ -6232,6 +6543,41 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
         Debug::Perf::EmitValue(L"viewer.space.scan.folders", folders, scanFinalHr);
         Debug::Perf::EmitValue(L"viewer.space.scan.bytes", bytes, scanFinalHr);
         Debug::Perf::EmitValue(L"viewer.space.scan.active_workers", threadCount, scanFinalHr);
+
+        uint64_t retainedDirectories = 0u;
+        uint64_t retainedFiles       = 0u;
+        uint64_t retainedChildRefs   = 0u;
+        uint64_t retainedNameBytes   = 0u;
+        resources.Snapshot(retainedDirectories, retainedFiles, retainedChildRefs, retainedNameBytes);
+        const uint64_t acceptedEntries   = resources.acceptedEntries.load(std::memory_order_relaxed);
+        const uint64_t rejectedEntries   = resources.rejectedEntries.load(std::memory_order_relaxed);
+        const uint64_t cappedDirectories = resources.cappedDirectories.load(std::memory_order_relaxed);
+        const uint64_t cappedFiles       = resources.cappedFiles.load(std::memory_order_relaxed);
+        const uint64_t traversedDirs     = resources.traversedDirectories.load(std::memory_order_relaxed);
+        const auto validationError = static_cast<ViewerSpaceScan::ValidationError>(resources.validationError.load(std::memory_order_relaxed));
+
+        PendingUpdate resourceUp;
+        resourceUp.kind                    = PendingUpdate::Kind::ResourceSummary;
+        resourceUp.generation              = generation;
+        resourceUp.acceptedEntries         = acceptedEntries;
+        resourceUp.rejectedEntries         = rejectedEntries;
+        resourceUp.cappedDirectories       = cappedDirectories;
+        resourceUp.cappedFiles             = cappedFiles;
+        resourceUp.retainedNameBytes       = retainedNameBytes;
+        resourceUp.retainedChildReferences = retainedChildRefs;
+        resourceUp.traversedDirectories    = traversedDirs;
+        resourceUp.validationError         = validationError;
+        PostUpdate(std::move(resourceUp));
+
+        Debug::Perf::EmitValue(L"viewer.space.model.accepted_entries", acceptedEntries, scanFinalHr);
+        Debug::Perf::Emit(L"viewer.space.model.rejected_entries", ValidationErrorDetail(validationError), 0u, rejectedEntries, 0u, scanFinalHr);
+        Debug::Perf::EmitValue(L"viewer.space.model.capped_directories", cappedDirectories, scanFinalHr);
+        Debug::Perf::EmitValue(L"viewer.space.model.capped_files", cappedFiles, scanFinalHr);
+        Debug::Perf::EmitValue(L"viewer.space.model.retained_directories", retainedDirectories, scanFinalHr);
+        Debug::Perf::EmitValue(L"viewer.space.model.retained_files", retainedFiles, scanFinalHr);
+        Debug::Perf::EmitValue(L"viewer.space.model.child_references", retainedChildRefs, scanFinalHr);
+        Debug::Perf::EmitValue(L"viewer.space.model.retained_name_bytes", retainedNameBytes, scanFinalHr);
+        Debug::Perf::EmitValue(L"viewer.space.model.traversed_directories", traversedDirs, scanFinalHr);
     });
 
     struct ProgressState final
@@ -6264,10 +6610,10 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
         return std::wstring(trimmed);
     };
 
-    auto postProgress = [&](ProgressState& progress, uint32_t nodeId, std::wstring_view currentPath) noexcept
+    auto postProgress = [&](ProgressState& progress, uint32_t nodeId, std::wstring_view currentPath, bool force = false) noexcept
     {
         const auto now = std::chrono::steady_clock::now();
-        if (nodeId == progress.lastProgressNodeId && (now - progress.lastProgress) < kProgressUpdateInterval)
+        if (! force && nodeId == progress.lastProgressNodeId && (now - progress.lastProgress) < kProgressUpdateInterval)
         {
             return;
         }
@@ -6304,12 +6650,31 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
         PostUpdate(std::move(errorUp));
         return;
     }
+    if (rootPath.empty() || rootPath.size() > resourcePolicy.maxPathChars)
+    {
+        resources.RecordValidationFailure(ViewerSpaceScan::ValidationError::PathLimit);
+        scanFinalState = ScanState::Error;
+        scanFinalHr    = HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        PendingUpdate errorUp;
+        errorUp.kind       = PendingUpdate::Kind::UpdateState;
+        errorUp.generation = generation;
+        errorUp.nodeId     = rootNodeId;
+        errorUp.state      = ScanState::Error;
+        PostUpdate(std::move(errorUp));
+        return;
+    }
 
-    ScanScheduler& scheduler = GetScanScheduler();
+    const std::shared_ptr<ScanScheduler> scheduler = GetScanScheduler();
+    if (! scheduler)
+    {
+        scanFinalState = ScanState::Canceled;
+        scanFinalHr    = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        return;
+    }
     ScanScheduler::Permit permit;
     if (fileSystemIsWin32)
     {
-        permit = scheduler.AcquireForPath(std::filesystem::path(rootPath), stopToken);
+        permit = scheduler->AcquireForPath(std::filesystem::path(rootPath), stopToken);
     }
     else
     {
@@ -6317,7 +6682,7 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
         constexpr size_t keyMax                  = (sizeof(key) / sizeof(key[0])) - 1;
         const auto r                             = std::format_to_n(key, keyMax, L"fs:{:p}", static_cast<const void*>(fileSystem.get()));
         key[(r.size < keyMax) ? r.size : keyMax] = L'\0';
-        permit                                   = scheduler.AcquireForKey(key, stopToken);
+        permit                                   = scheduler->AcquireForKey(key, stopToken);
     }
     if (! permit)
     {
@@ -6348,26 +6713,68 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
     scanningUp.state      = ScanState::Scanning;
     PostUpdate(std::move(scanningUp));
 
+    struct ProviderAncestor final
+    {
+        unsigned long providerId = 0u;
+        std::shared_ptr<const ProviderAncestor> parent;
+    };
+
     struct ChildDir final
     {
-        uint32_t nodeId = 0;
+        uint64_t traversalId    = 0u;
+        uint32_t modelNodeId    = 0u;
+        uint32_t aggregateOwner = 0u;
+        unsigned long providerId = 0u;
+        bool aggregateRoot      = false;
+        bool descend            = true;
         std::wstring name;
     };
 
     struct StackItem final
     {
-        uint32_t nodeId = 0;
+        uint64_t traversalId    = 0u;
+        uint32_t modelNodeId    = 0u;
+        uint32_t aggregateOwner = 0u;
+        bool aggregateRoot      = false;
+        uint32_t depth          = 0u;
         std::wstring path;
+        std::shared_ptr<const ProviderAncestor> providerAncestors;
         uint64_t bytes          = 0;
         bool enumerated         = false;
         bool failed             = false;
+        bool propagateFailure   = true;
         size_t processedEntries = 0;
-        size_t nextChildIndex   = 0;
         std::vector<ChildDir> children;
         std::vector<FileSummaryItem> topFiles;
-        uint64_t otherBytes  = 0;
-        uint32_t otherCount  = 0;
-        uint32_t otherNodeId = 0;
+        uint64_t fileCount  = 0u;
+        uint64_t nonDescendingFolders = 0u;
+        uint64_t otherBytes = 0u;
+        uint64_t otherFolders = 0u;
+        uint64_t otherFiles = 0u;
+    };
+
+    struct LogicalNameLess final
+    {
+        bool caseInsensitive = false;
+
+        [[nodiscard]] bool operator()(const std::wstring& left, const std::wstring& right) const noexcept
+        {
+            if (! caseInsensitive)
+            {
+                return left < right;
+            }
+
+            const int comparison = CompareStringOrdinal(left.data(), static_cast<int>(left.size()), right.data(), static_cast<int>(right.size()), TRUE);
+            if (comparison == CSTR_LESS_THAN)
+            {
+                return true;
+            }
+            if (comparison == CSTR_EQUAL || comparison == CSTR_GREATER_THAN)
+            {
+                return false;
+            }
+            return left < right;
+        }
     };
 
     auto minHeapByBytes = [](const FileSummaryItem& a, const FileSummaryItem& b) noexcept { return a.bytes > b.bytes; };
@@ -6379,239 +6786,356 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
         auto emitEnumerateMetric      = wil::scope_exit([&]() noexcept
         {
             Debug::Perf::Emit(L"viewer.space.scan.enumerate_us",
-                              L"phase0-current",
+                              L"bounded-provider",
                               Debug::Perf::ElapsedUs(enumerateStartedAt),
                               item.processedEntries,
                               workerIndex,
                               enumerateHr);
         });
 
+        const uint32_t progressNodeId = item.modelNodeId != 0u ? item.modelNodeId : item.aggregateOwner;
+        auto failProvider = [&](ViewerSpaceScan::ValidationError error, HRESULT hr, bool propagateFailure) noexcept
+        {
+            enumerateHr = hr;
+            item.failed = true;
+            item.propagateFailure = propagateFailure;
+            resources.RecordValidationFailure(error);
+            Debug::Warning(L"ViewerSpace: Rejected provider directory '{}' ({}, HRESULT: {:#x})",
+                           item.path,
+                           ValidationErrorDetail(error),
+                           static_cast<uint32_t>(hr));
+            if (item.modelNodeId != 0u)
+            {
+                PendingUpdate errorUp;
+                errorUp.kind       = PendingUpdate::Kind::UpdateState;
+                errorUp.generation = generation;
+                errorUp.nodeId     = item.modelNodeId;
+                errorUp.state      = ScanState::Error;
+                PostUpdate(std::move(errorUp));
+            }
+        };
+
         item.enumerated = true;
-        postProgress(progress, item.nodeId, item.path);
+        postProgress(progress, progressNodeId, item.path);
 
         wil::com_ptr<IFilesInformation> filesInformation;
         const HRESULT enumHr = fileSystem->ReadDirectoryInfo(item.path.c_str(), filesInformation.put());
         enumerateHr          = enumHr;
         if (FAILED(enumHr) || ! filesInformation)
         {
-            Debug::Warning(L"ViewerSpace: Failed to enumerate directory '{}' (HRESULT: {:#x})", item.path, static_cast<uint32_t>(enumHr));
-            item.failed = true;
+            const HRESULT failureHr = FAILED(enumHr) ? enumHr : E_FAIL;
+            const bool accessDenied = failureHr == HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+            if (accessDenied)
+            {
+                // Access-denied directories are a normal zero-sized leaf in a best-effort space scan.
+                return;
+            }
+            failProvider(ViewerSpaceScan::ValidationError::NullBuffer, failureHr, true);
+            return;
+        }
 
+        if (item.modelNodeId != 0u)
+        {
             PendingUpdate stateUp;
             stateUp.kind       = PendingUpdate::Kind::UpdateState;
             stateUp.generation = generation;
-            stateUp.nodeId     = item.nodeId;
-            stateUp.state      = ScanState::Error;
+            stateUp.nodeId     = item.modelNodeId;
+            stateUp.state      = ScanState::Scanning;
             PostUpdate(std::move(stateUp));
+        }
+
+        FileInfo* buffer              = nullptr;
+        unsigned long bufferSize      = 0u;
+        unsigned long allocatedSize   = 0u;
+        unsigned long advertisedCount = 0u;
+        const HRESULT bufferHr        = filesInformation->GetBuffer(&buffer);
+        const HRESULT sizeHr          = filesInformation->GetBufferSize(&bufferSize);
+        const HRESULT allocatedHr     = filesInformation->GetAllocatedSize(&allocatedSize);
+        const HRESULT countHr         = filesInformation->GetCount(&advertisedCount);
+        if (FAILED(bufferHr) || FAILED(sizeHr) || FAILED(allocatedHr) || FAILED(countHr))
+        {
+            const HRESULT failingHr = FAILED(bufferHr) ? bufferHr : (FAILED(sizeHr) ? sizeHr : (FAILED(allocatedHr) ? allocatedHr : countHr));
+            failProvider(ViewerSpaceScan::ValidationError::CountBufferMismatch, failingHr, true);
             return;
         }
 
-        PendingUpdate stateUp;
-        stateUp.kind       = PendingUpdate::Kind::UpdateState;
-        stateUp.generation = generation;
-        stateUp.nodeId     = item.nodeId;
-        stateUp.state      = ScanState::Scanning;
-        PostUpdate(std::move(stateUp));
-
-        FileInfo* buffer         = nullptr;
-        unsigned long bufferSize = 0;
-        const HRESULT bufferHr   = filesInformation->GetBuffer(&buffer);
-        const HRESULT sizeHr     = filesInformation->GetBufferSize(&bufferSize);
-        if (FAILED(bufferHr) || FAILED(sizeHr))
+        ViewerSpaceScan::ValidationError validation = ViewerSpaceScan::ValidateProviderBufferContract(
+            buffer, bufferSize, allocatedSize, advertisedCount, resourcePolicy);
+        if (validation != ViewerSpaceScan::ValidationError::None)
         {
-            enumerateHr = FAILED(bufferHr) ? bufferHr : sizeHr;
-            Debug::Warning(L"ViewerSpace: Failed to get buffer for directory '{}' (buffer: {:#x}, size: {:#x})",
-                           item.path,
-                           static_cast<uint32_t>(bufferHr),
-                           static_cast<uint32_t>(sizeHr));
-            item.failed = true;
-
-            PendingUpdate errorUp;
-            errorUp.kind       = PendingUpdate::Kind::UpdateState;
-            errorUp.generation = generation;
-            errorUp.nodeId     = item.nodeId;
-            errorUp.state      = ScanState::Error;
-            PostUpdate(std::move(errorUp));
+            failProvider(validation, HRESULT_FROM_WIN32(ERROR_INVALID_DATA), true);
             return;
         }
 
-        if (buffer != nullptr && bufferSize > 0)
-        {
-            const unsigned char* const bufferBytes         = reinterpret_cast<const unsigned char*>(buffer);
-            unsigned long offset                           = 0;
-            static constexpr unsigned long kWcharSizeBytes = static_cast<unsigned long>(sizeof(wchar_t));
-            const size_t nameOffset                        = offsetof(FileInfo, FileName);
+        uint64_t localFolderCount = 0u;
+        uint64_t localFileCount   = 0u;
+        const size_t fileCandidateLimit = std::min(topFilesPerDirectory, static_cast<size_t>(resourcePolicy.maxRetainedFileRecords));
+        std::unordered_set<unsigned long> providerIds;
+        std::set<std::wstring, LogicalNameLess> providerNames(LogicalNameLess{fileSystemIsWin32});
+        providerIds.reserve(std::min<size_t>(advertisedCount, 4096u));
 
-            while (offset < bufferSize)
+        if (buffer != nullptr && bufferSize > 0u)
+        {
+            const auto* firstByte = reinterpret_cast<const std::byte*>(buffer);
+            const std::span<const std::byte> providerBuffer(firstByte, static_cast<size_t>(bufferSize));
+            size_t validationOffset   = 0u;
+            uint64_t validatedEntries = 0u;
+            bool validatedTerminal    = false;
+            while (validationOffset < providerBuffer.size())
             {
                 if (stopToken.stop_requested())
                 {
                     return;
                 }
 
-                if (static_cast<size_t>(bufferSize - offset) < nameOffset)
+                ViewerSpaceScan::ProviderEntryView entryView{};
+                validation = ViewerSpaceScan::ValidateProviderEntry(providerBuffer, validationOffset, resourcePolicy, entryView);
+                if (validation != ViewerSpaceScan::ValidationError::None)
                 {
                     break;
                 }
 
-                const auto* entry              = reinterpret_cast<const FileInfo*>(bufferBytes + offset);
-                const unsigned long nextOffset = entry->NextEntryOffset;
-
-                if ((entry->FileNameSize % kWcharSizeBytes) == 0u &&
-                    nameOffset + static_cast<size_t>(entry->FileNameSize) <= static_cast<size_t>(bufferSize - offset))
+                validatedEntries = ViewerSpaceScan::SaturatingAdd(validatedEntries, uint64_t{1u});
+                if (validatedEntries > advertisedCount)
                 {
-                    const size_t nameChars = static_cast<size_t>(entry->FileNameSize / kWcharSizeBytes);
-                    const std::wstring_view name(entry->FileName, nameChars);
+                    validation = ViewerSpaceScan::ValidationError::CountMismatch;
+                    break;
+                }
 
-                    if (name != L"." && name != L"..")
+                validation = ViewerSpaceScan::ValidateProviderChildName(entryView.name);
+                if (validation != ViewerSpaceScan::ValidationError::None)
+                {
+                    break;
+                }
+                if (! providerNames.emplace(entryView.name).second)
+                {
+                    validation = ViewerSpaceScan::ValidationError::DuplicateName;
+                    break;
+                }
+                const FileInfo& entry = *entryView.entry;
+                if (entry.FileIndex != 0u && ! providerIds.insert(entry.FileIndex).second)
+                {
+                    validation = ViewerSpaceScan::ValidationError::DuplicateId;
+                    break;
+                }
+                if (entry.FileIndex != 0u && (entry.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0u &&
+                    (entry.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) == 0u)
+                {
+                    for (const ProviderAncestor* ancestor = item.providerAncestors.get(); ancestor != nullptr; ancestor = ancestor->parent.get())
                     {
-                        item.processedEntries += 1;
-
-                        const bool isDirectory = (entry->FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-                        const bool isReparse   = (entry->FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
-                        if (isDirectory)
+                        if (ancestor->providerId == entry.FileIndex)
                         {
-                            if (! isReparse)
-                            {
-                                scannedFolders.fetch_add(1u, std::memory_order_relaxed);
+                            validation = ViewerSpaceScan::ValidationError::AncestorCycle;
+                            break;
+                        }
+                    }
+                    if (validation != ViewerSpaceScan::ValidationError::None)
+                    {
+                        break;
+                    }
+                }
+                if (entryView.isLast)
+                {
+                    validation = ViewerSpaceScan::ValidateProviderTerminalExtent(providerBuffer, validationOffset, entryView);
+                    validatedTerminal = validation == ViewerSpaceScan::ValidationError::None;
+                    break;
+                }
+                validationOffset += entryView.nextOffset;
+            }
 
-                                const uint32_t dirNodeId = nextId.fetch_add(1u, std::memory_order_relaxed);
+            if (validation == ViewerSpaceScan::ValidationError::None && (! validatedTerminal || validatedEntries != advertisedCount))
+            {
+                validation = ViewerSpaceScan::ValidationError::CountMismatch;
+            }
+            if (validation != ViewerSpaceScan::ValidationError::None)
+            {
+                failProvider(validation, HRESULT_FROM_WIN32(ERROR_INVALID_DATA), true);
+                return;
+            }
 
-                                PendingUpdate addDir;
-                                addDir.kind       = PendingUpdate::Kind::AddChild;
-                                addDir.generation = generation;
-                                addDir.parentId   = item.nodeId;
-                                addDir.nodeId     = dirNodeId;
-                                addDir.name.assign(name);
-                                addDir.isDirectory = true;
-                                PostUpdate(std::move(addDir));
+            size_t offset      = 0u;
+            uint64_t parsed    = 0u;
+            bool observedLast = false;
 
-                                ChildDir childDir;
-                                childDir.nodeId = dirNodeId;
-                                childDir.name.assign(name);
-                                item.children.push_back(std::move(childDir));
-                            }
+            while (offset < providerBuffer.size())
+            {
+                if (stopToken.stop_requested())
+                {
+                    return;
+                }
+
+                ViewerSpaceScan::ProviderEntryView entryView{};
+                validation = ViewerSpaceScan::ValidateProviderEntry(providerBuffer, offset, resourcePolicy, entryView);
+                if (validation != ViewerSpaceScan::ValidationError::None)
+                {
+                    break;
+                }
+
+                parsed = ViewerSpaceScan::SaturatingAdd(parsed, uint64_t{1u});
+                if (parsed > advertisedCount)
+                {
+                    validation = ViewerSpaceScan::ValidationError::CountMismatch;
+                    break;
+                }
+
+                const FileInfo& entry        = *entryView.entry;
+                const std::wstring_view name = entryView.name;
+                item.processedEntries += 1u;
+                const bool isDirectory = (entry.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0u;
+                const bool isReparse   = (entry.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u;
+                if (isDirectory)
+                {
+                    localFolderCount = ViewerSpaceScan::SaturatingAdd(localFolderCount, uint64_t{1u});
+                    ChildDir childDir;
+                    childDir.providerId = entry.FileIndex;
+                    childDir.descend    = ! isReparse;
+                    childDir.name.assign(name);
+                    if (! childDir.descend)
+                    {
+                        item.nonDescendingFolders = ViewerSpaceScan::SaturatingAdd(item.nonDescendingFolders, uint64_t{1u});
+                    }
+                    item.children.push_back(std::move(childDir));
+                }
+                else
+                {
+                    localFileCount = ViewerSpaceScan::SaturatingAdd(localFileCount, uint64_t{1u});
+                    const uint64_t fileBytes = entry.EndOfFile > 0 ? static_cast<uint64_t>(entry.EndOfFile) : 0u;
+                    item.bytes = ViewerSpaceScan::SaturatingAdd(item.bytes, fileBytes);
+
+                    auto aggregateFile = [&](uint64_t bytes, bool alreadyCounted) noexcept
+                    {
+                        item.otherBytes = ViewerSpaceScan::SaturatingAdd(item.otherBytes, bytes);
+                        item.otherFiles = ViewerSpaceScan::SaturatingAdd(item.otherFiles, uint64_t{1u});
+                        if (! alreadyCounted)
+                        {
+                            SaturatingAtomicAdd(resources.cappedFiles, 1u);
+                        }
+                    };
+
+                    if (item.modelNodeId == 0u || fileCandidateLimit == 0u)
+                    {
+                        aggregateFile(fileBytes, false);
+                    }
+                    else
+                    {
+                        FileSummaryItem candidate;
+                        candidate.bytes = fileBytes;
+                        candidate.name.assign(name);
+
+                        if (item.topFiles.size() < fileCandidateLimit)
+                        {
+                            item.topFiles.push_back(std::move(candidate));
+                            std::push_heap(item.topFiles.begin(), item.topFiles.end(), minHeapByBytes);
+                        }
+                        else if (! item.topFiles.empty() && fileBytes > item.topFiles.front().bytes)
+                        {
+                            std::pop_heap(item.topFiles.begin(), item.topFiles.end(), minHeapByBytes);
+                            FileSummaryItem dropped = std::move(item.topFiles.back());
+                            item.topFiles.back()    = std::move(candidate);
+                            std::push_heap(item.topFiles.begin(), item.topFiles.end(), minHeapByBytes);
+                            aggregateFile(dropped.bytes, false);
                         }
                         else
                         {
-                            scannedFiles.fetch_add(1u, std::memory_order_relaxed);
-                            const uint64_t fileBytes = entry->EndOfFile > 0 ? static_cast<uint64_t>(entry->EndOfFile) : 0u;
-                            item.bytes += fileBytes;
-                            scannedBytes.fetch_add(fileBytes, std::memory_order_relaxed);
-
-                            FileSummaryItem candidate;
-                            candidate.bytes = fileBytes;
-                            candidate.name.assign(name);
-
-                            if (item.topFiles.size() < topFilesPerDirectory)
-                            {
-                                item.topFiles.push_back(std::move(candidate));
-                                std::push_heap(item.topFiles.begin(), item.topFiles.end(), minHeapByBytes);
-                            }
-                            else if (! item.topFiles.empty() && fileBytes > item.topFiles.front().bytes)
-                            {
-                                std::pop_heap(item.topFiles.begin(), item.topFiles.end(), minHeapByBytes);
-                                FileSummaryItem dropped = std::move(item.topFiles.back());
-                                item.topFiles.back()    = std::move(candidate);
-                                std::push_heap(item.topFiles.begin(), item.topFiles.end(), minHeapByBytes);
-
-                                item.otherBytes += dropped.bytes;
-                                item.otherCount += 1;
-                            }
-                            else
-                            {
-                                item.otherBytes += fileBytes;
-                                item.otherCount += 1;
-                            }
-
-                            if ((item.processedEntries % kProgressUpdateStride) == 0)
-                            {
-                                PendingUpdate progressUp;
-                                progressUp.kind       = PendingUpdate::Kind::UpdateSize;
-                                progressUp.generation = generation;
-                                progressUp.nodeId     = item.nodeId;
-                                progressUp.bytes      = item.bytes;
-                                PostUpdate(std::move(progressUp));
-                                postProgress(progress, item.nodeId, item.path);
-                            }
+                            aggregateFile(fileBytes, false);
                         }
+                    }
+
+                    if (item.modelNodeId != 0u && (item.processedEntries % kProgressUpdateStride) == 0u)
+                    {
+                        PendingUpdate progressUp;
+                        progressUp.kind       = PendingUpdate::Kind::UpdateSize;
+                        progressUp.generation = generation;
+                        progressUp.nodeId     = item.modelNodeId;
+                        progressUp.bytes      = item.bytes;
+                        PostUpdate(std::move(progressUp));
+                        postProgress(progress, progressNodeId, item.path);
                     }
                 }
 
-                if (nextOffset == 0)
+                if (entryView.isLast)
                 {
+                    observedLast = true;
                     break;
                 }
-
-                if (nextOffset > bufferSize - offset)
-                {
-                    break;
-                }
-
-                offset += nextOffset;
+                offset += entryView.nextOffset;
             }
-        }
 
-        PendingUpdate sizeUp;
-        sizeUp.kind       = PendingUpdate::Kind::UpdateSize;
-        sizeUp.generation = generation;
-        sizeUp.nodeId     = item.nodeId;
-        sizeUp.bytes      = item.bytes;
-        PostUpdate(std::move(sizeUp));
-
-        std::sort(item.topFiles.begin(),
-                  item.topFiles.end(),
-                  [](const FileSummaryItem& a, const FileSummaryItem& b) noexcept
-        {
-            if (a.bytes != b.bytes)
+            if (validation == ViewerSpaceScan::ValidationError::None && (! observedLast || parsed != advertisedCount))
             {
-                return a.bytes > b.bytes;
+                validation = ViewerSpaceScan::ValidationError::CountMismatch;
             }
-            return a.name < b.name;
-        });
+            if (validation != ViewerSpaceScan::ValidationError::None)
+            {
+                item.children.clear();
+                item.topFiles.clear();
+                item.bytes      = 0u;
+                item.otherBytes = 0u;
+                item.otherFiles = 0u;
+                failProvider(validation, HRESULT_FROM_WIN32(ERROR_INVALID_DATA), true);
+                return;
+            }
 
-        if (item.otherCount > 0 || item.otherBytes > 0)
-        {
-            item.otherNodeId = nextId.fetch_add(1u, std::memory_order_relaxed);
+            SaturatingAtomicAdd(resources.acceptedEntries, parsed);
         }
 
-        PendingUpdate filesUp;
-        filesUp.kind        = PendingUpdate::Kind::DirectoryFilesSummary;
-        filesUp.generation  = generation;
-        filesUp.nodeId      = item.nodeId;
-        filesUp.otherBytes  = item.otherBytes;
-        filesUp.otherCount  = item.otherCount;
-        filesUp.otherNodeId = item.otherNodeId;
-        filesUp.topFiles    = std::move(item.topFiles);
-        PostUpdate(std::move(filesUp));
+        item.fileCount = localFileCount;
+        SaturatingAtomicAdd(scannedFolders, localFolderCount);
+        SaturatingAtomicAdd(scannedFiles, localFileCount);
+        SaturatingAtomicAdd(scannedBytes, item.bytes);
 
-        postProgress(progress, item.nodeId, item.path);
+        postProgress(progress, progressNodeId, item.path, true);
     };
 
     struct ScanJob final
     {
-        uint32_t nodeId = 0;
-        uint32_t parentId = 0;
+        uint64_t traversalId       = 0u;
+        uint64_t parentTraversalId = 0u;
+        uint32_t modelNodeId       = 0u;
+        uint32_t aggregateOwner    = 0u;
+        bool aggregateRoot         = false;
+        uint32_t depth             = 0u;
+        uint64_t pathBytes         = 0u;
         std::wstring path;
+        std::shared_ptr<const ProviderAncestor> providerAncestors;
     };
 
     struct DirectoryCompletion final
     {
-        uint32_t parentId = 0;
-        uint64_t bytes = 0;
-        uint32_t pendingChildren = 0;
-        bool enumerated = false;
-        bool completed = false;
-        bool failed = false;
+        uint64_t parentTraversalId = 0u;
+        uint32_t modelNodeId       = 0u;
+        uint32_t aggregateOwner    = 0u;
+        uint64_t bytes             = 0u;
+        uint64_t folderCount       = 0u;
+        uint64_t fileCount         = 0u;
+        uint32_t pendingChildren   = 0u;
+        bool aggregateRoot         = false;
+        bool enumerated            = false;
+        bool completed             = false;
+        bool displayError          = false;
+        bool failed                = false;
     };
 
     std::mutex frontierMutex;
     std::condition_variable frontierCv;
     std::deque<ScanJob> frontier;
-    std::unordered_map<uint32_t, DirectoryCompletion> completions;
-    completions.reserve(1024u);
-    completions.emplace(rootNodeId, DirectoryCompletion{});
-    frontier.push_back(ScanJob{rootNodeId, 0u, std::move(rootPath)});
+    std::unordered_map<uint64_t, DirectoryCompletion> completions;
+    completions.reserve(std::min<size_t>(resourcePolicy.maxOutstandingDirectories, 4096u));
+
+    const uint64_t rootPathBytes = static_cast<uint64_t>(rootPath.size()) * sizeof(wchar_t);
+    DirectoryCompletion rootCompletion;
+    rootCompletion.modelNodeId    = rootNodeId;
+    rootCompletion.aggregateOwner = rootNodeId;
+    completions.emplace(1u, rootCompletion);
+
+    ScanJob rootJob;
+    rootJob.traversalId    = 1u;
+    rootJob.modelNodeId    = rootNodeId;
+    rootJob.aggregateOwner = rootNodeId;
+    rootJob.pathBytes      = rootPathBytes;
+    rootJob.path           = std::move(rootPath);
+    frontier.push_back(std::move(rootJob));
+    uint64_t livePathBytes = rootPathBytes;
 
     bool frontierFinished = false;
     std::atomic_bool rootFailed(false);
@@ -6627,36 +7151,46 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
         }
     };
 
-    auto postDirectoryCompletion = [&](uint32_t nodeId, uint64_t bytes, ScanState state) noexcept
+    auto postDirectoryCompletion = [&](uint32_t modelNodeId, uint64_t bytes, ScanState state) noexcept
     {
+        if (modelNodeId == 0u)
+        {
+            return;
+        }
         PendingUpdate sizeUp;
         sizeUp.kind       = PendingUpdate::Kind::UpdateSize;
         sizeUp.generation = generation;
-        sizeUp.nodeId     = nodeId;
+        sizeUp.nodeId     = modelNodeId;
         sizeUp.bytes      = bytes;
         PostUpdate(std::move(sizeUp));
 
         PendingUpdate doneUp;
         doneUp.kind       = PendingUpdate::Kind::UpdateState;
         doneUp.generation = generation;
-        doneUp.nodeId     = nodeId;
+        doneUp.nodeId     = modelNodeId;
         doneUp.state      = state;
         PostUpdate(std::move(doneUp));
     };
 
-    auto completeReadyDirectories = [&](uint32_t initialNodeId) noexcept -> void
+    auto completeReadyDirectories = [&](uint64_t initialTraversalId) noexcept -> void
     {
-        uint32_t nodeId = initialNodeId;
+        uint64_t traversalId = initialTraversalId;
         for (;;)
         {
-            uint32_t parentId = 0;
-            uint64_t bytes = 0;
-            bool failed = false;
-            bool completedRoot = false;
+            uint64_t parentTraversalId = 0u;
+            uint32_t modelNodeId       = 0u;
+            uint32_t aggregateOwner    = 0u;
+            uint64_t bytes             = 0u;
+            uint64_t folderCount       = 0u;
+            uint64_t fileCount         = 0u;
+            bool aggregateRoot         = false;
+            bool displayError          = false;
+            bool failed                = false;
+            bool completedRoot         = false;
 
             {
                 std::scoped_lock lock(frontierMutex);
-                auto it = completions.find(nodeId);
+                auto it = completions.find(traversalId);
                 if (it == completions.end())
                 {
                     return;
@@ -6669,18 +7203,40 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
                 }
 
                 completion.completed = true;
-                parentId             = completion.parentId;
+                parentTraversalId    = completion.parentTraversalId;
+                modelNodeId          = completion.modelNodeId;
+                aggregateOwner       = completion.aggregateOwner;
                 bytes                = completion.bytes;
+                folderCount          = completion.folderCount;
+                fileCount            = completion.fileCount;
+                aggregateRoot        = completion.aggregateRoot;
+                displayError         = completion.displayError;
                 failed               = completion.failed;
-                completedRoot        = nodeId == rootNodeId;
+                completedRoot        = traversalId == 1u;
                 if (completedRoot)
                 {
                     frontierFinished = true;
                     rootFailed.store(failed, std::memory_order_relaxed);
                 }
+                else
+                {
+                    completions.erase(it);
+                }
             }
 
-            postDirectoryCompletion(nodeId, bytes, failed ? ScanState::Error : ScanState::Done);
+            postDirectoryCompletion(modelNodeId, bytes, displayError ? ScanState::Error : ScanState::Done);
+
+            if (aggregateRoot && ! failed && aggregateOwner != 0u)
+            {
+                PendingUpdate aggregateUp;
+                aggregateUp.kind         = PendingUpdate::Kind::DirectoryFilesSummary;
+                aggregateUp.generation   = generation;
+                aggregateUp.nodeId       = aggregateOwner;
+                aggregateUp.otherBytes   = bytes;
+                aggregateUp.otherFolders = folderCount;
+                aggregateUp.otherFiles   = fileCount;
+                PostUpdate(std::move(aggregateUp));
+            }
 
             if (completedRoot)
             {
@@ -6689,18 +7245,24 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
             }
 
             uint64_t parentBytes = 0;
-            bool parentReady = false;
+            uint32_t parentModelNodeId = 0u;
+            bool parentReady     = false;
             {
                 std::scoped_lock lock(frontierMutex);
-                auto parentIt = completions.find(parentId);
+                auto parentIt = completions.find(parentTraversalId);
                 if (parentIt == completions.end())
                 {
                     return;
                 }
 
                 DirectoryCompletion& parent = parentIt->second;
-                parent.bytes += bytes;
-                parentBytes = parent.bytes;
+                parent.bytes       = ViewerSpaceScan::SaturatingAdd(parent.bytes, bytes);
+                parent.folderCount = ViewerSpaceScan::SaturatingAdd(parent.folderCount, folderCount);
+                parent.fileCount   = ViewerSpaceScan::SaturatingAdd(parent.fileCount, fileCount);
+                parent.displayError = parent.displayError || failed;
+                parent.failed      = parent.failed || failed;
+                parentBytes        = parent.bytes;
+                parentModelNodeId  = parent.modelNodeId;
                 if (parent.pendingChildren > 0u)
                 {
                     parent.pendingChildren -= 1u;
@@ -6708,30 +7270,46 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
                 parentReady = parent.enumerated && parent.pendingChildren == 0u && ! parent.completed;
             }
 
-            PendingUpdate parentSizeUp;
-            parentSizeUp.kind       = PendingUpdate::Kind::UpdateSize;
-            parentSizeUp.generation = generation;
-            parentSizeUp.nodeId     = parentId;
-            parentSizeUp.bytes      = parentBytes;
-            PostUpdate(std::move(parentSizeUp));
+            if (parentModelNodeId != 0u)
+            {
+                PendingUpdate parentSizeUp;
+                parentSizeUp.kind       = PendingUpdate::Kind::UpdateSize;
+                parentSizeUp.generation = generation;
+                parentSizeUp.nodeId     = parentModelNodeId;
+                parentSizeUp.bytes      = parentBytes;
+                PostUpdate(std::move(parentSizeUp));
+            }
 
             if (! parentReady)
             {
                 return;
             }
 
-            nodeId = parentId;
+            traversalId = parentTraversalId;
         }
     };
 
-    auto processJob = [&](const ScanJob& job, uint32_t workerIndex) noexcept
+    auto processJob = [&](ScanJob job, uint32_t workerIndex) noexcept
     {
         ProgressState progress;
 
         StackItem item;
-        item.nodeId = job.nodeId;
-        item.path   = job.path;
-        enumerate(item, progress, workerIndex);
+        item.traversalId    = job.traversalId;
+        item.modelNodeId    = job.modelNodeId;
+        item.aggregateOwner = job.aggregateOwner;
+        item.aggregateRoot  = job.aggregateRoot;
+        item.depth          = job.depth;
+        item.path           = std::move(job.path);
+        item.providerAncestors = std::move(job.providerAncestors);
+        if (item.depth > resourcePolicy.maxTraversalDepth)
+        {
+            item.failed = true;
+            resources.RecordValidationFailure(ViewerSpaceScan::ValidationError::DepthLimit);
+        }
+        else
+        {
+            enumerate(item, progress, workerIndex);
+        }
 
         if (stopToken.stop_requested())
         {
@@ -6744,10 +7322,26 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
             childJobs.reserve(item.children.size());
             for (const ChildDir& child : item.children)
             {
+                if (! child.descend)
+                {
+                    continue;
+                }
                 ScanJob childJob;
-                childJob.nodeId   = child.nodeId;
-                childJob.parentId = item.nodeId;
-                childJob.path     = JoinPath(item.path, child.name, pathSeparator);
+                childJob.parentTraversalId = item.traversalId;
+                childJob.depth             = ViewerSpaceScan::SaturatingAdd(item.depth, 1u);
+                childJob.path              = JoinPath(item.path, child.name, pathSeparator);
+                childJob.providerAncestors = child.providerId == 0u
+                                                 ? item.providerAncestors
+                                                 : std::make_shared<ProviderAncestor>(child.providerId, item.providerAncestors);
+                if (childJob.depth > resourcePolicy.maxTraversalDepth || childJob.path.size() > resourcePolicy.maxPathChars)
+                {
+                    item.failed = true;
+                    resources.RecordValidationFailure(childJob.depth > resourcePolicy.maxTraversalDepth ? ViewerSpaceScan::ValidationError::DepthLimit
+                                                                                                          : ViewerSpaceScan::ValidationError::PathLimit);
+                    childJobs.clear();
+                    break;
+                }
+                childJob.pathBytes = static_cast<uint64_t>(childJob.path.size()) * sizeof(wchar_t);
                 childJobs.push_back(std::move(childJob));
             }
         }
@@ -6755,18 +7349,176 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
         size_t frontierDepth = 0u;
         {
             std::scoped_lock lock(frontierMutex);
-            DirectoryCompletion& completion = completions[item.nodeId];
-            completion.parentId             = job.parentId;
-            completion.bytes += item.bytes;
-            completion.pendingChildren += static_cast<uint32_t>(std::min<size_t>(childJobs.size(), std::numeric_limits<uint32_t>::max()));
+            const auto completionIt = completions.find(item.traversalId);
+            if (completionIt == completions.end())
+            {
+                return;
+            }
+            DirectoryCompletion& completion = completionIt->second;
+            completion.bytes                = ViewerSpaceScan::SaturatingAdd(completion.bytes, item.bytes);
+            completion.folderCount          = ViewerSpaceScan::SaturatingAdd(completion.folderCount, item.nonDescendingFolders);
+            completion.fileCount            = ViewerSpaceScan::SaturatingAdd(completion.fileCount, item.fileCount);
             completion.enumerated = true;
-            completion.failed     = item.failed;
+            completion.displayError = completion.displayError || item.failed;
+            completion.failed       = completion.failed || (item.failed && item.propagateFailure);
+
+            uint64_t childPathBytes = 0u;
+            for (const ScanJob& childJob : childJobs)
+            {
+                childPathBytes = ViewerSpaceScan::SaturatingAdd(childPathBytes, childJob.pathBytes);
+            }
+            if (! item.failed && (childJobs.size() > resourcePolicy.maxOutstandingDirectories ||
+                                  completions.size() > resourcePolicy.maxOutstandingDirectories - childJobs.size() ||
+                                  childPathBytes > resourcePolicy.maxOutstandingPathBytes - std::min(livePathBytes, resourcePolicy.maxOutstandingPathBytes)))
+            {
+                completion.failed = true;
+                completion.displayError = true;
+                item.failed       = true;
+                resources.RecordValidationFailure(ViewerSpaceScan::ValidationError::OutstandingLimit);
+                childJobs.clear();
+            }
+            if (! item.failed)
+            {
+                if (item.modelNodeId != 0u &&
+                    (nextModelId == 0u || nextModelId >= kFileRecordIdBase ||
+                     item.children.size() > static_cast<size_t>(kFileRecordIdBase - nextModelId)))
+                {
+                    completion.failed       = true;
+                    completion.displayError = true;
+                    item.failed             = true;
+                    resources.RecordValidationFailure(ViewerSpaceScan::ValidationError::ItemIdLimit);
+                    childJobs.clear();
+                }
+                else if (! resources.TryTraverseDirectories(static_cast<uint64_t>(childJobs.size())))
+                {
+                    completion.failed       = true;
+                    completion.displayError = true;
+                    item.failed             = true;
+                    resources.RecordValidationFailure(ViewerSpaceScan::ValidationError::TraversalLimit);
+                    childJobs.clear();
+                }
+            }
+
+            if (! item.failed)
+            {
+                size_t descendingIndex = 0u;
+                for (ChildDir& child : item.children)
+                {
+                    child.aggregateOwner = item.modelNodeId != 0u ? item.modelNodeId : item.aggregateOwner;
+                    child.aggregateRoot  = item.modelNodeId != 0u && child.descend;
+
+                    const uint64_t nameBytes = static_cast<uint64_t>(child.name.size()) * sizeof(wchar_t);
+                    if (item.modelNodeId != 0u && resources.TryRetainDirectory(nameBytes))
+                    {
+                        child.modelNodeId    = nextModelId;
+                        child.aggregateOwner = nextModelId;
+                        child.aggregateRoot  = false;
+                        nextModelId += 1u;
+                    }
+                    else if (item.modelNodeId == 0u)
+                    {
+                        SaturatingAtomicAdd(resources.cappedDirectories, 1u);
+                        child.aggregateRoot = false;
+                    }
+                    else if (! child.descend)
+                    {
+                        item.otherFolders = ViewerSpaceScan::SaturatingAdd(item.otherFolders, uint64_t{1u});
+                    }
+
+                    if (child.descend)
+                    {
+                        ScanJob& childJob       = childJobs[descendingIndex++];
+                        child.traversalId       = nextTraversalId.fetch_add(1u, std::memory_order_relaxed);
+                        childJob.traversalId    = child.traversalId;
+                        childJob.modelNodeId    = child.modelNodeId;
+                        childJob.aggregateOwner = child.aggregateOwner;
+                        childJob.aggregateRoot  = child.aggregateRoot;
+                    }
+                }
+
+                std::vector<FileSummaryItem> retainedFiles;
+                retainedFiles.reserve(item.topFiles.size());
+                for (FileSummaryItem& file : item.topFiles)
+                {
+                    const uint64_t nameBytes = static_cast<uint64_t>(file.name.size()) * sizeof(wchar_t);
+                    if (resources.TryRetainFile(nameBytes))
+                    {
+                        retainedFiles.push_back(std::move(file));
+                    }
+                    else
+                    {
+                        item.otherBytes = ViewerSpaceScan::SaturatingAdd(item.otherBytes, file.bytes);
+                        item.otherFiles = ViewerSpaceScan::SaturatingAdd(item.otherFiles, uint64_t{1u});
+                    }
+                }
+                item.topFiles = std::move(retainedFiles);
+
+                if (item.modelNodeId != 0u)
+                {
+                    std::sort(item.topFiles.begin(),
+                              item.topFiles.end(),
+                              [](const FileSummaryItem& left, const FileSummaryItem& right) noexcept
+                    {
+                        if (left.bytes != right.bytes)
+                        {
+                            return left.bytes > right.bytes;
+                        }
+                        return left.name < right.name;
+                    });
+
+                    PendingUpdate sizeUp;
+                    sizeUp.kind       = PendingUpdate::Kind::UpdateSize;
+                    sizeUp.generation = generation;
+                    sizeUp.nodeId     = item.modelNodeId;
+                    sizeUp.bytes      = item.bytes;
+                    PostUpdate(std::move(sizeUp));
+
+                    PendingUpdate filesUp;
+                    filesUp.kind         = PendingUpdate::Kind::DirectoryFilesSummary;
+                    filesUp.generation   = generation;
+                    filesUp.nodeId       = item.modelNodeId;
+                    filesUp.otherBytes   = item.otherBytes;
+                    filesUp.otherFolders = item.otherFolders;
+                    filesUp.otherFiles   = item.otherFiles;
+                    filesUp.topFiles     = std::move(item.topFiles);
+                    PostUpdate(std::move(filesUp));
+                }
+
+                for (const ChildDir& child : item.children)
+                {
+                    if (child.modelNodeId == 0u)
+                    {
+                        continue;
+                    }
+
+                    PendingUpdate addDir;
+                    addDir.kind        = PendingUpdate::Kind::AddChild;
+                    addDir.generation  = generation;
+                    addDir.parentId    = item.modelNodeId;
+                    addDir.nodeId      = child.modelNodeId;
+                    addDir.name        = child.name;
+                    addDir.isDirectory = true;
+                    PostUpdate(std::move(addDir));
+
+                    if (! child.descend)
+                    {
+                        postDirectoryCompletion(child.modelNodeId, 0u, ScanState::Done);
+                    }
+                }
+            }
+
+            completion.pendingChildren = static_cast<uint32_t>(childJobs.size());
 
             for (auto& childJob : childJobs)
             {
                 DirectoryCompletion childCompletion;
-                childCompletion.parentId = item.nodeId;
-                completions.emplace(childJob.nodeId, childCompletion);
+                childCompletion.parentTraversalId = item.traversalId;
+                childCompletion.modelNodeId       = childJob.modelNodeId;
+                childCompletion.aggregateOwner    = childJob.aggregateOwner;
+                childCompletion.aggregateRoot     = childJob.aggregateRoot;
+                childCompletion.folderCount       = 1u;
+                completions.emplace(childJob.traversalId, childCompletion);
+                livePathBytes = ViewerSpaceScan::SaturatingAdd(livePathBytes, childJob.pathBytes);
                 frontier.push_back(std::move(childJob));
             }
 
@@ -6780,7 +7532,7 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
             frontierCv.notify_all();
         }
 
-        completeReadyDirectories(item.nodeId);
+        completeReadyDirectories(item.traversalId);
     };
 
     auto runWorker = [&](bool setBackgroundMode, uint32_t workerIndex) noexcept
@@ -6797,7 +7549,7 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
         for (;;)
         {
             ScanJob job;
-            uint32_t activeAfterStart = 0u;
+            uint32_t activeAfterStart    = 0u;
             size_t frontierDepthAfterPop = 0u;
             {
                 std::unique_lock lock(frontierMutex);
@@ -6826,12 +7578,14 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
             Debug::Perf::EmitValue(L"viewer.space.scan.active_workers", activeAfterStart);
             Debug::Perf::EmitValue(L"viewer.space.scan.frontier_depth", static_cast<uint64_t>(frontierDepthAfterPop));
 
-            processJob(job, workerIndex);
+            const uint64_t completedPathBytes = job.pathBytes;
+            processJob(std::move(job), workerIndex);
 
             const uint32_t activeAfterFinish = activeWorkers.fetch_sub(1u, std::memory_order_relaxed) - 1u;
             Debug::Perf::EmitValue(L"viewer.space.scan.active_workers", activeAfterFinish);
             {
                 std::scoped_lock lock(frontierMutex);
+                livePathBytes = completedPathBytes >= livePathBytes ? 0u : livePathBytes - completedPathBytes;
                 if (frontier.empty() && activeAfterFinish == 0u)
                 {
                     frontierCv.notify_all();
@@ -6883,13 +7637,33 @@ void ViewerSpace::PostUpdate(PendingUpdate&& update) noexcept
         return;
     }
 
+#ifdef ENABLE_TESTS
+    if (_debugPauseNextPostUpdate.exchange(false, std::memory_order_acq_rel))
+    {
+        const HANDLE enteredEvent = _debugPostUpdateEnteredEvent.load(std::memory_order_relaxed);
+        const HANDLE releaseEvent = _debugPostUpdateReleaseEvent.load(std::memory_order_relaxed);
+        if (enteredEvent && releaseEvent)
+        {
+            static_cast<void>(SetEvent(enteredEvent));
+            static_cast<void>(WaitForSingleObject(releaseEvent, 5000u));
+        }
+    }
+#endif
+
     const auto lockStartedAt = std::chrono::steady_clock::now();
     const size_t updateBytes = EstimatePendingUpdateBytes(update);
-    size_t pendingCount = 0;
-    uint64_t pendingBytes = 0u;
-    bool coalesced = false;
+    size_t pendingCount      = 0;
+    uint64_t pendingBytes    = 0u;
+    bool coalesced           = false;
     {
         std::scoped_lock lock(_updateMutex);
+        if (update.generation != _scanGeneration.load(std::memory_order_acquire))
+        {
+#ifdef ENABLE_TESTS
+            _debugPostUpdateInnerGenerationRejects.fetch_add(1u, std::memory_order_acq_rel);
+#endif
+            return;
+        }
         if (update.kind == PendingUpdate::Kind::UpdateSize || update.kind == PendingUpdate::Kind::Progress)
         {
             size_t examined = 0u;
@@ -6900,8 +7674,8 @@ void ViewerSpace::PostUpdate(PendingUpdate&& update) noexcept
                     continue;
                 }
 
-                const size_t previousBytes = EstimatePendingUpdateBytes(*it);
-                *it = std::move(update);
+                const size_t previousBytes    = EstimatePendingUpdateBytes(*it);
+                *it                           = std::move(update);
                 const size_t replacementBytes = EstimatePendingUpdateBytes(*it);
                 if (replacementBytes >= previousBytes)
                 {
@@ -6911,7 +7685,7 @@ void ViewerSpace::PostUpdate(PendingUpdate&& update) noexcept
                 else
                 {
                     const uint64_t delta = static_cast<uint64_t>(previousBytes - replacementBytes);
-                    pendingBytes = SubtractAtomicFloor(_pendingUpdateBytes, delta);
+                    pendingBytes         = SubtractAtomicFloor(_pendingUpdateBytes, delta);
                 }
                 coalesced = true;
                 break;
@@ -6961,9 +7735,9 @@ void ViewerSpace::DrainUpdates() noexcept
     const double budgetSeconds      = scanning ? kDrainBudgetSecondsWhileScanning : kDrainBudgetSecondsIdle;
     const size_t maxUpdatesPerDrain = scanning ? 512u : 2048u;
 
-    const auto drainStartedAt = std::chrono::steady_clock::now();
-    const double startSeconds = NowSeconds();
-    size_t processed          = 0;
+    const auto drainStartedAt  = std::chrono::steady_clock::now();
+    const double startSeconds  = NowSeconds();
+    size_t processed           = 0;
     uint64_t pendingBytesAfter = _pendingUpdateBytes.load(std::memory_order_relaxed);
 
     bool layoutChanged   = false;
@@ -6997,6 +7771,14 @@ void ViewerSpace::DrainUpdates() noexcept
         {
             case PendingUpdate::Kind::AddChild:
             {
+                if (update.nodeId == 0u || update.nodeId >= kFileRecordIdBase || update.parentId == 0u ||
+                    update.nodeId > _scanResourcePolicy.maxRetainedDirectories ||
+                    update.name.size() > (_scanResourcePolicy.maxProviderNameBytes / sizeof(wchar_t)))
+                {
+                    _overallState = ScanState::Error;
+                    break;
+                }
+
                 Node node;
                 node.id          = update.nodeId;
                 node.parentId    = update.parentId;
@@ -7007,6 +7789,11 @@ void ViewerSpace::DrainUpdates() noexcept
                 node.scanState   = update.isDirectory ? ScanState::Queued : ScanState::Done;
 
                 const size_t requiredSize = static_cast<size_t>(node.id) + 1u;
+                if (requiredSize > static_cast<size_t>(_scanResourcePolicy.maxRetainedDirectories) + 1u)
+                {
+                    _overallState = ScanState::Error;
+                    break;
+                }
                 if (_nodes.size() < requiredSize)
                 {
                     _nodes.resize(requiredSize);
@@ -7015,9 +7802,11 @@ void ViewerSpace::DrainUpdates() noexcept
                 _nodes[node.id] = std::move(node);
 
                 Node* parent = TryGetRealNode(update.parentId);
-                if (parent != nullptr)
+                if (parent == nullptr || ! AddRealNodeChild(*parent, update.nodeId))
                 {
-                    AddRealNodeChild(*parent, update.nodeId);
+                    _nodes[node.id] = {};
+                    _overallState  = ScanState::Error;
+                    break;
                 }
 
                 layoutChanged = true;
@@ -7048,12 +7837,6 @@ void ViewerSpace::DrainUpdates() noexcept
             }
             case PendingUpdate::Kind::DirectoryFilesSummary:
             {
-                const size_t requiredSize = static_cast<size_t>(std::max(update.otherNodeId, update.nodeId)) + 1u;
-                if (_nodes.size() < requiredSize)
-                {
-                    _nodes.resize(requiredSize);
-                }
-
                 Node* parent = TryGetRealNode(update.nodeId);
                 if (parent == nullptr)
                 {
@@ -7062,9 +7845,17 @@ void ViewerSpace::DrainUpdates() noexcept
 
                 for (const auto& file : update.topFiles)
                 {
+                    if (_fileRecords.size() >= _scanResourcePolicy.maxRetainedFileRecords)
+                    {
+                        parent->aggregateBytes = ViewerSpaceScan::SaturatingAdd(parent->aggregateBytes, file.bytes);
+                        parent->aggregateFiles = ViewerSpaceScan::SaturatingAdd(parent->aggregateFiles, uint64_t{1u});
+                        continue;
+                    }
                     const uint32_t fileId = FileRecordIdFromIndex(_fileRecords.size());
                     if (fileId == 0)
                     {
+                        parent->aggregateBytes = ViewerSpaceScan::SaturatingAdd(parent->aggregateBytes, file.bytes);
+                        parent->aggregateFiles = ViewerSpaceScan::SaturatingAdd(parent->aggregateFiles, uint64_t{1u});
                         continue;
                     }
 
@@ -7075,43 +7866,26 @@ void ViewerSpace::DrainUpdates() noexcept
                     record.bytes    = file.bytes;
 
                     _fileRecords.push_back(record);
-                    AddRealNodeChild(*parent, fileId);
-                }
-
-                if (update.otherNodeId != 0 && (update.otherCount > 0 || update.otherBytes > 0))
-                {
-                    Node otherNode;
-                    otherNode.id               = update.otherNodeId;
-                    otherNode.parentId         = update.nodeId;
-                    otherNode.isDirectory      = false;
-                    otherNode.isSynthetic      = true;
-                    otherNode.scanState        = ScanState::Done;
-                    otherNode.totalBytes       = update.otherBytes;
-                    otherNode.aggregateFolders = 0;
-                    otherNode.aggregateFiles   = update.otherCount;
-
-                    std::wstring otherName          = FormatStringResource(g_hInstance, IDS_VIEWERSPACE_OTHER_BUCKET_FORMAT, update.otherCount);
-                    const std::wstring otherDetails = FormatAggregateCountsLine(otherNode.aggregateFolders, otherNode.aggregateFiles);
-                    if (! otherDetails.empty())
+                    if (! AddRealNodeChild(*parent, fileId))
                     {
-                        otherName.append(L"\n");
-                        otherName.append(otherDetails);
+                        _fileRecords.pop_back();
+                        parent->aggregateBytes = ViewerSpaceScan::SaturatingAdd(parent->aggregateBytes, file.bytes);
+                        parent->aggregateFiles = ViewerSpaceScan::SaturatingAdd(parent->aggregateFiles, uint64_t{1u});
                     }
-
-                    otherNode.name = CopyToArena(_nameArena, otherName);
-
-                    _nodes[otherNode.id] = std::move(otherNode);
-                    AddRealNodeChild(*parent, update.otherNodeId);
                 }
+
+                parent->aggregateBytes   = ViewerSpaceScan::SaturatingAdd(parent->aggregateBytes, update.otherBytes);
+                parent->aggregateFolders = ViewerSpaceScan::SaturatingAdd(parent->aggregateFolders, update.otherFolders);
+                parent->aggregateFiles   = ViewerSpaceScan::SaturatingAdd(parent->aggregateFiles, update.otherFiles);
 
                 layoutChanged = true;
                 break;
             }
             case PendingUpdate::Kind::Progress:
             {
-                _scanProgressBytes        = update.bytes;
-                _scanProgressFolders      = update.scannedFolders;
-                _scanProgressFiles        = update.scannedFiles;
+                _scanProgressBytes        = std::max(_scanProgressBytes, update.bytes);
+                _scanProgressFolders      = std::max(_scanProgressFolders, update.scannedFolders);
+                _scanProgressFiles        = std::max(_scanProgressFiles, update.scannedFiles);
                 _scanProcessingNodeId     = update.nodeId;
                 _scanProcessingFolderName = std::move(update.name);
 
@@ -7125,6 +7899,31 @@ void ViewerSpace::DrainUpdates() noexcept
                 }
 
                 headerTextDirty = true;
+                break;
+            }
+            case PendingUpdate::Kind::ResourceSummary:
+            {
+                _lastModelAcceptedEntries         = update.acceptedEntries;
+                _lastModelRejectedEntries         = update.rejectedEntries;
+                _lastModelCappedDirectories       = update.cappedDirectories;
+                _lastModelCappedFiles             = update.cappedFiles;
+                _lastModelRetainedNameBytes       = update.retainedNameBytes;
+                _lastModelRetainedChildReferences = update.retainedChildReferences;
+                _lastModelTraversedDirectories    = update.traversedDirectories;
+                _lastModelValidationError         = update.validationError;
+                Debug::Perf::EmitValue(L"viewer.space.model.child_arena_slots", _childrenArena.size());
+                uint64_t freeSlots = 0u;
+                for (const ChildArenaFreeBlock& block : _childrenArenaFreeBlocks)
+                {
+                    freeSlots = ViewerSpaceScan::SaturatingAdd(freeSlots, static_cast<uint64_t>(block.capacity));
+                }
+                Debug::Perf::EmitValue(L"viewer.space.model.child_arena_free_slots", freeSlots);
+                uint64_t aggregateBytes = 0u;
+                for (const Node& node : _nodes)
+                {
+                    aggregateBytes = ViewerSpaceScan::SaturatingAdd(aggregateBytes, node.aggregateBytes);
+                }
+                Debug::Perf::EmitValue(L"viewer.space.model.aggregate_bytes", aggregateBytes);
                 break;
             }
         }
@@ -7279,9 +8078,8 @@ void ViewerSpace::ContinueScanCacheBuild() noexcept
         if (! cacheKey.rootKey.empty())
         {
             const uint64_t maxSnapshotBytes = MaxScanCacheSnapshotBytes();
-            uint64_t estimatedSnapshotBytes = static_cast<uint64_t>(
-                _childrenArena.size() * sizeof(uint32_t) + _nodes.size() * sizeof(ScanResultCacheNode) +
-                _fileRecords.size() * sizeof(ScanResultCacheFileRecord));
+            uint64_t estimatedSnapshotBytes = static_cast<uint64_t>(_childrenArena.size() * sizeof(uint32_t) + _nodes.size() * sizeof(ScanResultCacheNode) +
+                                                                    _fileRecords.size() * sizeof(ScanResultCacheFileRecord));
             for (const Node& node : _nodes)
             {
                 estimatedSnapshotBytes += static_cast<uint64_t>(node.name.size() * sizeof(wchar_t));
@@ -7376,6 +8174,7 @@ void ViewerSpace::ContinueScanCacheBuild() noexcept
             cachedNode.childrenStart    = node.childrenStart;
             cachedNode.childrenCount    = node.childrenCount;
             cachedNode.childrenCapacity = node.childrenCapacity;
+            cachedNode.aggregateBytes   = node.aggregateBytes;
             cachedNode.aggregateFolders = node.aggregateFolders;
             cachedNode.aggregateFiles   = node.aggregateFiles;
             cachedNode.name.assign(node.name.data(), node.name.size());
@@ -7435,9 +8234,8 @@ void ViewerSpace::ContinueScanCacheBuild() noexcept
     cacheKey.rootKey              = _scanCacheBuildRootKey;
     cacheKey.topFilesPerDirectory = _scanCacheBuildTopFilesPerDirectory;
 
-    uint64_t snapshotBytes = static_cast<uint64_t>(
-        snapshot->childrenArena.size() * sizeof(uint32_t) + snapshot->nodes.size() * sizeof(ScanResultCacheNode) +
-        snapshot->fileRecords.size() * sizeof(ScanResultCacheFileRecord));
+    uint64_t snapshotBytes = static_cast<uint64_t>(snapshot->childrenArena.size() * sizeof(uint32_t) + snapshot->nodes.size() * sizeof(ScanResultCacheNode) +
+                                                   snapshot->fileRecords.size() * sizeof(ScanResultCacheFileRecord));
     for (const ScanResultCacheNode& node : snapshot->nodes)
     {
         snapshotBytes += static_cast<uint64_t>(node.name.size() * sizeof(wchar_t));
@@ -7587,32 +8385,32 @@ std::optional<ViewerSpace::ResolvedItem> ViewerSpace::ResolveTreemapItem(uint32_
     if (const FileRecord* file = TryGetFileRecord(itemId))
     {
         return ResolvedItem{
-            .id = file->id,
-            .parentId = file->parentId,
-            .isDirectory = false,
-            .isSynthetic = false,
-            .isFileRecord = true,
-            .scanState = ScanState::Done,
-            .name = file->name,
-            .totalBytes = file->bytes,
+            .id               = file->id,
+            .parentId         = file->parentId,
+            .isDirectory      = false,
+            .isSynthetic      = false,
+            .isFileRecord     = true,
+            .scanState        = ScanState::Done,
+            .name             = file->name,
+            .totalBytes       = file->bytes,
             .aggregateFolders = 0,
-            .aggregateFiles = 1,
+            .aggregateFiles   = 1,
         };
     }
 
     if (const Node* node = TryGetRealNode(itemId))
     {
         return ResolvedItem{
-            .id = node->id,
-            .parentId = node->parentId,
-            .isDirectory = node->isDirectory,
-            .isSynthetic = node->isSynthetic,
-            .isFileRecord = false,
-            .scanState = node->scanState,
-            .name = node->name,
-            .totalBytes = node->totalBytes,
+            .id               = node->id,
+            .parentId         = node->parentId,
+            .isDirectory      = node->isDirectory,
+            .isSynthetic      = node->isSynthetic,
+            .isFileRecord     = false,
+            .scanState        = node->scanState,
+            .name             = node->name,
+            .totalBytes       = node->totalBytes,
             .aggregateFolders = node->aggregateFolders,
-            .aggregateFiles = node->aggregateFiles,
+            .aggregateFiles   = node->aggregateFiles,
         };
     }
 
@@ -7621,16 +8419,16 @@ std::optional<ViewerSpace::ResolvedItem> ViewerSpace::ResolveTreemapItem(uint32_
     {
         const Node& node = synthIt->second;
         return ResolvedItem{
-            .id = node.id,
-            .parentId = node.parentId,
-            .isDirectory = node.isDirectory,
-            .isSynthetic = node.isSynthetic,
-            .isFileRecord = false,
-            .scanState = node.scanState,
-            .name = node.name,
-            .totalBytes = node.totalBytes,
+            .id               = node.id,
+            .parentId         = node.parentId,
+            .isDirectory      = node.isDirectory,
+            .isSynthetic      = node.isSynthetic,
+            .isFileRecord     = false,
+            .scanState        = node.scanState,
+            .name             = node.name,
+            .totalBytes       = node.totalBytes,
             .aggregateFolders = node.aggregateFolders,
-            .aggregateFiles = node.aggregateFiles,
+            .aggregateFiles   = node.aggregateFiles,
         };
     }
 
@@ -7651,8 +8449,8 @@ std::span<const uint32_t> ViewerSpace::GetRealNodeChildren(const Node& node) con
         return {};
     }
 
-    const size_t end = start + count;
-    if (end > _childrenArena.size())
+    size_t end = 0u;
+    if (! ViewerSpaceScan::TryAddSize(start, count, end) || end > _childrenArena.size())
     {
         return {};
     }
@@ -7660,22 +8458,114 @@ std::span<const uint32_t> ViewerSpace::GetRealNodeChildren(const Node& node) con
     return std::span<const uint32_t>(_childrenArena.data() + start, count);
 }
 
-void ViewerSpace::AddRealNodeChild(Node& parent, uint32_t childItemId) noexcept
+std::optional<uint32_t> ViewerSpace::AllocateChildArenaBlock(uint32_t capacity) noexcept
 {
-    static constexpr uint32_t kInitialCapacity = 8;
+    if (capacity == 0u || capacity > _scanResourcePolicy.maxChildArenaSlots)
+    {
+        return std::nullopt;
+    }
+
+    size_t bestIndex    = _childrenArenaFreeBlocks.size();
+    uint32_t bestCapacity = (std::numeric_limits<uint32_t>::max)();
+    for (size_t index = 0u; index < _childrenArenaFreeBlocks.size(); ++index)
+    {
+        const ChildArenaFreeBlock& block = _childrenArenaFreeBlocks[index];
+        if (block.capacity >= capacity && block.capacity < bestCapacity)
+        {
+            bestIndex    = index;
+            bestCapacity = block.capacity;
+        }
+    }
+    if (bestIndex < _childrenArenaFreeBlocks.size())
+    {
+        ChildArenaFreeBlock& block = _childrenArenaFreeBlocks[bestIndex];
+        const uint32_t start       = block.start;
+        if (block.capacity == capacity)
+        {
+            _childrenArenaFreeBlocks.erase(_childrenArenaFreeBlocks.begin() + static_cast<ptrdiff_t>(bestIndex));
+        }
+        else
+        {
+            block.start += capacity;
+            block.capacity -= capacity;
+        }
+        return start;
+    }
+
+    const size_t previousSize = _childrenArena.size();
+    if (previousSize > _scanResourcePolicy.maxChildArenaSlots ||
+        capacity > static_cast<uint32_t>(_scanResourcePolicy.maxChildArenaSlots - previousSize) ||
+        previousSize > static_cast<size_t>((std::numeric_limits<uint32_t>::max)()))
+    {
+        return std::nullopt;
+    }
+
+    _childrenArena.resize(previousSize + capacity);
+    return static_cast<uint32_t>(previousSize);
+}
+
+void ViewerSpace::ReleaseChildArenaBlock(uint32_t start, uint32_t capacity) noexcept
+{
+    if (capacity == 0u || start >= _childrenArena.size() || capacity > _childrenArena.size() - start)
+    {
+        return;
+    }
+
+    _childrenArenaFreeBlocks.push_back(ChildArenaFreeBlock{start, capacity});
+    std::sort(_childrenArenaFreeBlocks.begin(), _childrenArenaFreeBlocks.end(), [](const ChildArenaFreeBlock& left, const ChildArenaFreeBlock& right) noexcept
+    {
+        return left.start < right.start;
+    });
+
+    size_t writeIndex = 0u;
+    for (const ChildArenaFreeBlock& block : _childrenArenaFreeBlocks)
+    {
+        if (writeIndex == 0u)
+        {
+            _childrenArenaFreeBlocks[writeIndex++] = block;
+            continue;
+        }
+
+        ChildArenaFreeBlock& previous = _childrenArenaFreeBlocks[writeIndex - 1u];
+        const uint64_t previousEnd    = static_cast<uint64_t>(previous.start) + previous.capacity;
+        if (previousEnd == block.start)
+        {
+            previous.capacity = ViewerSpaceScan::SaturatingAdd(previous.capacity, block.capacity);
+        }
+        else
+        {
+            _childrenArenaFreeBlocks[writeIndex++] = block;
+        }
+    }
+    _childrenArenaFreeBlocks.resize(writeIndex);
+
+    while (! _childrenArenaFreeBlocks.empty())
+    {
+        const ChildArenaFreeBlock& tail = _childrenArenaFreeBlocks.back();
+        if (static_cast<uint64_t>(tail.start) + tail.capacity != _childrenArena.size())
+        {
+            break;
+        }
+        _childrenArena.resize(tail.start);
+        _childrenArenaFreeBlocks.pop_back();
+    }
+}
+
+bool ViewerSpace::AddRealNodeChild(Node& parent, uint32_t childItemId) noexcept
+{
+    static constexpr uint32_t kInitialCapacity = 2;
 
     if (parent.childrenCapacity == 0)
     {
-        const size_t start = _childrenArena.size();
-        if (start > static_cast<size_t>(std::numeric_limits<uint32_t>::max()))
+        const std::optional<uint32_t> start = AllocateChildArenaBlock(kInitialCapacity);
+        if (! start.has_value())
         {
-            return;
+            return false;
         }
 
-        parent.childrenStart    = static_cast<uint32_t>(start);
+        parent.childrenStart    = start.value();
         parent.childrenCount    = 0;
         parent.childrenCapacity = kInitialCapacity;
-        _childrenArena.resize(start + static_cast<size_t>(kInitialCapacity));
     }
 
     if (parent.childrenCount >= parent.childrenCapacity)
@@ -7698,38 +8588,61 @@ void ViewerSpace::AddRealNodeChild(Node& parent, uint32_t childItemId) noexcept
             nextCapacity = nextCapacity * 2u;
         }
 
-        const size_t previousSize = _childrenArena.size();
-        if (previousSize > static_cast<size_t>(std::numeric_limits<uint32_t>::max()))
+        nextCapacity = std::min(nextCapacity, _scanResourcePolicy.maxChildArenaSlots);
+        if (nextCapacity <= oldCapacity)
         {
-            return;
+            return false;
         }
 
-        const uint32_t newStart = static_cast<uint32_t>(previousSize);
-        _childrenArena.resize(previousSize + static_cast<size_t>(nextCapacity));
-
-        if (oldCount > 0)
+        const uint64_t oldEnd = static_cast<uint64_t>(oldStart) + oldCapacity;
+        const uint32_t growth = nextCapacity - oldCapacity;
+        if (oldEnd == _childrenArena.size() && _childrenArena.size() <= _scanResourcePolicy.maxChildArenaSlots &&
+            growth <= static_cast<size_t>(_scanResourcePolicy.maxChildArenaSlots) - _childrenArena.size())
         {
-            const size_t oldStartIndex = static_cast<size_t>(oldStart);
-            const size_t oldCountIndex = static_cast<size_t>(oldCount);
-            if (oldStartIndex < previousSize && (oldStartIndex + oldCountIndex) <= previousSize)
+            _childrenArena.resize(_childrenArena.size() + growth, 0u);
+            parent.childrenCapacity = nextCapacity;
+        }
+        else
+        {
+            const std::optional<uint32_t> newStart = AllocateChildArenaBlock(nextCapacity);
+            if (! newStart.has_value())
             {
-                std::copy_n(_childrenArena.data() + oldStartIndex, oldCountIndex, _childrenArena.data() + previousSize);
+                return false;
             }
-        }
 
-        parent.childrenStart    = newStart;
-        parent.childrenCapacity = nextCapacity;
-        parent.childrenCount    = oldCount;
+            if (oldCount > 0)
+            {
+                const size_t oldStartIndex = static_cast<size_t>(oldStart);
+                const size_t oldCountIndex = static_cast<size_t>(oldCount);
+                size_t oldEndIndex         = 0u;
+                if (oldStartIndex < _childrenArena.size() && ViewerSpaceScan::TryAddSize(oldStartIndex, oldCountIndex, oldEndIndex) &&
+                    oldEndIndex <= _childrenArena.size())
+                {
+                    std::copy_n(_childrenArena.data() + oldStartIndex, oldCountIndex, _childrenArena.data() + newStart.value());
+                }
+                else
+                {
+                    ReleaseChildArenaBlock(newStart.value(), nextCapacity);
+                    return false;
+                }
+            }
+
+            parent.childrenStart    = newStart.value();
+            parent.childrenCapacity = nextCapacity;
+            parent.childrenCount    = oldCount;
+            ReleaseChildArenaBlock(oldStart, oldCapacity);
+        }
     }
 
     const size_t slot = static_cast<size_t>(parent.childrenStart) + static_cast<size_t>(parent.childrenCount);
     if (slot >= _childrenArena.size())
     {
-        return;
+        return false;
     }
 
     _childrenArena[slot] = childItemId;
     parent.childrenCount += 1;
+    return true;
 }
 
 std::wstring ViewerSpace::BuildNodePathText(uint32_t nodeId) const
@@ -7838,9 +8751,9 @@ uint32_t ViewerSpace::ComputeAdaptiveFileCandidateBudget() const noexcept
     const float heightDip       = DipFromPx(_clientSize.cy);
     const float headerBottomDip = GetHeaderBottomDip();
     const D2D1_RECT_F viewRc    = D2D1::RectF(kPaddingDip,
-                                           headerBottomDip + kPaddingDip,
-                                           std::max(kPaddingDip, widthDip - kPaddingDip),
-                                           std::max(headerBottomDip + kPaddingDip, heightDip - kPaddingDip));
+                                              headerBottomDip + kPaddingDip,
+                                              std::max(kPaddingDip, widthDip - kPaddingDip),
+                                              std::max(headerBottomDip + kPaddingDip, heightDip - kPaddingDip));
 
     const uint32_t pixelDrivenBudget = std::min<uint32_t>(PixelDrivenLayoutItemLimit(RectArea(viewRc)), kAdaptiveFileCandidateCeiling);
     return std::max<uint32_t>(_config.topFilesPerDirectory, pixelDrivenBudget);
@@ -7866,8 +8779,8 @@ ViewerSpace::DrawItem::Lod ViewerSpace::ClassifyDrawItemLod(const D2D1_RECT_F& i
     float gap = kItemGapDip - static_cast<float>(depth) * 0.15f;
     gap       = std::clamp(gap, 0.5f, kItemGapDip);
 
-    const float w = std::max(0.0f, (itemRc.right - itemRc.left) - (gap * 2.0f));
-    const float h = std::max(0.0f, (itemRc.bottom - itemRc.top) - (gap * 2.0f));
+    const float w    = std::max(0.0f, (itemRc.right - itemRc.left) - (gap * 2.0f));
+    const float h    = std::max(0.0f, (itemRc.bottom - itemRc.top) - (gap * 2.0f));
     const float area = w * h;
 
     if (w < 1.0f || h < 1.0f || area < 1.0f)
@@ -8064,40 +8977,43 @@ void ViewerSpace::RebuildLayout() noexcept
         const size_t reserveCount = std::min(children.size(), maxItems) + 1;
         out.reserve(reserveCount);
 
-        std::vector<Item>& topItems            = workspace.topItems;
-        std::vector<Item>& forcedItems         = workspace.forcedItems;
-        std::vector<uint32_t>& forcedChildIds  = workspace.forcedChildIds;
+        std::vector<Item>& topItems           = workspace.topItems;
+        std::vector<Item>& forcedItems        = workspace.forcedItems;
+        std::vector<uint32_t>& forcedChildIds = workspace.forcedChildIds;
 
-        uint64_t otherBytes   = 0;
-        double otherWeight    = 0.0;
-        size_t otherCount     = 0;
-        uint64_t otherFolders = 0;
-        uint64_t otherFiles   = 0;
+        const uint64_t retainedAggregateCount = ViewerSpaceScan::SaturatingAdd(parent->aggregateFolders, parent->aggregateFiles);
+        const size_t baseOtherCount = static_cast<size_t>(std::min<uint64_t>(retainedAggregateCount, (std::numeric_limits<size_t>::max)()));
+        const uint64_t baseOtherBytes   = parent->aggregateBytes;
+        const double baseOtherWeight    = baseOtherCount == 0u ? 0.0 : static_cast<double>(std::max<uint64_t>(baseOtherBytes, 1u));
+        const uint64_t baseOtherFolders = parent->aggregateFolders;
+        const uint64_t baseOtherFiles   = parent->aggregateFiles;
+
+        uint64_t otherBytes   = baseOtherBytes;
+        double otherWeight    = baseOtherWeight;
+        size_t otherCount     = baseOtherCount;
+        uint64_t otherFolders = baseOtherFolders;
+        uint64_t otherFiles   = baseOtherFiles;
 
         auto addUnderlyingCounts = [&](const ResolvedItem& nodeRef) noexcept
         {
             if (nodeRef.isSynthetic)
             {
-                otherFolders += nodeRef.aggregateFolders;
-                otherFiles += nodeRef.aggregateFiles;
+                otherFolders = ViewerSpaceScan::SaturatingAdd(otherFolders, nodeRef.aggregateFolders);
+                otherFiles   = ViewerSpaceScan::SaturatingAdd(otherFiles, nodeRef.aggregateFiles);
                 return;
             }
 
             if (nodeRef.isDirectory)
             {
-                otherFolders += 1;
+                otherFolders = ViewerSpaceScan::SaturatingAdd(otherFolders, uint64_t{1u});
             }
             else
             {
-                otherFiles += 1;
+                otherFiles = ViewerSpaceScan::SaturatingAdd(otherFiles, uint64_t{1u});
             }
         };
 
-        auto appendOtherBucket = [&](uint64_t bucketBytes,
-                                     double bucketWeight,
-                                     size_t bucketCount,
-                                     uint64_t bucketFolders,
-                                     uint64_t bucketFiles) noexcept
+        auto appendOtherBucket = [&](uint64_t bucketBytes, double bucketWeight, size_t bucketCount, uint64_t bucketFolders, uint64_t bucketFiles) noexcept
         {
             if (bucketCount == 0 || bucketWeight <= 0.0)
             {
@@ -8113,10 +9029,11 @@ void ViewerSpace::RebuildLayout() noexcept
             other.isSynthetic      = true;
             other.scanState        = ScanState::Done;
             other.totalBytes       = bucketBytes;
-            other.aggregateFolders = static_cast<uint32_t>(std::min<uint64_t>(bucketFolders, static_cast<uint64_t>(std::numeric_limits<uint32_t>::max())));
-            other.aggregateFiles   = static_cast<uint32_t>(std::min<uint64_t>(bucketFiles, static_cast<uint64_t>(std::numeric_limits<uint32_t>::max())));
+            other.aggregateBytes   = bucketBytes;
+            other.aggregateFolders = bucketFolders;
+            other.aggregateFiles   = bucketFiles;
 
-            const uint64_t otherItemCount = bucketFolders + bucketFiles;
+            const uint64_t otherItemCount = ViewerSpaceScan::SaturatingAdd(bucketFolders, bucketFiles);
             std::wstring otherName = FormatStringResource(g_hInstance, IDS_VIEWERSPACE_OTHER_BUCKET_FORMAT, otherItemCount == 0 ? bucketCount : otherItemCount);
 
             const std::wstring otherDetails = FormatAggregateCountsLine(other.aggregateFolders, other.aggregateFiles);
@@ -8143,10 +9060,13 @@ void ViewerSpace::RebuildLayout() noexcept
         };
 
         uint64_t candidateSignature = 0xCBF29CE484222325ull;
-        candidateSignature = mixCandidateSignature(candidateSignature, static_cast<uint64_t>(children.size()));
-        candidateSignature = mixCandidateSignature(candidateSignature, parent->totalBytes);
-        candidateSignature = mixCandidateSignature(candidateSignature, static_cast<uint64_t>(maxItems));
-        candidateSignature = mixCandidateSignature(candidateSignature, static_cast<uint64_t>(parent->scanState));
+        candidateSignature          = mixCandidateSignature(candidateSignature, static_cast<uint64_t>(children.size()));
+        candidateSignature          = mixCandidateSignature(candidateSignature, parent->totalBytes);
+        candidateSignature          = mixCandidateSignature(candidateSignature, parent->aggregateBytes);
+        candidateSignature          = mixCandidateSignature(candidateSignature, parent->aggregateFolders);
+        candidateSignature          = mixCandidateSignature(candidateSignature, parent->aggregateFiles);
+        candidateSignature          = mixCandidateSignature(candidateSignature, static_cast<uint64_t>(maxItems));
+        candidateSignature          = mixCandidateSignature(candidateSignature, static_cast<uint64_t>(parent->scanState));
 
         const bool canUseCandidateCache = ! scanning && remaining >= maxItems;
         if (canUseCandidateCache)
@@ -8177,11 +9097,11 @@ void ViewerSpace::RebuildLayout() noexcept
             forcedItems.clear();
             forcedChildIds.clear();
 
-            otherBytes   = 0;
-            otherWeight  = 0.0;
-            otherCount   = 0;
-            otherFolders = 0;
-            otherFiles   = 0;
+            otherBytes   = baseOtherBytes;
+            otherWeight  = baseOtherWeight;
+            otherCount   = baseOtherCount;
+            otherFolders = baseOtherFolders;
+            otherFiles   = baseOtherFiles;
 
             size_t normalSlots = maxItems;
             if (scanning && parentId == view.id)
@@ -8247,9 +9167,12 @@ void ViewerSpace::RebuildLayout() noexcept
 
                 if (normalSlots == 0)
                 {
-                    otherBytes += item.bytes;
+                    otherBytes = ViewerSpaceScan::SaturatingAdd(otherBytes, item.bytes);
                     otherWeight += item.weight;
-                    otherCount += 1;
+                    if (otherCount < (std::numeric_limits<size_t>::max)())
+                    {
+                        otherCount += 1u;
+                    }
                     addUnderlyingCounts(child.value());
                     continue;
                 }
@@ -8268,9 +9191,12 @@ void ViewerSpace::RebuildLayout() noexcept
                     topItems.back()    = item;
                     std::push_heap(topItems.begin(), topItems.end(), minHeapByWeight);
 
-                    otherBytes += dropped.bytes;
+                    otherBytes = ViewerSpaceScan::SaturatingAdd(otherBytes, dropped.bytes);
                     otherWeight += dropped.weight;
-                    otherCount += 1;
+                    if (otherCount < (std::numeric_limits<size_t>::max)())
+                    {
+                        otherCount += 1u;
+                    }
                     const std::optional<ResolvedItem> droppedNode = ResolveTreemapItem(dropped.nodeId);
                     if (droppedNode.has_value())
                     {
@@ -8279,9 +9205,12 @@ void ViewerSpace::RebuildLayout() noexcept
                     continue;
                 }
 
-                otherBytes += item.bytes;
+                otherBytes = ViewerSpaceScan::SaturatingAdd(otherBytes, item.bytes);
                 otherWeight += item.weight;
-                otherCount += 1;
+                if (otherCount < (std::numeric_limits<size_t>::max)())
+                {
+                    otherCount += 1u;
+                }
                 addUnderlyingCounts(child.value());
             }
 
@@ -8316,7 +9245,7 @@ void ViewerSpace::RebuildLayout() noexcept
             break;
         }
 
-        if (topItems.empty())
+        if (topItems.empty() && otherCount == 0u)
         {
             return;
         }
@@ -8338,9 +9267,12 @@ void ViewerSpace::RebuildLayout() noexcept
             {
                 const Item dropped = topItems.back();
                 topItems.pop_back();
-                otherBytes += dropped.bytes;
+                otherBytes = ViewerSpaceScan::SaturatingAdd(otherBytes, dropped.bytes);
                 otherWeight += dropped.weight;
-                otherCount += 1;
+                if (otherCount < (std::numeric_limits<size_t>::max)())
+                {
+                    otherCount += 1u;
+                }
                 const std::optional<ResolvedItem> droppedNode = ResolveTreemapItem(dropped.nodeId);
                 if (droppedNode.has_value())
                 {
@@ -8484,7 +9416,7 @@ void ViewerSpace::RebuildLayout() noexcept
             return;
         }
 
-        const double scale      = boundsArea / totalWeight;
+        const double scale = boundsArea / totalWeight;
 
         std::vector<ExpandTask>& expandTasks = workspace.expandTasks;
         expandTasks.clear();
@@ -8584,7 +9516,7 @@ void ViewerSpace::RebuildLayout() noexcept
             }
         };
 
-        D2D1_RECT_F freeRc = bounds;
+        D2D1_RECT_F freeRc     = bounds;
         std::vector<Item>& row = workspace.row;
         row.clear();
         double rowWeight    = 0.0;
@@ -8705,11 +9637,9 @@ void ViewerSpace::RebuildLayout() noexcept
         }
     }
 
-    const uint64_t layoutUs = Debug::Perf::ElapsedUs(layoutStartedAt);
-    const uint64_t culledTiles =
-        static_cast<uint64_t>(std::count_if(_drawItems.begin(), _drawItems.end(), [](const DrawItem& item) noexcept {
-            return item.lod == DrawItem::Lod::Culled;
-        }));
+    const uint64_t layoutUs    = Debug::Perf::ElapsedUs(layoutStartedAt);
+    const uint64_t culledTiles = static_cast<uint64_t>(
+        std::count_if(_drawItems.begin(), _drawItems.end(), [](const DrawItem& item) noexcept { return item.lod == DrawItem::Lod::Culled; }));
 #ifdef ENABLE_TESTS
     _lastLayoutUs = layoutUs;
 #endif
@@ -8739,9 +9669,7 @@ void ViewerSpace::BuildHitGrid(const D2D1_RECT_F& bounds) noexcept
     _hitGrid.cells.resize(static_cast<size_t>(columns) * static_cast<size_t>(rows));
 
     auto cellIndex = [columns](uint32_t x, uint32_t y) noexcept -> size_t
-    {
-        return static_cast<size_t>(y) * static_cast<size_t>(columns) + static_cast<size_t>(x);
-    };
+    { return static_cast<size_t>(y) * static_cast<size_t>(columns) + static_cast<size_t>(x); };
 
     for (size_t itemIndex = 0; itemIndex < _drawItems.size(); ++itemIndex)
     {
@@ -8767,14 +9695,12 @@ void ViewerSpace::BuildHitGrid(const D2D1_RECT_F& bounds) noexcept
         const auto clampCellX = [&](float x) noexcept -> uint32_t
         {
             const float t = (x - bounds.left) / std::max(1.0f, boundsW);
-            return static_cast<uint32_t>(
-                std::clamp(std::floor(static_cast<double>(t) * static_cast<double>(columns)), 0.0, static_cast<double>(columns - 1u)));
+            return static_cast<uint32_t>(std::clamp(std::floor(static_cast<double>(t) * static_cast<double>(columns)), 0.0, static_cast<double>(columns - 1u)));
         };
         const auto clampCellY = [&](float y) noexcept -> uint32_t
         {
             const float t = (y - bounds.top) / std::max(1.0f, boundsH);
-            return static_cast<uint32_t>(
-                std::clamp(std::floor(static_cast<double>(t) * static_cast<double>(rows)), 0.0, static_cast<double>(rows - 1u)));
+            return static_cast<uint32_t>(std::clamp(std::floor(static_cast<double>(t) * static_cast<double>(rows)), 0.0, static_cast<double>(rows - 1u)));
         };
 
         const uint32_t leftCell   = clampCellX(rc.left);
@@ -8799,10 +9725,10 @@ void ViewerSpace::BuildHitGrid(const D2D1_RECT_F& bounds) noexcept
 
 std::optional<uint32_t> ViewerSpace::HitTestTreemap(float xDip, float yDip) const noexcept
 {
-    const auto hitStartedAt = std::chrono::steady_clock::now();
-    uint32_t candidatesChecked = 0u;
+    const auto hitStartedAt     = std::chrono::steady_clock::now();
+    uint32_t candidatesChecked  = 0u;
     std::wstring_view hitDetail = L"linear";
-    auto emitHitMetric         = wil::scope_exit([&]() noexcept
+    auto emitHitMetric          = wil::scope_exit([&]() noexcept
     {
         const uint64_t hitUs = Debug::Perf::ElapsedUs(hitStartedAt);
 #ifdef ENABLE_TESTS
@@ -8826,19 +9752,17 @@ std::optional<uint32_t> ViewerSpace::HitTestTreemap(float xDip, float yDip) cons
     if (_hitGrid.columns > 0u && _hitGrid.rows > 0u && ! _hitGrid.cells.empty() && xDip >= _hitGrid.bounds.left && xDip <= _hitGrid.bounds.right &&
         yDip >= _hitGrid.bounds.top && yDip <= _hitGrid.bounds.bottom)
     {
-        hitDetail = L"grid";
-        const float boundsW = std::max(1.0f, _hitGrid.bounds.right - _hitGrid.bounds.left);
-        const float boundsH = std::max(1.0f, _hitGrid.bounds.bottom - _hitGrid.bounds.top);
-        const uint32_t cellX =
-            static_cast<uint32_t>(std::clamp(
-                std::floor((static_cast<double>(xDip - _hitGrid.bounds.left) / static_cast<double>(boundsW)) * static_cast<double>(_hitGrid.columns)),
-                0.0,
-                static_cast<double>(_hitGrid.columns - 1u)));
-        const uint32_t cellY =
-            static_cast<uint32_t>(std::clamp(
-                std::floor((static_cast<double>(yDip - _hitGrid.bounds.top) / static_cast<double>(boundsH)) * static_cast<double>(_hitGrid.rows)),
-                0.0,
-                static_cast<double>(_hitGrid.rows - 1u)));
+        hitDetail            = L"grid";
+        const float boundsW  = std::max(1.0f, _hitGrid.bounds.right - _hitGrid.bounds.left);
+        const float boundsH  = std::max(1.0f, _hitGrid.bounds.bottom - _hitGrid.bounds.top);
+        const uint32_t cellX = static_cast<uint32_t>(
+            std::clamp(std::floor((static_cast<double>(xDip - _hitGrid.bounds.left) / static_cast<double>(boundsW)) * static_cast<double>(_hitGrid.columns)),
+                       0.0,
+                       static_cast<double>(_hitGrid.columns - 1u)));
+        const uint32_t cellY = static_cast<uint32_t>(
+            std::clamp(std::floor((static_cast<double>(yDip - _hitGrid.bounds.top) / static_cast<double>(boundsH)) * static_cast<double>(_hitGrid.rows)),
+                       0.0,
+                       static_cast<double>(_hitGrid.rows - 1u)));
         const size_t index = static_cast<size_t>(cellY) * static_cast<size_t>(_hitGrid.columns) + static_cast<size_t>(cellX);
         if (index < _hitGrid.cells.size())
         {
@@ -8877,8 +9801,8 @@ std::optional<uint32_t> ViewerSpace::HitTestTreemap(float xDip, float yDip) cons
                 }
             }
 
-            hitDetail = L"grid-fallback-linear";
-            uint32_t linearCandidates = 0u;
+            hitDetail                         = L"grid-fallback-linear";
+            uint32_t linearCandidates         = 0u;
             std::optional<uint32_t> linearHit = HitTestTreemapLinear(xDip, yDip, linearCandidates);
             candidatesChecked += linearCandidates;
             return linearHit;
@@ -9073,13 +9997,12 @@ void ViewerSpace::RefreshCurrent() noexcept
 
 float ViewerSpace::DipFromPx(int px) const noexcept
 {
-    return static_cast<float>(px) * (96.0f / _dpi);
+    return Common::WindowSizing::PixelToDip(static_cast<float>(px), _dpi);
 }
 
 int ViewerSpace::PxFromDip(float dip) const noexcept
 {
-    const double scale = static_cast<double>(_dpi) / 96.0;
-    return static_cast<int>(std::lround(static_cast<double>(dip) * scale));
+    return Common::WindowSizing::DipToPixelRounded(dip, static_cast<UINT>(_dpi));
 }
 
 double ViewerSpace::NowSeconds() const noexcept

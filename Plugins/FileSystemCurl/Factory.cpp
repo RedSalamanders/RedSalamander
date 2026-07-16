@@ -24,6 +24,8 @@
 
 #include "FileSystemCurl.h"
 
+#include "PlugInterfaces/FactoryImpl.h"
+
 extern HINSTANCE g_hInstance;
 
 namespace
@@ -93,131 +95,102 @@ struct LocalizedPluginMetaDataSet
 [[nodiscard]] const LocalizedPluginMetaDataSet& GetPluginMetaDataSet() noexcept
 {
     static const LocalizedPluginMetaDataSet data;
-
     return data;
 }
 
-[[nodiscard]] std::optional<FileSystemCurlProtocol> ProtocolFromPluginId(std::wstring_view pluginId) noexcept
+// Per-entry metadata thunks (return contiguous array elements).
+const PluginMetaData* GetMetaDataFtp() noexcept
 {
-    if (pluginId == L"builtin/file-system-ftp")
-    {
-        return FileSystemCurlProtocol::Ftp;
-    }
-    if (pluginId == L"builtin/file-system-sftp")
-    {
-        return FileSystemCurlProtocol::Sftp;
-    }
-    if (pluginId == L"builtin/file-system-scp")
-    {
-        return FileSystemCurlProtocol::Scp;
-    }
-    if (pluginId == L"builtin/file-system-imap")
-    {
-        return FileSystemCurlProtocol::Imap;
-    }
-    return std::nullopt;
+    return &GetPluginMetaDataSet().plugins[0];
+}
+const PluginMetaData* GetMetaDataSftp() noexcept
+{
+    return &GetPluginMetaDataSet().plugins[1];
+}
+const PluginMetaData* GetMetaDataScp() noexcept
+{
+    return &GetPluginMetaDataSet().plugins[2];
+}
+const PluginMetaData* GetMetaDataImap() noexcept
+{
+    return &GetPluginMetaDataSet().plugins[3];
 }
 
-[[nodiscard]] const char* GetPluginSchema(std::wstring_view pluginId) noexcept
+// Per-entry schema thunks.
+const char* GetSchemaFtp() noexcept
 {
-    const auto protocol = ProtocolFromPluginId(pluginId);
-    if (! protocol.has_value())
-    {
-        return nullptr;
-    }
-
-    return GetFileSystemCurlStaticConfigurationSchema(protocol.value());
+    return GetFileSystemCurlStaticConfigurationSchema(FileSystemCurlProtocol::Ftp);
+}
+const char* GetSchemaSftp() noexcept
+{
+    return GetFileSystemCurlStaticConfigurationSchema(FileSystemCurlProtocol::Sftp);
+}
+const char* GetSchemaScp() noexcept
+{
+    return GetFileSystemCurlStaticConfigurationSchema(FileSystemCurlProtocol::Scp);
+}
+const char* GetSchemaImap() noexcept
+{
+    return GetFileSystemCurlStaticConfigurationSchema(FileSystemCurlProtocol::Imap);
 }
 
-HRESULT CreatePluginInstance(REFIID riid, IHost* host, std::wstring_view pluginId, void** result)
+// Per-entry creation thunks (bake in the plugin id for dispatch to the existing helper).
+HRESULT CreateInstanceFtp(const FactoryOptions* /*factoryOptions*/, IHost* host, void** result) noexcept
 {
-    if (riid != __uuidof(IFileSystem))
-    {
-        return E_NOINTERFACE;
-    }
-
-    const auto protocol = ProtocolFromPluginId(pluginId);
-    if (! protocol.has_value())
-    {
-        return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
-    }
-
-    auto* instance = new (std::nothrow) FileSystemCurl(protocol.value(), host);
+    auto* instance = new (std::nothrow) FileSystemCurl(FileSystemCurlProtocol::Ftp, host);
     if (! instance)
-    {
         return E_OUTOFMEMORY;
-    }
-
-    const HRESULT hr = instance->QueryInterface(riid, result);
+    const HRESULT hr = instance->QueryInterface(__uuidof(IFileSystem), result);
     instance->Release();
     return hr;
 }
+HRESULT CreateInstanceSftp(const FactoryOptions* /*factoryOptions*/, IHost* host, void** result) noexcept
+{
+    auto* instance = new (std::nothrow) FileSystemCurl(FileSystemCurlProtocol::Sftp, host);
+    if (! instance)
+        return E_OUTOFMEMORY;
+    const HRESULT hr = instance->QueryInterface(__uuidof(IFileSystem), result);
+    instance->Release();
+    return hr;
+}
+HRESULT CreateInstanceScp(const FactoryOptions* /*factoryOptions*/, IHost* host, void** result) noexcept
+{
+    auto* instance = new (std::nothrow) FileSystemCurl(FileSystemCurlProtocol::Scp, host);
+    if (! instance)
+        return E_OUTOFMEMORY;
+    const HRESULT hr = instance->QueryInterface(__uuidof(IFileSystem), result);
+    instance->Release();
+    return hr;
+}
+HRESULT CreateInstanceImap(const FactoryOptions* /*factoryOptions*/, IHost* host, void** result) noexcept
+{
+    auto* instance = new (std::nothrow) FileSystemCurl(FileSystemCurlProtocol::Imap, host);
+    if (! instance)
+        return E_OUTOFMEMORY;
+    const HRESULT hr = instance->QueryInterface(__uuidof(IFileSystem), result);
+    instance->Release();
+    return hr;
+}
+
+const PluginFactoryEntry kEntries[] = {
+    {&GetMetaDataFtp, &GetSchemaFtp, &CreateInstanceFtp},
+    {&GetMetaDataSftp, &GetSchemaSftp, &CreateInstanceSftp},
+    {&GetMetaDataScp, &GetSchemaScp, &CreateInstanceScp},
+    {&GetMetaDataImap, &GetSchemaImap, &CreateInstanceImap},
+};
 } // namespace
 
 extern "C" HRESULT __stdcall RedSalamanderEnumeratePlugins(REFIID riid, const PluginMetaData** metaData, unsigned int* count)
 {
-    if (! metaData || ! count)
-    {
-        return E_POINTER;
-    }
-
-    *metaData = nullptr;
-    *count    = 0;
-
-    if (riid != __uuidof(IFileSystem))
-    {
-        return E_NOINTERFACE;
-    }
-
-    const auto& plugins = GetPluginMetaDataSet().plugins;
-    *metaData           = plugins.data();
-    *count              = static_cast<unsigned int>(plugins.size());
-    return S_OK;
+    return FactoryEnumeratePlugins<IFileSystem>(kEntries, riid, metaData, count);
 }
 
-extern "C" HRESULT __stdcall RedSalamanderCreate(REFIID riid, const FactoryOptions* /*factoryOptions*/, IHost* host, const wchar_t* pluginId, void** result)
+extern "C" HRESULT __stdcall RedSalamanderCreate(REFIID riid, const FactoryOptions* factoryOptions, IHost* host, const wchar_t* pluginId, void** result)
 {
-    if (! result)
-    {
-        return E_POINTER;
-    }
-
-    *result = nullptr;
-    if (riid != __uuidof(IFileSystem))
-    {
-        return E_NOINTERFACE;
-    }
-    if (! pluginId || pluginId[0] == L'\0')
-    {
-        return E_INVALIDARG;
-    }
-
-    return CreatePluginInstance(riid, host, pluginId, result);
+    return FactoryCreate<IFileSystem>(kEntries, riid, factoryOptions, host, pluginId, result);
 }
 
 extern "C" HRESULT __stdcall RedSalamanderGetConfigurationSchema(REFIID riid, const wchar_t* pluginId, const char** schemaJsonUtf8)
 {
-    if (! schemaJsonUtf8)
-    {
-        return E_POINTER;
-    }
-
-    *schemaJsonUtf8 = nullptr;
-    if (riid != __uuidof(IFileSystem))
-    {
-        return E_NOINTERFACE;
-    }
-    if (! pluginId || pluginId[0] == L'\0')
-    {
-        return E_INVALIDARG;
-    }
-
-    const char* schema = GetPluginSchema(pluginId);
-    if (! schema)
-    {
-        return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
-    }
-
-    *schemaJsonUtf8 = schema;
-    return S_OK;
+    return FactoryGetConfigurationSchema<IFileSystem>(kEntries, riid, pluginId, schemaJsonUtf8);
 }

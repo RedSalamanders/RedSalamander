@@ -1,7 +1,7 @@
 #pragma once
 
-#include "framework.h"
 #include "FileSystemPathIdentity.h"
+#include "framework.h"
 
 #include <chrono>
 #include <cstdint>
@@ -38,9 +38,9 @@ struct Target final
 {
     std::filesystem::path sourcePath;
     std::filesystem::path relativeFolder;
-    bool isDirectory  = false;
+    bool isDirectory     = false;
     bool metadataUnknown = false;
-    uint64_t sizeBytes = 0;
+    uint64_t sizeBytes   = 0;
     std::optional<std::chrono::sys_seconds> lastWriteTime;
     std::optional<std::chrono::sys_seconds> createdTime;
 };
@@ -52,11 +52,11 @@ struct Rules final
     std::wstring nameTemplate = L"{name}";
     std::wstring searchFor;
     std::wstring replaceWith;
-    bool regexEnabled      = false;
-    bool caseSensitive     = true;
-    bool wholeWords        = false;
-    bool replaceOnce       = false;
-    bool excludeExtension  = false;
+    bool regexEnabled             = false;
+    bool caseSensitive            = true;
+    bool wholeWords               = false;
+    bool replaceOnce              = false;
+    bool excludeExtension         = false;
     std::wstring flattenSeparator = L" - ";
 
     CaseTransform fileNameCaseStyle  = CaseTransform::None;
@@ -77,9 +77,9 @@ struct PreviewRow final
     std::filesystem::path sourcePath;
     std::wstring originalName;
     std::wstring newName;
-    bool isDirectory  = false;
+    bool isDirectory     = false;
     bool metadataUnknown = false;
-    uint64_t sizeBytes = 0;
+    uint64_t sizeBytes   = 0;
     std::optional<std::chrono::sys_seconds> lastWriteTime;
     std::optional<std::chrono::sys_seconds> createdTime;
     std::vector<Issue> issues;

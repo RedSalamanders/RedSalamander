@@ -22,23 +22,25 @@
 #include "ViewerSpace.h"
 #include "resource.h"
 
+#include "PlugInterfaces/FactoryImpl.h"
+
 extern HINSTANCE g_hInstance;
 
 namespace
 {
 struct PluginMetaDataStorage final
 {
-    PluginMetaDataStorage() :
-        name(LoadStringResource(g_hInstance, IDS_VIEWERSPACE_NAME)),
-        description(LoadStringResource(g_hInstance, IDS_VIEWERSPACE_DESCRIPTION)),
-        metaData{
-            .id          = L"builtin/viewer-space",
-            .shortId     = L"viewspace",
-            .name        = name.c_str(),
-            .description = description.c_str(),
-            .author      = nullptr,
-            .version     = VERSINFO_PLUGIN_VERSION,
-        }
+    PluginMetaDataStorage()
+        : name(LoadStringResource(g_hInstance, IDS_VIEWERSPACE_NAME)),
+          description(LoadStringResource(g_hInstance, IDS_VIEWERSPACE_DESCRIPTION)),
+          metaData{
+              .id          = L"builtin/viewer-space",
+              .shortId     = L"viewspace",
+              .name        = name.c_str(),
+              .description = description.c_str(),
+              .author      = nullptr,
+              .version     = VERSINFO_PLUGIN_VERSION,
+          }
     {
     }
 
@@ -50,7 +52,7 @@ struct PluginMetaDataStorage final
 std::mutex g_pluginMetaDataStorageMutex;
 std::unique_ptr<PluginMetaDataStorage> g_pluginMetaDataStorage;
 
-[[nodiscard]] const PluginMetaData& GetPluginMetaData() noexcept
+[[nodiscard]] const PluginMetaData* GetMetaData() noexcept
 {
     std::scoped_lock lock(g_pluginMetaDataStorageMutex);
     if (! g_pluginMetaDataStorage)
@@ -58,7 +60,7 @@ std::unique_ptr<PluginMetaDataStorage> g_pluginMetaDataStorage;
         g_pluginMetaDataStorage = std::make_unique<PluginMetaDataStorage>();
     }
 
-    return g_pluginMetaDataStorage->metaData;
+    return &g_pluginMetaDataStorage->metaData;
 }
 
 void ShutdownPluginMetaData() noexcept
@@ -67,105 +69,44 @@ void ShutdownPluginMetaData() noexcept
     g_pluginMetaDataStorage.reset();
 }
 
-[[nodiscard]] const char* GetPluginSchema(std::wstring_view pluginId) noexcept
+[[nodiscard]] const char* GetSchema() noexcept
 {
-    if (! pluginId.empty() && ! OrdinalString::EqualsNoCase(pluginId, GetPluginMetaData().id))
-    {
-        return nullptr;
-    }
-
     return GetViewerSpaceStaticConfigurationSchema();
 }
-} // namespace
 
-HRESULT CreatePluginInstance(REFIID riid, IHost* host, void** result)
+HRESULT CreateInstance(const FactoryOptions* /*factoryOptions*/, IHost* host, void** result) noexcept
 {
-    if (result == nullptr)
+    auto* instance = new (std::nothrow) ViewerSpace();
+    if (instance == nullptr)
     {
-        return E_POINTER;
+        return E_OUTOFMEMORY;
     }
 
-    *result = nullptr;
+    instance->SetHost(host);
 
-    if (riid == __uuidof(IViewer))
-    {
-        auto* instance = new (std::nothrow) ViewerSpace();
-        if (instance == nullptr)
-        {
-            return E_OUTOFMEMORY;
-        }
-
-        instance->SetHost(host);
-
-        const HRESULT hr = instance->QueryInterface(riid, result);
-        instance->Release();
-        return hr;
-    }
-
-    return E_NOINTERFACE;
+    const HRESULT hr = instance->QueryInterface(__uuidof(IViewer), result);
+    instance->Release();
+    return hr;
 }
+
+const PluginFactoryEntry kEntries[] = {
+    {&GetMetaData, &GetSchema, &CreateInstance},
+};
+} // namespace
 
 extern "C" HRESULT __stdcall RedSalamanderEnumeratePlugins(REFIID riid, const PluginMetaData** metaData, unsigned int* count)
 {
-    if (! metaData || ! count)
-    {
-        return E_POINTER;
-    }
-
-    *metaData = nullptr;
-    *count    = 0;
-    if (riid != __uuidof(IViewer))
-    {
-        return E_NOINTERFACE;
-    }
-
-    *metaData = &GetPluginMetaData();
-    *count    = 1;
-    return S_OK;
+    return FactoryEnumeratePlugins<IViewer>(kEntries, riid, metaData, count);
 }
 
-extern "C" HRESULT __stdcall RedSalamanderCreate(REFIID riid, const FactoryOptions* /*factoryOptions*/, IHost* host, const wchar_t* pluginId, void** result)
+extern "C" HRESULT __stdcall RedSalamanderCreate(REFIID riid, const FactoryOptions* factoryOptions, IHost* host, const wchar_t* pluginId, void** result)
 {
-    if (! result)
-    {
-        return E_POINTER;
-    }
-
-    *result = nullptr;
-    if (riid != __uuidof(IViewer))
-    {
-        return E_NOINTERFACE;
-    }
-    if (pluginId && pluginId[0] != L'\0' && ! OrdinalString::EqualsNoCase(pluginId, GetPluginMetaData().id))
-    {
-        return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
-    }
-
-    return CreatePluginInstance(riid, host, result);
+    return FactoryCreate<IViewer>(kEntries, riid, factoryOptions, host, pluginId, result);
 }
 
 extern "C" HRESULT __stdcall RedSalamanderGetConfigurationSchema(REFIID riid, const wchar_t* pluginId, const char** schemaJsonUtf8)
 {
-    if (! schemaJsonUtf8)
-    {
-        return E_POINTER;
-    }
-
-    *schemaJsonUtf8 = nullptr;
-    if (riid != __uuidof(IViewer))
-    {
-        return E_NOINTERFACE;
-    }
-
-    const std::wstring_view requestedId = pluginId ? std::wstring_view(pluginId) : std::wstring_view{};
-    const char* schema                  = GetPluginSchema(requestedId);
-    if (! schema)
-    {
-        return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
-    }
-
-    *schemaJsonUtf8 = schema;
-    return S_OK;
+    return FactoryGetConfigurationSchema<IViewer>(kEntries, riid, pluginId, schemaJsonUtf8);
 }
 
 extern "C" PLUGFACTORY_API void __stdcall RedSalamanderPluginShutdown() noexcept
@@ -177,4 +118,9 @@ extern "C" PLUGFACTORY_API void __stdcall RedSalamanderPluginShutdown() noexcept
 extern "C" PLUGFACTORY_API BOOL __stdcall RedSalamanderPluginRetainModuleUntilProcessExit() noexcept
 {
     return TRUE;
+}
+
+extern "C" PLUGFACTORY_API BOOL __stdcall RedSalamanderPluginCanUnloadNow() noexcept
+{
+    return CanUnloadViewerSpaceModuleNow() ? TRUE : FALSE;
 }

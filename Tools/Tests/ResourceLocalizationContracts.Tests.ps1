@@ -2,6 +2,15 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$script:RSResourceRoots = @(
+    'Common',
+    'Plugins',
+    'PoC',
+    'RedConfigure',
+    'RedSalamander',
+    'RedSalamanderMonitor',
+    'Tests'
+)
 
 function Read-RSResourceText {
     param(
@@ -101,8 +110,12 @@ function Get-RSResourceStringEntries {
 function Get-RSResourceFiles {
     $resourceFiles = @()
     $resourceFiles += @(Get-ChildItem -LiteralPath $repoRoot -Filter '*.rc')
-    foreach ($rootChild in @(Get-ChildItem -LiteralPath $repoRoot -Directory | Where-Object { $_.Name -notin @('.build', 'packages', '.claude') })) {
-        $resourceFiles += @(Get-ChildItem -LiteralPath $rootChild.FullName -Recurse -Filter '*.rc')
+    foreach ($resourceRoot in $script:RSResourceRoots) {
+        $rootPath = Join-Path $repoRoot $resourceRoot
+        if (-not (Test-Path -LiteralPath $rootPath)) {
+            continue
+        }
+        $resourceFiles += @(Get-ChildItem -LiteralPath $rootPath -Recurse -Filter '*.rc')
     }
     return $resourceFiles
 }
@@ -168,6 +181,10 @@ function Get-RSLanguageNeutralStringIdsByOwner {
             'IDS_FILESYSTEMMICROSOFTDRIVE_NAME',
             'IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_APP_TITLE',
             'IDS_FILESYSTEMMICROSOFTDRIVE_SHAREPOINT_NAME'
+        )
+        'Plugins\FileSystemMtp' = @(
+            'IDS_FILESYSTEMMTP_NAME',
+            'IDS_FILESYSTEMMTP_FSNAME'
         )
         'Plugins\FileSystemS3' = @(
             'IDS_FILESYSTEMS3_NAME'
@@ -284,6 +301,20 @@ function Get-RSSatelliteBaseEntries {
 }
 
 Describe 'Resource localization contracts' {
+    It 'requires every top-level RC resource root to be explicitly allowlisted' {
+        $excludedRoots = @('.build', 'packages', '.claude', '.git')
+        $unexpectedRoots = @(
+            Get-ChildItem -LiteralPath $repoRoot -Directory |
+                Where-Object { $_.Name -notin $excludedRoots -and $_.Name -notin $script:RSResourceRoots } |
+                Where-Object { @(Get-ChildItem -LiteralPath $_.FullName -Recurse -Filter '*.rc' -File -ErrorAction SilentlyContinue).Count -gt 0 } |
+                Select-Object -ExpandProperty Name
+        )
+
+        if ($unexpectedRoots.Count -ne 0) {
+            throw "Top-level RC resource roots must be reviewed and added to the localization allowlist: $($unexpectedRoots -join ', ')"
+        }
+    }
+
     It 'keeps resource format placeholders positional and translation-safe' {
         $resourceFiles = @(Get-RSResourceFiles)
         $entries = @($resourceFiles | ForEach-Object { Get-RSResourceStringEntries -File $_ })

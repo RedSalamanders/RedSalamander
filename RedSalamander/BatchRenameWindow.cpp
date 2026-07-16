@@ -14,8 +14,8 @@
 #include <new>
 #include <optional>
 #include <span>
-#include <system_error>
 #include <string>
+#include <system_error>
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
@@ -26,8 +26,8 @@
 #include <wil/resource.h>
 #pragma warning(pop)
 
-#include "BatchRenameMenus.h"
 #include "BatchRenameExecutionEngine.h"
+#include "BatchRenameMenus.h"
 #include "DirectoryInfoCache.h"
 #include "DxUi/DxUi.h"
 #include "DxUiThemePalette.h"
@@ -48,11 +48,11 @@ using RedSalamander::DxUi::Button;
 using RedSalamander::DxUi::ButtonVariant;
 using RedSalamander::DxUi::Checkbox;
 using RedSalamander::DxUi::ComboBox;
-using RedSalamander::DxUi::Control;
 using RedSalamander::DxUi::ContextMenu;
 using RedSalamander::DxUi::ContextMenuRootHorizontalAlignment;
 using RedSalamander::DxUi::ContextMenuRootVerticalPlacement;
 using RedSalamander::DxUi::ContextMenuSessionCallbacks;
+using RedSalamander::DxUi::Control;
 using RedSalamander::DxUi::Grid;
 using RedSalamander::DxUi::GridCellData;
 using RedSalamander::DxUi::GridCellKind;
@@ -77,19 +77,19 @@ using RedSalamander::DxUi::TextField;
 using RedSalamander::DxUi::Toggle;
 using RedSalamander::DxUi::WindowHost;
 
-constexpr wchar_t kBatchRenameWindowClassName[] = L"RedSalamander.BatchRenameWindow";
-constexpr wchar_t kBatchRenameWindowId[]        = L"BatchRenameWindow";
-constexpr size_t kMaxRecentBatchRenameEntries   = 10u;
-constexpr wchar_t kDefaultBatchRenameMask[]     = L"*.*";
-constexpr UINT_PTR kPreviewRebuildTimerId       = 0xB471u;
-constexpr UINT kPreviewRebuildDebounceMs        = 150u;
-constexpr int kBatchRenamePreviewMenuCopyOriginalName = 1;
-constexpr int kBatchRenamePreviewMenuCopyNewName      = 2;
-constexpr int kBatchRenamePreviewMenuCopySourcePath   = 3;
-constexpr int kBatchRenamePreviewMenuCopyPreviewRows  = 4;
-constexpr int kBatchRenamePreviewMenuRevealInPane     = 5;
-constexpr int kBatchRenamePreviewMenuCopyUndoPlan     = 6;
-constexpr int kBatchRenamePreviewMenuCopyExecutionReport = 7;
+constexpr wchar_t kBatchRenameWindowClassName[]                  = L"RedSalamander.BatchRenameWindow";
+constexpr wchar_t kBatchRenameWindowId[]                         = L"BatchRenameWindow";
+constexpr size_t kMaxRecentBatchRenameEntries                    = 10u;
+constexpr wchar_t kDefaultBatchRenameMask[]                      = L"*.*";
+constexpr UINT_PTR kPreviewRebuildTimerId                        = 0xB471u;
+constexpr UINT kPreviewRebuildDebounceMs                         = 150u;
+constexpr int kBatchRenamePreviewMenuCopyOriginalName            = 1;
+constexpr int kBatchRenamePreviewMenuCopyNewName                 = 2;
+constexpr int kBatchRenamePreviewMenuCopySourcePath              = 3;
+constexpr int kBatchRenamePreviewMenuCopyPreviewRows             = 4;
+constexpr int kBatchRenamePreviewMenuRevealInPane                = 5;
+constexpr int kBatchRenamePreviewMenuCopyUndoPlan                = 6;
+constexpr int kBatchRenamePreviewMenuCopyExecutionReport         = 7;
 constexpr wchar_t kBatchRenameIssueProviderPathIdentityUnknown[] = L"provider_path_identity_unknown";
 
 #ifdef ENABLE_TESTS
@@ -119,7 +119,7 @@ unsigned long g_batchRenameDebugDestinationProbeFailureWin32Error = ERROR_ACCESS
 
 struct BatchRenameScopeOptions final
 {
-    std::wstring mask = kDefaultBatchRenameMask;
+    std::wstring mask          = kDefaultBatchRenameMask;
     bool includeSubdirectories = false;
     bool includeFiles          = true;
     bool includeFolders        = false;
@@ -127,12 +127,14 @@ struct BatchRenameScopeOptions final
 
 constexpr WPARAM kBatchRenameTaskCollection = 1u;
 constexpr WPARAM kBatchRenameTaskExecution  = 2u;
+constexpr WPARAM kBatchRenameTaskPreview    = 3u;
+constexpr unsigned char kBatchRenameModuleAnchor = 0u;
 
 struct BatchRenameTaskProgressPayload final
 {
-    uint64_t generation          = 0u;
-    uint64_t totalItems          = 0u;
-    uint64_t completedItems      = 0u;
+    uint64_t generation     = 0u;
+    uint64_t totalItems     = 0u;
+    uint64_t completedItems = 0u;
 };
 
 struct BatchRenameCollectionCompletedPayload final
@@ -154,9 +156,15 @@ struct BatchRenameExecutionCompletedPayload final
     std::vector<ExecutedDirectoryMove> executedDirectoryMoves;
 };
 
+struct BatchRenamePreviewCompletedPayload final
+{
+    uint64_t generation = 0u;
+    BatchRename::Plan plan;
+};
+
 struct BatchPreviewRow
 {
-    uint64_t stableId = 0u;
+    uint64_t stableId  = 0u;
     size_t targetIndex = 0u;
     std::filesystem::path sourcePath;
     std::wstring originalName;
@@ -168,18 +176,17 @@ struct BatchPreviewRow
     // Containing folder relative to the Batch Rename root (Find Files Path-column semantics):
     // empty for items directly under the root; absolute parent folder when outside the root.
     std::wstring displayPath;
-    uint64_t sizeBytes = 0u;
-    int iconIndex      = -1;
-    bool isDirectory   = false;
+    uint64_t sizeBytes   = 0u;
+    int iconIndex        = -1;
+    bool isDirectory     = false;
     bool metadataUnknown = false;
-    bool hasErrorIssue = false;
+    bool hasErrorIssue   = false;
     bool hasWarningIssue = false;
-    bool changed = false;
+    bool changed         = false;
     std::wstring issueTooltip;
 };
 
-template <typename FileTimePoint>
-[[nodiscard]] std::optional<std::chrono::sys_seconds> FileTimeToSysSeconds(const FileTimePoint fileTime) noexcept
+template <typename FileTimePoint> [[nodiscard]] std::optional<std::chrono::sys_seconds> FileTimeToSysSeconds(const FileTimePoint fileTime) noexcept
 {
     const auto nowFile = FileTimePoint::clock::now();
     const auto nowSys  = std::chrono::system_clock::now();
@@ -195,7 +202,7 @@ template <typename FileTimePoint>
 
     constexpr __int64 kWindowsToUnixEpoch100Ns = 116444736000000000LL;
     constexpr __int64 kFileTimeTicksPerSecond  = 10000000LL;
-    const __int64 seconds = (fileTimeTicks - kWindowsToUnixEpoch100Ns) / kFileTimeTicksPerSecond;
+    const __int64 seconds                      = (fileTimeTicks - kWindowsToUnixEpoch100Ns) / kFileTimeTicksPerSecond;
     return std::chrono::sys_seconds{std::chrono::seconds{seconds}};
 }
 
@@ -271,9 +278,7 @@ template <typename FileTimePoint>
     return target;
 }
 
-[[nodiscard]] BatchRename::Target BuildTargetFromProviderFileInfo(const std::filesystem::path& path,
-                                                                  const std::filesystem::path& root,
-                                                                  const FileInfo& entry)
+[[nodiscard]] BatchRename::Target BuildTargetFromProviderFileInfo(const std::filesystem::path& path, const std::filesystem::path& root, const FileInfo& entry)
 {
     BatchRename::Target target{};
     target.sourcePath     = path;
@@ -288,8 +293,7 @@ template <typename FileTimePoint>
     return target;
 }
 
-[[nodiscard]] BatchRename::Target BuildMetadataUnknownTargetFromProviderSelection(const std::filesystem::path& path,
-                                                                                  const std::filesystem::path& root)
+[[nodiscard]] BatchRename::Target BuildMetadataUnknownTargetFromProviderSelection(const std::filesystem::path& path, const std::filesystem::path& root)
 {
     BatchRename::Target target{};
     target.sourcePath      = path;
@@ -308,6 +312,8 @@ template <typename FileTimePoint>
     return ec ? HRESULT_FROM_WIN32(static_cast<DWORD>(ec.value())) : E_FAIL;
 }
 
+[[nodiscard]] HRESULT RevalidateLocalRenamePlan(const FileSystemPathIdentity& pathIdentity, const BatchRename::Plan& plan) noexcept;
+
 void EmitBatchRenameExecuteCounters(const uint64_t rows, const uint64_t completed, const uint64_t failed) noexcept
 {
     if (! Debug::Perf::IsCaptureEnabled())
@@ -322,7 +328,7 @@ void EmitBatchRenameExecuteCounters(const uint64_t rows, const uint64_t complete
 
 struct BatchRenameExecutionProgressPostContext final
 {
-    HWND hwnd = nullptr;
+    HWND hwnd           = nullptr;
     uint64_t generation = 0u;
 };
 
@@ -354,6 +360,7 @@ void RunBatchRenameExecution(HWND hwnd,
                              std::atomic_bool& cancelRequested,
                              wil::com_ptr<IFileSystem> fileSystem,
                              const FileSystemPathIdentity pathIdentity,
+                             std::optional<BatchRename::Plan> localPlan,
                              std::vector<BatchRenameExecutionOp> ops,
                              std::unique_ptr<BatchRenameExecutionCompletedPayload> payload) noexcept
 {
@@ -366,6 +373,27 @@ void RunBatchRenameExecution(HWND hwnd,
     [[maybe_unused]] const wil::unique_couninitialize_call coUninit;
 
     wil::com_ptr<IFileSystem> workerFileSystem = std::move(fileSystem);
+    const auto workerStartedAt = std::chrono::steady_clock::now();
+    if (localPlan.has_value())
+    {
+        const HRESULT revalidateHr = RevalidateLocalRenamePlan(pathIdentity, localPlan.value());
+        if (FAILED(revalidateHr))
+        {
+            payload->hr                  = revalidateHr;
+            payload->detail              = L"revalidate_failed";
+            payload->report.failedRows   = localPlan->stats.changedRows;
+            payload->report.firstFailure = revalidateHr;
+            Debug::Perf::Emit(L"batchrename.execute.us",
+                              L"revalidate_failed",
+                              Debug::Perf::ElapsedUs(workerStartedAt),
+                              static_cast<uint64_t>(localPlan->stats.changedRows),
+                              0u,
+                              revalidateHr);
+            EmitBatchRenameExecuteCounters(static_cast<uint64_t>(localPlan->stats.changedRows), 0u, static_cast<uint64_t>(localPlan->stats.changedRows));
+            static_cast<void>(PostMessagePayload(hwnd, WndMsg::kBatchRenameCompleted, kBatchRenameTaskExecution, std::move(payload)));
+            return;
+        }
+    }
     BatchRenameExecutionProgressPostContext progressContext{.hwnd = hwnd, .generation = generation};
     const BatchRenameExecutionResult result = RunBatchRenameExecutionEngine(cancelRequested,
                                                                             *workerFileSystem.get(),
@@ -373,11 +401,19 @@ void RunBatchRenameExecution(HWND hwnd,
                                                                             std::move(ops),
                                                                             BatchRenameExecutionOptions{
                                                                                 .progressCallback = &PostBatchRenameExecutionProgress,
-                                                                                .progressContext = &progressContext,
+                                                                                .progressContext  = &progressContext,
                                                                             });
-    payload->hr                     = result.hr;
-    payload->detail                 = result.detail;
+    payload->hr                             = result.hr;
+    payload->detail                         = result.detail;
+    // The execution engine returns a fresh report that only tracks completed/failed counts; it does not
+    // know the plan-level totals. The caller pre-populated payload->report with totalRows/skippedRows
+    // before launching this worker, so preserve them across the engine-result assignment (otherwise the
+    // success-path summary, TSV export, and persisted stats would all report "0 of 0").
+    const size_t totalRows          = payload->report.totalRows;
+    const size_t skippedRows        = payload->report.skippedRows;
     payload->report                 = result.report;
+    payload->report.totalRows       = totalRows;
+    payload->report.skippedRows     = skippedRows;
     payload->successfulSourcePaths  = result.successfulSourcePaths;
     payload->successfulTargetPaths  = result.successfulTargetPaths;
     payload->executedDirectoryMoves = result.executedDirectoryMoves;
@@ -416,8 +452,7 @@ void RunBatchRenameExecution(HWND hwnd,
                                        const std::vector<std::filesystem::path>& plannedSources,
                                        const std::filesystem::path& path) noexcept
 {
-    return std::ranges::any_of(plannedSources, [&pathIdentity, &path](const std::filesystem::path& source) noexcept
-    {
+    return std::ranges::any_of(plannedSources, [&pathIdentity, &path](const std::filesystem::path& source) noexcept {
         return EquivalentPath(pathIdentity, source.native(), path.native());
     });
 }
@@ -439,6 +474,8 @@ void AddProviderPathIdentityFailure(BatchRename::Plan& plan) noexcept
 
 void ApplyLocalDestinationConflictValidation(const FileSystemPathIdentity& pathIdentity, BatchRename::Plan& plan) noexcept
 {
+    const auto startedAt = std::chrono::steady_clock::now();
+
     std::vector<std::filesystem::path> plannedSources;
     plannedSources.reserve(plan.rows.size());
     for (const BatchRename::PreviewRow& row : plan.rows)
@@ -449,6 +486,69 @@ void ApplyLocalDestinationConflictValidation(const FileSystemPathIdentity& pathI
         }
     }
 
+    struct ParentListing final
+    {
+        std::filesystem::path path;
+        std::optional<std::wstring> pathKey;
+        std::error_code error;
+        std::unordered_set<std::wstring> childKeys;
+        std::vector<std::wstring> childNames;
+    };
+
+    std::vector<ParentListing> parentListings;
+    std::unordered_map<std::wstring, size_t> parentIndexByKey;
+    const auto findOrCollectParent = [&](const std::filesystem::path& parent) -> const ParentListing&
+    {
+        const std::optional<std::wstring> parentKey = TryMakePathKey(pathIdentity, parent.native());
+        if (parentKey.has_value())
+        {
+            const auto found = parentIndexByKey.find(parentKey.value());
+            if (found != parentIndexByKey.end() && found->second < parentListings.size() &&
+                EquivalentPath(pathIdentity, parentListings[found->second].path.native(), parent.native()))
+            {
+                return parentListings[found->second];
+            }
+        }
+
+        const auto existing = std::ranges::find_if(parentListings, [&](const ParentListing& listing) noexcept {
+            return EquivalentPath(pathIdentity, listing.path.native(), parent.native());
+        });
+        if (existing != parentListings.end())
+        {
+            return *existing;
+        }
+
+        ParentListing listing{};
+        listing.path    = parent;
+        listing.pathKey = parentKey;
+        constexpr std::filesystem::directory_options options = std::filesystem::directory_options::skip_permission_denied;
+        std::filesystem::directory_iterator iterator(parent, options, listing.error);
+        if (! listing.error)
+        {
+            for (const std::filesystem::directory_iterator end; iterator != end; iterator.increment(listing.error))
+            {
+                if (listing.error)
+                {
+                    break;
+                }
+                std::wstring childName = iterator->path().filename().native();
+                if (const std::optional<std::wstring> childKey = TryMakeComponentKey(pathIdentity, childName); childKey.has_value())
+                {
+                    listing.childKeys.insert(childKey.value());
+                }
+                listing.childNames.push_back(std::move(childName));
+            }
+        }
+
+        parentListings.push_back(std::move(listing));
+        const size_t index = parentListings.size() - 1u;
+        if (parentListings[index].pathKey.has_value())
+        {
+            parentIndexByKey[parentListings[index].pathKey.value()] = index;
+        }
+        return parentListings[index];
+    };
+
     bool changed = false;
     for (BatchRename::PreviewRow& row : plan.rows)
     {
@@ -457,25 +557,25 @@ void ApplyLocalDestinationConflictValidation(const FileSystemPathIdentity& pathI
             continue;
         }
 
-        const std::filesystem::path destinationPath = JoinFolderAndLeaf(row.sourcePath.parent_path(), row.newName);
+        const std::filesystem::path destinationPath = JoinFolderAndLeaf(pathIdentity, row.sourcePath.parent_path(), row.newName);
         if (EquivalentPath(pathIdentity, row.sourcePath.native(), destinationPath.native()))
         {
             continue;
         }
 
-        std::error_code ec;
+        std::error_code injectedError;
 #ifdef ENABLE_TESTS
-        if (TryInjectBatchRenameDestinationProbeFailure(pathIdentity, destinationPath, ec))
+        if (TryInjectBatchRenameDestinationProbeFailure(pathIdentity, destinationPath, injectedError))
         {
             BatchRename::AddIssue(row, BatchRename::IssueSeverity::Error, L"name_destination_probe_failed");
             changed = true;
             continue;
         }
 #endif
-        const std::filesystem::file_status destinationStatus = std::filesystem::symlink_status(destinationPath, ec);
-        if (ec)
+        const ParentListing& listing = findOrCollectParent(destinationPath.parent_path());
+        if (listing.error)
         {
-            if (! IsNotFoundError(ec))
+            if (! IsNotFoundError(listing.error))
             {
                 BatchRename::AddIssue(row, BatchRename::IssueSeverity::Error, L"name_destination_probe_failed");
                 changed = true;
@@ -483,7 +583,20 @@ void ApplyLocalDestinationConflictValidation(const FileSystemPathIdentity& pathI
             continue;
         }
 
-        if (std::filesystem::exists(destinationStatus) && ! IsPlannedSourcePath(pathIdentity, plannedSources, destinationPath))
+        const std::wstring destinationLeaf = destinationPath.filename().native();
+        bool destinationExists             = false;
+        if (const std::optional<std::wstring> destinationKey = TryMakeComponentKey(pathIdentity, destinationLeaf); destinationKey.has_value())
+        {
+            destinationExists = listing.childKeys.contains(destinationKey.value());
+        }
+        else
+        {
+            destinationExists = std::ranges::any_of(listing.childNames, [&](std::wstring_view childName) noexcept {
+                return EquivalentComponent(pathIdentity, childName, destinationLeaf);
+            });
+        }
+
+        if (destinationExists && ! IsPlannedSourcePath(pathIdentity, plannedSources, destinationPath))
         {
             BatchRename::AddIssue(row, BatchRename::IssueSeverity::Error, L"name_destination_exists");
             changed = true;
@@ -494,11 +607,19 @@ void ApplyLocalDestinationConflictValidation(const FileSystemPathIdentity& pathI
     {
         BatchRename::RecomputeStats(plan);
     }
+
+    if (Debug::Perf::IsCaptureEnabled())
+    {
+        Debug::Perf::Emit(L"batchrename.preview.destination_validation.us",
+                          L"cached-parent-listings",
+                          Debug::Perf::ElapsedUs(startedAt),
+                          static_cast<uint64_t>(plan.rows.size()),
+                          static_cast<uint64_t>(parentListings.size()));
+        Debug::Perf::EmitValue(L"batchrename.preview.destination_directory_listings", static_cast<uint64_t>(parentListings.size()));
+    }
 }
 
-void ApplyContextualPreviewValidation(const BatchRenamePaneContext& context,
-                                      const FileSystemPathIdentity& pathIdentity,
-                                      BatchRename::Plan& plan) noexcept
+void ApplyContextualPreviewValidation(const BatchRenamePaneContext& context, const FileSystemPathIdentity& pathIdentity, BatchRename::Plan& plan) noexcept
 {
     if (IsLocalFileSystemContext(context))
     {
@@ -511,7 +632,7 @@ void ApplyContextualPreviewValidation(const BatchRenamePaneContext& context,
                                                                const BatchRename::Rules& rules) noexcept
 {
     const std::optional<FileSystemPathIdentity> pathIdentity = ResolveBatchRenamePathIdentity(context);
-    const FileSystemPathIdentity effectiveIdentity = pathIdentity.value_or(FileSystemPathIdentity::OrdinalIgnoreCaseForLocalFileSystem());
+    const FileSystemPathIdentity effectiveIdentity           = pathIdentity.value_or(FileSystemPathIdentity::OrdinalIgnoreCaseForLocalFileSystem());
 
     BatchRename::Plan plan = BatchRename::BuildPlan(targets, rules, effectiveIdentity);
     if (! pathIdentity.has_value())
@@ -523,6 +644,48 @@ void ApplyContextualPreviewValidation(const BatchRenamePaneContext& context,
     ApplyContextualPreviewValidation(context, effectiveIdentity, plan);
     return plan;
 }
+
+struct BatchRenamePreviewWork final
+{
+    HWND hwnd = nullptr;
+    uint64_t generation = 0u;
+    BatchRenamePaneContext context;
+    std::vector<BatchRename::Target> targets;
+    BatchRename::Rules rules;
+    std::unique_ptr<BatchRenamePreviewCompletedPayload> payload;
+    wil::unique_hmodule modulePin;
+
+    BatchRenamePreviewWork() = default;
+    BatchRenamePreviewWork(const BatchRenamePreviewWork&) = delete;
+    BatchRenamePreviewWork(BatchRenamePreviewWork&&) = delete;
+    BatchRenamePreviewWork& operator=(const BatchRenamePreviewWork&) = delete;
+    BatchRenamePreviewWork& operator=(BatchRenamePreviewWork&&) = delete;
+
+    void Execute(PTP_CALLBACK_INSTANCE callbackInstance) noexcept
+    {
+        if (modulePin)
+        {
+            TransferModulePinToCallbackReturn(callbackInstance, modulePin);
+        }
+
+        const HRESULT coinitHr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+        if (FAILED(coinitHr))
+        {
+            payload->plan = {};
+        }
+        else
+        {
+            const wil::unique_couninitialize_call coUninit;
+            // Provider path-identity queries are not universally concurrency-safe. Serialize preview
+            // workers while keeping every provider query and destination listing off the UI thread.
+            static std::mutex previewWorkerMutex;
+            std::scoped_lock lock(previewWorkerMutex);
+            payload->plan = BuildBatchRenamePlanForContext(context, targets, rules);
+        }
+        payload->generation = generation;
+        static_cast<void>(PostMessagePayload(hwnd, WndMsg::kBatchRenameCompleted, kBatchRenameTaskPreview, std::move(payload)));
+    }
+};
 
 [[nodiscard]] HRESULT RevalidateLocalRenamePlan(const FileSystemPathIdentity& pathIdentity, const BatchRename::Plan& plan) noexcept
 {
@@ -554,7 +717,7 @@ void ApplyContextualPreviewValidation(const BatchRenamePaneContext& context,
             return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
         }
 
-        const std::filesystem::path destinationPath = JoinFolderAndLeaf(row.sourcePath.parent_path(), row.newName);
+        const std::filesystem::path destinationPath = JoinFolderAndLeaf(pathIdentity, row.sourcePath.parent_path(), row.newName);
         if (EquivalentPath(pathIdentity, row.sourcePath.native(), destinationPath.native()))
         {
             continue;
@@ -594,20 +757,19 @@ void ApplyContextualPreviewValidation(const BatchRenamePaneContext& context,
 
 struct BatchRenameTargetRefreshResult final
 {
-    size_t refreshedRows = 0u;
+    size_t refreshedRows         = 0u;
     uint64_t identityComparisons = 0u;
 };
 
-BatchRenameTargetRefreshResult RefreshBatchRenameTargetsAfterExecution(
-    const FileSystemPathIdentity& pathIdentity,
-    std::vector<BatchRename::Target>& targets,
-    std::span<const std::filesystem::path> successfulSourcePaths,
-    std::span<const std::filesystem::path> successfulTargetPaths,
-    std::span<const ExecutedDirectoryMove> executedDirectoryMoves,
-    const std::filesystem::path& root) noexcept
+BatchRenameTargetRefreshResult RefreshBatchRenameTargetsAfterExecution(const FileSystemPathIdentity& pathIdentity,
+                                                                       std::vector<BatchRename::Target>& targets,
+                                                                       std::span<const std::filesystem::path> successfulSourcePaths,
+                                                                       std::span<const std::filesystem::path> successfulTargetPaths,
+                                                                       std::span<const ExecutedDirectoryMove> executedDirectoryMoves,
+                                                                       const std::filesystem::path& root) noexcept
 {
     const auto targetRefreshStartedAt = std::chrono::steady_clock::now();
-    const size_t successCount = std::min(successfulSourcePaths.size(), successfulTargetPaths.size());
+    const size_t successCount         = std::min(successfulSourcePaths.size(), successfulTargetPaths.size());
 
     std::unordered_map<std::wstring, std::vector<size_t>> targetIndexesByPathKey;
     targetIndexesByPathKey.reserve(targets.size());
@@ -658,8 +820,7 @@ BatchRenameTargetRefreshResult RefreshBatchRenameTargetsAfterExecution(
 
     for (size_t index = 0u; index < successCount; ++index)
     {
-        const std::filesystem::path finalPath =
-            ApplyExecutedDirectoryMoves(pathIdentity, successfulTargetPaths[index], executedDirectoryMoves);
+        const std::filesystem::path finalPath   = ApplyExecutedDirectoryMoves(pathIdentity, successfulTargetPaths[index], executedDirectoryMoves);
         const std::optional<size_t> targetIndex = consumeTargetIndexForSource(successfulSourcePaths[index]);
         if (! targetIndex.has_value())
         {
@@ -701,7 +862,7 @@ struct BatchRenameScopeMatcher final
 {
     BatchRenameScopeMatcher matcher{};
     const std::wstring normalized = NormalizeScopeMask(mask);
-    matcher.matchAll = OrdinalString::EqualsNoCase(normalized, L"*") || OrdinalString::EqualsNoCase(normalized, kDefaultBatchRenameMask);
+    matcher.matchAll              = OrdinalString::EqualsNoCase(normalized, L"*") || OrdinalString::EqualsNoCase(normalized, kDefaultBatchRenameMask);
     if (! matcher.matchAll)
     {
         matcher.wildcardMask = MaskSyntax::ParseWildcardMask(normalized);
@@ -764,20 +925,15 @@ struct BatchRenameScopeMatcher final
 
 void SortBatchRenameTargets(std::vector<BatchRename::Target>& targets)
 {
-    std::ranges::sort(targets, [](const BatchRename::Target& lhs, const BatchRename::Target& rhs) noexcept
-    {
-        return ::CompareStringOrdinal(lhs.sourcePath.c_str(),
-                                      -1,
-                                      rhs.sourcePath.c_str(),
-                                      -1,
-                                      TRUE) == CSTR_LESS_THAN;
+    std::ranges::sort(targets, [](const BatchRename::Target& lhs, const BatchRename::Target& rhs) noexcept {
+        return ::CompareStringOrdinal(lhs.sourcePath.c_str(), -1, rhs.sourcePath.c_str(), -1, TRUE) == CSTR_LESS_THAN;
     });
 }
 
 struct BatchRenameTargetCollectionResult final
 {
     std::vector<BatchRename::Target> targets;
-    HRESULT hr = S_OK;
+    HRESULT hr          = S_OK;
     std::wstring detail = L"local";
 };
 
@@ -866,6 +1022,8 @@ template <typename Visitor>
     pending.push_back(context.rootPluginPath);
 
     const BatchRenameScopeMatcher scopeMatcher = BuildBatchRenameScopeMatcher(scope.mask);
+    const FileSystemPathIdentity collectionIdentity = ResolveBatchRenamePathIdentity(context).value_or(
+        FileSystemPathIdentity{.pathTextStableIdentity = true, .componentComparison = FileSystemPathComponentComparison::OrdinalCaseSensitive});
     std::unordered_set<std::wstring> queuedDirectories;
     queuedDirectories.insert(context.rootPluginPath.native());
 
@@ -893,7 +1051,7 @@ template <typename Visitor>
         const HRESULT walkHr = ForEachFileInfoEntry(*info,
                                                     [&](std::wstring_view name, const FileInfo& entry)
         {
-            const std::filesystem::path child = JoinFolderAndLeaf(directory, name);
+            const std::filesystem::path child = JoinFolderAndLeaf(collectionIdentity, directory, name);
             const DWORD attributes            = entry.FileAttributes;
             if (ShouldCollectProviderEntry(name, attributes, scope, scopeMatcher))
             {
@@ -938,10 +1096,8 @@ template <typename Visitor>
         std::vector<BatchRename::Target> targets;
     };
 
-    const FileSystemPathIdentity collectionIdentity =
-        ResolveBatchRenamePathIdentity(context).value_or(FileSystemPathIdentity{.pathTextStableIdentity = true,
-                                                                                .componentComparison =
-                                                                                    FileSystemPathComponentComparison::OrdinalCaseSensitive});
+    const FileSystemPathIdentity collectionIdentity = ResolveBatchRenamePathIdentity(context).value_or(
+        FileSystemPathIdentity{.pathTextStableIdentity = true, .componentComparison = FileSystemPathComponentComparison::OrdinalCaseSensitive});
 
     std::vector<ParentDirectoryEntries> entriesByParent;
     std::unordered_map<std::wstring, size_t> parentIndexByPathKey;
@@ -952,9 +1108,9 @@ template <typename Visitor>
             return HRESULT_FROM_WIN32(ERROR_CANCELLED);
         }
 
-        const std::filesystem::path parent = path.parent_path();
+        const std::filesystem::path parent              = path.parent_path();
         const std::optional<std::wstring> parentPathKey = TryMakePathKey(collectionIdentity, parent.native());
-        auto parentIt = entriesByParent.end();
+        auto parentIt                                   = entriesByParent.end();
         if (parentPathKey.has_value())
         {
             const auto keyedParentIt = parentIndexByPathKey.find(parentPathKey.value());
@@ -966,16 +1122,14 @@ template <typename Visitor>
         }
         if (parentIt == entriesByParent.end())
         {
-            parentIt = std::ranges::find_if(entriesByParent,
-                                            [&](const ParentDirectoryEntries& entries) noexcept
-        {
-            return EquivalentPath(collectionIdentity, entries.parent.native(), parent.native());
-        });
+            parentIt = std::ranges::find_if(entriesByParent, [&](const ParentDirectoryEntries& entries) noexcept {
+                return EquivalentPath(collectionIdentity, entries.parent.native(), parent.native());
+            });
         }
         if (parentIt == entriesByParent.end())
         {
             ParentDirectoryEntries entries{};
-            entries.parent = parent;
+            entries.parent        = parent;
             entries.parentPathKey = parentPathKey;
             wil::com_ptr<IFilesInformation> info;
             entries.hr = context.fileSystem->ReadDirectoryInfo(parent.c_str(), info.addressof());
@@ -984,7 +1138,7 @@ template <typename Visitor>
                 entries.hr = ForEachFileInfoEntry(*info,
                                                   [&](std::wstring_view name, const FileInfo& entry)
                 {
-                    const std::filesystem::path child = JoinFolderAndLeaf(parent, name);
+                    const std::filesystem::path child = JoinFolderAndLeaf(collectionIdentity, parent, name);
                     entries.targets.push_back(BuildTargetFromProviderFileInfo(child, context.rootPluginPath, entry));
                 },
                                                   cancelRequested);
@@ -1008,9 +1162,7 @@ template <typename Visitor>
         }
 
         const std::wstring selectedLeaf = path.filename().native();
-        const auto entryIt = std::ranges::find_if(parentIt->targets,
-                                                  [&](const BatchRename::Target& target) noexcept
-        {
+        const auto entryIt              = std::ranges::find_if(parentIt->targets, [&](const BatchRename::Target& target) noexcept {
             return EquivalentComponent(collectionIdentity, target.sourcePath.filename().native(), selectedLeaf);
         });
         if (FAILED(parentIt->hr) || entryIt == parentIt->targets.end())
@@ -1038,7 +1190,7 @@ template <typename Visitor>
 {
     std::error_code ec;
     constexpr std::filesystem::directory_options options = std::filesystem::directory_options::skip_permission_denied;
-    const BatchRenameScopeMatcher scopeMatcher = BuildBatchRenameScopeMatcher(scope.mask);
+    const BatchRenameScopeMatcher scopeMatcher           = BuildBatchRenameScopeMatcher(scope.mask);
     if (scope.includeSubdirectories)
     {
         std::filesystem::recursive_directory_iterator it(context.rootPluginPath, options, ec);
@@ -1169,24 +1321,54 @@ void EmitBatchRenameCollectMetrics(const std::chrono::steady_clock::time_point s
         return;
     }
 
-    Debug::Perf::Emit(L"batchrename.collect.us",
-                      result.detail,
-                      Debug::Perf::ElapsedUs(startedAt),
-                      static_cast<uint64_t>(result.targets.size()),
-                      0u,
-                      result.hr);
+    Debug::Perf::Emit(L"batchrename.collect.us", result.detail, Debug::Perf::ElapsedUs(startedAt), static_cast<uint64_t>(result.targets.size()), 0u, result.hr);
     Debug::Perf::EmitValue(L"batchrename.collect.targets", static_cast<uint64_t>(result.targets.size()), result.hr);
 }
 
-[[nodiscard]] std::vector<BatchRename::Target> BuildTargetsFromContext(const BatchRenamePaneContext& context,
-                                                                       const BatchRenameScopeOptions& scope,
-                                                                       const std::atomic_bool* cancelRequested = nullptr)
+struct BatchRenameCollectionWork final
 {
-    const auto startedAt = std::chrono::steady_clock::now();
-    BatchRenameTargetCollectionResult result = CollectBatchRenameTargets(context, scope, cancelRequested);
-    EmitBatchRenameCollectMetrics(startedAt, result);
-    return std::move(result.targets);
-}
+    HWND hwnd = nullptr;
+    uint64_t generation = 0u;
+    BatchRenamePaneContext context;
+    BatchRenameScopeOptions scope;
+    std::shared_ptr<std::atomic_bool> cancelRequested;
+    std::unique_ptr<BatchRenameCollectionCompletedPayload> payload;
+    wil::unique_hmodule modulePin;
+
+    BatchRenameCollectionWork() = default;
+    BatchRenameCollectionWork(const BatchRenameCollectionWork&) = delete;
+    BatchRenameCollectionWork(BatchRenameCollectionWork&&) = delete;
+    BatchRenameCollectionWork& operator=(const BatchRenameCollectionWork&) = delete;
+    BatchRenameCollectionWork& operator=(BatchRenameCollectionWork&&) = delete;
+
+    void Execute(PTP_CALLBACK_INSTANCE callbackInstance) noexcept
+    {
+        if (modulePin)
+        {
+            TransferModulePinToCallbackReturn(callbackInstance, modulePin);
+        }
+        const HRESULT coinitHr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+        if (FAILED(coinitHr))
+        {
+            payload->hr = coinitHr;
+        }
+        else
+        {
+            const wil::unique_couninitialize_call coUninit;
+            const auto startedAt = std::chrono::steady_clock::now();
+            static std::mutex collectionWorkerMutex;
+            std::scoped_lock lock(collectionWorkerMutex);
+            BatchRenameTargetCollectionResult result = CollectBatchRenameTargets(context, scope, cancelRequested.get());
+            EmitBatchRenameCollectMetrics(startedAt, result);
+            context.fileSystem.reset();
+            payload->hr      = result.hr;
+            payload->detail  = std::move(result.detail);
+            payload->targets = std::move(result.targets);
+        }
+        payload->generation = generation;
+        static_cast<void>(PostMessagePayload(hwnd, WndMsg::kBatchRenameCompleted, kBatchRenameTaskCollection, std::move(payload)));
+    }
+};
 
 [[nodiscard]] uint64_t StableRowIdFromPath(const std::filesystem::path& path) noexcept
 {
@@ -1224,7 +1406,7 @@ void EmitBatchRenameCollectMetrics(const std::chrono::steady_clock::time_point s
         return folderIcon.value_or(-1);
     }
 
-    const std::wstring extension = preview.sourcePath.extension().wstring();
+    const std::wstring extension      = preview.sourcePath.extension().wstring();
     const std::wstring sourcePathText = preview.sourcePath.native();
     if (iconCache.RequiresPerFileLookup(extension) && NavigationLocation::LooksLikeWindowsAbsolutePath(sourcePathText))
     {
@@ -1415,16 +1597,16 @@ void EmitBatchRenameCollectMetrics(const std::chrono::steady_clock::time_point s
             row.dateText = BatchRename::FormatDateText(preview.lastWriteTime.value());
             row.timeText = BatchRename::FormatTimeText(preview.lastWriteTime.value());
         }
-        row.fullPath     = preview.sourcePath.native();
-        row.displayPath  = BuildPreviewDisplayPath(rootText, preview.sourcePath);
-        row.sizeBytes    = preview.sizeBytes;
-        row.iconIndex    = ResolvePreviewIconIndex(preview);
-        row.isDirectory  = preview.isDirectory;
+        row.fullPath        = preview.sourcePath.native();
+        row.displayPath     = BuildPreviewDisplayPath(rootText, preview.sourcePath);
+        row.sizeBytes       = preview.sizeBytes;
+        row.iconIndex       = ResolvePreviewIconIndex(preview);
+        row.isDirectory     = preview.isDirectory;
         row.metadataUnknown = preview.metadataUnknown;
         row.hasErrorIssue   = BatchRename::HasIssueSeverity(preview, BatchRename::IssueSeverity::Error);
         row.hasWarningIssue = BatchRename::HasIssueSeverity(preview, BatchRename::IssueSeverity::Warning);
-        row.changed      = preview.newName != preview.originalName;
-        row.issueTooltip = BuildPreviewIssueTooltip(preview);
+        row.changed         = preview.newName != preview.originalName;
+        row.issueTooltip    = BuildPreviewIssueTooltip(preview);
         rows.push_back(std::move(row));
     }
     return rows;
@@ -1459,8 +1641,7 @@ void AppendBatchRenameTsvField(std::wstring& text, const std::wstring_view field
     }
 }
 
-[[nodiscard]] std::vector<RedSalamander::DxUi::GridColumnLayoutEntry> ConvertColumnLayout(
-    const std::vector<Common::Settings::GridColumnLayoutEntry>& layout)
+[[nodiscard]] std::vector<RedSalamander::DxUi::GridColumnLayoutEntry> ConvertColumnLayout(const std::vector<Common::Settings::GridColumnLayoutEntry>& layout)
 {
     std::vector<RedSalamander::DxUi::GridColumnLayoutEntry> converted;
     converted.reserve(layout.size());
@@ -1480,8 +1661,7 @@ void AppendBatchRenameTsvField(std::wstring& text, const std::wstring_view field
     return converted;
 }
 
-[[nodiscard]] std::vector<Common::Settings::GridColumnLayoutEntry> ConvertColumnLayout(
-    const std::vector<RedSalamander::DxUi::GridColumnLayoutEntry>& layout)
+[[nodiscard]] std::vector<Common::Settings::GridColumnLayoutEntry> ConvertColumnLayout(const std::vector<RedSalamander::DxUi::GridColumnLayoutEntry>& layout)
 {
     std::vector<Common::Settings::GridColumnLayoutEntry> converted;
     converted.reserve(layout.size());
@@ -1542,20 +1722,6 @@ void UpdateRecentBatchRenameValue(std::vector<std::wstring>& history, std::wstri
     }
     names.push_back(std::move(current));
     return names;
-}
-
-[[nodiscard]] std::wstring JoinPreviewNewNames(const BatchRename::Plan& plan)
-{
-    std::wstring text;
-    for (size_t index = 0u; index < plan.rows.size(); ++index)
-    {
-        if (index != 0u)
-        {
-            text.push_back(L'\n');
-        }
-        text.append(plan.rows[index].newName);
-    }
-    return text;
 }
 
 [[nodiscard]] std::wstring JoinManualNames(const std::vector<std::wstring>& names)
@@ -1651,14 +1817,14 @@ void UpdateRecentBatchRenameValue(std::vector<std::wstring>& history, std::wstri
     size_t count = 0u;
     EnumChildWindows(hwnd,
                      [](HWND child, LPARAM param) noexcept -> BOOL
-                     {
-                         auto* out = reinterpret_cast<size_t*>(param);
-                         if (out && IsWindowVisible(child) != FALSE)
-                         {
-                             ++(*out);
-                         }
-                         return TRUE;
-                     },
+    {
+        auto* out = reinterpret_cast<size_t*>(param);
+        if (out && IsWindowVisible(child) != FALSE)
+        {
+            ++(*out);
+        }
+        return TRUE;
+    },
                      reinterpret_cast<LPARAM>(&count));
     return count;
 }
@@ -1831,7 +1997,7 @@ public:
             case 5: outCell.text = row.displayPath; break;
             default: break;
         }
-        outCell.tooltipText   = outCell.text;
+        outCell.tooltipText = outCell.text;
         if (columnIndex == 1u && ! row.issueTooltip.empty())
         {
             outCell.tooltipText = row.issueTooltip;
@@ -1997,6 +2163,7 @@ private:
     void CancelPendingPreviewRebuild() noexcept;
     void OnPreviewRebuildTimer() noexcept;
     void RebuildPreview() noexcept;
+    void OnPreviewCompleted(std::unique_ptr<BatchRenamePreviewCompletedPayload> payload) noexcept;
     void SyncRuleControls() noexcept;
     void UpdateModeVisibility() noexcept;
     void SwitchMode(BatchRename::Mode mode);
@@ -2053,70 +2220,74 @@ private:
     std::vector<BatchRename::Target> _targets;
     BatchRename::Rules _rules;
     std::vector<BatchPreviewRow> _fullPreviewRows;
+    std::optional<BatchRename::Plan> _currentPlan;
     BatchRename::Stats _previewStats{};
     std::optional<BatchRenameExecutionReport> _lastExecutionReport;
     std::wstring _rootText;
     size_t _dispatchDepth = 0u;
     std::atomic_bool _cancelRequested{false};
     std::atomic<uint64_t> _taskGeneration{0u};
+    std::atomic<uint64_t> _previewGeneration{0u};
+    std::shared_ptr<std::atomic_bool> _collectionCancelFlag;
     std::jthread _taskWorker;
-    bool* _destructionObserver = nullptr;
-    bool _collecting           = false;
-    bool _executing            = false;
-    bool _collectionQueued     = false;
+    bool* _destructionObserver       = nullptr;
+    bool _collecting                 = false;
+    bool _executing                  = false;
+    bool _previewing                 = false;
+    bool _collectionQueued           = false;
     HRESULT _lastExecutionTerminalHr = S_OK;
-    bool _deletePending    = false;
-    bool _uiStatePersisted = false;
+    bool _deletePending              = false;
+    bool _uiStatePersisted           = false;
 
     NavigationView _rootNavigation;
     WindowHost _dxHost;
     std::unique_ptr<Panel> _rootStorage;
-    Panel* _root                    = nullptr;
-    Label* _titleLabel              = nullptr;
-    Label* _rootLabel               = nullptr;
-    Label* _maskLabel               = nullptr;
-    TextField* _maskField           = nullptr;
+    Panel* _root                          = nullptr;
+    Label* _titleLabel                    = nullptr;
+    Label* _rootLabel                     = nullptr;
+    Label* _maskLabel                     = nullptr;
+    TextField* _maskField                 = nullptr;
     Checkbox* _includeSubdirectoriesCheck = nullptr;
-    Checkbox* _includeFilesCheck    = nullptr;
-    Checkbox* _includeFoldersCheck  = nullptr;
-    RadioButtons* _modeSelector     = nullptr;
-    RadioButton* _rulesModeButton   = nullptr;
-    RadioButton* _manualModeButton  = nullptr;
-    Label* _newNameLabel            = nullptr;
-    Label* _searchForLabel          = nullptr;
-    Label* _replaceWithLabel        = nullptr;
-    Label* _fileNameCaseLabel       = nullptr;
-    Label* _extensionCaseLabel      = nullptr;
-    TextField* _nameTemplateField   = nullptr;
-    TextField* _searchForField      = nullptr;
-    TextField* _replaceWithField    = nullptr;
-    Button* _nameTemplateHelperButton = nullptr;
-    Button* _searchForHelperButton    = nullptr;
-    Button* _replaceWithHelperButton  = nullptr;
-    TextField* _manualNamesField    = nullptr;
-    Button* _manualFillButton       = nullptr;
-    Button* _manualClearButton      = nullptr;
-    Button* _manualPasteButton      = nullptr;
-    Button* _manualSortLikePreviewButton = nullptr;
-    Checkbox* _regexCheck           = nullptr;
-    Checkbox* _caseSensitiveCheck   = nullptr;
-    Checkbox* _wholeWordsCheck      = nullptr;
-    Checkbox* _replaceOnceCheck     = nullptr;
-    Checkbox* _excludeExtensionCheck = nullptr;
-    ComboBox* _fileNameCaseCombo     = nullptr;
-    ComboBox* _extensionCaseCombo    = nullptr;
-    Grid* _grid                     = nullptr;
-    StatusStrip* _status            = nullptr;
-    Checkbox* _hideUnchangedCheck   = nullptr;
-    Button* _cancelButton           = nullptr;
-    Button* _renameButton           = nullptr;
+    Checkbox* _includeFilesCheck          = nullptr;
+    Checkbox* _includeFoldersCheck        = nullptr;
+    RadioButtons* _modeSelector           = nullptr;
+    RadioButton* _rulesModeButton         = nullptr;
+    RadioButton* _manualModeButton        = nullptr;
+    Label* _newNameLabel                  = nullptr;
+    Label* _searchForLabel                = nullptr;
+    Label* _replaceWithLabel              = nullptr;
+    Label* _fileNameCaseLabel             = nullptr;
+    Label* _extensionCaseLabel            = nullptr;
+    TextField* _nameTemplateField         = nullptr;
+    TextField* _searchForField            = nullptr;
+    TextField* _replaceWithField          = nullptr;
+    Button* _nameTemplateHelperButton     = nullptr;
+    Button* _searchForHelperButton        = nullptr;
+    Button* _replaceWithHelperButton      = nullptr;
+    TextField* _manualNamesField          = nullptr;
+    Button* _manualFillButton             = nullptr;
+    Button* _manualClearButton            = nullptr;
+    Button* _manualPasteButton            = nullptr;
+    Button* _manualSortLikePreviewButton  = nullptr;
+    Checkbox* _regexCheck                 = nullptr;
+    Checkbox* _caseSensitiveCheck         = nullptr;
+    Checkbox* _wholeWordsCheck            = nullptr;
+    Checkbox* _replaceOnceCheck           = nullptr;
+    Checkbox* _excludeExtensionCheck      = nullptr;
+    ComboBox* _fileNameCaseCombo          = nullptr;
+    ComboBox* _extensionCaseCombo         = nullptr;
+    Grid* _grid                           = nullptr;
+    StatusStrip* _status                  = nullptr;
+    Checkbox* _hideUnchangedCheck         = nullptr;
+    Button* _cancelButton                 = nullptr;
+    Button* _renameButton                 = nullptr;
     std::unique_ptr<BatchRenamePreviewGridModel> _gridModelStorage;
     BatchRenamePreviewGridModel* _gridModel = nullptr;
-    bool _syncingRuleControls             = false;
-    bool _manualTextInitialized           = false;
-    bool _hideUnchangedRows               = false;
-    bool _previewRebuildPending           = false;
-    bool _targetRebuildPending            = false;
+    bool _syncingRuleControls               = false;
+    bool _manualTextInitialized             = false;
+    bool _hideUnchangedRows                 = false;
+    bool _previewRebuildPending             = false;
+    bool _targetRebuildPending              = false;
 };
 
 BatchRenameWindow* g_batchRenameWindow = nullptr;
@@ -2161,32 +2332,27 @@ HWND BatchRenameWindow::Create(HWND owner, Common::Settings::Settings& settings,
     _rootText    = ResolveContextRootText(_context);
     _ownerWindow = NormalizeBatchRenameOwner(owner);
     ApplySettingsDefaults();
-    if (! _context.initialPaths.empty())
-    {
-        // Explicit selections are bounded by the seeded path list; folder
-        // scopes are collected on a background worker once the window exists.
-        _targets = BuildTargetsFromContext(_context, _scopeOptions);
-    }
+    _targets.clear();
 
-    const UINT dpi          = _ownerWindow ? GetDpiForWindow(_ownerWindow) : GetDpiForSystem();
-    const int scaledWidth   = MulDiv(1040, static_cast<int>(dpi == 0u ? 96u : dpi), 96);
-    const int scaledHeight  = MulDiv(680, static_cast<int>(dpi == 0u ? 96u : dpi), 96);
+    const UINT dpi           = _ownerWindow ? GetDpiForWindow(_ownerWindow) : GetDpiForSystem();
+    const int scaledWidth    = MulDiv(1040, static_cast<int>(dpi == 0u ? 96u : dpi), 96);
+    const int scaledHeight   = MulDiv(680, static_cast<int>(dpi == 0u ? 96u : dpi), 96);
     const std::wstring title = LoadBatchRenameString(IDS_BATCH_RENAME_TITLE, L"Batch Rename");
 
     bool destroyedDuringCreate = false;
     _destructionObserver       = &destroyedDuringCreate;
-    const HWND hwnd = CreateWindowExW(0,
-                                      kBatchRenameWindowClassName,
-                                      title.c_str(),
-                                      WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
-                                      CW_USEDEFAULT,
-                                      CW_USEDEFAULT,
-                                      scaledWidth,
-                                      scaledHeight,
-                                      nullptr,
-                                      nullptr,
-                                      _instance,
-                                      this);
+    const HWND hwnd            = CreateWindowExW(0,
+                                                 kBatchRenameWindowClassName,
+                                                 title.c_str(),
+                                                 WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
+                                                 CW_USEDEFAULT,
+                                                 CW_USEDEFAULT,
+                                                 scaledWidth,
+                                                 scaledHeight,
+                                                 nullptr,
+                                                 nullptr,
+                                                 _instance,
+                                                 this);
     if (destroyedDuringCreate)
     {
         // WM_CREATE failed: CreateWindowExW destroyed the half-created window
@@ -2209,10 +2375,7 @@ HWND BatchRenameWindow::Create(HWND owner, Common::Settings::Settings& settings,
     const int showCmd       = hasPlacement ? WindowPlacementPersistence::Restore(*_settings, kBatchRenameWindowId, hwnd) : SW_SHOWNORMAL;
     ShowWindow(hwnd, showCmd);
     SetForegroundWindow(hwnd);
-    if (_context.initialPaths.empty())
-    {
-        StartTargetCollection();
-    }
+    StartTargetCollection();
     return hwnd;
 }
 
@@ -2228,14 +2391,7 @@ void BatchRenameWindow::SetContext(BatchRenamePaneContext context) noexcept
     CancelAndJoinBackgroundTask();
     ClearExecutionReport();
     _context = std::move(context);
-    if (! _context.initialPaths.empty())
-    {
-        _targets = BuildTargetsFromContext(_context, _scopeOptions);
-    }
-    else
-    {
-        _targets.clear();
-    }
+    _targets.clear();
     _rootText = ResolveContextRootText(_context);
     if (_rootLabel)
     {
@@ -2247,10 +2403,7 @@ void BatchRenameWindow::SetContext(BatchRenamePaneContext context) noexcept
     RebuildPreview();
     Layout();
     _dxHost.Invalidate();
-    if (_context.initialPaths.empty())
-    {
-        StartTargetCollection();
-    }
+    StartTargetCollection();
 }
 
 LRESULT CALLBACK BatchRenameWindow::WndProcThunk(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
@@ -2330,9 +2483,7 @@ LRESULT BatchRenameWindow::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARA
 
     switch (message)
     {
-        case WM_CREATE:
-            InitPostedPayloadWindow(hwnd);
-            return OnCreate(hwnd) ? 0 : -1;
+        case WM_CREATE: InitPostedPayloadWindow(hwnd); return OnCreate(hwnd) ? 0 : -1;
         case WM_SIZE: Layout(); return 0;
         // WM_DPICHANGED and WM_KEYDOWN are fully handled by the DxUi WindowHost
         // (which marks them handled before this switch), so they intentionally
@@ -2343,7 +2494,7 @@ LRESULT BatchRenameWindow::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARA
             auto* info = reinterpret_cast<MINMAXINFO*>(lParam);
             if (info)
             {
-                const UINT dpi          = GetDpiForWindow(hwnd);
+                const UINT dpi         = GetDpiForWindow(hwnd);
                 info->ptMinTrackSize.x = std::max<LONG>(info->ptMinTrackSize.x, MulDiv(760, static_cast<int>(dpi), 96));
                 info->ptMinTrackSize.y = std::max<LONG>(info->ptMinTrackSize.y, MulDiv(460, static_cast<int>(dpi), 96));
                 static_cast<void>(WindowMaximizeBehavior::ApplyVerticalMaximize(hwnd, *info));
@@ -2360,13 +2511,15 @@ LRESULT BatchRenameWindow::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARA
                 return 0;
             }
             break;
-        case WndMsg::kBatchRenameTaskUpdate:
-            OnTaskProgress(TakeMessagePayload<BatchRenameTaskProgressPayload>(lParam));
-            return 0;
+        case WndMsg::kBatchRenameTaskUpdate: OnTaskProgress(TakeMessagePayload<BatchRenameTaskProgressPayload>(lParam)); return 0;
         case WndMsg::kBatchRenameCompleted:
             if (wParam == kBatchRenameTaskCollection)
             {
                 OnCollectionCompleted(TakeMessagePayload<BatchRenameCollectionCompletedPayload>(lParam));
+            }
+            else if (wParam == kBatchRenameTaskPreview)
+            {
+                OnPreviewCompleted(TakeMessagePayload<BatchRenamePreviewCompletedPayload>(lParam));
             }
             else
             {
@@ -2409,6 +2562,9 @@ bool BatchRenameWindow::OnCreate(HWND hwnd) noexcept
 
 void BatchRenameWindow::OnNcDestroy(HWND hwnd) noexcept
 {
+    static_cast<void>(_taskGeneration.fetch_add(1u, std::memory_order_acq_rel));
+    static_cast<void>(_previewGeneration.fetch_add(1u, std::memory_order_acq_rel));
+    _previewing = false;
     CancelAndJoinBackgroundTask();
     PersistCloseState();
     CancelPendingPreviewRebuild();
@@ -2416,44 +2572,44 @@ void BatchRenameWindow::OnNcDestroy(HWND hwnd) noexcept
 
     _gridModel = nullptr;
     _gridModelStorage.reset();
-    _renameButton            = nullptr;
-    _cancelButton            = nullptr;
-    _status                  = nullptr;
-    _grid                    = nullptr;
-    _extensionCaseCombo      = nullptr;
-    _fileNameCaseCombo       = nullptr;
-    _excludeExtensionCheck   = nullptr;
-    _replaceOnceCheck        = nullptr;
-    _wholeWordsCheck         = nullptr;
-    _caseSensitiveCheck      = nullptr;
-    _regexCheck              = nullptr;
-    _replaceWithHelperButton = nullptr;
-    _searchForHelperButton   = nullptr;
-    _nameTemplateHelperButton = nullptr;
-    _replaceWithField        = nullptr;
-    _searchForField          = nullptr;
-    _nameTemplateField       = nullptr;
-    _manualClearButton       = nullptr;
-    _manualFillButton        = nullptr;
-    _manualPasteButton       = nullptr;
+    _renameButton                = nullptr;
+    _cancelButton                = nullptr;
+    _status                      = nullptr;
+    _grid                        = nullptr;
+    _extensionCaseCombo          = nullptr;
+    _fileNameCaseCombo           = nullptr;
+    _excludeExtensionCheck       = nullptr;
+    _replaceOnceCheck            = nullptr;
+    _wholeWordsCheck             = nullptr;
+    _caseSensitiveCheck          = nullptr;
+    _regexCheck                  = nullptr;
+    _replaceWithHelperButton     = nullptr;
+    _searchForHelperButton       = nullptr;
+    _nameTemplateHelperButton    = nullptr;
+    _replaceWithField            = nullptr;
+    _searchForField              = nullptr;
+    _nameTemplateField           = nullptr;
+    _manualClearButton           = nullptr;
+    _manualFillButton            = nullptr;
+    _manualPasteButton           = nullptr;
     _manualSortLikePreviewButton = nullptr;
-    _manualNamesField        = nullptr;
-    _extensionCaseLabel      = nullptr;
-    _fileNameCaseLabel       = nullptr;
-    _replaceWithLabel        = nullptr;
-    _searchForLabel          = nullptr;
-    _newNameLabel            = nullptr;
-    _manualModeButton        = nullptr;
-    _rulesModeButton         = nullptr;
-    _modeSelector            = nullptr;
-    _rootLabel               = nullptr;
-    _includeFoldersCheck     = nullptr;
-    _includeFilesCheck       = nullptr;
-    _includeSubdirectoriesCheck = nullptr;
-    _maskField               = nullptr;
-    _maskLabel               = nullptr;
-    _titleLabel              = nullptr;
-    _root                    = nullptr;
+    _manualNamesField            = nullptr;
+    _extensionCaseLabel          = nullptr;
+    _fileNameCaseLabel           = nullptr;
+    _replaceWithLabel            = nullptr;
+    _searchForLabel              = nullptr;
+    _newNameLabel                = nullptr;
+    _manualModeButton            = nullptr;
+    _rulesModeButton             = nullptr;
+    _modeSelector                = nullptr;
+    _rootLabel                   = nullptr;
+    _includeFoldersCheck         = nullptr;
+    _includeFilesCheck           = nullptr;
+    _includeSubdirectoriesCheck  = nullptr;
+    _maskField                   = nullptr;
+    _maskLabel                   = nullptr;
+    _titleLabel                  = nullptr;
+    _root                        = nullptr;
     _rootNavigation.Destroy();
     _rootStorage.reset();
     _dxHost.Detach();
@@ -2515,8 +2671,7 @@ void BatchRenameWindow::BuildUi()
         RequestPreviewRebuild(true);
     });
 
-    _includeSubdirectoriesCheck =
-        _root->AddChild<Checkbox>(LoadBatchRenameString(IDS_BATCH_RENAME_CHECK_INCLUDE_SUBDIRECTORIES, L"Include subdirectories"));
+    _includeSubdirectoriesCheck = _root->AddChild<Checkbox>(LoadBatchRenameString(IDS_BATCH_RENAME_CHECK_INCLUDE_SUBDIRECTORIES, L"Include subdirectories"));
     _includeSubdirectoriesCheck->SetChecked(_scopeOptions.includeSubdirectories);
     _includeSubdirectoriesCheck->SetOnToggled([this](bool checked)
     {
@@ -2552,8 +2707,8 @@ void BatchRenameWindow::BuildUi()
         RebuildTargetsFromScope();
     });
 
-    _modeSelector = _root->AddChild<RadioButtons>();
-    _rulesModeButton = _modeSelector->AddItem(LoadBatchRenameString(IDS_BATCH_RENAME_MODE_RULES, L"Rules"));
+    _modeSelector     = _root->AddChild<RadioButtons>();
+    _rulesModeButton  = _modeSelector->AddItem(LoadBatchRenameString(IDS_BATCH_RENAME_MODE_RULES, L"Rules"));
     _manualModeButton = _modeSelector->AddItem(LoadBatchRenameString(IDS_BATCH_RENAME_MODE_MANUAL, L"Manual"));
     _modeSelector->SetSelectedIndex(0);
     _modeSelector->SetOnSelectionChanged([this](int index)
@@ -2584,9 +2739,7 @@ void BatchRenameWindow::BuildUi()
     _nameTemplateHelperButton->SetTooltipText(templateHelperText);
     _nameTemplateHelperButton->SetAccessibleName(templateHelperText);
     _nameTemplateHelperButton->SetOnDropDownClick([this]() noexcept
-    {
-        ShowHelperMenu(BatchRenameMenus::HelperMenuKind::Template, _nameTemplateField, _nameTemplateHelperButton);
-    });
+    { ShowHelperMenu(BatchRenameMenus::HelperMenuKind::Template, _nameTemplateField, _nameTemplateHelperButton); });
 
     _searchForLabel = _root->AddChild<Label>(LoadBatchRenameString(IDS_BATCH_RENAME_LABEL_SEARCH_FOR, L"Search for:"));
     _searchForLabel->SetMultiline(false);
@@ -2607,9 +2760,7 @@ void BatchRenameWindow::BuildUi()
     _searchForHelperButton->SetTooltipText(regexHelperText);
     _searchForHelperButton->SetAccessibleName(regexHelperText);
     _searchForHelperButton->SetOnDropDownClick([this]() noexcept
-    {
-        ShowHelperMenu(BatchRenameMenus::HelperMenuKind::RegexSearch, _searchForField, _searchForHelperButton);
-    });
+    { ShowHelperMenu(BatchRenameMenus::HelperMenuKind::RegexSearch, _searchForField, _searchForHelperButton); });
 
     _replaceWithLabel = _root->AddChild<Label>(LoadBatchRenameString(IDS_BATCH_RENAME_LABEL_REPLACE_WITH, L"Replace with:"));
     _replaceWithLabel->SetMultiline(false);
@@ -2630,9 +2781,7 @@ void BatchRenameWindow::BuildUi()
     _replaceWithHelperButton->SetTooltipText(replaceHelperText);
     _replaceWithHelperButton->SetAccessibleName(replaceHelperText);
     _replaceWithHelperButton->SetOnDropDownClick([this]() noexcept
-    {
-        ShowHelperMenu(BatchRenameMenus::HelperMenuKind::Replacement, _replaceWithField, _replaceWithHelperButton);
-    });
+    { ShowHelperMenu(BatchRenameMenus::HelperMenuKind::Replacement, _replaceWithField, _replaceWithHelperButton); });
 
     _regexCheck = _root->AddChild<Checkbox>(LoadBatchRenameString(IDS_BATCH_RENAME_CHECK_REGEX, L"Regular expression"));
     _regexCheck->SetChecked(_rules.regexEnabled);
@@ -2739,8 +2888,8 @@ void BatchRenameWindow::BuildUi()
         {
             return;
         }
-        _rules.mode             = BatchRename::Mode::Manual;
-        _rules.manualNames      = SplitManualNames(text);
+        _rules.mode            = BatchRename::Mode::Manual;
+        _rules.manualNames     = SplitManualNames(text);
         _manualTextInitialized = true;
         UpdateModeVisibility();
         RequestPreviewRebuild(false);
@@ -2780,25 +2929,16 @@ void BatchRenameWindow::BuildUi()
     _hideUnchangedCheck = _root->AddChild<Checkbox>(LoadBatchRenameString(IDS_BATCH_RENAME_CHECK_HIDE_UNCHANGED, L"Hide unchanged"));
     _hideUnchangedCheck->SetAccessibleName(LoadBatchRenameString(IDS_BATCH_RENAME_CHECK_HIDE_UNCHANGED, L"Hide unchanged"));
     _hideUnchangedCheck->SetChecked(_hideUnchangedRows);
-    _hideUnchangedCheck->SetOnToggled([this](bool checked)
-    {
-        SetHideUnchangedRows(checked);
-    });
+    _hideUnchangedCheck->SetOnToggled([this](bool checked) { SetHideUnchangedRows(checked); });
 
     _cancelButton = _root->AddChild<Button>(LoadBatchRenameString(IDS_BATCH_RENAME_BTN_CANCEL, L"Cancel"));
     _cancelButton->SetEnabled(false);
-    _cancelButton->SetOnClick([this]
-    {
-        RequestTaskCancel();
-    });
+    _cancelButton->SetOnClick([this] { RequestTaskCancel(); });
 
     _renameButton = _root->AddChild<Button>(LoadBatchRenameString(IDS_BATCH_RENAME_BTN_RENAME, L"Rename"));
     _renameButton->SetPrimary(true);
     _renameButton->SetEnabled(false);
-    _renameButton->SetOnClick([this]
-    {
-        static_cast<void>(ExecuteRename());
-    });
+    _renameButton->SetOnClick([this] { static_cast<void>(ExecuteRename()); });
 
     _dxHost.SetRoot(std::move(_rootStorage));
     ApplyPreviewGridSettings();
@@ -2812,10 +2952,7 @@ bool BatchRenameWindow::CreateRootNavigation(HWND parent) noexcept
     _rootNavigation.SetTheme(_theme);
     _rootNavigation.SetEmbeddedDestinationMode(true);
     _rootNavigation.SetPaneFocused(false);
-    _rootNavigation.SetPathChangedCallback([this](const std::optional<std::filesystem::path>& path) noexcept
-    {
-        OnRootNavigationPathChanged(path);
-    });
+    _rootNavigation.SetPathChangedCallback([this](const std::optional<std::filesystem::path>& path) noexcept { OnRootNavigationPathChanged(path); });
     _rootNavigation.SetRequestFolderViewFocusCallback([this]
     {
         if (_hWnd)
@@ -2856,20 +2993,20 @@ void BatchRenameWindow::Layout() noexcept
     const D2D1_RECT_F bounds = _dxHost.GetClientBoundsDip();
     _root->SetBounds(bounds);
 
-    const float outer        = 16.0f;
-    const float gap          = 8.0f;
-    const float titleHeight  = 28.0f;
-    const float rootHeight   = 30.0f;
-    const float labelWidth   = 112.0f;
-    const float fieldHeight  = 30.0f;
-    const float checkHeight  = 28.0f;
-    const float modeHeight   = 30.0f;
-    const float manualHeight = 118.0f;
-    const float footerHeight = 34.0f;
-    const float buttonWidth  = 112.0f;
-    const float buttonHeight = 30.0f;
-    const float contentRight = bounds.right - outer;
-    const auto snapDip       = [this](const float dip) noexcept { return _dxHost.PixelsToDip(std::round(_dxHost.DipsToPixels(dip))); };
+    const float outer         = 16.0f;
+    const float gap           = 8.0f;
+    const float titleHeight   = 28.0f;
+    const float rootHeight    = 30.0f;
+    const float labelWidth    = 112.0f;
+    const float fieldHeight   = 30.0f;
+    const float checkHeight   = 28.0f;
+    const float modeHeight    = 30.0f;
+    const float manualHeight  = 118.0f;
+    const float footerHeight  = 34.0f;
+    const float buttonWidth   = 112.0f;
+    const float buttonHeight  = 30.0f;
+    const float contentRight  = bounds.right - outer;
+    const auto snapDip        = [this](const float dip) noexcept { return _dxHost.PixelsToDip(std::round(_dxHost.DipsToPixels(dip))); };
     const auto moveChildToDip = [this, &snapDip](HWND hwnd, const float left, const float top, const float rightEdge, const float bottom) noexcept
     {
         if (! hwnd)
@@ -2975,7 +3112,7 @@ void BatchRenameWindow::Layout() noexcept
         const float firstCheckWidth  = 186.0f;
         const float secondCheckWidth = 178.0f;
         const float thirdCheckWidth  = 150.0f;
-        float checkLeft             = outer + labelWidth + gap;
+        float checkLeft              = outer + labelWidth + gap;
         if (_caseSensitiveCheck)
         {
             _caseSensitiveCheck->SetBounds(D2D1::RectF(checkLeft, top, checkLeft + firstCheckWidth, top + checkHeight));
@@ -3004,9 +3141,9 @@ void BatchRenameWindow::Layout() noexcept
         }
         top += checkHeight + gap;
 
-        const float comboWidth      = 224.0f;
-        const float caseLabelWidth  = 92.0f;
-        const float secondCaseLeft  = outer + labelWidth + gap + comboWidth + gap + caseLabelWidth + gap;
+        const float comboWidth     = 224.0f;
+        const float caseLabelWidth = 92.0f;
+        const float secondCaseLeft = outer + labelWidth + gap + comboWidth + gap + caseLabelWidth + gap;
         if (_fileNameCaseLabel)
         {
             _fileNameCaseLabel->SetBounds(D2D1::RectF(outer, top, outer + labelWidth, top + fieldHeight));
@@ -3061,8 +3198,8 @@ void BatchRenameWindow::Layout() noexcept
         _grid->SetBounds(D2D1::RectF(outer, top, contentRight, footerTop - gap));
     }
 
-    const float buttonLeft = bounds.right - outer - buttonWidth;
-    const float cancelLeft = std::max(outer, buttonLeft - gap - buttonWidth);
+    const float buttonLeft         = bounds.right - outer - buttonWidth;
+    const float cancelLeft         = std::max(outer, buttonLeft - gap - buttonWidth);
     const float hideUnchangedWidth = 156.0f;
     const float hideUnchangedLeft  = std::max(outer, cancelLeft - gap - hideUnchangedWidth);
     if (_status)
@@ -3121,11 +3258,11 @@ void BatchRenameWindow::ApplySettingsDefaults() noexcept
     _scopeOptions.includeSubdirectories = settings.includeSubdirectories;
     _scopeOptions.includeFiles          = settings.includeFiles;
     _scopeOptions.includeFolders        = settings.includeFolders;
-    _rules.regexEnabled       = settings.regexEnabled;
-    _rules.caseSensitive      = settings.caseSensitive;
-    _rules.wholeWords         = settings.wholeWords;
-    _rules.replaceOnce        = settings.replaceOnce;
-    _rules.excludeExtension   = settings.excludeExtension;
+    _rules.regexEnabled                 = settings.regexEnabled;
+    _rules.caseSensitive                = settings.caseSensitive;
+    _rules.wholeWords                   = settings.wholeWords;
+    _rules.replaceOnce                  = settings.replaceOnce;
+    _rules.excludeExtension             = settings.excludeExtension;
     _rules.flattenSeparator   = settings.flattenSeparator.empty() ? Common::Settings::BatchRenameSettings{}.flattenSeparator : settings.flattenSeparator;
     _rules.fileNameCaseStyle  = CaseTransformFromSettings(settings.fileNameCaseStyle);
     _rules.extensionCaseStyle = CaseTransformFromSettings(settings.extensionCaseStyle);
@@ -3142,7 +3279,7 @@ void BatchRenameWindow::ApplyPreviewGridSettings() noexcept
     }
 
     const Common::Settings::BatchRenameSettings& settings = _settings->batchRename.value();
-    const auto layout = ConvertColumnLayout(settings.previewGridLayout);
+    const auto layout                                     = ConvertColumnLayout(settings.previewGridLayout);
     if (! layout.empty())
     {
         _grid->ApplyColumnLayout(layout);
@@ -3168,18 +3305,18 @@ void BatchRenameWindow::PersistUiState(const bool updateHistory) noexcept
     Common::Settings::BatchRenameSettings settings =
         _settings->batchRename.has_value() ? _settings->batchRename.value() : Common::Settings::BatchRenameSettings{};
 
-    settings.lastRoot             = _rootText;
+    settings.lastRoot              = _rootText;
     settings.includeSubdirectories = _scopeOptions.includeSubdirectories;
     settings.includeFiles          = _scopeOptions.includeFiles;
     settings.includeFolders        = _scopeOptions.includeFolders;
-    settings.regexEnabled         = _rules.regexEnabled;
-    settings.caseSensitive        = _rules.caseSensitive;
-    settings.wholeWords           = _rules.wholeWords;
-    settings.replaceOnce          = _rules.replaceOnce;
-    settings.excludeExtension     = _rules.excludeExtension;
-    settings.flattenSeparator     = _rules.flattenSeparator.empty() ? Common::Settings::BatchRenameSettings{}.flattenSeparator : _rules.flattenSeparator;
-    settings.fileNameCaseStyle    = CaseTransformToSettings(_rules.fileNameCaseStyle);
-    settings.extensionCaseStyle   = CaseTransformToSettings(_rules.extensionCaseStyle);
+    settings.regexEnabled          = _rules.regexEnabled;
+    settings.caseSensitive         = _rules.caseSensitive;
+    settings.wholeWords            = _rules.wholeWords;
+    settings.replaceOnce           = _rules.replaceOnce;
+    settings.excludeExtension      = _rules.excludeExtension;
+    settings.flattenSeparator      = _rules.flattenSeparator.empty() ? Common::Settings::BatchRenameSettings{}.flattenSeparator : _rules.flattenSeparator;
+    settings.fileNameCaseStyle     = CaseTransformToSettings(_rules.fileNameCaseStyle);
+    settings.extensionCaseStyle    = CaseTransformToSettings(_rules.extensionCaseStyle);
     settings.previewSortColumnId.clear();
     settings.previewSortDescending = false;
     settings.previewGridLayout.clear();
@@ -3228,14 +3365,8 @@ void BatchRenameWindow::PersistCloseState() noexcept
 
 void BatchRenameWindow::RebuildTargetsFromScope()
 {
-    if (! _context.initialPaths.empty() || _context.rootPluginPath.empty() || ! _hWnd)
+    if (! _hWnd)
     {
-        // Explicit selections and empty roots are bounded by the seeded path
-        // list; collect them synchronously. Folder scopes enumerate on a
-        // background worker so the window stays responsive.
-        _targets = BuildTargetsFromContext(_context, _scopeOptions);
-        RebuildPreviewFromRuleControlChange();
-        Layout();
         return;
     }
 
@@ -3246,7 +3377,7 @@ void BatchRenameWindow::RequestPreviewRebuild(const bool rebuildTargets) noexcep
 {
     ClearExecutionReport();
     _previewRebuildPending = true;
-    _targetRebuildPending = _targetRebuildPending || rebuildTargets;
+    _targetRebuildPending  = _targetRebuildPending || rebuildTargets;
 
     if (! _hWnd)
     {
@@ -3304,17 +3435,57 @@ void BatchRenameWindow::RebuildPreview() noexcept
     {
         return;
     }
+    _currentPlan.reset();
+
+    auto payload = std::unique_ptr<BatchRenamePreviewCompletedPayload>(new (std::nothrow) BatchRenamePreviewCompletedPayload{});
+    auto work    = std::unique_ptr<BatchRenamePreviewWork>(new (std::nothrow) BatchRenamePreviewWork{});
+    if (! payload || ! work)
+    {
+        _previewing = false;
+        _previewStats = {};
+        _fullPreviewRows.clear();
+        RefreshVisibleRows();
+        return;
+    }
+
+    const uint64_t generation = _previewGeneration.fetch_add(1u, std::memory_order_acq_rel) + 1u;
+    work->hwnd       = _hWnd.get();
+    work->generation = generation;
+    work->context    = _context;
+    work->targets    = _targets;
+    work->rules      = _rules;
+    work->payload    = std::move(payload);
+    work->modulePin  = AcquireModuleReferenceFromAddress(&kBatchRenameModuleAnchor);
+    if (! work->hwnd || ! work->modulePin || ! SubmitOwnedThreadpoolCallbackWithInstance(work))
+    {
+        _previewing = false;
+        _previewStats = {};
+        _fullPreviewRows.clear();
+        RefreshVisibleRows();
+        return;
+    }
+
+    _previewing = true;
+    UpdateTaskUi();
+}
+
+void BatchRenameWindow::OnPreviewCompleted(std::unique_ptr<BatchRenamePreviewCompletedPayload> payload) noexcept
+{
+    if (! payload || payload->generation != _previewGeneration.load(std::memory_order_acquire))
+    {
+        return;
+    }
 
     Debug::Perf::Scope recomputePerf(L"batchrename.preview.recompute.us");
-    recomputePerf.SetDetail(_rules.mode == BatchRename::Mode::Manual ? L"manual" : L"rules");
-
-    BatchRename::Plan plan = BuildBatchRenamePlanForContext(_context, _targets, _rules);
-    _previewStats = plan.stats;
-    recomputePerf.SetValue0(static_cast<uint64_t>(plan.rows.size()));
-    recomputePerf.SetValue1(static_cast<uint64_t>(plan.stats.changedRows));
-
-    _fullPreviewRows = BuildPreviewRowsFromPlan(plan, _rootText);
+    recomputePerf.SetDetail(_rules.mode == BatchRename::Mode::Manual ? L"worker-manual" : L"worker-rules");
+    _previewing  = false;
+    _previewStats = payload->plan.stats;
+    recomputePerf.SetValue0(static_cast<uint64_t>(payload->plan.rows.size()));
+    recomputePerf.SetValue1(static_cast<uint64_t>(payload->plan.stats.changedRows));
+    _fullPreviewRows = BuildPreviewRowsFromPlan(payload->plan, _rootText);
+    _currentPlan     = std::move(payload->plan);
     RefreshVisibleRows();
+    UpdateTaskUi();
 }
 
 void BatchRenameWindow::RefreshVisibleRows() noexcept
@@ -3324,13 +3495,13 @@ void BatchRenameWindow::RefreshVisibleRows() noexcept
         return;
     }
 
-    const auto visibleRefreshStartedAt = std::chrono::steady_clock::now();
+    const auto visibleRefreshStartedAt       = std::chrono::steady_clock::now();
     std::vector<BatchPreviewRow> previewRows = _fullPreviewRows;
     if (_hideUnchangedRows)
     {
         std::erase_if(previewRows, [](const BatchPreviewRow& row) noexcept { return ! row.changed; });
     }
-    const uint64_t visibleRows               = static_cast<uint64_t>(previewRows.size());
+    const uint64_t visibleRows = static_cast<uint64_t>(previewRows.size());
     _gridModel->SetRows(std::move(previewRows));
     if (_grid)
     {
@@ -3347,7 +3518,7 @@ void BatchRenameWindow::RefreshVisibleRows() noexcept
     }
     if (_renameButton)
     {
-        _renameButton->SetEnabled(_previewStats.changedRows > 0u && _previewStats.errorRows == 0u && ! _collecting && ! _executing);
+        _renameButton->SetEnabled(_previewStats.changedRows > 0u && _previewStats.errorRows == 0u && ! _collecting && ! _executing && ! _previewing);
     }
     UpdateStatus();
 }
@@ -3496,17 +3667,20 @@ void BatchRenameWindow::SwitchMode(const BatchRename::Mode mode)
 
 void BatchRenameWindow::SeedManualTextFromRulePreview()
 {
-    BatchRename::Rules rules = _rules;
-    rules.mode              = BatchRename::Mode::Rules;
-    const BatchRename::Plan plan = BuildBatchRenamePlanForContext(_context, _targets, rules);
-    SetManualText(JoinPreviewNewNames(plan));
+    std::vector<std::wstring> names;
+    names.reserve(_fullPreviewRows.size());
+    for (const BatchPreviewRow& row : _fullPreviewRows)
+    {
+        names.push_back(row.newName);
+    }
+    SetManualText(JoinManualNames(names));
 }
 
 void BatchRenameWindow::SetManualText(std::wstring text)
 {
     _manualTextInitialized = true;
-    _rules.mode           = BatchRename::Mode::Manual;
-    _rules.manualNames    = SplitManualNames(text);
+    _rules.mode            = BatchRename::Mode::Manual;
+    _rules.manualNames     = SplitManualNames(text);
 
     if (_manualNamesField)
     {
@@ -3551,10 +3725,9 @@ bool BatchRenameWindow::SortManualTextLikePreview()
         return false;
     }
 
-    // Build the full preview order from the complete plan, independent of the
-    // Hide-unchanged visibility filter, so sorting never silently no-ops.
-    const BatchRename::Plan plan             = BuildBatchRenamePlanForContext(_context, _targets, _rules);
-    std::vector<BatchPreviewRow> orderedRows = BuildPreviewRowsFromPlan(plan, _rootText);
+    // Use the retained full preview (independent of Hide unchanged) so this command performs
+    // no provider query or local destination I/O on the UI thread.
+    std::vector<BatchPreviewRow> orderedRows = _fullPreviewRows;
     if (_grid)
     {
         SortBatchPreviewRows(orderedRows, _gridModel->GetColumns(), _grid->GetSortSpec());
@@ -3611,13 +3784,29 @@ HRESULT BatchRenameWindow::ExecuteRename() noexcept
 {
     // Re-entrancy guard: Rename cannot run while an execution or a target
     // collection is still in flight.
-    if (_executing || _collecting)
+    if (_executing || _collecting || _previewing || ! _currentPlan.has_value())
     {
         return HRESULT_FROM_WIN32(ERROR_BUSY);
     }
 
-    const auto startedAt     = std::chrono::steady_clock::now();
-    uint64_t executeRows     = 0u;
+    if (_targetRebuildPending)
+    {
+        OnPreviewRebuildTimer();
+        if (_collecting)
+        {
+            return HRESULT_FROM_WIN32(ERROR_BUSY);
+        }
+    }
+    else
+    {
+        // ExecuteRename builds the authoritative plan from the current rules.
+        // Do not let a debounced preview timer race the filesystem worker over
+        // the same paths while execution is in flight.
+        CancelPendingPreviewRebuild();
+    }
+
+    const auto startedAt         = std::chrono::steady_clock::now();
+    uint64_t executeRows         = 0u;
     const auto finishSynchronous = [&](const HRESULT hr, const std::wstring_view detail, BatchRenameExecutionReport report) -> HRESULT
     {
         if (Debug::Perf::IsCaptureEnabled())
@@ -3638,7 +3827,7 @@ HRESULT BatchRenameWindow::ExecuteRename() noexcept
         return finishSynchronous(E_POINTER, L"missing_context", std::move(report));
     }
 
-    BatchRename::Plan plan = BuildBatchRenamePlanForContext(_context, _targets, _rules);
+    BatchRename::Plan plan = _currentPlan.value();
     BatchRenameExecutionReport report{};
     report.totalRows   = plan.rows.size();
     report.skippedRows = plan.stats.unchangedRows;
@@ -3646,7 +3835,7 @@ HRESULT BatchRenameWindow::ExecuteRename() noexcept
     {
         report.failedRows   = plan.stats.errorRows;
         report.firstFailure = HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
-        _previewStats = plan.stats;
+        _previewStats       = plan.stats;
         if (_renameButton)
         {
             _renameButton->SetEnabled(false);
@@ -3661,17 +3850,6 @@ HRESULT BatchRenameWindow::ExecuteRename() noexcept
         report.failedRows   = plan.stats.changedRows;
         report.firstFailure = HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
         return finishSynchronous(report.firstFailure, L"provider_path_identity_unknown", std::move(report));
-    }
-
-    if (IsLocalFileSystemContext(_context))
-    {
-        const HRESULT revalidateHr = RevalidateLocalRenamePlan(executionPathIdentity.value(), plan);
-        if (FAILED(revalidateHr))
-        {
-            report.failedRows   = plan.stats.changedRows;
-            report.firstFailure = revalidateHr;
-            return finishSynchronous(revalidateHr, L"revalidate_failed", std::move(report));
-        }
     }
 
     std::vector<BatchRenameExecutionOp> ops;
@@ -3699,7 +3877,8 @@ HRESULT BatchRenameWindow::ExecuteRename() noexcept
         return finishSynchronous(S_OK, L"noop", std::move(report));
     }
 
-    std::ranges::sort(ops, [](const BatchRenameExecutionOp& lhs, const BatchRenameExecutionOp& rhs) noexcept
+    std::ranges::sort(ops,
+                      [](const BatchRenameExecutionOp& lhs, const BatchRenameExecutionOp& rhs) noexcept
     {
         if (lhs.depth != rhs.depth)
         {
@@ -3716,30 +3895,45 @@ HRESULT BatchRenameWindow::ExecuteRename() noexcept
         return finishSynchronous(E_OUTOFMEMORY, L"rename_failed", std::move(report));
     }
 
-    CancelAndJoinBackgroundTask();
+    if (_collectionCancelFlag)
+    {
+        _collectionCancelFlag->store(true, std::memory_order_release);
+    }
     _cancelRequested.store(false, std::memory_order_release);
 
     const uint64_t generation = _taskGeneration.fetch_add(1u, std::memory_order_acq_rel) + 1u;
     payload->generation       = generation;
     payload->report           = std::move(report);
 
-    const HWND hwnd                          = _hWnd.get();
-    wil::com_ptr<IFileSystem> fileSystem       = _context.fileSystem;
+    const HWND hwnd                           = _hWnd.get();
+    wil::com_ptr<IFileSystem> fileSystem      = _context.fileSystem;
     const FileSystemPathIdentity pathIdentity = executionPathIdentity.value();
-    std::atomic_bool* const cancelFlag       = &_cancelRequested;
-    const size_t opsCount                    = ops.size();
-    const size_t skippedRows                 = plan.stats.unchangedRows;
-    const size_t totalRows                   = plan.rows.size();
+    std::atomic_bool* const cancelFlag        = &_cancelRequested;
+    const size_t opsCount                     = ops.size();
+    const size_t skippedRows                  = plan.stats.unchangedRows;
+    const size_t totalRows                    = plan.rows.size();
 
     _executing = true;
     UpdateTaskUi();
 
     try
     {
-        _taskWorker = std::jthread(
-            [hwnd, generation, cancelFlag, fileSystem = std::move(fileSystem), pathIdentity, ops = std::move(ops), payload = std::move(payload)]() mutable noexcept
+        std::optional<BatchRename::Plan> localPlan;
+        if (IsLocalFileSystemContext(_context))
         {
-            RunBatchRenameExecution(hwnd, generation, *cancelFlag, std::move(fileSystem), pathIdentity, std::move(ops), std::move(payload));
+            localPlan = plan;
+        }
+        _taskWorker = std::jthread([hwnd,
+                                    generation,
+                                    cancelFlag,
+                                    fileSystem = std::move(fileSystem),
+                                    pathIdentity,
+                                    localPlan = std::move(localPlan),
+                                    ops     = std::move(ops),
+                                    payload = std::move(payload)]() mutable noexcept
+        {
+            RunBatchRenameExecution(
+                hwnd, generation, *cancelFlag, std::move(fileSystem), pathIdentity, std::move(localPlan), std::move(ops), std::move(payload));
         });
     }
     catch (const std::system_error&)
@@ -3768,65 +3962,49 @@ void BatchRenameWindow::StartTargetCollection() noexcept
         return;
     }
 
-    CancelAndJoinBackgroundTask();
+    if (_collectionCancelFlag)
+    {
+        _collectionCancelFlag->store(true, std::memory_order_release);
+    }
     _cancelRequested.store(false, std::memory_order_release);
 
     const HWND hwnd = _hWnd.get();
     if (! hwnd)
     {
-        _targets = BuildTargetsFromContext(_context, _scopeOptions);
-        RebuildPreviewFromRuleControlChange();
         return;
     }
 
     auto payload = std::unique_ptr<BatchRenameCollectionCompletedPayload>(new (std::nothrow) BatchRenameCollectionCompletedPayload{});
-    if (! payload)
+    auto work    = std::unique_ptr<BatchRenameCollectionWork>(new (std::nothrow) BatchRenameCollectionWork{});
+    auto cancelFlag = std::shared_ptr<std::atomic_bool>(new (std::nothrow) std::atomic_bool{false});
+    if (! payload || ! work || ! cancelFlag)
     {
-        _targets = BuildTargetsFromContext(_context, _scopeOptions);
+        _targets.clear();
+        _collecting = false;
         RebuildPreviewFromRuleControlChange();
-        Layout();
+        UpdateTaskUi();
         return;
     }
 
     const uint64_t generation = _taskGeneration.fetch_add(1u, std::memory_order_acq_rel) + 1u;
-    payload->generation       = generation;
+    _collectionCancelFlag     = cancelFlag;
     _collecting               = true;
     ClearExecutionReport();
     UpdateTaskUi();
 
-    std::atomic_bool* const cancelFlag = &_cancelRequested;
-
-    try
+    work->hwnd            = hwnd;
+    work->generation      = generation;
+    work->context         = _context;
+    work->scope           = _scopeOptions;
+    work->cancelRequested = std::move(cancelFlag);
+    work->payload         = std::move(payload);
+    work->modulePin       = AcquireModuleReferenceFromAddress(&kBatchRenameModuleAnchor);
+    if (! work->modulePin || ! SubmitOwnedThreadpoolCallbackWithInstance(work))
     {
-        _taskWorker = std::jthread(
-            [hwnd, cancelFlag, context = _context, scope = _scopeOptions, payload = std::move(payload)]() mutable noexcept
-        {
-            const HRESULT coinitHr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-            if (FAILED(coinitHr))
-            {
-                Debug::Error(L"BatchRename collection task: CoInitializeEx(COINIT_MULTITHREADED) failed: 0x{:08X}",
-                             static_cast<unsigned long>(coinitHr));
-                FAIL_FAST_IF_FAILED(coinitHr);
-            }
-            [[maybe_unused]] const wil::unique_couninitialize_call coUninit;
-
-            const auto startedAt                     = std::chrono::steady_clock::now();
-            BatchRenameTargetCollectionResult result = CollectBatchRenameTargets(context, scope, cancelFlag);
-            EmitBatchRenameCollectMetrics(startedAt, result);
-            context.fileSystem.reset();
-
-            payload->hr      = result.hr;
-            payload->detail  = std::move(result.detail);
-            payload->targets = std::move(result.targets);
-            static_cast<void>(PostMessagePayload(hwnd, WndMsg::kBatchRenameCompleted, kBatchRenameTaskCollection, std::move(payload)));
-        });
-    }
-    catch (const std::system_error&)
-    {
-        // Thread creation failed; fall back to synchronous collection so the
-        // window still reflects the requested scope.
+        // Never fall back to provider enumeration on the UI thread.
         _collecting = false;
-        _targets    = BuildTargetsFromContext(_context, _scopeOptions);
+        _collectionCancelFlag.reset();
+        _targets.clear();
         RebuildPreviewFromRuleControlChange();
         Layout();
         UpdateTaskUi();
@@ -3841,12 +4019,11 @@ void BatchRenameWindow::OnCollectionCompleted(std::unique_ptr<BatchRenameCollect
     }
 
     _collecting         = false;
+    _collectionCancelFlag.reset();
     const bool canceled = IsBatchRenameCancellationHRESULT(payload->hr);
     if (FAILED(payload->hr) && ! canceled)
     {
-        Debug::Error(L"BatchRename: target collection failed (hr=0x{:08X}, scope={}).",
-                     static_cast<unsigned long>(payload->hr),
-                     payload->detail);
+        Debug::Error(L"BatchRename: target collection failed (hr=0x{:08X}, scope={}).", static_cast<unsigned long>(payload->hr), payload->detail);
     }
 
     _targets = std::move(payload->targets);
@@ -3882,7 +4059,7 @@ void BatchRenameWindow::OnExecutionCompleted(std::unique_ptr<BatchRenameExecutio
 
     struct CacheNotifyMove final
     {
-        size_t index = 0u;
+        size_t index       = 0u;
         size_t sourceDepth = 0u;
         std::filesystem::path finalTargetPath;
     };
@@ -3900,17 +4077,11 @@ void BatchRenameWindow::OnExecutionCompleted(std::unique_ptr<BatchRenameExecutio
     std::ranges::stable_sort(cacheNotifyMoves, {}, &CacheNotifyMove::sourceDepth);
     for (const CacheNotifyMove& move : cacheNotifyMoves)
     {
-        DirectoryInfoCache::GetInstance().NotifyPathMoved(_context.fileSystem.get(),
-                                                          payload->successfulSourcePaths[move.index],
-                                                          move.finalTargetPath);
+        DirectoryInfoCache::GetInstance().NotifyPathMoved(_context.fileSystem.get(), payload->successfulSourcePaths[move.index], move.finalTargetPath);
     }
 
-    static_cast<void>(RefreshBatchRenameTargetsAfterExecution(pathIdentity,
-                                                              _targets,
-                                                              payload->successfulSourcePaths,
-                                                              payload->successfulTargetPaths,
-                                                              payload->executedDirectoryMoves,
-                                                              _context.rootPluginPath));
+    static_cast<void>(RefreshBatchRenameTargetsAfterExecution(
+        pathIdentity, _targets, payload->successfulSourcePaths, payload->successfulTargetPaths, payload->executedDirectoryMoves, _context.rootPluginPath));
 
     RebuildPreview();
     _dxHost.Invalidate();
@@ -3961,6 +4132,10 @@ void BatchRenameWindow::RequestTaskCancel() noexcept
     }
 
     _cancelRequested.store(true, std::memory_order_release);
+    if (_collectionCancelFlag)
+    {
+        _collectionCancelFlag->store(true, std::memory_order_release);
+    }
     if (_cancelButton)
     {
         _cancelButton->SetEnabled(false);
@@ -3974,6 +4149,11 @@ void BatchRenameWindow::RequestTaskCancel() noexcept
 
 void BatchRenameWindow::CancelAndJoinBackgroundTask() noexcept
 {
+    if (_collectionCancelFlag)
+    {
+        _collectionCancelFlag->store(true, std::memory_order_release);
+        _collectionCancelFlag.reset();
+    }
     if (_taskWorker.joinable())
     {
         _cancelRequested.store(true, std::memory_order_release);
@@ -3986,16 +4166,17 @@ void BatchRenameWindow::CancelAndJoinBackgroundTask() noexcept
 
 void BatchRenameWindow::UpdateTaskUi() noexcept
 {
-    const bool busy = _collecting || _executing;
+    const bool cancelableBusy = _collecting || _executing;
+    const bool busy           = cancelableBusy || _previewing;
     if (_cancelButton)
     {
-        _cancelButton->SetEnabled(busy && ! _cancelRequested.load(std::memory_order_acquire));
+        _cancelButton->SetEnabled(cancelableBusy && ! _cancelRequested.load(std::memory_order_acquire));
     }
     if (_renameButton)
     {
         _renameButton->SetEnabled(! busy && _previewStats.changedRows > 0u && _previewStats.errorRows == 0u);
     }
-    if (busy && _status)
+    if (cancelableBusy && _status)
     {
         if (_collecting)
         {
@@ -4060,14 +4241,12 @@ bool BatchRenameWindow::InsertHelperCommand(TextField& targetField, const int co
         selectionEnd   = selection.value().second;
     }
 
-    const size_t textLength      = currentText.size();
-    const size_t normalizedStart = std::min(std::min(selectionStart, selectionEnd), textLength);
-    const size_t normalizedEnd   = std::min(std::max(selectionStart, selectionEnd), textLength);
-    const std::wstring_view selectedText =
-        currentText.substr(normalizedStart, normalizedEnd > normalizedStart ? normalizedEnd - normalizedStart : 0u);
+    const size_t textLength              = currentText.size();
+    const size_t normalizedStart         = std::min(std::min(selectionStart, selectionEnd), textLength);
+    const size_t normalizedEnd           = std::min(std::max(selectionStart, selectionEnd), textLength);
+    const std::wstring_view selectedText = currentText.substr(normalizedStart, normalizedEnd > normalizedStart ? normalizedEnd - normalizedStart : 0u);
 
-    std::optional<BatchRenameMenus::HelperCommandInsertion> helperInsertion =
-        BatchRenameMenus::TryBuildDynamicHelperInsertion(commandId, selectedText);
+    std::optional<BatchRenameMenus::HelperCommandInsertion> helperInsertion = BatchRenameMenus::TryBuildDynamicHelperInsertion(commandId, selectedText);
     if (! helperInsertion.has_value())
     {
         const std::optional<std::wstring_view> insertion = BatchRenameMenus::TryGetHelperInsertionText(commandId);
@@ -4088,8 +4267,7 @@ bool BatchRenameWindow::InsertHelperCommand(TextField& targetField, const int co
     targetField.ReplaceSelectionAndNotify(helperInsertion.value().insertionText);
     if (applied.text == targetField.GetText())
     {
-        targetField.SetSelectionRange(normalizedStart + helperInsertion.value().selectionStart,
-                                      normalizedStart + helperInsertion.value().selectionEnd);
+        targetField.SetSelectionRange(normalizedStart + helperInsertion.value().selectionStart, normalizedStart + helperInsertion.value().selectionEnd);
     }
     CancelPendingPreviewRebuild();
     RebuildPreviewFromRuleControlChange();
@@ -4154,9 +4332,9 @@ void BatchRenameWindow::ShowPreviewContextMenu(const size_t rowIndex, const POIN
         return;
     }
 
-    const int commandId      = command.value();
-    const bool rowIndependent = commandId == kBatchRenamePreviewMenuCopyPreviewRows || commandId == kBatchRenamePreviewMenuCopyUndoPlan ||
-                                commandId == kBatchRenamePreviewMenuCopyExecutionReport;
+    const int commandId                     = command.value();
+    const bool rowIndependent               = commandId == kBatchRenamePreviewMenuCopyPreviewRows || commandId == kBatchRenamePreviewMenuCopyUndoPlan ||
+                                              commandId == kBatchRenamePreviewMenuCopyExecutionReport;
     const std::optional<size_t> resolvedRow = _gridModel ? _gridModel->FindRowByStableId(stableRowId) : std::nullopt;
     if (! resolvedRow.has_value() && ! rowIndependent)
     {
@@ -4425,33 +4603,25 @@ void BatchRenameWindow::UpdateStatus() noexcept
         }
         else
         {
-            status = FormatStringResource(nullptr,
-                                          IDS_BATCH_RENAME_EXECUTE_STATUS_FMT,
-                                          report.totalRows,
-                                          report.completedRows,
-                                          report.skippedRows,
-                                          report.failedRows);
+            status = FormatStringResource(
+                nullptr, IDS_BATCH_RENAME_EXECUTE_STATUS_FMT, report.totalRows, report.completedRows, report.skippedRows, report.failedRows);
             if (status.empty())
             {
-                status = std::format(L"{} planned, {} renamed, {} skipped, {} failed",
-                                     report.totalRows,
-                                     report.completedRows,
-                                     report.skippedRows,
-                                     report.failedRows);
+                status = std::format(
+                    L"{} planned, {} renamed, {} skipped, {} failed", report.totalRows, report.completedRows, report.skippedRows, report.failedRows);
             }
         }
         _status->SetText(std::move(status));
         return;
     }
 
-    std::wstring status =
-        FormatStringResource(nullptr,
-                             IDS_BATCH_RENAME_STATUS_FMT,
-                             _previewStats.totalRows,
-                             _previewStats.changedRows,
-                             _previewStats.unchangedRows,
-                             _previewStats.errorRows,
-                             _previewStats.warningRows);
+    std::wstring status = FormatStringResource(nullptr,
+                                               IDS_BATCH_RENAME_STATUS_FMT,
+                                               _previewStats.totalRows,
+                                               _previewStats.changedRows,
+                                               _previewStats.unchangedRows,
+                                               _previewStats.errorRows,
+                                               _previewStats.warningRows);
     if (status.empty())
     {
         status = std::format(L"{} items, {} changed, {} unchanged, {} errors, {} warnings",
@@ -4512,8 +4682,7 @@ void BatchRenameWindow::RefreshRootNavigationHistory() noexcept
         history.emplace_back(_rootText);
     }
 
-    if (_settings && _settings->batchRename.has_value() && ! _settings->batchRename->lastRoot.empty() &&
-        _settings->batchRename->lastRoot != _rootText)
+    if (_settings && _settings->batchRename.has_value() && ! _settings->batchRename->lastRoot.empty() && _settings->batchRename->lastRoot != _rootText)
     {
         history.emplace_back(_settings->batchRename->lastRoot);
     }
@@ -4592,8 +4761,10 @@ void BatchRenameWindow::OnGridContextMenu(Grid& sender, const size_t rowIndex, c
     ShowPreviewContextMenu(rowIndex, screenPoint);
 }
 
-wil::com_ptr<ID2D1Bitmap1> BatchRenameWindow::GetGridIconBitmap(
-    const Grid& sender, const int iconIndex, const float targetDipSize, ID2D1DeviceContext* d2dContext)
+wil::com_ptr<ID2D1Bitmap1> BatchRenameWindow::GetGridIconBitmap(const Grid& sender,
+                                                                const int iconIndex,
+                                                                const float targetDipSize,
+                                                                ID2D1DeviceContext* d2dContext)
 {
     if (&sender != _grid || iconIndex < 0 || ! d2dContext)
     {
@@ -4612,34 +4783,32 @@ bool BatchRenameWindow::DebugGetSnapshot(BatchRenameDebugSnapshot& out) const no
         return false;
     }
 
-    out.usesDxUiHost          = _dxHost.GetHwnd() == _hWnd.get();
-    out.rootNavigationVisible = _rootNavigation.GetHwnd() != nullptr && IsWindow(_rootNavigation.GetHwnd()) != FALSE &&
-                                IsWindowVisible(_rootNavigation.GetHwnd()) != FALSE;
+    out.usesDxUiHost = _dxHost.GetHwnd() == _hWnd.get();
+    out.rootNavigationVisible =
+        _rootNavigation.GetHwnd() != nullptr && IsWindow(_rootNavigation.GetHwnd()) != FALSE && IsWindowVisible(_rootNavigation.GetHwnd()) != FALSE;
     NavigationViewDebugSnapshot rootNavigationSnapshot{};
     out.rootNavigationUsesNavigationView = out.rootNavigationVisible && _rootNavigation.DebugGetSnapshot(rootNavigationSnapshot);
     if (out.rootNavigationUsesNavigationView)
     {
         out.rootNavigationPathText = std::move(rootNavigationSnapshot.currentPathText);
     }
-    out.ruleControlsVisible   = _nameTemplateField != nullptr && _nameTemplateField->IsVisible() && _searchForField != nullptr &&
-                              _searchForField->IsVisible() && _replaceWithField != nullptr && _replaceWithField->IsVisible() &&
-                              _fileNameCaseCombo != nullptr && _fileNameCaseCombo->IsVisible() && _extensionCaseCombo != nullptr &&
-                              _extensionCaseCombo->IsVisible();
-    out.ruleHelperButtonsVisible = _nameTemplateHelperButton != nullptr && _nameTemplateHelperButton->IsVisible() &&
-                                 _searchForHelperButton != nullptr && _searchForHelperButton->IsVisible() &&
-                                 _replaceWithHelperButton != nullptr && _replaceWithHelperButton->IsVisible();
-    out.rulesModeSelected     = _rules.mode == BatchRename::Mode::Rules;
-    out.manualModeSelected    = _rules.mode == BatchRename::Mode::Manual;
-    out.manualControlsVisible = _manualNamesField != nullptr && _manualNamesField->IsVisible();
-    out.renameButtonEnabled   = _renameButton != nullptr && _renameButton->IsEnabled();
-    out.hideUnchangedRows     = _hideUnchangedRows;
-    out.previewRebuildPending = _previewRebuildPending;
-    out.visibleChildWindowCount = CountVisibleChildWindows(_hWnd.get());
+    out.ruleControlsVisible = _nameTemplateField != nullptr && _nameTemplateField->IsVisible() && _searchForField != nullptr && _searchForField->IsVisible() &&
+                              _replaceWithField != nullptr && _replaceWithField->IsVisible() && _fileNameCaseCombo != nullptr &&
+                              _fileNameCaseCombo->IsVisible() && _extensionCaseCombo != nullptr && _extensionCaseCombo->IsVisible();
+    out.ruleHelperButtonsVisible = _nameTemplateHelperButton != nullptr && _nameTemplateHelperButton->IsVisible() && _searchForHelperButton != nullptr &&
+                                   _searchForHelperButton->IsVisible() && _replaceWithHelperButton != nullptr && _replaceWithHelperButton->IsVisible();
+    out.rulesModeSelected        = _rules.mode == BatchRename::Mode::Rules;
+    out.manualModeSelected       = _rules.mode == BatchRename::Mode::Manual;
+    out.manualControlsVisible    = _manualNamesField != nullptr && _manualNamesField->IsVisible();
+    out.renameButtonEnabled      = _renameButton != nullptr && _renameButton->IsEnabled();
+    out.hideUnchangedRows        = _hideUnchangedRows;
+    out.previewRebuildPending    = _previewRebuildPending;
+    out.visibleChildWindowCount  = CountVisibleChildWindows(_hWnd.get());
     if (_root)
     {
         CollectBatchRenameFocusableAccessibleNames(_root, out.focusableAccessibleNames);
     }
-    out.rootText              = _rootText;
+    out.rootText = _rootText;
     if (_status)
     {
         out.statusText = std::wstring(_status->GetText());
@@ -4651,21 +4820,21 @@ bool BatchRenameWindow::DebugGetSnapshot(BatchRenameDebugSnapshot& out) const no
     out.includeSubdirectories = _includeSubdirectoriesCheck != nullptr && _includeSubdirectoriesCheck->IsChecked();
     out.includeFiles          = _includeFilesCheck != nullptr && _includeFilesCheck->IsChecked();
     out.includeFolders        = _includeFoldersCheck != nullptr && _includeFoldersCheck->IsChecked();
-    out.changedRowCount = _previewStats.changedRows;
-    out.errorRowCount   = _previewStats.errorRows;
-    out.warningRowCount = _previewStats.warningRows;
+    out.changedRowCount       = _previewStats.changedRows;
+    out.errorRowCount         = _previewStats.errorRows;
+    out.warningRowCount       = _previewStats.warningRows;
     if (_lastExecutionReport.has_value())
     {
         const BatchRenameExecutionReport& report = _lastExecutionReport.value();
-        out.hasExecutionReport              = true;
-        out.lastExecutionTotalRows          = report.totalRows;
-        out.lastExecutionCompletedRows      = report.completedRows;
-        out.lastExecutionSkippedRows        = report.skippedRows;
-        out.lastExecutionFailedRows         = report.failedRows;
-        out.lastExecutionUndoRowCount       = report.undoEntries.size();
-        out.lastExecutionFirstFailure       = report.firstFailure;
-        out.lastExecutionCanceled           = report.canceled;
-        out.lastExecutionFirstFailureText   = report.firstFailureText;
+        out.hasExecutionReport                   = true;
+        out.lastExecutionTotalRows               = report.totalRows;
+        out.lastExecutionCompletedRows           = report.completedRows;
+        out.lastExecutionSkippedRows             = report.skippedRows;
+        out.lastExecutionFailedRows              = report.failedRows;
+        out.lastExecutionUndoRowCount            = report.undoEntries.size();
+        out.lastExecutionFirstFailure            = report.firstFailure;
+        out.lastExecutionCanceled                = report.canceled;
+        out.lastExecutionFirstFailureText        = report.firstFailureText;
     }
     if (_nameTemplateField)
     {
@@ -4737,6 +4906,9 @@ void BatchRenameWindow::DebugSetRules(BatchRename::Rules rules) noexcept
     _rules = std::move(rules);
     SyncRuleControls();
     RebuildPreview();
+    // The production preview is asynchronous. Test callers need the same
+    // settled contract the previous synchronous implementation exposed.
+    DebugPumpWhileTasksActive(false);
     _dxHost.Invalidate();
 }
 
@@ -4762,6 +4934,7 @@ bool BatchRenameWindow::DebugSetRuleControls(const BatchRename::Rules& rules) no
     _rules.extensionCaseStyle = rules.extensionCaseStyle;
     SyncRuleControls();
     RebuildPreview();
+    DebugPumpWhileTasksActive(false);
     _dxHost.Invalidate();
     return true;
 }
@@ -4906,9 +5079,7 @@ TextField* BatchRenameWindow::DebugResolveRuleField(const BatchRenameDebugRuleFi
     }
 }
 
-bool BatchRenameWindow::DebugSetRuleFieldSelection(const BatchRenameDebugRuleField field,
-                                                   const size_t selectionStart,
-                                                   const size_t selectionEnd) noexcept
+bool BatchRenameWindow::DebugSetRuleFieldSelection(const BatchRenameDebugRuleField field, const size_t selectionStart, const size_t selectionEnd) noexcept
 {
     TextField* const textField = DebugResolveRuleField(field);
     if (! textField)
@@ -5019,7 +5190,7 @@ bool BatchRenameWindow::DebugInjectStaleCollectionPayload(std::filesystem::path 
     }
 
     BatchRename::Target target{};
-    target.sourcePath = std::move(sourcePath);
+    target.sourcePath   = std::move(sourcePath);
     payload->generation = _taskGeneration.load(std::memory_order_acquire) + 1u;
     payload->targets.push_back(std::move(target));
     OnCollectionCompleted(std::move(payload));
@@ -5034,8 +5205,8 @@ bool BatchRenameWindow::DebugInjectStaleExecutionPayload(std::filesystem::path s
         return false;
     }
 
-    payload->generation = _taskGeneration.load(std::memory_order_acquire) + 1u;
-    payload->report.totalRows = 1u;
+    payload->generation           = _taskGeneration.load(std::memory_order_acquire) + 1u;
+    payload->report.totalRows     = 1u;
     payload->report.completedRows = 1u;
     payload->successfulSourcePaths.push_back(std::move(sourcePath));
     payload->successfulTargetPaths.push_back(std::move(targetPath));
@@ -5046,8 +5217,9 @@ bool BatchRenameWindow::DebugInjectStaleExecutionPayload(std::filesystem::path s
 void BatchRenameWindow::DebugPumpWhileTasksActive(const bool waitForExecution) noexcept
 {
     const ULONGLONG deadline = GetTickCount64() + 30000ull;
-    const auto tasksActive   = [this, waitForExecution]() noexcept
-    { return _hWnd && (waitForExecution ? (_executing || _collecting) : _collecting); };
+    const auto tasksActive = [this, waitForExecution]() noexcept {
+        return _hWnd && (waitForExecution ? (_executing || _collecting || _previewing) : (_collecting || _previewing));
+    };
 
     while (tasksActive() && GetTickCount64() < deadline)
     {
@@ -5157,10 +5329,7 @@ bool DebugSetBatchRenameWindowRuleControls(const BatchRename::Rules& rules) noex
     return g_batchRenameWindow->DebugSetRuleControls(rules);
 }
 
-bool DebugSetBatchRenameWindowScope(const std::wstring_view mask,
-                                    const bool includeSubdirectories,
-                                    const bool includeFiles,
-                                    const bool includeFolders) noexcept
+bool DebugSetBatchRenameWindowScope(const std::wstring_view mask, const bool includeSubdirectories, const bool includeFiles, const bool includeFolders) noexcept
 {
     if (! g_batchRenameWindow || ! g_batchRenameWindow->Hwnd() || IsWindow(g_batchRenameWindow->Hwnd()) == FALSE)
     {
@@ -5223,9 +5392,7 @@ bool DebugClickBatchRenameWindowManualSortLikePreview() noexcept
     return g_batchRenameWindow->DebugClickManualSortLikePreview();
 }
 
-bool DebugSetBatchRenameWindowRuleFieldSelection(const BatchRenameDebugRuleField field,
-                                                 const size_t selectionStart,
-                                                 const size_t selectionEnd) noexcept
+bool DebugSetBatchRenameWindowRuleFieldSelection(const BatchRenameDebugRuleField field, const size_t selectionStart, const size_t selectionEnd) noexcept
 {
     if (! g_batchRenameWindow || ! g_batchRenameWindow->Hwnd() || IsWindow(g_batchRenameWindow->Hwnd()) == FALSE)
     {
@@ -5392,8 +5559,8 @@ bool DebugCollectBatchRenameTargetsForTests(BatchRenamePaneContext context,
 
     BatchRenameTargetCollectionResult result = CollectBatchRenameTargets(context, scope);
     out                                      = {};
-    out.hr                                  = result.hr;
-    out.detail                              = std::move(result.detail);
+    out.hr                                   = result.hr;
+    out.detail                               = std::move(result.detail);
     out.originalNames.reserve(result.targets.size());
     out.fullPaths.reserve(result.targets.size());
     out.isDirectories.reserve(result.targets.size());
@@ -5418,12 +5585,8 @@ bool DebugRefreshBatchRenameTargetsAfterExecutionForTests(const FileSystemPathId
                                                           size_t& refreshedRows,
                                                           uint64_t& identityComparisons) noexcept
 {
-    const BatchRenameTargetRefreshResult result = RefreshBatchRenameTargetsAfterExecution(pathIdentity,
-                                                                                          targets,
-                                                                                          successfulSourcePaths,
-                                                                                          successfulTargetPaths,
-                                                                                          std::span<const ExecutedDirectoryMove>{},
-                                                                                          root);
+    const BatchRenameTargetRefreshResult result = RefreshBatchRenameTargetsAfterExecution(
+        pathIdentity, targets, successfulSourcePaths, successfulTargetPaths, std::span<const ExecutedDirectoryMove>{}, root);
     refreshedRows       = result.refreshedRows;
     identityComparisons = result.identityComparisons;
     return refreshedRows == std::min(successfulSourcePaths.size(), successfulTargetPaths.size());

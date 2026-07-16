@@ -1,6 +1,6 @@
 # File Operations Specification
 
-Last updated: 2026-06-16
+Last updated: 2026-07-09
 
 Normative sections use RFC-2119 keywords (MUST/SHOULD/MAY). Appendices are informative.
 
@@ -53,9 +53,12 @@ Progress-display investigations MUST keep UI cadence and operation cadence separ
 - **Task**: One user-requested operation with a stable ID and mutable options (pause/cancel/speed limit).
 - **Informational Task**: A host-created, read-only progress card shown in the File Operations popup for long-running background work that is not a file operation (e.g., Compare Directories scan/content-compare).
 - **Pre-calculation (pre-calc)**: A scan phase that computes totals (bytes + file/folder counts) before the operation begins.
-- **Wait mode**: Sequential mode. Only one task may execute at a time. UI label: `IDS_FILEOPS_BTN_MODE_QUEUE` (`"Wait"`).
-- **Parallel mode**: Concurrent mode. Multiple tasks may execute at once. UI label: `IDS_FILEOPS_BTN_MODE_PARALLEL` (`"Parallel"`).
+- **Queue mode**: Sequential mode. Only one task may execute at a time. Footer UI label: `IDS_FILEOPS_MODE_NEW_TASKS` + `IDS_FILEOPS_BTN_MODE_QUEUE`.
+- **Parallel mode**: Concurrent mode. Multiple tasks may execute at once. Footer UI label: `IDS_FILEOPS_MODE_NEW_TASKS` + `IDS_FILEOPS_BTN_MODE_PARALLEL`.
 - **Queue pause**: A host-driven pause applied to tasks that already started, used when switching to Wait mode while multiple tasks are active.
+- **Start now**: A per-task queued-card action that releases only the selected not-yet-running task from its wait gate. It MUST NOT change the global Queue/Parallel mode.
+- **Pause all / Resume all**: Footer bulk controls that set the manual pause state for started live tasks. They MUST NOT clear queue gating, reorder queued tasks, or change the global Queue/Parallel mode.
+- **Completed group**: When at least two completed file-operation summaries remain visible, the popup groups them under `Completed (N)`. The group defaults expanded, can collapse/expand without dismissing summaries, and exposes a group-level clear action that dismisses the completed summaries in that group.
 
 ## Architecture
 
@@ -152,6 +155,7 @@ The file-operations subsystem also exposes a dedicated top-level Issues pane for
 - The Issues pane MUST open as an independent top-level window.
 - The visible body MUST use the shared DX grid path.
 - The pane MUST show issue rows built from file-operation issue state, including at least time, task, operation, severity, HRESULT, status, category, message, source path, and destination path when present.
+- Issue row de-duplication MUST include task id, operation, HRESULT/status, severity, category, message, source path, destination path, concurrency mode, and source/destination storage class. It MUST NOT collapse distinct provider/root/path/storage-context failures into a single visible row.
 - The pane MUST preserve stable-row selection when the selected issue is still present after a refresh.
 - A no-change refresh MUST NOT rebuild or disturb the applied grid state.
 - Sorting, wheel scrolling, and persisted window placement MUST remain part of the pane contract.
@@ -172,6 +176,13 @@ Backdrop regression coverage belongs in `--commands-selftest` cases for the Issu
 ## Popup Windowing And Locking Contract
 
 The progress popup may receive synchronous Win32 callbacks while it is being shown, moved, resized, or invalidated. Calls such as `ShowWindow`, `SetWindowPos`, and similar HWND-affecting APIs MUST NOT be made while holding the file-operation state mutex when the target window procedure can re-enter `FileOperationState` (for example to persist the last popup rectangle from `WM_MOVE`). Code that needs to re-show or reposition an existing popup MUST snapshot the HWND and any required state under the mutex, release the mutex, validate the HWND, then perform the Win32 windowing calls.
+
+Conflict publication follows the same non-blocking rule. The conflict-arbiter mutex protects prompt
+identity, actions, and the decision slot only. Provider metadata calls, Win32 metadata calls, and
+diagnostic logging MUST run after the basic prompt is visible and outside the arbiter lock. Metadata
+decoration MUST NOT create a content reader. Late metadata may merge only when the same active
+owner/bucket/status/source/destination tuple still matches. The protected metrics are
+`FileOps.Conflict.MetadataPromptUs` per prompt and `FileOps.Conflict.MetadataUs` per operation.
 
 `--fileops-selftest --selftest-case=Phase14_PopupHostLifetimeGuard` owns regression coverage for this contract, including the hidden/offscreen popup re-entry case that starts a new operation while the popup is being made visible again.
 
@@ -210,6 +221,21 @@ The built-in local FileSystem plugin has worker paths that can outlive the initi
 `IFileSystemDirectoryWatch::UnwatchDirectory(...)` MUST cancel outstanding directory-change I/O, drain threadpool I/O/work callbacks, and return only after no further callbacks for that watch can run. Rename/delete/recreate churn under a watched directory is validated by `--fileops-selftest` Phase 7 and must keep the overflow/resync contract intact.
 
 Focused teardown coverage is split across `--fileops-selftest --selftest-case=Phase14_PopupHostLifetimeGuard`, `--fileops-selftest --selftest-case=Phase7_WatcherChurn`, and `--commands-selftest --selftest-case=filesystem_local_watch_unwatch_drains_inflight_callback`.
+
+### Local Path Canonicalization and Reparse Intent
+
+The built-in local FileSystem plugin MUST keep display text separate from comparison/opening identity. Display paths preserve the user-visible spelling and casing, while comparison keys and containment checks use the provider's stable `pathIdentity` profile and canonicalized Win32 paths.
+
+Supported local path forms are ordinary drive/UNC Win32 paths and their equivalent extended forms (`\\?\C:\...` and `\\?\UNC\server\share\...`). Supported extended forms MUST be normalized through the same Win32 full-path resolver used for ordinary paths, including slash normalization and `.` / `..` collapse, before containment, overlap, watch, search, copy/move, delete, or metadata decisions use them. Generic device namespaces such as `\\?\GLOBALROOT\...`, `\\.\...`, and `\??\...` are not ordinary local filesystem paths for these contracts and MUST NOT be canonicalized into accepted local paths by stripping or rewriting prefixes.
+
+Every local open MUST be classified by intent before choosing flags:
+
+- target-content opens may follow reparse points when the operation is explicitly about the target bytes;
+- object metadata, link properties, delete, overwrite cleanup, and reparse-copy decisions MUST open with `FILE_FLAG_OPEN_REPARSE_POINT` and `FILE_FLAG_BACKUP_SEMANTICS` when directory objects are possible;
+- recursive traversal MUST treat enumeration attributes as advisory and re-open no-follow before destructive recursion decisions;
+- directory watch setup watches the requested directory object; callers that need target-following behavior must opt into that behavior before the watch path is canonicalized.
+
+The FileSystem debug selftests exported through `RedSalamanderFileSystemDebugSelfTests` include a path-normalization guard for ordinary, drive-rooted extended, extended UNC, and unsupported device-namespace inputs.
 
 ### Preconditions (cross-pane Copy/Move)
 
@@ -288,8 +314,9 @@ Conflict handling covers per-item failures that require a user decision (overwri
 
 - Copy/Move MUST start without allowing overwrite and without allowing replace-readonly (conflicts must surface).
 - A retry/re-run Copy/Move MAY suppress an `already exists` prompt only when the existing destination file is byte-identical to the current source. Same size and last-write time alone are insufficient proof and MUST still surface the normal conflict.
+- A byte-identical existing-file optimization returns per-item `S_FALSE`, not full `S_OK`: bytes were not rewritten and destination metadata, ACLs, and alternate data streams were not synchronized. The host treats this as a visible skipped/partial outcome. Directory copies propagate an identical-child `S_FALSE` when no stronger failure/skip occurred.
 - A source directory whose destination path already exists as a directory MUST be merged by recursing into the existing destination directory. Directory-vs-directory existence is not an overwrite conflict; only file-vs-existing-file, file-vs-existing-directory, and directory-vs-existing-file collisions raise the `already exists` conflict. Same-volume Move MUST apply the same merge rule, falling back to copy/delete when the platform rename API cannot move a directory onto an existing directory.
-- Directory reparse-point copy under copy-reparse policy MUST treat an existing destination directory as a valid merge target instead of requiring overwrite permission before recreating the reparse point.
+- Directory reparse-point copy under copy-reparse policy MUST NOT silently convert an existing real destination directory into a link/reparse object. Empty real-directory replacement requires an explicit Overwrite decision for that item; non-empty real-directory replacement MUST surface the non-empty-directory conflict bucket and preserve the destination unless the user explicitly authorizes replacement.
 - Delete SHOULD start by using Recycle Bin when supported.
 - A Delete operation that cannot be guaranteed to use the local Recycle Bin MUST show the permanent-delete confirmation prompt with default Cancel before any file operation task is created. This guard belongs at the host operation boundary, so commands, shortcuts, context menus, drag/drop routing, and future callers cannot bypass it by omitting a separate confirmation flag.
 - Continue-on-error MUST be user-driven (via per-conflict Skip/Skip All decisions), not a default behavior.
@@ -300,7 +327,11 @@ Conflict handling covers per-item failures that require a user decision (overwri
 - Recursive delete implementations MUST re-open each queued child/frame no-follow before deciding whether to recurse. Enumeration attributes are advisory only and MUST NOT be the final destructive decision when another process could have swapped the path.
 - Empty-only replacement of an existing real directory by a reparse-point copy MUST use a single non-recursive remove attempt on the destination directory. It MUST NOT pre-scan with `IsDirectoryEmpty` and then perform a separate destructive action, because a concurrent child creation between those steps would turn an empty-only grant into a stale decision.
 - Cross-volume Move copy/delete fallback MUST report `HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY)` when the copy succeeded but the source delete or cleanup cannot finish. The completed task diagnostics and Issues pane MUST make the outcome explicit with "source preserved" and "partial copy left" wording so users know both sides may need review.
-- Cross-filesystem Move MUST NOT delete a source file unless the destination file has been byte-proven complete. When the source reader reports a size, copied bytes MUST match that size before source deletion is eligible. If the source size cannot be obtained, the bridge MUST either prove the destination against another reliable source-size signal or preserve the source and report `HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY)`.
+- Cross-filesystem Copy and Move MUST NOT report success unless the destination file has been byte-proven complete. When the source reader reports a size, copied bytes MUST match that size before commit/promotion is eligible. If the source size cannot be obtained, the bridge MUST either prove the destination against another reliable source-size signal or fail the item with `HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY)`; Move must preserve the source and Copy must not commit the staged destination.
+- Built-in local overwrite writers MUST preserve a pre-existing destination until replacement bytes have been written, flushed, and successfully promoted. Releasing an overwrite writer without `Commit()` is an abort and MUST delete only the staged temp file, never the original destination. Successful overwrite commit MUST promote a sibling temp file into the final path with same-volume replace/rename semantics; a failed commit must leave the original destination intact whenever the filesystem can preserve it. Writer-created temp attributes (`HIDDEN`, `TEMPORARY`) are implementation details and MUST NOT leak to the final file.
+- Built-in local same-filesystem copy overwrite paths MUST use the same preservation model instead of copying over the live destination. When overwrite is authorized, regular-file copy MUST copy to a unique sibling temp path created with exclusive-create semantics, verify the temp byte count against the source size, and promote the temp into the final path only after the copy is complete. Copy-reparse overwrite paths MUST also stage into a sibling temp and promote the completed link object rather than mutating the live destination. Reparse-point replacements MUST NOT be promoted through `ReplaceFileW`; they use rename/replace semantics that preserve the staged link object. Failure, cancellation, injected promotion failure, or readonly replacement failure MUST leave the original destination bytes/object and original readonly attribute intact, roll back staged per-item progress accounting in both sequential and parallel copy paths, and remove the staged temp on best effort. Staged-temp cleanup MUST handle file and directory reparse points as links and try both file-style and directory-style deletion when path attributes are ambiguous.
+- Local staged promotion is shared by writer and copy paths. Promotion MUST clear `READONLY` on the staged temp before calling `ReplaceFileW`, then re-apply replacement `READONLY` to the final file when the source/replacement was read-only. Replacing a read-only destination still requires explicit replace-readonly consent; if promotion fails after temporarily clearing the destination bit, the original destination attributes MUST be restored on best effort. Regular-file replacement SHOULD use `REPLACEFILE_IGNORE_MERGE_ERRORS` to avoid demoting non-fatal metadata merge errors into a wholesale rename fallback. If `ReplaceFileW` is unavailable and the code falls back to `MoveFileExW`, it MUST restore captured destination DACL and creation time on best effort while preserving the replacement's source-derived last-write/last-access times. After promotion has committed, a required final attribute adjustment is part of the operation result: failure MUST be logged and returned as a failed HRESULT even though the replacement bytes have reached the final path.
+- Cross-filesystem bridge staging uses a unique sibling `.rs_tmp_<128-bit-random>_<streamId>` destination and strips overwrite grants when creating that temp. Failed, cancelled, or unproven transfers MUST abandon/purge the temp on best effort and log `bridge.temp.cleanup` if cleanup fails. A process crash can leave an orphaned `.rs_tmp_*` file; the v1 cleanup policy is user-visible safe deletion plus hiding recognized RedSalamander staging names from search/index results, not a blind startup sweep. Any future automatic sweep MUST only delete recognized staging names in the owning destination directory after conservative age/handle checks.
 - Copy-reparse retargeting MAY remap targets that point inside the copied source root into the copied destination root. After remapping, the normalized target MUST still be inside the destination root; otherwise the provider MUST fail the reparse copy instead of creating an escaped destination target.
 - Deterministic destructive selftests MUST keep out-of-tree sentinel content and assert it remains untouched after injected file/dir/reparse swaps.
 
@@ -309,6 +340,8 @@ Conflict handling covers per-item failures that require a user decision (overwri
 - When an item operation fails, the host SHOULD map the failure (`HRESULT`, usually `HRESULT_FROM_WIN32(...)`) into a stable *bucket* so the UI can show bucket-specific messaging and support apply-to-all caching.
 - The bucket set SHOULD include:
   - already exists
+  - non-empty destination directory
+  - destination reparse/link replacement
   - read-only
   - access denied
   - sharing violation
@@ -317,6 +350,7 @@ Conflict handling covers per-item failures that require a user decision (overwri
   - recycle bin failed (delete)
   - network / offline
   - unknown
+- Buckets are destructive-risk classes, not just raw HRESULT groups. In particular, a plain existing file, an existing non-empty directory, and a reparse/link replacement MUST NOT share one apply-to-all cache entry.
 
 #### Prompting + task concurrency
 
@@ -346,6 +380,7 @@ Retry and apply-to-all rules:
 
 - Retry MUST be capped to at most one retry per (item, bucket). If the retry fails with the same bucket again, Retry MUST NOT be offered again for that (item, bucket) and the UI MUST indicate that the retry failed.
 - “Apply to all similar” MUST only apply to non-retry actions and MUST be cached per-task per-bucket. Retry MUST NOT be cached.
+- A cached apply-to-all Overwrite for a plain `already exists` item MUST NOT authorize replacing a non-empty directory or reparse/link destination. Those higher-risk buckets require their own prompt text and their own apply-to-all cache entry.
 
 One-shot grant scope:
 
@@ -405,12 +440,21 @@ Per-file conflicts under the bridge:
 - When the bridge copies/moves a DIRECTORY across providers and a CHILD collides with a pre-existing destination item, the bridge MUST raise a per-FILE conflict naming that child (not the whole directory). **Skip** preserves the existing child and continues copying non-colliding siblings; the operation then ends as `ERROR_PARTIAL_COPY`.
 - The bridge MUST NOT fail the whole directory closed on a single child collision.
 - Temp staging files (when the materialization fallback is used) MUST use unpredictable (CSPRNG) names, must be created with exclusive-create/no-follow semantics, and cancellation MUST leave no temp residue. Overwrite/replace grants for the final destination MUST NOT authorize overwriting a temp staging path.
+- `IFileReader::Read` follows the Win32 stream contract: `S_OK` with `bytesRead == 0` is EOF only (or a zero-byte request). Bridge integrity still requires a known source size or stronger verification before committing Copy/Move output, so a premature zero-byte read cannot be treated as a successful unknown-size transfer.
 
 Move semantics under the bridge:
 
 - Cross-filesystem **Move** SHOULD be implemented as Copy + Delete (delete after successful copy).
 - For file Move, the bridge MUST revalidate the promoted destination before deleting the source when source-size verification was uncertain or provider I/O can report a successful short transfer. If destination validation fails or is unavailable, the item MUST finish as `ERROR_PARTIAL_COPY` with the source preserved.
+- For file Move cleanup, full byte-for-byte source/destination re-read is required for low-latency storage endpoints, but high-latency/cloud/virtual endpoints MAY rely on the copy-phase byte-count proof, source basic-information snapshot, and source/destination size equality to avoid re-downloading the just-written payload. If storage classification cannot be obtained, cleanup MUST fall back to the safer full content comparison. Any content comparison using `IFileReader` MUST tolerate short non-zero reads from either endpoint and compare the stream by byte sequence, not by equal per-call chunk sizes.
+- For directory Move, source cleanup MUST be per copied entry, not a blanket recursive delete of the original source tree. The bridge MUST retain or reconstruct a copied-entry manifest containing the relative path, kind, copied size when available, and stable metadata such as creation time, last-write time, and attributes when the provider exposes them.
+- Directory Move cleanup MUST delete only source entries proven copied and unchanged. File cleanup MUST revalidate the current source against the promoted destination before using a non-recursive source delete; unmanifested, newly created, modified, or unverifiable source entries MUST be preserved.
+- Directory source removal MUST be non-recursive so newly created or changed descendants can block parent directory removal. Directory reparse points MUST never be enumerated during Move source cleanup, including under `followTargets`; cleanup may delete the link object itself only after the copied destination and unchanged source entry are verified. Out-of-tree reparse targets MUST survive MOVE cleanup. When cleanup is intentionally incomplete, the item MUST finish as `ERROR_PARTIAL_COPY` and surface diagnostics that identify the preserved source path and reason. Transient cleanup probe failures SHOULD be retried briefly and then surfaced as cleanup failures rather than silently converted into a permanent partial-copy decision. Cancellation after any verified source entries have already been removed MUST emit a `bridge.move.cleanup.cancelled` diagnostic.
 - On partial failure, the host SHOULD follow the existing conflict/continue-on-error rules for the task.
+
+Copy semantics under the bridge:
+
+- Cross-filesystem **Copy** uses the same staged destination integrity guard as Move. If source-size verification is unavailable and no stronger post-copy verification exists, the staged destination MUST be abandoned and the item MUST finish as `ERROR_PARTIAL_COPY` rather than reporting a successful but unproven copy.
 
 ### Drag & Drop (Normative)
 
@@ -450,6 +494,7 @@ The host queries `IFileSystemDirectoryOperations` from the active `IFileSystem` 
 
 - If `QueryInterface(__uuidof(IFileSystemDirectoryOperations))` fails or returns null, pre-calc MUST be skipped and the task proceeds without totals.
 - Otherwise, the host calls `IFileSystemDirectoryOperations::GetDirectorySize(...)` for each source path (typically with `FILESYSTEM_FLAG_RECURSIVE`).
+- `GetDirectorySize(...)` MAY complete traversal and return `HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY)` with the same value in `result.status` when denied, vanished, sharing/lock-blocked, transient-network, or device-not-ready descendants were skipped. It MUST continue later siblings where possible. The host MUST treat the returned totals as best-effort and surface that partial status instead of presenting the byte/item totals as exact.
 
 Progress uses `IFileSystemDirectorySizeCallback`:
 
@@ -476,6 +521,7 @@ Delete operations also run pre-calc:
 
 - Size totals are useful for displaying “completed / total bytes” (when available).
 - Throughput is displayed as items/sec (bytes/sec may remain 0 depending on plugin).
+- When pre-calc is skipped, cancelled, unavailable, or partial, byte totals and ETA are advisory. Completed summaries and diagnostics MUST keep enough state (`preCalcSkipped`, best-effort totals, completed file/folder counts, and the final `precalc.result`) for the UI and issue export to make underestimation visible rather than rendering an apparently exact clean total.
 
 ## Progress Popup UI (Normative)
 
@@ -493,7 +539,17 @@ Delete operations also run pre-calc:
 - The UI updates on a timer (~100ms) by reading the latest progress snapshot collected via callbacks.
 - Displayed speed, ETA, and graph history MUST be timer-driven display estimates, not raw callback-cadence visualizations.
 - Callback bursts or brief callback silence SHOULD be smoothed so speed/ETA text and graph samples feel fluid; short silence MAY hold the previous smoothed rate, then decay it when silence continues.
+- Decayed display rates below 1 B/s MUST be treated as zero for ETA purposes, and all floating-point speed/ETA display conversions MUST clamp non-finite or negative inputs to zero and saturate above `uint64_t::max` before casting.
 - The graph MUST append samples at popup-display cadence and MUST NOT backfill a long callback interval as a visible trough when progress bytes arrive later in a burst.
+- The popup MUST drive Windows taskbar progress from the same aggregate model as the footer:
+  - `TBPF_NORMAL` while active determinate work is running.
+  - `TBPF_INDETERMINATE` while active work has unknown totals.
+  - `TBPF_PAUSED` when all active work is paused or queued.
+  - `TBPF_ERROR` when any active task needs attention.
+  - `TBPF_NOPROGRESS` when no active/waiting/attention task remains.
+  - `ITaskbarList3` ownership MUST use RAII (`wil::com_ptr`) and MUST tolerate unavailable taskbar integration without logging normal-control-flow errors.
+  - Hidden or minimized popup windows MUST update this model from the timer without requiring a
+    client paint; visible frames SHOULD reuse the render snapshot rather than scanning twice.
 - The operations list is vertically scrollable using the standard window scrollbar (`WS_VSCROLL`) and MUST be themed consistently with `FolderView`.
 - **Auto-sizing**:
   - The window height MUST automatically adjust to fit the content when tasks are added or removed.
@@ -504,6 +560,8 @@ Delete operations also run pre-calc:
 - Positioning:
   - Reuse the last window rectangle if it is still fully visible on a monitor work area.
   - Otherwise, center the popup over the current main application window (clamped to the monitor work area).
+  - Footer-only and expanded placements MUST use separate persisted keys. Destroying or restarting
+    while footer-only MUST NOT replace the expanded rectangle used by the next details expansion.
 
 ### Layout
 
@@ -515,10 +573,29 @@ Delete operations also run pre-calc:
 Global footer MUST provide:
 
 - **Cancel all** (requires confirmation)
-- **Wait / Parallel** toggle
-- A global status summary formatted from the same task-status model as the cards: `N running, M waiting, K need attention`.
+- An **Auto-dismiss success/canceled** toggle bound to `fileOperations.autoDismissSuccess`; this is the only currently allowed always-visible preference exception because it directly controls completed-card retention in the popup.
+- A state-legible **New tasks:** segmented control with **Queue** and **Parallel** segments. The selected segment MUST reflect `GetQueueNewTasks()` and clicking the other segment MUST call `ApplyQueueMode(...)`.
+- A footer details chevron at the far right. Collapsing details MUST persist footer-only state, resize to the footer-only minimum height, and restoring details SHOULD restore the previously captured window rectangle when available.
+- A slim aggregate progress bar derived from active file-operation totals. Byte totals take precedence over item totals; unknown active totals use an indeterminate marquee.
+- Planned top-level roots MUST NOT become an aggregate item denominator while recursive
+  pre-calculation is active. The footer and taskbar remain indeterminate until a real total is
+  published or pre-calculation ends and the planned-root fallback becomes valid.
+- A global status summary formatted from the same task-status model as the cards: `N running, M waiting, K need attention`. When aggregate smoothed bytes/sec is available, the summary SHOULD append aggregate throughput and, when totals allow it, aggregate ETA.
 
-The footer MUST NOT expose persistent preferences as always-visible controls. Auto-dismiss for successful or canceled completed tasks is the host-owned `fileOperations.autoDismissSuccess` preference and belongs under `Preferences -> File Operations`.
+The footer uses separate progress, summary, and command rows in an 88-DIP band and supports a
+480-DIP minimum client width. Queue and Parallel are separate desired-state hit targets; selecting
+the active segment is idempotent. Localized footer text that cannot fit MUST switch to an icon or
+checkbox-only presentation rather than clip. Aggregate ETA MUST be absent when any live Copy/Move
+has unknown byte totals or no matching usable rate, while aggregate throughput from live rates may
+remain visible.
+
+Footer controls MUST keep stable hit targets at minimum width and MUST NOT overlap or clip command text into adjacent controls. Any additional always-visible preference added to the footer requires an explicit spec update explaining why it is part of active transfer control rather than general Preferences.
+
+When at least two completed file-operation summaries remain visible, the operations list MUST insert
+a `Completed (N)` group header before those completed rows. The group is expanded by default. Its
+chevron MUST hide/show the completed rows while preserving the summaries, and its `Clear` command
+MUST dismiss the completed summaries in that group. Animated group expand/collapse is not part of the
+current contract.
 
 ### Operation cards
 
@@ -527,6 +604,9 @@ Each task card MUST support collapse/expand and MUST adapt to task state:
 **Header**
 - Every file-operation card MUST resolve exactly one `TaskSnapshot::StatusKind` before rendering. The header label, task status glyph, graph overlay, popup caption severity, and footer summary MUST derive from that resolved status rather than re-running separate state ladders.
 - Status precedence is terminal result first, then active conflict, waiting/queued, paused, pre-calc/calculating, preparing, and running.
+- Every file-operation card MUST expose status at a glance through both:
+  - a thin left status stripe whose tone is derived from the resolved `TaskSnapshot::StatusKind`; and
+  - a compact text chip in the header. The chip MUST use localized short status labels and MUST NOT be the only signal for the status.
 - During active conflict: `IDS_FILEOPS_STATUS_NEEDS_ATTENTION`
 - During pre-calc: `IDS_FILEOPS_CALCULATING` / `IDS_FMT_FILEOPS_CALCULATING_TIME`
 - During waiting/queue-paused: `IDS_FILEOPS_GRAPH_WAITING`
@@ -538,6 +618,7 @@ Each task card MUST support collapse/expand and MUST adapt to task state:
 
 **Body (expanded)**
 - During pre-calc: display the currently accumulated **item totals** (files + folders) and total bytes so far (as they are discovered).
+- Planned roots are descriptive during active pre-calculation, not a determinate progress total.
 - When pre-calc is skipped (totals unknown), Copy/Move cards SHOULD display a best-effort breakdown of completed **top-level** items by type (files vs folders) when that classification is available.
   - The counts MUST be monotonic.
   - When classification is complete for all top-level items, the host SHOULD keep the breakdown consistent with `completedItems` (`completedFiles + completedFolders == completedItems`).
@@ -562,7 +643,7 @@ Each task card MUST support collapse/expand and MUST adapt to task state:
     - Entries MAY still show `100%` briefly (e.g., end-of-file), optionally with a short grace window (~300ms), before disappearing or advancing to the next item.
 - Progress bars:
   - Pre-calc: indeterminate marquee bar
-  - Copy/Move: current-item bar (primary) + overall bar (secondary)
+  - Copy/Move: a per-file mini bar beside the active file line plus exactly one under-graph whole-task bar. The former duplicated under-graph current-item bar MUST NOT return.
   - Delete: overall item bar; MAY additionally show size progress when pre-calc data is available
   - Finished successful tasks MUST render their progress bar as complete even when the last advisory byte counters lagged the completion event.
 - Bandwidth graph (Copy/Move):
@@ -572,6 +653,7 @@ Each task card MUST support collapse/expand and MUST adapt to task state:
   - Graph-band fairness coverage MUST drive the rate-history/sampler deterministically when validating band attribution. It MUST NOT depend on popup visibility, `ShowWindow` timing, or live timer cadence unless the test explicitly asserts those prerequisites.
   - Bands engage only once history carries ≥2 concurrent streams; a single-file copy keeps the classic single theme-colored fill.
   - When speed limit is active, shows a horizontal line at the effective limit.
+  - The graph MUST also show the current effective smoothed bandwidth as a labeled horizontal marker. This marker represents observed throughput, not the configured speed limit, and SHOULD ease between displayed positions when the value changes.
   - Y-axis MUST auto-scale with headroom so the graph remains readable.
   - Overlay text MUST have a drop shadow for visibility against colored graph backgrounds.
   - Overlays:
@@ -589,6 +671,16 @@ Each task card MUST support collapse/expand and MUST adapt to task state:
 - Completed tasks:
   - **Dismiss** MUST remain the primary completed-task action.
   - When diagnostics are available, **Show log** and **Export issues** MUST be reachable through one **More...** menu affordance rather than rendered as separate flat buttons beside Dismiss.
+  - A just-finished task that is still present in the active-task list while its completed summary has already been recorded MUST render diagnostics from that completed summary. Warning/error counts and the last diagnostic message MUST NOT disappear during this transient active-to-completed handoff; otherwise the completed-task **More...** menu can briefly lose **Show log** / **Export issues** even though diagnostics are available.
+  - Destination navigation actions MUST use the plugin ID, short ID, instance context, and provider
+    path captured when the task was accepted. If that qualified location cannot be restored, the
+    command MUST fail and restore the pane's previous location rather than run against its current
+    provider. The qualified identity MUST be captured only when the supplied destination filesystem
+    matches that pane; explicit/test/provider filesystem objects that do not belong to the pane stay
+    unqualified and MUST NOT inherit its plugin ID. Provider-path leaf splitting/joining MUST support
+    `/`, `\`, and Windows roots. A completed action that changes provider MUST navigate directly to
+    the qualified target; it MUST NOT first enumerate the provider root and then replace that
+    navigation with the target.
 - Menus launched from operation-card controls (destination selector, speed limit, conflict **More...**, and completed-task **More...**) MUST use the standard DxUI drop-down menu-button chrome, including a glyph-rendered chevron, and MUST NOT render as split buttons unless the control has a separate primary action beside the menu action. These controls MUST anchor to the invoking button using the shared DxUI popup-menu placement callbacks. These menus MUST use the shared non-modal DxUI context-menu session (`ContextMenu::ShowAsync` or equivalent), not a nested modal menu loop, so the File Operations popup continues to process timers, animation, progress painting, and other owner-window messages while the menu is open. Menu-result callbacks MUST revalidate the target HWND/task before applying changes. A completed-task **More...** menu near the trailing edge MUST open right-aligned above that button, not centered over another task's live graph or progress display.
 
 **Conflict prompts (inline)**
@@ -604,6 +696,15 @@ Each task card MUST support collapse/expand and MUST adapt to task state:
   - Transient or unknown failures: **Retry**, **Skip**, **Cancel**
 - Rarer available actions such as **Replace read-only** and **Skip All** MUST remain reachable from the **More...** menu instead of expanding the prompt into additional rows of flat buttons.
 - While a task is blocked on a prompt, its progress UI SHOULD appear paused/waiting (frozen counters/graph overlays) until the decision is applied.
+- Conflict source/destination metadata is optional decoration. Local metadata may use
+  `GetFileAttributesExW` only when the captured provider identity is the built-in local filesystem;
+  other providers use metadata-only `IFileSystemIO` calls. Missing size/time remains unavailable and
+  MUST NOT delay prompt publication or popup snapshots behind the arbiter mutex. Prompt/action
+  construction while the arbiter mutex is held MUST be filesystem-I/O-free; any metadata-based action
+  refinement is conditionally merged into the same live prompt after the out-of-lock query. For a
+  built-in local-to-local **Exists** conflict, **Overwrite** MUST remain unavailable until metadata
+  proves the collision is not a file onto an existing directory. Cross-provider conflicts retain
+  their provider-defined overwrite/retry behavior and MUST NOT wait for local Win32 metadata.
 
 ### Path truncation
 
@@ -617,7 +718,7 @@ When paths do not fit, the UI MUST truncate using a **middle ellipsis** (`…`) 
 
 Consumers such as Compare Directories and Find Files MAY subscribe to file-operation completion notifications, but completion fan-out MUST NOT extend a destroyed consumer's lifetime or call back into invalid UI state. A subscription that targets a window/object with independent lifetime SHOULD include a weak lifetime guard; the multicast dispatcher MUST skip expired guarded subscriptions and remove explicitly unsubscribed tokens.
 
-Find Files result commands that start Move/Delete operations MUST defer row removal until the matching file-operation task completes successfully. Pending removals MUST be keyed by the stable task id, not by operation plus source path alone, so overlapping or repeated operations cannot remove rows for the wrong task. Pending removals SHOULD be age-reaped to avoid unbounded retention after missing or abandoned completion notifications; a failed, cancelled, or partial task MUST leave the original result rows visible.
+Find Files result commands that start Move/Delete operations MUST defer row removal until the matching file-operation task reports per-source completion. Pending removals MUST be keyed by the stable task id, not by operation plus source path alone, so overlapping or repeated operations cannot remove rows for the wrong task. Completion events carry sparse source-index outcomes; only indices with known `S_OK` are removed. Failed, `S_FALSE`, cancelled, missing, and otherwise uncertain indices remain visible. Legacy providers that emit no outcomes may remove all rows only when the overall task result is exactly `S_OK`. Pending removals SHOULD be age-reaped to avoid unbounded retention after missing or abandoned completion notifications.
 
 ## Speed Limit (Normative)
 
@@ -675,7 +776,7 @@ The host parses user-entered speed limits using a whitespace-tolerant, case-inse
 ## Theming (Normative)
 
 - All UI text MUST be in `.rc` resources.
-- All progress + graph colors MUST be derived from the active theme (no hard-coded colors).
+- All progress, graph, and status colors MUST be derived from the active theme (no hard-coded colors). Completed-success/`Ok` status uses `fileOperations.successText`, which MUST be distinct from the active accent in normal themes and may resolve to system/menu text in high-contrast themes.
 - Theme updates MUST re-skin the existing popup window on theme changes.
 
 ### Theme keys
@@ -711,10 +812,10 @@ When `menu.rainbowMode` is enabled:
 All user-facing strings referenced by the file operations UI MUST be localizable resources. Current IDs include:
 
 - Operations + labels: `IDS_FILEOP_OPERATION_COPY`, `IDS_FILEOP_OPERATION_MOVE`, `IDS_FILEOP_OPERATION_DELETE`, `IDS_FILEOPS_LABEL_FROM`, `IDS_FILEOPS_LABEL_TO`, `IDS_FILEOPS_LABEL_DELETING`
-- Buttons + menus: `IDS_FILEOP_BTN_PAUSE`, `IDS_FILEOP_BTN_RESUME`, `IDS_FILEOP_BTN_CANCEL`, `IDS_FILEOP_BTN_SPEED_LIMIT`, `IDS_FILEOPS_BTN_SKIP`, `IDS_FILEOPS_BTN_CANCEL_ALL`, `IDS_FILEOPS_BTN_MODE_QUEUE`, `IDS_FILEOPS_BTN_MODE_PARALLEL`, `IDS_FILEOP_SPEED_LIMIT_MENU_UNLIMITED`, `IDS_FILEOP_SPEED_LIMIT_MENU_CUSTOM`
-- Format strings: `IDS_FMT_FILEOPS_OP_COUNTS`, `IDS_FMT_FILEOPS_ETA`, `IDS_FMT_FILEOPS_CALCULATING_TIME`, `IDS_FMT_FILEOPS_FILES_FOLDERS`, `IDS_FMT_FILEOPS_SIZE_PROGRESS`, `IDS_FMT_FILEOP_SPEED_LIMIT_BUTTON_BYTES`, `IDS_FMT_FILEOP_SPEED_LIMIT_MENU_BYTES`
+- Buttons + menus: `IDS_FILEOP_BTN_PAUSE`, `IDS_FILEOP_BTN_RESUME`, `IDS_FILEOP_BTN_CANCEL`, `IDS_FILEOP_BTN_SPEED_LIMIT`, `IDS_FILEOPS_BTN_SKIP`, `IDS_FILEOPS_BTN_START_NOW`, `IDS_FILEOPS_BTN_CANCEL_ALL`, `IDS_FILEOPS_BTN_MODE_QUEUE`, `IDS_FILEOPS_BTN_MODE_PARALLEL`, `IDS_FILEOPS_MODE_NEW_TASKS`, `IDS_FILEOPS_CHECK_AUTODISMISS_OFF`, `IDS_FILEOPS_CHECK_AUTODISMISS_ON`, `IDS_FILEOP_SPEED_LIMIT_MENU_UNLIMITED`, `IDS_FILEOP_SPEED_LIMIT_MENU_CUSTOM`
+- Format strings: `IDS_FMT_FILEOPS_OP_COUNTS`, `IDS_FMT_FILEOPS_ETA`, `IDS_FMT_FILEOPS_CALCULATING_TIME`, `IDS_FMT_FILEOPS_FILES_FOLDERS`, `IDS_FMT_FILEOPS_SIZE_PROGRESS`, `IDS_FMT_FILEOP_SPEED_LIMIT_BUTTON_BYTES`, `IDS_FMT_FILEOP_SPEED_LIMIT_MENU_BYTES`, `IDS_FMT_FILEOPS_GLOBAL_STATUS_WITH_SPEED`, `IDS_FMT_FILEOPS_GLOBAL_STATUS_WITH_ETA_SPEED`
 - Overlay text: `IDS_FILEOPS_GRAPH_PAUSED`, `IDS_FILEOPS_GRAPH_WAITING`, `IDS_FILEOPS_GRAPH_CALCULATING`
-- Status text: `IDS_FILEOPS_STATUS_COMPLETED`, `IDS_FILEOPS_STATUS_CANCELED`, `IDS_FILEOPS_STATUS_PARTIAL`, `IDS_FILEOPS_STATUS_NEEDS_ATTENTION`, `IDS_FMT_FILEOPS_STATUS_FAILED`, `IDS_FMT_FILEOPS_GLOBAL_STATUS_SUMMARY`
+- Status text: `IDS_FILEOPS_STATUS_RUNNING`, `IDS_FILEOPS_STATUS_WAITING`, `IDS_FILEOPS_STATUS_COMPLETED`, `IDS_FILEOPS_STATUS_CANCELED`, `IDS_FILEOPS_STATUS_PARTIAL`, `IDS_FILEOPS_STATUS_PARTIAL_SHORT`, `IDS_FILEOPS_STATUS_FAILED_SHORT`, `IDS_FILEOPS_STATUS_NEEDS_ATTENTION`, `IDS_FMT_FILEOPS_STATUS_FAILED`, `IDS_FMT_FILEOPS_GLOBAL_STATUS_SUMMARY`
 - Confirmations:
   - `IDS_CAPTION_FILEOPS_CANCEL_ALL` / `IDS_MSG_FILEOPS_CANCEL_ALL_POPUP` — shown when clicking Cancel All button in popup
   - `IDS_CAPTION_FILEOPS_EXIT` / `IDS_MSG_FILEOPS_CANCEL_ALL_EXIT` — shown when exiting application with active operations
@@ -770,6 +871,10 @@ This plan is explicitly tied to the existing specs and current codebase state (a
   - `FolderWindow::FileOperationState::Task::WaitWhilePaused()` blocks inside:
     - `Task::FileSystemProgress(...)`
     - `Task::DirectorySizeProgress(...)`
+  - Manual-pause and queue-pause predicates are mutated under the same mutex used by the pause
+    condition-variable wait; resume notifies only after releasing that mutex. Regression coverage
+    MUST prove bytes/items advance after both manual and queue resume, not merely that a boolean
+    pause flag changed.
 - Wait/Parallel mode implemented via:
   - Start gating: `_waitForOthers` + `EnterOperation(...)` queue
   - Queue pause: `UpdateQueuePausedTasks()` sets `_queuePaused`
@@ -804,6 +909,7 @@ This plan is explicitly tied to the existing specs and current codebase state (a
     - default max concurrency: 4
     - configurable via `copyMoveMaxConcurrency` (max 16)
     - resolved through `concurrencyMode`: manual uses the configured cap directly; auto resolves from `IFileSystem::GetStorageCharacteristics(...)`
+    - local physical-medium probes are cached per `FileSystem` provider instance and resolved volume root; concurrent first queries serialize one probe, repeated operation-start queries reuse it, and a new provider/context instance naturally invalidates the cache. `FileOps.Storage.ProbeCache` records hit/miss behavior.
   - `DeleteItems` parallelizes delete with ordering safety across overlapping inputs (children before parents) and supports Recycle Bin deletes with bounded concurrency:
     - default max concurrency: 8
     - default max concurrency (Recycle Bin): 2
@@ -834,6 +940,7 @@ These are the “product rules” that determine the safest implementation strat
 
 4) **Directory watcher overflow semantics**
    - `overflow==TRUE` MUST be treated as “resync required” (not just “some events may be coalesced”).
+   - A zero-byte successful watch completion and any failure to re-arm the next `ReadDirectoryChangesW` request MUST also be surfaced as `overflow==TRUE`, because incremental state is no longer trustworthy.
 
 5) **Popup close behavior**
    - The popup close button continues to mean “Cancel All” (with confirmation).
@@ -1003,6 +1110,12 @@ Tasks:
     - Pause/Resume a running task; verify graph/history freezes while paused and resumes smoothly (no sudden spikes from dt accumulation).
     - Enable `menu.rainbowMode`; verify per-sample colors persist as the graph scrolls (older samples retain their hue) and match per-file progress colors.
     - Resize the popup narrower; verify path truncation uses middle ellipsis and never renders under the mini progress indicator.
+- [x] Popup-owned settings changes capture an immutable UI-thread snapshot, debounce/coalesce it,
+  and persist the value-only settings JSON through the process-wide serialized save worker without
+  regenerating the unchanged schema. `FileOps.Settings.EnqueueUs` protects input
+  cost and `FileOps.Settings.SaveUs` measures background persistence; teardown performs a final
+  bounded flush. If storage does not finish before the shutdown deadline, teardown continues while
+  the process-wide worker retains ownership of the copied snapshot and completes it safely.
 - [x] If delete bytes are implemented, validate the delete card’s “size progress” line is meaningful (covered by `--fileops-selftest` Phase 6).
 - [x] Wire up the destination selector UX (click the destination chevron next to `To:` before task start to open `ShowDestinationMenu(...)`).
 - [x] Replace the native custom speed-limit dialog with an owned DX prompt surface and remove the `IDD_FILEOP_SPEED_LIMIT_CUSTOM` dialog template.
@@ -1034,7 +1147,7 @@ Stress scenarios:
   - knob coverage: set FileSystem `copyMoveMaxConcurrency` to `1`, `4`, `16` and verify:
     - throughput scales on many-small-file workloads
     - popup shows multiple in-flight file lines (MRU; up to the configured concurrency / host UI max)
-  - slower/virtual provider and bounded-queue coverage: `Phase7_CopyMoveConcurrency16Perf`, `Phase7_SharedPerItemScheduler`, and `Phase11_BridgePipelineDummyToDummyPerf`; future real-device tuning must open a new plan with same-machine `Specs/TestRuns/` evidence before making user-facing performance claims
+  - slower/virtual provider and bounded-queue coverage: `Phase7_CopyMoveConcurrency16Perf`, `Phase7_SharedPerItemScheduler`, `Phase11_BridgePipelineDummyToDummyPerf`, and `Phase11_BridgeMultiFolderParallelCopyInFlightLines`; the multi-folder bridge guard uses two selected roots under the dummy provider's four-copy cap so each active root retains within-folder bridge budget greater than 1 and must emit admission/early-start counters before the producer drains
   - speed limit set/unset mid-flight
   - pause/resume repeatedly
 - [ ] Parallel delete:
@@ -1051,7 +1164,7 @@ Instrumentation (recommended, debug-only):
 - [x] Watcher: queue depth, overflow count, callback latency (`FileSystem.Watch`).
 - [x] File ops: cancel latency, limiter target vs achieved throughput, progress callback frequency (`FileOps.PreCalc`, `FileOps.Operation`, `FileOps.CancelLatency`).
 - [x] Recursive Copy/Move: queued files/directories/reparse points, selected-root nested budget, focused single-folder stream count, multi-root dominant-subtree stream count, recursive matrix shape timings/stream counts including copied reparse items and nested concurrency 1, optional real cross-volume move coverage, and debug-forced move fallback counter (`FileOps.CopyRecursiveParallel.*`, `FileOps.CopyItems.NestedConcurrencyBudget`, `FileOps.MoveItems.NestedConcurrencyBudget`, `FileOps.Move.DebugForceCopyFallback`, `FileOps.SelfTest.CopyItemsSingleFolder*`, `FileOps.SelfTest.CopyItemSingleFolder*`, `FileOps.SelfTest.CopyItemsMultiRoot*`, `FileOps.SelfTest.CopyRecursiveMatrix*`).
-- [x] Clearflow parallelism/status: pre-calc worker occupancy, bridge streaming admission, single-folder worker occupancy, and one-status popup snapshots (`FileOps.SelfTest.ClearflowPreCalcMultiRootWorkers`, `FileOps.SelfTest.ClearflowPreCalcSingleRootFanOutWorkers`, `FileOps.Bridge.FileAdmissionCount`, `FileOps.Bridge.FileStartedBeforeProducerDone`, `FileOps.SelfTest.BridgeWideShallowEarlyFileStarts`, `FileOps.SelfTest.ClearflowSingleDeepFolderWorkerOccupancy`, `cmd_pane_fileops_conflict_prompt_compacts_actions`).
+- [x] Clearflow parallelism/status: pre-calc worker occupancy, bridge streaming admission, single-folder worker occupancy, and one-status popup snapshots (`FileOps.SelfTest.ClearflowPreCalcMultiRootWorkers`, `FileOps.SelfTest.ClearflowPreCalcSingleRootFanOutWorkers`, `FileOps.Bridge.FileAdmissionCount`, `FileOps.Bridge.FileStartedBeforeProducerDone`, `FileOps.Bridge.AdmissionMaxQueueDepth`, `FileOps.SelfTest.BridgeWideShallowEarlyFileStarts`, `FileOps.SelfTest.ClearflowSingleDeepFolderWorkerOccupancy`, `cmd_pane_fileops_popup_progress_contracts`, `cmd_pane_fileops_conflict_metadata_uses_single_provider_roundtrip`, `cmd_pane_fileops_conflict_prompt_metadata_and_actions`, `cmd_pane_fileops_popup_presentation_settings_and_taskbar`, `cmd_pane_fileops_completed_group_and_navigation`).
 - [x] Destructive correctness: partial move status, reparse retarget containment, and debug-injected delete TOCTOU swap coverage (`FileOps.SelfTest.CrossVolumeMovePartialFailureStatus`, `FileOps.SelfTest.ReparseRetargetDestinationContainment`, `FileOps.Delete.DebugToctouSwapInjected`, `FileOps.SelfTest.DeleteToctouSwapGuard`).
 - [x] Enumeration: peak buffer size, fallback usage, trim events (`FileSystem.DirectoryOps.Enumerate`, `FileSystem.DirectoryOps.TrimBuffer`).
 - [x] Debug-only end-to-end self-test runner:
@@ -1210,6 +1323,9 @@ This note captures the agreed plan to add user-driven conflict handling (overwri
    - Manual: conflict prompts inline; retry capped; apply-to-all works for non-retry; pause/cancel responsiveness retained; large batches run without pre-scan.
    - Add/extend `--fileops-selftest` coverage:
      - No-overwrite copy fails with `HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS)` and destination stays unchanged.
+     - Bridge Copy/Move unknown source-size injection returns `ERROR_PARTIAL_COPY`; Copy does not commit a destination and Move preserves the source (`Floodgate_CrossFsCopyGetSizeFailureRefusesCommit`, `Floodgate_CrossFsMoveGetSizeFailurePreservesSource`).
+     - Cross-filesystem directory Move cleanup mutates only source-root basic information after a two-level tree is copied, deletes the still-matching children, preserves the changed source shell with `ERROR_PARTIAL_COPY`, and proves the MOVE-only manifest decreases during cleanup and reaches zero (`Floodgate_CrossFsDirectoryMoveCleanupPreservesChangedSource`).
+     - Local overwrite writer abort preserves the original destination and commit replaces it without leaving staged temp files (`Floodgate_LocalWriterOverwriteIsStaged`).
      - Per-item copy keeps `totalItems == plannedItems` (not `1`) and aggregates `completedBytes` to pre-calc totals.
      - Conflict prompt coverage:
        - Exists → Overwrite (and follow-up ReadOnly → ReplaceReadOnly).

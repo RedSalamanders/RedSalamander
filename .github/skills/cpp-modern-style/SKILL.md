@@ -125,6 +125,18 @@ public:
 - **Dependencies**: Minimize header includes
 - **Platform**: Isolate platform-specific code when possible
 
+## Shared Helper Reuse
+
+Before defining a local helper, consult `Specs/Core/Core_SharedHelpers.md` and search `Common/` (or
+`Tests/TestSupport/` for test infrastructure). If an existing helper has the required semantics, use it directly.
+Do not create a differently named copy or a leaf wrapper that only forwards the same policy.
+
+If the existing helper is at the correct dependency layer but lacks a generally useful operation, extend it and
+add focused tests. Keep a local implementation only when it intentionally differs in policy, dependency, ABI,
+ownership, failure handling, or hot-path constraints; name and document that difference. When adding a canonical
+shared helper, update the catalog and its authoritative domain spec, and add a source-contract guard when a
+regression could silently recreate prior copies.
+
 ## Comments and Documentation
 
 - Write self-documenting code with meaningful names

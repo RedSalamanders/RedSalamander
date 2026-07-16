@@ -15,6 +15,7 @@
 #include <string_view>
 #include <vector>
 
+#include "FileActionLauncher.h"
 #include "FileActionResolver.h"
 #include "Helpers.h"
 #include "UiMetrics.h"
@@ -1135,7 +1136,7 @@ void FileActionPreferencesPage::ApplyTheme(const PreferencesDialogState& state) 
 {
     if (_pageHost)
     {
-        _pageHost->SetTheme(PrefsUi::MakeDxPalette(state.theme));
+        _pageHost->SetTheme(MakeAppThemeDxPalette(state.theme));
     }
 }
 
@@ -1794,11 +1795,10 @@ void FileActionPreferencesPage::LayoutPage(
     const int associationBelowGridHeight = gapY + (associationRows * (rowHeight + gapY)) + UiMetrics::ScaleDip(dpi, 58) + contentInsetY;
     const int actionAboveGridHeight      = tabHeader + contentInsetY;
     const int actionBelowGridHeight      = gapY + (actionRows * (rowHeight + gapY)) + margin + contentInsetY;
-    const int availablePageHeight = std::max(0, hostHeight - y - margin);
+    const int availablePageHeight        = std::max(0, hostHeight - y - margin);
     const int belowFoldPeekHeight        = UiMetrics::ScaleDip(dpi, 64);
-    const int viewportDrivenGridHeight =
-        availablePageHeight - std::max(associationAboveGridHeight, actionAboveGridHeight) - belowFoldPeekHeight;
-    const int gridHeight = std::max(minGridHeight, viewportDrivenGridHeight);
+    const int viewportDrivenGridHeight   = availablePageHeight - std::max(associationAboveGridHeight, actionAboveGridHeight) - belowFoldPeekHeight;
+    const int gridHeight                 = std::max(minGridHeight, viewportDrivenGridHeight);
     const int associationPageHeight      = associationAboveGridHeight + gridHeight + associationBelowGridHeight;
     const int actionPageHeight           = actionAboveGridHeight + gridHeight + actionBelowGridHeight;
     const int pageHeight                 = std::max(associationPageHeight, actionPageHeight);
@@ -2234,6 +2234,15 @@ void FileActionPreferencesPage::SaveAction(PreferencesDialogState& state) noexce
     else
     {
         action.executablePath = _executableField ? Trim(_executableField->GetText()) : std::wstring{};
+        if (! FileActionLauncher::TemplateContainsSupportedMacro(action.executablePath) &&
+            ! Common::Paths::IsExplicitAbsoluteExecutablePath(action.executablePath))
+        {
+            if (_previewLabel)
+            {
+                _previewLabel->SetText(LoadRes(IDS_PREFS_FILE_ACTION_VALIDATION_ABSOLUTE_EXECUTABLE_REQUIRED));
+            }
+            return;
+        }
     }
     action.arguments               = _argumentsField ? std::wstring(_argumentsField->GetText()) : std::wstring{};
     action.workingDirectory        = _workingDirectoryField ? Trim(_workingDirectoryField->GetText()) : std::wstring{};
@@ -2556,7 +2565,15 @@ bool FileActionPreferencesPage::DebugGetAssociationRowClientRect(const size_t ro
         return false;
     }
 
-    outRect = DipRectToPx(*_pageHost, rect.value());
+    D2D1_RECT_F clientRect = rect.value();
+    if (_state)
+    {
+        const float pageScrollDip = _pageHost->PixelsToDip(static_cast<float>(_state->pageScrollY));
+        clientRect.top -= pageScrollDip;
+        clientRect.bottom -= pageScrollDip;
+    }
+
+    outRect = DipRectToPx(*_pageHost, clientRect);
     return outRect.right > outRect.left && outRect.bottom > outRect.top;
 }
 
@@ -2574,7 +2591,15 @@ bool FileActionPreferencesPage::DebugGetAssociationHeaderClientRect(const size_t
         return false;
     }
 
-    outRect = DipRectToPx(*_pageHost, rect.value());
+    D2D1_RECT_F clientRect = rect.value();
+    if (_state)
+    {
+        const float pageScrollDip = _pageHost->PixelsToDip(static_cast<float>(_state->pageScrollY));
+        clientRect.top -= pageScrollDip;
+        clientRect.bottom -= pageScrollDip;
+    }
+
+    outRect = DipRectToPx(*_pageHost, clientRect);
     return outRect.right > outRect.left && outRect.bottom > outRect.top;
 }
 
@@ -2641,7 +2666,15 @@ bool FileActionPreferencesPage::DebugGetTabClientRect(const size_t tabIndex, REC
         return false;
     }
 
-    outRect = DipRectToPx(*_pageHost, _tabs->DebugGetTabRect(tabIndex));
+    D2D1_RECT_F clientRect = _tabs->DebugGetTabRect(tabIndex);
+    if (_state)
+    {
+        const float pageScrollDip = _pageHost->PixelsToDip(static_cast<float>(_state->pageScrollY));
+        clientRect.top -= pageScrollDip;
+        clientRect.bottom -= pageScrollDip;
+    }
+
+    outRect = DipRectToPx(*_pageHost, clientRect);
     return outRect.right > outRect.left && outRect.bottom > outRect.top;
 }
 
@@ -2665,7 +2698,40 @@ bool FileActionPreferencesPage::DebugGetSelectedTabIndex(size_t& outIndex) const
 bool FileActionPreferencesPage::DebugSelectAssociationRow(const size_t rowIndex) noexcept
 {
     DebugShowAssociationsTab();
-    return _associationsGrid && _associationsGrid->RequestSelectRow(rowIndex, 0u);
+    if (! _associationsGrid || ! _pageHost || ! _associationsGrid->RequestSelectRow(rowIndex, 0u))
+    {
+        return false;
+    }
+
+    if (_state && _hostWindow && IsWindow(_hostWindow) != FALSE)
+    {
+        if (const std::optional<D2D1_RECT_F> rect = _associationsGrid->GetVisibleRowRect(rowIndex))
+        {
+            RECT client{};
+            if (GetClientRect(_hostWindow, &client) != FALSE)
+            {
+                const int viewportBottomPx = std::max(0l, client.bottom - client.top);
+                const int marginPx         = static_cast<int>(std::lround(_pageHost->DipsToPixels(12.0f)));
+                const int rowTopPx         = static_cast<int>(std::lround(_pageHost->DipsToPixels(rect->top)));
+                const int rowBottomPx      = static_cast<int>(std::lround(_pageHost->DipsToPixels(rect->bottom)));
+
+                int desiredScrollY = _state->pageScrollY;
+                if ((rowTopPx - desiredScrollY) < marginPx)
+                {
+                    desiredScrollY = rowTopPx - marginPx;
+                }
+                else if ((rowBottomPx - desiredScrollY) > (viewportBottomPx - marginPx))
+                {
+                    desiredScrollY = rowBottomPx - (viewportBottomPx - marginPx);
+                }
+
+                PrefsPageHost::ScrollTo(_hostWindow, *_state, desiredScrollY);
+            }
+        }
+    }
+
+    _pageHost->SetFocusControl(_associationsGrid);
+    return _pageHost->GetFocusControl() == _associationsGrid;
 }
 
 bool FileActionPreferencesPage::DebugSetSearchText(std::wstring_view text) noexcept

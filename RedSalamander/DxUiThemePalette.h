@@ -23,9 +23,10 @@
     {
         palette.reducedMotion = theme.reducedMotionOverride.value();
     }
-    palette.density               = theme.compactMode ? RedSalamander::DxUi::Density::Compact : RedSalamander::DxUi::Density::Standard;
-    palette.rainbowMode           = theme.menu.rainbowMode;
-    palette.accent                = theme.accent;
+    palette.density     = theme.compactMode ? RedSalamander::DxUi::Density::Compact : RedSalamander::DxUi::Density::Standard;
+    palette.rainbowMode = theme.menu.rainbowMode;
+    palette.accent      = theme.accent;
+    RedSalamander::DxUi::RefreshAccentVariants(palette, theme.dark);
     palette.windowBackground      = ColorFromCOLORREF(theme.windowBackground);
     palette.surfaceBackground     = ColorFromCOLORREF(surfaceBackground.value_or(UiMetrics::GetControlSurfaceColor(theme)));
     palette.overlayBackground     = palette.surfaceBackground;
@@ -100,5 +101,52 @@
             palette.headerPressed = mix(palette.overlayBackground, palette.accentPressed, theme.dark ? 0.62f : 0.42f);
         }
     }
+    return palette;
+}
+
+[[nodiscard]] inline RedSalamander::DxUi::ThemePalette MakeFolderContentDxPalette(const AppTheme& theme) noexcept
+{
+    const auto mix = [](const D2D1_COLOR_F& a, const D2D1_COLOR_F& b, float t) noexcept
+    {
+        const float clamped = std::clamp(t, 0.0f, 1.0f);
+        return D2D1::ColorF(a.r + ((b.r - a.r) * clamped), a.g + ((b.g - a.g) * clamped), a.b + ((b.b - a.b) * clamped), a.a + ((b.a - a.a) * clamped));
+    };
+
+    RedSalamander::DxUi::ThemePalette palette = RedSalamander::DxUi::MakeDefaultThemePalette(theme.dark);
+    palette.dark                              = theme.dark;
+    palette.highContrast                      = theme.highContrast;
+    palette.rainbowMode                       = theme.menu.rainbowMode;
+    palette.accent                            = theme.accent;
+    RedSalamander::DxUi::RefreshAccentVariants(palette, theme.dark);
+    palette.windowBackground      = ColorFromCOLORREF(theme.windowBackground);
+    palette.surfaceBackground     = theme.folderView.backgroundColor;
+    palette.headerBackground      = ColorFromCOLORREF(theme.menu.background);
+    palette.headerHovered         = mix(palette.headerBackground, palette.accent, theme.dark ? 0.22f : 0.10f);
+    palette.headerPressed         = mix(palette.headerBackground, palette.accent, theme.dark ? 0.32f : 0.18f);
+    palette.border                = ColorFromCOLORREF(theme.menu.border);
+    palette.gridLine              = theme.folderView.gridLines;
+    palette.text                  = theme.folderView.textNormal;
+    palette.subduedText           = ColorFromCOLORREF(theme.menu.shortcutText);
+    palette.selectionFill         = ColorFromCOLORREF(theme.menu.selectionBg);
+    palette.selectionText         = ColorFromCOLORREF(theme.menu.selectionText);
+    palette.selectionInactiveFill = D2D1::ColorF(palette.selectionFill.r, palette.selectionFill.g, palette.selectionFill.b, theme.highContrast ? 1.0f : 0.55f);
+    palette.focusStroke           = theme.folderView.focusBorder;
+    palette.hoverFill             = D2D1::ColorF(palette.accent.r, palette.accent.g, palette.accent.b, theme.dark ? 0.18f : 0.10f);
+    palette.buttonFill            = ColorFromCOLORREF(theme.menu.background);
+    palette.buttonBorder          = ColorFromCOLORREF(theme.menu.border);
+    palette.buttonHotFill         = palette.headerHovered;
+    palette.buttonPressedFill     = palette.headerPressed;
+    palette.inputFill             = theme.folderView.backgroundColor;
+    palette.inputBorder           = ColorFromCOLORREF(theme.menu.border);
+    palette.scrollbarTrack        = theme.fileOperations.scrollbarTrack;
+    palette.scrollbarThumb        = theme.fileOperations.scrollbarThumb;
+    palette.scrollbarThumbHot =
+        D2D1::ColorF(palette.scrollbarThumb.r, palette.scrollbarThumb.g, palette.scrollbarThumb.b, (std::min)(1.0f, palette.scrollbarThumb.a + 0.10f));
+    palette.infoFill    = theme.folderView.infoBackground;
+    palette.infoText    = theme.folderView.infoText;
+    palette.warningFill = theme.folderView.warningBackground;
+    palette.warningText = theme.folderView.warningText;
+    palette.errorFill   = theme.folderView.errorBackground;
+    palette.errorText   = theme.folderView.errorText;
     return palette;
 }

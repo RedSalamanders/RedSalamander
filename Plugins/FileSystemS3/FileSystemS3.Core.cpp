@@ -127,6 +127,13 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::QueryInterface(REFIID riid, void** ppvOb
         return S_OK;
     }
 
+    if (riid == __uuidof(IFileSystemAtomicWriter))
+    {
+        *ppvObject = static_cast<IFileSystemAtomicWriter*>(this);
+        AddRef();
+        return S_OK;
+    }
+
     if (riid == __uuidof(IInformations))
     {
         *ppvObject = static_cast<IInformations*>(this);
@@ -264,6 +271,10 @@ void FileSystemS3::EmitSyntheticWatchNotification(std::wstring_view watchedPath,
 void FileSystemS3::NotifySyntheticPathCreated(std::wstring_view fullPath) noexcept
 {
     const std::wstring normalized          = FsS3::NormalizePluginPath(fullPath);
+    {
+        std::lock_guard lock(_stateMutex);
+        _writableDirectoryValidationTicks.erase(normalized);
+    }
     const std::filesystem::path parentPath = std::filesystem::path(normalized).parent_path();
     const std::wstring parent              = parentPath.empty() ? L"/" : FsS3::NormalizePluginPath(parentPath.native());
 
@@ -290,6 +301,37 @@ void FileSystemS3::NotifySyntheticPathCreated(std::wstring_view fullPath) noexce
     {
         EmitSyntheticWatchNotification(watchedPath, changes, false);
     }
+}
+
+void FileSystemS3::RememberWritableDirectoryValidation(std::wstring_view fullPath) noexcept
+{
+    constexpr size_t kMaxCachedDirectories = 4096u;
+    const std::wstring normalized = FsS3::NormalizePluginPath(fullPath);
+    std::lock_guard lock(_stateMutex);
+    if (_writableDirectoryValidationTicks.size() >= kMaxCachedDirectories)
+    {
+        _writableDirectoryValidationTicks.clear();
+    }
+    _writableDirectoryValidationTicks.insert_or_assign(normalized, GetTickCount64());
+}
+
+bool FileSystemS3::HasFreshWritableDirectoryValidation(std::wstring_view fullPath) noexcept
+{
+    constexpr ULONGLONG kValidationLifetimeMs = 60'000ull;
+    const std::wstring normalized = FsS3::NormalizePluginPath(fullPath);
+    const ULONGLONG nowTick = GetTickCount64();
+    std::lock_guard lock(_stateMutex);
+    const auto found = _writableDirectoryValidationTicks.find(normalized);
+    if (found == _writableDirectoryValidationTicks.end())
+    {
+        return false;
+    }
+    if (nowTick < found->second || nowTick - found->second > kValidationLifetimeMs)
+    {
+        _writableDirectoryValidationTicks.erase(found);
+        return false;
+    }
+    return true;
 }
 
 void FileSystemS3::NotifySyntheticPathDeleted(std::wstring_view fullPath) noexcept

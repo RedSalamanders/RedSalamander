@@ -46,10 +46,11 @@ struct BatchRenameExecutionOp final
     std::filesystem::path originalSource;
     std::wstring finalLeaf;
     std::filesystem::path tempPath;
-    size_t depth     = 0u;
-    bool isDirectory = false;
-    bool completed   = false;
-    bool failed      = false;
+    size_t depth              = 0u;
+    bool isDirectory          = false;
+    bool completed            = false;
+    bool failed               = false;
+    bool tempRestoreAttempted = false;
 };
 
 struct BatchRenameExecutionResult final
@@ -67,12 +68,14 @@ using BatchRenameExecutionProgressCallback = void (*)(void* context, uint64_t co
 struct BatchRenameExecutionOptions final
 {
     BatchRenameExecutionProgressCallback progressCallback = nullptr;
-    void* progressContext = nullptr;
+    void* progressContext                                 = nullptr;
 };
 
 [[nodiscard]] bool IsBatchRenameCancellationHRESULT(HRESULT hr) noexcept;
 [[nodiscard]] size_t PathDepthKey(const std::filesystem::path& path) noexcept;
-[[nodiscard]] std::filesystem::path JoinFolderAndLeaf(const std::filesystem::path& folder, std::wstring_view leaf) noexcept;
+[[nodiscard]] std::filesystem::path JoinFolderAndLeaf(const FileSystemPathIdentity& pathIdentity,
+                                                      const std::filesystem::path& folder,
+                                                      std::wstring_view leaf) noexcept;
 [[nodiscard]] std::filesystem::path ApplyExecutedDirectoryMoves(const FileSystemPathIdentity& pathIdentity,
                                                                 std::filesystem::path path,
                                                                 std::span<const ExecutedDirectoryMove> directoryMoves);

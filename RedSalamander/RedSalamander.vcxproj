@@ -100,6 +100,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <GenerateManifest>true</GenerateManifest>
+      <AdditionalDependencies>PortableDeviceGuids.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <Manifest>
       <AdditionalManifestFiles>$(ProjectDir)res\exe.manifest</AdditionalManifestFiles>
@@ -122,6 +123,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <GenerateManifest>true</GenerateManifest>
+      <AdditionalDependencies>PortableDeviceGuids.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <Manifest>
       <AdditionalManifestFiles>$(ProjectDir)res\exe.manifest</AdditionalManifestFiles>
@@ -144,6 +146,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <GenerateManifest>true</GenerateManifest>
+      <AdditionalDependencies>PortableDeviceGuids.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <Manifest>
       <AdditionalManifestFiles>$(ProjectDir)res\exe.manifest</AdditionalManifestFiles>
@@ -166,6 +169,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <GenerateManifest>true</GenerateManifest>
+      <AdditionalDependencies>PortableDeviceGuids.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <Manifest>
       <AdditionalManifestFiles>$(ProjectDir)res\exe.manifest</AdditionalManifestFiles>
@@ -190,6 +194,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <GenerateManifest>true</GenerateManifest>
+      <AdditionalDependencies>PortableDeviceGuids.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <Manifest>
       <AdditionalManifestFiles>$(ProjectDir)res\exe.manifest</AdditionalManifestFiles>
@@ -214,6 +219,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <GenerateManifest>true</GenerateManifest>
+      <AdditionalDependencies>PortableDeviceGuids.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <Manifest>
       <AdditionalManifestFiles>$(ProjectDir)res\exe.manifest</AdditionalManifestFiles>
@@ -230,6 +236,7 @@
     <ClInclude Include="DirectoryInfoCache.h" />
     <ClInclude Include="FileSystemRenameBatch.h" />
     <ClInclude Include="FileSystemPluginManager.h" />
+    <ClInclude Include="PluginModuleLifecycle.h" />
     <ClInclude Include="FluentIcons.h" />
     <ClInclude Include="FunctionBar.h" />
     <ClInclude Include="Framework.h" />
@@ -309,6 +316,7 @@
     <ClInclude Include="ShortcutText.h" />
     <ClInclude Include="SessionState.h" />
     <ClInclude Include="SelfTest\Common\SelfTestCommon.h" />
+    <ClInclude Include="SelfTest\Common\SelfTestLatencyHooks.h" />
     <ClInclude Include="SettingsSchemaExport.h" />
     <ClInclude Include="UiMetrics.h" />
     <ClInclude Include="SplashScreen.h" />
@@ -346,6 +354,7 @@
     <ClCompile Include="ConnectionProfileUtils.cpp" />
     <ClCompile Include="DirectoryInfoCache.cpp" />
     <ClCompile Include="FileSystemPluginManager.cpp" />
+    <ClCompile Include="PluginModuleLifecycle.cpp" />
     <ClCompile Include="FunctionBar.cpp" />
     <ClCompile Include="FolderView.cpp" />
     <ClCompile Include="FolderView.DragDrop.cpp" />
@@ -432,6 +441,7 @@
     <ClCompile Include="ShortcutManager.cpp" />
     <ClCompile Include="ShortcutText.cpp" />
     <ClCompile Include="SelfTest\Common\SelfTestCommon.cpp" />
+    <ClCompile Include="SelfTest\Common\SelfTestLatencyHooks.cpp" />
     <ClCompile Include="SplashScreen.cpp" />
     <ClCompile Include="ViewerPluginManager.cpp" />
     <ClCompile Include="WSLDistro.cpp" />
@@ -465,6 +475,7 @@
     <None Include="SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.Cases.SearchAndIndex.cpp" />
     <None Include="SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.Cases.CoreDiffs.cpp" />
     <None Include="SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.Cases.RuntimeAndRemote.cpp" />
+    <None Include="SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.Cases.Mtp.cpp" />
     <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.Phases05_06.cpp" />
     <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.Phases07_09.cpp" />
     <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.Phases10_13.cpp" />
@@ -533,9 +544,14 @@
     </PropertyGroup>
     <ItemGroup>
       <ThemeFiles Include="$(ThemeSourceDir)\*.theme.json5" />
+      <ThemeNoticeFiles Include="$(ThemeSourceDir)\THIRD-PARTY-NOTICES.md" />
+      <ThemeLicenseFiles Include="$(ThemeSourceDir)\Licenses\*.LICENSE.txt" />
     </ItemGroup>
     <MakeDir Directories="$(ThemeDestinationDir)" />
+    <MakeDir Directories="$(ThemeDestinationDir)Licenses\" />
     <Copy SourceFiles="@(ThemeFiles)" DestinationFolder="$(ThemeDestinationDir)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(ThemeNoticeFiles)" DestinationFolder="$(ThemeDestinationDir)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(ThemeLicenseFiles)" DestinationFolder="$(ThemeDestinationDir)Licenses\" SkipUnchangedFiles="true" />
   </Target>
   <Target Name="CopySettingsStoreSchema" AfterTargets="Build">
     <PropertyGroup>

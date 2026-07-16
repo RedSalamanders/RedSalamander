@@ -126,7 +126,7 @@ void UserMenuPane::ApplyTheme(const PreferencesDialogState& state) noexcept
 {
     if (_pageHost)
     {
-        _pageHost->SetTheme(PrefsUi::MakeDxPalette(state.theme));
+        _pageHost->SetTheme(MakeAppThemeDxPalette(state.theme));
     }
 }
 

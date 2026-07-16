@@ -84,7 +84,15 @@ Visible pane correctness is mandatory across all built-in file system plugins.
 - When a mounted context resolves to a Windows backing path, local file-system rename or move retargets the mount and keeps the internal plugin path when possible.
 - When that backing item is deleted, the pane exits the mount and navigates to the nearest surviving local ancestor or the default local root.
 - Focus memory is preserved where possible so cross-pane updates feel stable instead of jumping to an unrelated item.
+- A selected direct child that is renamed MUST remain selected when the refreshed enumeration exposes the rename target. This applies to chained rename hints and to hints that arrive after a watcher refresh has already removed the selected source from the visible model. Unrelated refreshes MUST NOT expire the chain by count; pending rename and recently-missing-selection state is time-bounded and MUST be cleared when the pane changes folder or file-system provider.
 - Off-screen folders may be marked dirty without eager re-enumeration.
+- Runtime filesystem-plugin rediscovery is a model replacement boundary: before releasing providers,
+  FolderWindow preserves both pane provider identities, instance contexts, raw provider paths, and
+  the active pane. After rediscovery it qualifies each raw path exactly once, restores each
+  still-available location, and re-enumerates it on the UI thread. Reinstalling a provider without
+  rebuilding the retained FolderView model is forbidden because it leaves both panes permanently
+  empty; formatting an already-qualified display path again is forbidden because it corrupts
+  mounted/archive locations.
 
 ## Error UI
 
@@ -176,6 +184,11 @@ FolderWindow responsibilities:
 - A visible function bar must also paint its themed background, separators/key glyphs, and command labels. Its Direct2D HWND render target is DPI-aware, so Win32 pixel rectangles MUST be converted to DIPs before drawing; scaled-DPI layouts must not produce a blank strip.
 - Function Bar key glyph, modifier, hit-test, and label measurement MUST use DirectWrite text formats / `DxUi.Typography` specs. The Function Bar must not create or select `HFONT` for app-owned visible text measurement.
 - The Function Bar visible paint path MUST NOT bind an `ID2D1DCRenderTarget` to a paint HDC for app-owned text/chrome. It uses the same Direct2D HWND-target model as the pane status bars so toggle/show operations cannot leave an unpainted child strip.
+- Function Bar and pane status-bar chrome share `Common::Rendering::HwndRenderTargetResources` for the exact
+  D2D factory, HWND render-target, and target-dependent solid-brush lifecycle. Surface-specific DirectWrite
+  factories/formats, trimming, DPI invalidation policy, drawing, and HWND property ownership remain local.
+  Ordinary paints retain all resources; size or device-loss invalidation releases the brush before its target
+  while retaining the D2D factory, and HWND teardown releases the complete surface-owned resource aggregate.
 - Every command must expose a localized short display resource via the `IDS_CMD_SHORT_BASE + IDS_CMD_*` convention. Examples: `Make Directory` -> `MakeDir`, `User Menu` -> `UsrMenu`, `Sort by Time` -> `ByTime`.
 - Resource ids `20000..21999` are reserved for command short labels.
 - Short labels should be concise enough for the function bar target width; the command registry self-test guards that every command has a non-empty short label and that representative labels match the expected compact text.
@@ -247,11 +260,14 @@ Example (narrow):
 - Implementation note: status bars are themed via custom paint (subclass `WM_PAINT`) rather than `SBT_OWNERDRAW`/`WM_DRAWITEM`, to avoid message-routing issues and to match menu theming.
 - Status bar text paint and part sizing MUST stay on the shared `DxUi.Typography` / DirectWrite path; do not reintroduce ambient `DEFAULT_GUI_FONT`, `HFONT`-selected GDI paint, or visible GDI text measurement for this surface.
 - The status-bar HWND is a transitional host only: it must not own an `HFONT`, receive `WM_SETFONT`, or use the native font message path. Typography ownership belongs to the DirectWrite render resources used by `FolderWindow.StatusBar.cpp`.
+- The shared HWND render-target helper must not absorb status-bar contents, hit testing, focus/accent policy,
+  Fluent Icon availability, text formats, or part layout; those remain StatusBar-owned policy.
 
 ### Interaction
 
 - Clicking the sort indicator opens the same sort menu as the pane menu bar (`Left → Sort by` or `Right → Sort by`), anchored to the sort indicator region (right-aligned to its edge) and placed above the status bar so the menu grows into the pane area. The popup MUST render through the shared DxUI popup menu path rather than a native `TrackPopupMenu` popup.
-- The pane sort popup also exposes a **Thumbnail size** discrete slider with four stops: Small `48 DIP`, Medium `64 DIP`, Large `96 DIP`, and Extra Large `128 DIP`. The slider targets the pane whose status-bar sort region opened the popup, updates only that pane, and keeps left/right pane sizes independent.
+- The pane sort popup displays the configured shortcuts for None, Name, Extension, Time, and Size in the shared right-aligned accelerator column. Attributes leaves that column empty when it has no configured shortcut.
+- The popup also exposes a **Thumbnail size** discrete slider with four stops: Small `48 DIP`, Medium `64 DIP`, Large `96 DIP`, and Extra Large `128 DIP`. Each stop is a progressively larger graphical thumbnail tile rather than an identical dot, so the available sizes are understandable without labels. Pressing a stop starts an animated thumb movement and previews its localized size label. While the left button remains down, horizontal pointer movement updates the preview with graphical feedback; releasing commits the nearest stop. Track clicks remain direct, the drag clamps to the first/last stop outside the track, reduced-motion mode applies the new state without animation, and keyboard arrow/Home/End behavior remains available. The slider targets the pane whose status-bar sort region opened the popup, updates only that pane, and keeps left/right pane sizes independent.
 - Hovering the sort indicator shows a tooltip indicating it is clickable.
 - Status bar visibility is persisted per pane.
 
@@ -289,9 +305,9 @@ The pane-scoped file-system prompts for change-attributes, change-case, and sele
 
 - `Change Attributes...` MUST route through the owned prompt-window path in `RedSalamander/FolderWindow.FileSystem.Commands.Part.cpp`. The prompt MUST expose tri-state attribute toggles, date/time rows, alternate-stream removal, and an Include subdirectories option that is enabled only when a folder is in scope. Recursive Change Attributes runs asynchronously as a File Operations informational task with enumeration/apply status.
 - `Change Case...` MUST route through the owned prompt-window path in `RedSalamander/FolderWindow.FileSystem.cpp`.
-- The selection-mask commands (`Select by Mask...` / `Unselect by Mask...`) MUST route through the owned prompt-window path in `RedSalamander/FolderWindow.FileSystem.cpp`.
+- The selection-mask commands (`Select by Mask...` / `Unselect by Mask...`) MUST route through the owned prompt-window path in `RedSalamander/FolderWindow.FileSystem.cpp`. The prompt's DxUi `TextField` MUST expose the localized adjacent mask label as its non-empty UI Automation Name across repeated open/close and live edit cycles.
 - These prompts MUST expose the shared DxUi host contract and MUST NOT reintroduce legacy `DialogBoxParamW`, owner-draw button/toggle, or extra visible combo/input-frame fallback surfaces for the active product path.
-- Validation anchors for this contract are `cmd_pane_changeAttributes_options_dialog_uses_dxui_not_win32_template`, `cmd_pane_changeAttributes_recurse_applies_datetime_with_progress`, `cmd_pane_changeCase_prompt_*`, `cmd_pane_changeCase_dialog`, and `cmd_pane_selection_mask_dialogs`.
+- Validation anchors for this contract are `cmd_pane_changeAttributes_options_dialog_uses_dxui_not_win32_template`, `cmd_pane_changeAttributes_recurse_applies_datetime_with_progress`, `cmd_pane_changeCase_prompt_*`, `cmd_pane_changeCase_dialog`, `cmd_pane_selection_mask_dialogs`, `cmd_pane_selection_mask_prompt_live_dx_interaction`, and `cmd_pane_selection_mask_prompt_long_run_open_close_stays_stable`.
 
 ### Sort By
 

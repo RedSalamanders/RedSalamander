@@ -8,7 +8,6 @@
 #include <array>
 #include <cerrno>
 #include <cwchar>
-#include <limits>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -17,11 +16,6 @@
 
 #include <commdlg.h>
 #include <shobjidl.h>
-
-#pragma warning(push)
-#pragma warning(disable : 6297 28182) // yyjson warnings
-#include <yyjson.h>
-#pragma warning(pop)
 
 #pragma warning(push)
 // WIL: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted), C5027 (move assign deleted)
@@ -66,53 +60,6 @@ struct DebugPluginConfigurationBrowseResult
 
 std::optional<DebugPluginConfigurationBrowseResult> g_debugNextPluginConfigurationBrowseResult;
 #endif
-
-[[nodiscard]] std::wstring Utf16FromUtf8(std::string_view text) noexcept
-{
-    if (text.empty() || text.size() > static_cast<size_t>((std::numeric_limits<int>::max)()))
-    {
-        return {};
-    }
-
-    const int required = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0);
-    if (required <= 0)
-    {
-        return {};
-    }
-
-    std::wstring result(static_cast<size_t>(required), L'\0');
-    const int written = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), result.data(), required);
-    if (written != required)
-    {
-        return {};
-    }
-
-    return result;
-}
-
-[[nodiscard]] std::string Utf8FromUtf16(std::wstring_view text) noexcept
-{
-    if (text.empty() || text.size() > static_cast<size_t>((std::numeric_limits<int>::max)()))
-    {
-        return {};
-    }
-
-    const int required = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
-    if (required <= 0)
-    {
-        return {};
-    }
-
-    std::string result(static_cast<size_t>(required), '\0');
-    const int written =
-        WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), result.data(), required, nullptr, nullptr);
-    if (written != required)
-    {
-        return {};
-    }
-
-    return result;
-}
 
 [[nodiscard]] bool TryBrowseFolderPath(HWND owner, std::filesystem::path& outPath) noexcept
 {
@@ -301,546 +248,40 @@ void SyncDxInteractiveState(PreferencesDialogState& state, PrefsPluginConfigFiel
     }
 }
 
-PrefsPluginConfigFieldType ParsePluginConfigFieldType(std::string_view type) noexcept
+Common::PluginConfiguration::SchemaParseResult ParsePluginConfigSchema(std::string_view schemaJsonUtf8) noexcept
 {
-    if (type == "text")
-    {
-        return PrefsPluginConfigFieldType::Text;
-    }
-    if (type == "value")
-    {
-        return PrefsPluginConfigFieldType::Value;
-    }
-    if (type == "bool" || type == "boolean")
-    {
-        return PrefsPluginConfigFieldType::Bool;
-    }
-    if (type == "option")
-    {
-        return PrefsPluginConfigFieldType::Option;
-    }
-    if (type == "selection")
-    {
-        return PrefsPluginConfigFieldType::Selection;
-    }
-    return PrefsPluginConfigFieldType::Text;
+    return Common::PluginConfiguration::ParseSchema(schemaJsonUtf8);
 }
 
-std::optional<std::string_view> TryGetUtf8String(yyjson_val* obj, const char* key) noexcept
+void ApplyFieldValueToControls(const PrefsPluginConfigField& field,
+                               const Common::PluginConfiguration::FieldValue& value,
+                               PrefsPluginConfigFieldControls& out) noexcept
 {
-    if (! obj || ! key)
+    out.field               = field;
+    out.schemaDefaultOption = field.defaultOption;
+
+    switch (field.type)
     {
-        return std::nullopt;
-    }
-
-    yyjson_val* v = yyjson_obj_get(obj, key);
-    if (! v || ! yyjson_is_str(v))
-    {
-        return std::nullopt;
-    }
-
-    const char* s = yyjson_get_str(v);
-    if (! s)
-    {
-        return std::nullopt;
-    }
-
-    return std::string_view(s);
-}
-
-bool TryGetInt64(yyjson_val* obj, const char* key, int64_t& out) noexcept
-{
-    if (! obj || ! key)
-    {
-        return false;
-    }
-
-    yyjson_val* v = yyjson_obj_get(obj, key);
-    if (! v)
-    {
-        return false;
-    }
-
-    if (yyjson_is_sint(v))
-    {
-        out = yyjson_get_sint(v);
-        return true;
-    }
-
-    if (yyjson_is_uint(v))
-    {
-        out = static_cast<int64_t>(std::min<uint64_t>(yyjson_get_uint(v), static_cast<uint64_t>(std::numeric_limits<int64_t>::max())));
-        return true;
-    }
-
-    if (yyjson_is_real(v))
-    {
-        out = static_cast<int64_t>(yyjson_get_real(v));
-        return true;
-    }
-
-    return false;
-}
-
-[[nodiscard]] bool EqualsNoCase(std::wstring_view a, std::wstring_view b) noexcept
-{
-    if (a.size() > static_cast<size_t>(std::numeric_limits<int>::max()) || b.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
-    {
-        return false;
-    }
-
-    return OrdinalString::EqualsNoCase(a, b);
-}
-
-[[nodiscard]] std::optional<bool> TryParseBoolToggleToken(const std::wstring_view token) noexcept
-{
-    if (EqualsNoCase(token, L"on") || EqualsNoCase(token, L"true") || token == L"1")
-    {
-        return true;
-    }
-
-    if (EqualsNoCase(token, L"off") || EqualsNoCase(token, L"false") || token == L"0")
-    {
-        return false;
-    }
-
-    return std::nullopt;
-}
-
-bool TryGetBoolValue(yyjson_val* obj, const char* key, bool& out) noexcept
-{
-    if (! obj || ! key)
-    {
-        return false;
-    }
-
-    yyjson_val* v = yyjson_obj_get(obj, key);
-    if (! v)
-    {
-        return false;
-    }
-
-    if (yyjson_is_bool(v))
-    {
-        out = yyjson_get_bool(v);
-        return true;
-    }
-
-    if (yyjson_is_sint(v))
-    {
-        out = yyjson_get_sint(v) != 0;
-        return true;
-    }
-
-    if (yyjson_is_uint(v))
-    {
-        out = yyjson_get_uint(v) != 0;
-        return true;
-    }
-
-    if (yyjson_is_str(v))
-    {
-        const char* s = yyjson_get_str(v);
-        if (! s)
-        {
-            return false;
-        }
-
-        const std::optional<bool> parsed = TryParseBoolToggleToken(Utf16FromUtf8(s));
-        if (parsed.has_value())
-        {
-            out = parsed.value();
-            return true;
-        }
-    }
-
-    return false;
-}
-
-std::vector<PrefsPluginConfigField> ParsePluginConfigSchema(std::string_view schemaJsonUtf8) noexcept
-{
-    std::vector<PrefsPluginConfigField> fields;
-    if (schemaJsonUtf8.empty())
-    {
-        return fields;
-    }
-
-    yyjson_doc* doc = yyjson_read(schemaJsonUtf8.data(), schemaJsonUtf8.size(), YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM);
-    if (! doc)
-    {
-        return fields;
-    }
-
-    auto freeDoc = wil::scope_exit([&] { yyjson_doc_free(doc); });
-
-    yyjson_val* root = yyjson_doc_get_root(doc);
-    if (! root || ! yyjson_is_obj(root))
-    {
-        return fields;
-    }
-
-    yyjson_val* fieldsArr = yyjson_obj_get(root, "fields");
-    if (! fieldsArr || ! yyjson_is_arr(fieldsArr))
-    {
-        return fields;
-    }
-
-    const size_t count = yyjson_arr_size(fieldsArr);
-    fields.reserve(count);
-
-    for (size_t i = 0; i < count; ++i)
-    {
-        yyjson_val* item = yyjson_arr_get(fieldsArr, i);
-        if (! item || ! yyjson_is_obj(item))
-        {
-            continue;
-        }
-
-        const auto keyUtf8  = TryGetUtf8String(item, "key");
-        const auto typeUtf8 = TryGetUtf8String(item, "type");
-        if (! keyUtf8.has_value() || ! typeUtf8.has_value())
-        {
-            continue;
-        }
-
-        PrefsPluginConfigField field;
-        field.key = Utf16FromUtf8(keyUtf8.value());
-        if (field.key.empty())
-        {
-            continue;
-        }
-
-        field.type = ParsePluginConfigFieldType(typeUtf8.value());
-
-        const auto labelUtf8 = TryGetUtf8String(item, "label");
-        field.label          = labelUtf8.has_value() ? Utf16FromUtf8(labelUtf8.value()) : field.key;
-        if (field.label.empty())
-        {
-            field.label = field.key;
-        }
-
-        const auto descriptionUtf8 = TryGetUtf8String(item, "description");
-        if (descriptionUtf8.has_value())
-        {
-            field.description = Utf16FromUtf8(descriptionUtf8.value());
-        }
-
-        bool uiHidden = false;
-        if (TryGetBoolValue(item, "x-ui-hidden", uiHidden))
-        {
-            field.uiHidden = uiHidden;
-        }
-
-        if (field.type == PrefsPluginConfigFieldType::Text)
-        {
-            const auto browseUtf8 = TryGetUtf8String(item, "browse");
-            if (browseUtf8.has_value())
-            {
-                const std::string_view browse = browseUtf8.value();
-                field.browseFolder            = (browse == "folder") || (browse == "directory");
-            }
-        }
-
-        int64_t minValue = 0;
-        if (TryGetInt64(item, "min", minValue))
-        {
-            field.hasMin = true;
-            field.min    = minValue;
-        }
-
-        int64_t maxValue = 0;
-        if (TryGetInt64(item, "max", maxValue))
-        {
-            field.hasMax = true;
-            field.max    = maxValue;
-        }
-
-        if (field.type == PrefsPluginConfigFieldType::Text)
-        {
-            const auto def    = TryGetUtf8String(item, "default");
-            field.defaultText = def.has_value() ? Utf16FromUtf8(def.value()) : std::wstring();
-        }
-        else if (field.type == PrefsPluginConfigFieldType::Value)
-        {
-            int64_t defValue = 0;
-            if (TryGetInt64(item, "default", defValue))
-            {
-                field.defaultInt = defValue;
-            }
-        }
-        else if (field.type == PrefsPluginConfigFieldType::Bool)
-        {
-            bool def = false;
-            if (TryGetBoolValue(item, "default", def))
-            {
-                field.defaultBool = def;
-            }
-        }
-        else if (field.type == PrefsPluginConfigFieldType::Option)
-        {
-            const auto def      = TryGetUtf8String(item, "default");
-            field.defaultOption = def.has_value() ? Utf16FromUtf8(def.value()) : std::wstring();
-
-            yyjson_val* options = yyjson_obj_get(item, "options");
-            if (options && yyjson_is_arr(options))
-            {
-                const size_t optCount = yyjson_arr_size(options);
-                field.choices.reserve(optCount);
-                for (size_t o = 0; o < optCount; ++o)
-                {
-                    yyjson_val* opt = yyjson_arr_get(options, o);
-                    if (! opt || ! yyjson_is_obj(opt))
-                    {
-                        continue;
-                    }
-
-                    const auto valueUtf8 = TryGetUtf8String(opt, "value");
-                    if (! valueUtf8.has_value())
-                    {
-                        continue;
-                    }
-
-                    PrefsPluginConfigChoice choice;
-                    choice.value = Utf16FromUtf8(valueUtf8.value());
-                    if (choice.value.empty())
-                    {
-                        continue;
-                    }
-
-                    const auto optLabelUtf8 = TryGetUtf8String(opt, "label");
-                    choice.label            = optLabelUtf8.has_value() ? Utf16FromUtf8(optLabelUtf8.value()) : choice.value;
-                    if (choice.label.empty())
-                    {
-                        choice.label = choice.value;
-                    }
-
-                    field.choices.push_back(std::move(choice));
-                }
-            }
-        }
-        else if (field.type == PrefsPluginConfigFieldType::Selection)
-        {
-            yyjson_val* options = yyjson_obj_get(item, "options");
-            if (options && yyjson_is_arr(options))
-            {
-                const size_t optCount = yyjson_arr_size(options);
-                field.choices.reserve(optCount);
-                for (size_t o = 0; o < optCount; ++o)
-                {
-                    yyjson_val* opt = yyjson_arr_get(options, o);
-                    if (! opt || ! yyjson_is_obj(opt))
-                    {
-                        continue;
-                    }
-
-                    const auto valueUtf8 = TryGetUtf8String(opt, "value");
-                    if (! valueUtf8.has_value())
-                    {
-                        continue;
-                    }
-
-                    PrefsPluginConfigChoice choice;
-                    choice.value = Utf16FromUtf8(valueUtf8.value());
-                    if (choice.value.empty())
-                    {
-                        continue;
-                    }
-
-                    const auto optLabelUtf8 = TryGetUtf8String(opt, "label");
-                    choice.label            = optLabelUtf8.has_value() ? Utf16FromUtf8(optLabelUtf8.value()) : choice.value;
-                    if (choice.label.empty())
-                    {
-                        choice.label = choice.value;
-                    }
-
-                    field.choices.push_back(std::move(choice));
-                }
-            }
-
-            yyjson_val* def = yyjson_obj_get(item, "default");
-            if (def && yyjson_is_arr(def))
-            {
-                const size_t defCount = yyjson_arr_size(def);
-                field.defaultSelection.reserve(defCount);
-                for (size_t d = 0; d < defCount; ++d)
-                {
-                    yyjson_val* v = yyjson_arr_get(def, d);
-                    if (! v || ! yyjson_is_str(v))
-                    {
-                        continue;
-                    }
-
-                    const char* s = yyjson_get_str(v);
-                    if (! s)
-                    {
-                        continue;
-                    }
-
-                    std::wstring value = Utf16FromUtf8(s);
-                    if (! value.empty())
-                    {
-                        field.defaultSelection.push_back(std::move(value));
-                    }
-                }
-            }
-        }
-
-        fields.push_back(std::move(field));
-    }
-
-    return fields;
-}
-
-yyjson_doc* ParseJsonToDoc(std::string_view textUtf8) noexcept
-{
-    if (textUtf8.empty())
-    {
-        return nullptr;
-    }
-
-    return yyjson_read(textUtf8.data(), textUtf8.size(), YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM);
-}
-
-void ApplyFieldDefaultToControls(const PrefsPluginConfigField& field, PrefsPluginConfigFieldControls& out, yyjson_val* configRoot) noexcept
-{
-    out.field = field;
-
-    const std::string keyUtf8 = Utf8FromUtf16(field.key);
-    yyjson_val* current       = nullptr;
-    if (configRoot && ! keyUtf8.empty())
-    {
-        current = yyjson_obj_get(configRoot, keyUtf8.c_str());
-    }
-
-    if (field.type == PrefsPluginConfigFieldType::Text)
-    {
-        std::wstring value = field.defaultText;
-        if (current && yyjson_is_str(current))
-        {
-            const char* s = yyjson_get_str(current);
-            if (s)
-            {
-                value = Utf16FromUtf8(s);
-            }
-        }
-        out.field.defaultText = value;
-    }
-    else if (field.type == PrefsPluginConfigFieldType::Value)
-    {
-        int64_t value = field.defaultInt;
-        if (current)
-        {
-            if (yyjson_is_sint(current))
-            {
-                value = yyjson_get_sint(current);
-            }
-            else if (yyjson_is_uint(current))
-            {
-                value = static_cast<int64_t>(std::min<uint64_t>(yyjson_get_uint(current), static_cast<uint64_t>(std::numeric_limits<int64_t>::max())));
-            }
-            else if (yyjson_is_real(current))
-            {
-                value = static_cast<int64_t>(yyjson_get_real(current));
-            }
-        }
-        out.field.defaultInt = value;
-    }
-    else if (field.type == PrefsPluginConfigFieldType::Bool)
-    {
-        bool value = field.defaultBool;
-        if (current)
-        {
-            if (yyjson_is_bool(current))
-            {
-                value = yyjson_get_bool(current);
-            }
-            else if (yyjson_is_sint(current))
-            {
-                value = yyjson_get_sint(current) != 0;
-            }
-            else if (yyjson_is_uint(current))
-            {
-                value = yyjson_get_uint(current) != 0;
-            }
-            else if (yyjson_is_str(current))
-            {
-                const char* s = yyjson_get_str(current);
-                if (s)
-                {
-                    const std::optional<bool> parsed = TryParseBoolToggleToken(Utf16FromUtf8(s));
-                    if (parsed.has_value())
-                    {
-                        value = parsed.value();
-                    }
-                }
-            }
-        }
-        out.field.defaultBool = value;
-    }
-    else if (field.type == PrefsPluginConfigFieldType::Option)
-    {
-        out.schemaDefaultOption = field.defaultOption;
-        std::wstring value      = field.defaultOption;
-        if (current && yyjson_is_str(current))
-        {
-            const char* s = yyjson_get_str(current);
-            if (s)
-            {
-                value = Utf16FromUtf8(s);
-            }
-        }
-        out.field.defaultOption = value;
-    }
-    else if (field.type == PrefsPluginConfigFieldType::Selection)
-    {
-        std::vector<std::wstring> values = field.defaultSelection;
-        if (current && yyjson_is_arr(current))
-        {
-            values.clear();
-            const size_t count = yyjson_arr_size(current);
-            values.reserve(count);
-            for (size_t i = 0; i < count; ++i)
-            {
-                yyjson_val* v = yyjson_arr_get(current, i);
-                if (! v || ! yyjson_is_str(v))
-                {
-                    continue;
-                }
-                const char* s = yyjson_get_str(v);
-                if (! s)
-                {
-                    continue;
-                }
-                std::wstring t = Utf16FromUtf8(s);
-                if (! t.empty())
-                {
-                    values.push_back(std::move(t));
-                }
-            }
-        }
-
-        out.field.defaultSelection = std::move(values);
-    }
-
-    if (out.field.type == PrefsPluginConfigFieldType::Text)
-    {
-        out.retainedText = out.field.defaultText;
-    }
-    else if (out.field.type == PrefsPluginConfigFieldType::Value)
-    {
-        out.retainedText = std::to_wstring(out.field.defaultInt);
-    }
-    else if (out.field.type == PrefsPluginConfigFieldType::Bool)
-    {
-        out.retainedToggleValue = out.field.defaultBool;
-    }
-    else if (out.field.type == PrefsPluginConfigFieldType::Option)
-    {
-        out.retainedOptionValue = out.field.defaultOption;
-    }
-    else if (out.field.type == PrefsPluginConfigFieldType::Selection)
-    {
-        out.retainedSelectionValues = out.field.defaultSelection;
+        case PrefsPluginConfigFieldType::Text:
+            out.field.defaultText = value.text;
+            out.retainedText      = value.text;
+            break;
+        case PrefsPluginConfigFieldType::Value:
+            out.field.defaultInt = value.integer;
+            out.retainedText     = std::to_wstring(value.integer);
+            break;
+        case PrefsPluginConfigFieldType::Bool:
+            out.field.defaultBool    = value.boolean;
+            out.retainedToggleValue = value.boolean;
+            break;
+        case PrefsPluginConfigFieldType::Option:
+            out.field.defaultOption    = value.text;
+            out.retainedOptionValue   = value.text;
+            break;
+        case PrefsPluginConfigFieldType::Selection:
+            out.field.defaultSelection    = value.selection;
+            out.retainedSelectionValues = value.selection;
+            break;
     }
 }
 } // namespace
@@ -908,6 +349,7 @@ void Clear(PreferencesDialogState& state) noexcept
     SetDetailsConfigErrorText(state, L"");
     SetDetailsConfigEmptyStateText(state, L"");
     state.pluginsDetailsConfigPluginId.clear();
+    state.pluginsDetailsConfigSourceJsonUtf8.clear();
 }
 
 [[nodiscard]] bool EnsureEditor(HWND parent, PreferencesDialogState& state, const PrefsPluginListItem& pluginItem) noexcept
@@ -966,7 +408,8 @@ void Clear(PreferencesDialogState& state) noexcept
         return false;
     }
 
-    const std::vector<PrefsPluginConfigField> fields = ParsePluginConfigSchema(schemaUtf8);
+    const Common::PluginConfiguration::SchemaParseResult schema = ParsePluginConfigSchema(schemaUtf8);
+    const std::vector<PrefsPluginConfigField>& fields            = schema.fields;
     if (fields.empty())
     {
         SetDetailsConfigEmptyStateText(state, LoadStringResource(nullptr, IDS_PREFS_PLUGINS_DETAILS_SCHEMA_NO_FIELDS));
@@ -1003,25 +446,9 @@ void Clear(PreferencesDialogState& state) noexcept
     {
         configUtf8 = "{}";
     }
-
-    yyjson_doc* configDoc = ParseJsonToDoc(configUtf8);
-    auto freeConfigDoc    = wil::scope_exit([&]
-    {
-        if (configDoc)
-        {
-            yyjson_doc_free(configDoc);
-        }
-    });
-
-    yyjson_val* configRoot = nullptr;
-    if (configDoc)
-    {
-        configRoot = yyjson_doc_get_root(configDoc);
-        if (! configRoot || ! yyjson_is_obj(configRoot))
-        {
-            configRoot = nullptr;
-        }
-    }
+    state.pluginsDetailsConfigSourceJsonUtf8 = configUtf8;
+    const Common::PluginConfiguration::ConfigurationParseResult configuration =
+        Common::PluginConfiguration::ParseConfiguration(fields, configUtf8);
 
     SetDetailsConfigErrorText(state, L"");
 
@@ -1042,10 +469,13 @@ void Clear(PreferencesDialogState& state) noexcept
     state.pluginsDetailsConfigFields.clear();
     state.pluginsDetailsConfigFields.reserve(fields.size());
 
-    for (const PrefsPluginConfigField& field : fields)
+    for (size_t fieldIndex = 0; fieldIndex < fields.size(); ++fieldIndex)
     {
+        const PrefsPluginConfigField& field = fields[fieldIndex];
         PrefsPluginConfigFieldControls controls{};
-        ApplyFieldDefaultToControls(field, controls, configRoot);
+        ApplyFieldValueToControls(field, configuration.values[fieldIndex], controls);
+        const bool useOptionToggle = Common::PluginConfiguration::TryGetBoolToggleChoiceIndices(
+            controls.field, controls.toggleOnChoiceIndex, controls.toggleOffChoiceIndex);
 
         if (controls.field.uiHidden)
         {
@@ -1172,7 +602,7 @@ void Clear(PreferencesDialogState& state) noexcept
                 }
             }
 
-            if (controls.field.type == PrefsPluginConfigFieldType::Option && controls.field.choices.size() >= 2u && ! state.theme.systemHighContrast)
+            if (controls.field.type == PrefsPluginConfigFieldType::Option && useOptionToggle && ! state.theme.systemHighContrast)
             {
                 std::wstring uncheckedLabel = LoadStringResource(nullptr, IDS_PREFS_COMMON_OFF);
                 std::wstring checkedLabel   = LoadStringResource(nullptr, IDS_PREFS_COMMON_ON);
@@ -1696,154 +1126,62 @@ void LayoutCards(HWND host, PreferencesDialogState& state, int x, int& y, int wi
 
 namespace
 {
-std::string BuildConfigurationJson(const std::vector<PrefsPluginConfigFieldControls>& controls) noexcept
+std::string BuildConfigurationJson(const std::vector<PrefsPluginConfigFieldControls>& controls,
+                                   std::string_view originalConfigurationJsonUtf8) noexcept
 {
-    yyjson_mut_doc* doc = yyjson_mut_doc_new(nullptr);
-    if (! doc)
+    std::vector<PrefsPluginConfigField> fields;
+    std::vector<Common::PluginConfiguration::FieldValue> values;
+    fields.reserve(controls.size());
+    values.reserve(controls.size());
+
+    for (const PrefsPluginConfigFieldControls& controlsForField : controls)
     {
+        const PrefsPluginConfigField& field = controlsForField.field;
+        fields.push_back(field);
+
+        Common::PluginConfiguration::FieldValue value;
+        value.type = field.type;
+        switch (field.type)
+        {
+            case PrefsPluginConfigFieldType::Text:
+                value.text = controlsForField.retainedText;
+                break;
+            case PrefsPluginConfigFieldType::Value:
+            {
+                value.integer = field.defaultInt;
+                if (! controlsForField.retainedText.empty())
+                {
+                    wchar_t* end           = nullptr;
+                    errno                  = 0;
+                    const long long parsed = std::wcstoll(controlsForField.retainedText.c_str(), &end, 10);
+                    if (errno == 0 && end != controlsForField.retainedText.c_str())
+                    {
+                        value.integer = static_cast<int64_t>(parsed);
+                    }
+                }
+                break;
+            }
+            case PrefsPluginConfigFieldType::Bool:
+                value.boolean = controlsForField.retainedToggleValue;
+                break;
+            case PrefsPluginConfigFieldType::Option:
+                value.text = controlsForField.retainedOptionValue;
+                break;
+            case PrefsPluginConfigFieldType::Selection:
+                value.selection = controlsForField.retainedSelectionValues;
+                break;
+        }
+        values.push_back(std::move(value));
+    }
+
+    std::string serialized;
+    if (FAILED(Common::PluginConfiguration::SerializeConfiguration(originalConfigurationJsonUtf8, fields, values, serialized)))
+    {
+        Debug::Error(L"Failed to serialize Preferences plugin configuration through the shared codec.");
         return {};
     }
-
-    auto freeDoc = wil::scope_exit([&] { yyjson_mut_doc_free(doc); });
-
-    yyjson_mut_val* root = yyjson_mut_obj(doc);
-    if (! root)
-    {
-        return {};
-    }
-    yyjson_mut_doc_set_root(doc, root);
-
-    for (const auto& c : controls)
-    {
-        const std::string keyUtf8 = Utf8FromUtf16(c.field.key);
-        if (keyUtf8.empty() && ! c.field.key.empty())
-        {
-            continue;
-        }
-
-        if (keyUtf8.empty())
-        {
-            continue;
-        }
-
-        yyjson_mut_val* key = yyjson_mut_strncpy(doc, keyUtf8.c_str(), keyUtf8.size());
-        if (! key)
-        {
-            return {};
-        }
-
-        if (c.field.type == PrefsPluginConfigFieldType::Text)
-        {
-            const std::string utf8 = Utf8FromUtf16(c.retainedText);
-            yyjson_mut_val* val    = yyjson_mut_strncpy(doc, utf8.c_str(), utf8.size());
-            if (! val)
-            {
-                return {};
-            }
-            if (! yyjson_mut_obj_add(root, key, val))
-            {
-                return {};
-            }
-        }
-        else if (c.field.type == PrefsPluginConfigFieldType::Value)
-        {
-            int64_t v = c.field.defaultInt;
-            if (! c.retainedText.empty())
-            {
-                wchar_t* end           = nullptr;
-                errno                  = 0;
-                const long long parsed = std::wcstoll(c.retainedText.c_str(), &end, 10);
-                if (errno == 0 && end != c.retainedText.c_str())
-                {
-                    v = static_cast<int64_t>(parsed);
-                }
-            }
-
-            if (c.field.hasMin)
-            {
-                v = std::max(v, c.field.min);
-            }
-            if (c.field.hasMax)
-            {
-                v = std::min(v, c.field.max);
-            }
-
-            yyjson_mut_val* val = yyjson_mut_int(doc, v);
-            if (! val)
-            {
-                return {};
-            }
-            if (! yyjson_mut_obj_add(root, key, val))
-            {
-                return {};
-            }
-        }
-        else if (c.field.type == PrefsPluginConfigFieldType::Bool)
-        {
-            yyjson_mut_val* val = yyjson_mut_bool(doc, c.retainedToggleValue ? true : false);
-            if (! val)
-            {
-                return {};
-            }
-            if (! yyjson_mut_obj_add(root, key, val))
-            {
-                return {};
-            }
-        }
-        else if (c.field.type == PrefsPluginConfigFieldType::Option)
-        {
-            const std::string utf8 = Utf8FromUtf16(c.retainedOptionValue);
-            yyjson_mut_val* val    = yyjson_mut_strncpy(doc, utf8.c_str(), utf8.size());
-            if (! val)
-            {
-                return {};
-            }
-            if (! yyjson_mut_obj_add(root, key, val))
-            {
-                return {};
-            }
-        }
-        else if (c.field.type == PrefsPluginConfigFieldType::Selection)
-        {
-            yyjson_mut_val* arr = yyjson_mut_arr(doc);
-            if (! arr)
-            {
-                return {};
-            }
-            if (! yyjson_mut_obj_add(root, key, arr))
-            {
-                return {};
-            }
-
-            for (const auto& selectedValue : c.retainedSelectionValues)
-            {
-                const std::string utf8 = Utf8FromUtf16(selectedValue);
-                yyjson_mut_val* val    = yyjson_mut_strncpy(doc, utf8.c_str(), utf8.size());
-                if (! val)
-                {
-                    return {};
-                }
-                if (! yyjson_mut_arr_add_val(arr, val))
-                {
-                    return {};
-                }
-            }
-        }
-    }
-
-    yyjson_write_err err{};
-    size_t len = 0;
-    wil::unique_any<char*, decltype(&::free), ::free> json(yyjson_mut_write_opts(doc, YYJSON_WRITE_NOFLAG, nullptr, &len, &err));
-    if (! json || len == 0)
-    {
-        Debug::Error(L"Failed to serialize plugin configuration to JSON: code: {}", err.code);
-        return {};
-    }
-
-    std::string out(json.get(), len);
-    return out;
+    return serialized;
 }
-
 [[nodiscard]] std::wstring GetPluginConfigurationSchemaErrorText(const PrefsPluginListItem& pluginItem) noexcept
 {
     if (! PrefsPlugins::IsLoadable(pluginItem))
@@ -1860,7 +1198,8 @@ std::string BuildConfigurationJson(const std::vector<PrefsPluginConfigFieldContr
         return false;
     }
 
-    const std::string configJson = BuildConfigurationJson(state.pluginsDetailsConfigFields);
+    const std::string configJson =
+        BuildConfigurationJson(state.pluginsDetailsConfigFields, state.pluginsDetailsConfigSourceJsonUtf8);
     if (configJson.empty())
     {
         return false;
@@ -1888,6 +1227,7 @@ std::string BuildConfigurationJson(const std::vector<PrefsPluginConfigFieldContr
     {
         state.workingSettings.plugins.configurationByPluginId[state.pluginsDetailsConfigPluginId] = std::move(parsedValue);
     }
+    state.pluginsDetailsConfigSourceJsonUtf8 = configJson;
 
     if (HWND dlg = GetParent(host))
     {

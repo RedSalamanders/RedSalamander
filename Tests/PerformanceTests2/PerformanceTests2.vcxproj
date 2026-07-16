@@ -358,11 +358,32 @@
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Release|x64'">../../RedSalamander;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">main=__ignored_main_IconCache;wmain=__ignored_wmain_IconCache;WinMain=__ignored_WinMain_IconCache;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
+    <ClCompile Include="..\..\RedSalamander\SelfTest\Common\SelfTestLatencyHooks.cpp">
+      <DisableSpecificWarnings>$(RSPerformanceTests2SourceImportDisabledWarnings);%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+      </PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      </PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+      </PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+      </PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="FolderIconEnumerationDuplicatePathPerfTest.cpp" />
     <ClCompile Include="FolderIconEnumerationPerfTest.cpp" />
     <ClCompile Include="FolderViewColumnLayoutTests.cpp" />
     <ClCompile Include="FolderViewRefreshDuplicatePathPerfTest.cpp" />
     <ClCompile Include="..\..\RedSalamander\FileSystemPluginManager.cpp">
+      <DisableSpecificWarnings>$(RSPerformanceTests2SourceImportDisabledWarnings);%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <PrecompiledHeader></PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'"></PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'"></PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'"></PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'"></PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="..\..\RedSalamander\PluginModuleLifecycle.cpp">
       <DisableSpecificWarnings>$(RSPerformanceTests2SourceImportDisabledWarnings);%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <PrecompiledHeader></PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'"></PrecompiledHeader>

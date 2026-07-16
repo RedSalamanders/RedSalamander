@@ -4,6 +4,7 @@
 #define NOMINMAX
 
 #include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <mutex>
 #include <optional>
@@ -31,6 +32,7 @@
 [[nodiscard]] bool DebugNormalizeIconBitmapAlphaForD2DWithMask(std::span<BYTE> pixels, HBITMAP maskBitmap, int width, int height, HDC hdc) noexcept;
 [[nodiscard]] int DebugSelectIconCacheImageListSize(float targetDipSize, float dpi) noexcept;
 [[nodiscard]] size_t DebugGetAssociationIconCacheSize() noexcept;
+[[nodiscard]] uint32_t DebugGetLivePathIconFailureBackoffMs(uint32_t consecutiveFailureCount) noexcept;
 #endif
 
 // Forward declarations
@@ -260,8 +262,11 @@ private:
 
     struct PathIconCacheEntry
     {
-        int iconIndex         = 0;
-        size_t lastAccessTime = 0;
+        int iconIndex                                      = 0;
+        size_t lastAccessTime                              = 0;
+        bool lookupFailed                                  = false;
+        std::chrono::steady_clock::time_point failureStamp = {};
+        uint32_t consecutiveFailureCount                   = 0;
     };
 
     // Evict least recently used icon if cache exceeds size limit.

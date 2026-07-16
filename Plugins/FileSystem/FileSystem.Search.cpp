@@ -36,6 +36,7 @@ constexpr unsigned long kParallelScanThreshold = 500u;
 // Number of entries per chunk dispatched to a threadpool worker.
 constexpr unsigned long kParallelScanChunkSize        = 128u;
 constexpr size_t kParallelDirectoryResultFlushMatches = 32u;
+constexpr size_t kMaxQueuedFollowSymlinkDirectories   = 1'000'000u;
 
 using UniqueThreadpoolWork = wil::unique_any<PTP_WORK, decltype(&::CloseThreadpoolWork), ::CloseThreadpoolWork>;
 
@@ -169,21 +170,21 @@ struct SearchRuntime final
     std::unordered_set<DirectoryVisitIdentity, DirectoryVisitIdentityHasher> queuedDirectoryIdentities;
     std::unordered_set<std::wstring> emittedMatchPaths;
     std::mutex queuedDirectoriesMutex;
-    bool includeFiles                         = false;
-    bool includeDirectories                   = false;
-    bool recursive                            = false;
-    bool followSymlinks                       = false;
-    bool wantSnippets                         = false;
-    bool matchCaseName                        = false;
-    bool matchCaseContent                     = false;
-    uint64_t maxResults                       = 0;
-    uint64_t maxContentBytesPerFile           = kDefaultSearchContentBytesPerFile;
-    uint32_t maxSnippetCharacters             = kDefaultSearchSnippetChars;
-    uint64_t scannedDirectories               = 0;
-    uint64_t scannedFiles                     = 0;
-    uint64_t candidateFiles                   = 0;
-    uint64_t indexedCandidatesConsumed        = 0;
-    uint64_t matchedEntries                   = 0;
+    bool includeFiles                  = false;
+    bool includeDirectories            = false;
+    bool recursive                     = false;
+    bool followSymlinks                = false;
+    bool wantSnippets                  = false;
+    bool matchCaseName                 = false;
+    bool matchCaseContent              = false;
+    uint64_t maxResults                = 0;
+    uint64_t maxContentBytesPerFile    = kDefaultSearchContentBytesPerFile;
+    uint32_t maxSnippetCharacters      = kDefaultSearchSnippetChars;
+    uint64_t scannedDirectories        = 0;
+    uint64_t scannedFiles              = 0;
+    uint64_t candidateFiles            = 0;
+    uint64_t indexedCandidatesConsumed = 0;
+    uint64_t matchedEntries            = 0;
     mutable std::atomic<uint64_t> materializedEntryPathPairs{0};
     FileSystemSearchBackend backend           = FILESYSTEM_SEARCH_BACKEND_SCAN;
     uint32_t warningFlags                     = FILESYSTEM_SEARCH_WARNING_NONE;
@@ -289,8 +290,7 @@ struct SearchRuntime final
             return false;
         }
 
-        metadata.relativePath =
-            relativeBase.empty() ? metadata.displayName : NormalizeSearchPath(AppendPath(std::wstring(relativeBase), metadata.displayName));
+        metadata.relativePath = relativeBase.empty() ? metadata.displayName : NormalizeSearchPath(AppendPath(std::wstring(relativeBase), metadata.displayName));
         materialized          = true;
     }
 
@@ -336,11 +336,29 @@ struct SearchRuntime final
     return S_OK;
 }
 
-[[nodiscard]] bool MarkQueuedDirectory(SearchRuntime& runtime, std::wstring_view fullPath) noexcept
+[[nodiscard]] bool MarkQueuedDirectory(SearchRuntime& runtime, std::wstring_view fullPath, uint32_t* outWarningFlags = nullptr) noexcept
 {
+    if (outWarningFlags != nullptr)
+    {
+        *outWarningFlags = FILESYSTEM_SEARCH_WARNING_NONE;
+    }
+
     const std::wstring visitKey = NormalizeVisitKey(fullPath);
     {
         std::lock_guard lock(runtime.queuedDirectoriesMutex);
+        if (runtime.followSymlinks && runtime.queuedDirectories.size() >= kMaxQueuedFollowSymlinkDirectories)
+        {
+            if (outWarningFlags != nullptr)
+            {
+                *outWarningFlags |= FILESYSTEM_SEARCH_WARNING_OVERFLOW;
+            }
+            else
+            {
+                runtime.warningFlags |= FILESYSTEM_SEARCH_WARNING_OVERFLOW;
+            }
+            return false;
+        }
+
         if (! runtime.queuedDirectories.insert(visitKey).second)
         {
             return false;
@@ -355,7 +373,17 @@ struct SearchRuntime final
     DirectoryVisitIdentity identity{};
     if (FAILED(TryGetDirectoryVisitIdentity(fullPath, identity)))
     {
-        return true;
+        std::lock_guard lock(runtime.queuedDirectoriesMutex);
+        runtime.queuedDirectories.erase(visitKey);
+        if (outWarningFlags != nullptr)
+        {
+            *outWarningFlags |= FILESYSTEM_SEARCH_WARNING_ACCESS_DENIED_SKIPPED;
+        }
+        else
+        {
+            runtime.warningFlags |= FILESYSTEM_SEARCH_WARNING_ACCESS_DENIED_SKIPPED;
+        }
+        return false;
     }
 
     std::lock_guard lock(runtime.queuedDirectoriesMutex);
@@ -472,8 +500,13 @@ void RequestParallelDirectoryWalkStop(ParallelDirectoryWalkState& state, HRESULT
 
 void EnqueueParallelDirectory(ParallelDirectoryWalkState& state, SearchRuntime& runtime, std::wstring fullPath, std::wstring relativeBase) noexcept
 {
-    if (! MarkQueuedDirectory(runtime, fullPath))
+    uint32_t warningFlags = FILESYSTEM_SEARCH_WARNING_NONE;
+    if (! MarkQueuedDirectory(runtime, fullPath, &warningFlags))
     {
+        if (warningFlags != FILESYSTEM_SEARCH_WARNING_NONE)
+        {
+            state.warningFlags.fetch_or(warningFlags, std::memory_order_acq_rel);
+        }
         return;
     }
 
@@ -533,7 +566,7 @@ void AccumulateParallelNameOnlyEntry(const SearchRuntime& runtime,
 
     if (! MaterializeEntryPaths(metadata, directoryFullPath, relativeBase, &runtime.materializedEntryPathPairs))
     {
-        result.status = E_FAIL;
+        result.warningFlags |= FILESYSTEM_SEARCH_WARNING_OVERFLOW;
         return;
     }
 
@@ -545,7 +578,7 @@ void AccumulateParallelNameOnlyEntry(const SearchRuntime& runtime,
 
 [[nodiscard]] bool HasQueuedParallelDirectoryResultWork(const ParallelDirectoryResult& result) noexcept
 {
-    return SUCCEEDED(result.status) && ! result.matches.empty();
+    return ! result.matches.empty();
 }
 
 void QueueParallelDirectoryResultChunk(ParallelDirectoryWalkState& state, ParallelDirectoryResult& result) noexcept
@@ -571,7 +604,10 @@ void QueueParallelDirectoryResultChunk(ParallelDirectoryWalkState& state, Parall
     queued.status       = result.status;
     result.matches.clear();
     result.warningFlags = FILESYSTEM_SEARCH_WARNING_NONE;
-    result.status       = S_OK;
+    if (SUCCEEDED(queued.status))
+    {
+        result.status = S_OK;
+    }
 
     {
         std::lock_guard lock(state.mutex);
@@ -655,8 +691,8 @@ void BuildParallelDirectoryResult(SearchRuntime& runtime,
         {
             if (! MaterializeEntryPaths(metadata, frame.fullPath, frame.relativeBase, &runtime.materializedEntryPathPairs))
             {
-                result.status = E_FAIL;
-                break;
+                result.warningFlags |= FILESYSTEM_SEARCH_WARNING_OVERFLOW;
+                continue;
             }
 
             EnqueueParallelDirectory(state, runtime, std::wstring(metadata.fullPath), std::wstring(metadata.relativePath));
@@ -834,7 +870,7 @@ HRESULT SearchDirectoryTreeParallelNameOnly(SearchRuntime& runtime) noexcept
         return SearchDirectoryTree(runtime);
     }
 
-    bool workerWorkItemsWaited = false;
+    bool workerWorkItemsWaited        = false;
     const auto waitForWorkerWorkItems = [&]() noexcept
     {
         if (workerWorkItemsWaited)
@@ -1420,7 +1456,10 @@ HRESULT EmitSearchMatch(SearchRuntime& runtime, const SearchEntryMetadata& entry
     return S_OK;
 }
 
-HRESULT EvaluateEntry(SearchRuntime& runtime, SearchEntryMetadata& entry, std::wstring_view directoryFullPath = {}, std::wstring_view relativeBase = {}) noexcept
+HRESULT EvaluateEntry(SearchRuntime& runtime,
+                      SearchEntryMetadata& entry,
+                      std::wstring_view directoryFullPath = {},
+                      std::wstring_view relativeBase      = {}) noexcept
 {
     const bool isDirectory = (entry.fileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
     if ((isDirectory && ! runtime.includeDirectories) || (! isDirectory && ! runtime.includeFiles))
@@ -1469,7 +1508,8 @@ HRESULT EvaluateEntry(SearchRuntime& runtime, SearchEntryMetadata& entry, std::w
 
         if (! MaterializeEntryPaths(entry, directoryFullPath, relativeBase, &runtime.materializedEntryPathPairs))
         {
-            return E_FAIL;
+            runtime.warningFlags |= FILESYSTEM_SEARCH_WARNING_OVERFLOW;
+            return S_OK;
         }
 
         const HRESULT hr = MatchFileContent(runtime, entry.fullPath, contentResult);
@@ -1488,7 +1528,8 @@ HRESULT EvaluateEntry(SearchRuntime& runtime, SearchEntryMetadata& entry, std::w
 
     if (! MaterializeEntryPaths(entry, directoryFullPath, relativeBase, &runtime.materializedEntryPathPairs))
     {
-        return E_FAIL;
+        runtime.warningFlags |= FILESYSTEM_SEARCH_WARNING_OVERFLOW;
+        return S_OK;
     }
 
     uint32_t matchedBy = FILESYSTEM_SEARCH_MATCH_SOURCE_NONE;
@@ -1593,6 +1634,7 @@ void ApplyIndexedQueryStats(SearchRuntime& runtime, const LocalSearchIndexCore::
 {
     runtime.scannedDirectories = (std::max)(runtime.scannedDirectories, stats.directoryCount);
     runtime.scannedFiles       = (std::max)(runtime.scannedFiles, stats.fileCount);
+    runtime.warningFlags |= stats.warningFlags;
     if (runtime.stopRequested && runtime.indexedCandidatesConsumed != 0u)
     {
         runtime.candidateFiles = runtime.indexedCandidatesConsumed;
@@ -1900,13 +1942,10 @@ HRESULT SearchServiceTree(SearchRuntime& runtime) noexcept
     return S_OK;
 }
 
-[[nodiscard]] bool IsServiceFallbackCandidate(HRESULT hr) noexcept
+[[nodiscard]] bool IsServiceTransportFailure(HRESULT hr) noexcept
 {
     switch (hr)
     {
-        case kAccessDeniedHr:
-        case HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED):
-        case HRESULT_FROM_WIN32(ERROR_INVALID_FUNCTION):
         case HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND):
         case HRESULT_FROM_WIN32(ERROR_NO_DATA):
         case HRESULT_FROM_WIN32(ERROR_PIPE_NOT_CONNECTED):
@@ -1918,6 +1957,26 @@ HRESULT SearchServiceTree(SearchRuntime& runtime) noexcept
     }
 
     return false;
+}
+
+[[nodiscard]] bool IsServiceRootRejection(HRESULT hr) noexcept
+{
+    switch (hr)
+    {
+        case kAccessDeniedHr:
+        case HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED):
+        case HRESULT_FROM_WIN32(ERROR_INVALID_FUNCTION):
+        case HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND):
+        case HRESULT_FROM_WIN32(ERROR_BAD_PATHNAME):
+        case E_INVALIDARG: return true;
+    }
+
+    return false;
+}
+
+[[nodiscard]] bool IsServiceFallbackCandidate(HRESULT hr) noexcept
+{
+    return IsServiceTransportFailure(hr) || IsServiceRootRejection(hr);
 }
 
 // ---------------------------------------------------------------------------
@@ -2134,8 +2193,8 @@ void ParallelScanWorkerBody(ParallelChunkWork* chunk) noexcept
 
             if (! MaterializeEntryPaths(entry, chunk->directoryFullPath, chunk->relativeBase, &runtime.materializedEntryPathPairs))
             {
-                result.status = E_FAIL;
-                return;
+                result.warningFlags |= FILESYSTEM_SEARCH_WARNING_OVERFLOW;
+                continue;
             }
 
             ++result.candidateFiles;
@@ -2178,8 +2237,8 @@ void ParallelScanWorkerBody(ParallelChunkWork* chunk) noexcept
 
         if (! MaterializeEntryPaths(entry, chunk->directoryFullPath, chunk->relativeBase, &runtime.materializedEntryPathPairs))
         {
-            result.status = E_FAIL;
-            return;
+            result.warningFlags |= FILESYSTEM_SEARCH_WARNING_OVERFLOW;
+            continue;
         }
 
         result.matches.push_back({std::move(entry), std::move(contentResult), matchedBy});
@@ -2236,14 +2295,14 @@ HRESULT ParallelEvaluateEntries(SearchRuntime& runtime,
         }
         offset += thisChunkSize;
 
-        chunks[i].runtime         = &runtime;
-        chunks[i].cancelFlag      = &cancelFlag;
+        chunks[i].runtime           = &runtime;
+        chunks[i].cancelFlag        = &cancelFlag;
         chunks[i].directoryFullPath = std::wstring(directoryFullPath);
         chunks[i].relativeBase      = std::wstring(relativeBase);
-        chunks[i].completionMutex = &completionMutex;
-        chunks[i].completionCv    = &completionCv;
-        chunks[i].remainingChunks = &remainingChunks;
-        chunks[i].modulePin       = AcquireModuleReferenceFromAddress(&kFileSystemModuleAnchor);
+        chunks[i].completionMutex   = &completionMutex;
+        chunks[i].completionCv      = &completionCv;
+        chunks[i].remainingChunks   = &remainingChunks;
+        chunks[i].modulePin         = AcquireModuleReferenceFromAddress(&kFileSystemModuleAnchor);
     }
 
     // Dispatch chunks to the threadpool.
@@ -2261,7 +2320,7 @@ HRESULT ParallelEvaluateEntries(SearchRuntime& runtime,
         ::SubmitThreadpoolWork(chunkWorkItems.back().get());
     }
 
-    bool chunkWorkItemsWaited = false;
+    bool chunkWorkItemsWaited        = false;
     const auto waitForChunkWorkItems = [&]() noexcept
     {
         if (chunkWorkItemsWaited)
@@ -2442,7 +2501,7 @@ HRESULT SearchDirectoryTree(SearchRuntime& runtime) noexcept
             }
 
             SearchEntryMetadata metadata{};
-            metadata.displayName = std::wstring(name);
+            metadata.displayName    = std::wstring(name);
             metadata.fileAttributes = entry->FileAttributes;
             metadata.creationTime   = entry->CreationTime;
             metadata.lastAccessTime = entry->LastAccessTime;
@@ -2467,7 +2526,8 @@ HRESULT SearchDirectoryTree(SearchRuntime& runtime) noexcept
             {
                 if (! MaterializeEntryPaths(metadata, frame.fullPath, frame.relativeBase, &runtime.materializedEntryPathPairs))
                 {
-                    return E_FAIL;
+                    runtime.warningFlags |= FILESYSTEM_SEARCH_WARNING_OVERFLOW;
+                    continue;
                 }
 
                 if (MarkQueuedDirectory(runtime, metadata.fullPath))
@@ -2513,6 +2573,35 @@ HRESULT SearchDirectoryTree(SearchRuntime& runtime) noexcept
     return S_OK;
 }
 } // namespace
+
+#if defined(_DEBUG)
+namespace FileSystemInternal
+{
+void RunDebugSearchServiceFallbackCandidateSelfTest(unsigned int& passed, unsigned int& failed) noexcept
+{
+    const auto check = [&](bool condition, const wchar_t* message) noexcept -> bool
+    {
+        if (condition)
+        {
+            ++passed;
+            return true;
+        }
+
+        ++failed;
+        Debug::Error(L"FileSystem debug selftest failed: {}", message);
+        return false;
+    };
+
+    check(IsServiceRootRejection(HRESULT_FROM_WIN32(ERROR_BAD_PATHNAME)),
+          L"Search service root rejection should include ERROR_BAD_PATHNAME validation failures");
+    check(IsServiceRootRejection(HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND)),
+          L"Search service root rejection should include ERROR_PATH_NOT_FOUND validation failures");
+    check(IsServiceRootRejection(E_INVALIDARG), L"Search service root rejection should include E_INVALIDARG validation failures");
+    check(! IsServiceTransportFailure(E_INVALIDARG), L"Search service root rejection must not poison the transport cooldown");
+    check(IsServiceTransportFailure(HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND)), L"A missing service pipe should poison the transport cooldown");
+}
+} // namespace FileSystemInternal
+#endif
 
 HRESULT STDMETHODCALLTYPE FileSystem::Search(const FileSystemSearchQuery* query, IFileSystemSearchCallback* callback, void* cookie) noexcept
 {
@@ -2726,11 +2815,16 @@ HRESULT STDMETHODCALLTYPE FileSystem::Search(const FileSystemSearchQuery* query,
             {
                 Debug::Warning(
                     L"FileSystem::Search: service backend failed root='{}' hr=0x{:08X}; falling back.", runtime.rootPath, static_cast<unsigned long>(hr));
-                runtime.warningFlags |= FILESYSTEM_SEARCH_WARNING_SERVICE_UNAVAILABLE;
+                if (IsServiceTransportFailure(hr))
                 {
+                    runtime.warningFlags |= FILESYSTEM_SEARCH_WARNING_SERVICE_UNAVAILABLE;
                     std::lock_guard lock(_stateMutex);
                     _searchServiceUnavailablePipeName  = configuredServicePipeName;
                     _searchServiceUnavailableUntilTick = ::GetTickCount64() + kSearchServiceUnavailableRetryCooldownMs;
+                }
+                else
+                {
+                    runtime.warningFlags |= FILESYSTEM_SEARCH_WARNING_SERVICE_ROOT_REJECTED;
                 }
                 if (searchIndexRepository && indexSupport.indexable)
                 {
@@ -2803,17 +2897,17 @@ HRESULT STDMETHODCALLTYPE FileSystem::Search(const FileSystemSearchQuery* query,
                           runtime.scannedFiles + runtime.scannedDirectories,
                           FAILED(hr) ? hr : finalStatus);
 
-        Debug::Info(
-            L"FileSystem::Search: completed root='{}' backend='{}' status=0x{:08X} matched={} candidates={} scannedFiles={} scannedDirs={} materializedPaths={} warnings=0x{:08X}",
-            runtime.rootPath,
-            SearchBackendToString(runtime.backend),
-            static_cast<unsigned long>(FAILED(hr) ? hr : finalStatus),
-            runtime.matchedEntries,
-            runtime.candidateFiles,
-            runtime.scannedFiles,
-            runtime.scannedDirectories,
-            runtime.materializedEntryPathPairs.load(std::memory_order_relaxed),
-            runtime.warningFlags);
+        Debug::Info(L"FileSystem::Search: completed root='{}' backend='{}' status=0x{:08X} matched={} candidates={} scannedFiles={} scannedDirs={} "
+                    L"materializedPaths={} warnings=0x{:08X}",
+                    runtime.rootPath,
+                    SearchBackendToString(runtime.backend),
+                    static_cast<unsigned long>(FAILED(hr) ? hr : finalStatus),
+                    runtime.matchedEntries,
+                    runtime.candidateFiles,
+                    runtime.scannedFiles,
+                    runtime.scannedDirectories,
+                    runtime.materializedEntryPathPairs.load(std::memory_order_relaxed),
+                    runtime.warningFlags);
 
         if (runtime.stopRequested && SUCCEEDED(hr))
         {

@@ -18,6 +18,7 @@
 #include "DxUi/DxUi.h"
 #include "DxUiThemePalette.h"
 #include "Helpers.h"
+#include "PathUtils.h"
 
 #include <algorithm>
 #include <array>
@@ -156,8 +157,7 @@ constexpr wchar_t kHistoryText[]          = L"⩔";
     return RGB(static_cast<BYTE>(std::clamp(r, 0, 255)), static_cast<BYTE>(std::clamp(g, 0, 255)), static_cast<BYTE>(std::clamp(b, 0, 255)));
 }
 
-template <typename... Args>
-void TraceNavigationViewMenuDiagnostics(std::wstring_view eventName, std::wformat_string<Args...> format, Args&&... args) noexcept
+template <typename... Args> void TraceNavigationViewMenuDiagnostics(std::wstring_view eventName, std::wformat_string<Args...> format, Args&&... args) noexcept
 {
     if (! RedSalamander::DxUi::IsContextMenuDiagnosticsEnabled())
     {
@@ -261,72 +261,12 @@ struct EditChromeRects
     return OrdinalString::EqualsNoCase(a, b);
 }
 
-[[nodiscard]] bool LooksLikeWindowsDrivePath(std::wstring_view text) noexcept
-{
-    if (text.size() < 2u)
-    {
-        return false;
-    }
-
-    const wchar_t drive = text[0];
-    if ((drive < L'A' || drive > L'Z') && (drive < L'a' || drive > L'z'))
-    {
-        return false;
-    }
-
-    if (text[1] != L':')
-    {
-        return false;
-    }
-
-    if (text.size() < 3u)
-    {
-        return true; // "C:" (drive-relative)
-    }
-
-    const wchar_t slash = text[2];
-    return slash == L'\\' || slash == L'/';
-}
-
-[[nodiscard]] bool LooksLikeUncPath(std::wstring_view text) noexcept
-{
-    return text.size() >= 2u && text[0] == L'\\' && text[1] == L'\\';
-}
-
-[[nodiscard]] bool LooksLikeExtendedPath(std::wstring_view text) noexcept
-{
-    return text.rfind(L"\\\\?\\", 0) == 0 || text.rfind(L"\\\\.\\", 0) == 0;
-}
-
 [[nodiscard]] bool LooksLikeWindowsAbsolutePath(std::wstring_view text) noexcept
 {
-    if (text.empty())
-    {
-        return false;
-    }
-
-    if (LooksLikeExtendedPath(text))
-    {
-        return true;
-    }
-
-    if (LooksLikeUncPath(text))
-    {
-        return true;
-    }
-
-    if (! LooksLikeWindowsDrivePath(text))
-    {
-        return false;
-    }
-
-    if (text.size() < 3u)
-    {
-        return false;
-    }
-
-    const wchar_t slash = text[2];
-    return slash == L'\\' || slash == L'/';
+    const Common::Paths::WindowsPathClass pathClass = Common::Paths::ClassifyWindowsPath(text);
+    return pathClass == Common::Paths::WindowsPathClass::DriveAbsolute || pathClass == Common::Paths::WindowsPathClass::Unc ||
+           pathClass == Common::Paths::WindowsPathClass::ExtendedDriveAbsolute || pathClass == Common::Paths::WindowsPathClass::ExtendedUnc ||
+           pathClass == Common::Paths::WindowsPathClass::ExtendedOther || pathClass == Common::Paths::WindowsPathClass::Device;
 }
 
 [[nodiscard]] bool IsValidPluginShortIdPrefix(std::wstring_view prefix) noexcept

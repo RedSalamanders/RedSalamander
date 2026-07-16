@@ -144,7 +144,7 @@ struct CommandShellLaunchPlan final
     plan.executable       = GetCommandProcessorPath();
     plan.workingDirectory = std::wstring(workingDirText);
 
-    if (LooksLikeUncPath(workingDirText) && IsCmdExecutable(plan.executable))
+    if (Common::Paths::ClassifyWindowsPath(workingDirText) == Common::Paths::WindowsPathClass::Unc && IsCmdExecutable(plan.executable))
     {
         plan.directory  = GetDefaultFileSystemRoot().wstring();
         plan.parameters = std::wstring(L"/K pushd ") + QuoteCommandLineArgument(workingDirText);
@@ -509,7 +509,7 @@ HRESULT FolderWindow::LaunchCommandLine(std::wstring_view commandLine, const std
 
     std::wstring directory  = workingDirText;
     std::wstring parameters = L"/D /S /C ";
-    if (LooksLikeUncPath(workingDirText) && IsCmdExecutable(comSpec))
+    if (Common::Paths::ClassifyWindowsPath(workingDirText) == Common::Paths::WindowsPathClass::Unc && IsCmdExecutable(comSpec))
     {
         directory = GetDefaultFileSystemRoot().wstring();
         parameters.append(L"pushd ");
@@ -924,15 +924,13 @@ bool DebugSetFolderViewPaneFilterPromptHelpExpanded(bool expanded) noexcept
 bool DebugConfirmFolderViewPaneFilterPrompt() noexcept
 {
     const HWND hwnd = GetFolderViewPaneFilterPromptHandle();
-    return hwnd &&
-           SendMessageW(hwnd, WndMsg::kFolderViewPaneFilterPromptDebug, static_cast<WPARAM>(FolderViewPaneFilterPromptDebugCommand::Confirm), 0) != FALSE;
+    return PostDxUiPromptCloseDebugCommand(hwnd, WndMsg::kFolderViewPaneFilterPromptDebug, static_cast<WPARAM>(FolderViewPaneFilterPromptDebugCommand::Confirm));
 }
 
 bool DebugCancelFolderViewPaneFilterPrompt() noexcept
 {
     const HWND hwnd = GetFolderViewPaneFilterPromptHandle();
-    return hwnd &&
-           SendMessageW(hwnd, WndMsg::kFolderViewPaneFilterPromptDebug, static_cast<WPARAM>(FolderViewPaneFilterPromptDebugCommand::Cancel), 0) != FALSE;
+    return PostDxUiPromptCloseDebugCommand(hwnd, WndMsg::kFolderViewPaneFilterPromptDebug, static_cast<WPARAM>(FolderViewPaneFilterPromptDebugCommand::Cancel));
 }
 
 HWND GetFolderViewSelectionMaskPromptHandle() noexcept
@@ -991,15 +989,15 @@ bool DebugSetFolderViewSelectionMaskPromptText(std::wstring_view text) noexcept
 bool DebugConfirmFolderViewSelectionMaskPrompt() noexcept
 {
     const HWND hwnd = GetFolderViewSelectionMaskPromptHandle();
-    return hwnd &&
-           SendMessageW(hwnd, WndMsg::kFolderViewSelectionMaskPromptDebug, static_cast<WPARAM>(FolderViewSelectionMaskPromptDebugCommand::Confirm), 0) != FALSE;
+    return PostDxUiPromptCloseDebugCommand(
+        hwnd, WndMsg::kFolderViewSelectionMaskPromptDebug, static_cast<WPARAM>(FolderViewSelectionMaskPromptDebugCommand::Confirm));
 }
 
 bool DebugCancelFolderViewSelectionMaskPrompt() noexcept
 {
     const HWND hwnd = GetFolderViewSelectionMaskPromptHandle();
-    return hwnd &&
-           SendMessageW(hwnd, WndMsg::kFolderViewSelectionMaskPromptDebug, static_cast<WPARAM>(FolderViewSelectionMaskPromptDebugCommand::Cancel), 0) != FALSE;
+    return PostDxUiPromptCloseDebugCommand(
+        hwnd, WndMsg::kFolderViewSelectionMaskPromptDebug, static_cast<WPARAM>(FolderViewSelectionMaskPromptDebugCommand::Cancel));
 }
 
 bool DebugGetFolderViewCreateDirectoryPromptSnapshot(FolderViewCreateDirectoryPromptDebugSnapshot& out) noexcept
@@ -1040,17 +1038,15 @@ bool DebugSetFolderViewCreateDirectoryPromptText(std::wstring_view text) noexcep
 bool DebugConfirmFolderViewCreateDirectoryPrompt() noexcept
 {
     const HWND hwnd = GetFolderViewCreateDirectoryPromptHandle();
-    return hwnd &&
-           SendMessageW(hwnd, GetFolderViewCreateDirectoryPromptDebugMessage(), static_cast<WPARAM>(FolderViewCreateDirectoryPromptDebugCommand::Confirm), 0) !=
-               FALSE;
+    return PostDxUiPromptCloseDebugCommand(
+        hwnd, GetFolderViewCreateDirectoryPromptDebugMessage(), static_cast<WPARAM>(FolderViewCreateDirectoryPromptDebugCommand::Confirm));
 }
 
 bool DebugCancelFolderViewCreateDirectoryPrompt() noexcept
 {
     const HWND hwnd = GetFolderViewCreateDirectoryPromptHandle();
-    return hwnd &&
-           SendMessageW(hwnd, GetFolderViewCreateDirectoryPromptDebugMessage(), static_cast<WPARAM>(FolderViewCreateDirectoryPromptDebugCommand::Cancel), 0) !=
-               FALSE;
+    return PostDxUiPromptCloseDebugCommand(
+        hwnd, GetFolderViewCreateDirectoryPromptDebugMessage(), static_cast<WPARAM>(FolderViewCreateDirectoryPromptDebugCommand::Cancel));
 }
 
 bool DebugGetFolderViewEditNewPromptSnapshot(FolderViewEditNewPromptDebugSnapshot& out) noexcept
@@ -1106,13 +1102,13 @@ bool DebugSelectFolderViewEditNewPromptEditor(std::wstring_view actionId) noexce
 bool DebugConfirmFolderViewEditNewPrompt() noexcept
 {
     const HWND hwnd = GetFolderViewEditNewPromptHandle();
-    return hwnd && SendMessageW(hwnd, GetFolderViewEditNewPromptDebugMessage(), static_cast<WPARAM>(FolderViewEditNewPromptDebugCommand::Confirm), 0) != FALSE;
+    return PostDxUiPromptCloseDebugCommand(hwnd, GetFolderViewEditNewPromptDebugMessage(), static_cast<WPARAM>(FolderViewEditNewPromptDebugCommand::Confirm));
 }
 
 bool DebugCancelFolderViewEditNewPrompt() noexcept
 {
     const HWND hwnd = GetFolderViewEditNewPromptHandle();
-    return hwnd && SendMessageW(hwnd, GetFolderViewEditNewPromptDebugMessage(), static_cast<WPARAM>(FolderViewEditNewPromptDebugCommand::Cancel), 0) != FALSE;
+    return PostDxUiPromptCloseDebugCommand(hwnd, GetFolderViewEditNewPromptDebugMessage(), static_cast<WPARAM>(FolderViewEditNewPromptDebugCommand::Cancel));
 }
 
 HWND GetFolderViewChangeCasePromptHandle() noexcept
@@ -1158,15 +1154,13 @@ bool DebugSetFolderViewChangeCasePromptSelections(size_t styleIndex, size_t targ
 bool DebugConfirmFolderViewChangeCasePrompt() noexcept
 {
     const HWND hwnd = GetFolderViewChangeCasePromptHandle();
-    return hwnd &&
-           SendMessageW(hwnd, WndMsg::kFolderViewChangeCasePromptDebug, static_cast<WPARAM>(FolderViewChangeCasePromptDebugCommand::Confirm), 0) != FALSE;
+    return PostDxUiPromptCloseDebugCommand(hwnd, WndMsg::kFolderViewChangeCasePromptDebug, static_cast<WPARAM>(FolderViewChangeCasePromptDebugCommand::Confirm));
 }
 
 bool DebugCancelFolderViewChangeCasePrompt() noexcept
 {
     const HWND hwnd = GetFolderViewChangeCasePromptHandle();
-    return hwnd &&
-           SendMessageW(hwnd, WndMsg::kFolderViewChangeCasePromptDebug, static_cast<WPARAM>(FolderViewChangeCasePromptDebugCommand::Cancel), 0) != FALSE;
+    return PostDxUiPromptCloseDebugCommand(hwnd, WndMsg::kFolderViewChangeCasePromptDebug, static_cast<WPARAM>(FolderViewChangeCasePromptDebugCommand::Cancel));
 }
 #endif
 

@@ -10,14 +10,16 @@ Current placeholders (1×1 PNG):
 
 ## Latest capture pass
 
-The 2026-05-21 documentation review refreshed the public theme screenshots from
-the current Debug build and added sanitized running-app captures for:
+The 2026-07-14 theme-system closeout refreshed the public control galleries and
+button-state audit from the current Debug build. The existing sanitized
+running-application captures cover:
 
 - `folder-view-brief-detailed.png`: Brief and Detailed pane layouts.
 - `folder-view-extra-thumbnails.png`: Extra Detailed and Thumbnails pane layouts.
 - `preview-pane-text.png`: Preview Pane hosted in the opposite pane with text content.
 - `theme-light.png`, `theme-dark.png`, `theme-rainbow.png`, `theme-high-contrast-app.png`: same generated demo folders under different built-in app themes.
-- `theme-controls-*.png` and `theme-button-states-after-fix.png`: regenerated from `DxUiTests`.
+- `theme-controls-*.png`: regenerated from `DxUiTests` for Light, Dark, Rainbow Light, Rainbow Dark, High Contrast, and every shipped JSON5 theme, including Dracula and Catppuccin Latte/Frappé/Mocha.
+- `theme-button-states-after-fix.png`: regenerated from the same current theme set.
 
 The running-app captures used generated files under `.build/docs-screenshot-demo`
 and a temporary sanitized settings file that was restored after capture. They
@@ -94,7 +96,7 @@ The docs are now organized so missing images are tracked explicitly instead of b
 - `preferences-viewers.png`: Preferences → Viewers (extension → viewer mapping).
 - `preferences-keyboard.png`: Preferences → Keyboard (shortcut bindings).
 - `preferences-themes.png`: Preferences → Themes (theme selection + edit controls).
-- `theme-controls-*.png`: generated DxUi control galleries, one file per built-in or shipped JSON5 theme. Regenerate with `.build\x64\Debug\DxUiTests.exe --suite=Gallery --gallery-output-directory=docs\res`.
+- `theme-controls-*.png`: generated DxUi control galleries for Light, Dark, both effective Rainbow bases, High Contrast, and one file per shipped JSON5 theme ID. Regenerate with `.build\x64\Debug\DxUiTests.exe --suite=Gallery --gallery-output-directory=docs\res`; the checked-in set must exactly match the generated theme inventory.
 - `theme-button-states-after-fix.png`: generated DxUi button-state contrast audit across built-in and shipped JSON5 themes. Regenerate with `.build\x64\Debug\DxUiTests.exe --suite=ButtonContrast --button-audit-output=docs\res\theme-button-states-after-fix.png`.
 - `connections-manager.png`: Connection Manager dialog (profile list + editor pane).
 - `plugins.png`: Plugin Manager entry point (menu item or Preferences → Plugins root page).

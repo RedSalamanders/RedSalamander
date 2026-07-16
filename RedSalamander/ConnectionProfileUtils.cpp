@@ -54,6 +54,10 @@ namespace
     {
         return L"s3table";
     }
+    if (OrdinalString::EqualsNoCase(pluginId, L"builtin/file-system-mtp"))
+    {
+        return L"mtp";
+    }
 
     return nullptr;
 }
@@ -61,68 +65,12 @@ namespace
 
 std::optional<bool> ExtraGetBool(const Common::Settings::JsonValue& extra, std::string_view key) noexcept
 {
-    const auto* objPtr = std::get_if<Common::Settings::JsonValue::ObjectPtr>(&extra.value);
-    if (! objPtr || ! *objPtr)
-    {
-        return std::nullopt;
-    }
-
-    for (const auto& [k, v] : (*objPtr)->members)
-    {
-        if (k != key)
-        {
-            continue;
-        }
-
-        const auto* b = std::get_if<bool>(&v.value);
-        if (! b)
-        {
-            return std::nullopt;
-        }
-
-        return *b;
-    }
-
-    return std::nullopt;
+    return Common::Settings::GetBool(extra, key);
 }
 
 std::optional<uint32_t> ExtraGetUInt32(const Common::Settings::JsonValue& extra, std::string_view key) noexcept
 {
-    const auto* objPtr = std::get_if<Common::Settings::JsonValue::ObjectPtr>(&extra.value);
-    if (! objPtr || ! *objPtr)
-    {
-        return std::nullopt;
-    }
-
-    for (const auto& [k, v] : (*objPtr)->members)
-    {
-        if (k != key)
-        {
-            continue;
-        }
-
-        if (const auto* n = std::get_if<uint64_t>(&v.value))
-        {
-            if (*n <= std::numeric_limits<uint32_t>::max())
-            {
-                return static_cast<uint32_t>(*n);
-            }
-            return std::nullopt;
-        }
-
-        if (const auto* n = std::get_if<int64_t>(&v.value))
-        {
-            if (*n >= 0 && *n <= static_cast<int64_t>(std::numeric_limits<uint32_t>::max()))
-            {
-                return static_cast<uint32_t>(*n);
-            }
-            return std::nullopt;
-        }
-
-        return std::nullopt;
-    }
-
-    return std::nullopt;
+    return Common::Settings::GetUInt32(extra, key);
 }
 
 const Common::Settings::ConnectionProfile* FindConnectionProfileByName(const Common::Settings::Settings* settings, std::wstring_view connectionName) noexcept
@@ -250,7 +198,9 @@ std::wstring BuildConnectionDisplayUrl(const Common::Settings::ConnectionProfile
         user = profile.userName;
     }
 
-    const bool hideAnonymous = OrdinalString::EqualsNoCase(profile.pluginId, L"builtin/file-system-ftp") && (user == L"anonymous");
+    const bool hideAnonymous = (OrdinalString::EqualsNoCase(profile.pluginId, L"builtin/file-system-ftp") ||
+                                OrdinalString::EqualsNoCase(profile.pluginId, L"builtin/file-system-mtp")) &&
+                               (user == L"anonymous");
     const bool showUser      = ! user.empty() && ! hideAnonymous;
     std::wstring result(scheme);
     result.append(L"://");

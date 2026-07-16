@@ -1,10 +1,15 @@
 #pragma once
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
+#include <cstdint>
 #include <cwchar>
 #include <limits>
+#include <mutex>
+#include <string>
 #include <string_view>
+#include <vector>
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -43,6 +48,49 @@ struct TextPixelMetrics final
     int widthPx      = 0;
     int heightPx     = 0;
     int lineHeightPx = 0;
+};
+
+inline constexpr std::wstring_view kTypographyFamilyCacheMissMetric     = L"dxui.typography.family_cache_miss_count";
+inline constexpr std::wstring_view kTypographyTextFormatCacheMissMetric = L"dxui.typography.text_format_cache_miss_count";
+
+using TypographyPerfEmitter =
+    void (*)(std::wstring_view metric, std::wstring_view detail, uint64_t durationUs, uint64_t value, uint64_t count, HRESULT hr) noexcept;
+
+[[nodiscard]] inline std::atomic<TypographyPerfEmitter>& GetTypographyPerfEmitter() noexcept
+{
+    static std::atomic<TypographyPerfEmitter> emitter{nullptr};
+    return emitter;
+}
+
+inline void SetTypographyPerfEmitter(TypographyPerfEmitter emitter) noexcept
+{
+    GetTypographyPerfEmitter().store(emitter, std::memory_order_release);
+}
+
+inline void EmitTypographyPerfCounter(
+    std::wstring_view metric, std::wstring_view detail, uint64_t durationUs, uint64_t value, uint64_t count, HRESULT hr) noexcept
+{
+    if (TypographyPerfEmitter emitter = GetTypographyPerfEmitter().load(std::memory_order_acquire))
+    {
+        emitter(metric, detail, durationUs, value, count, hr);
+    }
+}
+
+struct TypographyFontFamilyCacheEntry final
+{
+    wil::com_ptr<IDWriteFactory> factory;
+    IDWriteFactory* factoryKey = nullptr;
+    std::wstring familyName;
+    bool available = false;
+};
+
+struct TypographyTextFormatCacheEntry final
+{
+    wil::com_ptr<IDWriteFactory> factory;
+    IDWriteFactory* factoryKey = nullptr;
+    FontRole role              = FontRole::Body;
+    bool wrap                  = false;
+    wil::com_ptr<IDWriteTextFormat> textFormat;
 };
 
 [[nodiscard]] inline std::wstring_view GetUiTextFamilyForSizeDip(float sizeDip) noexcept
@@ -140,7 +188,25 @@ template <size_t Capacity> [[nodiscard]] inline bool CopyNullTerminated(std::wst
     return kSegoeUiFallbackFamily;
 }
 
-[[nodiscard]] inline bool IsFontFamilyAvailable(IDWriteFactory* dwriteFactory, PCWSTR familyName) noexcept
+[[nodiscard]] inline std::mutex& GetTypographyMeasurementCacheMutex() noexcept
+{
+    static std::mutex cacheMutex;
+    return cacheMutex;
+}
+
+[[nodiscard]] inline std::vector<TypographyFontFamilyCacheEntry>& GetTypographyFontFamilyCache() noexcept
+{
+    static std::vector<TypographyFontFamilyCacheEntry> cache;
+    return cache;
+}
+
+[[nodiscard]] inline std::vector<TypographyTextFormatCacheEntry>& GetTypographyTextFormatCache() noexcept
+{
+    static std::vector<TypographyTextFormatCacheEntry> cache;
+    return cache;
+}
+
+[[nodiscard]] inline bool QueryFontFamilyAvailable(IDWriteFactory* dwriteFactory, PCWSTR familyName) noexcept
 {
     if (! dwriteFactory || ! IsNullTerminatedWithin(familyName, kMaxDWriteFamilyNameLength) || familyName[0] == L'\0')
     {
@@ -157,6 +223,56 @@ template <size_t Capacity> [[nodiscard]] inline bool CopyNullTerminated(std::wst
     BOOL familyExists  = FALSE;
     const HRESULT hr   = fontCollection->FindFamilyName(familyName, &familyIndex, &familyExists);
     return SUCCEEDED(hr) && familyExists == TRUE;
+}
+
+[[nodiscard]] inline bool IsFontFamilyAvailable(IDWriteFactory* dwriteFactory, PCWSTR familyName) noexcept
+{
+    if (! dwriteFactory || ! IsNullTerminatedWithin(familyName, kMaxDWriteFamilyNameLength) || familyName[0] == L'\0')
+    {
+        return false;
+    }
+
+    {
+        std::scoped_lock lock(GetTypographyMeasurementCacheMutex());
+        for (const TypographyFontFamilyCacheEntry& entry : GetTypographyFontFamilyCache())
+        {
+            if (entry.factoryKey == dwriteFactory && entry.familyName == familyName)
+            {
+                return entry.available;
+            }
+        }
+    }
+
+    const bool available = QueryFontFamilyAvailable(dwriteFactory, familyName);
+    EmitTypographyPerfCounter(kTypographyFamilyCacheMissMetric, familyName, 0u, 1u, available ? 1u : 0u, S_OK);
+
+    std::scoped_lock lock(GetTypographyMeasurementCacheMutex());
+    for (const TypographyFontFamilyCacheEntry& entry : GetTypographyFontFamilyCache())
+    {
+        if (entry.factoryKey == dwriteFactory && entry.familyName == familyName)
+        {
+            return entry.available;
+        }
+    }
+
+    TypographyFontFamilyCacheEntry entry;
+    entry.factory    = dwriteFactory;
+    entry.factoryKey = dwriteFactory;
+    entry.familyName = familyName;
+    entry.available  = available;
+    GetTypographyFontFamilyCache().push_back(std::move(entry));
+    return available;
+}
+
+[[nodiscard]] inline std::wstring ResolveCachedFontFamilyName(IDWriteFactory* dwriteFactory, PCWSTR preferredFamilyName) noexcept
+{
+    if (! IsNullTerminatedWithin(preferredFamilyName, kMaxDWriteFamilyNameLength) || preferredFamilyName[0] == L'\0')
+    {
+        return {};
+    }
+
+    PCWSTR fallbackFamily = GetFallbackFamilyName(preferredFamilyName);
+    return IsFontFamilyAvailable(dwriteFactory, preferredFamilyName) ? std::wstring(preferredFamilyName) : std::wstring(fallbackFamily);
 }
 
 [[nodiscard]] inline HRESULT CreateTextFormat(IDWriteFactory* dwriteFactory,
@@ -176,11 +292,12 @@ template <size_t Capacity> [[nodiscard]] inline bool CopyNullTerminated(std::wst
         return E_INVALIDARG;
     }
 
-    PCWSTR fallbackFamily = GetFallbackFamilyName(preferredFamilyBuffer);
-    PCWSTR resolvedFamily = IsFontFamilyAvailable(dwriteFactory, preferredFamilyBuffer) ? preferredFamilyBuffer : fallbackFamily;
-    HRESULT hr =
-        dwriteFactory->CreateTextFormat(resolvedFamily, nullptr, spec.weight, spec.style, DWRITE_FONT_STRETCH_NORMAL, spec.sizeDip, localeName, outFormat);
-    if (FAILED(hr) && ! FontFamilyEquals(resolvedFamily, fallbackFamily))
+    PCWSTR fallbackFamily        = GetFallbackFamilyName(preferredFamilyBuffer);
+    std::wstring resolvedFamily  = ResolveCachedFontFamilyName(dwriteFactory, preferredFamilyBuffer);
+    PCWSTR resolvedFamilyPointer = resolvedFamily.empty() ? fallbackFamily : resolvedFamily.c_str();
+    HRESULT hr                   = dwriteFactory->CreateTextFormat(
+        resolvedFamilyPointer, nullptr, spec.weight, spec.style, DWRITE_FONT_STRETCH_NORMAL, spec.sizeDip, localeName, outFormat);
+    if (FAILED(hr) && ! FontFamilyEquals(resolvedFamilyPointer, fallbackFamily))
     {
         hr = dwriteFactory->CreateTextFormat(fallbackFamily, nullptr, spec.weight, spec.style, DWRITE_FONT_STRETCH_NORMAL, spec.sizeDip, localeName, outFormat);
     }
@@ -206,10 +323,11 @@ template <size_t Capacity> [[nodiscard]] inline bool CopyNullTerminated(std::wst
         return E_INVALIDARG;
     }
 
-    PCWSTR fallbackFamily = GetFallbackFamilyName(preferredFamily);
-    PCWSTR resolvedFamily = IsFontFamilyAvailable(dwriteFactory, preferredFamily) ? preferredFamily : fallbackFamily;
-    HRESULT hr            = dwriteFactory->CreateTextFormat(resolvedFamily, nullptr, weight, style, DWRITE_FONT_STRETCH_NORMAL, sizeDip, localeName, outFormat);
-    if (FAILED(hr) && ! FontFamilyEquals(resolvedFamily, fallbackFamily))
+    PCWSTR fallbackFamily        = GetFallbackFamilyName(preferredFamily);
+    std::wstring resolvedFamily  = ResolveCachedFontFamilyName(dwriteFactory, preferredFamily);
+    PCWSTR resolvedFamilyPointer = resolvedFamily.empty() ? fallbackFamily : resolvedFamily.c_str();
+    HRESULT hr = dwriteFactory->CreateTextFormat(resolvedFamilyPointer, nullptr, weight, style, DWRITE_FONT_STRETCH_NORMAL, sizeDip, localeName, outFormat);
+    if (FAILED(hr) && ! FontFamilyEquals(resolvedFamilyPointer, fallbackFamily))
     {
         hr = dwriteFactory->CreateTextFormat(fallbackFamily, nullptr, weight, style, DWRITE_FONT_STRETCH_NORMAL, sizeDip, localeName, outFormat);
     }
@@ -248,6 +366,55 @@ template <size_t Capacity> [[nodiscard]] inline bool CopyNullTerminated(std::wst
     }();
 
     return resources.get();
+}
+
+[[nodiscard]] inline IDWriteTextFormat* GetCachedMeasurementTextFormat(IDWriteFactory* dwriteFactory, FontRole role, bool wrap) noexcept
+{
+    if (! dwriteFactory)
+    {
+        return nullptr;
+    }
+
+    {
+        std::scoped_lock lock(GetTypographyMeasurementCacheMutex());
+        for (const TypographyTextFormatCacheEntry& entry : GetTypographyTextFormatCache())
+        {
+            if (entry.factoryKey == dwriteFactory && entry.role == role && entry.wrap == wrap)
+            {
+                return entry.textFormat.get();
+            }
+        }
+    }
+
+    wil::com_ptr<IDWriteTextFormat> textFormat;
+    if (FAILED(CreateTextFormat(dwriteFactory, GetDxUiTypographySpec(role), textFormat.put())) || ! textFormat)
+    {
+        return nullptr;
+    }
+
+    static_cast<void>(textFormat->SetWordWrapping(wrap ? DWRITE_WORD_WRAPPING_WRAP : DWRITE_WORD_WRAPPING_NO_WRAP));
+    static_cast<void>(textFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR));
+    static_cast<void>(textFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING));
+
+    EmitTypographyPerfCounter(kTypographyTextFormatCacheMissMetric, L"", 0u, 1u, static_cast<uint64_t>(role), S_OK);
+
+    std::scoped_lock lock(GetTypographyMeasurementCacheMutex());
+    for (const TypographyTextFormatCacheEntry& entry : GetTypographyTextFormatCache())
+    {
+        if (entry.factoryKey == dwriteFactory && entry.role == role && entry.wrap == wrap)
+        {
+            return entry.textFormat.get();
+        }
+    }
+
+    TypographyTextFormatCacheEntry entry;
+    entry.factory    = dwriteFactory;
+    entry.factoryKey = dwriteFactory;
+    entry.role       = role;
+    entry.wrap       = wrap;
+    entry.textFormat = std::move(textFormat);
+    GetTypographyTextFormatCache().push_back(std::move(entry));
+    return GetTypographyTextFormatCache().back().textFormat.get();
 }
 
 [[nodiscard]] inline TextPixelMetrics MeasureSingleLineTextMetrics(IDWriteFactory* dwriteFactory,
@@ -308,16 +475,13 @@ template <size_t Capacity> [[nodiscard]] inline bool CopyNullTerminated(std::wst
         return 0;
     }
 
-    wil::com_ptr<IDWriteTextFormat> textFormat;
-    if (FAILED(CreateTextFormat(dwriteFactory, GetDxUiTypographySpec(role), textFormat.put())) || ! textFormat)
+    IDWriteTextFormat* textFormat = GetCachedMeasurementTextFormat(dwriteFactory, role, false);
+    if (! textFormat)
     {
         return 0;
     }
 
-    static_cast<void>(textFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP));
-    static_cast<void>(textFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR));
-    static_cast<void>(textFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING));
-    return MeasureSingleLineTextMetrics(dwriteFactory, textFormat.get(), GetEffectiveDpi(hwnd), text).widthPx;
+    return MeasureSingleLineTextMetrics(dwriteFactory, textFormat, GetEffectiveDpi(hwnd), text).widthPx;
 }
 
 [[nodiscard]] inline int MeasureWrappedTextHeightPx(HWND hwnd, FontRole role, int widthPx, std::wstring_view text) noexcept
@@ -333,21 +497,16 @@ template <size_t Capacity> [[nodiscard]] inline bool CopyNullTerminated(std::wst
         return 0;
     }
 
-    wil::com_ptr<IDWriteTextFormat> textFormat;
-    if (FAILED(CreateTextFormat(dwriteFactory, GetDxUiTypographySpec(role), textFormat.put())) || ! textFormat)
+    IDWriteTextFormat* textFormat = GetCachedMeasurementTextFormat(dwriteFactory, role, true);
+    if (! textFormat)
     {
         return 0;
     }
 
-    static_cast<void>(textFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_WRAP));
-    static_cast<void>(textFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR));
-    static_cast<void>(textFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING));
-
     const UINT dpi             = GetEffectiveDpi(hwnd);
     const float layoutWidthDip = (std::max)(1.0f, (static_cast<float>(widthPx) * static_cast<float>(USER_DEFAULT_SCREEN_DPI)) / static_cast<float>(dpi));
     wil::com_ptr<IDWriteTextLayout> layout;
-    if (FAILED(dwriteFactory->CreateTextLayout(text.data(), static_cast<UINT32>(text.size()), textFormat.get(), layoutWidthDip, 4096.0f, layout.put())) ||
-        ! layout)
+    if (FAILED(dwriteFactory->CreateTextLayout(text.data(), static_cast<UINT32>(text.size()), textFormat, layoutWidthDip, 4096.0f, layout.put())) || ! layout)
     {
         return 0;
     }

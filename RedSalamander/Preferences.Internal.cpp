@@ -718,16 +718,7 @@ int MeasureWrappedTextHeightPx(const PreferencesTypographyContext& typography,
 
 std::wstring_view TrimWhitespace(std::wstring_view text) noexcept
 {
-    const auto isSpace = [](wchar_t ch) noexcept { return std::iswspace(static_cast<wint_t>(ch)) != 0; };
-    while (! text.empty() && isSpace(text.front()))
-    {
-        text.remove_prefix(1);
-    }
-    while (! text.empty() && isSpace(text.back()))
-    {
-        text.remove_suffix(1);
-    }
-    return text;
+    return StringUtils::TrimWhitespace(text);
 }
 
 bool ContainsCaseInsensitive(std::wstring_view haystack, std::wstring_view needle) noexcept

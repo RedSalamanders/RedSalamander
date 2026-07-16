@@ -14,9 +14,16 @@
 #pragma warning(pop)
 
 #include "Helpers.h"
+#include "HandleIo.h"
 
 namespace
 {
+[[nodiscard]] bool IsSupportedMacroName(const std::wstring_view name) noexcept
+{
+    return name == L"Path" || name == L"FullPath" || name == L"PathAndFilename" || name == L"Filename" || name == L"SelectedPathsFile" ||
+           name == L"OppositePanePath" || name == L"ComputerName";
+}
+
 [[nodiscard]] HRESULT MissingMacroValue() noexcept
 {
     return HRESULT_FROM_WIN32(ERROR_BAD_ARGUMENTS);
@@ -64,26 +71,6 @@ void AppendWindowsQuotedArgument(std::wstring& out, std::wstring_view value)
 [[nodiscard]] bool IsMacroWrappedByTemplateQuotes(std::wstring_view templateText, size_t open, size_t close) noexcept
 {
     return open > 0u && close + 1u < templateText.size() && templateText[open - 1u] == L'"' && templateText[close + 1u] == L'"';
-}
-
-[[nodiscard]] HRESULT WriteAllBytes(HANDLE file, const void* data, size_t byteCount) noexcept
-{
-    const auto* cursor  = static_cast<const std::byte*>(data);
-    size_t totalWritten = 0u;
-    while (totalWritten < byteCount)
-    {
-        const size_t remaining = byteCount - totalWritten;
-        const DWORD chunk      = static_cast<DWORD>(std::min<size_t>(remaining, static_cast<size_t>(std::numeric_limits<DWORD>::max())));
-        DWORD written          = 0u;
-        if (WriteFile(file, cursor + totalWritten, chunk, &written, nullptr) == FALSE || written == 0u)
-        {
-            const DWORD error = GetLastError();
-            return HRESULT_FROM_WIN32(error == ERROR_SUCCESS ? ERROR_WRITE_FAULT : error);
-        }
-        totalWritten += written;
-    }
-
-    return S_OK;
 }
 
 [[nodiscard]] std::filesystem::path CurrentDirectoryForContext(const FileActionLauncher::MacroContext& context)
@@ -429,7 +416,7 @@ void CleanupFiles(const std::vector<std::filesystem::path>& files) noexcept
     }
 
     constexpr std::array<std::byte, 2u> kUtf16LeBom{{std::byte{0xFFu}, std::byte{0xFEu}}};
-    if (const HRESULT hr = WriteAllBytes(file.get(), kUtf16LeBom.data(), kUtf16LeBom.size()); FAILED(hr))
+    if (const HRESULT hr = Common::HandleIo::WriteAll(file.get(), kUtf16LeBom.data(), kUtf16LeBom.size()); FAILED(hr))
     {
         perf.SetHr(hr);
         return hr;
@@ -437,7 +424,7 @@ void CleanupFiles(const std::vector<std::filesystem::path>& files) noexcept
 
     const size_t textBytes = text.size() * sizeof(wchar_t);
     perf.SetValue1(static_cast<uint64_t>(textBytes + kUtf16LeBom.size()));
-    if (const HRESULT hr = WriteAllBytes(file.get(), text.data(), textBytes); FAILED(hr))
+    if (const HRESULT hr = Common::HandleIo::WriteAll(file.get(), text.data(), textBytes); FAILED(hr))
     {
         perf.SetHr(hr);
         return hr;
@@ -510,6 +497,47 @@ HRESULT ExpandMacros(std::wstring_view templateText, const MacroContext& context
     return ExpandMacrosInternal(templateText, context, false, out);
 }
 
+bool TemplateContainsSupportedMacro(const std::wstring_view templateText) noexcept
+{
+    for (size_t index = 0; index < templateText.size();)
+    {
+        const wchar_t ch = templateText[index];
+        if (ch == L'{')
+        {
+            if (index + 1u < templateText.size() && templateText[index + 1u] == L'{')
+            {
+                index += 2u;
+                continue;
+            }
+
+            const size_t close = templateText.find(L'}', index + 1u);
+            if (close == std::wstring_view::npos)
+            {
+                ++index;
+                continue;
+            }
+
+            if (IsSupportedMacroName(templateText.substr(index + 1u, close - index - 1u)))
+            {
+                return true;
+            }
+
+            index = close + 1u;
+            continue;
+        }
+
+        if (ch == L'}' && index + 1u < templateText.size() && templateText[index + 1u] == L'}')
+        {
+            index += 2u;
+            continue;
+        }
+
+        ++index;
+    }
+
+    return false;
+}
+
 HRESULT BuildExternalLaunchPlan(const Common::Settings::FileActionDefinition& action, const MacroContext& context, LaunchPlan& out) noexcept
 {
     out = LaunchPlan{};
@@ -564,6 +592,11 @@ HRESULT BuildExternalLaunchPlan(const Common::Settings::FileActionDefinition& ac
         out = LaunchPlan{};
         return E_INVALIDARG;
     }
+    if (! Common::Paths::IsExplicitAbsoluteExecutablePath(out.executablePath))
+    {
+        out = LaunchPlan{};
+        return HRESULT_FROM_WIN32(ERROR_BAD_PATHNAME);
+    }
 
     if (const HRESULT hr = ExpandArgumentMacros(action.arguments, effectiveContext, out.arguments); FAILED(hr))
     {
@@ -600,10 +633,12 @@ HRESULT LaunchExternalPlan(const LaunchPlan& plan, const LaunchOptions& options,
         *result = LaunchResult{};
     }
 
-    if (plan.executablePath.empty())
+    if (! Common::Paths::IsExplicitAbsoluteExecutablePath(plan.executablePath))
     {
-        perf.SetHr(E_INVALIDARG);
-        return E_INVALIDARG;
+        const HRESULT hr = HRESULT_FROM_WIN32(ERROR_BAD_PATHNAME);
+        perf.SetHr(hr);
+        CleanupFiles(plan.cleanupFilesAfterExit);
+        return hr;
     }
 
     SHELLEXECUTEINFOW executeInfo{};

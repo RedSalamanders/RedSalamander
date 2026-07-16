@@ -77,6 +77,13 @@ jobs:
     with:
       upload_build_output: false
 
+  build-arm64:
+    uses: ./.github/workflows/build-reusable.yml
+    with:
+      configuration: Debug
+      platform: ARM64
+      upload_build_output: false
+
   selftest-build:
     uses: ./.github/workflows/build-reusable.yml
     with:
@@ -87,6 +94,8 @@ jobs:
   selftest:
     runs-on: windows-latest
     needs: selftest-build
+    env:
+      REDSALAMANDER_TEST_ROOT: ${{ github.workspace }}\.build\TestSandbox
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -107,90 +116,19 @@ jobs:
             Copy-Item -Path .\Themes\* -Destination $dest -Recurse -Force
           }
 
-      - name: Run Compare and FileOps selftests
-        shell: pwsh
-        working-directory: .build/x64/Debug
-        run: .\RedSalamander.exe --compare-selftest --fileops-selftest --selftest-timeout-multiplier=2.0
-        timeout-minutes: 40
-
-      - name: Run Commands selftests
-        shell: pwsh
-        working-directory: .build/x64/Debug
-        run: .\RedSalamander.exe --commands-selftest --selftest-timeout-multiplier=2.0
-        timeout-minutes: 50
-
-      - name: Run Viewer PETests
-        shell: pwsh
-        working-directory: .build/x64/Debug
-        run: |
-          .\ViewerPETests.exe
-          .\ViewerPETests.exe TestViewerTextFindPromptUsesDxUiHostAndClosesCleanly
-          .\ViewerPETests.exe TestViewerTextGotoPromptUsesDxUiHostAndClosesCleanly
-        timeout-minutes: 20
-
-      - name: Run DxUi And ViewerSqlite Tests
-        shell: pwsh
-        working-directory: .build/x64/Debug
-        run: |
-          .\DxUiTests.exe
-          .\ViewerSqliteTests.exe
-        timeout-minutes: 25
-
-      - name: Run Monitor and Localization Tests
-        shell: pwsh
-        working-directory: .build/x64/Debug
-        run: |
-          .\MonitorTest.exe
-          .\LocalizationTests.exe
-        timeout-minutes: 15
-
-      - name: Run PerformanceTests2
-        shell: pwsh
-        working-directory: .build/x64/Debug
-        run: |
-          $ErrorActionPreference = "Stop"
-          $vstest = Get-Command vstest.console.exe -ErrorAction SilentlyContinue
-          if (-not $vstest) {
-            $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-            if (-not (Test-Path $vswhere)) {
-              throw "vstest.console.exe and vswhere.exe were not found."
-            }
-            $vstestPath =
-              (& $vswhere -latest -products * -prerelease -find 'Common7\IDE\Extensions\TestPlatform\vstest.console.exe' 2>$null) |
-              Select-Object -First 1
-            if (-not $vstestPath -or -not (Test-Path $vstestPath)) {
-              throw "vstest.console.exe was not found through vswhere."
-            }
-          } else {
-            $vstestPath = $vstest.Source
-          }
-          & $vstestPath .\PerformanceTests2.dll
-        timeout-minutes: 15
-
-      - name: Run PowerShell tool tests
-        shell: powershell
-        run: |
-          $result = Invoke-Pester .\Tools\Tests -ExcludeTag RequiresBuildToolchain -PassThru
-          if ($result.FailedCount -gt 0) {
-            throw "PowerShell tool tests failed: $($result.FailedCount)"
-          }
-        timeout-minutes: 30
-
-      - name: Run fast vcpkg merge synthetic tests
-        shell: pwsh
-        run: .\Tests\vcpkg-merge-synthetic-test.ps1
-        timeout-minutes: 10
-
-      - name: Export LOCALAPPDATA
-        if: always()
+      - name: Run CI test suite
         shell: pwsh
         run: |
-          "LOCALAPPDATA=$env:LOCALAPPDATA" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          # Suite CI routes the PR gate through the unified runner, splits DxUiTests by suite,
+          # and includes deterministic filesystem, configuration, plugin-contract, settings-schema,
+          # and crash-handling coverage. Monitor ETW latency remains Suite Full-only.
+          .\Tools\Run-AllTests.ps1 -Suite CI -SkipBuild -TimeoutMultiplier 2.0
+        timeout-minutes: 210
 
       - name: Upload selftest artifacts
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: selftest-artifacts
-          path: ${{ env.LOCALAPPDATA }}\RedSalamander\SelfTest\
+          path: ${{ env.REDSALAMANDER_TEST_ROOT }}\
           retention-days: 7

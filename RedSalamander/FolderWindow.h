@@ -341,6 +341,14 @@ public:
                           bool activateWindow,
                           std::wstring_view navigateToPaintMetricName          = {},
                           std::chrono::steady_clock::time_point inputStartedAt = {}) noexcept;
+    HRESULT ExecuteInPaneLocation(Pane pane,
+                                  std::wstring_view pluginId,
+                                  std::wstring_view pluginShortId,
+                                  std::wstring_view instanceContext,
+                                  const std::filesystem::path& folderPath,
+                                  std::wstring_view focusItemDisplayName,
+                                  unsigned int folderViewCommandId,
+                                  bool activateWindow) noexcept;
     HRESULT OpenViewerWithPlugin(std::wstring_view pluginId,
                                  const ViewerOpenContext& context,
                                  std::wstring_view openedBy = {},
@@ -452,6 +460,21 @@ public:
     void CommandViewSpace(Pane pane);
     void CommandDelete(Pane pane);
     void CommandPermanentDelete(Pane pane);
+
+    enum class ResolvedFileOperationItemKind : uint8_t
+    {
+        Normal,
+        DirectoryShell,
+    };
+
+    struct ResolvedFileOperationItem
+    {
+        std::filesystem::path sourcePath;
+        std::filesystem::path destinationPath;
+        FileSystemFlags flags              = FILESYSTEM_FLAG_NONE;
+        ResolvedFileOperationItemKind kind = ResolvedFileOperationItemKind::Normal;
+    };
+
     HRESULT StartFileOperationForResolvedPaths(std::wstring_view sourcePluginId,
                                                std::wstring_view sourceInstanceContext,
                                                FileSystemOperation operation,
@@ -459,13 +482,20 @@ public:
                                                FileSystemFlags flags,
                                                bool requireConfirmation,
                                                uint64_t* taskIdOut = nullptr) noexcept;
+    HRESULT StartFileOperationForResolvedItemsToOtherPane(std::wstring_view sourcePluginId,
+                                                          std::wstring_view sourceInstanceContext,
+                                                          FileSystemOperation operation,
+                                                          std::vector<ResolvedFileOperationItem> items,
+                                                          std::optional<std::filesystem::path>* outDestinationFolder = nullptr,
+                                                          uint64_t* taskIdOut                                        = nullptr,
+                                                          std::wstring confirmationMessage                           = {}) noexcept;
     HRESULT StartFileOperationForResolvedPathsToOtherPane(std::wstring_view sourcePluginId,
                                                           std::wstring_view sourceInstanceContext,
                                                           FileSystemOperation operation,
                                                           std::vector<std::filesystem::path> sourcePaths,
                                                           FileSystemFlags flags,
                                                           std::optional<std::filesystem::path>* outDestinationFolder = nullptr,
-                                                          uint64_t* taskIdOut = nullptr) noexcept;
+                                                          uint64_t* taskIdOut                                        = nullptr) noexcept;
     HRESULT StartFileOperationForResolvedPathsToDestination(std::wstring_view sourcePluginId,
                                                             std::wstring_view sourceInstanceContext,
                                                             FileSystemOperation operation,
@@ -474,9 +504,7 @@ public:
                                                             FileSystemFlags flags,
                                                             uint64_t* taskIdOut = nullptr) noexcept;
     [[nodiscard]] std::optional<std::filesystem::path> GetOtherPaneDestinationForResolvedPaths(
-        std::wstring_view sourcePluginId,
-        std::wstring_view sourceInstanceContext,
-        const std::vector<std::filesystem::path>& sourcePaths) const noexcept;
+        std::wstring_view sourcePluginId, std::wstring_view sourceInstanceContext, const std::vector<std::filesystem::path>& sourcePaths) const noexcept;
     [[nodiscard]] bool TryLaunchResolvedFileAction(std::wstring_view sourcePluginId,
                                                    std::wstring_view sourceInstanceContext,
                                                    const std::filesystem::path& focusedPath,
@@ -624,13 +652,23 @@ public:
 
     [[nodiscard]] bool HasSavedSelection() const noexcept;
 
+    struct FileOperationItemOutcome
+    {
+        size_t sourceIndex = 0;
+        HRESULT status     = E_PENDING;
+    };
+
     struct FileOperationCompletedEvent
     {
-        uint64_t taskId              = 0;
+        uint64_t taskId               = 0;
         FileSystemOperation operation = static_cast<FileSystemOperation>(0);
         Pane sourcePane               = Pane::Left;
         std::optional<Pane> destinationPane;
         std::vector<std::filesystem::path> sourcePaths;
+        std::vector<std::filesystem::path> destinationPaths;
+        // Sparse, per-source terminal results reported by the provider. Missing indices are
+        // uncertain and consumers must preserve any source-derived UI state for them.
+        std::vector<FileOperationItemOutcome> itemOutcomes;
         std::optional<std::filesystem::path> destinationFolder;
         HRESULT hr = S_OK;
     };
@@ -807,6 +845,10 @@ public:
         uint64_t thumbnailPendingCount           = 0;
         uint64_t thumbnailCacheHitCount          = 0;
         uint64_t thumbnailShellSuccessCount      = 0;
+        uint64_t thumbnailShellCacheHitCount     = 0;
+        uint64_t thumbnailShellCacheMissCount    = 0;
+        uint64_t thumbnailShellProviderAllowedCount = 0;
+        uint64_t thumbnailShellProviderTimeoutCount = 0;
         uint64_t thumbnailWicSuccessCount        = 0;
         uint64_t thumbnailWicFactoryCreateCount  = 0;
         uint64_t thumbnailDecodeFailureCount     = 0;
@@ -859,6 +901,14 @@ public:
         HWND previewContentHwnd               = nullptr;
         HWND previewEmbeddedViewerHwnd        = nullptr;
         uintptr_t previewViewerInstanceId     = 0;
+        size_t previewDirectChildCount        = 0u;
+        size_t previewVisibleDirectChildCount = 0u;
+        size_t previewOwnVisibleDirectChildCount = 0u;
+        size_t previewLastOpenCreatedChildCount = 0u;
+        size_t previewLastOpenDetectedChildCount = 0u;
+        size_t previewLastOpenHiddenRejectedChildCount = 0u;
+        bool previewLastOpenRejectedChildCardinality = false;
+        bool previewLastReopenRejectedChildSet = false;
         RECT tabRect{};
         RECT folderTabClientRect{};
         RECT previewTabClientRect{};
@@ -877,6 +927,15 @@ public:
         int previewPropertiesScrollOffsetPx  = 0;
         int previewPropertiesScrollMaxPx     = 0;
         std::wstring sourceFocusedDisplayName;
+    };
+
+    enum class PreviewEmbeddedChildFaultForTest : uint8_t
+    {
+        None,
+        ReportNoNewChild,
+        CreateAdditionalNewChild,
+        CreateAdditionalNewChildOnReopen,
+        ReplaceEmbeddedChildOnReopen,
     };
 
     struct OpenedFilesDebugRow
@@ -992,7 +1051,13 @@ public:
     [[nodiscard]] bool DebugClickSplitterArrow(Pane pane) noexcept;
     [[nodiscard]] bool DebugGetPaneViewOptionsSnapshot(Pane pane, PaneViewOptionsDebugSnapshot& out) const;
     void DebugSetThumbnailProviderMode(Pane pane, FolderView::DebugThumbnailProviderMode mode) noexcept;
+    [[nodiscard]] bool DebugSeedThumbnailPendingAndPostThumbnailBitmapMessagesForTest(Pane pane,
+                                                                                      uint64_t pendingCount,
+                                                                                      uint64_t staleBatchMessageCount,
+                                                                                      uint64_t staleGenerationMessageCount,
+                                                                                      uint64_t unaccountedCurrentMessageCount);
     [[nodiscard]] bool DebugGetPreviewPaneSnapshot(PreviewPaneDebugSnapshot& out) const noexcept;
+    void DebugSetNextPreviewEmbeddedChildFaultForTest(PreviewEmbeddedChildFaultForTest fault) noexcept;
     [[nodiscard]] bool DebugSetPreviewPaneTab(Pane hostPane, bool previewTab) noexcept;
     [[nodiscard]] bool DebugScrollPreviewPropertiesByWheelDetents(Pane hostPane, int detents) noexcept;
     [[nodiscard]] bool DebugAdvancePreviewTabsTooltipDelayForTest(Pane hostPane) noexcept;
@@ -1023,6 +1088,7 @@ public:
     [[nodiscard]] bool DebugWarmPaneRendering(Pane pane) noexcept;
     [[nodiscard]] bool DebugGetPaneColumnLayoutSnapshot(Pane pane, FolderView::DebugColumnLayoutSnapshot& out) const;
     [[nodiscard]] bool DebugIsEmptyFolderStateActive(Pane pane) const noexcept;
+    [[nodiscard]] std::wstring_view DebugGetPaneEmptyStateMessage(Pane pane) const noexcept;
     [[nodiscard]] std::wstring_view DebugGetEmptyFolderFunMessage(Pane pane) const noexcept;
     [[nodiscard]] FolderView::DebugEmptyFolderItemMetrics DebugGetEmptyFolderItemMetrics(Pane pane) const noexcept;
     [[nodiscard]] HWND DebugGetNavigationViewHwnd(Pane pane) const noexcept;
@@ -1066,6 +1132,9 @@ public:
     void DebugReportPaneRenderingFailureForSelfTest(Pane pane, HRESULT hr) const;
     void DebugAgePaneRenderingFailureForSelfTest(Pane pane, uint64_t ageMs) const noexcept;
     void DebugClearPaneRenderingFailureForSelfTest(Pane pane) const;
+    void DebugForcePaneNextRenderFailure(Pane pane, FolderView::DebugRenderFailurePoint point, HRESULT hr) noexcept;
+    [[nodiscard]] bool DebugSetPaneHoveredItemByDisplayName(Pane pane, std::wstring_view displayName) noexcept;
+    void DebugResetPaneDrawItemTransientBrushCreateCount(Pane pane) noexcept;
 #endif
 
     void ShowPaneAlertOverlay(Pane pane,
@@ -1282,7 +1351,12 @@ private:
         std::vector<const wchar_t*> selectionPointers;
         std::vector<std::wstring> otherFilesStorage;
         std::vector<const wchar_t*> otherFilePointers;
+        HWND embeddedHwnd = nullptr;
     };
+
+    [[nodiscard]] static bool IsOwnedPreviewEmbeddedHwnd(const PaneState& host, const ViewerInstance* instance, HWND hwnd) noexcept;
+    [[nodiscard]] static bool TryBindPreviewEmbeddedHwnd(PaneState& host, ViewerInstance& instance, HWND hwnd) noexcept;
+    static void HideAndClearPreviewEmbeddedHwnd(PaneState& host, ViewerInstance& instance) noexcept;
 
     HRESULT OpenViewerWithPluginInternal(std::wstring_view pluginId,
                                          const ViewerOpenContext& context,
@@ -1646,5 +1720,28 @@ private:
     std::unique_ptr<NetworkChangeSubscription> _networkChangeSubscription;
     uint64_t _lastNetworkConnectivityRefreshTick = 0;
 
+#ifdef ENABLE_TESTS
+    PreviewEmbeddedChildFaultForTest _debugNextPreviewEmbeddedChildFault = PreviewEmbeddedChildFaultForTest::None;
+    size_t _debugPreviewLastOpenCreatedChildCount = 0u;
+    size_t _debugPreviewLastOpenDetectedChildCount = 0u;
+    size_t _debugPreviewLastOpenHiddenRejectedChildCount = 0u;
+    bool _debugPreviewLastOpenRejectedChildCardinality = false;
+    bool _debugPreviewLastReopenRejectedChildSet = false;
+#endif
+
     friend LRESULT CALLBACK FolderWindowDxHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
 };
+
+#ifdef ENABLE_TESTS
+[[nodiscard]] inline bool PostDxUiPromptCloseDebugCommand(HWND hwnd, UINT message, WPARAM command) noexcept
+{
+    if (! hwnd || message == 0u || IsWindow(hwnd) == FALSE)
+    {
+        return false;
+    }
+
+    // Closing a modal DxUi prompt tears down its TSF/native-input state. Always post
+    // test close commands so teardown never occurs inside a cross-thread SendMessage stack.
+    return PostMessageW(hwnd, message, command, 0) != FALSE;
+}
+#endif

@@ -1,5 +1,7 @@
 #include "DxUiTestHelpers.h"
 
+#include <fstream>
+
 namespace
 {
 using RedSalamander::DxUi::WindowHostBitmapCapture;
@@ -126,6 +128,23 @@ WindowHostBitmapCapture CaptureAttachedHostWindowBitmapForComboSuite(AttachedHos
                                  std::abs(channel(lhsBgra, 16u) - channel(rhsBgra, 16u)));
 }
 
+[[nodiscard]] size_t CountSubstring(std::string_view text, std::string_view needle) noexcept
+{
+    if (needle.empty())
+    {
+        return 0u;
+    }
+
+    size_t count  = 0u;
+    size_t offset = 0u;
+    while ((offset = text.find(needle, offset)) != std::string_view::npos)
+    {
+        ++count;
+        offset += needle.size();
+    }
+    return count;
+}
+
 [[nodiscard]] bool PostHostLeftClickForComboSuite(HWND hwnd, POINT screenPoint) noexcept
 {
     POINT clientPoint = screenPoint;
@@ -139,8 +158,7 @@ WindowHostBitmapCapture CaptureAttachedHostWindowBitmapForComboSuite(AttachedHos
            PostMessageW(hwnd, WM_LBUTTONUP, 0, lParam) != FALSE;
 }
 
-template<typename Predicate>
-[[nodiscard]] bool PumpComboSuiteMessagesUntil(AttachedHostWindow& window, DWORD timeoutMs, Predicate&& predicate)
+template <typename Predicate> [[nodiscard]] bool PumpComboSuiteMessagesUntil(AttachedHostWindow& window, DWORD timeoutMs, Predicate&& predicate)
 {
     const ULONGLONG deadline = GetTickCount64() + timeoutMs;
     while (GetTickCount64() <= deadline)
@@ -284,8 +302,8 @@ void TestAttachedComboBoxSentMouseHoverAndOutsideDismiss()
             "attached combo pointer window can be placed on-screen");
     ShowWindow(window.Hwnd(), SW_SHOWNOACTIVATE);
 
-    auto root       = std::make_unique<Panel>();
-    auto* combo     = root->AddChild<ComboBox>();
+    auto root         = std::make_unique<Panel>();
+    auto* combo       = root->AddChild<ComboBox>();
     auto* pointerSink = root->AddChild<PointerSinkControl>();
     combo->SetBounds(D2D1::RectF(24.0f, 24.0f, 216.0f, 56.0f));
     combo->SetItems({
@@ -306,8 +324,8 @@ void TestAttachedComboBoxSentMouseHoverAndOutsideDismiss()
 
     const D2D1_RECT_F secondPopupItemRect = combo->DebugGetPopupItemRect(1u, &window.Host());
     RequireRectHasArea(secondPopupItemRect, "combo popup exposes the second popup item geometry");
-    const D2D1_POINT_2F secondPopupItemCenter = D2D1::Point2F((secondPopupItemRect.left + secondPopupItemRect.right) * 0.5f,
-                                                              (secondPopupItemRect.top + secondPopupItemRect.bottom) * 0.5f);
+    const D2D1_POINT_2F secondPopupItemCenter =
+        D2D1::Point2F((secondPopupItemRect.left + secondPopupItemRect.right) * 0.5f, (secondPopupItemRect.top + secondPopupItemRect.bottom) * 0.5f);
     Require(combo->OnMouseMove(window.Host(), secondPopupItemCenter, 0), "combo popup hover move over the second item is handled");
     window.PumpMessages();
     Require(combo->DebugGetHoveredPopupIndex().has_value() && combo->DebugGetHoveredPopupIndex().value() == 1u,
@@ -317,7 +335,7 @@ void TestAttachedComboBoxSentMouseHoverAndOutsideDismiss()
     Require(PostHostLeftClickForComboSuite(window.Hwnd(), outsidePoint), "outside combo click sends a host button sequence");
     const bool popupClosed = PumpComboSuiteMessagesUntil(window, 500u, [&]() noexcept { return ! combo->DebugIsPopupOpen(); });
     Require(popupClosed, "outside click light-dismisses the combo popup even when the click lands on a handled non-focusable control");
-    Require(pointerSink->MouseDownCount() == 0u, "combo light-dismiss consumes the first outside click instead of activating the underlying sink");
+    Require(pointerSink->MouseDownCount() == 1u, "combo outside click reaches the underlying sink after dismissing the popup");
 }
 
 void TestComboBoxPopupOverlayBlocksUnderlyingHover()
@@ -917,6 +935,107 @@ void TestNativeEditableComboBoxEmojiUsesColorFontRendering()
     Require(warmPixels >= 24u, "native editable combo renders warm emoji color-font pixels");
 }
 
+void TestEditableComboBoxPaintReusesSingleLineLayoutAndCaretOffset()
+{
+    const std::filesystem::path repoRoot = FindRepoRootForDxUiTests();
+
+    std::ifstream headerInput(repoRoot / L"Common" / L"DxUi" / L"DxUi.h");
+    Require(headerInput.good(), "DxUi header is readable for editable ComboBox paint-cache guard");
+    const std::string header((std::istreambuf_iterator<char>(headerInput)), std::istreambuf_iterator<char>());
+
+    std::ifstream sourceInput(repoRoot / L"Common" / L"DxUi" / L"DxUi.ComboBox.cpp");
+    Require(sourceInput.good(), "ComboBox source is readable for editable paint-cache guard");
+    const std::string source((std::istreambuf_iterator<char>(sourceInput)), std::istreambuf_iterator<char>());
+
+    const auto requireBlock = [](const std::string& text, const char* beginMarker, const char* endMarker, const char* description)
+    {
+        const size_t begin = text.find(beginMarker);
+        const size_t end   = text.find(endMarker, begin == std::string::npos ? 0u : begin + 1u);
+        Require(begin != std::string::npos && end != std::string::npos && begin < end, description);
+        return text.substr(begin, end - begin);
+    };
+
+    const std::string comboClassBlock = requireBlock(header, "class ComboBox : public Control", "class Tree final", "ComboBox class block is found");
+    Require(comboClassBlock.find("SingleLineTextLayoutCache _singleLineLayoutCache") != std::string::npos,
+            "editable ComboBox owns the shared single-line layout cache");
+    Require(comboClassBlock.find("InvalidateSingleLineLayoutCache() const noexcept") != std::string::npos,
+            "editable ComboBox declares a single-line cache invalidator");
+    Require(comboClassBlock.find("GetOrCreateSingleLineLayout(") != std::string::npos, "editable ComboBox declares a cache-backed single-line layout accessor");
+
+    const std::string paintBlock = requireBlock(source, "void ComboBox::Paint", "void ComboBox::PaintOverlay", "ComboBox paint block is found");
+    Require(paintBlock.find("const wil::com_ptr<IDWriteTextLayout> editableLayout") != std::string::npos,
+            "editable ComboBox paint creates or reuses one layout for text, selection, and caret");
+    Require(paintBlock.find("DrawSingleLineSelectionWithLayout") != std::string::npos, "editable ComboBox paint draws selection through the cached layout");
+    Require(paintBlock.find("editableCaretOffsetDip = EnsureEditableCaretVisible") != std::string::npos,
+            "editable ComboBox paint reuses the caret offset from its single visibility pass");
+    Require(CountSubstring(paintBlock, "EnsureEditableCaretVisible(") == 1u, "editable ComboBox paint ensures caret visibility only once per frame");
+    Require(paintBlock.find("MeasureCaretOffsetDip(&host") == std::string::npos, "editable ComboBox paint no longer creates a separate caret layout");
+
+    const std::string setTextBlock = requireBlock(source, "void ComboBox::SetText", "void ComboBox::SetTextAndNotify", "ComboBox SetText block is found");
+    Require(setTextBlock.find("InvalidateSingleLineLayoutCache()") != std::string::npos, "editable ComboBox text changes invalidate the cached layout");
+
+    const std::string invalidateBlock = requireBlock(
+        source, "void ComboBox::InvalidateSingleLineLayoutCache", "float ComboBox::EnsureEditableCaretVisible", "ComboBox cache invalidator block is found");
+    Require(invalidateBlock.find("ClearSingleLineTextLayoutCache(_singleLineLayoutCache)") != std::string::npos,
+            "editable ComboBox cache invalidator clears the shared cache");
+
+    const std::string ensureBlock = requireBlock(
+        source, "float ComboBox::EnsureEditableCaretVisible", "void ComboBox::ResetEditableCaretBlink", "ComboBox caret-visibility block is found");
+    Require(ensureBlock.find("GetOrCreateSingleLineLayout(") != std::string::npos, "editable ComboBox caret visibility uses the shared layout cache");
+    Require(ensureBlock.find("MeasureCaretOffsetDip(layout.get()") != std::string::npos, "editable ComboBox caret visibility measures from the cached layout");
+    Require(ensureBlock.find("MeasureCaretOffsetDip(host") == std::string::npos,
+            "editable ComboBox caret visibility no longer creates a separate uncached layout");
+}
+
+void TestPopupBackdropCaptureUsesSharedBoundedHelper()
+{
+    const std::filesystem::path repoRoot = FindRepoRootForDxUiTests();
+
+    const auto readSource = [](const std::filesystem::path& path, const char* context)
+    {
+        std::ifstream input(path);
+        Require(input.good(), context);
+        return std::string((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+    };
+
+    const std::string internalHeader =
+        readSource(repoRoot / L"Common" / L"DxUi" / L"DxUi.Internal.h", "DxUi internal header is readable for backdrop-capture guard");
+    const std::string sharedSource = readSource(repoRoot / L"Common" / L"DxUi" / L"DxUi.cpp", "DxUi shared source is readable for backdrop-capture guard");
+    const std::string comboSource = readSource(repoRoot / L"Common" / L"DxUi" / L"DxUi.ComboBox.cpp", "ComboBox source is readable for backdrop-capture guard");
+    const std::string menuSource  = readSource(repoRoot / L"Common" / L"DxUi" / L"DxUi.Menu.cpp", "Menu source is readable for backdrop-capture guard");
+
+    Require(internalHeader.find("CaptureBackdropScreenRegion(") != std::string::npos, "bounded popup backdrop capture is declared as one shared DxUi helper");
+    Require(sharedSource.find("bool CaptureBackdropScreenRegion(") != std::string::npos,
+            "bounded popup backdrop capture is implemented once in shared DxUi code");
+    Require(sharedSource.find("CreateDIBSection(") != std::string::npos && sharedSource.find("BitBlt(") != std::string::npos,
+            "shared backdrop helper owns the GDI screen-copy implementation");
+
+    Require(comboSource.find("CaptureComboBoxBackdropScreenRegion") == std::string::npos, "ComboBox does not keep a duplicate backdrop capture helper");
+    Require(menuSource.find("CaptureMenuBackdropScreenRegion") == std::string::npos, "Menu does not keep a duplicate backdrop capture helper");
+    Require(comboSource.find("CreateDIBSection(") == std::string::npos && comboSource.find("BitBlt(") == std::string::npos,
+            "ComboBox calls the shared bounded helper instead of owning GDI screen-copy code");
+    Require(menuSource.find("CreateDIBSection(") == std::string::npos && menuSource.find("BitBlt(") == std::string::npos,
+            "Menu calls the shared bounded helper instead of owning GDI screen-copy code");
+
+    const size_t comboLayout    = comboSource.find("UpdatePopupLayout(&host)");
+    const size_t comboPopupRect = comboSource.find("const RECT popupRectPx", comboLayout);
+    const size_t comboCapture   = comboSource.find("CaptureBackdropScreenRegion(popupRectPx, _popupBackdropCapture", comboPopupRect);
+    Require(comboLayout != std::string::npos && comboPopupRect != std::string::npos && comboCapture != std::string::npos && comboLayout < comboPopupRect &&
+                comboPopupRect < comboCapture,
+            "ComboBox captures only the current bounded popup rectangle after layout is updated");
+
+    const size_t menuCreate      = menuSource.find("CreateMenuPopupWindow");
+    const size_t menuSurfaceRect = menuSource.find("const RECT surfaceRectPx", menuCreate);
+    const size_t menuWindowRect  = menuSource.find("const RECT windowRect", menuSurfaceRect);
+    const size_t menuCapture     = menuSource.find("CaptureBackdropScreenRegion(surfaceRectPx, popup->backdropSnapshot.capture", menuWindowRect);
+    Require(menuCreate != std::string::npos && menuSurfaceRect != std::string::npos && menuWindowRect != std::string::npos &&
+                menuCapture != std::string::npos && menuSurfaceRect < menuWindowRect && menuWindowRect < menuCapture,
+            "Menu captures the visible surface rectangle, not the larger popup window shadow bounds");
+    Require(menuSource.find("CaptureBackdropScreenRegion(popup->windowRectPx") == std::string::npos &&
+                menuSource.find("CaptureBackdropScreenRegion(windowRect") == std::string::npos,
+            "Menu backdrop capture does not use the larger window rectangle");
+}
+
 void TestComboBoxCompactPopupItemTextRectPreservesInsetAndWidth()
 {
     using namespace RedSalamander::DxUi;
@@ -1063,6 +1182,8 @@ void RunComboBoxTests()
     runTest("TestComboBoxSetMaxVisibleItemsAllowsLargerPopup", TestComboBoxSetMaxVisibleItemsAllowsLargerPopup);
     runTest("TestComboBoxCompactEditableTextRectPreservesInsetAndWidth", TestComboBoxCompactEditableTextRectPreservesInsetAndWidth);
     runTest("TestNativeEditableComboBoxEmojiUsesColorFontRendering", TestNativeEditableComboBoxEmojiUsesColorFontRendering);
+    runTest("TestEditableComboBoxPaintReusesSingleLineLayoutAndCaretOffset", TestEditableComboBoxPaintReusesSingleLineLayoutAndCaretOffset);
+    runTest("TestPopupBackdropCaptureUsesSharedBoundedHelper", TestPopupBackdropCaptureUsesSharedBoundedHelper);
     runTest("TestComboBoxCompactPopupItemTextRectPreservesInsetAndWidth", TestComboBoxCompactPopupItemTextRectPreservesInsetAndWidth);
     runTest("TestComboBoxPopupUsesRoundSmallCornerRadius", TestComboBoxPopupUsesRoundSmallCornerRadius);
     runTest("TestComboBoxRainbowPopupUsesAccentDerivedHighlight", TestComboBoxRainbowPopupUsesAccentDerivedHighlight);

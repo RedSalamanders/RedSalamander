@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <cwctype>
 #include <limits>
 #include <utility>
@@ -16,6 +17,101 @@
 namespace
 {
 constexpr std::wstring_view kFallbackPreviewViewerId = L"builtin/viewer-text";
+constexpr wchar_t kPreviewPreOpenChildMarkerProperty[] = L"RedSalamander.FolderWindow.PreviewPreOpenChild";
+constexpr wchar_t kPreviewViewerInstanceProperty[]     = L"RedSalamander.FolderWindow.PreviewViewerInstance";
+
+class PreviewChildOpenAttempt final
+{
+public:
+    explicit PreviewChildOpenAttempt(HWND parent) noexcept : _parent(parent) {}
+
+    PreviewChildOpenAttempt(const PreviewChildOpenAttempt&)            = delete;
+    PreviewChildOpenAttempt(PreviewChildOpenAttempt&&)                 = delete;
+    PreviewChildOpenAttempt& operator=(const PreviewChildOpenAttempt&) = delete;
+    PreviewChildOpenAttempt& operator=(PreviewChildOpenAttempt&&)      = delete;
+
+    ~PreviewChildOpenAttempt() noexcept
+    {
+        const HANDLE marker = Marker();
+        for (const HWND child : _markedChildren)
+        {
+            if (IsWindow(child) != FALSE && GetParent(child) == _parent && GetPropW(child, kPreviewPreOpenChildMarkerProperty) == marker)
+            {
+                static_cast<void>(RemovePropW(child, kPreviewPreOpenChildMarkerProperty));
+            }
+        }
+    }
+
+    [[nodiscard]] HRESULT MarkExistingDirectChildren() noexcept
+    {
+        if (! _parent || IsWindow(_parent) == FALSE)
+        {
+            return E_HANDLE;
+        }
+
+        const HANDLE marker = Marker();
+        for (HWND child = GetWindow(_parent, GW_CHILD); child != nullptr; child = GetWindow(child, GW_HWNDNEXT))
+        {
+            if (GetParent(child) != _parent)
+            {
+                continue;
+            }
+            if (GetPropW(child, kPreviewPreOpenChildMarkerProperty) != nullptr)
+            {
+                return HRESULT_FROM_WIN32(ERROR_BUSY);
+            }
+            if (SetPropW(child, kPreviewPreOpenChildMarkerProperty, marker) == FALSE)
+            {
+                const DWORD lastError = GetLastError();
+                return HRESULT_FROM_WIN32(lastError != ERROR_SUCCESS ? lastError : ERROR_GEN_FAILURE);
+            }
+            _markedChildren.push_back(child);
+        }
+        return S_OK;
+    }
+
+    [[nodiscard]] std::vector<HWND> CollectNewDirectChildren() const
+    {
+        std::vector<HWND> children;
+        const HANDLE marker = Marker();
+        for (HWND child = GetWindow(_parent, GW_CHILD); child != nullptr; child = GetWindow(child, GW_HWNDNEXT))
+        {
+            if (GetParent(child) == _parent && GetPropW(child, kPreviewPreOpenChildMarkerProperty) != marker)
+            {
+                children.push_back(child);
+            }
+        }
+        return children;
+    }
+
+    [[nodiscard]] size_t HideDirectChildren(const std::vector<HWND>& children) const noexcept
+    {
+        size_t hiddenCount = 0u;
+        for (const HWND child : children)
+        {
+            if (IsWindow(child) == FALSE || GetParent(child) != _parent)
+            {
+                continue;
+            }
+            ShowWindow(child, SW_HIDE);
+            if ((GetWindowLongPtrW(child, GWL_STYLE) & WS_VISIBLE) == 0)
+            {
+                ++hiddenCount;
+            }
+        }
+        return hiddenCount;
+    }
+
+private:
+    [[nodiscard]] HANDLE Marker() const noexcept
+    {
+        return reinterpret_cast<HANDLE>(const_cast<std::byte*>(&_markerStorage));
+    }
+
+    HWND _parent = nullptr;
+    std::byte _markerStorage{};
+    std::vector<HWND> _markedChildren;
+};
 
 bool EqualsNoCase(std::wstring_view a, std::wstring_view b) noexcept
 {
@@ -342,11 +438,13 @@ HRESULT FolderWindow::OnViewerClosed(ViewerInstance* instance) noexcept
         // callbacks before forcing Close() from the host side.
         if (_leftPane.previewViewerInstance == instance)
         {
+            HideAndClearPreviewEmbeddedHwnd(_leftPane, *instance);
             _leftPane.previewViewerInstance = nullptr;
             _leftPane.previewViewerPluginId.clear();
         }
         if (_rightPane.previewViewerInstance == instance)
         {
+            HideAndClearPreviewEmbeddedHwnd(_rightPane, *instance);
             _rightPane.previewViewerInstance = nullptr;
             _rightPane.previewViewerPluginId.clear();
         }
@@ -355,6 +453,50 @@ HRESULT FolderWindow::OnViewerClosed(ViewerInstance* instance) noexcept
     }
 
     return S_OK;
+}
+
+bool FolderWindow::IsOwnedPreviewEmbeddedHwnd(const PaneState& host, const ViewerInstance* instance, HWND hwnd) noexcept
+{
+    if (! instance || ! hwnd || instance->embeddedHwnd != hwnd || ! host.hPreviewContent || IsWindow(hwnd) == FALSE ||
+        GetParent(hwnd) != host.hPreviewContent.get())
+    {
+        return false;
+    }
+
+    return GetPropW(hwnd, kPreviewViewerInstanceProperty) == reinterpret_cast<HANDLE>(const_cast<ViewerInstance*>(instance));
+}
+
+bool FolderWindow::TryBindPreviewEmbeddedHwnd(PaneState& host, ViewerInstance& instance, HWND hwnd) noexcept
+{
+    if (! host.hPreviewContent || ! hwnd || IsWindow(hwnd) == FALSE || GetParent(hwnd) != host.hPreviewContent.get() ||
+        GetPropW(hwnd, kPreviewViewerInstanceProperty) != nullptr)
+    {
+        return false;
+    }
+
+    if (SetPropW(hwnd, kPreviewViewerInstanceProperty, reinterpret_cast<HANDLE>(&instance)) == FALSE)
+    {
+        return false;
+    }
+
+    instance.embeddedHwnd = hwnd;
+    return true;
+}
+
+void FolderWindow::HideAndClearPreviewEmbeddedHwnd(PaneState& host, ViewerInstance& instance) noexcept
+{
+    const HWND hwnd = instance.embeddedHwnd;
+    if (IsOwnedPreviewEmbeddedHwnd(host, &instance, hwnd))
+    {
+        ShowWindow(hwnd, SW_HIDE);
+        if (GetParent(hwnd) == host.hPreviewContent.get() &&
+            GetPropW(hwnd, kPreviewViewerInstanceProperty) == reinterpret_cast<HANDLE>(&instance))
+        {
+            static_cast<void>(RemovePropW(hwnd, kPreviewViewerInstanceProperty));
+        }
+    }
+
+    instance.embeddedHwnd = nullptr;
 }
 
 ViewerTheme FolderWindow::BuildViewerTheme() const noexcept
@@ -403,6 +545,14 @@ void FolderWindow::ApplyViewerTheme() noexcept
 
 void FolderWindow::ShutdownViewers() noexcept
 {
+    if (_leftPane.previewViewerInstance)
+    {
+        HideAndClearPreviewEmbeddedHwnd(_leftPane, *_leftPane.previewViewerInstance);
+    }
+    if (_rightPane.previewViewerInstance)
+    {
+        HideAndClearPreviewEmbeddedHwnd(_rightPane, *_rightPane.previewViewerInstance);
+    }
     _leftPane.previewViewerInstance  = nullptr;
     _rightPane.previewViewerInstance = nullptr;
     _leftPane.previewViewerPluginId.clear();
@@ -645,6 +795,12 @@ void FolderWindow::ClosePreviewViewer(Pane hostPane) noexcept
 {
     PaneState& host                 = hostPane == Pane::Left ? _leftPane : _rightPane;
     ViewerInstance* previewInstance = host.previewViewerInstance;
+
+    if (previewInstance)
+    {
+        HideAndClearPreviewEmbeddedHwnd(host, *previewInstance);
+    }
+
     host.previewViewerInstance      = nullptr;
     host.previewViewerPluginId.clear();
 
@@ -774,7 +930,8 @@ bool FolderWindow::OpenPreviewFocusedPathWithViewer(Pane sourcePane, Pane hostPa
     previewPerf.SetDetail(pluginIdStorage);
 
     if (hostState.previewViewerInstance && OrdinalString::EqualsNoCase(hostState.previewViewerPluginId, pluginIdStorage) &&
-        OrdinalString::EqualsNoCase(hostState.previewedPath.wstring(), hostState.previewViewerInstance->focusedPath))
+        OrdinalString::EqualsNoCase(hostState.previewedPath.wstring(), hostState.previewViewerInstance->focusedPath) &&
+        IsOwnedPreviewEmbeddedHwnd(hostState, hostState.previewViewerInstance, hostState.previewViewerInstance->embeddedHwnd))
     {
         previewPerf.SetValue0(2u);
         SetPreviewPlaceholder(hostPane, {});
@@ -782,6 +939,14 @@ bool FolderWindow::OpenPreviewFocusedPathWithViewer(Pane sourcePane, Pane hostPa
         FocusPaneFolderView(sourcePane);
         return true;
     }
+
+#ifdef ENABLE_TESTS
+    _debugPreviewLastOpenCreatedChildCount        = 0u;
+    _debugPreviewLastOpenDetectedChildCount       = 0u;
+    _debugPreviewLastOpenHiddenRejectedChildCount = 0u;
+    _debugPreviewLastOpenRejectedChildCardinality = false;
+    _debugPreviewLastReopenRejectedChildSet       = false;
+#endif
 
     std::wstring fileSystemName;
     wil::com_ptr<IInformations> fileSystemInfo;
@@ -841,19 +1006,95 @@ bool FolderWindow::OpenPreviewFocusedPathWithViewer(Pane sourcePane, Pane hostPa
     {
         previewPerf.SetValue0(1u);
         instance = hostState.previewViewerInstance;
-        openHr   = ReopenViewerInstance(*instance, context, openedBy, sourcePane, OpenedFileSourceKind::Preview);
-        if (SUCCEEDED(openHr))
+
+        PreviewChildOpenAttempt reopenAttempt(hostState.hPreviewContent.get());
+        const HRESULT markerHr = reopenAttempt.MarkExistingDirectChildren();
+        if (SUCCEEDED(markerHr))
         {
-            SetPreviewPlaceholder(hostPane, {});
-            LayoutEmbeddedPreviewViewer(hostPane);
-            FocusPaneFolderView(sourcePane);
-            return true;
+            openHr = ReopenViewerInstance(*instance, context, openedBy, sourcePane, OpenedFileSourceKind::Preview);
+
+#ifdef ENABLE_TESTS
+            PreviewEmbeddedChildFaultForTest reopenFault = PreviewEmbeddedChildFaultForTest::None;
+            if (_debugNextPreviewEmbeddedChildFault == PreviewEmbeddedChildFaultForTest::CreateAdditionalNewChildOnReopen ||
+                _debugNextPreviewEmbeddedChildFault == PreviewEmbeddedChildFaultForTest::ReplaceEmbeddedChildOnReopen)
+            {
+                reopenFault = std::exchange(_debugNextPreviewEmbeddedChildFault, PreviewEmbeddedChildFaultForTest::None);
+            }
+
+            wil::unique_hwnd debugReopenChild;
+            if (SUCCEEDED(openHr) && reopenFault == PreviewEmbeddedChildFaultForTest::ReplaceEmbeddedChildOnReopen)
+            {
+                const HWND oldRoot = instance->embeddedHwnd;
+                if (IsOwnedPreviewEmbeddedHwnd(hostState, instance, oldRoot))
+                {
+                    ShowWindow(oldRoot, SW_HIDE);
+                    static_cast<void>(RemovePropW(oldRoot, kPreviewViewerInstanceProperty));
+                }
+            }
+            if (SUCCEEDED(openHr) &&
+                (reopenFault == PreviewEmbeddedChildFaultForTest::CreateAdditionalNewChildOnReopen ||
+                 reopenFault == PreviewEmbeddedChildFaultForTest::ReplaceEmbeddedChildOnReopen))
+            {
+                debugReopenChild.reset(CreateWindowExW(0,
+                                                        L"STATIC",
+                                                        nullptr,
+                                                        WS_CHILD | WS_VISIBLE | SS_BLACKRECT,
+                                                        0,
+                                                        0,
+                                                        1,
+                                                        1,
+                                                        hostState.hPreviewContent.get(),
+                                                        nullptr,
+                                                        GetModuleHandleW(nullptr),
+                                                        nullptr));
+            }
+#endif
+
+            const std::vector<HWND> createdPreviewChildren = reopenAttempt.CollectNewDirectChildren();
+            const bool retainedOwnedRoot = IsOwnedPreviewEmbeddedHwnd(hostState, instance, instance->embeddedHwnd);
+            if (SUCCEEDED(openHr) && retainedOwnedRoot && createdPreviewChildren.empty())
+            {
+                SetPreviewPlaceholder(hostPane, {});
+                LayoutEmbeddedPreviewViewer(hostPane);
+                FocusPaneFolderView(sourcePane);
+                return true;
+            }
+
+            const size_t hiddenRejectedChildCount = reopenAttempt.HideDirectChildren(createdPreviewChildren);
+#ifdef ENABLE_TESTS
+            if (! createdPreviewChildren.empty() || (SUCCEEDED(openHr) && ! retainedOwnedRoot))
+            {
+                _debugPreviewLastOpenCreatedChildCount        = createdPreviewChildren.size();
+                _debugPreviewLastOpenDetectedChildCount       = createdPreviewChildren.size();
+                _debugPreviewLastOpenHiddenRejectedChildCount = hiddenRejectedChildCount;
+                _debugPreviewLastOpenRejectedChildCardinality = true;
+                _debugPreviewLastReopenRejectedChildSet       = true;
+            }
+#endif
+
+            if (SUCCEEDED(openHr))
+            {
+                openHr = E_UNEXPECTED;
+            }
+
+            Debug::Warning(
+                L"FolderWindow::OpenPreviewFocusedPathWithViewer: preview viewer '{}' failed to refresh '{}' (hr=0x{:08X}, retainedOwnedRoot={}, newDirectChildren={}, hiddenNewChildren={}); reopening.",
+                pluginIdStorage,
+                hostState.previewedPath.wstring(),
+                static_cast<unsigned long>(openHr),
+                retainedOwnedRoot,
+                createdPreviewChildren.size(),
+                hiddenRejectedChildCount);
+        }
+        else
+        {
+            openHr = markerHr;
+            Debug::Error(
+                L"FolderWindow::OpenPreviewFocusedPathWithViewer: failed to mark existing preview children before refreshing '{}' (hr=0x{:08X}).",
+                pluginIdStorage,
+                static_cast<unsigned long>(markerHr));
         }
 
-        Debug::Warning(L"FolderWindow::OpenPreviewFocusedPathWithViewer: preview viewer '{}' failed to refresh '{}' (hr=0x{:08X}); reopening.",
-                       pluginIdStorage,
-                       hostState.previewedPath.wstring(),
-                       static_cast<unsigned long>(openHr));
         previewPerf.SetHr(openHr);
         ClosePreviewViewer(hostPane);
         instance = nullptr;
@@ -863,9 +1104,22 @@ bool FolderWindow::OpenPreviewFocusedPathWithViewer(Pane sourcePane, Pane hostPa
         ClosePreviewViewer(hostPane);
     }
 
+    PreviewChildOpenAttempt previewOpenAttempt(hostState.hPreviewContent.get());
+    const HRESULT markerHr = previewOpenAttempt.MarkExistingDirectChildren();
+    if (FAILED(markerHr))
+    {
+        Debug::Error(L"FolderWindow::OpenPreviewFocusedPathWithViewer: failed to mark existing preview children before opening '{}' (hr=0x{:08X}).",
+                     pluginIdStorage,
+                     static_cast<unsigned long>(markerHr));
+        previewPerf.SetHr(markerHr);
+        return false;
+    }
+
     openHr = OpenViewerWithPluginInternal(pluginIdStorage, context, openedBy, sourcePane, OpenedFileSourceKind::Preview, &instance);
     if (FAILED(openHr) || ! instance)
     {
+        const std::vector<HWND> failedOpenChildren = previewOpenAttempt.CollectNewDirectChildren();
+        static_cast<void>(previewOpenAttempt.HideDirectChildren(failedOpenChildren));
         Debug::Warning(
             L"FolderWindow::OpenPreviewFocusedPathWithViewer: failed to open preview viewer '{}' for '{}' (hr=0x{:08X}); using item properties fallback.",
             pluginIdStorage,
@@ -877,11 +1131,97 @@ bool FolderWindow::OpenPreviewFocusedPathWithViewer(Pane sourcePane, Pane hostPa
 
     hostState.previewViewerInstance = instance;
     hostState.previewViewerPluginId = pluginIdStorage;
+
+#ifdef ENABLE_TESTS
+    PreviewEmbeddedChildFaultForTest childFault = PreviewEmbeddedChildFaultForTest::None;
+    if (_debugNextPreviewEmbeddedChildFault == PreviewEmbeddedChildFaultForTest::ReportNoNewChild ||
+        _debugNextPreviewEmbeddedChildFault == PreviewEmbeddedChildFaultForTest::CreateAdditionalNewChild)
+    {
+        childFault = std::exchange(_debugNextPreviewEmbeddedChildFault, PreviewEmbeddedChildFaultForTest::None);
+    }
+    wil::unique_hwnd debugAdditionalPreviewChild;
+    if (childFault == PreviewEmbeddedChildFaultForTest::CreateAdditionalNewChild)
+    {
+        debugAdditionalPreviewChild.reset(CreateWindowExW(0,
+                                                           L"STATIC",
+                                                           nullptr,
+                                                           WS_CHILD | WS_VISIBLE | SS_BLACKRECT,
+                                                           0,
+                                                           0,
+                                                           1,
+                                                           1,
+                                                           hostState.hPreviewContent.get(),
+                                                           nullptr,
+                                                           GetModuleHandleW(nullptr),
+                                                           nullptr));
+    }
+#endif
+
+    // A property marker survives z-order changes but disappears if a retiring HWND is destroyed.
+    // Therefore a newly allocated HWND that reuses the same numeric value cannot be mistaken for
+    // the old child. Exactly one unmarked direct child is the new embedded viewer root.
+    const std::vector<HWND> createdPreviewChildren = previewOpenAttempt.CollectNewDirectChildren();
+
+    size_t detectedPreviewChildCount = createdPreviewChildren.size();
+#ifdef ENABLE_TESTS
+    if (childFault == PreviewEmbeddedChildFaultForTest::ReportNoNewChild)
+    {
+        detectedPreviewChildCount = 0u;
+    }
+    if (! _debugPreviewLastReopenRejectedChildSet)
+    {
+        _debugPreviewLastOpenCreatedChildCount  = createdPreviewChildren.size();
+        _debugPreviewLastOpenDetectedChildCount = detectedPreviewChildCount;
+    }
+#endif
+
+    if (detectedPreviewChildCount != 1u)
+    {
+        const size_t hiddenRejectedChildCount = previewOpenAttempt.HideDirectChildren(createdPreviewChildren);
+#ifdef ENABLE_TESTS
+        _debugPreviewLastOpenCreatedChildCount        = createdPreviewChildren.size();
+        _debugPreviewLastOpenDetectedChildCount       = detectedPreviewChildCount;
+        _debugPreviewLastOpenHiddenRejectedChildCount = hiddenRejectedChildCount;
+        _debugPreviewLastOpenRejectedChildCardinality = true;
+        _debugPreviewLastReopenRejectedChildSet       = false;
+#endif
+        Debug::Error(L"FolderWindow::OpenPreviewFocusedPathWithViewer: preview viewer '{}' created {} direct embedded children; exactly one is required (hidden={}).",
+                     pluginIdStorage,
+                     detectedPreviewChildCount,
+                     hiddenRejectedChildCount);
+        previewPerf.SetHr(E_UNEXPECTED);
+        ClosePreviewViewer(hostPane);
+        return false;
+    }
+
+    if (! TryBindPreviewEmbeddedHwnd(hostState, *instance, createdPreviewChildren.front()))
+    {
+        const size_t hiddenRejectedChildCount = previewOpenAttempt.HideDirectChildren(createdPreviewChildren);
+#ifdef ENABLE_TESTS
+        if (! _debugPreviewLastReopenRejectedChildSet)
+        {
+            _debugPreviewLastOpenHiddenRejectedChildCount = hiddenRejectedChildCount;
+        }
+#endif
+        Debug::Error(L"FolderWindow::OpenPreviewFocusedPathWithViewer: failed to bind preview viewer '{}' to its direct embedded child (hidden={}).",
+                     pluginIdStorage,
+                     hiddenRejectedChildCount);
+        previewPerf.SetHr(E_UNEXPECTED);
+        ClosePreviewViewer(hostPane);
+        return false;
+    }
     SetPreviewPlaceholder(hostPane, {});
     LayoutEmbeddedPreviewViewer(hostPane);
     FocusPaneFolderView(sourcePane);
     return true;
 }
+
+#ifdef ENABLE_TESTS
+void FolderWindow::DebugSetNextPreviewEmbeddedChildFaultForTest(PreviewEmbeddedChildFaultForTest fault) noexcept
+{
+    _debugNextPreviewEmbeddedChildFault = fault;
+}
+#endif
 
 bool FolderWindow::TryViewFileWithViewer(Pane pane, const FolderView::ViewFileRequest& request) noexcept
 {
@@ -1151,11 +1491,11 @@ bool FolderWindow::TryViewFileWithViewer(Pane pane, const FolderView::ViewFileRe
 }
 
 bool FolderWindow::TryEditFileWithEditor(Pane pane,
-                                          const std::filesystem::path& filePath,
-                                          const std::vector<std::filesystem::path>& selectedPaths,
-                                          std::wstring_view actionId,
-                                          bool alternate,
-                                          HWND ownerWindow) noexcept
+                                         const std::filesystem::path& filePath,
+                                         const std::vector<std::filesystem::path>& selectedPaths,
+                                         std::wstring_view actionId,
+                                         bool alternate,
+                                         HWND ownerWindow) noexcept
 {
     ClearFileActionFailure();
 

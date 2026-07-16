@@ -843,6 +843,7 @@ void PluginsPane::SyncDxListSelectionFromState(const PreferencesDialogState& sta
     if (selectedPluginId.empty())
     {
         _dxState->page.listControl->GetSelectionModel().Clear();
+        _dxState->page.listControl->RefreshAccessibilitySnapshot();
         if (_pageHostDx)
         {
             _pageHostDx->Invalidate();
@@ -854,6 +855,7 @@ void PluginsPane::SyncDxListSelectionFromState(const PreferencesDialogState& sta
     if (! dxRowIndex.has_value())
     {
         _dxState->page.listControl->GetSelectionModel().Clear();
+        _dxState->page.listControl->RefreshAccessibilitySnapshot();
         if (_pageHostDx)
         {
             _pageHostDx->Invalidate();
@@ -862,6 +864,7 @@ void PluginsPane::SyncDxListSelectionFromState(const PreferencesDialogState& sta
     }
 
     _dxState->page.listControl->GetSelectionModel().SetSingle(_dxState->page.listModel->GetStableRowId(dxRowIndex.value()));
+    _dxState->page.listControl->RefreshAccessibilitySnapshot();
     if (_pageHostDx)
     {
         _pageHostDx->Invalidate();
@@ -880,6 +883,7 @@ void PluginsPane::SyncDxCustomPathsSelectionFromState(const PreferencesDialogSta
     if (selectedPath.empty())
     {
         _dxState->page.customPathsListControl->GetSelectionModel().Clear();
+        _dxState->page.customPathsListControl->RefreshAccessibilitySnapshot();
         if (_pageHostDx)
         {
             _pageHostDx->Invalidate();
@@ -891,6 +895,7 @@ void PluginsPane::SyncDxCustomPathsSelectionFromState(const PreferencesDialogSta
     if (! dxRowIndex.has_value())
     {
         _dxState->page.customPathsListControl->GetSelectionModel().Clear();
+        _dxState->page.customPathsListControl->RefreshAccessibilitySnapshot();
         if (_pageHostDx)
         {
             _pageHostDx->Invalidate();
@@ -899,6 +904,7 @@ void PluginsPane::SyncDxCustomPathsSelectionFromState(const PreferencesDialogSta
     }
 
     _dxState->page.customPathsListControl->GetSelectionModel().SetSingle(_dxState->page.customPathsListModel->GetStableRowId(dxRowIndex.value()));
+    _dxState->page.customPathsListControl->RefreshAccessibilitySnapshot();
     if (_pageHostDx)
     {
         _pageHostDx->Invalidate();
@@ -1072,7 +1078,7 @@ void PluginsPane::ApplyDxTheme(const PreferencesDialogState& state) noexcept
         return;
     }
 
-    const ThemePalette palette = PrefsUi::MakeDxPalette(state.theme);
+    const ThemePalette palette = MakeAppThemeDxPalette(state.theme);
     _pageHostDx->SetTheme(palette);
 }
 
@@ -1514,6 +1520,7 @@ bool PluginsPane::DebugSelectMainListRow(const size_t rowIndex) noexcept
 
     _dxState->page.listControl->GetSelectionModel().SetSingle(rows[rowIndex].stableId);
     OnGridSelectionChanged(*_dxState->page.listControl);
+    _dxState->page.listControl->RefreshAccessibilitySnapshot();
     return true;
 }
 
@@ -1532,6 +1539,7 @@ bool PluginsPane::DebugClickMainListRow(const size_t rowIndex) noexcept
 
     _dxState->page.listControl->GetSelectionModel().SetSingle(rows[rowIndex].stableId);
     OnGridSelectionChanged(*_dxState->page.listControl);
+    _dxState->page.listControl->RefreshAccessibilitySnapshot();
     return true;
 }
 
@@ -1560,6 +1568,7 @@ bool PluginsPane::DebugSelectCustomPathsListRow(const size_t rowIndex) noexcept
 
     _dxState->page.customPathsListControl->GetSelectionModel().SetSingle(rows[rowIndex].stableId);
     OnGridSelectionChanged(*_dxState->page.customPathsListControl);
+    _dxState->page.customPathsListControl->RefreshAccessibilitySnapshot();
     return true;
 }
 

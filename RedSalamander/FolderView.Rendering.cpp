@@ -1,5 +1,6 @@
 #include "FolderViewInternal.h"
 
+#include "DxUi/DxUi.h"
 #include "DxUi/DxUi.FrameRuntime.h"
 #include "DxUi/DxUi.Typography.h"
 #include "FluentIcons.h"
@@ -26,6 +27,21 @@ void PerfEmitCounter(std::wstring_view name, uint64_t value) noexcept
 void PerfEmitDuration(std::wstring_view name, uint64_t durationUs, uint64_t value0 = 0, uint64_t value1 = 0, HRESULT hr = S_OK) noexcept
 {
     Debug::Perf::Emit(name, L"", durationUs, value0, value1, hr);
+}
+
+#ifdef ENABLE_TESTS
+[[nodiscard]] bool ShouldForceFolderViewWarpDevice() noexcept
+{
+    return EnvironmentVariables::IsTruthyFlagSet(L"REDSALAMANDER_FOLDERVIEW_FORCE_WARP");
+}
+#endif
+
+[[nodiscard]] D2D1::ColorF D2DColorFromArgb(uint32_t argb) noexcept
+{
+    return D2D1::ColorF(static_cast<float>((argb >> 16u) & 0xFFu) / 255.0f,
+                        static_cast<float>((argb >> 8u) & 0xFFu) / 255.0f,
+                        static_cast<float>(argb & 0xFFu) / 255.0f,
+                        static_cast<float>((argb >> 24u) & 0xFFu) / 255.0f);
 }
 
 [[nodiscard]] D2D1_INTERPOLATION_MODE ResolveFolderViewIconBitmapInterpolation(D2D1_SIZE_U sourcePixelSize, float destinationSizeDip, float dpi) noexcept
@@ -174,36 +190,30 @@ void FolderView::EnsureDeviceResources()
 
     D3D_FEATURE_LEVEL levels[] = {D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1};
 
-    HRESULT hrDevice = D3D11CreateDevice(nullptr,
-                                         D3D_DRIVER_TYPE_HARDWARE,
-                                         nullptr,
-                                         creationFlags,
-                                         levels,
-                                         std::size(levels),
-                                         D3D11_SDK_VERSION,
-                                         _d3dDevice.addressof(),
-                                         &_featureLevel,
-                                         _d3dContext.addressof());
-    if (FAILED(hrDevice))
-    {
-        hrDevice = D3D11CreateDevice(nullptr,
-                                     D3D_DRIVER_TYPE_WARP,
-                                     nullptr,
-                                     creationFlags,
-                                     levels,
-                                     std::size(levels),
-                                     D3D11_SDK_VERSION,
-                                     _d3dDevice.addressof(),
-                                     &_featureLevel,
-                                     _d3dContext.addressof());
-        if (! CheckHR(hrDevice, L"D3D11CreateDevice (WARP)"))
-        {
-            return;
-        }
-    }
-    else if (! CheckHR(hrDevice, L"D3D11CreateDevice"))
+    bool forceWarp = false;
+#ifdef ENABLE_TESTS
+    forceWarp = ShouldForceFolderViewWarpDevice();
+#endif
+    D3D_DRIVER_TYPE createdDriverType = D3D_DRIVER_TYPE_UNKNOWN;
+    const HRESULT hrDevice = RedSalamander::DxUi::CreateD3D11DeviceWithWarpFallback(creationFlags,
+                                                                                    levels,
+                                                                                    forceWarp,
+                                                                                    _d3dDevice.addressof(),
+                                                                                    &_featureLevel,
+                                                                                    _d3dContext.addressof(),
+                                                                                    &createdDriverType);
+    if (! CheckHR(hrDevice, createdDriverType == D3D_DRIVER_TYPE_WARP ? L"D3D11CreateDevice (WARP)" : L"D3D11CreateDevice"))
     {
         return;
+    }
+    if (forceWarp)
+    {
+        Debug::Info(L"FolderView: D3D WARP device forced by REDSALAMANDER_FOLDERVIEW_FORCE_WARP with feature level {:#06x}",
+                    static_cast<int>(_featureLevel));
+    }
+    else if (createdDriverType == D3D_DRIVER_TYPE_WARP)
+    {
+        Debug::Warning(L"FolderView: D3D hardware device creation fell back to WARP with feature level {:#06x}", static_cast<int>(_featureLevel));
     }
     else
     {
@@ -266,6 +276,27 @@ void FolderView::EnsureDeviceResources()
     }
 }
 
+HRESULT FolderView::CreateFolderViewSolidColorBrush(const D2D1_COLOR_F& color,
+                                                    wil::com_ptr<ID2D1SolidColorBrush>& brush,
+                                                    SolidBrushLifetime lifetime) noexcept
+{
+    if (! _d2dContext)
+    {
+        return E_UNEXPECTED;
+    }
+
+    const HRESULT hr = _d2dContext->CreateSolidColorBrush(color, brush.put());
+#ifdef ENABLE_TESTS
+    if (SUCCEEDED(hr) && lifetime == SolidBrushLifetime::Transient && _debugDrawItemActive)
+    {
+        _debugDrawItemTransientBrushCreateCount.fetch_add(1u, std::memory_order_relaxed);
+    }
+#else
+    static_cast<void>(lifetime);
+#endif
+    return hr;
+}
+
 void FolderView::RecreateThemeBrushes()
 {
     if (! _d2dContext)
@@ -284,6 +315,8 @@ void FolderView::RecreateThemeBrushes()
     _metadataTextBrush.reset();
     _metadataTextUnfocusedBrush.reset();
     _selectionBrush.reset();
+    _hoverBrush.reset();
+    _selectedItemTextBrush.reset();
     _focusedBackgroundBrush.reset();
     _focusBrush.reset();
     _emptyFolderFocusCueBrush.reset();
@@ -295,13 +328,13 @@ void FolderView::RecreateThemeBrushes()
     _incrementalSearchIndicatorAccentBrush.reset();
 
     // Create brushes from theme colors
-    const HRESULT hrBgBrush = _d2dContext->CreateSolidColorBrush(_theme.backgroundColor, _backgroundBrush.addressof());
+    const HRESULT hrBgBrush = CreateFolderViewSolidColorBrush(_theme.backgroundColor, _backgroundBrush, SolidBrushLifetime::Cached);
     if (! CheckHR(hrBgBrush, L"ID2D1DeviceContext::CreateSolidColorBrush(background)"))
     {
         return;
     }
 
-    const HRESULT hrTextBrush = _d2dContext->CreateSolidColorBrush(_theme.textNormal, _textBrush.addressof());
+    const HRESULT hrTextBrush = CreateFolderViewSolidColorBrush(_theme.textNormal, _textBrush, SolidBrushLifetime::Cached);
     if (! CheckHR(hrTextBrush, L"ID2D1DeviceContext::CreateSolidColorBrush(text)"))
     {
         return;
@@ -310,7 +343,7 @@ void FolderView::RecreateThemeBrushes()
     {
         D2D1::ColorF textColor             = _theme.textNormal;
         textColor.a                        = FolderViewVisualState::ResolveNormalTextAlpha(textColor.a, false, false);
-        const HRESULT hrUnfocusedTextBrush = _d2dContext->CreateSolidColorBrush(textColor, _textUnfocusedBrush.addressof());
+        const HRESULT hrUnfocusedTextBrush = CreateFolderViewSolidColorBrush(textColor, _textUnfocusedBrush, SolidBrushLifetime::Cached);
         if (! CheckHR(hrUnfocusedTextBrush, L"ID2D1DeviceContext::CreateSolidColorBrush(unfocused text)"))
         {
             return;
@@ -320,20 +353,20 @@ void FolderView::RecreateThemeBrushes()
     {
         D2D1::ColorF watermarkColor = _theme.textNormal;
         watermarkColor.a            = _theme.darkBase ? 0.07f : 0.04f;
-        const HRESULT hrWatermark   = _d2dContext->CreateSolidColorBrush(watermarkColor, _filterWatermarkBrush.addressof());
+        const HRESULT hrWatermark   = CreateFolderViewSolidColorBrush(watermarkColor, _filterWatermarkBrush, SolidBrushLifetime::Cached);
         static_cast<void>(CheckHR(hrWatermark, L"ID2D1DeviceContext::CreateSolidColorBrush(filter watermark)"));
     }
 
     {
         D2D1::ColorF watermarkColor = _theme.textNormal;
         watermarkColor.a            = 1.0f;
-        const HRESULT hrWatermark   = _d2dContext->CreateSolidColorBrush(watermarkColor, _backgroundWatermarkBrush.addressof());
+        const HRESULT hrWatermark   = CreateFolderViewSolidColorBrush(watermarkColor, _backgroundWatermarkBrush, SolidBrushLifetime::Cached);
         static_cast<void>(CheckHR(hrWatermark, L"ID2D1DeviceContext::CreateSolidColorBrush(background watermark)"));
     }
 
     D2D1::ColorF detailsColor    = _theme.textNormal;
     detailsColor.a               = std::clamp(detailsColor.a * kDetailsTextAlpha, 0.0f, 1.0f);
-    const HRESULT hrDetailsBrush = _d2dContext->CreateSolidColorBrush(detailsColor, _detailsTextBrush.addressof());
+    const HRESULT hrDetailsBrush = CreateFolderViewSolidColorBrush(detailsColor, _detailsTextBrush, SolidBrushLifetime::Cached);
     if (! CheckHR(hrDetailsBrush, L"ID2D1DeviceContext::CreateSolidColorBrush(details text)"))
     {
         return;
@@ -342,7 +375,7 @@ void FolderView::RecreateThemeBrushes()
     {
         D2D1::ColorF unfocusedDetailsColor    = detailsColor;
         unfocusedDetailsColor.a               = FolderViewVisualState::ResolveNormalTextAlpha(unfocusedDetailsColor.a, false, false);
-        const HRESULT hrUnfocusedDetailsBrush = _d2dContext->CreateSolidColorBrush(unfocusedDetailsColor, _detailsTextUnfocusedBrush.addressof());
+        const HRESULT hrUnfocusedDetailsBrush = CreateFolderViewSolidColorBrush(unfocusedDetailsColor, _detailsTextUnfocusedBrush, SolidBrushLifetime::Cached);
         if (! CheckHR(hrUnfocusedDetailsBrush, L"ID2D1DeviceContext::CreateSolidColorBrush(unfocused details text)"))
         {
             return;
@@ -351,7 +384,7 @@ void FolderView::RecreateThemeBrushes()
 
     D2D1::ColorF metadataColor    = _theme.textNormal;
     metadataColor.a               = std::clamp(metadataColor.a * kMetadataTextAlpha, 0.0f, 1.0f);
-    const HRESULT hrMetadataBrush = _d2dContext->CreateSolidColorBrush(metadataColor, _metadataTextBrush.addressof());
+    const HRESULT hrMetadataBrush = CreateFolderViewSolidColorBrush(metadataColor, _metadataTextBrush, SolidBrushLifetime::Cached);
     if (! CheckHR(hrMetadataBrush, L"ID2D1DeviceContext::CreateSolidColorBrush(metadata text)"))
     {
         return;
@@ -360,32 +393,44 @@ void FolderView::RecreateThemeBrushes()
     {
         D2D1::ColorF unfocusedMetadataColor    = metadataColor;
         unfocusedMetadataColor.a               = FolderViewVisualState::ResolveNormalTextAlpha(unfocusedMetadataColor.a, false, false);
-        const HRESULT hrUnfocusedMetadataBrush = _d2dContext->CreateSolidColorBrush(unfocusedMetadataColor, _metadataTextUnfocusedBrush.addressof());
+        const HRESULT hrUnfocusedMetadataBrush = CreateFolderViewSolidColorBrush(unfocusedMetadataColor, _metadataTextUnfocusedBrush, SolidBrushLifetime::Cached);
         if (! CheckHR(hrUnfocusedMetadataBrush, L"ID2D1DeviceContext::CreateSolidColorBrush(unfocused metadata text)"))
         {
             return;
         }
     }
 
-    const HRESULT hrSelBrush = _d2dContext->CreateSolidColorBrush(_theme.itemBackgroundSelected, _selectionBrush.addressof());
+    const HRESULT hrSelBrush = CreateFolderViewSolidColorBrush(_theme.itemBackgroundSelected, _selectionBrush, SolidBrushLifetime::Cached);
     if (! CheckHR(hrSelBrush, L"ID2D1DeviceContext::CreateSolidColorBrush(selection)"))
     {
         return;
     }
 
-    const HRESULT hrFocusedBgBrush = _d2dContext->CreateSolidColorBrush(_theme.itemBackgroundFocused, _focusedBackgroundBrush.addressof());
+    const HRESULT hrHoverBrush = CreateFolderViewSolidColorBrush(_theme.itemBackgroundHovered, _hoverBrush, SolidBrushLifetime::Cached);
+    if (! CheckHR(hrHoverBrush, L"ID2D1DeviceContext::CreateSolidColorBrush(hover)"))
+    {
+        return;
+    }
+
+    const HRESULT hrSelectedTextBrush = CreateFolderViewSolidColorBrush(_theme.textSelected, _selectedItemTextBrush, SolidBrushLifetime::Cached);
+    if (! CheckHR(hrSelectedTextBrush, L"ID2D1DeviceContext::CreateSolidColorBrush(selected item text)"))
+    {
+        return;
+    }
+
+    const HRESULT hrFocusedBgBrush = CreateFolderViewSolidColorBrush(_theme.itemBackgroundFocused, _focusedBackgroundBrush, SolidBrushLifetime::Cached);
     if (! CheckHR(hrFocusedBgBrush, L"ID2D1DeviceContext::CreateSolidColorBrush(focused background)"))
     {
         return;
     }
 
-    const HRESULT hrFocusBrush = _d2dContext->CreateSolidColorBrush(_theme.focusBorder, _focusBrush.addressof());
+    const HRESULT hrFocusBrush = CreateFolderViewSolidColorBrush(_theme.focusBorder, _focusBrush, SolidBrushLifetime::Cached);
     if (! CheckHR(hrFocusBrush, L"ID2D1DeviceContext::CreateSolidColorBrush(focus)"))
     {
         return;
     }
 
-    const HRESULT hrIncrementalSearchBrush = _d2dContext->CreateSolidColorBrush(_theme.textSelected, _incrementalSearchHighlightBrush.addressof());
+    const HRESULT hrIncrementalSearchBrush = CreateFolderViewSolidColorBrush(_theme.textSelected, _incrementalSearchHighlightBrush, SolidBrushLifetime::Cached);
     if (! CheckHR(hrIncrementalSearchBrush, L"ID2D1DeviceContext::CreateSolidColorBrush(incremental search highlight text)"))
     {
         return;
@@ -414,19 +459,24 @@ void FolderView::RecreateThemeBrushes()
 
     D2D1::ColorF indicatorShadow = D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f);
 
-    const HRESULT hrIndicatorBg = _d2dContext->CreateSolidColorBrush(indicatorBackground, _incrementalSearchIndicatorBackgroundBrush.addressof());
+    const HRESULT hrIndicatorBg =
+        CreateFolderViewSolidColorBrush(indicatorBackground, _incrementalSearchIndicatorBackgroundBrush, SolidBrushLifetime::Cached);
     static_cast<void>(CheckHR(hrIndicatorBg, L"ID2D1DeviceContext::CreateSolidColorBrush(incremental search indicator background)"));
 
-    const HRESULT hrIndicatorBorder = _d2dContext->CreateSolidColorBrush(_theme.focusBorder, _incrementalSearchIndicatorBorderBrush.addressof());
+    const HRESULT hrIndicatorBorder =
+        CreateFolderViewSolidColorBrush(_theme.focusBorder, _incrementalSearchIndicatorBorderBrush, SolidBrushLifetime::Cached);
     static_cast<void>(CheckHR(hrIndicatorBorder, L"ID2D1DeviceContext::CreateSolidColorBrush(incremental search indicator border)"));
 
-    const HRESULT hrIndicatorText = _d2dContext->CreateSolidColorBrush(indicatorText, _incrementalSearchIndicatorTextBrush.addressof());
+    const HRESULT hrIndicatorText =
+        CreateFolderViewSolidColorBrush(indicatorText, _incrementalSearchIndicatorTextBrush, SolidBrushLifetime::Cached);
     static_cast<void>(CheckHR(hrIndicatorText, L"ID2D1DeviceContext::CreateSolidColorBrush(incremental search indicator text)"));
 
-    const HRESULT hrIndicatorShadow = _d2dContext->CreateSolidColorBrush(indicatorShadow, _incrementalSearchIndicatorShadowBrush.addressof());
+    const HRESULT hrIndicatorShadow =
+        CreateFolderViewSolidColorBrush(indicatorShadow, _incrementalSearchIndicatorShadowBrush, SolidBrushLifetime::Cached);
     static_cast<void>(CheckHR(hrIndicatorShadow, L"ID2D1DeviceContext::CreateSolidColorBrush(incremental search indicator shadow)"));
 
-    const HRESULT hrIndicatorAccent = _d2dContext->CreateSolidColorBrush(_theme.focusBorder, _incrementalSearchIndicatorAccentBrush.addressof());
+    const HRESULT hrIndicatorAccent =
+        CreateFolderViewSolidColorBrush(_theme.focusBorder, _incrementalSearchIndicatorAccentBrush, SolidBrushLifetime::Cached);
     static_cast<void>(CheckHR(hrIndicatorAccent, L"ID2D1DeviceContext::CreateSolidColorBrush(incremental search indicator accent)"));
 }
 
@@ -679,6 +729,8 @@ void FolderView::DiscardDeviceResources()
     _textBrush.reset();
     _textUnfocusedBrush.reset();
     _selectionBrush.reset();
+    _hoverBrush.reset();
+    _selectedItemTextBrush.reset();
     _focusedBackgroundBrush.reset();
     _focusBrush.reset();
     _emptyFolderFocusCueBrush.reset();
@@ -958,6 +1010,7 @@ void FolderView::Render(const RECT& invalidRect)
     if (! _d2dContext || ! _d2dTarget)
     {
         Debug::Warning(L"FolderView::Render skipped - no valid render target");
+        ClearPendingPaintMetricsOnFailedFrame();
         return;
     }
 
@@ -999,6 +1052,35 @@ void FolderView::Render(const RECT& invalidRect)
         }
         PerfEmitCounter(L"dwrite.text_layout.frame_create_count", _frameTextLayoutCreateCount);
     });
+
+    auto recoverFromDeviceLoss = [&](std::wstring_view operation, HRESULT failureHr)
+    {
+        DiscardDeviceResources();
+        _forceFullRenderOnNextPaint = true;
+#ifdef ENABLE_TESTS
+        ++_debugDeviceLossRecoveryCount;
+        bool d2dDeviceDiscarded = false;
+        {
+            std::lock_guard lock(_d2dDeviceMutex);
+            d2dDeviceDiscarded = _d2dDevice == nullptr;
+        }
+        const bool discardedResources = _d3dDevice == nullptr && _d3dContext == nullptr && _d2dFactory == nullptr && d2dDeviceDiscarded &&
+                                        _d2dContext == nullptr && _d2dTarget == nullptr;
+        if (discardedResources)
+        {
+            ++_debugDeviceLossDiscardedResourcesCount;
+        }
+        SelfTest::AppendSelfTestTrace(std::format(L"FolderView::Render: recovered from device loss operation={} hr=0x{:08X} discarded={}",
+                                                  operation,
+                                                  static_cast<unsigned>(failureHr),
+                                                  discardedResources ? L"yes" : L"no"));
+#endif
+        Debug::Perf::Emit(L"folder.render.device_loss_recovery_count", operation, 0, 1u, 0, failureHr);
+        if (_hWnd)
+        {
+            InvalidateRect(_hWnd.get(), nullptr, FALSE);
+        }
+    };
 
     RECT paintRect = invalidRect;
     if (paintRect.right <= paintRect.left || paintRect.bottom <= paintRect.top)
@@ -1474,7 +1556,8 @@ void FolderView::Render(const RECT& invalidRect)
                     {
                         cueTextColor.a = FolderViewVisualState::ResolveNormalTextAlpha(cueTextColor.a, false, false);
                     }
-                    if (! _emptyFolderFocusCueBrush && FAILED(_d2dContext->CreateSolidColorBrush(cueTextColor, _emptyFolderFocusCueBrush.addressof())))
+                    if (! _emptyFolderFocusCueBrush &&
+                        FAILED(CreateFolderViewSolidColorBrush(cueTextColor, _emptyFolderFocusCueBrush, SolidBrushLifetime::Cached)))
                     {
                         return;
                     }
@@ -1871,22 +1954,29 @@ void FolderView::Render(const RECT& invalidRect)
     PerfEmitCounter(L"render.incremental_search_effect_updates", drawStats.incrementalSearchUpdates);
 #ifdef ENABLE_TESTS
     _debugIncrementalSearchEffectUpdateCount += drawStats.incrementalSearchUpdates;
+    if (const std::optional<HRESULT> forcedEndDraw = DebugConsumeNextRenderFailure(DebugRenderFailurePoint::EndDraw); forcedEndDraw.has_value())
+    {
+        hr            = forcedEndDraw.value();
+        folderFrameHr = hr;
+        SelfTest::AppendSelfTestTrace(std::format(L"FolderView::Render: forced EndDraw hr=0x{:08X}", static_cast<unsigned>(hr)));
+    }
 #endif
 
     if (FAILED(hr))
     {
+        ClearPendingPaintMetricsOnFailedFrame();
         ReportError(L"ID2D1DeviceContext::EndDraw", hr);
+        if (RedSalamander::DxUi::IsDeviceLossHResult(hr))
+        {
+            recoverFromDeviceLoss(L"ID2D1DeviceContext::EndDraw", hr);
+            return;
+        }
         ReleaseSwapChain();
         EnsureSwapChain();
+        return;
     }
     else if (_supportsPresent1 && _swapChain)
     {
-#ifdef ENABLE_TESTS
-        if (IsNameFilterActive())
-        {
-            SelfTest::AppendSelfTestTrace(std::format(L"FolderView::Render: before Present1 itemsDrawn={}", itemsDrawn));
-        }
-#endif
         DXGI_PRESENT_PARAMETERS params{};
         params.DirtyRectsCount            = 1;
         params.pDirtyRects                = &paintRect;
@@ -1895,6 +1985,15 @@ void FolderView::Render(const RECT& invalidRect)
         const auto presentStart           = std::chrono::steady_clock::now();
         const auto folderPresentStartedAt = frameClock.Now();
         HRESULT hrPresent                 = S_OK;
+#ifdef ENABLE_TESTS
+        const std::optional<HRESULT> forcedPresent = DebugConsumeNextRenderFailure(DebugRenderFailurePoint::Present);
+        if (forcedPresent.has_value())
+        {
+            hrPresent = forcedPresent.value();
+            SelfTest::AppendSelfTestTrace(std::format(L"FolderView::Render: forced Present1 hr=0x{:08X}", static_cast<unsigned>(hrPresent)));
+        }
+        else
+#endif
         {
             RedSalamander::DxUi::FrameStageScope presentScope(frameStage, RedSalamander::DxUi::FrameStage::Present);
             hrPresent = _swapChain->Present1(1, 0, &params);
@@ -1903,15 +2002,15 @@ void FolderView::Render(const RECT& invalidRect)
         folderPresentAttempted = true;
         folderFrameHr          = hrPresent;
         PerfEmitDuration(L"render.present_us", PerfElapsedUs(presentStart), dirtyAreaPx, itemsDrawn, hrPresent);
-#ifdef ENABLE_TESTS
-        if (IsNameFilterActive())
-        {
-            SelfTest::AppendSelfTestTrace(std::format(L"FolderView::Render: after Present1 hr=0x{:08X}", static_cast<unsigned>(hrPresent)));
-        }
-#endif
         if (FAILED(hrPresent))
         {
+            ClearPendingPaintMetricsOnFailedFrame();
             ReportError(L"IDXGISwapChain1::Present1", hrPresent);
+            if (RedSalamander::DxUi::IsDeviceLossHResult(hrPresent))
+            {
+                recoverFromDeviceLoss(L"IDXGISwapChain1::Present1", hrPresent);
+                return;
+            }
             ReleaseSwapChain();
             EnsureSwapChain();
             return;
@@ -1919,12 +2018,22 @@ void FolderView::Render(const RECT& invalidRect)
         _forceFullRenderOnNextPaint = false;
         ClearErrorOverlay(ErrorOverlayKind::Rendering);
         EmitPendingInputToPaintMetricAfterPresent();
+        EmitPendingRefreshToPaintMetricAfterPresent();
     }
     else if (_swapChainLegacy)
     {
         const auto presentStart           = std::chrono::steady_clock::now();
         const auto folderPresentStartedAt = frameClock.Now();
         HRESULT hrPresent                 = S_OK;
+#ifdef ENABLE_TESTS
+        const std::optional<HRESULT> forcedPresent = DebugConsumeNextRenderFailure(DebugRenderFailurePoint::Present);
+        if (forcedPresent.has_value())
+        {
+            hrPresent = forcedPresent.value();
+            SelfTest::AppendSelfTestTrace(std::format(L"FolderView::Render: forced legacy Present hr=0x{:08X}", static_cast<unsigned>(hrPresent)));
+        }
+        else
+#endif
         {
             RedSalamander::DxUi::FrameStageScope presentScope(frameStage, RedSalamander::DxUi::FrameStage::Present);
             hrPresent = _swapChainLegacy->Present(1, 0);
@@ -1935,7 +2044,13 @@ void FolderView::Render(const RECT& invalidRect)
         PerfEmitDuration(L"render.present_us", PerfElapsedUs(presentStart), dirtyAreaPx, itemsDrawn, hrPresent);
         if (FAILED(hrPresent))
         {
+            ClearPendingPaintMetricsOnFailedFrame();
             ReportError(L"IDXGISwapChain::Present", hrPresent);
+            if (RedSalamander::DxUi::IsDeviceLossHResult(hrPresent))
+            {
+                recoverFromDeviceLoss(L"IDXGISwapChain::Present", hrPresent);
+                return;
+            }
             ReleaseSwapChain();
             EnsureSwapChain();
             return;
@@ -1943,6 +2058,7 @@ void FolderView::Render(const RECT& invalidRect)
         _forceFullRenderOnNextPaint = false;
         ClearErrorOverlay(ErrorOverlayKind::Rendering);
         EmitPendingInputToPaintMetricAfterPresent();
+        EmitPendingRefreshToPaintMetricAfterPresent();
     }
 }
 
@@ -2128,6 +2244,9 @@ void FolderView::DrawItem(FolderItem& item, DrawItemPerfStats* perfStats)
     const auto drawStart = std::chrono::steady_clock::now();
     auto emitPerf        = wil::scope_exit([&] { PerfEmitDuration(L"render.draw_item_us", PerfElapsedUs(drawStart)); });
 #ifdef ENABLE_TESTS
+    const bool previousDrawItemActive = _debugDrawItemActive;
+    _debugDrawItemActive              = true;
+    const auto restoreDrawItemActive  = wil::scope_exit([&] { _debugDrawItemActive = previousDrawItemActive; });
     if (IsNameFilterActive())
     {
         SelfTest::AppendSelfTestTrace(std::format(L"FolderView::DrawItem: begin name='{}' hasIcon={} selected={} focused={}",
@@ -2196,9 +2315,22 @@ void FolderView::DrawItem(FolderItem& item, DrawItemPerfStats* perfStats)
 
     D2D1::ColorF selectionBackground            = _theme.itemBackgroundSelected;
     D2D1::ColorF selectionBackgroundForContrast = selectionBackground;
+    bool selectionUsesRuntimeColor              = false;
     if (item.selected)
     {
-        if (_theme.rainbowMode)
+        if (_theme.itemBackgroundSelectedDynamic.has_value())
+        {
+            const uint32_t argb = Common::Settings::EvaluateDynamicThemeColor(
+                _theme.itemBackgroundSelectedDynamic.value(),
+                Common::Settings::ThemeRuntimeContext{.seedHash32 = item.stableHash32, .highContrast = _appTheme.highContrast});
+            selectionBackground = D2DColorFromArgb(argb);
+            if (! selectionActive)
+            {
+                selectionBackground.a = std::clamp(_theme.itemBackgroundSelectedInactive.a, 0.0f, 1.0f);
+            }
+            selectionUsesRuntimeColor = true;
+        }
+        else if (_theme.itemBackgroundSelectedUsesInheritedRainbow)
         {
             const uint32_t hash = item.stableHash32;
             const float hue     = static_cast<float>(hash % 360u);
@@ -2207,6 +2339,7 @@ void FolderView::DrawItem(FolderItem& item, DrawItemPerfStats* perfStats)
             selectionBackground = ColorFromHSV(hue, sat, val);
             selectionBackground.a =
                 selectionActive ? std::clamp(_theme.itemBackgroundSelected.a, 0.0f, 1.0f) : std::clamp(_theme.itemBackgroundSelectedInactive.a, 0.0f, 1.0f);
+            selectionUsesRuntimeColor = true;
         }
         else
         {
@@ -2245,15 +2378,10 @@ void FolderView::DrawItem(FolderItem& item, DrawItemPerfStats* perfStats)
             _d2dContext->FillRoundedRectangle(roundedBounds, _focusedBackgroundBrush.get());
         }
     }
-    else if (isHovered)
+    else if (isHovered && _hoverBrush)
     {
-        // Create temporary brush for hover state
-        wil::com_ptr<ID2D1SolidColorBrush> hoverBrush;
-        const HRESULT hrHover = _d2dContext->CreateSolidColorBrush(_theme.itemBackgroundHovered, hoverBrush.addressof());
-        if (SUCCEEDED(hrHover) && hoverBrush)
-        {
-            _d2dContext->FillRoundedRectangle(roundedBounds, hoverBrush.get());
-        }
+        _hoverBrush->SetColor(_theme.itemBackgroundHovered);
+        _d2dContext->FillRoundedRectangle(roundedBounds, _hoverBrush.get());
     }
 
     // Draw focus border
@@ -2380,22 +2508,18 @@ void FolderView::DrawItem(FolderItem& item, DrawItemPerfStats* perfStats)
 
     // Select text brush based on selection state
     ID2D1SolidColorBrush* textBrush = (! _paneFocused && _textUnfocusedBrush) ? _textUnfocusedBrush.get() : _textBrush.get();
-    wil::com_ptr<ID2D1SolidColorBrush> selectedTextBrush;
-    if (item.selected)
+    if (item.selected && _selectedItemTextBrush)
     {
         D2D1::ColorF selectedTextColor = selectionActive ? _theme.textSelected : _theme.textSelectedInactive;
-        if (_theme.rainbowMode)
+        if (selectionUsesRuntimeColor)
         {
             const float luminance =
                 0.2126f * selectionBackgroundForContrast.r + 0.7152f * selectionBackgroundForContrast.g + 0.0722f * selectionBackgroundForContrast.b;
             selectedTextColor = luminance > 0.60f ? D2D1::ColorF(D2D1::ColorF::Black) : D2D1::ColorF(D2D1::ColorF::White);
         }
 
-        const HRESULT hrSelText = _d2dContext->CreateSolidColorBrush(selectedTextColor, selectedTextBrush.addressof());
-        if (SUCCEEDED(hrSelText) && selectedTextBrush)
-        {
-            textBrush = selectedTextBrush.get();
-        }
+        _selectedItemTextBrush->SetColor(selectedTextColor);
+        textBrush = _selectedItemTextBrush.get();
     }
 
     auto drawIncrementalSearchHighlight = [&](D2D1_POINT_2F origin, const DWRITE_TEXT_RANGE& highlightRange) noexcept

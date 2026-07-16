@@ -33,6 +33,10 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::CreateDirectory(const wchar_t* path) noe
     const HRESULT hrAttr = GetAttributes(path, &attrs);
     if (SUCCEEDED(hrAttr))
     {
+        if ((attrs & FILE_ATTRIBUTE_DIRECTORY) != 0u)
+        {
+            RememberWritableDirectoryValidation(path);
+        }
         return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
     }
 
@@ -40,6 +44,7 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::CreateDirectory(const wchar_t* path) noe
     {
         // S3 has no intrinsic directories; creating is a no-op.
         NotifySyntheticPathCreated(path);
+        RememberWritableDirectoryValidation(path);
         return S_OK;
     }
 

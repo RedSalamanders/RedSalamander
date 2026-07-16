@@ -111,7 +111,7 @@ RedSalamander.exe has no `main.cpp`; the entry point is `wWinMain` in `RedSalama
 
 #### Boot sequence
 
-`RunApplication` parses argv (`--help`, `--crash-test`, `--etw`, `--perf[=PATH]`, and `ENABLE_TESTS`-only `--selftest*`), opens a `Debug::Perf::Scope` named `App.Startup.UntilMessageLoop`, and calls `StartupMetrics::Initialize()` to stamp `t0`. It then, in order: `CoInitializeEx(COINIT_APARTMENTTHREADED)`; loads themes; loads settings via `Common::Settings::LoadSettingsWithRecoveryInfo`; runs `CrashQuarantine::OfferPluginDisableIfPreviousCrashDetected`; arms the delayed splash; warms `NavigationView` device resources and the icon cache on the thread pool; initializes shortcuts, file-system and viewer plugin managers; and finally `InitInstance` creates the main window. After `LoadAccelerators`, `startupPerf` is reset and the `GetMessage` loop runs. Two `wil::scope_exit` guards (`comCleanup`, `shutdownProcessSingletons`) tear down COM and process singletons (closing the splash, sweeping DxUi window hosts) on every exit path.
+`RunApplication` parses argv (`--help`, `--crash-test`, `--etw`, `--perf[=PATH]`, and `ENABLE_TESTS`-only `--selftest*`), opens a `Debug::Perf::Scope` named `App.Startup.UntilMessageLoop`, and calls `StartupMetrics::Initialize()` to stamp `t0`. It then, in order: `CoInitializeEx(COINIT_APARTMENTTHREADED)`; loads themes; loads settings via `Common::Settings::LoadSettingsWithRecoveryInfo`; runs `CrashQuarantine::OfferPluginDisableIfPreviousCrashDetected`; arms the delayed splash; warms `NavigationView` device resources and the icon cache on the thread pool; initializes shortcuts, file-system and viewer plugin managers; and finally `InitInstance` creates the main window. After `LoadAccelerators`, `startupPerf` is reset and the `GetMessage` loop runs. Two `wil::scope_exit` guards (`comCleanup`, `shutdownProcessSingletons`) tear down COM and process singletons (closing the splash, sweeping DxUi window hosts and the current-thread native text-input TSF manager) on every exit path.
 
 #### Startup metrics & lifecycle markers
 
@@ -419,7 +419,7 @@ Everything — render, hit-test, focus, capture, animation — is UI-thread-only
 - Store `WindowHost` in stable storage; route the owner WndProc through `HandleMessage` and always `Detach()` on `WM_NCDESTROY` before destroying owner state.
 - Grid/tree models are non-owning and must outlive the control; never read/mutate them off-thread.
 - Extend by subclassing `Control`/`Panel` or implementing `IDxGridModel`/`IDxGridDelegate`; add a `ThemePalette` token in `DxUi.Theme.cpp` rather than hardcoding colors.
-- Gotchas: no Win32 background brush (DxUi paints its own surface); hidden hosts must not present (`IsHostWindowEffectivelyVisible`); `TextInputBackend` is `Native` only — do not reintroduce hidden edit/RichEdit backers.
+- Gotchas: no Win32 background brush (DxUi paints its own surface); hidden hosts must not present (`IsHostWindowEffectivelyVisible`); `TextInputBackend` is `Native` only — do not reintroduce hidden edit/RichEdit backers; keep TSF `ITfThreadMgr` active at UI-thread scope and shut it down through `ShutdownNativeTextInputForCurrentThread()`, not per modal prompt or focus cycle.
 
 ### Settings & SettingsStore: schema, hot reload, migration
 
@@ -609,27 +609,33 @@ Both the reveal path (`VerifySecretRevealForProfile` in the window) and the plug
 
 See [Connections.md](Connections.md) and `Specs/UI/UI_TopLevelToolWindows.md` for the window contract.
 
-### Theming (AppTheme) & the Preferences Dialog
+### Theming (version 2 authored themes, AppTheme, and Preferences)
 
-_How AppTheme resolves a full color palette from a ThemeMode plus overrides, how it feeds GDI/D2D/DWM surfaces, and how the modeless Preferences dialog hosts per-category pages and previews/commits theme changes._
+_How the shared version 2 theme model resolves palettes, references, static/event/paint functions, and Rainbow inheritance into the `AppTheme` consumed by GDI/D2D/DWM surfaces._
 
-RedSalamander has a single source of truth for color: the `AppTheme` struct. Theming code converts a high-level intent (a `ThemeMode` plus optional per-key overrides) into a fully populated palette; the Preferences dialog is the main editor and live previewer of that palette.
+Theme input has one shared representation and parser. `Common::Settings::ThemeDefinition` requires `formatVersion == 2` and stores authored `ThemeColorSource` values in both `palette` and semantic `colors` maps. `ThemeDefinitionIo` reads/writes that representation losslessly; there is no version-1 reader or flattened compatibility writer. `ThemeExpression` parses, validates, formats, resolves dependencies, reports cycles/missing references/limits, and compiles allowlisted paint-time sources. Runtime adapters then apply `ResolvedThemeColors` to value-typed `AppTheme` and Monitor theme structures.
 
 #### What this part does
 
-`AppTheme` (`RedSalamander/AppTheme.h`) aggregates sub-themes for each surface: `FolderViewTheme`, `NavigationViewTheme`, `MenuTheme`, `TitleBarTheme`, `FileOperationsTheme`, `ViewerDiffTheme`, plus scalar fields (`dark`, `highContrast`, `accent`, `compactMode`, `reducedMotionOverride`, `primaryWindowBackdrop`/`toolWindowBackdrop`, `windowBackground`). `ResolveAppTheme(requestedMode, rainbowSeed, accentOverride)` in `AppTheme.cpp` is the factory: it consults Windows state (`IsHighContrastEnabled`, `IsSystemDarkModeEnabled`, `GetSystemAccentColor` via DWM), picks the right `Make*Theme{Light,Dark,HighContrast,AppHighContrast,Rainbow}` builder per surface, and returns a value-typed `AppTheme`. Five `ThemeMode` values exist: `System, Light, Dark, Rainbow, HighContrast`. High contrast splits into *system* (uses `GetSysColor`) versus *app* (black/yellow), and Rainbow derives the accent hue from a stable FNV-1a hash (`StableHash32`) of a seed.
+`AppTheme` (`RedSalamander/AppTheme.h`) aggregates sub-themes for each surface: `FolderViewTheme`, `NavigationViewTheme`, `MenuTheme`, `TitleBarTheme`, `FileOperationsTheme`, `ViewerDiffTheme`, plus scalar fields (`dark`, `highContrast`, `accent`, `compactMode`, `reducedMotionOverride`, backdrop types, and `windowBackground`). `ResolveAppTheme(requestedMode, rainbowSeed, accentOverride)` constructs the built-in base. `MakeAppThemeResolutionContext` exposes inherited semantic values and system colors to `ResolveThemeDefinition`; the resolved static map and immutable compiled programs are then applied atomically. System High Contrast wins before authored or Rainbow colors.
+
+Five built-in `ThemeMode` values exist: `System`, `Light`, `Dark`, `Rainbow`, and `HighContrast`. Rainbow follows the effective Windows light/dark base, derives repeatable colors from stable 32-bit hashes, and retains application-wide plugin/viewer Rainbow flags only when the base is `builtin/rainbow`. A static authored value suppresses inherited Rainbow for that one token. Other bases may use an allowlisted `seededRainbow`/`seededChoice` token without enabling unrelated Rainbow surfaces.
 
 #### Architecture and key files
 
 | File | Role |
 |------|------|
-| `AppTheme.h/.cpp` | Palette model + `ResolveAppTheme`, DWM helpers `ApplyTitleBarTheme`/`ApplyWindowBackdropTheme`/`ApplyWindowChromeTheme` |
+| `Common/ThemeExpression.h`, `Common/Common/ThemeExpression.cpp` | Authored source model, parser/formatter, graph resolver, dependency maps, system/perceptual functions, compiled dynamic evaluator |
+| `Common/ThemeDefinitionIo.h`, `Common/Common/ThemeDefinitionIo.cpp` | Strict standalone and lenient inline version 2 JSON5 I/O |
+| `Common/SettingsStore.h`, `Common/Common/SettingsStore.cpp` | Inline user-theme persistence and opaque recovery for unusable entries |
+| `AppTheme.h/.cpp` | Built-in base palette, shared resolution context, resolved override application, dynamic programs, DWM helpers |
 | `DxUiThemePalette.h` | `MakeAppThemeDxPalette` — adapts `AppTheme` to `DxUi::ThemePalette` (see [DxUi.md](DxUi.md)) |
 | `ThemedInputFrames.h/.cpp` | Subclasses native edit/combo controls + their frame to paint themed borders/backgrounds via D2D-on-HDC |
 | `Preferences.h/.cpp` | Public `ShowPreferencesDialog*` entry points + `UpdatePreferencesWindowsTheme` |
 | `Preferences.Dialog.cpp` | Modeless shell: category tree, scrollable page host, OK/Cancel/Apply, per-page dispatch |
 | `Preferences.Internal.h` | `PreferencesDialogState`, `PrefCategory`, layout constants, per-namespace settings accessors |
-| `Preferences.Themes.cpp` | Themes page: theme list, color-override grid, `ApplyThemeTemporarily`, file/user theme management |
+| `Preferences.Themes.cpp` | Lossless theme list/duplicate/reset/import/export and temporary application |
+| `RedConfigure/Themes/ThemePreviewModel.*` | Advanced palette/source editing, dependency inspection, fixed-seed preview resolution |
 
 `ColorFromCOLORREF`/`ColorToCOLORREF` bridge GDI `COLORREF` and D2D `D2D1::ColorF`. `MakeAppThemeDxPalette` mixes accent into hovered/pressed states and selects the overlay material (Mica/MicaAlt/Acrylic/Solid) from the backdrop type.
 
@@ -641,11 +647,13 @@ Settings use a two-copy model in `PreferencesDialogState`: `baselineSettings` vs
 
 #### Theme preview and commit
 
-The Themes page edits `workingSettings.theme` (a `Common::Settings::ThemeDefinition` with `baseThemeId` + a `colors` override map). `ApplyThemeTemporarily` (Preferences.Themes.cpp ~1936) copies the working theme into the live `*state.settings`, sets `previewApplied`, re-runs `ResolveAppTheme` (`ResolveThemeFromSettingsForDialog`), repaints, and posts `WndMsg::kSettingsApplied` to `state.owner`. `RestorePreviewAppliedPreferencesOnCancel` reverts `settings->theme` to baseline on Cancel. The owner (FolderWindow) re-themes itself; the dialog itself is re-themed via `UpdatePreferencesWindowsTheme` → `RefreshPreferencesDialogTheme`.
+The Themes page edits `workingSettings.theme`, preserving `palette` and `colors` source objects through duplicate, reset, import, and export. `ApplyThemeTemporarily` copies the working selection into live settings, resolves the complete graph before replacement, repaints, and posts `WndMsg::kSettingsApplied` to the owner. `RestorePreviewAppliedPreferencesOnCancel` restores the baseline selection. Advanced graph authoring remains RedConfigure-owned so Preferences does not maintain a second expression designer.
+
+Static and event-time sources resolve on theme application or the relevant system color/theme notification. Paint-time `seededRainbow` and `seededChoice` programs are parsed and compiled during resolution; `EvaluateDynamicThemeColor` receives only the stable runtime hash and performs no parsing, allocation, locking, system query, callback, or I/O. Theme/settings hot reload builds a complete replacement first and retains the last valid live theme on failure.
 
 #### Threading, invariants, gotchas
 
-All theme application and palette resolution is **UI-thread only**; `ResolveAppTheme` reads `GetSysColor`/DWM. Theme resources held in state (`backgroundBrush`, `cardBrush`, `inputBrush`…) are `wil::unique_hbrush` (RAII). `ResolveAppTheme` returns by value — never cache a stale `AppTheme&` across a theme change. `ThemedInputFrames::InstallFrame`/`InstallControl` subclass native HWNDs; their original WndProcs are stored as window props and must be restored. Color-key strings in the override grid (e.g. `viewer.diff.divider`) must match the keys `ApplyAppThemeOverrides` recognizes, otherwise edits are silently ignored. See `Specs/UI/UI_VisualStyle.md` and `Specs/UI/UI_PreferencesDialog.md`.
+Theme application and event-time system-color resolution are **UI-thread only**. Theme resources held in state (`backgroundBrush`, `cardBrush`, `inputBrush`…) are `wil::unique_hbrush` (RAII). Never retain a stale `AppTheme&` or a pointer into a prior `ResolvedThemeColors` across selection/hot reload. Paint consumers may read only the immutable compiled program owned by the atomically installed theme. Semantic keys must be real runtime keys recognized by all intended adapters; preview-only aliases are forbidden. See `Specs/Core/Core_SettingsStore.md`, `Specs/Core/Core_RedConfigure.md`, `Specs/UI/UI_VisualStyle.md`, and `Specs/UI/UI_PreferencesDialog.md`.
 
 ### Diagnostics: ETW/TraceLogging, Debug Logging & Monitor
 

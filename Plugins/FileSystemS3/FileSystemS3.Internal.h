@@ -227,6 +227,10 @@ template <typename AwsErrors> [[nodiscard]] HRESULT HresultFromAwsError(const Aw
     {
         return HRESULT_FROM_WIN32(ERROR_TIMEOUT);
     }
+    if (code == HttpResponseCode::PRECONDITION_FAILED || code == HttpResponseCode::REQUESTED_RANGE_NOT_SATISFIABLE)
+    {
+        return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+    }
 
     const int errType = static_cast<int>(err.GetErrorType());
     if (errType == static_cast<int>(Aws::Client::CoreErrors::NETWORK_CONNECTION))
@@ -271,6 +275,12 @@ template <typename AwsErrors> [[nodiscard]] HRESULT HresultFromAwsError(const Aw
                                             uint64_t& outSizeBytes,
                                             __int64& outLastWriteTime,
                                             bool& outFound) noexcept;
+[[nodiscard]] HRESULT ValidateS3RangeResponseLength(uint64_t expectedBytes, long long responseContentLength, uint64_t bodyBytesRead) noexcept;
+
+#if defined(_DEBUG)
+void RunDebugRangeReadContractSelfTest(unsigned int& passed, unsigned int& failed) noexcept;
+void RunDebugMultipartWriterContractSelfTest(unsigned int& passed, unsigned int& failed) noexcept;
+#endif
 
 [[nodiscard]] constexpr std::wstring_view CoreErrorNameFromInt(int code) noexcept
 {

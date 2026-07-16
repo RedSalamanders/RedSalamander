@@ -3,6 +3,7 @@
 #include "DxUi.h"
 #include "Helpers.h"
 #include "WindowMessages.h"
+#include "WindowSizing.h"
 #include "resource.h"
 
 #include <algorithm>
@@ -57,11 +58,6 @@ std::jthread g_workerThread;
 [[nodiscard]] D2D1_COLOR_F Rgba(float red, float green, float blue, float alpha = 1.0f) noexcept
 {
     return D2D1::ColorF(red / 255.0f, green / 255.0f, blue / 255.0f, alpha);
-}
-
-[[nodiscard]] int ScaleDip(int dip, UINT dpi) noexcept
-{
-    return ::MulDiv(dip, static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI);
 }
 
 [[nodiscard]] std::wstring LoadAppString(HINSTANCE instance, UINT resourceId)
@@ -229,11 +225,11 @@ private:
 void UpdateSplashWindowSize(HWND hwnd) noexcept
 {
     const UINT dpi     = ::GetDpiForWindow(hwnd);
-    const int widthPx  = ScaleDip(kSplashWidthDip, dpi);
-    const int heightPx = ScaleDip(kSplashHeightDip, dpi);
+    const int widthPx  = Common::WindowSizing::DipToPixelRounded(dpi, kSplashWidthDip);
+    const int heightPx = Common::WindowSizing::DipToPixelRounded(dpi, kSplashHeightDip);
     ::SetWindowPos(hwnd, nullptr, 0, 0, widthPx, heightPx, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
 
-    const int radius = ScaleDip(kSplashRadiusDip, dpi);
+    const int radius = Common::WindowSizing::DipToPixelRounded(dpi, kSplashRadiusDip);
     wil::unique_hrgn region(::CreateRoundRectRgn(0, 0, widthPx + 1, heightPx + 1, radius, radius));
     if (region && ::SetWindowRgn(hwnd, region.get(), TRUE) != 0)
     {
@@ -354,15 +350,15 @@ void CenterOverOwner(HWND hwnd, HWND owner) noexcept
         return;
     }
 
-    const int width       = std::max(1, static_cast<int>(rect.right - rect.left));
-    const int height      = std::max(1, static_cast<int>(rect.bottom - rect.top));
-    const RECT workArea   = GetWorkAreaForOwner(owner);
-    const int workLeft    = static_cast<int>(workArea.left);
-    const int workTop     = static_cast<int>(workArea.top);
-    const int workRight   = static_cast<int>(workArea.right);
-    const int workBottom  = static_cast<int>(workArea.bottom);
-    int targetCenterX     = (workLeft + workRight) / 2;
-    int targetCenterY     = (workTop + workBottom) / 2;
+    const int width      = std::max(1, static_cast<int>(rect.right - rect.left));
+    const int height     = std::max(1, static_cast<int>(rect.bottom - rect.top));
+    const RECT workArea  = GetWorkAreaForOwner(owner);
+    const int workLeft   = static_cast<int>(workArea.left);
+    const int workTop    = static_cast<int>(workArea.top);
+    const int workRight  = static_cast<int>(workArea.right);
+    const int workBottom = static_cast<int>(workArea.bottom);
+    int targetCenterX    = (workLeft + workRight) / 2;
+    int targetCenterY    = (workTop + workBottom) / 2;
     RECT ownerRect{};
     if (owner && ::IsWindow(owner) && ::GetWindowRect(owner, &ownerRect))
     {
@@ -483,7 +479,7 @@ void ThreadMain(std::stop_token stopToken, std::chrono::milliseconds delay, HINS
     g_debugLastError.store(0, std::memory_order_release);
     g_debugComHr.store(S_OK, std::memory_order_release);
 #endif
-    const auto startedAt = std::chrono::steady_clock::now();
+    const auto startedAt  = std::chrono::steady_clock::now();
     const auto resetState = wil::scope_exit([]() noexcept
     {
         g_hwnd.store(nullptr, std::memory_order_release);
@@ -548,8 +544,8 @@ void ThreadMain(std::stop_token stopToken, std::chrono::milliseconds delay, HINS
                                             WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
                                             CW_USEDEFAULT,
                                             CW_USEDEFAULT,
-                                            ScaleDip(kSplashWidthDip, USER_DEFAULT_SCREEN_DPI),
-                                            ScaleDip(kSplashHeightDip, USER_DEFAULT_SCREEN_DPI),
+                                            Common::WindowSizing::DipToPixelRounded(USER_DEFAULT_SCREEN_DPI, kSplashWidthDip),
+                                            Common::WindowSizing::DipToPixelRounded(USER_DEFAULT_SCREEN_DPI, kSplashHeightDip),
                                             owner,
                                             nullptr,
                                             instance,

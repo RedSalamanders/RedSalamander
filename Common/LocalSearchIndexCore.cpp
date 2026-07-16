@@ -1,6 +1,7 @@
 #include "LocalSearchIndexCore.h"
 
 #include "Helpers.h"
+#include "PathUtils.h"
 #include "SqliteIndexStore.h"
 
 #include <algorithm>
@@ -39,13 +40,12 @@ constexpr uint64_t kSqliteAutoCheckpointTargetBytes          = 128u * 1024u * 10
 constexpr uint32_t kSqliteAutoCompactionFragmentationPercent = 15u;
 constexpr uint64_t kSqliteAutoCompactionMinBytes             = 64u * 1024u * 1024u;
 #ifdef ENABLE_TESTS
-constexpr wchar_t kForceNtfsTraversalSeedEnvVar[] = L"REDSALAMANDER_TEST_FORCE_NTFS_TRAVERSAL_SEED";
-thread_local DWORD g_nextJournalReplayReadFailureForTests = ERROR_SUCCESS;
+constexpr wchar_t kForceNtfsTraversalSeedEnvVar[]          = L"REDSALAMANDER_TEST_FORCE_NTFS_TRAVERSAL_SEED";
+constexpr wchar_t kAllowDirectSqliteWithoutJournalEnvVar[] = L"REDSALAMANDER_TEST_ALLOW_DIRECT_SQLITE_WITHOUT_JOURNAL";
+thread_local DWORD g_nextJournalReplayReadFailureForTests  = ERROR_SUCCESS;
 #endif
 constexpr DWORD kJournalReplayReasons = USN_REASON_FILE_CREATE | USN_REASON_FILE_DELETE | USN_REASON_RENAME_OLD_NAME | USN_REASON_RENAME_NEW_NAME |
                                         USN_REASON_BASIC_INFO_CHANGE | USN_REASON_HARD_LINK_CHANGE | USN_REASON_REPARSE_POINT_CHANGE;
-constexpr HRESULT kSkipCandidateHr    = MAKE_HRESULT(SEVERITY_SUCCESS, FACILITY_ITF, 0x201u);
-
 [[nodiscard]] std::wstring FoldPathKey(std::wstring_view path) noexcept;
 
 inline void EmitPerfCount(std::wstring_view name, uint64_t value = 1u) noexcept
@@ -110,15 +110,38 @@ HRESULT STDMETHODCALLTYPE TrackCandidateAndForward(Candidate* candidate, void* c
         return E_POINTER;
     }
 
+    std::wstring candidateKey;
+    try
+    {
+        candidateKey = FoldPathKey(candidate->fullPath);
+        if (context.emittedPathKeys->contains(candidateKey))
+        {
+            return kSkipCandidateHr;
+        }
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::terminate();
+    }
+    catch (const std::exception&)
+    {
+        Debug::Error(L"LocalSearchIndexCore: failed to prepare SQLite candidate path key.");
+        return E_FAIL;
+    }
+
     HRESULT hr = context.callback(candidate, context.cookie);
     if (FAILED(hr))
+    {
+        return hr;
+    }
+    if (hr == kSkipCandidateHr)
     {
         return hr;
     }
 
     try
     {
-        context.emittedPathKeys->insert(FoldPathKey(candidate->fullPath));
+        context.emittedPathKeys->insert(std::move(candidateKey));
     }
     catch (const std::bad_alloc&)
     {
@@ -478,6 +501,95 @@ void AssignRepositoryProgressCounts(
     return OrdinalString::FoldCaseInvariant(text);
 }
 
+[[nodiscard]] bool IsAsciiHex(wchar_t ch) noexcept
+{
+    return (ch >= L'0' && ch <= L'9') || (ch >= L'a' && ch <= L'f') || (ch >= L'A' && ch <= L'F');
+}
+
+[[nodiscard]] bool IsAsciiHexRun(std::wstring_view text) noexcept
+{
+    return std::ranges::all_of(text, IsAsciiHex);
+}
+
+[[nodiscard]] bool IsGeneratedGuidWithBraces(std::wstring_view text) noexcept
+{
+    if (text.size() != 38u || text.front() != L'{' || text.back() != L'}')
+    {
+        return false;
+    }
+
+    for (size_t index = 1u; index + 1u < text.size(); ++index)
+    {
+        const bool mustBeDash = index == 9u || index == 14u || index == 19u || index == 24u;
+        if (mustBeDash)
+        {
+            if (text[index] != L'-')
+            {
+                return false;
+            }
+            continue;
+        }
+
+        if (! IsAsciiHex(text[index]))
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+[[nodiscard]] bool EndsWith(std::wstring_view text, std::wstring_view suffix) noexcept
+{
+    return text.size() >= suffix.size() && text.substr(text.size() - suffix.size()) == suffix;
+}
+
+[[nodiscard]] bool HasGeneratedBridgeTempSuffix(std::wstring_view tail) noexcept
+{
+    constexpr size_t kRandomHexChars = 32u;
+    return tail.size() > kRandomHexChars + 1u && IsAsciiHexRun(tail.substr(0u, kRandomHexChars)) && tail[kRandomHexChars] == L'_' &&
+           IsAsciiHexRun(tail.substr(kRandomHexChars + 1u));
+}
+
+[[nodiscard]] bool HasGeneratedCopyTempSuffix(std::wstring_view tail) noexcept
+{
+    return tail.size() == 8u + 1u + 8u + 1u + 16u && IsAsciiHexRun(tail.substr(0u, 8u)) && tail[8u] == L'_' && IsAsciiHexRun(tail.substr(9u, 8u)) &&
+           tail[17u] == L'_' && IsAsciiHexRun(tail.substr(18u, 16u));
+}
+
+[[nodiscard]] bool HasGeneratedWriterTempSuffix(std::wstring_view tail) noexcept
+{
+    if (! EndsWith(tail, L".tmp"))
+    {
+        return false;
+    }
+
+    tail.remove_suffix(4u);
+    if (tail.size() == 38u)
+    {
+        return IsGeneratedGuidWithBraces(tail);
+    }
+
+    return tail.size() == 8u + 1u + 16u && IsAsciiHexRun(tail.substr(0u, 8u)) && tail[8u] == L'.' && IsAsciiHexRun(tail.substr(9u, 16u));
+}
+
+[[nodiscard]] bool HasGeneratedTempTail(std::wstring_view name, std::wstring_view marker, bool (*tailMatches)(std::wstring_view) noexcept) noexcept
+{
+    const size_t markerPos = name.find(marker);
+    if (markerPos == std::wstring_view::npos)
+    {
+        return false;
+    }
+
+    return tailMatches(name.substr(markerPos + marker.size()));
+}
+
+[[nodiscard]] bool IsRedSalamanderStagedTempName(std::wstring_view name) noexcept
+{
+    return HasGeneratedTempTail(name, L".rs_tmp_", HasGeneratedBridgeTempSuffix) || HasGeneratedTempTail(name, L".rs_copy_tmp_", HasGeneratedCopyTempSuffix) ||
+           HasGeneratedTempTail(name, L".~rs-write-", HasGeneratedWriterTempSuffix);
+}
+
 [[nodiscard]] bool IsDriveRoot(std::wstring_view path) noexcept
 {
     return path.size() == 3u && path[1] == L':' && (path[2] == L'\\' || path[2] == L'/');
@@ -713,7 +825,7 @@ void AssignRepositoryProgressCounts(
     }
 
     std::error_code ec;
-    const auto fileSize = std::filesystem::file_size(std::filesystem::path(path), ec);
+    const auto fileSize = std::filesystem::file_size(std::filesystem::path(ToExtendedPath(path)), ec);
     return ec ? 0u : static_cast<uint64_t>(fileSize);
 }
 
@@ -734,6 +846,26 @@ void AssignRepositoryProgressCounts(
     std::wstring value;
     value.resize(required - 1u);
     const DWORD written = ::GetEnvironmentVariableW(kForceNtfsTraversalSeedEnvVar, value.data(), required);
+    if (written == 0u || written >= required)
+    {
+        return false;
+    }
+
+    value.resize(written);
+    return ! value.empty() && ! OrdinalString::EqualsNoCase(value, L"0") && ! OrdinalString::EqualsNoCase(value, L"false");
+}
+
+[[nodiscard]] bool IsDirectSqliteJournalBypassEnabledForTests() noexcept
+{
+    const DWORD required = ::GetEnvironmentVariableW(kAllowDirectSqliteWithoutJournalEnvVar, nullptr, 0u);
+    if (required <= 1u)
+    {
+        return false;
+    }
+
+    std::wstring value;
+    value.resize(required - 1u);
+    const DWORD written = ::GetEnvironmentVariableW(kAllowDirectSqliteWithoutJournalEnvVar, value.data(), required);
     if (written == 0u || written >= required)
     {
         return false;
@@ -831,10 +963,52 @@ HRESULT EnsureSnapshotDirectory(std::wstring_view snapshotPath) noexcept
     }
 
     std::error_code ec;
-    std::filesystem::create_directories(parent, ec);
+    std::filesystem::create_directories(std::filesystem::path(ToExtendedPath(parent.native())), ec);
     if (ec)
     {
         return HRESULT_FROM_WIN32(static_cast<DWORD>(ec.value()));
+    }
+
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT OpenSnapshotTempFile(std::wstring_view snapshotPath, wil::unique_handle& outFile, std::wstring& outTempPath) noexcept
+{
+    outFile.reset();
+    outTempPath.clear();
+
+    try
+    {
+        const std::wstring leaf                 = std::filesystem::path(snapshotPath).filename().wstring();
+        const std::wstring prefix               = std::format(L".{}.tmp.", leaf);
+        const std::wstring extendedSnapshotPath = ToExtendedPath(snapshotPath);
+        const Common::Paths::UniqueSiblingFileOptions options{.prefix = prefix, .maximumAttempts = 16u};
+        return Common::Paths::CreateUniqueSiblingFile(extendedSnapshotPath, options, outTempPath, outFile);
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::terminate();
+    }
+    catch (const std::exception&)
+    {
+        // Mandatory: this helper is noexcept; translate temp-path construction failures to HRESULT.
+        Debug::Error(L"LocalSearchIndexCore: OpenSnapshotTempFile failed with an unexpected std::exception.");
+        return E_FAIL;
+    }
+}
+
+[[nodiscard]] HRESULT WriteSnapshotBytes(HANDLE file, const void* data, DWORD bytes) noexcept
+{
+    DWORD written = 0u;
+    if (::WriteFile(file, data, bytes, &written, nullptr) == 0)
+    {
+        const DWORD lastError = ::GetLastError();
+        return HRESULT_FROM_WIN32(lastError != ERROR_SUCCESS ? lastError : ERROR_WRITE_FAULT);
+    }
+
+    if (written != bytes)
+    {
+        return HRESULT_FROM_WIN32(ERROR_WRITE_FAULT);
     }
 
     return S_OK;
@@ -870,7 +1044,8 @@ public:
         stats.snapshotFileBytes = 0u;
         outState                = {};
 
-        wil::unique_handle file(::CreateFileW(_snapshotPath.c_str(),
+        const std::wstring extendedSnapshotPath = ToExtendedPath(_snapshotPath);
+        wil::unique_handle file(::CreateFileW(extendedSnapshotPath.c_str(),
                                               GENERIC_READ,
                                               FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
                                               nullptr,
@@ -985,11 +1160,23 @@ public:
             return hr;
         }
 
-        wil::unique_handle file(::CreateFileW(_snapshotPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
-        if (! file)
+        std::wstring tempPath;
+        wil::unique_handle file;
+        hr = OpenSnapshotTempFile(_snapshotPath, file, tempPath);
+        if (FAILED(hr))
         {
-            return HRESULT_FROM_WIN32(::GetLastError());
+            return hr;
         }
+
+        const auto deleteTempOnFailure = wil::scope_exit([&]
+        {
+            file.reset();
+            if (! tempPath.empty())
+            {
+                const std::wstring extendedTempPath = ToExtendedPath(tempPath);
+                static_cast<void>(::DeleteFileW(extendedTempPath.c_str()));
+            }
+        });
 
         SnapshotHeader header{};
         header.fileSystemKind = static_cast<uint32_t>(state.fileSystemKind);
@@ -999,37 +1186,60 @@ public:
         header.rootIdLow      = state.trackedRootId.low;
         header.rootIdHigh     = state.trackedRootId.high;
 
-        DWORD written = 0u;
-        if (::WriteFile(file.get(), &header, sizeof(header), &written, nullptr) == 0 || written != sizeof(header))
+        hr = WriteSnapshotBytes(file.get(), &header, static_cast<DWORD>(sizeof(header)));
+        if (FAILED(hr))
         {
-            return HRESULT_FROM_WIN32(::GetLastError());
+            return hr;
         }
 
         for (const PersistedEntry& entry : state.entries)
         {
+            const size_t nameBytesSize = entry.name.size() * sizeof(wchar_t);
+            if (nameBytesSize > static_cast<size_t>((std::numeric_limits<uint32_t>::max)()))
+            {
+                return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
+            }
+
             SnapshotEntryHeader entryHeader{};
             entryHeader.idLow          = entry.id.low;
             entryHeader.idHigh         = entry.id.high;
             entryHeader.parentIdLow    = entry.parentId.low;
             entryHeader.parentIdHigh   = entry.parentId.high;
             entryHeader.fileAttributes = entry.fileAttributes;
-            entryHeader.nameBytes      = static_cast<uint32_t>(entry.name.size() * sizeof(wchar_t));
+            entryHeader.nameBytes      = static_cast<uint32_t>(nameBytesSize);
 
-            if (::WriteFile(file.get(), &entryHeader, sizeof(entryHeader), &written, nullptr) == 0 || written != sizeof(entryHeader))
+            hr = WriteSnapshotBytes(file.get(), &entryHeader, static_cast<DWORD>(sizeof(entryHeader)));
+            if (FAILED(hr))
             {
-                return HRESULT_FROM_WIN32(::GetLastError());
+                return hr;
             }
 
             if (! entry.name.empty())
             {
-                const DWORD nameBytes = static_cast<DWORD>(entry.name.size() * sizeof(wchar_t));
-                if (::WriteFile(file.get(), entry.name.data(), nameBytes, &written, nullptr) == 0 || written != nameBytes)
+                const DWORD nameBytes = static_cast<DWORD>(entryHeader.nameBytes);
+                hr                    = WriteSnapshotBytes(file.get(), entry.name.data(), nameBytes);
+                if (FAILED(hr))
                 {
-                    return HRESULT_FROM_WIN32(::GetLastError());
+                    return hr;
                 }
             }
         }
 
+        if (::FlushFileBuffers(file.get()) == 0)
+        {
+            return HRESULT_FROM_WIN32(::GetLastError());
+        }
+
+        file.reset();
+
+        const std::wstring extendedTempPath     = ToExtendedPath(tempPath);
+        const std::wstring extendedSnapshotPath = ToExtendedPath(_snapshotPath);
+        if (::MoveFileExW(extendedTempPath.c_str(), extendedSnapshotPath.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) == 0)
+        {
+            return HRESULT_FROM_WIN32(::GetLastError());
+        }
+
+        tempPath.clear();
         stats.snapshotSaved     = true;
         stats.snapshotFileBytes = GetPrimaryBytes();
         return S_OK;
@@ -1042,16 +1252,22 @@ public:
             return E_INVALIDARG;
         }
 
-        std::error_code ec;
-        static_cast<void>(std::filesystem::remove(std::filesystem::path(_snapshotPath), ec));
-        return S_OK;
+        const std::wstring extendedSnapshotPath = ToExtendedPath(_snapshotPath);
+        if (::DeleteFileW(extendedSnapshotPath.c_str()) != 0)
+        {
+            return S_OK;
+        }
+
+        const DWORD error = ::GetLastError();
+        return error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND ? S_OK : HRESULT_FROM_WIN32(error);
     }
 
 #ifdef ENABLE_TESTS
     HRESULT CorruptForTests(SnapshotCorruptionMode mode) noexcept override
     {
+        const std::wstring extendedSnapshotPath = ToExtendedPath(_snapshotPath);
         wil::unique_handle file(
-            ::CreateFileW(_snapshotPath.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+            ::CreateFileW(extendedSnapshotPath.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
         if (! file)
         {
             return HRESULT_FROM_WIN32(::GetLastError());
@@ -1161,6 +1377,16 @@ void UpdateSqliteMirrorState(VolumeIndex& volume, const SqliteIndexStore::Replac
     return metadataComplete;
 }
 
+[[nodiscard]] uint32_t ResolveSqliteVolumeStateForMetadataCompleteness(const uint32_t desiredState, const bool metadataComplete) noexcept
+{
+    if (metadataComplete || desiredState == SqliteIndexStore::kVolumeStateCurrentnessUnproven)
+    {
+        return desiredState;
+    }
+
+    return SqliteIndexStore::kVolumeStateImportedLegacySnapshot;
+}
+
 void BuildSqliteReplaceRequest(const VolumeIndex& volume,
                                const uint32_t desiredState,
                                SqliteIndexStore::ReplaceVolumeRequest& outRequest,
@@ -1182,7 +1408,7 @@ void BuildSqliteReplaceRequest(const VolumeIndex& volume,
         outRequest.entries.push_back(std::move(imported));
     }
 
-    outRequest.state = outMetadataComplete ? desiredState : SqliteIndexStore::kVolumeStateImportedLegacySnapshot;
+    outRequest.state = ResolveSqliteVolumeStateForMetadataCompleteness(desiredState, outMetadataComplete);
 }
 
 void BuildSqliteApplyJournalDeltaRequest(const VolumeIndex& volume, const JournalDelta& delta, SqliteIndexStore::ApplyJournalDeltaRequest& outRequest)
@@ -1228,12 +1454,9 @@ void BuildSqliteApplyJournalDeltaRequest(const VolumeIndex& volume, const Journa
         outRequest.upsertEntries.push_back(std::move(imported));
     }
 
-    if (! metadataComplete)
-    {
-        outRequest.state = SqliteIndexStore::kVolumeStateImportedLegacySnapshot;
-    }
+    outRequest.state = ResolveSqliteVolumeStateForMetadataCompleteness(outRequest.state, metadataComplete);
 
-    outRequest.seedStateIfMissing = seedMetadataComplete ? outRequest.state : SqliteIndexStore::kVolumeStateImportedLegacySnapshot;
+    outRequest.seedStateIfMissing = ResolveSqliteVolumeStateForMetadataCompleteness(outRequest.state, seedMetadataComplete);
 }
 
 class SqliteVolumeStore final : public IIndexStore
@@ -1334,7 +1557,7 @@ public:
             request.entries.push_back(std::move(imported));
         }
 
-        request.state    = metadataComplete ? state.state : SqliteIndexStore::kVolumeStateImportedLegacySnapshot;
+        request.state    = ResolveSqliteVolumeStateForMetadataCompleteness(state.state, metadataComplete);
         const HRESULT hr = SqliteIndexStore::ReplaceVolume(_databasePath, request, nullptr);
         if (SUCCEEDED(hr))
         {
@@ -1432,7 +1655,12 @@ HRESULT PersistInitialVolumeSeed(
 
     if (IsSqliteAuthoritative(options))
     {
-        return SaveSnapshot(volume, stats);
+        const HRESULT hr = SaveSnapshot(volume, stats);
+        if (SUCCEEDED(hr))
+        {
+            outSqliteStoreChanged = true;
+        }
+        return hr;
     }
 
     if (options.persistentStoreKind == PersistentStoreKind::Sqlite && snapshotMissingOnStart)
@@ -1650,9 +1878,8 @@ HRESULT GetJournalState(const VolumeIndex& volume, JournalState& outState) noexc
     }
 
     const uint32_t recordLength = header->RecordLength;
-    if (minimumNameOffset > static_cast<size_t>((std::numeric_limits<uint32_t>::max)()) ||
-        recordLength < static_cast<uint32_t>(minimumNameOffset) || fileNameOffset < static_cast<uint32_t>(minimumNameOffset) ||
-        fileNameOffset > recordLength || fileNameLength > recordLength - fileNameOffset)
+    if (minimumNameOffset > static_cast<size_t>((std::numeric_limits<uint32_t>::max)()) || recordLength < static_cast<uint32_t>(minimumNameOffset) ||
+        fileNameOffset < static_cast<uint32_t>(minimumNameOffset) || fileNameOffset > recordLength || fileNameLength > recordLength - fileNameOffset)
     {
         return false;
     }
@@ -1723,12 +1950,9 @@ struct DirectoryInfoEntryView final
     size_t nextOffset            = 0u;
 };
 
-[[nodiscard]] bool TryParseFileFullDirectoryInformationEntry(const std::byte* buffer,
-                                                             size_t bytesValid,
-                                                             size_t offset,
-                                                             DirectoryInfoEntryView& out) noexcept
+[[nodiscard]] bool TryParseFileFullDirectoryInformationEntry(const std::byte* buffer, size_t bytesValid, size_t offset, DirectoryInfoEntryView& out) noexcept
 {
-    out = {};
+    out                              = {};
     constexpr size_t kFileNameOffset = offsetof(FILE_FULL_DIR_INFO, FileName);
 
     if (buffer == nullptr || offset >= bytesValid || bytesValid - offset < kFileNameOffset)
@@ -1780,7 +2004,7 @@ struct DirectoryInfoEntryView final
 
 [[nodiscard]] bool EqualsCaseInsensitive(std::wstring_view left, std::wstring_view right) noexcept
 {
-    return FoldText(left) == FoldText(right);
+    return OrdinalString::EqualsFoldedInvariant(left, right);
 }
 
 [[nodiscard]] std::vector<std::wstring> SplitRelativeComponents(std::wstring_view basePath, std::wstring_view childPath) noexcept
@@ -2266,7 +2490,7 @@ HRESULT EnumerateDirectory(std::wstring_view directoryPath, std::vector<Enumerat
         do
         {
             const std::wstring_view name(data.cFileName);
-            if (name == L"." || name == L"..")
+            if (name == L"." || name == L".." || IsRedSalamanderStagedTempName(name))
             {
                 continue;
             }
@@ -2353,7 +2577,7 @@ HRESULT EnumerateDirectory(std::wstring_view directoryPath, std::vector<Enumerat
                 return HRESULT_FROM_WIN32(ERROR_BAD_LENGTH);
             }
 
-            if (entry.name != L"." && entry.name != L"..")
+            if (entry.name != L"." && entry.name != L".." && ! IsRedSalamanderStagedTempName(entry.name))
             {
                 EnumeratedChild child{};
                 child.name           = std::wstring(entry.name);
@@ -2374,14 +2598,20 @@ HRESULT EnumerateDirectory(std::wstring_view directoryPath, std::vector<Enumerat
     return S_OK;
 }
 
-HRESULT HydrateDirectorySubtree(VolumeIndex& volume,
-                                const NodeId& directoryId,
-                                std::wstring_view directoryPath,
-                                CancelCheckFn cancelCheck,
-                                void* cancelCookie,
-                                QueryStats& stats,
-                                RepositoryProgressState& progress) noexcept
+HRESULT HydrateDirectorySubtreeImpl(VolumeIndex& volume,
+                                    const NodeId& directoryId,
+                                    std::wstring_view directoryPath,
+                                    CancelCheckFn cancelCheck,
+                                    void* cancelCookie,
+                                    QueryStats& stats,
+                                    RepositoryProgressState& progress,
+                                    std::unordered_set<NodeId, NodeIdHash>& visitedDirectoryIds) noexcept
 {
+    if (! visitedDirectoryIds.insert(directoryId).second)
+    {
+        return S_OK;
+    }
+
     HRESULT hr = CheckCancelled(cancelCheck, cancelCookie);
     if (FAILED(hr))
     {
@@ -2407,12 +2637,33 @@ HRESULT HydrateDirectorySubtree(VolumeIndex& volume,
         hr = GetPathNodeId(child.fullPath, childId);
         if (FAILED(hr))
         {
-            if (hr == HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED))
+            if (hr == HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED) || hr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND) ||
+                hr == HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND))
             {
                 continue;
             }
 
             return hr;
+        }
+
+        const auto existing = volume.entries.find(childId);
+        if (existing != volume.entries.end())
+        {
+            const bool isAlias = ! (existing->second.parentId == directoryId) || existing->second.name != child.name;
+            if (isAlias)
+            {
+                stats.hardlinkAliasCoverageIncomplete = true;
+            }
+            if (isAlias && IsDirectoryAttributes(child.fileAttributes))
+            {
+                hr = HydrateDirectorySubtreeImpl(
+                    volume, childId, child.fullPath, cancelCheck, cancelCookie, stats, progress, visitedDirectoryIds);
+                if (FAILED(hr) && hr != HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND) && hr != HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND))
+                {
+                    return hr;
+                }
+            }
+            continue;
         }
 
         Entry entry{};
@@ -2437,9 +2688,14 @@ HRESULT HydrateDirectorySubtree(VolumeIndex& volume,
 
         if (IsDirectoryAttributes(child.fileAttributes))
         {
-            hr = HydrateDirectorySubtree(volume, childId, child.fullPath, cancelCheck, cancelCookie, stats, progress);
+            hr = HydrateDirectorySubtreeImpl(volume, childId, child.fullPath, cancelCheck, cancelCookie, stats, progress, visitedDirectoryIds);
             if (FAILED(hr))
             {
+                if (hr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND) || hr == HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND))
+                {
+                    continue;
+                }
+
                 return hr;
             }
         }
@@ -2447,6 +2703,18 @@ HRESULT HydrateDirectorySubtree(VolumeIndex& volume,
 
     stats.usedTraversalSeed = true;
     return S_OK;
+}
+
+HRESULT HydrateDirectorySubtree(VolumeIndex& volume,
+                                const NodeId& directoryId,
+                                std::wstring_view directoryPath,
+                                CancelCheckFn cancelCheck,
+                                void* cancelCookie,
+                                QueryStats& stats,
+                                RepositoryProgressState& progress) noexcept
+{
+    std::unordered_set<NodeId, NodeIdHash> visitedDirectoryIds;
+    return HydrateDirectorySubtreeImpl(volume, directoryId, directoryPath, cancelCheck, cancelCookie, stats, progress, visitedDirectoryIds);
 }
 
 HRESULT SeedTraversalIndex(VolumeIndex& volume, CancelCheckFn cancelCheck, void* cancelCookie, QueryStats& stats, RepositoryProgressState& progress) noexcept
@@ -2592,12 +2860,19 @@ HRESULT SeedNtfsIndex(VolumeIndex& volume, CancelCheckFn cancelCheck, void* canc
             if (TryParseUsnRecord(header, parsed))
             {
                 SeedEntry entry{};
-                entry.id             = parsed.id;
-                entry.parentId       = parsed.parentId;
-                entry.name           = std::move(parsed.name);
-                entry.fileAttributes = parsed.fileAttributes;
-                allEntries[entry.id] = entry;
-                childrenByParent[entry.parentId].push_back(entry.id);
+                entry.id                        = parsed.id;
+                entry.parentId                  = parsed.parentId;
+                entry.name                      = std::move(parsed.name);
+                entry.fileAttributes            = parsed.fileAttributes;
+                const auto [insertIt, inserted] = allEntries.emplace(entry.id, entry);
+                if (inserted)
+                {
+                    childrenByParent[entry.parentId].push_back(entry.id);
+                }
+                else if (! (insertIt->second.parentId == entry.parentId) || insertIt->second.name != entry.name)
+                {
+                    stats.hardlinkAliasCoverageIncomplete = true;
+                }
 
                 hr = AdvanceRepositoryProgress(progress,
                                                FILESYSTEM_SEARCH_PHASE_INDEX_LOOKUP,
@@ -2719,6 +2994,7 @@ HRESULT BuildIndex(VolumeIndex& volume, CancelCheckFn cancelCheck, void* cancelC
 
 void ApplyJournalRecordToVolume(VolumeIndex& volume,
                                 const UsnRecordData& record,
+                                QueryStats& stats,
                                 JournalDelta* outDelta,
                                 std::unordered_set<NodeId, NodeIdHash>& directoriesToHydrate) noexcept
 {
@@ -2751,6 +3027,11 @@ void ApplyJournalRecordToVolume(VolumeIndex& volume,
     if (const auto existing = volume.entries.find(record.id); existing != volume.entries.end())
     {
         updated = existing->second;
+        if ((record.reason & USN_REASON_HARD_LINK_CHANGE) != 0u &&
+            (! (existing->second.parentId == record.parentId) || (! record.name.empty() && existing->second.name != record.name)))
+        {
+            stats.hardlinkAliasCoverageIncomplete = true;
+        }
     }
 
     updated.id             = record.id;
@@ -2790,7 +3071,7 @@ HRESULT HydrateJournalDirectories(VolumeIndex& volume,
         }
 
         const std::wstring directoryPath = directoryIt->second.fullPath;
-        HRESULT hr = HydrateDirectorySubtree(volume, directoryId, directoryPath, cancelCheck, cancelCookie, stats, progress);
+        HRESULT hr                       = HydrateDirectorySubtree(volume, directoryId, directoryPath, cancelCheck, cancelCookie, stats, progress);
         if (FAILED(hr))
         {
             return hr;
@@ -2845,7 +3126,7 @@ HRESULT ReplayJournal(VolumeIndex& volume,
 
         DWORD bytesReturned = 0u;
 #ifdef ENABLE_TESTS
-        const DWORD injectedReadFailure = g_nextJournalReplayReadFailureForTests;
+        const DWORD injectedReadFailure        = g_nextJournalReplayReadFailureForTests;
         g_nextJournalReplayReadFailureForTests = ERROR_SUCCESS;
         if (injectedReadFailure != ERROR_SUCCESS)
         {
@@ -2891,7 +3172,7 @@ HRESULT ReplayJournal(VolumeIndex& volume,
                     return progressHr;
                 }
 
-                ApplyJournalRecordToVolume(volume, record, outDelta, directoriesToHydrate);
+                ApplyJournalRecordToVolume(volume, record, stats, outDelta, directoriesToHydrate);
             }
 
             offset += header->RecordLength;
@@ -3480,6 +3761,10 @@ HRESULT STDMETHODCALLTYPE EmitSqliteCandidate(Candidate* candidate, void* cookie
         const HRESULT progressHr = AdvanceRepositoryProgress(*context.progress, FILESYSTEM_SEARCH_PHASE_ENUMERATING, candidate->fullPath, 0u, 0u, 0u, 0u, 1u);
         return FAILED(progressHr) ? progressHr : S_FALSE;
     }
+    if (hr == kSkipCandidateHr)
+    {
+        return hr;
+    }
     if (FAILED(hr))
     {
         return hr;
@@ -3507,6 +3792,11 @@ HRESULT STDMETHODCALLTYPE EmitSqliteCandidate(Candidate* candidate, void* cookie
     if (! probe.storedVolumeReady)
     {
         return false;
+    }
+
+    if (IsDirectSqliteJournalBypassEnabledForTests())
+    {
+        return true;
     }
 
     if (! probe.currentJournalKnown || ! probe.currentJournalAvailable)
@@ -3574,7 +3864,7 @@ HRESULT TryEnumerateFromConfiguredSqliteStore(const PersistentStoreInfo& storeIn
     {
         return S_FALSE;
     }
-    if (! storeInfo.inspectionSucceeded)
+    if (storeInfo.primaryPath.empty())
     {
         if (outFallbackReason != nullptr)
         {
@@ -3583,7 +3873,7 @@ HRESULT TryEnumerateFromConfiguredSqliteStore(const PersistentStoreInfo& storeIn
         return S_FALSE;
     }
 
-    if (! storeInfo.readyForQueryCutover)
+    if (storeInfo.inspectionSucceeded && ! storeInfo.readyForQueryCutover)
     {
         stats.sqliteCutoverBlocked = true;
         if (outFallbackReason != nullptr)
@@ -4038,17 +4328,19 @@ PersistentStoreInfo GetPersistentStoreInfo(const RepositoryOptions& options) noe
         const HRESULT inspectHr = SqliteIndexStore::InspectStore(info.primaryPath, sqliteInfo);
         if (SUCCEEDED(inspectHr))
         {
-            info.inspectionSucceeded     = true;
-            info.primaryBytes            = sqliteInfo.databaseBytes;
-            info.writeAheadLogBytes      = sqliteInfo.writeAheadLogBytes;
-            info.pageCount               = sqliteInfo.pageCount;
-            info.freelistPageCount       = sqliteInfo.freelistPageCount;
-            info.lastCheckpointUtc       = sqliteInfo.lastCheckpointUtc;
-            info.lastCompactionUtc       = sqliteInfo.lastCompactionUtc;
-            info.indexedVolumeCount      = sqliteInfo.volumeCount;
-            info.indexedEntryCount       = sqliteInfo.entryCount;
-            info.legacyImportVolumeCount = sqliteInfo.legacyImportVolumeCount;
-            info.readyForQueryCutover    = sqliteInfo.legacyImportVolumeCount == 0u;
+            info.inspectionSucceeded          = true;
+            info.primaryBytes                 = sqliteInfo.databaseBytes;
+            info.writeAheadLogBytes           = sqliteInfo.writeAheadLogBytes;
+            info.pageCount                    = sqliteInfo.pageCount;
+            info.freelistPageCount            = sqliteInfo.freelistPageCount;
+            info.incrementalAutoVacuumEnabled = sqliteInfo.incrementalAutoVacuumEnabled;
+            info.lastCheckpointUtc            = sqliteInfo.lastCheckpointUtc;
+            info.lastCompactionUtc            = sqliteInfo.lastCompactionUtc;
+            info.indexedVolumeCount           = sqliteInfo.volumeCount;
+            info.indexedEntryCount            = sqliteInfo.entryCount;
+            info.legacyImportVolumeCount      = sqliteInfo.legacyImportVolumeCount;
+            info.storeGeneration              = sqliteInfo.storeGeneration;
+            info.readyForQueryCutover         = sqliteInfo.queryUnreadyVolumeCount == 0u;
         }
     }
 
@@ -4094,6 +4386,245 @@ PersistentStoreInfo Repository::GetCachedPersistentStoreInfo() noexcept
     return _cachedPersistentStoreInfo;
 }
 
+bool Repository::TryCapturePersistentStoreFileStamp(const PersistentStoreInfo& storeInfo, PersistentStoreFileStamp& outStamp) noexcept
+{
+    outStamp = {};
+    if (storeInfo.primaryPath.empty())
+    {
+        return false;
+    }
+
+    const auto captureFile = [](const std::wstring& path, bool& outExists, uint64_t& outLastWriteTime, uint64_t& outBytes) noexcept -> bool
+    {
+        WIN32_FILE_ATTRIBUTE_DATA attributes{};
+        if (::GetFileAttributesExW(path.c_str(), GetFileExInfoStandard, &attributes) == 0)
+        {
+            const DWORD error = ::GetLastError();
+            if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND)
+            {
+                outExists        = false;
+                outLastWriteTime = 0u;
+                outBytes         = 0u;
+                return true;
+            }
+            return false;
+        }
+
+        ULARGE_INTEGER lastWriteTime{};
+        lastWriteTime.LowPart  = attributes.ftLastWriteTime.dwLowDateTime;
+        lastWriteTime.HighPart = attributes.ftLastWriteTime.dwHighDateTime;
+        ULARGE_INTEGER fileSize{};
+        fileSize.LowPart  = attributes.nFileSizeLow;
+        fileSize.HighPart = attributes.nFileSizeHigh;
+        outExists         = true;
+        outLastWriteTime  = lastWriteTime.QuadPart;
+        outBytes          = fileSize.QuadPart;
+        return true;
+    };
+
+    const std::wstring walPath = storeInfo.writeAheadLogPath.empty() ? storeInfo.primaryPath + L"-wal" : storeInfo.writeAheadLogPath;
+    return captureFile(storeInfo.primaryPath, outStamp.databaseExists, outStamp.databaseLastWriteTime, outStamp.databaseBytes) &&
+           captureFile(walPath, outStamp.walExists, outStamp.walLastWriteTime, outStamp.walBytes);
+}
+
+PersistentStoreInfo Repository::GetValidatedCachedPersistentStoreInfoForQuery() noexcept
+{
+    try
+    {
+        bool refreshStoreInfo = false;
+        PersistentStoreInfo cachedStoreInfo{};
+        PersistentStoreFileStamp cachedFileStamp{};
+        bool cachedFileStampValid = false;
+        {
+            std::lock_guard guard(_mutex);
+            refreshStoreInfo     = ! _cachedPersistentStoreInfoValid;
+            cachedStoreInfo      = _cachedPersistentStoreInfo;
+            cachedFileStamp      = _cachedPersistentStoreFileStamp;
+            cachedFileStampValid = _cachedPersistentStoreFileStampValid;
+        }
+
+        if (! refreshStoreInfo && cachedStoreInfo.kind == PersistentStoreKind::Sqlite && cachedStoreInfo.inspectionSucceeded &&
+            ! cachedStoreInfo.primaryPath.empty())
+        {
+            PersistentStoreFileStamp currentFileStamp{};
+            const bool currentFileStampValid = TryCapturePersistentStoreFileStamp(cachedStoreInfo, currentFileStamp);
+            const bool databaseStampUnchanged = cachedFileStamp.databaseExists == currentFileStamp.databaseExists &&
+                                                cachedFileStamp.databaseLastWriteTime == currentFileStamp.databaseLastWriteTime &&
+                                                cachedFileStamp.databaseBytes == currentFileStamp.databaseBytes;
+            const bool emptyReadOnlyWalTransition =
+                cachedFileStampValid && currentFileStampValid && databaseStampUnchanged &&
+                ((! cachedFileStamp.walExists && currentFileStamp.walExists && currentFileStamp.walBytes == 0u) ||
+                 (cachedFileStamp.walExists && cachedFileStamp.walBytes == 0u && ! currentFileStamp.walExists));
+            if (cachedFileStampValid && currentFileStampValid && (currentFileStamp == cachedFileStamp || emptyReadOnlyWalTransition))
+            {
+                EmitPerfCount(L"search.backend.sqlite.store_generation_probe_skips");
+                if (emptyReadOnlyWalTransition)
+                {
+                    std::lock_guard guard(_mutex);
+                    if (_cachedPersistentStoreInfoValid && _cachedPersistentStoreInfo.primaryPath == cachedStoreInfo.primaryPath &&
+                        _cachedPersistentStoreInfo.storeGeneration == cachedStoreInfo.storeGeneration)
+                    {
+                        _cachedPersistentStoreFileStamp = currentFileStamp;
+                    }
+                }
+            }
+            else
+            {
+                if (cachedFileStampValid && currentFileStampValid)
+                {
+                    if (cachedFileStamp.databaseExists != currentFileStamp.databaseExists)
+                    {
+                        EmitPerfCount(L"search.backend.sqlite.store_stamp.database_exists_changes");
+                    }
+                    if (cachedFileStamp.databaseLastWriteTime != currentFileStamp.databaseLastWriteTime)
+                    {
+                        EmitPerfCount(L"search.backend.sqlite.store_stamp.database_mtime_changes");
+                    }
+                    if (cachedFileStamp.databaseBytes != currentFileStamp.databaseBytes)
+                    {
+                        EmitPerfCount(L"search.backend.sqlite.store_stamp.database_size_changes");
+                    }
+                    if (cachedFileStamp.walExists != currentFileStamp.walExists)
+                    {
+                        EmitPerfCount(L"search.backend.sqlite.store_stamp.wal_exists_changes");
+                    }
+                    if (cachedFileStamp.walLastWriteTime != currentFileStamp.walLastWriteTime)
+                    {
+                        EmitPerfCount(L"search.backend.sqlite.store_stamp.wal_mtime_changes");
+                    }
+                    if (cachedFileStamp.walBytes != currentFileStamp.walBytes)
+                    {
+                        EmitPerfCount(L"search.backend.sqlite.store_stamp.wal_size_changes");
+                    }
+                }
+                EmitPerfCount(L"search.backend.sqlite.store_generation_probe_opens");
+                uint64_t currentGeneration = 0u;
+                const HRESULT generationHr = SqliteIndexStore::ReadStoreGeneration(cachedStoreInfo.primaryPath, currentGeneration);
+                refreshStoreInfo           = FAILED(generationHr) || currentGeneration != cachedStoreInfo.storeGeneration;
+                if (refreshStoreInfo)
+                {
+                    EmitPerfCount(L"search.backend.sqlite.store_generation_refreshes");
+                }
+                else if (currentFileStampValid)
+                {
+                    std::lock_guard guard(_mutex);
+                    if (_cachedPersistentStoreInfoValid && _cachedPersistentStoreInfo.primaryPath == cachedStoreInfo.primaryPath &&
+                        _cachedPersistentStoreInfo.storeGeneration == cachedStoreInfo.storeGeneration)
+                    {
+                        _cachedPersistentStoreFileStamp      = currentFileStamp;
+                        _cachedPersistentStoreFileStampValid = true;
+                    }
+                }
+            }
+        }
+
+        if (refreshStoreInfo)
+        {
+            RefreshCachedPersistentStoreInfo();
+            return GetCachedPersistentStoreInfo();
+        }
+
+        return cachedStoreInfo;
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::terminate();
+    }
+    catch (const std::exception&)
+    {
+        Debug::Error(L"LocalSearchIndexCore: GetValidatedCachedPersistentStoreInfoForQuery failed with an unexpected std::exception.");
+        return GetCachedPersistentStoreInfo();
+    }
+}
+
+bool Repository::TryGetCachedPersistentStoreInfo(PersistentStoreInfo& outInfo) noexcept
+{
+    std::lock_guard guard(_mutex);
+    outInfo = _cachedPersistentStoreInfo;
+    return _cachedPersistentStoreInfoValid;
+}
+
+bool Repository::TryBuildInMemoryPersistentStoreInfo(PersistentStoreInfo& outInfo) noexcept
+{
+    try
+    {
+        outInfo = {};
+        if (_options.persistentStoreKind != PersistentStoreKind::Sqlite)
+        {
+            return false;
+        }
+
+        std::vector<std::shared_ptr<VolumeIndex>> volumes;
+        {
+            std::lock_guard guard(_mutex);
+            volumes.reserve(_volumes.size());
+            for (const auto& [key, volume] : _volumes)
+            {
+                UNREFERENCED_PARAMETER(key);
+                if (volume)
+                {
+                    volumes.push_back(volume);
+                }
+            }
+        }
+
+        const SqliteMaintenancePolicy policy       = GetDefaultSqliteMaintenancePolicy();
+        outInfo.kind                               = _options.persistentStoreKind;
+        outInfo.rootDirectory                      = GetSnapshotRootDirectory(_options);
+        outInfo.primaryPath                        = GetDefaultSqliteDatabasePath(_options);
+        outInfo.primaryBytes                       = GetFileBytes(outInfo.primaryPath);
+        outInfo.writeAheadLogPath                  = outInfo.primaryPath.empty() ? std::wstring{} : outInfo.primaryPath + L"-wal";
+        outInfo.writeAheadLogBytes                 = GetFileBytes(outInfo.writeAheadLogPath);
+        outInfo.autoCheckpointEnabled              = true;
+        outInfo.autoCheckpointTargetBytes          = policy.autoCheckpointTargetBytes;
+        outInfo.autoCompactionEnabled              = true;
+        outInfo.autoCompactionFragmentationPercent = policy.autoCompactionFragmentationPercent;
+        outInfo.autoCompactionMinBytes             = policy.autoCompactionMinBytes;
+
+        bool allVolumesReady = true;
+        for (const std::shared_ptr<VolumeIndex>& volume : volumes)
+        {
+            std::lock_guard volumeGuard(volume->mutex);
+            if (! volume->initialized || volume->entries.empty())
+            {
+                continue;
+            }
+
+            ++outInfo.indexedVolumeCount;
+            outInfo.indexedEntryCount += static_cast<uint64_t>(volume->entries.size());
+            if (volume->persistentStoreState == SqliteIndexStore::kVolumeStateImportedLegacySnapshot)
+            {
+                ++outInfo.legacyImportVolumeCount;
+            }
+            if (volume->persistentStoreState != SqliteIndexStore::kVolumeStateReady)
+            {
+                allVolumesReady = false;
+            }
+        }
+
+        if (outInfo.indexedVolumeCount == 0u)
+        {
+            outInfo = {};
+            return false;
+        }
+
+        outInfo.inspectionSucceeded  = true;
+        outInfo.readyForQueryCutover = allVolumesReady;
+        return true;
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::terminate();
+    }
+    catch (const std::exception&)
+    {
+        // Mandatory: this status helper is noexcept; report the store summary as unavailable.
+        Debug::Error(L"LocalSearchIndexCore: TryBuildInMemoryPersistentStoreInfo failed with an unexpected std::exception.");
+        outInfo = {};
+        return false;
+    }
+}
+
 void Repository::GetStatus(RepositoryStatus& outStatus) noexcept
 {
     outStatus = CaptureRepositoryRuntimeStatus(&_runtimeStatus, &_statusMutex);
@@ -4137,10 +4668,15 @@ HRESULT Repository::AcquireOrCreateVolume(const SupportInfo& support, std::share
 void Repository::RefreshCachedPersistentStoreInfo() noexcept
 {
     const PersistentStoreInfo refreshed = GetPersistentStoreInfo(_options);
+    PersistentStoreFileStamp refreshedFileStamp{};
+    const bool refreshedFileStampValid =
+        refreshed.kind == PersistentStoreKind::Sqlite && refreshed.inspectionSucceeded && TryCapturePersistentStoreFileStamp(refreshed, refreshedFileStamp);
 
     std::lock_guard guard(_mutex);
-    _cachedPersistentStoreInfo      = refreshed;
-    _cachedPersistentStoreInfoValid = true;
+    _cachedPersistentStoreInfo           = refreshed;
+    _cachedPersistentStoreFileStamp      = refreshedFileStamp;
+    _cachedPersistentStoreInfoValid      = true;
+    _cachedPersistentStoreFileStampValid = refreshedFileStampValid;
 }
 
 void Repository::InvalidateCachedPersistentStoreInfo() noexcept
@@ -4148,7 +4684,9 @@ void Repository::InvalidateCachedPersistentStoreInfo() noexcept
     std::lock_guard guard(_mutex);
     _cachedPersistentStoreInfo      = {};
     _cachedPersistentStoreInfo.kind = _options.persistentStoreKind;
-    _cachedPersistentStoreInfoValid = false;
+    _cachedPersistentStoreFileStamp      = {};
+    _cachedPersistentStoreInfoValid      = false;
+    _cachedPersistentStoreFileStampValid = false;
 }
 
 HRESULT Repository::ProbePath(std::wstring_view rootPath, SupportInfo& outSupport) noexcept
@@ -4278,19 +4816,10 @@ HRESULT Repository::Enumerate(const QueryPlan& plan,
             return kNotSupportedHr;
         }
 
+        PersistentStoreInfo validatedStoreInfo{};
+        bool hasValidatedStoreInfo = false;
         if (_options.persistentStoreKind == PersistentStoreKind::Sqlite)
         {
-            bool refreshStoreInfo = false;
-            {
-                std::lock_guard guard(_mutex);
-                refreshStoreInfo = ! _cachedPersistentStoreInfoValid;
-            }
-
-            if (refreshStoreInfo)
-            {
-                RefreshCachedPersistentStoreInfo();
-            }
-
             QueryPlan sqlitePlan = plan;
             sqlitePlan.rootPath  = support.normalizedRootPath;
 
@@ -4303,10 +4832,11 @@ HRESULT Repository::Enumerate(const QueryPlan& plan,
                 return hr;
             }
 
-            const auto directSqliteStart              = std::chrono::steady_clock::now();
-            const PersistentStoreInfo cachedStoreInfo = GetCachedPersistentStoreInfo();
-            hr                                        = TryEnumerateFromConfiguredSqliteStore(
-                cachedStoreInfo, sqlitePlan, cancelCheck, cancelCookie, candidateCallback, candidateCookie, stats, progress);
+            const auto directSqliteStart = std::chrono::steady_clock::now();
+            validatedStoreInfo           = GetValidatedCachedPersistentStoreInfoForQuery();
+            hasValidatedStoreInfo        = true;
+            hr = TryEnumerateFromConfiguredSqliteStore(
+                validatedStoreInfo, sqlitePlan, cancelCheck, cancelCookie, candidateCallback, candidateCookie, stats, progress);
             if (hr == S_OK)
             {
                 stats.executeQueryDurationMs = ClampDurationMs(std::chrono::steady_clock::now() - directSqliteStart);
@@ -4367,6 +4897,8 @@ HRESULT Repository::Enumerate(const QueryPlan& plan,
             if (refreshStoreInfo)
             {
                 RefreshCachedPersistentStoreInfo();
+                validatedStoreInfo    = GetCachedPersistentStoreInfo();
+                hasValidatedStoreInfo = true;
             }
         }
 
@@ -4380,9 +4912,9 @@ HRESULT Repository::Enumerate(const QueryPlan& plan,
             return hr;
         }
 
-        const auto executeStart                   = std::chrono::steady_clock::now();
-        const PersistentStoreInfo cachedStoreInfo = GetCachedPersistentStoreInfo();
-        hr                                        = TryEnumerateFromConfiguredSqliteStore(
+        const auto executeStart = std::chrono::steady_clock::now();
+        const PersistentStoreInfo cachedStoreInfo = hasValidatedStoreInfo ? validatedStoreInfo : GetValidatedCachedPersistentStoreInfoForQuery();
+        hr = TryEnumerateFromConfiguredSqliteStore(
             cachedStoreInfo, effectivePlan, cancelCheck, cancelCookie, candidateCallback, candidateCookie, stats, progress);
         if (hr == S_FALSE)
         {
@@ -4495,29 +5027,21 @@ HRESULT Repository::EnumerateNoWait(const QueryPlan& plan,
             return kNotSupportedHr;
         }
 
-        bool refreshStoreInfo = false;
-        {
-            std::lock_guard guard(_mutex);
-            refreshStoreInfo = ! _cachedPersistentStoreInfoValid;
-        }
-        if (refreshStoreInfo)
-        {
-            RefreshCachedPersistentStoreInfo();
-        }
-
         QueryPlan effectivePlan        = plan;
         effectivePlan.rootPath         = support.normalizedRootPath;
         const bool sqliteAuthoritative = IsSqliteAuthoritative(_options);
 
-        const PersistentStoreInfo cachedStoreInfo = GetCachedPersistentStoreInfo();
+        const PersistentStoreInfo cachedStoreInfo = GetValidatedCachedPersistentStoreInfoForQuery();
 
+        const FallbackReason initialFallbackReason = ! cachedStoreInfo.inspectionSucceeded
+                                                         ? ClassifyUninspectableStore(cachedStoreInfo)
+                                                         : (cachedStoreInfo.readyForQueryCutover ? FallbackReason::None : FallbackReason::CutoverBlocked);
         UpdateRepositoryRuntimeStatus(&_runtimeStatus,
                                       &_statusMutex,
-                                      cachedStoreInfo.inspectionSucceeded ? StoreState::Ready
-                                                                          : GetFallbackStoreState(ClassifyUninspectableStore(cachedStoreInfo)),
+                                      initialFallbackReason == FallbackReason::None ? StoreState::Ready : GetFallbackStoreState(initialFallbackReason),
                                       SyncPhase::Idle,
                                       QueryExecutionMode::Unknown,
-                                      FallbackReason::None,
+                                      initialFallbackReason,
                                       effectivePlan.rootPath);
         ApplyRuntimeStatusToProgress(progress, CaptureRepositoryRuntimeStatus(&_runtimeStatus, &_statusMutex));
 
@@ -4551,7 +5075,7 @@ HRESULT Repository::EnumerateNoWait(const QueryPlan& plan,
             hr = TryEnumerateFromConfiguredSqliteStore(
                 cachedStoreInfo, effectivePlan, cancelCheck, cancelCookie, &TrackCandidateAndForward, &sqliteTrackingContext, stats, progress, &fallbackReason);
         }
-        if (hr == S_OK)
+        const auto completeSqliteSuccess = [&]() noexcept -> HRESULT
         {
             stats.queryExecutionMode     = QueryExecutionMode::Sqlite;
             stats.fallbackReason         = FallbackReason::None;
@@ -4570,10 +5094,50 @@ HRESULT Repository::EnumerateNoWait(const QueryPlan& plan,
             }
 
             return S_OK;
+        };
+        if (hr == S_OK)
+        {
+            return completeSqliteSuccess();
         }
         if (FAILED(hr))
         {
             return hr;
+        }
+
+        if (fallbackReason == FallbackReason::StoreMissing || fallbackReason == FallbackReason::StoreInvalid ||
+            fallbackReason == FallbackReason::CutoverBlocked || fallbackReason == FallbackReason::StoreStale)
+        {
+            RefreshCachedPersistentStoreInfo();
+            const PersistentStoreInfo refreshedStoreInfo = GetCachedPersistentStoreInfo();
+            if (! refreshedStoreInfo.primaryPath.empty())
+            {
+                stats.usedSqliteStore      = false;
+                stats.sqliteReadOnlyQuery  = false;
+                stats.usedNamePrefilter    = false;
+                stats.sqliteCutoverBlocked = false;
+                fallbackReason             = FallbackReason::None;
+                {
+                    const Debug::Perf::Scope sqliteRetryPerf(L"search.backend.sqlite.retry_query_ms");
+                    hr = TryEnumerateFromConfiguredSqliteStore(refreshedStoreInfo,
+                                                               effectivePlan,
+                                                               cancelCheck,
+                                                               cancelCookie,
+                                                               &TrackCandidateAndForward,
+                                                               &sqliteTrackingContext,
+                                                               stats,
+                                                               progress,
+                                                               &fallbackReason);
+                }
+                if (hr == S_OK)
+                {
+                    EmitPerfCount(L"search.backend.sqlite.retry_successes");
+                    return completeSqliteSuccess();
+                }
+                if (FAILED(hr))
+                {
+                    return hr;
+                }
+            }
         }
 
         EmitPerfCount(L"search.backend.sqlite.soft_fallbacks");
@@ -4953,6 +5517,93 @@ HRESULT Repository::DropCachedVolumeForTests(std::wstring_view rootPath) noexcep
     return InvalidateRoot(rootPath, false);
 }
 
+HRESULT Repository::HydrateRootAndQueryForTests(const QueryPlan& plan, std::vector<Candidate>& outCandidates, QueryStats* outStats) noexcept
+{
+    try
+    {
+        outCandidates.clear();
+        if (outStats != nullptr)
+        {
+            *outStats = {};
+        }
+
+        SupportInfo support{};
+        HRESULT hr = PopulateSupportInfo(plan.rootPath, support);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        std::shared_ptr<VolumeIndex> volume;
+        hr = AcquireOrCreateVolume(support, volume);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        QueryStats stats{};
+        RepositoryProgressState progress{};
+        std::lock_guard volumeGuard(volume->mutex);
+        if (! volume->initialized)
+        {
+            return E_UNEXPECTED;
+        }
+
+        hr = HydrateDirectorySubtree(*volume, volume->trackedRootId, volume->normalizedRootPath, nullptr, nullptr, stats, progress);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        RebuildDerivedState(*volume);
+        PopulateStatsFromVolume(*volume, stats);
+        QueryPlan effectivePlan = plan;
+        effectivePlan.rootPath  = volume->normalizedRootPath;
+        hr = ExecuteQueryImpl(*volume,
+                              effectivePlan,
+                              nullptr,
+                              nullptr,
+                              stats,
+                              progress,
+                              [&](Candidate&& candidate) noexcept -> HRESULT
+        {
+            try
+            {
+                outCandidates.push_back(std::move(candidate));
+                return S_OK;
+            }
+            catch (const std::bad_alloc&)
+            {
+                std::terminate();
+            }
+            catch (const std::exception&)
+            {
+                // Mandatory: test callback boundary. Report failure instead of unwinding through noexcept query code.
+                return E_FAIL;
+            }
+        });
+        if (outStats != nullptr)
+        {
+            *outStats = stats;
+        }
+        return hr;
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::terminate();
+    }
+    catch (const std::exception&)
+    {
+        Debug::Error(L"LocalSearchIndexCore: HydrateRootAndQueryForTests failed with an unexpected std::exception.");
+        outCandidates.clear();
+        if (outStats != nullptr)
+        {
+            *outStats = {};
+        }
+        return E_FAIL;
+    }
+}
+
 HRESULT Repository::CorruptSnapshotForTests(std::wstring_view rootPath, SnapshotCorruptionMode mode) noexcept
 {
     try
@@ -5052,7 +5703,7 @@ HRESULT Repository::ApplySyntheticJournalForTests(std::wstring_view rootPath,
                 }
             }
 
-            record.name = synthetic.name.empty() ? GetPathLeaf(synthetic.idPath) : synthetic.name;
+            record.name           = synthetic.name.empty() ? GetPathLeaf(synthetic.idPath) : synthetic.name;
             record.fileAttributes = synthetic.fileAttributes;
             if (record.fileAttributes == 0u)
             {
@@ -5065,7 +5716,7 @@ HRESULT Repository::ApplySyntheticJournalForTests(std::wstring_view rootPath,
             }
             record.reason = synthetic.reason;
 
-            ApplyJournalRecordToVolume(*volume, record, delta, directoriesToHydrate);
+            ApplyJournalRecordToVolume(*volume, record, stats, delta, directoriesToHydrate);
         }
 
         hr = HydrateJournalDirectories(*volume, directoriesToHydrate, nullptr, nullptr, stats, progress, delta);
@@ -5183,13 +5834,13 @@ HRESULT Repository::QueryPersistedVolumeForTests(const QueryPlan& plan, std::vec
 
         QueryPlan effectivePlan = plan;
         effectivePlan.rootPath  = support.normalizedRootPath;
-        hr = ExecuteQueryImpl(*volume,
-                              effectivePlan,
-                              nullptr,
-                              nullptr,
-                              stats,
-                              progress,
-                              [&outCandidates](Candidate&& candidate) noexcept -> HRESULT
+        hr                      = ExecuteQueryImpl(*volume,
+                                                   effectivePlan,
+                                                   nullptr,
+                                                   nullptr,
+                                                   stats,
+                                                   progress,
+                                                   [&outCandidates](Candidate&& candidate) noexcept -> HRESULT
         {
             try
             {

@@ -28,6 +28,7 @@
 #include "PlugInterfaces/FileSystem.h"
 #include "PlugInterfaces/Host.h"
 #include "PlugInterfaces/Informations.h"
+#include "PackedFileInfoBuffer.h"
 #include "PlugInterfaces/NavigationMenu.h"
 
 namespace Aws
@@ -93,20 +94,15 @@ public:
     HRESULT BuildFromEntries(std::vector<Entry> entries) noexcept;
 
 private:
-    static size_t AlignUp(size_t value, size_t alignment) noexcept;
-    static size_t ComputeEntrySizeBytes(std::wstring_view name) noexcept;
-    HRESULT LocateEntry(unsigned long index, FileInfo** ppEntry) const noexcept;
-
     std::atomic_ulong _refCount{1};
-    std::vector<std::byte> _buffer;
-    unsigned long _count     = 0;
-    unsigned long _usedBytes = 0;
+    Common::Plugins::PackedFileInfoBuffer _packedBuffer;
 };
 
 class FileSystemS3 final : public IFileSystem,
                            public IFileSystemIO,
                            public IFileSystemDirectoryOperations,
                            public IFileSystemDirectoryWatch,
+                           public IFileSystemAtomicWriter,
                            public IInformations,
                            public INavigationMenu,
                            public IDriveInfo
@@ -216,6 +212,9 @@ public:
     HRESULT STDMETHODCALLTYPE SetFileBasicInformation(const wchar_t* path, const FileSystemBasicInformation* info) noexcept override;
     HRESULT STDMETHODCALLTYPE GetItemProperties(const wchar_t* path, const char** jsonUtf8) noexcept override;
 
+    // IFileSystemAtomicWriter
+    HRESULT STDMETHODCALLTYPE SupportsAtomicWriterCommit(const wchar_t* path, FileSystemFlags flags, BOOL* supported) noexcept override;
+
     // IFileSystemDirectoryOperations
     HRESULT STDMETHODCALLTYPE CreateDirectory(const wchar_t* path) noexcept override;
     HRESULT STDMETHODCALLTYPE GetDirectorySize(const wchar_t* path,
@@ -276,6 +275,8 @@ public:
     void NotifySyntheticPathCreated(std::wstring_view fullPath) noexcept;
     void NotifySyntheticPathDeleted(std::wstring_view fullPath) noexcept;
     void NotifySyntheticFolderChanged(std::wstring_view folderPath) noexcept;
+    void RememberWritableDirectoryValidation(std::wstring_view fullPath) noexcept;
+    [[nodiscard]] bool HasFreshWritableDirectoryValidation(std::wstring_view fullPath) noexcept;
 
 private:
     struct MenuEntry
@@ -340,7 +341,7 @@ private:
     "rename": false,
     "properties": true,
     "read": true,
-    "write": true
+    "write": false
   },
   "concurrency": {
     "copyMoveMax": 1,
@@ -349,7 +350,7 @@ private:
   },
   "crossFileSystem": {
     "export": { "copy": ["*"], "move": [] },
-    "import": { "copy": ["*"], "move": ["*"] }
+    "import": { "copy": [], "move": [] }
   },
   "pathIdentity": {
     "version": 1,
@@ -523,6 +524,7 @@ private:
     // S3 cache (best-effort)
     std::unordered_map<std::wstring, std::string> _s3BucketRegionByName;
     std::unordered_map<std::string, std::shared_ptr<Aws::S3Crt::S3CrtClient>> _s3ClientsByCtxKey;
+    std::unordered_map<std::wstring, ULONGLONG> _writableDirectoryValidationTicks;
 
     // S3 Tables cache (best-effort)
     std::unordered_map<std::wstring, std::string> _s3TableBucketArnByName;

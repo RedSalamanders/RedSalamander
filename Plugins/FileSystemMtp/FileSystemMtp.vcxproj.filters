@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{2C577458-0CB1-4B1E-B1C0-C516C2711AF3}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{8C725643-E3B4-4C8F-A612-53772E06D745}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{3B6E0343-A410-49A5-A789-624550638708}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav</Extensions>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="dllmain.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="Factory.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="FilesInformationMtp.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="FileSystemMtp.Core.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="FileSystemMtp.Device.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="FileSystemMtp.FakeBackend.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="FileSystemMtp.Shared.cpp"><Filter>Source Files</Filter></ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="FileSystemMtp.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="FileSystemMtp.Internal.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="FileSystemMtpResources.h"><Filter>Header Files</Filter></ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="FileSystemMtpResources.rc"><Filter>Resource Files</Filter></ResourceCompile>
+  </ItemGroup>
+</Project>

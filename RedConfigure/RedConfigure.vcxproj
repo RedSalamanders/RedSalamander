@@ -132,6 +132,7 @@
     <ClCompile Include="RedConfigureApp.cpp" />
     <ClCompile Include="RedConfigureRoot.cpp" />
     <ClCompile Include="RedConfigureSession.cpp" />
+    <ClCompile Include="RedConfigureWorkflow.cpp" />
     <ClCompile Include="RedConfigureSplashScreen.cpp" />
     <ClCompile Include="RedConfigureTraceProvider.cpp" />
     <ClCompile Include="RedConfigureUiHelpers.cpp" />
@@ -140,13 +141,16 @@
     <ClCompile Include="Workspace\WorkspaceDiscovery.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="RedConfigureBinaryFile.h" />
     <ClInclude Include="Localization\PlaceholderValidation.h" />
     <ClInclude Include="Localization\RcParser.h" />
     <ClInclude Include="Localization\RcWriter.h" />
     <ClInclude Include="RedConfigureApp.h" />
     <ClInclude Include="RedConfigureGridModels.h" />
+    <ClInclude Include="RedConfigureLocalizationExampleControl.h" />
     <ClInclude Include="RedConfigureRoot.h" />
     <ClInclude Include="RedConfigureSession.h" />
+    <ClInclude Include="RedConfigureWorkflow.h" />
     <ClInclude Include="RedConfigureSplashScreen.h" />
     <ClInclude Include="RedConfigureThemeExampleControl.h" />
     <ClInclude Include="RedConfigureUiHelpers.h" />

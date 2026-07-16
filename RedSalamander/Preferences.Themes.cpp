@@ -105,10 +105,7 @@ void LogThemesDxState(const wchar_t* reason,
                 rebuildOnShow ? L"true" : L"false");
 }
 
-[[nodiscard]] COLORREF ColorRefFromArgb(uint32_t argb) noexcept
-{
-    return RGB((argb >> 16) & 0xFFu, (argb >> 8) & 0xFFu, argb & 0xFFu);
-}
+using Common::Colors::ColorRefFromArgb;
 
 [[nodiscard]] COLORREF CompositeArgbOnBackground(COLORREF background, uint32_t argb) noexcept
 {
@@ -122,7 +119,7 @@ void LogThemesDxState(const wchar_t* reason,
     {
         return rgb;
     }
-    return UiMetrics::BlendColor(background, rgb, alpha, 255);
+    return UiMetrics::BlendColorRefWeightedTruncate(background, rgb, alpha, 255);
 }
 
 void DrawRoundedColorSwatch(HDC hdc, RECT rc, UINT dpi, const AppTheme& theme, COLORREF background, std::optional<uint32_t> argb, bool enabled) noexcept
@@ -136,7 +133,7 @@ void DrawRoundedColorSwatch(HDC hdc, RECT rc, UINT dpi, const AppTheme& theme, C
     const int height = std::max(0l, rc.bottom - rc.top);
     const int radius = std::max(1, std::min(UiMetrics::ScaleDip(dpi, 4), std::min(width, height) / 2));
 
-    COLORREF border = theme.systemHighContrast ? GetSysColor(COLOR_WINDOWTEXT) : UiMetrics::BlendColor(background, theme.menu.text, theme.dark ? 70 : 50, 255);
+    COLORREF border = theme.systemHighContrast ? GetSysColor(COLOR_WINDOWTEXT) : UiMetrics::BlendColorRefWeightedTruncate(background, theme.menu.text, theme.dark ? 70 : 50, 255);
     COLORREF fill   = background;
     if (argb.has_value())
     {
@@ -145,8 +142,8 @@ void DrawRoundedColorSwatch(HDC hdc, RECT rc, UINT dpi, const AppTheme& theme, C
 
     if (! enabled && ! theme.highContrast)
     {
-        fill   = UiMetrics::BlendColor(background, fill, theme.dark ? 120 : 95, 255);
-        border = UiMetrics::BlendColor(background, border, theme.dark ? 120 : 95, 255);
+        fill   = UiMetrics::BlendColorRefWeightedTruncate(background, fill, theme.dark ? 120 : 95, 255);
+        border = UiMetrics::BlendColorRefWeightedTruncate(background, border, theme.dark ? 120 : 95, 255);
     }
 
     D2DHdcPaint::Session paint;
@@ -753,6 +750,10 @@ bool DebugCancelPreferencesThemesNextBrowseImpl() noexcept
             outError = parserMessage.empty() ? LoadStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_PARSE_FAILED) : parserMessage;
             break;
         case Common::Settings::ThemeDefinitionIoError::RootNotObject: outError = LoadStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_ROOT_NOT_OBJECT); break;
+        case Common::Settings::ThemeDefinitionIoError::MissingOrInvalidFormatVersion:
+        case Common::Settings::ThemeDefinitionIoError::UnsupportedFormatVersion:
+            outError = parserMessage.empty() ? LoadStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_PARSE_FAILED) : parserMessage;
+            break;
         case Common::Settings::ThemeDefinitionIoError::MissingOrInvalidId:
             outError = FormatStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_FIELD_MISSING_OR_NOT_STRING_FMT, L"id");
             break;
@@ -766,7 +767,13 @@ bool DebugCancelPreferencesThemesNextBrowseImpl() noexcept
         case Common::Settings::ThemeDefinitionIoError::InvalidBaseThemeId:
             outError = LoadStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_BASE_NOT_BUILTIN);
             break;
+        case Common::Settings::ThemeDefinitionIoError::PaletteNotObject:
+        case Common::Settings::ThemeDefinitionIoError::TooManyPaletteEntries:
+        case Common::Settings::ThemeDefinitionIoError::InvalidPaletteName:
+        case Common::Settings::ThemeDefinitionIoError::DuplicatePaletteName:
+        case Common::Settings::ThemeDefinitionIoError::DuplicateColorKey:
         case Common::Settings::ThemeDefinitionIoError::ColorsMissingOrNotObject:
+        case Common::Settings::ThemeDefinitionIoError::TooManyColorEntries:
             outError = LoadStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_COLORS_MISSING_OR_NOT_OBJECT);
             break;
         case Common::Settings::ThemeDefinitionIoError::InvalidColorKey:
@@ -933,10 +940,6 @@ void PopulateThemesThemeCombo(PreferencesDialogState& state) noexcept
     return nullptr;
 }
 
-[[nodiscard]] ThemeMode ThemeModeFromThemeId(std::wstring_view id) noexcept;
-[[nodiscard]] std::optional<D2D1::ColorF> FindAccentOverride(const std::unordered_map<std::wstring, uint32_t>& colors) noexcept;
-void ApplyAppThemeOverrides(AppTheme& theme, const std::unordered_map<std::wstring, uint32_t>& colors) noexcept;
-
 struct MonitorTextViewTheme
 {
     D2D1::ColorF bg              = D2D1::ColorF(D2D1::ColorF::White);
@@ -1048,20 +1051,9 @@ constexpr std::array<std::wstring_view, 65> kKnownColorKeys = {{
     bool editable                       = false;
     const auto* def                     = FindThemeDefinitionForDisplay(state, themeId, editable);
     const std::wstring_view baseThemeId = (def && ! def->baseThemeId.empty()) ? std::wstring_view(def->baseThemeId) : themeId;
-    const auto* overrides               = def ? &def->colors : nullptr;
-
-    const ThemeMode baseMode = ThemeModeFromThemeId(baseThemeId);
-    std::optional<D2D1::ColorF> accentOverride;
-    if (overrides)
-    {
-        accentOverride = FindAccentOverride(*overrides);
-    }
-
-    AppTheme appTheme = ResolveAppTheme(baseMode, L"RedSalamander", accentOverride);
-    if (overrides)
-    {
-        ApplyAppThemeOverrides(appTheme, *overrides);
-    }
+    AppThemeSelectionResolution resolution = ResolveAppThemeSelection(themeId, def, L"RedSalamander");
+    const auto* overrides = resolution.resolvedColors.has_value() ? &resolution.resolvedColors->colors : nullptr;
+    AppTheme appTheme     = std::move(resolution.theme);
     const MonitorTextViewTheme monitorTheme = ResolveMonitorThemeForDisplay(baseThemeId, overrides);
 
     const std::wstring_view filter = PrefsUi::TrimWhitespace(state.themesSearchText);
@@ -1178,27 +1170,6 @@ void RefreshThemesPage(HWND host, PreferencesDialogState& state) noexcept
     InvalidateRect(host, nullptr, TRUE);
 }
 
-[[nodiscard]] ThemeMode ThemeModeFromThemeId(std::wstring_view id) noexcept
-{
-    if (id == L"builtin/light")
-    {
-        return ThemeMode::Light;
-    }
-    if (id == L"builtin/dark")
-    {
-        return ThemeMode::Dark;
-    }
-    if (id == L"builtin/rainbow")
-    {
-        return ThemeMode::Rainbow;
-    }
-    if (id == L"builtin/highContrast")
-    {
-        return ThemeMode::HighContrast;
-    }
-    return ThemeMode::System;
-}
-
 [[nodiscard]] float AlphaFromArgb(uint32_t argb) noexcept
 {
     return static_cast<float>((argb >> 24) & 0xFFu) / 255.0f;
@@ -1214,53 +1185,6 @@ void RefreshThemesPage(HWND host, PreferencesDialogState& state) noexcept
         }
     }
     return std::nullopt;
-}
-
-[[nodiscard]] std::optional<D2D1::ColorF> FindAccentOverride(const std::unordered_map<std::wstring, uint32_t>& colors) noexcept
-{
-    const auto argb = FindColorOverride(colors, L"app.accent");
-    if (! argb)
-    {
-        return std::nullopt;
-    }
-
-    const COLORREF rgb = ColorRefFromArgb(*argb);
-    return ColorFromCOLORREF(rgb, AlphaFromArgb(*argb));
-}
-
-void ApplyDialogThemeOverrides(AppTheme& theme, const std::unordered_map<std::wstring, uint32_t>& colors) noexcept
-{
-    const auto applyColorRef = [&](std::wstring_view key, COLORREF& target) noexcept
-    {
-        const auto argb = FindColorOverride(colors, key);
-        if (! argb)
-        {
-            return;
-        }
-        target = ColorRefFromArgb(*argb);
-    };
-
-    const auto applyD2D = [&](std::wstring_view key, D2D1::ColorF& target) noexcept
-    {
-        const auto argb = FindColorOverride(colors, key);
-        if (! argb)
-        {
-            return;
-        }
-        const COLORREF rgb = ColorRefFromArgb(*argb);
-        target             = ColorFromCOLORREF(rgb, AlphaFromArgb(*argb));
-    };
-
-    applyD2D(L"app.accent", theme.accent);
-    applyColorRef(L"window.background", theme.windowBackground);
-
-    applyColorRef(L"menu.background", theme.menu.background);
-    applyColorRef(L"menu.text", theme.menu.text);
-    applyColorRef(L"menu.disabledText", theme.menu.disabledText);
-    applyColorRef(L"menu.selectionBg", theme.menu.selectionBg);
-    applyColorRef(L"menu.selectionText", theme.menu.selectionText);
-    applyColorRef(L"menu.separator", theme.menu.separator);
-    applyColorRef(L"menu.border", theme.menu.border);
 }
 
 [[nodiscard]] uint32_t ArgbFromColorRef(COLORREF rgb, uint8_t alpha = 0xFFu) noexcept
@@ -1284,141 +1208,6 @@ void ApplyDialogThemeOverrides(AppTheme& theme, const std::unordered_map<std::ws
     const uint32_t g = clampByte(color.g);
     const uint32_t b = clampByte(color.b);
     return (a << 24) | (r << 16) | (g << 8) | b;
-}
-
-void ApplyAppThemeOverrides(AppTheme& theme, const std::unordered_map<std::wstring, uint32_t>& colors) noexcept
-{
-    const auto applyColorRef = [&](std::wstring_view key, COLORREF& target) noexcept
-    {
-        const auto argb = FindColorOverride(colors, key);
-        if (! argb)
-        {
-            return;
-        }
-        target = ColorRefFromArgb(*argb);
-    };
-
-    const auto applyD2D = [&](std::wstring_view key, D2D1::ColorF& target) noexcept
-    {
-        const auto argb = FindColorOverride(colors, key);
-        if (! argb)
-        {
-            return;
-        }
-        const COLORREF rgb = ColorRefFromArgb(*argb);
-        target             = ColorFromCOLORREF(rgb, AlphaFromArgb(*argb));
-    };
-
-    applyD2D(L"app.accent", theme.accent);
-    applyColorRef(L"window.background", theme.windowBackground);
-
-    applyColorRef(L"menu.background", theme.menu.background);
-    applyColorRef(L"menu.text", theme.menu.text);
-    applyColorRef(L"menu.disabledText", theme.menu.disabledText);
-    applyColorRef(L"menu.selectionBg", theme.menu.selectionBg);
-    applyColorRef(L"menu.selectionText", theme.menu.selectionText);
-    applyColorRef(L"menu.separator", theme.menu.separator);
-    applyColorRef(L"menu.border", theme.menu.border);
-
-    applyD2D(L"navigation.background", theme.navigationView.background);
-    applyD2D(L"navigation.backgroundHover", theme.navigationView.backgroundHover);
-    applyD2D(L"navigation.backgroundPressed", theme.navigationView.backgroundPressed);
-    applyD2D(L"navigation.text", theme.navigationView.text);
-    applyD2D(L"navigation.separator", theme.navigationView.separator);
-    applyD2D(L"navigation.accent", theme.navigationView.accent);
-    applyD2D(L"navigation.progressOk", theme.navigationView.progressOk);
-    applyD2D(L"navigation.progressWarn", theme.navigationView.progressWarn);
-    applyD2D(L"navigation.progressBackground", theme.navigationView.progressBackground);
-
-    if (const auto argb = FindColorOverride(colors, L"navigation.background"))
-    {
-        const COLORREF rgb                 = ColorRefFromArgb(*argb);
-        theme.navigationView.gdiBackground = rgb;
-        theme.navigationView.gdiBorder     = rgb;
-    }
-
-    if (const auto argb = FindColorOverride(colors, L"navigation.separator"))
-    {
-        theme.navigationView.gdiBorderPen = ColorRefFromArgb(*argb);
-    }
-
-    applyD2D(L"folderView.background", theme.folderView.backgroundColor);
-    applyD2D(L"folderView.itemBackgroundNormal", theme.folderView.itemBackgroundNormal);
-    applyD2D(L"folderView.itemBackgroundHovered", theme.folderView.itemBackgroundHovered);
-    applyD2D(L"folderView.itemBackgroundSelected", theme.folderView.itemBackgroundSelected);
-    applyD2D(L"folderView.itemBackgroundSelectedInactive", theme.folderView.itemBackgroundSelectedInactive);
-    applyD2D(L"folderView.itemBackgroundFocused", theme.folderView.itemBackgroundFocused);
-    applyD2D(L"folderView.textNormal", theme.folderView.textNormal);
-    applyD2D(L"folderView.textSelected", theme.folderView.textSelected);
-    applyD2D(L"folderView.textSelectedInactive", theme.folderView.textSelectedInactive);
-    applyD2D(L"folderView.textDisabled", theme.folderView.textDisabled);
-    applyD2D(L"folderView.focusBorder", theme.folderView.focusBorder);
-    applyD2D(L"folderView.gridLines", theme.folderView.gridLines);
-    applyD2D(L"folderView.errorBackground", theme.folderView.errorBackground);
-    applyD2D(L"folderView.errorText", theme.folderView.errorText);
-    applyD2D(L"folderView.warningBackground", theme.folderView.warningBackground);
-    applyD2D(L"folderView.warningText", theme.folderView.warningText);
-    applyD2D(L"folderView.infoBackground", theme.folderView.infoBackground);
-    applyD2D(L"folderView.infoText", theme.folderView.infoText);
-
-    theme.fileOperations.progressBackground = theme.navigationView.progressBackground;
-    theme.fileOperations.progressTotal      = theme.navigationView.progressOk;
-    theme.fileOperations.progressItem       = theme.navigationView.accent;
-
-    const D2D1::ColorF menuBorder   = ColorFromCOLORREF(theme.menu.border);
-    const D2D1::ColorF menuDisabled = ColorFromCOLORREF(theme.menu.disabledText);
-
-    theme.fileOperations.graphBackground =
-        D2D1::ColorF(theme.fileOperations.progressBackground.r, theme.fileOperations.progressBackground.g, theme.fileOperations.progressBackground.b, 0.35f);
-    theme.fileOperations.graphGrid      = D2D1::ColorF(menuBorder.r, menuBorder.g, menuBorder.b, 0.35f);
-    theme.fileOperations.graphLimit     = D2D1::ColorF(menuDisabled.r, menuDisabled.g, menuDisabled.b, 0.85f);
-    theme.fileOperations.graphLine      = theme.fileOperations.progressItem;
-    theme.fileOperations.scrollbarTrack = D2D1::ColorF(menuBorder.r, menuBorder.g, menuBorder.b, 0.12f);
-    theme.fileOperations.scrollbarThumb = D2D1::ColorF(menuBorder.r, menuBorder.g, menuBorder.b, 0.40f);
-
-    applyD2D(L"fileOps.progressBackground", theme.fileOperations.progressBackground);
-    applyD2D(L"fileOps.progressTotal", theme.fileOperations.progressTotal);
-    applyD2D(L"fileOps.progressItem", theme.fileOperations.progressItem);
-    applyD2D(L"fileOps.graphBackground", theme.fileOperations.graphBackground);
-    applyD2D(L"fileOps.graphGrid", theme.fileOperations.graphGrid);
-    applyD2D(L"fileOps.graphLimit", theme.fileOperations.graphLimit);
-    applyD2D(L"fileOps.graphLine", theme.fileOperations.graphLine);
-    applyD2D(L"fileOps.scrollbarTrack", theme.fileOperations.scrollbarTrack);
-    applyD2D(L"fileOps.scrollbarThumb", theme.fileOperations.scrollbarThumb);
-
-    applyD2D(L"viewer.diff.addedBackground", theme.viewerDiff.addedBackground);
-    applyD2D(L"viewer.diff.removedBackground", theme.viewerDiff.removedBackground);
-    applyD2D(L"viewer.diff.contextBackground", theme.viewerDiff.contextBackground);
-    applyD2D(L"viewer.diff.headerBackground", theme.viewerDiff.headerBackground);
-    applyD2D(L"viewer.diff.bannerBackground", theme.viewerDiff.bannerBackground);
-    applyD2D(L"viewer.diff.placeholderBackground", theme.viewerDiff.placeholderBackground);
-    applyD2D(L"viewer.diff.divider", theme.viewerDiff.divider);
-
-    if (! FindColorOverride(colors, L"folderView.itemBackgroundSelectedInactive"))
-    {
-        if (const auto argb = FindColorOverride(colors, L"folderView.itemBackgroundSelected"))
-        {
-            const float inactiveSelectionAlphaScale = theme.highContrast ? 0.80f : 0.65f;
-            const COLORREF rgb                      = ColorRefFromArgb(*argb);
-            theme.folderView.itemBackgroundSelectedInactive =
-                ColorFromCOLORREF(rgb, std::clamp(AlphaFromArgb(*argb) * inactiveSelectionAlphaScale, 0.0f, 1.0f));
-        }
-    }
-
-    if (! FindColorOverride(colors, L"folderView.textSelectedInactive") && ! theme.highContrast)
-    {
-        const float alpha             = std::clamp(theme.folderView.itemBackgroundSelectedInactive.a, 0.0f, 1.0f);
-        const D2D1::ColorF background = theme.folderView.backgroundColor;
-        const D2D1::ColorF overlay    = theme.folderView.itemBackgroundSelectedInactive;
-
-        const D2D1::ColorF composite = D2D1::ColorF(overlay.r * alpha + background.r * (1.0f - alpha),
-                                                    overlay.g * alpha + background.g * (1.0f - alpha),
-                                                    overlay.b * alpha + background.b * (1.0f - alpha),
-                                                    1.0f);
-
-        const COLORREF contrastText           = ChooseContrastingTextColor(ColorToCOLORREF(composite));
-        theme.folderView.textSelectedInactive = ColorFromCOLORREF(contrastText);
-    }
 }
 
 [[nodiscard]] MonitorTextViewTheme ResolveMonitorThemeForDisplay(std::wstring_view baseThemeId,
@@ -1877,6 +1666,7 @@ void DuplicateSelectedTheme(HWND host, PreferencesDialogState& state) noexcept
     if (sourceDef)
     {
         def.baseThemeId = sourceDef->baseThemeId.empty() ? std::wstring(themeId) : sourceDef->baseThemeId;
+        def.palette     = sourceDef->palette;
         def.colors      = sourceDef->colors;
     }
     else
@@ -2038,15 +1828,32 @@ void SetThemeOverrideFromEditor(HWND host, PreferencesDialogState& state) noexce
     }
 
     const std::wstring valueText = state.themesColorText;
-    uint32_t argb                = 0;
-    if (valueText.empty() || ! Common::Settings::TryParseColor(valueText, argb))
+    Common::Settings::ThemeColorSource source;
+    if (valueText.empty() || FAILED(Common::Settings::ParseThemeColorSource(valueText, source)))
     {
         ShowDialogAlert(
             dlg, HOST_ALERT_WARNING, LoadStringResource(nullptr, IDS_CAPTION_WARNING), LoadStringResource(nullptr, IDS_PREFS_THEMES_WARNING_ENTER_COLOR_VALUE));
         return;
     }
 
-    def->colors[key] = argb;
+    const auto previous = def->colors.find(key);
+    const std::optional<Common::Settings::ThemeColorSource> previousSource =
+        previous == def->colors.end() ? std::nullopt : std::optional<Common::Settings::ThemeColorSource>(previous->second);
+    def->colors[key] = std::move(source);
+    if (! ResolveAppThemeSelection(def->id, def, L"RedSalamander").customDefinitionResolved)
+    {
+        if (previousSource.has_value())
+        {
+            def->colors[key] = previousSource.value();
+        }
+        else
+        {
+            def->colors.erase(key);
+        }
+        ShowDialogAlert(
+            dlg, HOST_ALERT_WARNING, LoadStringResource(nullptr, IDS_CAPTION_WARNING), LoadStringResource(nullptr, IDS_PREFS_THEMES_WARNING_ENTER_COLOR_VALUE));
+        return;
+    }
 
     SetDirty(dlg, state);
     RefreshThemesPage(host, state);
@@ -2112,6 +1919,7 @@ void ResetSelectedThemeToDefaults(HWND host, PreferencesDialogState& state) noex
         return;
     }
 
+    def->palette.clear();
     def->colors.clear();
     SetDirty(dlg, state);
     RefreshThemesPage(host, state);
@@ -2220,23 +2028,7 @@ void SaveThemeToFile(HWND host, PreferencesDialogState& state) noexcept
         custom = FindThemeDefinitionById(settings.theme.themes, themeId);
     }
 
-    ThemeMode baseMode = ThemeModeFromThemeId(themeId);
-    std::optional<D2D1::ColorF> accentOverride;
-    const std::unordered_map<std::wstring, uint32_t>* overrides = nullptr;
-    if (custom)
-    {
-        baseMode       = ThemeModeFromThemeId(custom->baseThemeId);
-        accentOverride = FindAccentOverride(custom->colors);
-        overrides      = &custom->colors;
-    }
-
-    AppTheme theme = ResolveAppTheme(baseMode, L"RedSalamander", accentOverride);
-    if (overrides)
-    {
-        ApplyDialogThemeOverrides(theme, *overrides);
-    }
-
-    return theme;
+    return ResolveAppThemeSelection(themeId, custom, L"RedSalamander").theme;
 }
 
 void ApplyThemeToPreferencesDialog(HWND dlg, PreferencesDialogState& state, const AppTheme& theme) noexcept
@@ -2251,9 +2043,9 @@ void ApplyThemeToPreferencesDialog(HWND dlg, PreferencesDialogState& state, cons
     state.inputDisabledBrush.reset();
     state.cardBrush.reset();
 
-    state.inputBackgroundColor         = UiMetrics::BlendColor(state.cardBackgroundColor, state.theme.windowBackground, state.theme.dark ? 50 : 30, 255);
-    state.inputFocusedBackgroundColor  = UiMetrics::BlendColor(state.inputBackgroundColor, state.theme.menu.text, state.theme.dark ? 20 : 16, 255);
-    state.inputDisabledBackgroundColor = UiMetrics::BlendColor(state.theme.windowBackground, state.inputBackgroundColor, state.theme.dark ? 70 : 40, 255);
+    state.inputBackgroundColor         = UiMetrics::BlendColorRefWeightedTruncate(state.cardBackgroundColor, state.theme.windowBackground, state.theme.dark ? 50 : 30, 255);
+    state.inputFocusedBackgroundColor  = UiMetrics::BlendColorRefWeightedTruncate(state.inputBackgroundColor, state.theme.menu.text, state.theme.dark ? 20 : 16, 255);
+    state.inputDisabledBackgroundColor = UiMetrics::BlendColorRefWeightedTruncate(state.theme.windowBackground, state.inputBackgroundColor, state.theme.dark ? 70 : 40, 255);
     if (! state.theme.systemHighContrast)
     {
         state.cardBrush.reset(CreateSolidBrush(state.cardBackgroundColor));
@@ -2665,7 +2457,7 @@ void ThemesPane::ApplyDxTheme(const PreferencesDialogState& state) noexcept
         return;
     }
 
-    _pageHostDx->SetTheme(PrefsUi::MakeDxPalette(state.theme));
+    _pageHostDx->SetTheme(MakeAppThemeDxPalette(state.theme));
 }
 
 void ThemesPane::SyncDxControlsFromState(const PreferencesDialogState& state) noexcept
@@ -2870,7 +2662,7 @@ void ThemesPane::SyncDxSwatchFromState(const PreferencesDialogState& state) noex
 }
 
 void ThemesPane::LayoutDxPage(HWND host,
-                              const PreferencesDialogState& state,
+                              PreferencesDialogState& state,
                               int x,
                               int& y,
                               int width,
@@ -3025,11 +2817,13 @@ void ThemesPane::LayoutDxPage(HWND host,
     }
     localY += rowHeight + gapY;
 
-    const int editorHeight = rowHeight;
-    const int editorTop    = std::max(localY, hostContentBottom - editorHeight);
-    const int listTop      = localY;
-    const int listBottom   = std::max(listTop, editorTop - gapY);
-    const int listHeight   = std::max(0, listBottom - listTop);
+    const int editorHeight  = rowHeight;
+    const int minListHeight = std::max(rowHeight * 3, UiMetrics::ScaleDip(dpi, 30 + 48));
+    const int minEditorTop  = localY + minListHeight + gapY;
+    const int editorTop     = std::max(minEditorTop, hostContentBottom - editorHeight);
+    const int listTop       = localY;
+    const int listBottom    = std::max(listTop + minListHeight, editorTop - gapY);
+    const int listHeight    = std::max(0, listBottom - listTop);
     if (page.colorsListControl)
     {
         page.colorsListControl->SetBounds(D2D1::RectF(pxToDip(x), pxToDip(listTop), pxToDip(x + width), pxToDip(listTop + listHeight)));
@@ -3097,8 +2891,28 @@ void ThemesPane::LayoutDxPage(HWND host,
         page.removeOverride->SetBounds(D2D1::RectF(pxToDip(buttonX), pxToDip(editorTop), pxToDip(buttonX + clearWidth), pxToDip(editorTop + rowHeight)));
     }
 
+    int dxContentBottomPx      = 0;
+    const auto includeDxBottom = [&](const Control* control) noexcept
+    {
+        if (! control)
+        {
+            return;
+        }
+
+        const D2D1_RECT_F bounds = control->GetBounds();
+        dxContentBottomPx        = std::max(dxContentBottomPx, static_cast<int>(std::lround(_pageHostDx->DipsToPixels(bounds.bottom))));
+    };
+    includeDxBottom(page.colorsListControl);
+    includeDxBottom(page.keyEdit);
+    includeDxBottom(page.colorEdit);
+    includeDxBottom(page.colorSwatch);
+    includeDxBottom(page.pickColor);
+    includeDxBottom(page.setOverride);
+    includeDxBottom(page.removeOverride);
+
     _pageHostDx->Invalidate();
-    y = hostContentBottom;
+    y                                   = std::max(hostContentBottom, editorTop + editorHeight + margin);
+    state.pageHostDirectContentBottomPx = std::max({state.pageHostDirectContentBottomPx, y, dxContentBottomPx + margin});
 }
 
 void ThemesPane::OnVisibilityChanged(bool visible) noexcept
@@ -3300,26 +3114,23 @@ void ThemesPane::UpdateEditorFromSelection(HWND host, PreferencesDialogState& st
         bool editable                       = false;
         const auto* def                     = FindThemeDefinitionForDisplay(state, themeIdOpt.value(), editable);
         const std::wstring_view baseThemeId = (def && ! def->baseThemeId.empty()) ? std::wstring_view(def->baseThemeId) : themeIdOpt.value();
-        const auto* overrides               = def ? &def->colors : nullptr;
 
-        const ThemeMode baseMode = ThemeModeFromThemeId(baseThemeId);
-        std::optional<D2D1::ColorF> accentOverride;
-        if (overrides)
-        {
-            accentOverride = FindAccentOverride(*overrides);
-        }
-
-        AppTheme appTheme = ResolveAppTheme(baseMode, L"RedSalamander", accentOverride);
-        if (overrides)
-        {
-            ApplyAppThemeOverrides(appTheme, *overrides);
-        }
+        AppThemeSelectionResolution resolution = ResolveAppThemeSelection(themeIdOpt.value(), def, L"RedSalamander");
+        const auto* overrides = resolution.resolvedColors.has_value() ? &resolution.resolvedColors->colors : nullptr;
+        AppTheme appTheme     = std::move(resolution.theme);
         const MonitorTextViewTheme monitorTheme = ResolveMonitorThemeForDisplay(baseThemeId, overrides);
 
         const auto colorOpt = TryGetEffectiveThemeColorArgb(appTheme, monitorTheme, overrides, selectedKey);
         if (colorOpt.has_value())
         {
             valueText = Common::Settings::FormatColor(colorOpt.value());
+        }
+        if (def)
+        {
+            if (const auto authored = def->colors.find(selectedKey); authored != def->colors.end())
+            {
+                valueText = Common::Settings::FormatThemeColorSource(authored->second);
+            }
         }
     }
 
@@ -3484,10 +3295,11 @@ bool ThemesPane::DebugGetListRowClientRect(const size_t rowIndex, RECT& outRect)
         return false;
     }
 
-    outRect.left   = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(rowRect->left)));
-    outRect.top    = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(rowRect->top)));
-    outRect.right  = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(rowRect->right)));
-    outRect.bottom = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(rowRect->bottom)));
+    const float pageScrollDip = _state ? _pageHostDx->PixelsToDip(static_cast<float>(_state->pageScrollY)) : 0.0f;
+    outRect.left              = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(rowRect->left)));
+    outRect.top               = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(rowRect->top - pageScrollDip)));
+    outRect.right             = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(rowRect->right)));
+    outRect.bottom            = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(rowRect->bottom - pageScrollDip)));
     return outRect.right > outRect.left && outRect.bottom > outRect.top;
 }
 
@@ -3505,16 +3317,17 @@ bool ThemesPane::DebugGetListHeaderClientRect(const size_t columnIndex, RECT& ou
         return false;
     }
 
-    outRect.left   = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(headerRect->left)));
-    outRect.top    = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(headerRect->top)));
-    outRect.right  = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(headerRect->right)));
-    outRect.bottom = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(headerRect->bottom)));
+    const float pageScrollDip = _state ? _pageHostDx->PixelsToDip(static_cast<float>(_state->pageScrollY)) : 0.0f;
+    outRect.left              = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(headerRect->left)));
+    outRect.top               = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(headerRect->top - pageScrollDip)));
+    outRect.right             = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(headerRect->right)));
+    outRect.bottom            = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(headerRect->bottom - pageScrollDip)));
     return outRect.right > outRect.left && outRect.bottom > outRect.top;
 }
 
 bool ThemesPane::DebugSelectListRow(const size_t rowIndex) noexcept
 {
-    if (! _dxState || ! _dxState->page.colorsListControl || ! _dxState->page.colorsListModel)
+    if (! _state || ! _dxState || ! _dxState->page.colorsListControl || ! _dxState->page.colorsListModel)
     {
         return false;
     }
@@ -3529,6 +3342,33 @@ bool ThemesPane::DebugSelectListRow(const size_t rowIndex) noexcept
     OnGridSelectionChanged();
     if (_pageHostDx)
     {
+        if (_hostWindow && IsWindow(_hostWindow) != FALSE)
+        {
+            if (const auto rowRect = _dxState->page.colorsListControl->GetVisibleRowRect(rowIndex))
+            {
+                RECT client{};
+                if (GetClientRect(_hostWindow, &client) != FALSE)
+                {
+                    const int viewportBottomPx = std::max(0l, client.bottom - client.top);
+                    const int marginPx         = static_cast<int>(std::lround(_pageHostDx->DipsToPixels(12.0f)));
+                    const int rowTopPx         = static_cast<int>(std::lround(_pageHostDx->DipsToPixels(rowRect->top)));
+                    const int rowBottomPx      = static_cast<int>(std::lround(_pageHostDx->DipsToPixels(rowRect->bottom)));
+
+                    int desiredScrollY = _state->pageScrollY;
+                    if ((rowTopPx - desiredScrollY) < marginPx)
+                    {
+                        desiredScrollY = rowTopPx - marginPx;
+                    }
+                    else if ((rowBottomPx - desiredScrollY) > (viewportBottomPx - marginPx))
+                    {
+                        desiredScrollY = rowBottomPx - (viewportBottomPx - marginPx);
+                    }
+
+                    PrefsPageHost::ScrollTo(_hostWindow, *_state, desiredScrollY);
+                }
+            }
+        }
+
         _pageHostDx->Invalidate();
     }
     return true;

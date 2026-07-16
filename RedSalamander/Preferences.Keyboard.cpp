@@ -737,7 +737,7 @@ void KeyboardPane::ApplyDxTheme(const PreferencesDialogState& state) noexcept
         return;
     }
 
-    const ThemePalette palette = PrefsUi::MakeDxPalette(state.theme);
+    const ThemePalette palette = MakeAppThemeDxPalette(state.theme);
     _pageHostDx->SetTheme(palette);
 }
 
@@ -748,7 +748,7 @@ void KeyboardPane::SyncDxControlsFromState(const PreferencesDialogState& state) 
         return;
     }
 
-    const ThemePalette palette = PrefsUi::MakeDxPalette(state.theme);
+    const ThemePalette palette = MakeAppThemeDxPalette(state.theme);
     KeyboardDxPage& page       = _dxState->page;
     page.searchLabel->SetText(GetKeyboardSearchLabelText());
     page.searchLabel->SetMnemonicTarget(page.searchEdit);
@@ -823,6 +823,7 @@ void KeyboardPane::SyncDxControlsFromState(const PreferencesDialogState& state) 
         }
         _syncingDxSelection = false;
         page.listControl->NotifyDataChanged();
+        page.listControl->RefreshAccessibilitySnapshot();
         if (_pageHostDx)
         {
             _pageHostDx->Invalidate();
@@ -916,14 +917,14 @@ void KeyboardPane::LayoutDxPage(HWND host,
         hintHeight = std::max(hintHeight, PrefsUi::MeasureWrappedTextHeightPx(typography, typography.caption, width, state.keyboardHintText));
     }
 
-    const int buttonHeight = std::max(1, UiMetrics::ScaleDip(dpi, 26));
+    const int buttonHeight  = std::max(1, UiMetrics::ScaleDip(dpi, 26));
     const int minListHeight = std::max(1, UiMetrics::ScaleDip(dpi, 30 + 48));
     const int minButtonsTop = localY + minListHeight + gapY + hintHeight + gapY;
-    const int buttonsTop   = std::max(minButtonsTop, hostContentBottom - buttonHeight);
-    const int hintTop      = std::max(localY, buttonsTop - gapY - hintHeight);
-    const int listTop      = localY;
-    const int listBottom   = std::max(listTop, hintTop - gapY);
-    const int listHeight   = std::max(0, listBottom - listTop);
+    const int buttonsTop    = std::max(minButtonsTop, hostContentBottom - buttonHeight);
+    const int hintTop       = std::max(localY, buttonsTop - gapY - hintHeight);
+    const int listTop       = localY;
+    const int listBottom    = std::max(listTop, hintTop - gapY);
+    const int listHeight    = std::max(0, listBottom - listTop);
 
     if (page.listControl)
     {
@@ -1287,6 +1288,7 @@ bool KeyboardPane::DebugSelectListRow(const size_t rowIndex) noexcept
 
     _dxState->page.listControl->GetSelectionModel().SetSingle(rows[rowIndex].stableId);
     OnGridSelectionChanged(*_dxState->page.listControl);
+    _dxState->page.listControl->RefreshAccessibilitySnapshot();
     if (_pageHostDx)
     {
         _pageHostDx->Invalidate();
@@ -1638,47 +1640,12 @@ void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& t
 
 [[nodiscard]] std::wstring Utf16FromUtf8(std::string_view text) noexcept
 {
-    if (text.empty() || text.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
-    {
-        return {};
-    }
-
-    const int required = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0);
-    if (required <= 0)
-    {
-        return {};
-    }
-
-    std::wstring result(static_cast<size_t>(required), L'\0');
-    const int written = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), result.data(), required);
-    if (written != required)
-    {
-        return {};
-    }
-    return result;
+    return Common::Strings::Utf16FromUtf8StrictOrEmpty(text);
 }
 
 [[nodiscard]] std::string Utf8FromUtf16(std::wstring_view text) noexcept
 {
-    if (text.empty() || text.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
-    {
-        return {};
-    }
-
-    const int required = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
-    if (required <= 0)
-    {
-        return {};
-    }
-
-    std::string result(static_cast<size_t>(required), '\0');
-    const int written =
-        WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), result.data(), required, nullptr, nullptr);
-    if (written != required)
-    {
-        return {};
-    }
-    return result;
+    return Common::Strings::Utf8FromUtf16StrictOrEmpty(text);
 }
 
 [[nodiscard]] std::wstring_view GetShortcutScopeDisplayName(ShortcutScope scope) noexcept

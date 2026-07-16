@@ -1,6 +1,7 @@
 #include "SqliteIndexStore.h"
 
 #include "Helpers.h"
+#include "PathUtils.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -51,6 +52,7 @@ constexpr uint64_t kQueryCancelCheckInterval           = 256u;
 constexpr uint64_t kAutomaticIncrementalVacuumMaxPages = 4'096u;
 constexpr std::string_view kMetaLastCheckpointUtc      = "last_checkpoint_utc";
 constexpr std::string_view kMetaLastCompactionUtc      = "last_compaction_utc";
+constexpr std::string_view kMetaStoreGeneration        = "store_generation";
 #ifdef ENABLE_TESTS
 constexpr wchar_t kEnumerateFailAfterEmittedRowsEnvVar[] = L"REDSALAMANDER_TEST_SQLITE_FAIL_AFTER_EMITTED_ROWS";
 #endif
@@ -86,6 +88,58 @@ constexpr wchar_t kEnumerateFailAfterEmittedRowsEnvVar[] = L"REDSALAMANDER_TEST_
     }
 
     return std::filesystem::path(databasePath).lexically_normal().wstring();
+}
+
+[[nodiscard]] bool HasWin32NamespacePrefix(std::wstring_view path) noexcept
+{
+    return path.rfind(LR"(\\?\)", 0u) == 0 || path.rfind(LR"(\\.\)", 0u) == 0;
+}
+
+[[nodiscard]] std::wstring MakeWin32ExtendedPath(std::wstring path)
+{
+    std::replace(path.begin(), path.end(), L'/', L'\\');
+    if (path.empty() || HasWin32NamespacePrefix(path))
+    {
+        return path;
+    }
+
+    if (path.rfind(LR"(\\)", 0u) == 0)
+    {
+        return std::wstring(LR"(\\?\UNC\)") + path.substr(2u);
+    }
+
+    if (Common::Paths::IsDriveAbsoluteWindowsPath(path))
+    {
+        return std::wstring(LR"(\\?\)") + path;
+    }
+
+    DWORD required = ::GetFullPathNameW(path.c_str(), 0u, nullptr, nullptr);
+    if (required == 0u)
+    {
+        return path;
+    }
+
+    std::wstring absolute;
+    absolute.resize(required);
+    const DWORD written = ::GetFullPathNameW(path.c_str(), static_cast<DWORD>(absolute.size()), absolute.data(), nullptr);
+    if (written == 0u || written >= absolute.size())
+    {
+        return path;
+    }
+
+    absolute.resize(written);
+    return MakeWin32ExtendedPath(std::move(absolute));
+}
+
+[[nodiscard]] std::wstring MakeSqliteOpenPath(std::wstring_view normalizedPath)
+{
+    constexpr size_t kSqliteSidecarPathReserve = 16u;
+    if (normalizedPath.empty() || HasWin32NamespacePrefix(normalizedPath) || normalizedPath.size() + kSqliteSidecarPathReserve < MAX_PATH)
+    {
+        return std::wstring(normalizedPath);
+    }
+
+    return MakeWin32ExtendedPath(std::wstring(normalizedPath));
 }
 
 #ifdef ENABLE_TESTS
@@ -130,27 +184,7 @@ constexpr wchar_t kEnumerateFailAfterEmittedRowsEnvVar[] = L"REDSALAMANDER_TEST_
 
 [[nodiscard]] std::wstring Utf8ToWide(std::string_view text)
 {
-    if (text.empty())
-    {
-        return {};
-    }
-
-    const int required = ::MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), nullptr, 0);
-    if (required <= 0)
-    {
-        return {};
-    }
-
-    std::wstring wide;
-    wide.resize(static_cast<size_t>(required));
-    const int written = ::MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), wide.data(), required);
-    if (written <= 0)
-    {
-        return {};
-    }
-
-    wide.resize(static_cast<size_t>(written));
-    return wide;
+    return Common::Strings::Utf16FromUtf8ReplacingInvalid(text);
 }
 
 [[nodiscard]] std::wstring FoldText(std::wstring_view text) noexcept
@@ -170,12 +204,22 @@ constexpr wchar_t kEnumerateFailAfterEmittedRowsEnvVar[] = L"REDSALAMANDER_TEST_
     for (size_t index = upper.size(); index > 0u; --index)
     {
         wchar_t& ch = upper[index - 1u];
-        if (ch != static_cast<wchar_t>(0xFFFFu))
+        if (ch == static_cast<wchar_t>(0xFFFFu))
         {
-            ++ch;
-            upper.resize(index);
-            return upper;
+            continue;
         }
+        // Incrementing a UTF-16 surrogate code unit yields another unpaired surrogate, which SQLite
+        // collapses to U+FFFD when binding via sqlite3_bind_text16. That can make the computed bound NOT
+        // strictly greater than rows beginning with that surrogate and silently drop genuine matches.
+        // Skip the upper bound entirely in that case (lower-bound-only scan); the MatchName() post-filter
+        // keeps results correct, only widening the scan range slightly.
+        if (ch >= static_cast<wchar_t>(0xD800u) && ch <= static_cast<wchar_t>(0xDFFFu))
+        {
+            return {};
+        }
+        ++ch;
+        upper.resize(index);
+        return upper;
     }
 
     return {};
@@ -234,9 +278,10 @@ constexpr wchar_t kEnumerateFailAfterEmittedRowsEnvVar[] = L"REDSALAMANDER_TEST_
 
 [[nodiscard]] HRESULT OpenConnection(std::wstring_view databasePath, int flags, unique_connection& outConnection)
 {
-    sqlite3* raw               = nullptr;
-    const std::string utf8Path = ToUtf8(databasePath);
-    const int sqliteResult     = sqlite3_open_v2(utf8Path.c_str(), &raw, flags, nullptr);
+    sqlite3* raw                = nullptr;
+    const std::wstring openPath = MakeSqliteOpenPath(databasePath);
+    const std::string utf8Path  = ToUtf8(openPath);
+    const int sqliteResult      = sqlite3_open_v2(utf8Path.c_str(), &raw, flags, nullptr);
     unique_connection connection(raw);
     if (sqliteResult != SQLITE_OK)
     {
@@ -255,26 +300,16 @@ constexpr wchar_t kEnumerateFailAfterEmittedRowsEnvVar[] = L"REDSALAMANDER_TEST_
     const std::string sqlText(sql);
     char* errorText        = nullptr;
     const int sqliteResult = sqlite3_exec(db, sqlText.c_str(), nullptr, nullptr, &errorText);
-    wil::unique_hlocal_string sqliteError{};
+    std::wstring sqliteError;
     if (errorText != nullptr)
     {
-        const size_t errorLen = std::strlen(errorText);
-        const int required    = ::MultiByteToWideChar(CP_UTF8, 0, errorText, static_cast<int>(errorLen), nullptr, 0);
-        if (required > 0)
-        {
-            sqliteError.reset(static_cast<wchar_t*>(::LocalAlloc(LMEM_FIXED, static_cast<size_t>(required + 1) * sizeof(wchar_t))));
-            if (sqliteError)
-            {
-                static_cast<void>(::MultiByteToWideChar(CP_UTF8, 0, errorText, static_cast<int>(errorLen), sqliteError.get(), required));
-                sqliteError.get()[required] = L'\0';
-            }
-        }
+        sqliteError = Common::Strings::Utf16FromUtf8ReplacingInvalid(errorText);
         sqlite3_free(errorText);
     }
 
     if (sqliteResult != SQLITE_OK)
     {
-        Debug::Error(L"SqliteIndexStore: {} failed. code={} message='{}'", context, sqliteResult, sqliteError ? sqliteError.get() : GetSqliteErrorMessage(db));
+        Debug::Error(L"SqliteIndexStore: {} failed. code={} message='{}'", context, sqliteResult, sqliteError.empty() ? GetSqliteErrorMessage(db) : sqliteError);
         return E_FAIL;
     }
 
@@ -443,6 +478,46 @@ constexpr wchar_t kEnumerateFailAfterEmittedRowsEnvVar[] = L"REDSALAMANDER_TEST_
     return S_OK;
 }
 
+[[nodiscard]] HRESULT ReadMetaUInt64(sqlite3* db, std::string_view key, uint64_t& outValue, bool& outFound)
+{
+    outValue = 0u;
+    outFound = false;
+
+    std::wstring text;
+    HRESULT hr = ReadMetaText(db, key, text, outFound);
+    if (FAILED(hr) || ! outFound)
+    {
+        return hr;
+    }
+
+    wchar_t* end                    = nullptr;
+    const unsigned long long parsed = _wcstoui64(text.c_str(), &end, 10);
+    if (end == nullptr || *end != L'\0')
+    {
+        Debug::Warning(L"SqliteIndexStore: meta key '{}' has non-numeric value '{}'.", std::wstring(key.begin(), key.end()), text);
+        outFound = false;
+        outValue = 0u;
+        return S_OK;
+    }
+
+    outValue = static_cast<uint64_t>(parsed);
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT EnsureStoreGenerationInitialized(sqlite3* db)
+{
+    constexpr std::string_view kSql = "INSERT INTO meta(key, value) VALUES('store_generation', '1') "
+                                      "ON CONFLICT(key) DO NOTHING;";
+    return ExecuteSql(db, kSql, L"SQLite store generation bootstrap");
+}
+
+[[nodiscard]] HRESULT IncrementStoreGeneration(sqlite3* db)
+{
+    constexpr std::string_view kSql = "INSERT INTO meta(key, value) VALUES('store_generation', '1') "
+                                      "ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + 1;";
+    return ExecuteSql(db, kSql, L"SQLite store generation increment");
+}
+
 [[nodiscard]] HRESULT SchemaObjectExists(sqlite3* db, std::string_view type, std::string_view name, bool& outExists)
 {
     unique_statement statement;
@@ -575,6 +650,17 @@ constexpr wchar_t kEnumerateFailAfterEmittedRowsEnvVar[] = L"REDSALAMANDER_TEST_
     const int sqliteResult = sqlite3_wal_checkpoint_v2(db, nullptr, mode, &logFrames, &checkpointedFrames);
     if (sqliteResult != SQLITE_OK)
     {
+        if (sqliteResult == SQLITE_BUSY || sqliteResult == SQLITE_LOCKED)
+        {
+            Debug::Warning(L"SqliteIndexStore: {} deferred. code={} logFrames={} checkpointedFrames={} message='{}'",
+                           context,
+                           sqliteResult,
+                           logFrames,
+                           checkpointedFrames,
+                           GetSqliteErrorMessage(db));
+            return HRESULT_FROM_WIN32(ERROR_BUSY);
+        }
+
         Debug::Error(L"SqliteIndexStore: {} failed. code={} logFrames={} checkpointedFrames={} message='{}'",
                      context,
                      sqliteResult,
@@ -582,6 +668,50 @@ constexpr wchar_t kEnumerateFailAfterEmittedRowsEnvVar[] = L"REDSALAMANDER_TEST_
                      checkpointedFrames,
                      GetSqliteErrorMessage(db));
         return E_FAIL;
+    }
+
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT RunQuickCheck(sqlite3* db, std::wstring_view context)
+{
+    unique_statement statement;
+    HRESULT hr = PrepareStatement(db, "PRAGMA quick_check;", statement);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    bool sawRow = false;
+    for (;;)
+    {
+        const int sqliteResult = sqlite3_step(statement.get());
+        if (sqliteResult == SQLITE_DONE)
+        {
+            break;
+        }
+
+        if (sqliteResult != SQLITE_ROW)
+        {
+            Debug::Error(L"SqliteIndexStore: {} quick_check failed. code={} message='{}'", context, sqliteResult, GetSqliteErrorMessage(db));
+            return (sqliteResult == SQLITE_BUSY || sqliteResult == SQLITE_LOCKED) ? HRESULT_FROM_WIN32(ERROR_BUSY) : E_FAIL;
+        }
+
+        sawRow           = true;
+        const auto* text = reinterpret_cast<const char*>(sqlite3_column_text(statement.get(), 0));
+        const int bytes  = sqlite3_column_bytes(statement.get(), 0);
+        const std::string_view result(text != nullptr && bytes > 0 ? text : "", text != nullptr && bytes > 0 ? static_cast<size_t>(bytes) : 0u);
+        if (result != "ok")
+        {
+            Debug::Error(L"SqliteIndexStore: {} quick_check reported '{}'", context, Utf8ToWide(result));
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+    }
+
+    if (! sawRow)
+    {
+        Debug::Error(L"SqliteIndexStore: {} quick_check returned no rows.", context);
+        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
 
     return S_OK;
@@ -638,6 +768,7 @@ struct NamePrefilter final
 {
     NamePrefilterKind kind = NamePrefilterKind::None;
     std::wstring value;
+    std::wstring upperBound;
 };
 
 [[nodiscard]] bool ContainsWildcardTokens(std::wstring_view pattern) noexcept
@@ -682,8 +813,9 @@ struct NamePrefilter final
                 const std::wstring_view prefix = pattern.substr(0u, pattern.size() - 1u);
                 if (! prefix.empty() && prefix.find_first_of(L"*?") == std::wstring_view::npos)
                 {
-                    outPrefilter.kind  = NamePrefilterKind::PrefixFolded;
-                    outPrefilter.value = FoldText(prefix);
+                    outPrefilter.kind       = NamePrefilterKind::PrefixFolded;
+                    outPrefilter.value      = FoldText(prefix);
+                    outPrefilter.upperBound = BuildPrefixUpperBound(outPrefilter.value);
                     return ! outPrefilter.value.empty();
                 }
             }
@@ -737,6 +869,16 @@ struct NamePrefilter final
 {
     outRow = {};
 
+    const auto readCurrentRow = [](sqlite3_stmt* statement, VolumeRow& row) noexcept
+    {
+        row.volumeId       = sqlite3_column_int64(statement, 0);
+        row.fileSystemKind = static_cast<LocalSearchIndexCore::FileSystemKind>(sqlite3_column_int(statement, 1));
+        row.journalId      = static_cast<uint64_t>(sqlite3_column_int64(statement, 2));
+        row.nextUsn        = static_cast<uint64_t>(sqlite3_column_int64(statement, 3));
+        row.entryCount     = static_cast<uint64_t>(sqlite3_column_int64(statement, 4));
+        row.state          = static_cast<uint32_t>(sqlite3_column_int(statement, 5));
+    };
+
     unique_statement statement;
     constexpr std::string_view kSql = "SELECT volume_id, fs_kind, journal_id, next_usn, entry_count, state FROM volumes WHERE root_path = ?1;";
     HRESULT hr                      = PrepareStatement(db, kSql, statement);
@@ -753,23 +895,48 @@ struct NamePrefilter final
     }
 
     const int sqliteResult = sqlite3_step(statement.get());
-    if (sqliteResult == SQLITE_DONE)
+    if (sqliteResult == SQLITE_ROW)
     {
-        return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
+        readCurrentRow(statement.get(), outRow);
+        return S_OK;
     }
-    if (sqliteResult != SQLITE_ROW)
+    if (sqliteResult != SQLITE_DONE)
     {
         Debug::Error(L"SqliteIndexStore: volume query failed for '{}'. code={} message='{}'", std::wstring(rootPath), sqliteResult, GetSqliteErrorMessage(db));
         return E_FAIL;
     }
 
-    outRow.volumeId       = sqlite3_column_int64(statement.get(), 0);
-    outRow.fileSystemKind = static_cast<LocalSearchIndexCore::FileSystemKind>(sqlite3_column_int(statement.get(), 1));
-    outRow.journalId      = static_cast<uint64_t>(sqlite3_column_int64(statement.get(), 2));
-    outRow.nextUsn        = static_cast<uint64_t>(sqlite3_column_int64(statement.get(), 3));
-    outRow.entryCount     = static_cast<uint64_t>(sqlite3_column_int64(statement.get(), 4));
-    outRow.state          = static_cast<uint32_t>(sqlite3_column_int(statement.get(), 5));
-    return S_OK;
+    unique_statement foldedStatement;
+    constexpr std::string_view kFoldedSql = "SELECT volume_id, fs_kind, journal_id, next_usn, entry_count, state, root_path FROM volumes;";
+    hr                                    = PrepareStatement(db, kFoldedSql, foldedStatement);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    const std::wstring foldedRootPath = FoldText(rootPath);
+    for (;;)
+    {
+        const int foldedResult = sqlite3_step(foldedStatement.get());
+        if (foldedResult == SQLITE_DONE)
+        {
+            return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
+        }
+        if (foldedResult != SQLITE_ROW)
+        {
+            Debug::Error(L"SqliteIndexStore: folded volume query failed for '{}'. code={} message='{}'",
+                         std::wstring(rootPath),
+                         foldedResult,
+                         GetSqliteErrorMessage(db));
+            return E_FAIL;
+        }
+
+        if (FoldText(ReadWideColumn(foldedStatement.get(), 6)) == foldedRootPath)
+        {
+            readCurrentRow(foldedStatement.get(), outRow);
+            return S_OK;
+        }
+    }
 }
 
 [[nodiscard]] HRESULT ReadVolumeTypeCounts(sqlite3* db, sqlite3_int64 volumeId, uint64_t& outFileCount, uint64_t& outDirectoryCount)
@@ -892,7 +1059,7 @@ struct NamePrefilter final
         case NamePrefilterKind::PrefixFolded:
         {
             sql += std::format(" AND name_folded >= ?{}", parameterIndex++);
-            if (! BuildPrefixUpperBound(prefilter.value).empty())
+            if (! prefilter.upperBound.empty())
             {
                 sql += std::format(" AND name_folded < ?{}", parameterIndex++);
             }
@@ -914,7 +1081,7 @@ struct NamePrefilter final
                                                 unique_statement& outStatement)
 {
     const std::string sql = BuildEnumerateStatementSql(rootEntry, request, prefilter);
-    HRESULT hr = PrepareStatement(db, sql, outStatement);
+    HRESULT hr            = PrepareStatement(db, sql, outStatement);
     if (FAILED(hr))
     {
         return hr;
@@ -968,10 +1135,9 @@ struct NamePrefilter final
                 return hr;
             }
 
-            const std::wstring upperBound = BuildPrefixUpperBound(prefilter.value);
-            if (! upperBound.empty())
+            if (! prefilter.upperBound.empty())
             {
-                hr = BindWideText(outStatement.get(), bindIndex++, upperBound);
+                hr = BindWideText(outStatement.get(), bindIndex++, prefilter.upperBound);
                 if (FAILED(hr))
                 {
                     Debug::Error(L"SqliteIndexStore: failed to bind prefix upper bound for '{}'.", request.rootPath);
@@ -1106,6 +1272,8 @@ struct NamePrefilter final
                                             "    ON CONFLICT(key) DO UPDATE SET value = excluded.value;"
                                             "INSERT INTO meta(key, value) VALUES('store_kind', 'sqlite-v2')"
                                             "    ON CONFLICT(key) DO UPDATE SET value = excluded.value;"
+                                            "INSERT INTO meta(key, value) VALUES('store_generation', '1')"
+                                            "    ON CONFLICT(key) DO NOTHING;"
                                             "COMMIT;";
     return ExecuteSql(db, kSchemaSql, L"SQLite schema bootstrap");
 }
@@ -1150,7 +1318,7 @@ struct NamePrefilter final
             hr                    = ReadSingleInt(db, "SELECT CAST(value AS INTEGER) FROM meta WHERE key = 'schema_version';", metaSchemaVersion);
             if (SUCCEEDED(hr) && metaSchemaVersion == static_cast<int>(kSchemaVersion))
             {
-                return S_OK;
+                return EnsureStoreGenerationInitialized(db);
             }
             if (FAILED(hr))
             {
@@ -1216,6 +1384,8 @@ struct NamePrefilter final
                                 "    ON CONFLICT(key) DO UPDATE SET value = excluded.value;"
                                 "INSERT INTO meta(key, value) VALUES('store_kind', 'sqlite-v2')"
                                 "    ON CONFLICT(key) DO UPDATE SET value = excluded.value;"
+                                "INSERT INTO meta(key, value) VALUES('store_generation', '1')"
+                                "    ON CONFLICT(key) DO NOTHING;"
                                 "PRAGMA user_version=2;"),
                     L"SQLite schema v2 metadata update");
     if (FAILED(hr))
@@ -1537,6 +1707,17 @@ struct NamePrefilter final
         return hr;
     }
 
+    bool hasStoreGeneration = false;
+    hr                      = ReadMetaUInt64(db, kMetaStoreGeneration, outInfo.storeGeneration, hasStoreGeneration);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+    if (! hasStoreGeneration)
+    {
+        outInfo.storeGeneration = 0u;
+    }
+
     hr = ReadSingleInt64(db, "SELECT COUNT(*) FROM volumes;", outInfo.volumeCount);
     if (FAILED(hr))
     {
@@ -1557,6 +1738,14 @@ struct NamePrefilter final
         return hr;
     }
 
+    hr = ReadSingleInt64(db,
+                         std::format("SELECT COUNT(*) FROM volumes WHERE state <> {};", static_cast<unsigned long long>(kVolumeStateReady)),
+                         outInfo.queryUnreadyVolumeCount);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
     outInfo.schemaReady = hasMetaTable && hasVolumesTable && hasEntriesTable && hasNameIndex && hasExtensionIndex && hasPathIndex && hasParentIndex &&
                           hasCreationTimeColumn && hasLastAccessTimeColumn && hasChangeTimeColumn && hasAllocationSizeColumn &&
                           metaSchemaVersion == static_cast<int>(kSchemaVersion) && outInfo.schemaVersion == kSchemaVersion;
@@ -1568,33 +1757,18 @@ struct NamePrefilter final
     outVolumeId = 0;
     outExists   = false;
 
-    unique_statement statement;
-    constexpr std::string_view kSql = "SELECT volume_id FROM volumes WHERE root_path = ?1;";
-    HRESULT hr                      = PrepareStatement(db, kSql, statement);
-    if (FAILED(hr))
-    {
-        return hr;
-    }
-
-    hr = BindWideText(statement.get(), 1, rootPath);
-    if (FAILED(hr))
-    {
-        Debug::Error(L"SqliteIndexStore: failed to bind root_path for volume lookup '{}'.", std::wstring(rootPath));
-        return hr;
-    }
-
-    const int sqliteResult = sqlite3_step(statement.get());
-    if (sqliteResult == SQLITE_DONE)
+    VolumeRow row{};
+    const HRESULT hr = ReadVolumeRow(db, rootPath, row);
+    if (hr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND))
     {
         return S_OK;
     }
-    if (sqliteResult != SQLITE_ROW)
+    if (FAILED(hr))
     {
-        Debug::Error(L"SqliteIndexStore: volume lookup failed for '{}'. code={} message='{}'", std::wstring(rootPath), sqliteResult, GetSqliteErrorMessage(db));
-        return E_FAIL;
+        return hr;
     }
 
-    outVolumeId = sqlite3_column_int64(statement.get(), 0);
+    outVolumeId = row.volumeId;
     outExists   = true;
     return S_OK;
 }
@@ -2115,7 +2289,11 @@ HRESULT InspectStore(std::wstring_view databasePath, StoreInfo& outInfo) noexcep
         }
 
         unique_connection db;
-        const HRESULT hr = OpenConnection(normalizedPath, SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX, db);
+        HRESULT hr = OpenConnection(normalizedPath, SQLITE_OPEN_READWRITE | SQLITE_OPEN_NOMUTEX, db);
+        if (FAILED(hr))
+        {
+            hr = OpenConnection(normalizedPath, SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX, db);
+        }
         if (FAILED(hr))
         {
             return hr;
@@ -2130,6 +2308,44 @@ HRESULT InspectStore(std::wstring_view databasePath, StoreInfo& outInfo) noexcep
     catch (const std::exception&)
     {
         Debug::Error(L"SqliteIndexStore::InspectStore: std::exception");
+        return E_FAIL;
+    }
+}
+
+HRESULT ReadStoreGeneration(std::wstring_view databasePath, uint64_t& outGeneration) noexcept
+{
+    try
+    {
+        outGeneration = 0u;
+
+        unique_connection db;
+        HRESULT hr = OpenReadOnlyReadyConnection(databasePath, db);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        bool found = false;
+        hr         = ReadMetaUInt64(db.get(), kMetaStoreGeneration, outGeneration, found);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        if (! found)
+        {
+            outGeneration = 0u;
+        }
+        return S_OK;
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::terminate();
+    }
+    catch (const std::exception&)
+    {
+        Debug::Error(L"SqliteIndexStore::ReadStoreGeneration: std::exception");
+        outGeneration = 0u;
         return E_FAIL;
     }
 }
@@ -2297,6 +2513,12 @@ HRESULT ReplaceVolume(std::wstring_view databasePath, const ReplaceVolumeRequest
             return hr;
         }
 
+        hr = IncrementStoreGeneration(db.get());
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
         hr = ExecuteSql(db.get(), "COMMIT;", L"COMMIT");
         if (FAILED(hr))
         {
@@ -2456,6 +2678,12 @@ HRESULT ApplyJournalDelta(std::wstring_view databasePath, const ApplyJournalDelt
             return E_FAIL;
         }
 
+        hr = IncrementStoreGeneration(db.get());
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
         hr = ExecuteSql(db.get(), "COMMIT;", L"COMMIT");
         if (FAILED(hr))
         {
@@ -2542,6 +2770,12 @@ HRESULT DeleteVolume(std::wstring_view databasePath, std::wstring_view rootPath)
             {
                 return hr;
             }
+
+            hr = IncrementStoreGeneration(db.get());
+            if (FAILED(hr))
+            {
+                return hr;
+            }
         }
 
         hr = ExecuteSql(db.get(), "COMMIT;", L"COMMIT");
@@ -2609,6 +2843,12 @@ HRESULT RunManualMaintenance(std::wstring_view databasePath, ManualMaintenanceRe
         }
 
         hr = UpsertMetaText(db.get(), kMetaLastCheckpointUtc, checkpointUtcBeforeVacuum);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        hr = RunQuickCheck(db.get(), L"manual maintenance");
         if (FAILED(hr))
         {
             return hr;
@@ -2715,12 +2955,14 @@ HRESULT RunAutomaticMaintenance(std::wstring_view databasePath,
         }
 
         const bool shouldCheckpoint         = policy.autoCheckpointTargetBytes != 0u && result.before.writeAheadLogBytes >= policy.autoCheckpointTargetBytes;
+        const bool shouldRewriteAutoVacuum  = ! result.before.incrementalAutoVacuumEnabled;
         const uint64_t fragmentationPercent = CalculateFragmentationPercent(result.before);
         const uint64_t reclaimableBytes     = CalculateReclaimableBytes(result.before, pageSizeBytes);
         const bool shouldCompact = result.before.freelistPageCount != 0u &&
                                    (fragmentationPercent >= policy.autoCompactionFragmentationPercent || reclaimableBytes >= policy.autoCompactionMinBytes);
+        const bool shouldIncrementalCompact = shouldCompact && ! shouldRewriteAutoVacuum;
 
-        result.maintenanceNeeded = shouldCheckpoint || shouldCompact;
+        result.maintenanceNeeded = shouldCheckpoint || shouldRewriteAutoVacuum || shouldIncrementalCompact;
         if (! result.maintenanceNeeded)
         {
             result.after = result.before;
@@ -2731,24 +2973,38 @@ HRESULT RunAutomaticMaintenance(std::wstring_view databasePath,
             return S_FALSE;
         }
 
-        if (shouldCheckpoint || shouldCompact)
+        bool shouldFinalCheckpoint = shouldCheckpoint;
+
+        if (shouldRewriteAutoVacuum)
         {
-            const std::wstring checkpointUtc = GetCurrentUtcTimestampText();
-            hr                               = RunWalCheckpoint(db.get(), SQLITE_CHECKPOINT_TRUNCATE, L"automatic WAL checkpoint");
+            hr = ExecuteSql(db.get(), "PRAGMA auto_vacuum=INCREMENTAL;", L"PRAGMA auto_vacuum=INCREMENTAL before automatic VACUUM");
             if (FAILED(hr))
             {
                 return hr;
             }
 
-            hr = UpsertMetaText(db.get(), kMetaLastCheckpointUtc, checkpointUtc);
+            hr = RunQuickCheck(db.get(), L"automatic auto-vacuum mode rewrite");
             if (FAILED(hr))
             {
                 return hr;
             }
-            result.ranCheckpoint = true;
+
+            hr = ExecuteSql(db.get(), "VACUUM;", L"automatic auto-vacuum mode rewrite");
+            if (FAILED(hr))
+            {
+                return hr;
+            }
+            result.ranVacuum      = true;
+            shouldFinalCheckpoint = true;
+
+            const std::wstring compactionUtc = GetCurrentUtcTimestampText();
+            hr                               = UpsertMetaText(db.get(), kMetaLastCompactionUtc, compactionUtc);
+            if (FAILED(hr))
+            {
+                return hr;
+            }
         }
-
-        if (shouldCompact)
+        else if (shouldIncrementalCompact)
         {
             result.requestedVacuumPages = std::min<uint64_t>(result.before.freelistPageCount, kAutomaticIncrementalVacuumMaxPages);
             if (result.requestedVacuumPages != 0u)
@@ -2759,6 +3015,7 @@ HRESULT RunAutomaticMaintenance(std::wstring_view databasePath,
                     return hr;
                 }
                 result.ranIncrementalVacuum = true;
+                shouldFinalCheckpoint       = true;
             }
 
             const std::wstring compactionUtc = GetCurrentUtcTimestampText();
@@ -2767,26 +3024,30 @@ HRESULT RunAutomaticMaintenance(std::wstring_view databasePath,
             {
                 return hr;
             }
+        }
 
-            hr = RunWalCheckpoint(db.get(), SQLITE_CHECKPOINT_TRUNCATE, L"post-incremental-vacuum WAL checkpoint");
+        if (shouldFinalCheckpoint)
+        {
+            // Checkpoint once after metadata updates so the WAL shape reflects the final maintenance state.
+            hr = RunWalCheckpoint(db.get(), SQLITE_CHECKPOINT_TRUNCATE, L"final automatic WAL checkpoint");
             if (FAILED(hr))
             {
-                return hr;
-            }
+                if (hr == HRESULT_FROM_WIN32(ERROR_BUSY) && shouldCheckpoint && ! result.ranVacuum && ! result.ranIncrementalVacuum)
+                {
+                    result.after = result.before;
+                    if (outResult != nullptr)
+                    {
+                        *outResult = std::move(result);
+                    }
+                    return S_FALSE;
+                }
 
-            hr = UpsertMetaText(db.get(), kMetaLastCheckpointUtc, compactionUtc);
-            if (FAILED(hr))
-            {
                 return hr;
             }
             result.ranCheckpoint = true;
-        }
 
-        if (result.ranCheckpoint)
-        {
-            // Metadata updates above dirty the WAL again; finish maintenance with a final truncate checkpoint
-            // so the archived post-maintenance store shape reflects the actual checkpointed state.
-            hr = RunWalCheckpoint(db.get(), SQLITE_CHECKPOINT_TRUNCATE, L"final automatic WAL checkpoint");
+            const std::wstring checkpointUtc = GetCurrentUtcTimestampText();
+            hr                               = UpsertMetaText(db.get(), kMetaLastCheckpointUtc, checkpointUtc);
             if (FAILED(hr))
             {
                 return hr;
@@ -2954,6 +3215,10 @@ HRESULT EnumerateVolume(std::wstring_view databasePath,
             {
                 break;
             }
+            if (hr == LocalSearchIndexCore::kSkipCandidateHr)
+            {
+                continue;
+            }
             if (FAILED(hr))
             {
                 return hr;
@@ -3025,7 +3290,7 @@ HRESULT ExplainEnumerateVolumeForTests(std::wstring_view databasePath, const Que
         if (prefilter.kind == NamePrefilterKind::PrefixFolded)
         {
             outPlan.prefixLowerBound = prefilter.value;
-            outPlan.prefixUpperBound = BuildPrefixUpperBound(prefilter.value);
+            outPlan.prefixUpperBound = prefilter.upperBound;
         }
         outPlan.sql = BuildEnumerateStatementSql(rootEntry, request, prefilter);
 
@@ -3036,7 +3301,7 @@ HRESULT ExplainEnumerateVolumeForTests(std::wstring_view databasePath, const Que
             return hr;
         }
 
-        char* expandedSql = sqlite3_expanded_sql(boundStatement.get());
+        char* expandedSql          = sqlite3_expanded_sql(boundStatement.get());
         const auto freeExpandedSql = wil::scope_exit([&]() noexcept
         {
             if (expandedSql != nullptr)

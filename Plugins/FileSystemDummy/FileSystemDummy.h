@@ -389,6 +389,7 @@ private:
 
     std::atomic_ulong _refCount{1};
     inline static std::mutex _mutex;
+    inline static std::atomic_uint _liveInstanceCount{0};
     inline static std::uint64_t _effectiveSeed      = 0;
     inline static std::uint64_t _generationBaseTime = 0;
     inline static std::vector<std::unique_ptr<DummyRoot>> _roots;

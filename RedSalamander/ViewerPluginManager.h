@@ -19,6 +19,7 @@
 
 #include "PlugInterfaces/Informations.h"
 #include "PlugInterfaces/Viewer.h"
+#include "PluginModuleLifecycle.h"
 
 namespace Common::Settings
 {
@@ -58,6 +59,7 @@ public:
 
         bool loadable = false;
         bool disabled = false;
+        bool unloadDeferred = false;
         std::wstring loadError;
 
         std::wstring id;
@@ -93,11 +95,7 @@ public:
     HRESULT TestPlugin(std::wstring_view pluginId) noexcept;
 
 private:
-    enum class ModuleUnloadMode : uint8_t
-    {
-        FreeLibrary,
-        ProcessShutdown,
-    };
+    using ModuleUnloadMode = PluginModuleLifecycle::ModuleUnloadMode;
 
     ViewerPluginManager()  = default;
     ~ViewerPluginManager() = default;
@@ -110,7 +108,10 @@ private:
     HRESULT Discover(Common::Settings::Settings& settings) noexcept;
     HRESULT EnsureLoaded(PluginEntry& entry) noexcept;
     void UnloadAll(ModuleUnloadMode mode) noexcept;
-    void Unload(PluginEntry& entry, ModuleUnloadMode mode) noexcept;
+    bool Unload(PluginEntry& entry, ModuleUnloadMode mode) noexcept;
+    void SweepDeferredUnloadEntries(ModuleUnloadMode mode) noexcept;
+    [[nodiscard]] bool IsPluginPathDeferred(const std::filesystem::path& path) const noexcept;
+    void AddDeferredPlaceholder(const PluginEntry& entry) noexcept;
 
     std::filesystem::path GetExecutableDirectory() noexcept;
     std::filesystem::path GetOptionalPluginsDirectory() noexcept;
@@ -123,4 +124,5 @@ private:
     bool _initialized = false;
     std::filesystem::path _exeDir;
     std::vector<PluginEntry> _plugins;
+    std::vector<PluginEntry> _deferredUnloadEntries;
 };

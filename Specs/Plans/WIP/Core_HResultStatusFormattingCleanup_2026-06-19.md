@@ -1,8 +1,16 @@
 # Core HRESULT/Status Formatting Cleanup
 
-Last updated: 2026-06-19
+Last updated: 2026-07-02 (folder review)
 
-Status: WIP
+Status: WIP — verified 2026-07-02: zero implementation work has landed since creation; the audit snapshot
+below is still 100% accurate (both trivial aliases exist verbatim: `FormatHResult` at
+`FolderViewInternal.h:307`, `FormatStatusText` at `FolderWindow.FileOperations.IssuesPane.cpp:51`).
+All 5 work items genuinely open. **Next action = WI-1**: inline the two aliases (callers:
+`FolderView.ErrorOverlay.cpp:593,1191`, `IssuesPane.cpp:454`; update the test mirror
+`Tests/PerformanceTests2/FolderViewInternal.Access.h:301` in lockstep), then run
+`.\Tools\Run-AllTests.ps1 -Suite Commands -CaseFilter "folderView|fileops"`. Low priority. NOTE:
+`FolderViewInternal.h`/`FolderView.ErrorOverlay.cpp` are hot files on the WarpDrive branch — coordinate
+with any active FolderView session before touching them.
 
 Source split:
 

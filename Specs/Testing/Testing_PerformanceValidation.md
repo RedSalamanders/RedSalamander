@@ -23,7 +23,7 @@ Related documents:
 
 - `Specs/Testing/Testing_SelfTests.md`
 - `Specs/TestRuns/README.md`
-- `Specs/Plans/WIP/Perf_InstrumentationPlan_2026-03-26.md`
+- `Specs/Plans/WIP/Operation_PerfMeasurementContract_2026-07-06.md`
 
 ## Required Development Contract
 
@@ -91,10 +91,17 @@ If same-machine evidence is unavailable, the claim MUST be labeled directional r
 Every perf-sensitive PR MUST include this gate in the PR description, review notes, or linked closeout spec before merge:
 
 - Scenario: the exact user-visible path being protected.
-- Metric keys: the emitted metric family or the existing metrics that cover the path.
-- Deterministic validation: the selftest, focused harness, or deterministic repro that exercises the path.
-- Archived evidence: the `Specs/TestRuns/<MachineHash>/<Area>/<RunId>/` folder containing `results.json`, `trace.txt`, and `perf_metrics.jsonl` when metrics are emitted.
-- Before/after delta: baseline run, candidate run, same-machine status, changed metric values, and caveats.
+- Subsystem and change type: feature, optimization, stabilization, regression-fix, or instrumentation-only.
+- User-visible risk protected: the latency, throughput, responsiveness, queueing, memory, or correctness/perf interaction being guarded.
+- Metric keys: the emitted metric family or the existing metrics that cover the path, including units and sample grain.
+- Instrumentation: existing instrumentation reused or new instrumentation added.
+- Deterministic validation: the selftest, focused harness, or deterministic repro that exercises the path, including exact command, case filter, timeout multiplier, perf budget path when applicable, and required environment variables.
+- Build flavor: Debug diagnostic, test-enabled Release, or another explicitly justified flavor. Final throughput, latency, percentile, or budget claims require Release evidence unless the owning spec allows otherwise.
+- Environment/root matrix: machine hash, CPU/load notes when material, `REDSALAMANDER_TEST_ROOT` override if any, filesystem capability reason, and whether the run is final evidence or diagnostic only. Path-sensitive local evidence that cannot use the workspace default should use `REDSALAMANDER_TEST_ROOT=C:\RSPerf`; `%LOCALAPPDATA%\Temp\RedSalamander-TestSandbox` and `C:\RST` must not be used for final path-sensitive evidence.
+- Archived evidence: the `Specs/TestRuns/<MachineHash>/<Area>/<RunId>/` folder containing `results.json`, `trace.txt`, `run-all-tests-results.json` when the runner created one, and `perf_metrics.jsonl` when metrics are emitted.
+- Analyzer and sample quality: the `Tools/Show-PerfRuns.ps1` command or owning analyzer, `-FailOnQuality` status for percentile claims, and explicit sample count sufficiency.
+- Before/after delta: baseline run, candidate run, same-machine status, same-suite status, changed metric values, and caveats.
+- Authoritative spec updates: the owning durable spec or guidance files that were updated, or the exact blocker if the update is deferred.
 
 If any field is blocked, the PR MUST state the blocker explicitly and identify the follow-up owner/task. A perf-sensitive PR is not complete with only manual timing notes or unarchived terminal output.
 
@@ -145,6 +152,8 @@ Avoid relying only on:
 - broad “total duration” metrics when the decision requires stage attribution.
 - repeated hot-path rows that only report pointer coordinates and sub-millisecond callback duration, such as per-hit-test/per-pointer-move traces, when the user-visible scenario needs input-to-visible latency, queue counts, scroll-apply cost, or paint cost instead.
 - high-frequency per-item or per-creation emits that distort the very pass that hosts them. The JSONL sink keeps its file handle open (fixed 2026-06-19, `Common/Common/PerfJsonl.cpp`, so a row is a single `WriteFile` rather than an open/close), but each row still has a cost and grows the file, so coalesce hot-path telemetry into per-pass/per-frame aggregates (cf. the FolderView `dwrite.text_layout.frame_create_*` pattern).
+- file-backed selftest trace writes inside the measured render, draw-item, icon-apply, or present hot path. Use `Debug::Perf` counters/scopes for measured paths, and keep `SelfTest::AppendSelfTestTrace(...)` outside the timed gesture or behind a diagnostic mode that is disabled for perf-budget runs. A 2026-06-29 FolderView closeout pass found that trace writes around `Present1` and per-batch icon apply distorted the huge quick-search and relayout matrices even though the product work was below budget.
+- self-test-local perf sinks configured through `Debug::Perf::ConfigureJsonlOutput(...)` must immediately update the process-local sink cache. A previous "no sink configured" fast path must not suppress metrics after a later self-test configures `perf/perf_metrics.jsonl`; `ClearJsonlOutput()` must likewise clear the cache so following tests do not append to a stale sink.
 
 ## Test and Archive Requirements
 
@@ -167,6 +176,177 @@ If the repo archive path is unavailable, the blocked reason MUST be documented e
 ### Baselines
 
 Once a scenario becomes important for ongoing work, a same-machine archived baseline SHOULD be recorded and reused for future comparisons.
+
+### Evidence quality gates
+
+Frame-time and latency claims MUST report the actual selftest build flavor carried
+by the JSONL `build` field. Release runs are not acceptable evidence when the
+artifact is mislabeled as Debug or when the build flavor is unknown.
+
+For percentile-based decisions, `Tools/Show-PerfRuns.ps1` is the required
+first-pass analyzer. Use PowerShell 7+ for this script. Any p95 claim SHOULD have
+at least 200 samples for the requested metric unless an authoritative per-metric
+budget declares a smaller `minimumSamples`; p99 SHOULD have at least 1000
+samples. Automation that gates a p95 claim MUST pass `-FailOnQuality`, which
+exits non-zero when a quality-gated requested metric has fewer than its p95
+sample minimum. An explicitly supplied `-MinimumSamplesForP95` overrides budget
+minimums; otherwise `-BudgetPath` selects the budget document used for those
+minimums. If that selected budget file exists but cannot be parsed, the analyzer
+MUST warn, latch quality failure, and exit non-zero when `-FailOnQuality` is set.
+`-FolderViewPreset` uses the p95 rows in
+`Specs/Testing/FolderViewPerfBudgets.json5` as its quality-gated metric set; the
+remaining preset rows are still displayed but are informational for
+`-FailOnQuality` unless requested explicitly with `-Metric`. In `-CompareRun`
+mode, `-FailOnQuality` gates the candidate run only; a sparse baseline remains
+visible in the comparison table but does not fail the command. Use
+`-FolderViewPreset` for the core FolderView frame, scale/cold/slow, scroll,
+icon, thumbnail, and refresh metric family when reviewing FolderView runs.
+FolderView scroll/dirty-region reviews MUST check that the preset summarizes
+`folder.scroll.product_paint_render_count`,
+`folder.scroll.product_paint_full_client_count`, and
+`folder.scroll.product_paint_dirty_rect_area_px` in addition to
+`folder.scroll_input_to_paint_us` and the `folder.frame.*` rows. No-op scroll
+requests that do not change the viewport must report zero product paint frames;
+viewport-changing scrolls are expected to remain full-client paints unless a
+separately gated DXGI scroll-rect implementation exists.
+FolderView icon-pipeline reviews MUST check that the preset summarizes
+`FolderView.ExecuteEnumeration.IconIndex.QueryExtensions`,
+`FolderView.ExecuteEnumeration.IconIndex.QueryPerFileIcons`,
+`FolderView.ExecuteEnumeration.IconIndex.BuildPerFilePaths`,
+`FolderView.IconLoading.ProcessQueue`, `FolderView.IconLoading.BatchUpdate`,
+`FolderView.IconLoading.BitmapConversion`, `icons.queue_wait_to_dequeue_us`,
+`icons.extract_us`, `icons.batch_update_scan_us`, `iconcache.shgetfileinfo_us`,
+`iconcache.lock_wait_slow_us`, `iconcache.lock_hold_slow_us`, and
+`icons.recall_avoided_count`.
+
+FolderView same-folder refresh reviews MUST check the aggregate `folder.refresh.*`
+family. `preserve_count`, `rebuild_count`, `selection_preserve_count`,
+`rename_transfer_count`, `debounce_delay_ms`, and `enumeration_count` are
+one-row-per-refresh counters; `request_to_paint_us` is a request-to-present
+latency row emitted only after the refresh result has reached the UI thread and
+the pane has presented. Refresh latency MUST use the dedicated FolderView refresh
+pending slot so input-to-paint and navigation-to-paint rows cannot overwrite or
+misattribute it.
+
+FolderView frame-producing perf cases that make frame p95 claims MUST archive a
+`metricQuality` object with `folderFrameTotal.count`,
+`folderFramePresent.count`, `samplesEnoughForP95`, `samplesEnoughForP99`, and
+`buildConfiguration`. `samplesEnoughForP95` is a hard case gate for
+`folder.frame.total_us` and `folder.frame.present_us` when the case claims p95
+evidence, and strict budget runs still enforce the budget file's
+`minimumSamples`. `folderView_perf_overlay_invalidation_stress` records
+`samplesEnoughForP95` as advisory because animation cadence and host load can
+reduce frame samples without proving an overlay correctness failure; cite p95 for
+that case only when the analyzer quality gate passes. `samplesEnoughForP99` is
+advisory until a case deliberately captures at least 1000 frame samples. Other
+event-scoped rows exposed by the FolderView preset, such as scroll input latency
+or one-shot icon/thumbnail counters, may report `P95Quality=fail`; do not cite a
+p95 for those rows unless that exact metric also has enough samples.
+
+Representative FolderView perf coverage MUST include:
+
+- `folderView_perf_scroll_render_stress`: 1,600-item normal-mode scroll/render
+  coverage across Brief, Detailed, and Extra Detailed modes. It must produce at
+  least 200 `folder.frame.total_us` and `folder.frame.present_us` rows for p95
+  claims, emit scroll input latency and product-paint delta metrics, assert
+  repeated no-op boundary scrolls do not repaint, and archive whether each
+  scroll step changed the viewport.
+- `folderView_perf_huge_folder_scale`: synthetic dummy-provider scale coverage at
+  10,000 items for routine runs and 50,000 items only when
+  `REDSALAMANDER_FOLDERVIEW_HUGE_PERF=1` is set. Artifacts record item count,
+  extension count, enumeration time, first visible paint, sort toggle,
+  quick-search keystroke-to-paint, select-all scroll brush guard, and working-set
+  / private-byte samples including bytes per item.
+- `folderView_perf_cold_first_visit`: local first-visit coverage with unique paths
+  and extensions after clearing the application `IconCache`. The artifact records
+  first enumeration, first paint, icon-index lookup metric count, icon bitmap
+  queue count, icon-settle time, and a deterministic forced first thumbnail
+  fallback. The artifact MUST state that the OS shell cache is not controlled by
+  the test.
+- `folderView_perf_slow_virtual_provider`: deterministic slow-provider coverage
+  for dummy-provider enumeration latency, icon extraction latency, live-path
+  failed icon lookup negative-cache behavior (`icons.repeated_failed_lookup_count`
+  must stay bounded), provider-allowed thumbnail lookup latency, and the paste
+  shortcut latency coverage supplied by the ShellCommands paste-shortcut cases.
+- `folderView_perf_icon_pipeline_cold_slow`: focused icon-pipeline coverage for
+  per-file icon types (`.exe`, `.dll`, `.ico`, `.lnk`, `.url`, `.cpl`, `.scr`,
+  `.msc`, `.ocx`), one delayed HICON extraction, analyzer-visible queue/extract/
+  convert/apply metrics, and synthetic offline/recall placeholder avoidance.
+  The artifact must prove at least one visible bitmap icon resolves before the
+  delayed extraction finishes, `IconPathLiveLookup` is not consumed for the
+  offline/recall dummy fixture, `icons.recall_avoided_count` emits for those
+  items, and the thumbnail pass avoids provider-allowed shell I/O.
+- `folderView_perf_relayout_churn_while_scrolled`: 10,000-item scrolled-pane
+  relayout coverage that alternates DPI, size, light/dark/high-contrast theme
+  triggers, emits `folder.relayout_to_paint_us`, archives repaint-burst sample
+  quality and `fontRelayoutCovered=false`, and asserts focus/scroll survival.
+
+Every representative FolderView scale/cold/slow/relayout artifact MUST include an
+`environmentMatrix` object with build flavor, active DPI, display refresh rate,
+display scale percent, local-console/RDP status, WARP availability, whether WARP
+was actually executed, adapter name, driver-version availability, high-DPI run
+status, and notes for matrix dimensions that require separate hardware or
+process-level runs. FolderView WARP coverage is opt-in for selftest evidence:
+set `REDSALAMANDER_FOLDERVIEW_FORCE_WARP=1` before launching the Commands
+selftest so FolderView creates its D3D device with `D3D_DRIVER_TYPE_WARP`; the
+archive must then report `environmentMatrix.warpRunExecuted=true`.
+
+Release perf evidence that depends on selftest cases MUST use a test-enabled
+Release build, because normal Release binaries may omit selftest entrypoints:
+
+```powershell
+try {
+    $env:RSBuildEnableTests='true'
+    .\build.ps1 -ProjectName RedSalamander -Configuration Release
+} finally {
+    Remove-Item Env:RSBuildEnableTests -ErrorAction SilentlyContinue
+}
+```
+
+### Automated FolderView budget gates
+
+The authoritative FolderView perf budget file is
+`Specs/Testing/FolderViewPerfBudgets.json5`. It is intentionally machine-keyed
+through a top-level `machines[]` array: each entry has a `machineHash` and its own
+`budgets[]` list. Hard thresholds apply only when the current selftest
+`machineHash` matches one of those machine entries, and each hard threshold MUST
+cite its source archive, measured value, maximum, statistic, build flavor, and
+`minimumSamples`.
+
+Unknown machines are never silent. The native harness emits a visible warning with
+a scaffold entry shape to fill, e.g. `{ "machineHash": "<current>", "budgets": [] }`.
+The default behavior keeps non-applicable budgets as warnings so ad-hoc Debug runs
+can proceed; strict runs add `--selftest-require-perf-budgets` (or
+`Run-AllTests.ps1 -RequirePerfBudgets`) to fail when the budget path is missing, no
+current-machine entry exists, or no hard entry matches the current build flavor.
+
+Run the focused strict gate through the normal runner with:
+
+```powershell
+.\Tools\Run-AllTests.ps1 -Suite Commands -Configuration Release -CaseFilter folderView_perf_scroll_render_stress -PerfBudgetPath Specs\Testing\FolderViewPerfBudgets.json5 -RequirePerfBudgets -TimeoutMultiplier 8
+```
+
+For an already-built test-enabled Release binary, the native equivalent is:
+
+```powershell
+.\.build\x64\Release\RedSalamander.exe --commands-selftest --selftest-case=folderView_perf_scroll_render_stress --selftest-perf-budget=Specs\Testing\FolderViewPerfBudgets.json5 --selftest-require-perf-budgets --selftest-timeout-multiplier=8
+```
+
+For grouped validation, pass the comma-separated budgeted case list. The current
+budgeted set is `folderView_perf_scroll_render_stress`,
+`folderView_perf_overlay_invalidation_stress`,
+`folderView_perf_huge_folder_scale`, `folderView_perf_slow_virtual_provider`,
+`folderView_perf_relayout_churn_while_scrolled`, and
+`folderView_thumbnail_cached_only_no_close_stall`.
+
+Expected-failure smoke checks SHOULD use a local scratch budget with an
+impossible maximum and MUST NOT commit that scratch file.
+
+Selftest-only latency injection points MUST be implemented through
+`RedSalamander/SelfTest/Common/SelfTestLatencyHooks.h/.cpp` and compiled as
+no-ops outside `ENABLE_TESTS`.
+These hooks exist to make slow shell/provider/file-system behavior deterministic;
+they must not become production delays or runtime configuration.
 
 ## Spec Ownership Requirement
 

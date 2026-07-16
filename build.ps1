@@ -95,6 +95,8 @@ $ErrorActionPreference = "Stop"
 $BuildProjectSelectionScript = Join-Path -Path $PSScriptRoot -ChildPath "Tools\BuildProjectSelection.ps1"
 $MSBuildInvocationScript = Join-Path -Path $PSScriptRoot -ChildPath "Tools\MSBuildInvocation.ps1"
 $ProcessStreamingScript = Join-Path -Path $PSScriptRoot -ChildPath "Tools\ProcessStreaming.ps1"
+$SanitizedEnvironmentScript = Join-Path -Path $PSScriptRoot -ChildPath "Tools\SanitizedEnvironment.ps1"
+$ArtifactOperationLockScript = Join-Path -Path $PSScriptRoot -ChildPath "Tools\ArtifactOperationLock.ps1"
 if (-not (Test-Path $BuildProjectSelectionScript)) {
     Write-Error "Build project selection helper not found: $BuildProjectSelectionScript"
     exit 1
@@ -107,10 +109,20 @@ if (-not (Test-Path $ProcessStreamingScript)) {
     Write-Error "Process streaming helper not found: $ProcessStreamingScript"
     exit 1
 }
+if (-not (Test-Path $SanitizedEnvironmentScript)) {
+    Write-Error "Sanitized environment helper not found: $SanitizedEnvironmentScript"
+    exit 1
+}
+if (-not (Test-Path $ArtifactOperationLockScript)) {
+    Write-Error "Artifact operation lock helper not found: $ArtifactOperationLockScript"
+    exit 1
+}
 
 . $BuildProjectSelectionScript
 . $MSBuildInvocationScript
+. $SanitizedEnvironmentScript
 . $ProcessStreamingScript
+. $ArtifactOperationLockScript
 
 function Test-InteractiveTerminal {
     try {
@@ -234,6 +246,50 @@ if (-not (Test-Path $VersioningScript)) {
 $SolutionFullPath = (Resolve-Path $SolutionFile).Path
 $SolutionDir = (Split-Path -Parent $SolutionFullPath)
 $SolutionDirWithSlash = $SolutionDir.TrimEnd('\') + '\'
+$artifactOperationLock = $null
+$stopwatch = [System.Diagnostics.Stopwatch]::new()
+$contaminationRepairAuthorized = $false
+try {
+    $operationTarget = if ($ProjectName) { $ProjectName } else { 'solution' }
+    $artifactOperationLock = Enter-RSArtifactOperationLock `
+        -RepoRoot $SolutionDir `
+        -Operation "build $operationTarget $Configuration|$Platform" `
+        -Scope @{
+            kind = 'build'
+            target = $operationTarget
+            configuration = $Configuration
+            platform = $Platform
+        }
+
+    if ($artifactOperationLock.WasAbandoned) {
+        [void](Set-RSArtifactOperationContaminated `
+                -RepoRoot $SolutionDir `
+                -Reason "The previous build/test owner exited without clearing the exclusive artifact-operation lock." `
+                -AbandonedOwner $artifactOperationLock.AbandonedOwner)
+    }
+
+    $contamination = Read-RSArtifactOperationContamination -RepoRoot $SolutionDir
+    if ($null -ne $contamination) {
+        $contaminationRepairAuthorized = Test-RSArtifactOperationRepairAllowed `
+            -Contamination $contamination `
+            -Rebuild:$Rebuild `
+            -ProjectName $ProjectName `
+            -Configuration $Configuration `
+            -Platform $Platform
+        if (-not $contaminationRepairAuthorized) {
+            $markerPath = Get-RSArtifactContaminationMarkerPath -RepoRoot $SolutionDir
+            $scopeText = if ($null -ne $contamination.PSObject.Properties['abandoned_operation'] -and
+                -not [string]::IsNullOrWhiteSpace([string]$contamination.abandoned_operation)) {
+                " Previous operation: '$($contamination.abandoned_operation)'."
+            } else { '' }
+            throw ("Shared build artifacts may be mixed after an interrupted operation." +
+                   "$scopeText Run a full-solution build.ps1 -Rebuild with the recorded configuration and platform; " +
+                   "-Clean alone and targeted or wrong-scope rebuilds cannot clear this marker. Marker: $markerPath")
+        }
+    }
+
+    Assert-RSNoResidualArtifactToolProcesses -RepoRoot $SolutionDir
+
 $versionState = Use-RSVersionStateLock -RepoRoot $SolutionDir -ScriptBlock {
     $context = Get-RSVersionContext -RepoRoot $SolutionDir -Configuration $Configuration -Platform $Platform -BuildNumber $BuildNumber -OfficialRelease:$OfficialRelease
     $statePath = Save-RSVersionContext -RepoRoot $SolutionDir -VersionContext $context
@@ -505,8 +561,10 @@ function Invoke-MSBuild {
     $invocationPlan = Get-RSMSBuildInvocationPlan -UseInteractiveTerminal $script:UseInteractiveTerminal -LogPath $logPath
     if ($invocationPlan.UseDirectConsole) {
         # Preserve MSBuild's native color and message ordering in interactive terminals while still writing a file log.
-        & $MSBuildPath @effectiveArguments @($invocationPlan.AdditionalArguments)
-        $exitCode = if ($null -ne $LASTEXITCODE) { $LASTEXITCODE } else { 0 }
+        $exitCode = Invoke-RSProcess `
+            -FilePath $MSBuildPath `
+            -Arguments @($effectiveArguments + @($invocationPlan.AdditionalArguments)) `
+            -WorkingDirectory $WorkingDirectory
     }
     else {
         $exitCode = Invoke-RSStreamingProcess `
@@ -655,7 +713,21 @@ if ($Clean) {
 
 # Start build
 Write-Host "Starting build..." -ForegroundColor Yellow
-$stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+$stopwatch.Restart()
+
+function Test-BuildOutputSelfTestCommandLine {
+    param(
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$CommandLine
+    )
+
+    if ([string]::IsNullOrWhiteSpace($CommandLine)) {
+        return $false
+    }
+
+    return $CommandLine -match '(?i)(?:^|[\s"])--[a-z0-9-]*selftest[a-z0-9-]*(?:=[^\s"]*)?(?=$|[\s"])'
+}
 
 function Stop-BuildOutputProcess {
     param(
@@ -683,6 +755,7 @@ function Stop-BuildOutputProcess {
         return
     }
 
+    $matchingProcesses = @()
     foreach ($proc in $processes) {
         $exePath = $proc.ExecutablePath
         if (-not $exePath) {
@@ -701,15 +774,35 @@ function Stop-BuildOutputProcess {
             continue
         }
 
+        $matchingProcesses += [pscustomobject]@{
+            ProcessId = $proc.ProcessId
+            ExecutablePath = $exeFullPath
+            CommandLine = $proc.CommandLine
+        }
+    }
+
+    $protectedProcesses = @($matchingProcesses | Where-Object {
+        [string]::IsNullOrWhiteSpace($_.CommandLine) -or (Test-BuildOutputSelfTestCommandLine -CommandLine $_.CommandLine)
+    })
+    if ($protectedProcesses.Count -gt 0) {
+        $diagnostics = @($protectedProcesses | ForEach-Object {
+            $commandLine = if ([string]::IsNullOrWhiteSpace($_.CommandLine)) { '<unavailable>' } else { $_.CommandLine }
+            "  PID=$($_.ProcessId); Path='$($_.ExecutablePath)'; CommandLine='$commandLine'"
+        })
+        throw ("Build canceled because an active self-test may be using a target output. " +
+               "Wait for the self-test to finish before rebuilding.`n" +
+               ($diagnostics -join "`n"))
+    }
+
+    foreach ($proc in $matchingProcesses) {
         Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
     }
 }
 
-$buildOutputDir = Join-Path -Path $SolutionDir -ChildPath (".build\\{0}\\{1}" -f $Platform, $Configuration)
-Stop-BuildOutputProcess -ProcessName "RedSalamander.exe" -ExpectedExePath (Join-Path -Path $buildOutputDir -ChildPath "RedSalamander.exe")
-Stop-BuildOutputProcess -ProcessName "RedSalamanderMonitor.exe" -ExpectedExePath (Join-Path -Path $buildOutputDir -ChildPath "RedSalamanderMonitor.exe")
+    $buildOutputDir = Join-Path -Path $SolutionDir -ChildPath (".build\\{0}\\{1}" -f $Platform, $Configuration)
+    Stop-BuildOutputProcess -ProcessName "RedSalamander.exe" -ExpectedExePath (Join-Path -Path $buildOutputDir -ChildPath "RedSalamander.exe")
+    Stop-BuildOutputProcess -ProcessName "RedSalamanderMonitor.exe" -ExpectedExePath (Join-Path -Path $buildOutputDir -ChildPath "RedSalamanderMonitor.exe")
 
-try {
     # Execute clean if requested
     if ($Clean) {
         Write-Host "Cleaning..." -ForegroundColor Yellow
@@ -1070,6 +1163,10 @@ try {
         }
     }
     
+    if ($contaminationRepairAuthorized) {
+        Clear-RSArtifactOperationContaminated -RepoRoot $SolutionDir
+    }
+
     exit 0
 }
 catch {
@@ -1081,4 +1178,7 @@ catch {
     Write-Host "Error: $_" -ForegroundColor Red
     Write-Host "Build time: $($stopwatch.Elapsed.ToString('mm\:ss'))" -ForegroundColor Red
     exit 1
+}
+finally {
+    Exit-RSArtifactOperationLock -Lock $artifactOperationLock
 }

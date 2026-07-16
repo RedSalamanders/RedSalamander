@@ -1,60 +1,28 @@
 # Fix S3 shutdown crash: AWS background thread after DLL unload
 
-Status: WIP - mitigation code is present, but the shutdown-crash validation evidence is not archived.
+Purpose: prevent the shutdown access violation where AWS SDK background threads (e.g. `AwsHostResolver`) execute inside unloaded CRT DLLs (`aws-c-io.dll` etc.) after `FileSystemS3.dll` is unmapped.
 
-## Closeout audit (`2026-04-25`)
+Status (2026-07-02 folder review): WIP — mitigations are landed and verified in code, but the validation evidence is not archived and the runtime-refresh unload path remains unproven (see REMAINING EXPOSURE).
 
-The code now has `AwsSdkLifetime` reference counting around S3 instances and IO objects, a finite default `requestTimeoutMs` of 30000, cached S3 client cleanup before SDK release, request-timeout wiring into client config, and process-shutdown module retention for `FileSystemS3.dll` so its imported AWS CRT DLLs remain mapped until OS teardown. This plan stays in WIP because the required ASan/heavy-S3 shutdown reproduction and proof of AWS CRT thread quiescence are not present in the plan or archived test runs.
+## Landed mitigations (verified 2026-07-02)
 
-Remaining closeout checklist:
+- `AwsSdkLifetime` reference counting around SDK init/shutdown — `Plugins/FileSystemS3/FileSystemS3.Shared.cpp:7-58`, used by `FileSystemS3.Core.cpp:55/92` and `FileSystemS3.IO.cpp:299/501`.
+- Finite 30s default `requestTimeoutMs` wired into S3 client configuration — `FileSystemS3.h:240`, `FileSystemS3.Shared.cpp:705`; clamped in `FileSystemS3.Configuration.cpp:93-98`.
+- Cached S3 clients cleared before releasing the SDK lifetime reference — `FileSystemS3.Core.cpp:85-93`.
+- Process-shutdown module retention: plugin exports `RedSalamanderPluginRetainModuleUntilProcessExit` (`FileSystemS3.Factory.cpp:142-145`), honored by the host in `RedSalamander/FileSystemPluginManager.cpp:1290-1314` (selftest-guarded), so AWS CRT DLLs stay mapped until OS teardown.
+- The required shutdown ordering contract (stop producers → stop UI postings → release clients → `Aws::ShutdownAPI` → unload) is durably documented in `Specs/Plugins/Plugins_VirtualFileSystem.md` (via FSDeepAudit TrackI).
 
-- [x] Reference-count AWS SDK initialization/shutdown with `AwsSdkLifetime`.
-- [x] Use a finite default request timeout and wire it into S3 client configuration.
-- [x] Clear cached S3 clients before releasing the AWS SDK lifetime reference.
-- [x] Request process-shutdown module retention so AWS CRT dependencies are not explicitly unloaded during process teardown.
-- [ ] Run and archive the ASan heavy-S3 shutdown validation from the recipe.
-- [ ] Confirm no `AwsHostResolver` or other AWS CRT thread executes after AWS DLL unload.
-- [ ] Update the shutdown ordering evidence here, then move the plan to Done.
+Symptom, root cause, code touchpoints, and the required-shutdown-ordering prose formerly in this plan are now redundant with the landed code and `Specs/Plugins/Plugins_VirtualFileSystem.md`, which owns that content.
 
-## Symptom
+## REMAINING EXPOSURE (this is why the plan stays open)
 
-Crash during shutdown (often under ASan) with an access violation executing code in an **unloaded AWS DLL**, e.g.:
+Module retention applies ONLY in ProcessShutdown mode. Runtime plugin refresh/rediscovery paths (`RedSalamander/FileSystemPluginManager.cpp:524, 809-810, 942, 959, 1084`) unload in FreeLibrary mode and unconditionally unmap `FileSystemS3.dll` and its AWS CRT dependency chain. `FileSystemS3` exports no `RedSalamanderPluginCanUnloadNow`, and its `RedSalamanderPluginShutdown` (`FileSystemS3.Factory.cpp:137-140`) is a no-op. On that path the only barrier against the original AV (`AwsHostResolver` running in unmapped `aws-c-io.dll`) is the UNVERIFIED assumption that `Aws::ShutdownAPI` (`FileSystemS3.Shared.cpp:45`) joins all CRT threads synchronously before returning.
 
-- A background thread such as `AwsHostResolver` continues running.
-- The process unloads `aws-c-io.dll` (dependency of the S3 plugin).
-- The background thread later executes inside the unmapped module → AV.
+## Open items
 
-## Root cause
-
-The S3 plugin and/or host unload ordering allows AWS SDK background threads to outlive the last module reference to AWS CRT DLLs.
-
-Even if `Aws::ShutdownAPI()` is called, a shutdown is only safe if **all AWS client objects and internal threadpool resources are released first**, and the SDK has actually quiesced before the last `FreeLibrary` on AWS DLLs occurs.
-
-## Code touchpoints
-
-- S3 SDK lifetime:
-  - `Plugins/FileSystemS3/FileSystemS3.Shared.cpp` (`AwsSdkLifetime::AddRef/Release`, `Aws::InitAPI`, `Aws::ShutdownAPI`)
-  - `Plugins/FileSystemS3/FileSystemS3.Core.cpp` (`FileSystemS3` ctor/dtor calls `AwsSdkLifetime`)
-- Host/plugin module unload:
-  - `RedSalamander/FileSystemPluginManager.cpp` (`Shutdown`, `Unload` → `entry.module.reset()`)
-  - `RedSalamander/RedSalamander.cpp` (`SaveAppSettings` calls plugin manager shutdown)
-- Compare window safety:
-  - `RedSalamander/CompareDirectoriesWindow.cpp` holds `wil::unique_hmodule` for per-pane plugin instances until background cleanup runs.
-
-## Required shutdown ordering (quiet point)
-
-To prevent use-after-free across module unload:
-
-1. **Stop producers**: cancel compare workers / stop creating new AWS requests.
-2. **Stop UI postings**: stop callbacks posting into windows that may be closing.
-3. **Release all AWS clients/streams/readers**: ensure no `S3CrtClient` instances (and no response streams) remain alive.
-4. **Shutdown the AWS SDK**: call `Aws::ShutdownAPI()` only after step (3) is true.
-5. **Only then unload modules**: allow `wil::unique_hmodule` / plugin manager to drop the last reference to `FileSystemS3.dll` and its dependency chain (`aws-c-io.dll`, etc.).
-
-Notes:
-
-- Infinite request timeouts (`requestTimeoutMs = 0`) make step (1) unreliable because requests can hang forever. Prefer a finite timeout (30s) so cancellation/exit is bounded.
-- Do not “fix” this by forcing UI-thread joins; shutdown must stay responsive.
+- [ ] CL-1: Run and archive the ASan heavy-S3 shutdown validation using the verification recipe below.
+- [ ] CL-2: Prove AWS CRT-thread quiescence on the runtime-refresh unload path (FreeLibrary mode), or close the gap in code — e.g. export a `RedSalamanderPluginCanUnloadNow` that answers busy until the SDK has quiesced.
+- [ ] CL-3: Record the evidence here, then move the plan to Done.
 
 ## Verification recipe
 
@@ -66,3 +34,6 @@ Notes:
 3. Confirm no AWS CRT threads (e.g., `AwsHostResolver`) are executing after AWS DLLs unload.
    - If needed, use WinDbg to list threads/stacks during teardown and confirm quiescence.
 
+## Next action
+
+CL-1/CL-2: run the ASan recipe with a runtime plugin refresh under heavy S3 load included in the scenario.

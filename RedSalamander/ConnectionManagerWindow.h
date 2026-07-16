@@ -105,6 +105,20 @@ struct ConnectionManagerDebugSnapshot
     bool removeButtonFocusable = false;
     std::wstring currentNameText;
     std::wstring currentPluginId;
+    bool authSectionVisible          = false;
+    bool userFieldVisible            = false;
+    bool secretFieldVisible          = false;
+    bool hostFieldVisible            = false;
+    bool initialPathFieldVisible     = false;
+    bool mtpDevicePickerVisible      = false;
+    bool mtpStoragePickerVisible     = false;
+    bool mtpReadOnlyVisible          = false;
+    bool mtpRefreshButtonVisible     = false;
+    size_t mtpDevicePickerItemCount  = 0u;
+    size_t mtpStoragePickerItemCount = 0u;
+    std::wstring currentMtpDeviceValue;
+    std::wstring currentMtpStorageValue;
+    bool currentMtpReadOnly              = false;
     bool secretStoredPlaceholderVisible  = false;
     size_t secretStoredPlaceholderLength = 0u;
     bool secretMasked                    = false;
@@ -134,6 +148,7 @@ struct ConnectionManagerDebugSnapshot
 
 [[nodiscard]] bool DebugGetConnectionManagerDialogSnapshot(ConnectionManagerDebugSnapshot& out) noexcept;
 [[nodiscard]] bool DebugClickConnectionManagerListRow(size_t rowIndex) noexcept;
+[[nodiscard]] bool DebugClearConnectionManagerListSelection() noexcept;
 [[nodiscard]] bool DebugScrollConnectionManagerListByWheelDetents(int detents) noexcept;
 [[nodiscard]] bool DebugFocusConnectionManagerFirstInput() noexcept;
 [[nodiscard]] bool DebugFocusConnectionManagerUserInput() noexcept;

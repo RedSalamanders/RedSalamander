@@ -1,8 +1,10 @@
 # Google Drive Filesystem Plugin Plan
 
-Last updated: 2026-03-07
+Last updated: 2026-07-02
 
 Status: WIP - read-only directory-listing milestone landed; file IO, write operations, and remote validation remain.
+
+> **2026-07-02 folder review:** ~1/3 done (enumeration, drive info, `[id:...]` duplicate-name suffixes, token refresh — landed 123ce33a6). Everything mutating/streaming still stubbed: capabilities JSON reports read/write/copy/move/delete/rename ALL false; Copy/Move/Delete/Rename entry points return `ERROR_NOT_SUPPORTED` (`FileSystemGoogleDrive.cpp:1247-1323`). No Drive feature commit since 2026-04-25. Next action = Phase 2 remainder: interactive OAuth PKCE sign-in + read-stream/download support (without in-product sign-in nothing else is usable).
 
 ## Closeout audit (`2026-04-25`)
 
@@ -11,7 +13,7 @@ Current code and spec evidence show the plugin project, OAuth/Connection Manager
 Remaining closeout checklist:
 
 - [x] Plugin project and solution wiring exist under `Plugins/FileSystemGoogleDrive/`.
-- [x] OAuth2/PKCE connection profile groundwork and refresh-token secret retrieval exist.
+- [x] OAuth2/PKCE connection profile groundwork and refresh-token secret retrieval exist. **Caveat (2026-07-02 folder review):** groundwork only — `OAuth2Pkce` auth mode, `HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN`, and `SetConnectionSecret`/`DeleteConnectionSecret` all exist in `HostServices.cpp`, but the interactive PKCE sign-in flow (browser launch + 127.0.0.1 loopback listener + initial token exchange) exists nowhere for Google (grep pkce/code_verifier/loopback = 0 hits; contrast `FileSystemMicrosoftDrive.cpp:2454` `LaunchInteractiveAuth`). A profile cannot acquire its first refresh token in-product; the plugin only consumes a pre-stored refresh token (`FileSystemGoogleDrive.cpp:1614-1712`).
 - [x] Directory enumeration and drive-info milestone are documented in `Specs/FileSystem/FileSystem_GoogleDrive.md`.
 - [ ] Implement or explicitly defer file download/read streams, including native Google Docs export behavior.
 - [ ] Implement or explicitly defer upload/overwrite/create-directory/rename/move/delete/server-side copy.
@@ -29,63 +31,15 @@ Add a new remote filesystem plugin, `FileSystemGoogleDrive`, that:
 
 ## Recommended Shape
 
-Build this as a dedicated plugin DLL under `Plugins/FileSystemGoogleDrive/`, reusing:
-
-- `curl` for HTTPS transport
-- `yyjson` for JSON parsing
-- WIL for all Win32 and COM lifetime management
-- the existing `IHostConnections` / Connection Manager model for profile lookup and secret storage
-- the same bounded worker / serialized callback patterns already used by `FileSystemCurl` and `FileSystemS3`
-
-Do not add `google-cloud-cpp` or `cpprestsdk`.
+Settled and shipped: dedicated plugin DLL under `Plugins/FileSystemGoogleDrive/` reusing `curl` (HTTPS), `yyjson` (JSON), WIL, the existing `IHostConnections`/Connection Manager model, and the bounded-worker/serialized-callback patterns from `FileSystemCurl`/`FileSystemS3`.
 
 ## Why This Approach
 
-### API / library reality
-
-- Google's official API client library page does not list a current first-party C++ Drive client.
-- Google recommends OAuth 2.0 for native apps using the system browser and PKCE.
-- Drive is a REST/HTTPS API. The repo already ships a mature HTTPS stack (`curl`) and JSON parser (`yyjson`).
-
-### Performance reality
-
-The biggest wins for Drive are:
-
-- fewer round trips
-- smaller JSON responses
-- server-side copy/move where the API supports it
-- resumable uploads for large files
-- bounded parallelism with good cancellation
-
-Those wins come from request shape and operation selection more than from adding another client library.
+Settled: Drive is plain REST/HTTPS with no first-party C++ client, and the real performance wins (fewer round trips, trimmed `fields`, server-side copy, resumable uploads, bounded parallelism with cancellation) come from request shape rather than another client library.
 
 ## Dependency Decision
 
-### Keep
-
-- `curl`
-- `yyjson`
-- WIL / Win32 APIs already used by the repo
-
-### Add
-
-- Recommended: enable `curl[http2]` in `vcpkg.json`
-
-Reason:
-
-- Drive is pure HTTPS against a small host set.
-- HTTP/2 is a clear, low-risk upgrade on top of an existing dependency.
-- It improves the ceiling for metadata-heavy workloads without introducing a second HTTP stack.
-
-### Reject
-
-- `google-cloud-cpp`
-  - wrong abstraction level for Drive
-  - much heavier dependency and DLL surface
-  - poor fit for the repo's current remote plugin patterns
-- `cpprestsdk`
-  - duplicates HTTP/JSON responsibilities already covered by `curl` + `yyjson`
-  - adds code and build cost without a clear performance win
+Settled — `curl` + `yyjson` shipped (plus WIL/Win32 already in repo; `curl[http2]` remains an optional low-risk upgrade); `google-cloud-cpp` rejected (wrong abstraction level, heavy DLL surface, poor fit for repo plugin patterns) and `cpprestsdk` rejected (duplicates `curl`+`yyjson` with no performance win).
 
 ## Product Constraints From Google Drive
 
@@ -124,6 +78,8 @@ These should be treated as first-order design inputs, not implementation details
 - Cross-account server-side copy
 
 ## Required Host-Side Changes
+
+2026-07-02 folder review: items 1-3 below have landed (see Phase 1 in Phased Delivery); kept here as the authoritative description of the shipped shape.
 
 The current Connection Manager and host secret API are password/SSH oriented. That is not enough for OAuth refresh-token storage.
 
@@ -450,20 +406,20 @@ Document at minimum:
 
 ## Phased Delivery
 
-### Phase 1: Host auth groundwork
+### Phase 1: Host auth groundwork — DONE (2026-07-02 folder review)
 
-- add OAuth auth mode and secret kind
-- add generic secret save/delete APIs
-- add Connection Manager protocol entry and schema support
+- [x] add OAuth auth mode and secret kind (`ConnectionAuthMode::OAuth2Pkce`, `HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN`)
+- [x] add generic secret save/delete APIs (`SetConnectionSecret`/`DeleteConnectionSecret` in `HostServices.cpp`)
+- [x] add Connection Manager protocol entry and schema support
 
-### Phase 2: Read-only Drive core
+### Phase 2: Read-only Drive core — PARTIAL (2026-07-02 folder review)
 
-- plugin skeleton
-- OAuth PKCE flow
-- directory listing
-- file download
-- quota / account info
-- shared drive root support
+- [x] plugin skeleton
+- [ ] OAuth PKCE flow — interactive sign-in (browser launch + loopback listener + initial token exchange) does not exist for Google; only refresh of a pre-stored token is implemented (see closeout-checklist caveat above)
+- [x] directory listing
+- [ ] file download
+- [x] quota / account info
+- [x] shared drive root support
 
 ### Phase 3: Write operations
 
@@ -503,20 +459,8 @@ That is the best fit for this repo's current architecture and the fastest path t
 
 ## References
 
-- Google API client libraries: <https://developers.google.com/api-client-library>
-- OAuth 2.0 for native apps: <https://developers.google.com/identity/protocols/oauth2/native-app>
-- OAuth best practices: <https://developers.google.com/identity/protocols/oauth2/resources/best-practices>
-- Drive API scopes: <https://developers.google.com/workspace/drive/api/guides/api-specific-auth>
-- Drive `files.list`: <https://developers.google.com/workspace/drive/api/reference/rest/v3/files/list>
-- Drive changes guide: <https://developers.google.com/workspace/drive/api/guides/manage-changes>
-- Drive search guide: <https://developers.google.com/workspace/drive/api/guides/search-files>
-- Drive partial responses / `fields`: <https://developers.google.com/workspace/drive/api/guides/fields-parameter>
-- Drive uploads: <https://developers.google.com/workspace/drive/api/guides/manage-uploads>
+(Trimmed 2026-07-02 folder review; the full Drive REST guide set is discoverable from these entry points.)
+
+- OAuth 2.0 for native apps (PKCE + loopback): <https://developers.google.com/identity/protocols/oauth2/native-app>
+- Drive `files.list` / REST v3 reference: <https://developers.google.com/workspace/drive/api/reference/rest/v3/files/list>
 - Drive downloads / export: <https://developers.google.com/workspace/drive/api/guides/manage-downloads>
-- Shared drive support: <https://developers.google.com/workspace/drive/api/guides/enable-shareddrives>
-- Push notifications: <https://developers.google.com/workspace/drive/api/guides/push>
-- Drive error handling: <https://developers.google.com/workspace/drive/api/guides/handle-errors>
-- Drive user / quota info: <https://developers.google.com/workspace/drive/api/guides/user-info>
-- vcpkg `curl`: <https://vcpkg.io/en/package/curl.html>
-- vcpkg `google-cloud-cpp`: <https://vcpkg.io/en/package/google-cloud-cpp>
-- vcpkg `cpprestsdk`: <https://vcpkg.io/en/package/cpprestsdk>

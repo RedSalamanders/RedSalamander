@@ -21,6 +21,7 @@
 #include <mutex>
 #include <new>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -386,6 +387,11 @@ size_t CurlWriteToString(void* buffer, size_t size, size_t nitems, void* outstre
 
 [[nodiscard]] std::string RemotePathForCommand(const ConnectionInfo& conn, std::wstring_view pluginPath) noexcept;
 [[nodiscard]] HRESULT CurlPerformList(const ConnectionInfo& conn, std::wstring_view pluginPath, std::string& outListing) noexcept;
+// Targeted existence/size probe (FTP SIZE, SFTP stat) that avoids listing the parent directory. Returns
+// S_OK when the file exists; sizeKnownOut reports whether the server gave a byte count. Returns a failure
+// HRESULT (including ERROR_NOT_SUPPORTED for IMAP) when the probe cannot confirm the file, signalling the
+// caller to fall back to GetEntryInfo.
+[[nodiscard]] HRESULT CurlProbeRemoteFileSize(const ConnectionInfo& conn, std::wstring_view pluginPath, uint64_t& sizeOut, bool& sizeKnownOut) noexcept;
 [[nodiscard]] HRESULT CurlPerformListAndParse(const ConnectionInfo& conn,
                                               std::wstring_view pluginPath,
                                               std::vector<FilesInformationCurl::Entry>& outEntries) noexcept;
@@ -700,4 +706,8 @@ struct TransferProgressContext
 
 [[nodiscard]] HRESULT EnsureDirectoryExists(const ConnectionInfo& conn, std::wstring_view directoryPath) noexcept;
 [[nodiscard]] HRESULT EnsureOverwriteTargetFile(const ConnectionInfo& conn, std::wstring_view destinationPath, bool allowOverwrite) noexcept;
+
+#if defined(_DEBUG)
+void RunDebugCurlStreamingReaderContractSelfTests(unsigned int& passed, unsigned int& failed) noexcept;
+#endif
 } // namespace FileSystemCurlInternal

@@ -54,6 +54,17 @@ Specs/TestRuns/4cb089111a23/Commands/*
 !Specs/TestRuns/4cb089111a23/Commands/2026-06-10_161852/
 Specs/TestRuns/4cb089111a23/Commands/2026-06-10_161852/*
 !Specs/TestRuns/4cb089111a23/Commands/2026-06-10_161852/README.md
+!Specs/TestRuns/4cb089111a23/Viewers/
+Specs/TestRuns/4cb089111a23/Viewers/*
+!Specs/TestRuns/4cb089111a23/Viewers/2026-07-11_173930_viewersqlite_fs22_snapshot_bounds/
+!Specs/TestRuns/4cb089111a23/Viewers/2026-07-11_173930_viewersqlite_fs22_snapshot_bounds/**
+!Specs/TestRuns/4cb089111a23/Continuation/
+Specs/TestRuns/4cb089111a23/Continuation/*
+!Specs/TestRuns/4cb089111a23/Continuation/2026-07-12_205636_farsight_full_green/
+!Specs/TestRuns/4cb089111a23/Continuation/2026-07-12_205636_farsight_full_green/**
+!Specs/TestRuns/4cb089111a23/Commands/2026-07-11_130136/
+Specs/TestRuns/4cb089111a23/Commands/2026-07-11_130136/*
+!Specs/TestRuns/4cb089111a23/Commands/2026-07-11_130136/README.md
 !Specs/TestRuns/SINON/
 Specs/TestRuns/SINON/*
 !Specs/TestRuns/SINON/FileOps/

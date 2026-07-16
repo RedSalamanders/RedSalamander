@@ -27,9 +27,7 @@ struct BatchRenameItemOutcome final
 class BatchRenameExecutionCallback final : public IFileSystemCallback
 {
 public:
-    BatchRenameExecutionCallback(const std::atomic_bool& cancelRequested,
-                                 BatchRenameExecutionOptions options,
-                                 const size_t overallTotal) noexcept
+    BatchRenameExecutionCallback(const std::atomic_bool& cancelRequested, BatchRenameExecutionOptions options, const size_t overallTotal) noexcept
         : _cancelRequested(cancelRequested),
           _options(options),
           _overallTotal(overallTotal)
@@ -160,7 +158,7 @@ private:
     std::vector<BatchRenameItemOutcome> _itemOutcomes;
 };
 
-[[nodiscard]] std::wstring MakeBatchRenameTempLeaf(const std::filesystem::path& sourcePath)
+[[nodiscard]] HRESULT MakeBatchRenameTempLeaf(const std::filesystem::path& sourcePath, std::wstring& tempLeaf) noexcept
 {
     // The temp leaf is "<name>.rsren-<32 hex>"; the suffix is a fixed 39 characters. Cap the name
     // portion so the synthesized leaf can never exceed the Windows 255-character limit -- otherwise a
@@ -168,93 +166,12 @@ private:
     // ERROR_INVALID_NAME and strand the whole cycle). The GUID alone guarantees uniqueness; the name
     // prefix is only a readability aid, so truncating it is safe.
     constexpr size_t kMaxTempLeafLength    = 255u;
-    constexpr size_t kTempLeafSuffixLength = 39u; // ".rsren-" (7) + 32 hex characters
-    const std::wstring sourceName          = sourcePath.filename().native();
-    const std::wstring_view namePrefix =
-        std::wstring_view(sourceName).substr(0, (std::min)(sourceName.size(), kMaxTempLeafLength - kTempLeafSuffixLength));
-
-    GUID guid{};
-    uint64_t fallbackCounterValue = 0u;
-    if (FAILED(::CoCreateGuid(&guid)))
-    {
-        static std::atomic_uint64_t fallbackCounter{0u};
-        fallbackCounterValue = fallbackCounter.fetch_add(1u, std::memory_order_relaxed) + 1u;
-        guid.Data1 = static_cast<unsigned long>(::GetTickCount64());
-        guid.Data2 = static_cast<unsigned short>(::GetCurrentThreadId());
-        guid.Data3 = static_cast<unsigned short>(::GetCurrentProcessId());
-    }
-    if (fallbackCounterValue != 0u)
-    {
-        return std::format(L"{}.rsren-{:08X}{:04X}{:04X}{:016X}",
-                           namePrefix,
-                           guid.Data1,
-                           guid.Data2,
-                           guid.Data3,
-                           fallbackCounterValue);
-    }
-
-    return std::format(L"{}.rsren-{:08X}{:04X}{:04X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}",
-                       namePrefix,
-                       guid.Data1,
-                       guid.Data2,
-                       guid.Data3,
-                       guid.Data4[0],
-                       guid.Data4[1],
-                       guid.Data4[2],
-                       guid.Data4[3],
-                       guid.Data4[4],
-                       guid.Data4[5],
-                       guid.Data4[6],
-                       guid.Data4[7]);
-}
-
-[[nodiscard]] wchar_t GuessPreferredSeparator(std::wstring_view folder) noexcept
-{
-    const bool hasForward = folder.find(L'/') != std::wstring_view::npos;
-    const bool hasBack    = folder.find(L'\\') != std::wstring_view::npos;
-    if (hasForward && ! hasBack)
-    {
-        return L'/';
-    }
-    return L'\\';
-}
-
-[[nodiscard]] bool IsPathPrefixByIdentity(const FileSystemPathIdentity& pathIdentity,
-                                          const std::filesystem::path& prefix,
-                                          const std::filesystem::path& candidate) noexcept
-{
-    auto prefixIt        = prefix.begin();
-    const auto prefixEnd = prefix.end();
-    auto candidateIt     = candidate.begin();
-    const auto candidateEnd = candidate.end();
-
-    for (; prefixIt != prefixEnd; ++prefixIt, ++candidateIt)
-    {
-        if (candidateIt == candidateEnd || ! EquivalentComponent(pathIdentity, prefixIt->native(), candidateIt->native()))
-        {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-[[nodiscard]] std::filesystem::path ReplacePathPrefix(const std::filesystem::path& candidate,
-                                                      const std::filesystem::path& oldPrefix,
-                                                      const std::filesystem::path& newPrefix)
-{
-    auto candidateIt = candidate.begin();
-    for (auto oldIt = oldPrefix.begin(); oldIt != oldPrefix.end() && candidateIt != candidate.end(); ++oldIt)
-    {
-        ++candidateIt;
-    }
-
-    std::filesystem::path rewritten = newPrefix;
-    for (; candidateIt != candidate.end(); ++candidateIt)
-    {
-        rewritten /= *candidateIt;
-    }
-    return rewritten;
+    const std::wstring sourceName = sourcePath.filename().native();
+    return Common::Paths::BuildUniqueSiblingName(std::wstring_view(sourceName),
+                                                  std::wstring_view(L".rsren-"),
+                                                  std::wstring_view{},
+                                                  kMaxTempLeafLength,
+                                                  tempLeaf);
 }
 
 void FinalizeUndoEntryCurrentPaths(const FileSystemPathIdentity& pathIdentity,
@@ -287,24 +204,11 @@ size_t PathDepthKey(const std::filesystem::path& path) noexcept
     return depth;
 }
 
-std::filesystem::path JoinFolderAndLeaf(const std::filesystem::path& folder, const std::wstring_view leaf) noexcept
+std::filesystem::path JoinFolderAndLeaf(const FileSystemPathIdentity& pathIdentity,
+                                        const std::filesystem::path& folder,
+                                        const std::wstring_view leaf) noexcept
 {
-    if (folder.empty())
-    {
-        return std::filesystem::path(std::wstring(leaf));
-    }
-
-    std::wstring result(folder.native());
-    if (! result.empty())
-    {
-        const wchar_t last = result.back();
-        if (last != L'\\' && last != L'/')
-        {
-            result.push_back(GuessPreferredSeparator(result));
-        }
-    }
-    result.append(leaf);
-    return std::filesystem::path(std::move(result));
+    return std::filesystem::path(JoinFileSystemPath(pathIdentity, folder.native(), leaf));
 }
 
 std::filesystem::path ApplyExecutedDirectoryMoves(const FileSystemPathIdentity& pathIdentity,
@@ -317,9 +221,9 @@ std::filesystem::path ApplyExecutedDirectoryMoves(const FileSystemPathIdentity& 
         // whatever occupies that name now (a sibling chain/swap rename re-occupying
         // the vacated name), not to the directory the move relocated; rewriting it
         // would corrupt undo entries and refresh targets for directory chains.
-        if (! EquivalentPath(pathIdentity, move.sourcePath.native(), path.native()) && IsPathPrefixByIdentity(pathIdentity, move.sourcePath, path))
+        if (IsStrictDescendantPath(pathIdentity, move.sourcePath.native(), path.native()))
         {
-            path = ReplacePathPrefix(path, move.sourcePath, move.targetPath);
+            path = std::filesystem::path(ReplaceFileSystemPathPrefix(pathIdentity, path.native(), move.sourcePath.native(), move.targetPath.native()));
         }
     }
     return path;
@@ -335,6 +239,7 @@ BatchRenameExecutionResult RunBatchRenameExecutionEngine(std::atomic_bool& cance
     BatchRenameExecutionCallback callback(cancelRequested, options, ops.size());
     BatchRenameExecutionResult result{};
     BatchRenameExecutionReport& report = result.report;
+    report.totalRows                   = ops.size();
 
     size_t completedOps  = 0u;
     size_t failedOps     = 0u;
@@ -355,11 +260,12 @@ BatchRenameExecutionResult RunBatchRenameExecutionEngine(std::atomic_bool& cance
 
     const auto restoreTempBestEffort = [&](BatchRenameExecutionOp& op) noexcept
     {
-        if (op.tempPath.empty() || op.completed)
+        if (op.tempPath.empty() || op.completed || op.tempRestoreAttempted)
         {
             return;
         }
 
+        op.tempRestoreAttempted = true;
         const HRESULT restoreHr = fileSystem.RenameItem(op.tempPath.c_str(), op.originalSource.c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr);
         if (FAILED(restoreHr))
         {
@@ -367,8 +273,77 @@ BatchRenameExecutionResult RunBatchRenameExecutionEngine(std::atomic_bool& cance
                            op.tempPath.native(),
                            op.originalSource.native(),
                            static_cast<unsigned long>(restoreHr));
+            return;
         }
         op.tempPath.clear();
+    };
+
+    const auto hasOpenTempHop = [&ops]() noexcept
+    { return std::ranges::any_of(ops, [](const BatchRenameExecutionOp& op) noexcept { return ! op.tempPath.empty(); }); };
+
+    const auto removeSuccessfulRecord = [&](const BatchRenameExecutionOp& op, const std::filesystem::path& targetPath)
+    {
+        for (size_t index = result.successfulSourcePaths.size(); index > 0u; --index)
+        {
+            const size_t entryIndex = index - 1u;
+            if (EquivalentPath(pathIdentity, result.successfulSourcePaths[entryIndex].native(), op.originalSource.native()) &&
+                entryIndex < result.successfulTargetPaths.size() &&
+                EquivalentPath(pathIdentity, result.successfulTargetPaths[entryIndex].native(), targetPath.native()))
+            {
+                result.successfulSourcePaths.erase(result.successfulSourcePaths.begin() + static_cast<std::ptrdiff_t>(entryIndex));
+                result.successfulTargetPaths.erase(result.successfulTargetPaths.begin() + static_cast<std::ptrdiff_t>(entryIndex));
+                break;
+            }
+        }
+
+        std::erase_if(report.undoEntries,
+                      [&](const BatchRenameUndoEntry& entry) noexcept
+        {
+            return EquivalentPath(pathIdentity, entry.originalPath.native(), op.originalSource.native()) &&
+                   EquivalentPath(pathIdentity, entry.currentPath.native(), targetPath.native());
+        });
+        std::erase_if(directoryMoves,
+                      [&](const ExecutedDirectoryMove& move) noexcept
+        {
+            return EquivalentPath(pathIdentity, move.sourcePath.native(), op.originalSource.native()) &&
+                   EquivalentPath(pathIdentity, move.targetPath.native(), targetPath.native());
+        });
+    };
+
+    std::vector<size_t> completedWithOpenTempHop;
+    completedWithOpenTempHop.reserve(ops.size());
+
+    const auto rollbackCompletedOpenTempHopRows = [&]() noexcept
+    {
+        for (auto it = completedWithOpenTempHop.rbegin(); it != completedWithOpenTempHop.rend(); ++it)
+        {
+            BatchRenameExecutionOp& op = ops[*it];
+            if (! op.completed)
+            {
+                continue;
+            }
+
+            const std::filesystem::path targetPath = JoinFolderAndLeaf(pathIdentity, op.currentSource.parent_path(), op.finalLeaf);
+            const HRESULT rollbackHr = fileSystem.RenameItem(targetPath.c_str(), op.originalSource.c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr);
+            if (FAILED(rollbackHr))
+            {
+                Debug::Warning(L"BatchRename: failed to roll back completed rename '{}' back to '{}' while restoring a temp-hop cycle (hr=0x{:08X}).",
+                               targetPath.native(),
+                               op.originalSource.native(),
+                               static_cast<unsigned long>(rollbackHr));
+                continue;
+            }
+
+            removeSuccessfulRecord(op, targetPath);
+            op.completed = false;
+            op.failed    = true;
+            if (completedOps != 0u)
+            {
+                --completedOps;
+            }
+            ++failedOps;
+        }
+        completedWithOpenTempHop.clear();
     };
 
     size_t groupBegin = 0u;
@@ -401,12 +376,9 @@ BatchRenameExecutionResult RunBatchRenameExecutionEngine(std::atomic_bool& cance
             layer.reserve(remaining.size());
             for (const size_t opIndex : remaining)
             {
-                const std::filesystem::path targetPath = JoinFolderAndLeaf(ops[opIndex].currentSource.parent_path(), ops[opIndex].finalLeaf);
-                const bool blocked = std::ranges::any_of(remaining,
-                                                          [&](const size_t pendingIndex) noexcept
-                {
-                    return pendingIndex != opIndex &&
-                           EquivalentPath(pathIdentity, ops[pendingIndex].currentSource.native(), targetPath.native());
+                const std::filesystem::path targetPath = JoinFolderAndLeaf(pathIdentity, ops[opIndex].currentSource.parent_path(), ops[opIndex].finalLeaf);
+                const bool blocked                     = std::ranges::any_of(remaining, [&](const size_t pendingIndex) noexcept {
+                    return pendingIndex != opIndex && EquivalentPath(pathIdentity, ops[pendingIndex].currentSource.native(), targetPath.native());
                 });
                 if (! blocked)
                 {
@@ -420,7 +392,15 @@ BatchRenameExecutionResult RunBatchRenameExecutionEngine(std::atomic_bool& cance
                 // cycle (swap). Vacate one member through a unique temp name.
                 const size_t cycleIndex         = remaining.front();
                 BatchRenameExecutionOp& cycleOp = ops[cycleIndex];
-                const std::wstring tempLeaf     = MakeBatchRenameTempLeaf(cycleOp.currentSource);
+                std::wstring tempLeaf;
+                const HRESULT tempNameHr = MakeBatchRenameTempLeaf(cycleOp.currentSource, tempLeaf);
+                if (FAILED(tempNameHr))
+                {
+                    cycleOp.failed = true;
+                    noteFailure(tempNameHr);
+                    std::erase(remaining, cycleIndex);
+                    continue;
+                }
                 const FileSystemRenameBatch::RenameOp tempRename{
                     .sourcePath  = cycleOp.currentSource,
                     .newLeaf     = tempLeaf,
@@ -429,13 +409,9 @@ BatchRenameExecutionResult RunBatchRenameExecutionEngine(std::atomic_bool& cance
                 };
                 callback.SetProgressBase(completedOps + failedOps);
                 callback.ResetItemOutcomes();
-                const HRESULT tempHr = FileSystemRenameBatch::Execute(fileSystem,
-                                                                      std::span<const FileSystemRenameBatch::RenameOp>(&tempRename, 1u),
-                                                                      FILESYSTEM_FLAG_NONE,
-                                                                      nullptr,
-                                                                      &callback,
-                                                                      nullptr);
-                HRESULT tempStatus = tempHr;
+                const HRESULT tempHr = FileSystemRenameBatch::Execute(
+                    fileSystem, std::span<const FileSystemRenameBatch::RenameOp>(&tempRename, 1u), FILESYSTEM_FLAG_NONE, nullptr, &callback, nullptr);
+                HRESULT tempStatus                                     = tempHr;
                 const std::vector<BatchRenameItemOutcome> tempOutcomes = callback.TakeItemOutcomes();
                 if (! tempOutcomes.empty())
                 {
@@ -464,7 +440,7 @@ BatchRenameExecutionResult RunBatchRenameExecutionEngine(std::atomic_bool& cance
                     continue;
                 }
 
-                cycleOp.tempPath      = JoinFolderAndLeaf(cycleOp.currentSource.parent_path(), tempLeaf);
+                cycleOp.tempPath      = JoinFolderAndLeaf(pathIdentity, cycleOp.currentSource.parent_path(), tempLeaf);
                 cycleOp.currentSource = cycleOp.tempPath;
                 continue;
             }
@@ -497,11 +473,11 @@ BatchRenameExecutionResult RunBatchRenameExecutionEngine(std::atomic_bool& cance
 
             for (size_t layerOffset = 0u; layerOffset < layer.size(); ++layerOffset)
             {
-                const size_t opIndex = layer[layerOffset];
+                const size_t opIndex       = layer[layerOffset];
                 BatchRenameExecutionOp& op = ops[opIndex];
                 // Providers that report per-item completion drive per-row
                 // bookkeeping; otherwise fall back to the batch result.
-                HRESULT status = outcomes.empty() ? batchHr : HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+                HRESULT status = outcomes.empty() || IsBatchRenameCancellationHRESULT(batchHr) ? batchHr : HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
                 if (! outcomes.empty())
                 {
                     if (statusByItemIndex[layerOffset].has_value())
@@ -512,8 +488,7 @@ BatchRenameExecutionResult RunBatchRenameExecutionEngine(std::atomic_bool& cance
                     {
                         for (const BatchRenameItemOutcome& outcome : outcomes)
                         {
-                            if (outcome.itemIndex >= statusByItemIndex.size() &&
-                                EquivalentPath(pathIdentity, outcome.sourcePath, op.currentSource.native()))
+                            if (outcome.itemIndex >= statusByItemIndex.size() && EquivalentPath(pathIdentity, outcome.sourcePath, op.currentSource.native()))
                             {
                                 status = outcome.status;
                                 break;
@@ -526,7 +501,7 @@ BatchRenameExecutionResult RunBatchRenameExecutionEngine(std::atomic_bool& cance
                 {
                     op.completed = true;
                     ++completedOps;
-                    const std::filesystem::path targetPath = JoinFolderAndLeaf(op.currentSource.parent_path(), op.finalLeaf);
+                    const std::filesystem::path targetPath = JoinFolderAndLeaf(pathIdentity, op.currentSource.parent_path(), op.finalLeaf);
                     result.successfulSourcePaths.push_back(op.originalSource);
                     result.successfulTargetPaths.push_back(targetPath);
                     // Undo entries record the NET original -> final transition;
@@ -541,6 +516,10 @@ BatchRenameExecutionResult RunBatchRenameExecutionEngine(std::atomic_bool& cance
                         directoryMoves.push_back(ExecutedDirectoryMove{.sourcePath = op.originalSource, .targetPath = targetPath});
                     }
                     op.tempPath.clear();
+                    if (hasOpenTempHop())
+                    {
+                        completedWithOpenTempHop.push_back(opIndex);
+                    }
                 }
                 else
                 {
@@ -556,9 +535,17 @@ BatchRenameExecutionResult RunBatchRenameExecutionEngine(std::atomic_bool& cance
             }
 
             callback.NotifyOverallProgress(completedOps + failedOps);
+            if (! hasOpenTempHop())
+            {
+                completedWithOpenTempHop.clear();
+            }
 
             if (FAILED(batchHr))
             {
+                if (hasOpenTempHop())
+                {
+                    rollbackCompletedOpenTempHopRows();
+                }
                 aborted = true;
                 abortHr = batchHr;
             }
@@ -574,6 +561,7 @@ BatchRenameExecutionResult RunBatchRenameExecutionEngine(std::atomic_bool& cance
     {
         if (op.completed || op.failed)
         {
+            restoreTempBestEffort(op);
             continue;
         }
         ++neverRan;

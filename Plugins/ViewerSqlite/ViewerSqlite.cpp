@@ -5,6 +5,7 @@
 #include <cwchar>
 #include <format>
 #include <functional>
+#include <limits>
 #include <new>
 #include <utility>
 
@@ -19,6 +20,7 @@
 
 #include "Helpers.h"
 #include "WindowMessages.h"
+#include "ViewerTitleBarTheme.h"
 #include "WindowSizing.h"
 #include "resource.h"
 
@@ -76,8 +78,8 @@ constexpr char kViewerSqliteSchemaJson[] = R"json({
     {
       "key": "directOpenLocalFiles",
       "type": "bool",
-      "label": "Direct-open local files",
-      "description": "Open local SQLite files directly instead of copying them to a temporary snapshot first.",
+      "label": "Optimized local snapshot",
+      "description": "Use SQLite's backup API for a transactionally consistent private snapshot of local databases and their WAL state.",
       "default": true
     }
   ]
@@ -113,20 +115,6 @@ struct ViewerSqliteAsyncWorkItem final
     return leaf;
 }
 
-void ApplyImmersiveDarkMode(HWND hwnd, bool enabled) noexcept
-{
-    if (! hwnd)
-    {
-        return;
-    }
-
-    const BOOL darkMode                                 = enabled ? TRUE : FALSE;
-    static constexpr DWORD kDwmwaUseImmersiveDarkMode19 = 19u;
-    static constexpr DWORD kDwmwaUseImmersiveDarkMode20 = 20u;
-    static_cast<void>(DwmSetWindowAttribute(hwnd, kDwmwaUseImmersiveDarkMode20, &darkMode, sizeof(darkMode)));
-    static_cast<void>(DwmSetWindowAttribute(hwnd, kDwmwaUseImmersiveDarkMode19, &darkMode, sizeof(darkMode)));
-}
-
 [[nodiscard]] std::wstring ReadStatusText(UINT resourceId)
 {
     return LoadStringResource(g_hInstance, resourceId);
@@ -144,8 +132,13 @@ void ApplyImmersiveDarkMode(HWND hwnd, bool enabled) noexcept
 
 [[nodiscard]] bool QueueThreadpoolWork(std::unique_ptr<ViewerSqliteAsyncWorkItem> workItem) noexcept
 {
+    if (! workItem || ! workItem->moduleKeepAlive)
+    {
+        return false;
+    }
+
     const BOOL queued = TrySubmitThreadpoolCallback(
-        [](PTP_CALLBACK_INSTANCE /*instance*/, void* context) noexcept
+        [](PTP_CALLBACK_INSTANCE instance, void* context) noexcept
     {
         std::unique_ptr<ViewerSqliteAsyncWorkItem> owned(static_cast<ViewerSqliteAsyncWorkItem*>(context));
         if (! owned)
@@ -153,12 +146,15 @@ void ApplyImmersiveDarkMode(HWND hwnd, bool enabled) noexcept
             return;
         }
 
+        if (owned->moduleKeepAlive)
+        {
+            TransferModulePinToCallbackReturn(instance, owned->moduleKeepAlive);
+        }
+
         if (owned->work)
         {
             owned->work();
         }
-
-        owned->moduleKeepAlive.reset();
 
 #ifdef _DEBUG
         if (owned->pendingAsyncWork)
@@ -198,10 +194,23 @@ void ApplyImmersiveDarkMode(HWND hwnd, bool enabled) noexcept
         g_hInstance, page.hasMore ? IDS_VIEWERSQLITE_STATUS_TABLE_PAGE_MORE_FMT : IDS_VIEWERSQLITE_STATUS_TABLE_PAGE_FMT, tableName, firstRow, lastRow);
 }
 
+[[nodiscard]] std::wstring_view FindTableDisplayName(const std::vector<ViewerSqliteEngine::TableInfo>& tables,
+                                                     const std::wstring_view tableName) noexcept
+{
+    const auto match = std::find_if(tables.begin(), tables.end(),
+                                    [&](const ViewerSqliteEngine::TableInfo& table) noexcept { return table.name == tableName; });
+    return match != tables.end() ? std::wstring_view(match->displayName) : std::wstring_view{};
+}
+
 [[nodiscard]] std::wstring BuildQueryStatusText(const ViewerSqliteEngine::QueryPage& page)
 {
     return FormatStringResource(
         g_hInstance, page.truncated ? IDS_VIEWERSQLITE_STATUS_QUERY_TRUNCATED_FMT : IDS_VIEWERSQLITE_STATUS_QUERY_FMT, static_cast<uint64_t>(page.rows.size()));
+}
+
+[[nodiscard]] bool CanAdvanceTablePage(const uint64_t rowOffset, const uint32_t pageSize) noexcept
+{
+    return rowOffset <= static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) - pageSize;
 }
 } // namespace
 
@@ -327,8 +336,9 @@ private:
             }
             else
             {
-                column.title =
-                    (columnCount == 1u) ? LoadStringResource(g_hInstance, IDS_VIEWERSQLITE_COLUMN_RESULT) : std::format(L"Column {}", columnIndex + 1u);
+                column.title = (columnCount == 1u)
+                                   ? LoadStringResource(g_hInstance, IDS_VIEWERSQLITE_COLUMN_RESULT)
+                                   : FormatStringResource(g_hInstance, IDS_VIEWERSQLITE_COLUMN_FORMAT, columnIndex + 1u);
             }
 
             column.widthDip    = (columnIndex == 0u) ? 180.0f : 160.0f;
@@ -798,6 +808,10 @@ LRESULT ViewerSqlite::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcep
                         return FALSE;
                     }
 
+                    if (! CanAdvanceTablePage(_currentRowOffset, _config.pageSize))
+                    {
+                        return FALSE;
+                    }
                     QueueTablePreview(_currentTable, _currentRowOffset + _config.pageSize);
                     return TRUE;
                 default: return FALSE;
@@ -1001,6 +1015,7 @@ HRESULT STDMETHODCALLTYPE ViewerSqlite::Close() noexcept
 {
     AddRef();
     const auto releaseSelf = wil::scope_exit([&]() noexcept { Release(); });
+    static_cast<void>(_requestId.fetch_add(1u, std::memory_order_relaxed));
     _hWnd.reset();
     _embeddedMode = false;
     return S_OK;
@@ -1139,7 +1154,7 @@ void ViewerSqlite::OnAsyncOpenComplete(std::unique_ptr<AsyncOpenResult> result, 
     {
         _currentHasMore = result->initialPage.hasMore;
         PopulateResults(std::move(result->initialPage));
-        UpdateStatusText(BuildTableStatusText(_currentPage, _currentTable));
+        UpdateStatusText(BuildTableStatusText(_currentPage, FindTableDisplayName(_tables, _currentTable)));
     }
     else
     {
@@ -1184,7 +1199,7 @@ void ViewerSqlite::OnAsyncQueryComplete(std::unique_ptr<AsyncQueryResult> result
         _currentRowOffset = result->rowOffset;
         RefreshTableCombo();
         PopulateResults(std::move(result->page));
-        UpdateStatusText(BuildTableStatusText(_currentPage, _currentTable));
+        UpdateStatusText(BuildTableStatusText(_currentPage, FindTableDisplayName(_tables, _currentTable)));
     }
     else
     {
@@ -1251,7 +1266,13 @@ void ViewerSqlite::BuildUi() noexcept
     });
 
     _nextButton = _root->AddChild<Button>(LoadStringResource(g_hInstance, IDS_VIEWERSQLITE_BUTTON_NEXT));
-    _nextButton->SetOnClick([this] { QueueTablePreview(_currentTable, _currentRowOffset + _config.pageSize); });
+    _nextButton->SetOnClick([this]
+    {
+        if (CanAdvanceTablePage(_currentRowOffset, _config.pageSize))
+        {
+            QueueTablePreview(_currentTable, _currentRowOffset + _config.pageSize);
+        }
+    });
 
     _queryLabel = _root->AddChild<Label>(LoadStringResource(g_hInstance, IDS_VIEWERSQLITE_LABEL_QUERY));
     _queryLabel->SetAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
@@ -1302,14 +1323,14 @@ void ViewerSqlite::ApplyTheme(HWND hwnd) noexcept
     }
 }
 
-void ViewerSqlite::ApplyTitleBarTheme(bool /*windowActive*/) noexcept
+void ViewerSqlite::ApplyTitleBarTheme(bool windowActive) noexcept
 {
     if (! _hWnd)
     {
         return;
     }
 
-    ApplyImmersiveDarkMode(_hWnd.get(), _hasTheme && _theme.darkMode != FALSE);
+    RedSalamander::ViewerChrome::ApplyTitleBarTheme(_hWnd.get(), _theme, windowActive, L"title");
 }
 
 void ViewerSqlite::Layout() noexcept
@@ -1420,7 +1441,7 @@ void ViewerSqlite::RefreshTableCombo() noexcept
     for (size_t index = 0; index < _tables.size(); ++index)
     {
         const auto& table = _tables[index];
-        items.push_back(ComboBox::Item{table.name, table.name});
+        items.push_back(ComboBox::Item{table.name, table.displayName});
         if (! selectedIndex && table.name == _currentTable)
         {
             selectedIndex = index;
@@ -1519,7 +1540,7 @@ void ViewerSqlite::UpdateControlState() noexcept
     }
     if (_nextButton)
     {
-        _nextButton->SetEnabled(canTablePager && _tablePreviewMode && _currentHasMore);
+        _nextButton->SetEnabled(canTablePager && _tablePreviewMode && _currentHasMore && CanAdvanceTablePage(_currentRowOffset, _config.pageSize));
     }
     if (_runButton)
     {
@@ -1644,7 +1665,8 @@ void ViewerSqlite::QueueOpenCurrentPath() noexcept
         result->requestId = requestId;
         result->path      = path;
 
-        auto opened       = ViewerSqliteEngine::OpenFromViewerContext(fileSystem.get(), path, config.directOpenLocalFiles);
+        const ViewerSqliteEngine::QueryCancellation cancellation{&_requestId, requestId};
+        auto opened = ViewerSqliteEngine::OpenFromViewerContext(fileSystem.get(), path, config.directOpenLocalFiles, cancellation);
         result->hr        = opened.hr;
         result->errorText = std::move(opened.errorText);
 
@@ -1664,7 +1686,12 @@ void ViewerSqlite::QueueOpenCurrentPath() noexcept
                 }
 
                 result->initialTable = selectedTableIt->name;
-                auto page            = result->source->LoadTablePage(result->initialTable, config.pageSize, 0);
+                auto page = result->source->LoadTablePage(result->initialTable,
+                                                          config.pageSize,
+                                                          0,
+                                                          ViewerSqliteEngine::kNoSortColumn,
+                                                          ViewerSqliteEngine::TableSortDirection::None,
+                                                          cancellation);
                 if (FAILED(page.hr))
                 {
                     result->hr        = page.hr;
@@ -1761,7 +1788,8 @@ void ViewerSqlite::QueueTablePreview(std::wstring tableName, uint64_t rowOffset)
         result->tableName    = tableName;
         result->rowOffset    = rowOffset;
 
-        auto page         = source->LoadTablePage(result->tableName, pageSize, rowOffset, sortColumnIndex, sortDirection);
+        const ViewerSqliteEngine::QueryCancellation cancellation{&_requestId, requestId};
+        auto page = source->LoadTablePage(result->tableName, pageSize, rowOffset, sortColumnIndex, sortDirection, cancellation);
         result->hr        = page.hr;
         result->errorText = std::move(page.errorText);
         result->page      = std::move(page.page);
@@ -1851,7 +1879,8 @@ void ViewerSqlite::QueueCustomQuery(std::wstring sql) noexcept
         result->tablePreview = false;
         result->sql          = sql;
 
-        auto query        = source->ExecuteReadOnlyQuery(result->sql, rowCap);
+        const ViewerSqliteEngine::QueryCancellation cancellation{&_requestId, requestId};
+        auto query = source->ExecuteReadOnlyQuery(result->sql, rowCap, cancellation);
         result->hr        = query.hr;
         result->errorText = std::move(query.errorText);
         result->page      = std::move(query.page);

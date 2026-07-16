@@ -2,6 +2,7 @@
 
 #include "FolderViewIncrementalSearch.h"
 
+#include <cmath>
 #include <cwctype>
 #include <limits>
 
@@ -165,8 +166,7 @@ LRESULT FolderView::OnKillFocusMessage(HWND newFocus) noexcept
             {
                 DWORD foregroundProcessId = 0;
                 const HWND foreground     = GetForegroundWindow();
-                if (! foreground ||
-                    (GetWindowThreadProcessId(foreground, &foregroundProcessId) != 0 && foregroundProcessId == GetCurrentProcessId()))
+                if (! foreground || (GetWindowThreadProcessId(foreground, &foregroundProcessId) != 0 && foregroundProcessId == GetCurrentProcessId()))
                 {
                     restoreTarget = root;
                 }
@@ -197,6 +197,7 @@ void FolderView::OnContextMenuMessage(HWND hwnd, LPARAM lParam)
 
 void FolderView::OnHScrollMessage(UINT scrollRequest)
 {
+    const float horizontalBefore = _horizontalOffset;
     SCROLLINFO si{};
     si.cbSize = sizeof(si);
     si.fMask  = SIF_ALL;
@@ -227,6 +228,10 @@ void FolderView::OnHScrollMessage(UINT scrollRequest)
     }
 
     _horizontalOffset = std::clamp(newOffsetDip, 0.0f, maxHorizontalOffset);
+    if (std::abs(_horizontalOffset - horizontalBefore) <= 0.01f)
+    {
+        return;
+    }
 
     UpdateScrollMetrics();
     QueueMissingVisibleThumbnails();
@@ -379,6 +384,7 @@ void FolderView::OnCommandMessage(UINT commandId)
 
 void FolderView::OnMouseWheel(int delta, bool horizontal)
 {
+    const float horizontalBefore = _horizontalOffset;
     const float maxHorizontal = std::max(0.0f, _contentWidth - DipFromPx(_clientSize.cx));
     const int wheelClicks     = horizontal ? (delta / WHEEL_DELTA) : (-delta / WHEEL_DELTA);
     for (int click = 0; click < std::abs(wheelClicks); ++click)
@@ -388,6 +394,10 @@ void FolderView::OnMouseWheel(int delta, bool horizontal)
     }
 
     _horizontalOffset = std::clamp(_horizontalOffset, 0.0f, maxHorizontal);
+    if (std::abs(_horizontalOffset - horizontalBefore) <= 0.01f)
+    {
+        return;
+    }
 
     UpdateScrollMetrics();
     QueueMissingVisibleThumbnails();

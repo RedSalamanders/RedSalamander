@@ -321,6 +321,8 @@ BEGIN
     IDS_VIEWERTEXT_CAPTION_ERROR "Divák"
     IDS_VIEWERTEXT_ERR_OPEN_FAILED "Súbor sa nepodarilo otvoriť."
     IDS_VIEWERTEXT_ERR_SAVE_FAILED "Súbor sa nepodarilo uložiť."
+    IDS_VIEWERTEXT_ERR_SAVE_LOADING "Pred uložením počkajte, kým sa súbor dokončí načítavať."
+    IDS_VIEWERTEXT_ERR_SAVE_STREAM_CONVERT "Tento súbor je načítaný iba čiastočne. Ak ho chcete uložiť bez konverzie, vyberte možnosť Zachovať pôvodné kódovanie."
 
     IDS_VIEWERTEXT_DIALOG_OPEN_TITLE "Otvorte súbor"
     IDS_VIEWERTEXT_DIALOG_SAVE_TITLE "Uložiť súbor ako"
@@ -371,4 +373,5 @@ IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_ADDED_FILE "[žiadny súbor na ľavej strane: 
 IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_DELETED_FILE "[žiadny súbor na pravej strane: oprava vymaže tento súbor]"
 IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_TOO_LARGE "[nezmenené riadky sú skryté: odkazovaný súbor je príliš veľký na rozbalenie]"
 IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_BINARY "[nezmenené riadky skryté: odkazovaný súbor je binárny]"
+IDS_VIEWERTEXT_MSG_HEX_COPY_TRUNCATED "Výber bol príliš veľký. Skopírovalo sa iba prvých 256 KiB."
 END

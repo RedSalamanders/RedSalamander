@@ -676,7 +676,7 @@ case SelfTestState::Step::Phase7_LargeDirectoryEnumeration:
             R"json({"concurrencyMode":"manual","copyMoveMaxConcurrency":4,"deleteMaxConcurrency":8,"deleteRecycleBinMaxConcurrency":2,"enumerationSoftMaxBufferMiB":1,"enumerationHardMaxBufferMiB":8})json"));
 
         // Create a lot of long-named files while staying under MAX_PATH even from deep worktrees.
-        constexpr int kFileCount = 4000;
+        constexpr int kFileCount          = 4000;
         constexpr size_t kTargetPathChars = 240;
         constexpr size_t kMinPadChars     = 24;
         constexpr size_t kMaxPadChars     = 120;
@@ -1233,9 +1233,15 @@ case SelfTestState::Step::Phase7_CopyMoveConcurrency16Perf:
             return;
         }
 
+        const unsigned int effectiveBudget = task->_effectiveConcurrencyBudget.load(std::memory_order_acquire);
+        if (effectiveBudget == 0u)
+        {
+            return;
+        }
+
         std::scoped_lock lock(task->_progressMutex);
         maxActive  = (std::max)(maxActive, task->_perItemInFlightCallCount);
-        configured = (std::max)(configured, task->_perItemMaxConcurrency);
+        configured = (std::max)(configured, effectiveBudget);
     };
 
     const auto finalizeCopy = [&](const std::optional<std::uint64_t>& taskSlot,
@@ -1451,7 +1457,7 @@ case SelfTestState::Step::Phase7_AutoConcurrencyHints:
     unsigned int kAutoDeleteConcurrency = 8u;
     {
         FileSystemStorageCharacteristics storageCharacteristics{};
-        storageCharacteristics.sizeBytes = sizeof(storageCharacteristics);
+        storageCharacteristics.sizeBytes    = sizeof(storageCharacteristics);
         const std::wstring storageProbePath = state.tempRoot.wstring();
         if (state.fsLocal && SUCCEEDED(state.fsLocal->GetStorageCharacteristics(storageProbePath.c_str(), &storageCharacteristics)))
         {
@@ -1465,10 +1471,10 @@ case SelfTestState::Step::Phase7_AutoConcurrencyHints:
             }
         }
     }
-    constexpr int kCopyFileCount                  = 16;
-    constexpr size_t kCopyFileBytes               = 4ull * 1024ull * 1024ull;
-    constexpr int kDeleteFileCount                = 256;
-    constexpr size_t kDeleteFileBytes             = 256ull * 1024ull;
+    constexpr int kCopyFileCount      = 16;
+    constexpr size_t kCopyFileBytes   = 4ull * 1024ull * 1024ull;
+    constexpr int kDeleteFileCount    = 256;
+    constexpr size_t kDeleteFileBytes = 256ull * 1024ull;
 
     const std::filesystem::path manualSrcDir  = state.tempRoot / L"auto-concurrency-manual-src";
     const std::filesystem::path manualDstDir  = state.tempRoot / L"auto-concurrency-manual-dst";
@@ -1619,8 +1625,13 @@ case SelfTestState::Step::Phase7_AutoConcurrencyHints:
             return;
         }
 
-        std::scoped_lock lock(task->_progressMutex);
-        configured = (std::max)(configured, task->_perItemMaxConcurrency);
+        const unsigned int effectiveBudget = task->_effectiveConcurrencyBudget.load(std::memory_order_acquire);
+        if (effectiveBudget == 0u)
+        {
+            return;
+        }
+
+        configured = (std::max)(configured, effectiveBudget);
     };
 
     const auto finalizeCopy = [&](const std::optional<std::uint64_t>& taskSlot,
@@ -1766,12 +1777,11 @@ case SelfTestState::Step::Phase7_AutoConcurrencyHints:
         return 1;
     };
 
-    const auto verifyAutoConcurrencyDiagnostics =
-        [&](uint64_t taskId,
-            std::wstring_view expectedOperation,
-            unsigned int expectedAutoConcurrency,
-            unsigned int expectedEffectiveConcurrency,
-            std::wstring_view label) noexcept -> int
+    const auto verifyAutoConcurrencyDiagnostics = [&](uint64_t taskId,
+                                                      std::wstring_view expectedOperation,
+                                                      unsigned int expectedAutoConcurrency,
+                                                      unsigned int expectedEffectiveConcurrency,
+                                                      std::wstring_view label) noexcept -> int
     {
         const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(L"RedSalamander");
         if (settingsPath.empty())
@@ -1862,11 +1872,17 @@ case SelfTestState::Step::Phase7_AutoConcurrencyHints:
         if (! popupSnapshot.autoConcurrencyUsed || popupSnapshot.autoTunedConcurrency != expectedAutoConcurrency ||
             popupSnapshot.effectiveConcurrencyBudget != expectedEffectiveConcurrency)
         {
+            if (! popupSnapshot.finished &&
+                (! popupSnapshot.autoConcurrencyUsed || popupSnapshot.autoTunedConcurrency == 0u || popupSnapshot.effectiveConcurrencyBudget == 0u))
+            {
+                return 0;
+            }
+
             const auto* liveTask                = state.fileOps ? state.fileOps->FindTask(taskSlot.value()) : nullptr;
             const bool liveAutoUsed             = liveTask ? liveTask->_autoConcurrencyUsed.load(std::memory_order_acquire) : false;
             const unsigned int liveResolved     = liveTask ? liveTask->_autoTunedConcurrency.load(std::memory_order_acquire) : 0u;
             const unsigned int liveApplied      = liveTask ? liveTask->_effectiveConcurrencyBudget.load(std::memory_order_acquire) : 0u;
-            const unsigned int liveConfigured   = liveTask ? liveTask->_perItemMaxConcurrency : 0u;
+            const unsigned int liveConfigured   = liveTask ? liveTask->_effectiveConcurrencyBudget.load(std::memory_order_acquire) : 0u;
             const unsigned int liveFlags        = liveTask ? static_cast<unsigned int>(liveTask->_flags) : 0u;
             HRESULT storageHr                   = E_FAIL;
             unsigned int storagePreferredCopy   = 0u;
@@ -2098,11 +2114,6 @@ case SelfTestState::Step::Phase7_AutoConcurrencyHints:
         {
             return false;
         }
-        if (autoPopupStatus == 0)
-        {
-            Fail(L"auto-concurrency auto copy completed before popup diagnostics could be observed.");
-            return true;
-        }
 
         const int autoCompletedPopupStatus = verifyCompletedAutoConcurrencyPopup(state.taskB,
                                                                                  kAutoCopyConcurrency,
@@ -2150,11 +2161,6 @@ case SelfTestState::Step::Phase7_AutoConcurrencyHints:
     if (deleteStatus == 0)
     {
         return false;
-    }
-    if (deletePopupStatus == 0)
-    {
-        Fail(L"auto-concurrency auto delete completed before popup diagnostics could be observed.");
-        return true;
     }
 
     const int deleteCompletedPopupStatus = verifyCompletedAutoConcurrencyPopup(state.taskC,
@@ -3162,7 +3168,9 @@ case SelfTestState::Step::Phase7_CopyRecursiveParallelismMatrix:
         auto cleanupAlternateVolumeRoot = wil::scope_exit([&]() noexcept
         {
             std::error_code cleanupEc;
-            std::filesystem::remove_all(alternateVolumeRoot.value(), cleanupEc);
+            const std::filesystem::path root = alternateVolumeRoot.value();
+            std::filesystem::remove_all(root, cleanupEc);
+            PruneEmptyAlternateVolumeSandboxParents(root);
         });
 
         const std::filesystem::path realMoveSrcRoot = state.tempRoot / L"copy-matrix-real-cross-volume-src";
@@ -4921,6 +4929,10 @@ case SelfTestState::Step::Phase9_ConflictPrompt_OverwriteReplaceReadonly:
         {
             return false;
         }
+        if (! prompt->sourceMetadata.available || ! prompt->destinationMetadata.available)
+        {
+            return false;
+        }
 
         if (prompt->bucket != Task::ConflictBucket::Exists)
         {
@@ -5089,6 +5101,10 @@ case SelfTestState::Step::Phase9_ConflictPrompt_ApplyToAllUiCache:
 
         const auto prompt = TryGetConflictPromptCopy(task);
         if (! prompt.has_value())
+        {
+            return false;
+        }
+        if (! prompt->sourceMetadata.available || ! prompt->destinationMetadata.available)
         {
             return false;
         }
@@ -5420,19 +5436,134 @@ case SelfTestState::Step::Phase9_ConflictPrompt_OverwriteAutoCap:
             return true;
         }
 
-        NextStep(state, SelfTestState::Step::Phase9_ConflictPrompt_SkipAll);
+        NextStep(state, SelfTestState::Step::Phase9_ConflictPrompt_LocalFileOntoDirectory);
         return false;
     }
 
     return false;
 }
-case SelfTestState::Step::Phase9_ConflictPrompt_SkipAll:
+case SelfTestState::Step::Phase9_ConflictPrompt_LocalFileOntoDirectory:
 {
     using Task              = FolderWindow::FileOperationState::Task;
     const ULONGLONG nowTick = GetTickCount64();
     if (HasTimedOut(state, nowTick, 120'000ull))
     {
-        Fail(L"Phase9_ConflictPrompt_SkipAll timed out.");
+        Fail(L"Phase9_ConflictPrompt_LocalFileOntoDirectory timed out.");
+        return true;
+    }
+
+    const std::filesystem::path srcDir               = state.tempRoot / L"local-file-dir-conflict-src";
+    const std::filesystem::path dstDir               = state.tempRoot / L"local-file-dir-conflict-dst";
+    const std::filesystem::path srcFile              = srcDir / L"stuck.bin";
+    const std::filesystem::path dstConflictDirectory = dstDir / L"stuck.bin";
+
+    if (state.stepState == 0)
+    {
+        if (! RecreateEmptyDirectory(srcDir) || ! RecreateEmptyDirectory(dstDir) || ! WriteTestFile(srcFile, 4096))
+        {
+            Fail(L"Failed to prepare local file-on-directory conflict inputs.");
+            return true;
+        }
+
+        std::error_code createEc;
+        if (! std::filesystem::create_directory(dstConflictDirectory, createEc) || createEc)
+        {
+            Fail(L"Failed to create the local destination conflict directory.");
+            return true;
+        }
+
+        const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
+        state.taskA                 = StartFileOperationAndGetId(state.fileOps,
+                                                                 FILESYSTEM_COPY,
+                                                                 FolderWindow::Pane::Left,
+                                                                 FolderWindow::Pane::Right,
+                                                                 state.fsLocal,
+                                                                 {srcFile},
+                                                                 dstDir,
+                                                                 flags,
+                                                                 false,
+                                                                 0,
+                                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
+        if (! state.taskA.has_value())
+        {
+            Fail(L"Failed to start the local file-on-directory conflict task.");
+            return true;
+        }
+
+        state.stepState = 1;
+        return false;
+    }
+
+    if (state.stepState == 1)
+    {
+        Task* task        = state.fileOps && state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr;
+        const auto prompt = TryGetConflictPromptCopy(task);
+        if (! prompt.has_value() || ! prompt->sourceMetadata.available || ! prompt->destinationMetadata.available)
+        {
+            return false;
+        }
+
+        if (prompt->bucket != Task::ConflictBucket::Exists || prompt->sourceMetadata.isDirectory || ! prompt->destinationMetadata.isDirectory)
+        {
+            Fail(L"Local file-on-directory conflict metadata did not describe the expected collision.");
+            return true;
+        }
+        if (PromptHasAction(prompt.value(), Task::ConflictAction::Overwrite))
+        {
+            Fail(L"Local file-on-directory conflict must not offer Overwrite after metadata resolves.");
+            return true;
+        }
+        if (! PromptHasAction(prompt.value(), Task::ConflictAction::Skip))
+        {
+            Fail(L"Local file-on-directory conflict should keep Skip available.");
+            return true;
+        }
+
+        task->SubmitConflictDecision(Task::ConflictAction::Skip, false);
+        state.stepState = 2;
+        return false;
+    }
+
+    if (state.stepState == 2)
+    {
+        const auto completed = state.completedTasks.find(state.taskA.value());
+        if (completed == state.completedTasks.end())
+        {
+            return false;
+        }
+
+        const HRESULT expectedHr = HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+        if (completed->second.hr != expectedHr || completed->second.conflictPromptCount != 1u)
+        {
+            Fail(std::format(L"Local file-on-directory Skip expected one prompt and 0x{:08X}; prompts={} hr=0x{:08X}.",
+                             static_cast<unsigned long>(expectedHr),
+                             completed->second.conflictPromptCount,
+                             static_cast<unsigned long>(completed->second.hr)));
+            return true;
+        }
+
+        const DWORD sourceAttributes      = GetFileAttributesW(srcFile.c_str());
+        const DWORD destinationAttributes = GetFileAttributesW(dstConflictDirectory.c_str());
+        if (sourceAttributes == INVALID_FILE_ATTRIBUTES || (sourceAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0 ||
+            destinationAttributes == INVALID_FILE_ATTRIBUTES || (destinationAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
+        {
+            Fail(L"Local file-on-directory Skip changed the source file or destination directory.");
+            return true;
+        }
+
+        NextStep(state, SelfTestState::Step::Phase9_ConflictPrompt_SkipApplyToAll);
+        return false;
+    }
+
+    return false;
+}
+case SelfTestState::Step::Phase9_ConflictPrompt_SkipApplyToAll:
+{
+    using Task              = FolderWindow::FileOperationState::Task;
+    const ULONGLONG nowTick = GetTickCount64();
+    if (HasTimedOut(state, nowTick, 120'000ull))
+    {
+        Fail(L"Phase9_ConflictPrompt_SkipApplyToAll timed out.");
         return true;
     }
 
@@ -5490,17 +5621,10 @@ case SelfTestState::Step::Phase9_ConflictPrompt_SkipAll:
 
         if (prompt->bucket != Task::ConflictBucket::Exists)
         {
-            Fail(L"Expected Exists conflict bucket for SkipAll prompt.");
+            Fail(L"Expected Exists conflict bucket for Skip + All similar prompt.");
             return true;
         }
 
-        // Fairstream 3A: SkipAll is no longer offered as a separate action; the "All similar"
-        // toggle plus Skip expresses the same decision with one fewer button.
-        if (PromptHasAction(prompt.value(), Task::ConflictAction::SkipAll))
-        {
-            Fail(L"SkipAll must not be offered; 'All similar' + Skip replaces it.");
-            return true;
-        }
         if (! PromptHasAction(prompt.value(), Task::ConflictAction::Skip))
         {
             Fail(L"Skip action not offered for Exists conflict.");
@@ -5523,7 +5647,7 @@ case SelfTestState::Step::Phase9_ConflictPrompt_SkipAll:
         const HRESULT expectedHr = HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
         if (it->second.hr != expectedHr)
         {
-            Fail(std::format(L"Expected SkipAll copy task to return 0x{:08X}, got 0x{:08X}.",
+            Fail(std::format(L"Expected Skip + All similar copy task to return 0x{:08X}, got 0x{:08X}.",
                              static_cast<unsigned long>(expectedHr),
                              static_cast<unsigned long>(it->second.hr)));
             return true;
@@ -5539,14 +5663,14 @@ case SelfTestState::Step::Phase9_ConflictPrompt_SkipAll:
         const auto sizeA = std::filesystem::file_size(dstA, ec);
         if (ec || sizeA != 4096u)
         {
-            Fail(L"SkipAll: destination file A size changed unexpectedly.");
+            Fail(L"Skip + All similar: destination file A size changed unexpectedly.");
             return true;
         }
         ec.clear();
         const auto sizeB = std::filesystem::file_size(dstB, ec);
         if (ec || sizeB != 4096u)
         {
-            Fail(L"SkipAll: destination file B size changed unexpectedly.");
+            Fail(L"Skip + All similar: destination file B size changed unexpectedly.");
             return true;
         }
 

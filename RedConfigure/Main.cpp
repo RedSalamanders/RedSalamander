@@ -3,6 +3,7 @@
 #include <Windows.h>
 
 #include "DxUi.h"
+#include "Helpers.h"
 #include "MinimumOsVersion.h"
 #include "RedConfigureApp.h"
 #include "RedConfigureRoot.h"
@@ -10,7 +11,6 @@
 #include "RedConfigureSplashScreen.h"
 #include "SettingsStore.h"
 #include "resource.h"
-#include "Helpers.h"
 
 #include <algorithm>
 #include <array>
@@ -250,10 +250,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int showCommand)
     }
 
     RedConfigure::SplashScreen::BeginImmediateOpen(instance, LoadAppString(instance, IDS_REDCONFIGURE_SPLASH_STATUS_STARTING));
-    const auto closeSplash = wil::scope_exit([]() noexcept
-    {
-        RedConfigure::SplashScreen::CloseIfExist();
-    });
+    const auto closeSplash = wil::scope_exit([]() noexcept { RedConfigure::SplashScreen::CloseIfExist(); });
 
     MainWindow window(instance);
     wil::unique_hwnd hwnd(window.Create(showCommand));

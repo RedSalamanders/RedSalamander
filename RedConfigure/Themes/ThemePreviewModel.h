@@ -6,27 +6,14 @@
 #include <optional>
 #include <string>
 #include <string_view>
-#include <unordered_map>
 #include <vector>
 
 namespace RedConfigure::Themes
 {
-enum class ThemeColorExpressionKind : uint8_t
+enum class ThemeSourceTransform : uint8_t
 {
-    Reference,
-    Lighten,
-    Darken,
-    Alpha,
-    Blend,
-    Contrast,
-};
-
-struct ThemeColorExpression
-{
-    ThemeColorExpressionKind kind = ThemeColorExpressionKind::Reference;
-    std::wstring firstKey;
-    std::wstring secondKey;
-    double amount = 0.0;
+    Darken10,
+    BlendAccent16,
 };
 
 class ThemePreviewModel final
@@ -35,17 +22,27 @@ public:
     void SetTheme(const Common::Settings::ThemeDefinition& theme);
 
     [[nodiscard]] const Common::Settings::ThemeDefinition& GetTheme() const noexcept;
-    [[nodiscard]] Common::Settings::ThemeDefinition BuildFlattenedTheme() const;
     [[nodiscard]] std::optional<uint32_t> GetEffectiveColor(std::wstring_view key) const;
     [[nodiscard]] std::wstring GetAuthoredColorText(std::wstring_view key) const;
     [[nodiscard]] bool TryEditOverride(std::wstring_view key, std::wstring_view colorText);
-    void ResetOverride(std::wstring_view key);
+    [[nodiscard]] bool CreatePaletteEntry(std::wstring_view name, std::wstring_view colorText, bool replaceMatchingDirectSources);
+    [[nodiscard]] bool WrapSourceWithTransform(std::wstring_view key, ThemeSourceTransform transform);
+    [[nodiscard]] bool ResetOverride(std::wstring_view key);
+    [[nodiscard]] bool RenamePaletteEntry(std::wstring_view oldName, std::wstring_view newName);
+    [[nodiscard]] std::vector<std::wstring> GetDependencies(std::wstring_view key) const;
+    [[nodiscard]] std::vector<std::wstring> GetAffected(std::wstring_view key) const;
+    [[nodiscard]] Common::Settings::ThemeColorEvaluationPhase GetEvaluationPhase(std::wstring_view key) const;
+    [[nodiscard]] std::optional<Common::Settings::ThemeColorSourceKind> GetSourceKind(std::wstring_view key) const noexcept;
+    [[nodiscard]] std::wstring_view GetLastError() const noexcept;
+    void SetPreviewSeed(uint32_t seed) noexcept;
+    [[nodiscard]] uint32_t GetPreviewSeed() const noexcept;
 
 private:
-    [[nodiscard]] std::optional<uint32_t> ResolveColor(std::wstring_view key, std::vector<std::wstring>& stack) const;
-    [[nodiscard]] std::optional<uint32_t> ResolveExpression(const ThemeColorExpression& expression, std::vector<std::wstring>& stack) const;
+    [[nodiscard]] bool Recompute();
 
     Common::Settings::ThemeDefinition _theme;
-    std::unordered_map<std::wstring, ThemeColorExpression> _expressions;
+    Common::Settings::ResolvedThemeColors _resolved;
+    std::wstring _lastError;
+    uint32_t _previewSeed = 0x52ED5EEDu;
 };
 } // namespace RedConfigure::Themes

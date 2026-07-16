@@ -610,8 +610,7 @@ void FolderView::ReportError(const std::wstring& context, HRESULT hr) const
         renderingDecision = UpdateRenderingFailureOverlayDecision(hr, nowTickMs);
         if (! renderingDecision.showOverlay)
         {
-            Debug::Perf::Emit(
-                L"folder.render.failure_suppressed", context, renderingDecision.elapsedMs * 1000u, renderingDecision.failureCount, 0u, hr);
+            Debug::Perf::Emit(L"folder.render.failure_suppressed", context, renderingDecision.elapsedMs * 1000u, renderingDecision.failureCount, 0u, hr);
             if (renderingDecision.failureCount == 1u)
             {
                 Debug::Warning(L"{} failed transiently; suppressing user-visible rendering overlay until persistent: {}", context, details);
@@ -621,8 +620,7 @@ void FolderView::ReportError(const std::wstring& context, HRESULT hr) const
 
         if (renderingDecision.newlyPromoted)
         {
-            Debug::Perf::Emit(
-                L"folder.render.failure_promoted", context, renderingDecision.elapsedMs * 1000u, renderingDecision.failureCount, 0u, hr);
+            Debug::Perf::Emit(L"folder.render.failure_promoted", context, renderingDecision.elapsedMs * 1000u, renderingDecision.failureCount, 0u, hr);
             Debug::Error(L"{} failed persistently: {}", context, details);
         }
     }
@@ -798,11 +796,11 @@ void FolderView::ReportError(const std::wstring& context, HRESULT hr) const
 void FolderView::ResetRenderingFailureState() const noexcept
 {
     std::lock_guard lock(_errorOverlayMutex);
-    _renderingFailureLastHr            = S_OK;
-    _renderingFailureConsecutiveCount  = 0;
-    _renderingFailureFirstTickMs       = 0;
-    _renderingFailureLastTickMs        = 0;
-    _renderingFailureOverlayPromoted   = false;
+    _renderingFailureLastHr           = S_OK;
+    _renderingFailureConsecutiveCount = 0;
+    _renderingFailureFirstTickMs      = 0;
+    _renderingFailureLastTickMs       = 0;
+    _renderingFailureOverlayPromoted  = false;
 }
 
 FolderView::RenderingFailureOverlayDecision FolderView::UpdateRenderingFailureOverlayDecision(HRESULT hr, uint64_t nowTickMs) const noexcept
@@ -814,9 +812,9 @@ FolderView::RenderingFailureOverlayDecision FolderView::UpdateRenderingFailureOv
     RenderingFailureOverlayDecision decision{};
     std::lock_guard lock(_errorOverlayMutex);
 
-    const bool sameFailure = _renderingFailureLastHr == hr && _renderingFailureFirstTickMs != 0u;
-    const bool freshFailure =
-        _renderingFailureLastTickMs == 0u || nowTickMs < _renderingFailureLastTickMs || (nowTickMs - _renderingFailureLastTickMs) <= kRenderingFailureSequenceResetMs;
+    const bool sameFailure  = _renderingFailureLastHr == hr && _renderingFailureFirstTickMs != 0u;
+    const bool freshFailure = _renderingFailureLastTickMs == 0u || nowTickMs < _renderingFailureLastTickMs ||
+                              (nowTickMs - _renderingFailureLastTickMs) <= kRenderingFailureSequenceResetMs;
     if (! sameFailure || ! freshFailure)
     {
         _renderingFailureLastHr           = hr;

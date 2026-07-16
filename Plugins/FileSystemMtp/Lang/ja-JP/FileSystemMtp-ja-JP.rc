@@ -1,0 +1,13 @@
+#pragma code_page(65001)
+#include "../../FileSystemMtpResources.h"
+#include <winres.h>
+
+LANGUAGE LANG_JAPANESE, SUBLANG_DEFAULT
+
+STRINGTABLE
+BEGIN
+    IDS_FILESYSTEMMTP_DESCRIPTION "Windows Portable Devices over MTP/PTP."
+    IDS_FILESYSTEMMTP_MENU_NO_DEVICES "No portable devices"
+    IDS_FILESYSTEMMTP_MENU_PROPERTIES "Properties"
+    IDS_FILESYSTEMMTP_MENU_DISCONNECT "Disconnect"
+END

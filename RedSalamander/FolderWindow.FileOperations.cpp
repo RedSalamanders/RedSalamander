@@ -34,30 +34,7 @@ struct FileSystemCapabilitiesV1
 
 [[nodiscard]] std::wstring Utf16FromUtf8(std::string_view text) noexcept
 {
-    if (text.empty())
-    {
-        return {};
-    }
-
-    if (text.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
-    {
-        return {};
-    }
-
-    const int required = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0);
-    if (required <= 0)
-    {
-        return {};
-    }
-
-    std::wstring result(static_cast<size_t>(required), L'\0');
-    const int written = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), result.data(), required);
-    if (written != required)
-    {
-        return {};
-    }
-
-    return result;
+    return Common::Strings::Utf16FromUtf8StrictOrEmpty(text);
 }
 
 [[nodiscard]] std::vector<std::wstring> ParsePluginIdList(yyjson_val* value) noexcept
@@ -136,7 +113,7 @@ struct FileSystemCapabilitiesV1
     }
 
     FileSystemCapabilitiesV1 out{};
-    out.pathIdentity = TryParseFileSystemPathIdentityContract(jsonUtf8, {});
+    out.pathIdentity = TryParseFileSystemPathIdentityContractFromRoot(root, {});
     if (! out.pathIdentity.has_value())
     {
         return std::nullopt;
@@ -216,8 +193,7 @@ void ReportCapabilitiesContractViolationOnce(const IFileSystem* fileSystem, std:
                  static_cast<unsigned long>(hr));
 }
 
-[[nodiscard]] std::optional<FileSystemCapabilitiesV1> TryGetCapabilities(const wil::com_ptr<IFileSystem>& fileSystem,
-                                                                         std::wstring_view pluginId = {}) noexcept
+[[nodiscard]] std::optional<FileSystemCapabilitiesV1> TryGetCapabilities(const wil::com_ptr<IFileSystem>& fileSystem, std::wstring_view pluginId = {}) noexcept
 {
     if (! fileSystem)
     {
@@ -499,8 +475,9 @@ HRESULT FolderWindow::StartFileOperationFromFolderView(Pane pane, FolderView::Fi
                                            std::move(destinationFileSystem));
 }
 
-std::optional<FolderWindow::Pane> FolderWindow::ResolveSourcePaneForResolvedPaths(
-    std::wstring_view sourcePluginId, std::wstring_view sourceInstanceContext, const std::vector<std::filesystem::path>& sourcePaths) const noexcept
+std::optional<FolderWindow::Pane> FolderWindow::ResolveSourcePaneForResolvedPaths(std::wstring_view sourcePluginId,
+                                                                                  std::wstring_view sourceInstanceContext,
+                                                                                  const std::vector<std::filesystem::path>& sourcePaths) const noexcept
 {
     if (sourcePluginId.empty() || sourcePaths.empty())
     {
@@ -509,11 +486,7 @@ std::optional<FolderWindow::Pane> FolderWindow::ResolveSourcePaneForResolvedPath
 
     const auto contextMatches = [&](const PaneState& state) noexcept -> bool
     {
-        return CompareStringOrdinal(state.pluginId.c_str(),
-                                    -1,
-                                    sourcePluginId.data(),
-                                    static_cast<int>(sourcePluginId.size()),
-                                    TRUE) == CSTR_EQUAL &&
+        return CompareStringOrdinal(state.pluginId.c_str(), -1, sourcePluginId.data(), static_cast<int>(sourcePluginId.size()), TRUE) == CSTR_EQUAL &&
                NavigationLocation::EqualsNoCase(state.instanceContext, sourceInstanceContext);
     };
 
@@ -545,7 +518,7 @@ std::optional<FolderWindow::Pane> FolderWindow::ResolveSourcePaneForResolvedPath
 
     const auto pathFitsPane = [&](Pane pane) noexcept -> bool
     {
-        const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+        const PaneState& state                            = pane == Pane::Left ? _leftPane : _rightPane;
         const std::optional<std::filesystem::path> folder = state.folderView.GetFolderPath();
         return folder.has_value() && isSameOrUnderFolder(folder->native(), sourcePaths.front().native());
     };
@@ -583,10 +556,9 @@ std::optional<FolderWindow::Pane> FolderWindow::ResolveSourcePaneForResolvedPath
     return sourcePane;
 }
 
-std::optional<std::filesystem::path> FolderWindow::GetOtherPaneDestinationForResolvedPaths(
-    std::wstring_view sourcePluginId,
-    std::wstring_view sourceInstanceContext,
-    const std::vector<std::filesystem::path>& sourcePaths) const noexcept
+std::optional<std::filesystem::path> FolderWindow::GetOtherPaneDestinationForResolvedPaths(std::wstring_view sourcePluginId,
+                                                                                           std::wstring_view sourceInstanceContext,
+                                                                                           const std::vector<std::filesystem::path>& sourcePaths) const noexcept
 {
     const std::optional<Pane> sourcePane = ResolveSourcePaneForResolvedPaths(sourcePluginId, sourceInstanceContext, sourcePaths);
     if (! sourcePane.has_value())
@@ -594,7 +566,7 @@ std::optional<std::filesystem::path> FolderWindow::GetOtherPaneDestinationForRes
         return std::nullopt;
     }
 
-    const Pane destinationPane = OppositePane(sourcePane.value());
+    const Pane destinationPane        = OppositePane(sourcePane.value());
     const PaneState& destinationState = destinationPane == Pane::Left ? _leftPane : _rightPane;
     return destinationState.folderView.GetFolderPath();
 }
@@ -634,7 +606,7 @@ HRESULT FolderWindow::StartFileOperationForResolvedPaths(std::wstring_view sourc
         return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
     }
 
-    const Pane sourcePane = resolvedSourcePane.value();
+    const Pane sourcePane  = resolvedSourcePane.value();
     PaneState& sourceState = sourcePane == Pane::Left ? _leftPane : _rightPane;
     if (! sourceState.fileSystem)
     {
@@ -667,6 +639,115 @@ HRESULT FolderWindow::StartFileOperationForResolvedPaths(std::wstring_view sourc
                                            requireConfirmation,
                                            nullptr,
                                            taskIdOut);
+}
+
+HRESULT FolderWindow::StartFileOperationForResolvedItemsToOtherPane(std::wstring_view sourcePluginId,
+                                                                    std::wstring_view sourceInstanceContext,
+                                                                    FileSystemOperation operation,
+                                                                    std::vector<ResolvedFileOperationItem> items,
+                                                                    std::optional<std::filesystem::path>* outDestinationFolder,
+                                                                    uint64_t* taskIdOut,
+                                                                    std::wstring confirmationMessage) noexcept
+{
+    if (taskIdOut)
+    {
+        *taskIdOut = 0;
+    }
+
+    if (outDestinationFolder)
+    {
+        outDestinationFolder->reset();
+    }
+
+    if (sourcePluginId.empty() || (operation != FILESYSTEM_COPY && operation != FILESYSTEM_MOVE))
+    {
+        return E_INVALIDARG;
+    }
+
+    if (items.empty())
+    {
+        return S_FALSE;
+    }
+
+    std::vector<std::filesystem::path> sourcePaths;
+    sourcePaths.reserve(items.size());
+    for (const ResolvedFileOperationItem& item : items)
+    {
+        if (item.sourcePath.empty() || item.destinationPath.empty())
+        {
+            return E_INVALIDARG;
+        }
+        sourcePaths.push_back(item.sourcePath);
+    }
+
+    EnsureFileOperations();
+    if (! _fileOperations)
+    {
+        return E_FAIL;
+    }
+
+    const std::optional<Pane> resolvedSourcePane = ResolveSourcePaneForResolvedPaths(sourcePluginId, sourceInstanceContext, sourcePaths);
+    if (! resolvedSourcePane.has_value())
+    {
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+
+    const Pane sourcePane = resolvedSourcePane.value();
+    const Pane destPane   = OppositePane(sourcePane);
+    PaneState& src        = sourcePane == Pane::Left ? _leftPane : _rightPane;
+    PaneState& dest       = destPane == Pane::Left ? _leftPane : _rightPane;
+    if (! src.fileSystem || ! dest.fileSystem)
+    {
+        return E_POINTER;
+    }
+
+    if (! SanityCheckBothPanes(src, dest, operation))
+    {
+        return E_FAIL;
+    }
+
+    const std::optional<std::filesystem::path> destinationFolder = dest.folderView.GetFolderPath();
+    if (! destinationFolder.has_value())
+    {
+        return E_FAIL;
+    }
+    if (outDestinationFolder)
+    {
+        *outDestinationFolder = destinationFolder.value();
+    }
+
+    const bool waitForOthers                        = _fileOperations->ShouldQueueNewTask();
+    const bool contextSame                          = CompareStringOrdinal(src.pluginId.c_str(), -1, dest.pluginId.c_str(), -1, TRUE) == CSTR_EQUAL &&
+                                                      NavigationLocation::EqualsNoCase(src.instanceContext, dest.instanceContext);
+    wil::com_ptr<IFileSystem> destinationFileSystem = contextSame ? nullptr : dest.fileSystem;
+    if (! destinationFileSystem && ! CanSameFileSystemOperation(src.fileSystem, operation, src.pluginId))
+    {
+        Debug::Error(L"FolderWindow::StartFileOperationForResolvedItemsToOtherPane provider rejected same-filesystem operation plugin:{} op:{}.",
+                     src.pluginId,
+                     static_cast<unsigned int>(operation));
+        src.folderView.ShowAlertOverlay(FolderView::ErrorOverlayKind::Operation,
+                                        FolderView::OverlaySeverity::Error,
+                                        LoadStringResource(nullptr, IDS_CAPTION_ERROR),
+                                        LoadStringResource(nullptr, IDS_MSG_PANE_OP_REQUIRES_COMPATIBLE_FS));
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+
+    const bool requireConfirmation = operation == FILESYSTEM_MOVE;
+    return _fileOperations->StartOperation(operation,
+                                           sourcePane,
+                                           destPane,
+                                           src.fileSystem,
+                                           std::move(sourcePaths),
+                                           destinationFolder.value(),
+                                           FILESYSTEM_FLAG_NONE,
+                                           waitForOthers,
+                                           0,
+                                           FileOperationState::ExecutionMode::PerItem,
+                                           requireConfirmation,
+                                           std::move(destinationFileSystem),
+                                           taskIdOut,
+                                           std::move(items),
+                                           std::move(confirmationMessage));
 }
 
 HRESULT FolderWindow::StartFileOperationForResolvedPathsToOtherPane(std::wstring_view sourcePluginId,
@@ -1204,6 +1285,25 @@ LRESULT FolderWindow::OnFileOperationCompleted(LPARAM lp) noexcept
 
     const Pane sourcePane                     = task->GetSourcePane();
     const std::optional<Pane> destinationPane = task->GetDestinationPane();
+    const bool hasResolvedItems               = task->_resolvedItems.size() == task->_sourcePaths.size();
+
+    const auto resolvedDestinationForIndex = [&](size_t index) noexcept -> std::optional<std::filesystem::path>
+    {
+        if (hasResolvedItems)
+        {
+            return task->_resolvedItems[index].destinationPath;
+        }
+
+        if (destinationPane.has_value() && index < task->_sourcePaths.size())
+        {
+            return task->GetDestinationFolder() / task->_sourcePaths[index].filename();
+        }
+
+        return std::nullopt;
+    };
+
+    const auto isResolvedDirectoryShell = [&](size_t index) noexcept -> bool
+    { return hasResolvedItems && task->_resolvedItems[index].kind == ResolvedFileOperationItemKind::DirectoryShell; };
 
     if (! _fileOperationCompletedCallbacks.empty())
     {
@@ -1213,8 +1313,30 @@ LRESULT FolderWindow::OnFileOperationCompleted(LPARAM lp) noexcept
         e.sourcePane        = sourcePane;
         e.destinationPane   = destinationPane;
         e.sourcePaths       = task->_sourcePaths;
+        {
+            std::scoped_lock lock(task->_sourceItemStatusMutex);
+            e.itemOutcomes.reserve(task->_sourceItemStatuses.size());
+            for (size_t index = 0; index < task->_sourceItemStatuses.size(); ++index)
+            {
+                if (task->_sourceItemStatuses[index].has_value())
+                {
+                    e.itemOutcomes.push_back(FileOperationItemOutcome{.sourceIndex = index, .status = task->_sourceItemStatuses[index].value()});
+                }
+            }
+        }
         e.destinationFolder = task->GetDestinationFolder();
-        e.hr                = payload->hr;
+        if (destinationPane.has_value() && (task->GetOperation() == FILESYSTEM_COPY || task->GetOperation() == FILESYSTEM_MOVE))
+        {
+            e.destinationPaths.reserve(task->_sourcePaths.size());
+            for (size_t index = 0; index < task->_sourcePaths.size(); ++index)
+            {
+                if (const auto destination = resolvedDestinationForIndex(index); destination.has_value())
+                {
+                    e.destinationPaths.push_back(destination.value());
+                }
+            }
+        }
+        e.hr = payload->hr;
 
         // Iterate over a copy: a callback may unsubscribe (or subscribe) while handling the event.
         const auto subscriptions = _fileOperationCompletedCallbacks;
@@ -1282,6 +1404,30 @@ LRESULT FolderWindow::OnFileOperationCompleted(LPARAM lp) noexcept
         }
     };
 
+    const auto notifyDestinationParentsChanged = [&](PaneState& dst) noexcept
+    {
+        if (! dst.fileSystem)
+        {
+            return;
+        }
+
+        for (size_t index = 0; index < task->_sourcePaths.size(); ++index)
+        {
+            const auto destination = resolvedDestinationForIndex(index);
+            if (! destination.has_value())
+            {
+                continue;
+            }
+
+            const std::filesystem::path parent = destination->parent_path();
+            if (! parent.empty())
+            {
+                cache.NotifyFolderContentsChanged(dst.fileSystem.get(), parent);
+                forceRefreshVisibleFolder(parent);
+            }
+        }
+    };
+
     const auto forceRefreshPane = [&](PaneState& paneState)
     {
         const auto folder = paneState.folderView.GetFolderPath();
@@ -1303,30 +1449,41 @@ LRESULT FolderWindow::OnFileOperationCompleted(LPARAM lp) noexcept
                 if (dst != nullptr && dst->fileSystem)
                 {
                     cache.NotifyFolderContentsChanged(dst->fileSystem.get(), task->GetDestinationFolder());
+                    notifyDestinationParentsChanged(*dst);
                 }
                 forceRefreshVisibleFolder(task->GetDestinationFolder());
                 break;
             case FILESYSTEM_MOVE:
                 if (sameContext && src.fileSystem)
                 {
-                    const std::filesystem::path destinationFolder = task->GetDestinationFolder();
-                    for (const auto& sourcePath : task->_sourcePaths)
+                    for (size_t index = 0; index < task->_sourcePaths.size(); ++index)
                     {
-                        cache.NotifyPathMoved(src.fileSystem.get(), sourcePath, destinationFolder / sourcePath.filename());
+                        if (isResolvedDirectoryShell(index))
+                        {
+                            continue;
+                        }
+                        if (const auto destination = resolvedDestinationForIndex(index); destination.has_value())
+                        {
+                            cache.NotifyPathMoved(src.fileSystem.get(), task->_sourcePaths[index], destination.value());
+                        }
                     }
                 }
                 else
                 {
                     if (src.fileSystem)
                     {
-                        for (const auto& sourcePath : task->_sourcePaths)
+                        for (size_t index = 0; index < task->_sourcePaths.size(); ++index)
                         {
-                            cache.NotifyPathDeleted(src.fileSystem.get(), sourcePath);
+                            if (! isResolvedDirectoryShell(index))
+                            {
+                                cache.NotifyPathDeleted(src.fileSystem.get(), task->_sourcePaths[index]);
+                            }
                         }
                     }
                     if (dst != nullptr && dst->fileSystem)
                     {
                         cache.NotifyFolderContentsChanged(dst->fileSystem.get(), task->GetDestinationFolder());
+                        notifyDestinationParentsChanged(*dst);
                     }
                 }
                 forceRefreshVisibleSourceParents();
@@ -1370,8 +1527,7 @@ LRESULT FolderWindow::OnFileOperationCompleted(LPARAM lp) noexcept
 
     const bool autoDismissSuccess = _fileOperations->GetAutoDismissSuccess();
     _fileOperations->RemoveTask(payload->taskId);
-    if (autoDismissSuccess &&
-        IsAutoDismissableFileOperationCompletion(payload->hr, payload->warningCount, payload->errorCount))
+    if (autoDismissSuccess && IsAutoDismissableFileOperationCompletion(payload->hr, payload->warningCount, payload->errorCount))
     {
         _fileOperations->DismissCompletedTask(payload->taskId);
     }

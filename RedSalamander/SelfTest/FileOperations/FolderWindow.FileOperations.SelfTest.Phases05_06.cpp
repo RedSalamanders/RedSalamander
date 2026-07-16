@@ -8,15 +8,15 @@ case SelfTestState::Step::FileOps_CopyMergeIntoExistingFolder:
         return true;
     }
 
-    const std::filesystem::path srcRoot      = state.tempRoot / L"clearflow-copy-merge-src";
-    const std::filesystem::path dstRoot      = state.tempRoot / L"clearflow-copy-merge-dst";
-    const std::filesystem::path srcFoo       = srcRoot / L"Foo";
-    const std::filesystem::path dstFoo       = dstRoot / L"Foo";
-    const std::filesystem::path srcConflict  = srcFoo / L"a.bin";
-    const std::filesystem::path dstConflict  = dstFoo / L"a.bin";
-    const std::filesystem::path srcNested    = srcFoo / L"nested" / L"c.bin";
-    const std::filesystem::path dstNested    = dstFoo / L"nested" / L"c.bin";
-    const std::filesystem::path dstKeep      = dstFoo / L"keep.bin";
+    const std::filesystem::path srcRoot     = state.tempRoot / L"clearflow-copy-merge-src";
+    const std::filesystem::path dstRoot     = state.tempRoot / L"clearflow-copy-merge-dst";
+    const std::filesystem::path srcFoo      = srcRoot / L"Foo";
+    const std::filesystem::path dstFoo      = dstRoot / L"Foo";
+    const std::filesystem::path srcConflict = srcFoo / L"a.bin";
+    const std::filesystem::path dstConflict = dstFoo / L"a.bin";
+    const std::filesystem::path srcNested   = srcFoo / L"nested" / L"c.bin";
+    const std::filesystem::path dstNested   = dstFoo / L"nested" / L"c.bin";
+    const std::filesystem::path dstKeep     = dstFoo / L"keep.bin";
 
     if (state.stepState == 0)
     {
@@ -76,11 +76,8 @@ case SelfTestState::Step::FileOps_CopyMergeIntoExistingFolder:
         const std::wstring actualDest     = NormalizePathForCompare(prompt->destinationPath);
         if (actualSource != expectedSource || actualDest != expectedDest)
         {
-            Fail(std::format(L"Copy-merge prompted for the wrong item. expected='{}' -> '{}' actual='{}' -> '{}'.",
-                             expectedSource,
-                             expectedDest,
-                             actualSource,
-                             actualDest));
+            Fail(std::format(
+                L"Copy-merge prompted for the wrong item. expected='{}' -> '{}' actual='{}' -> '{}'.", expectedSource, expectedDest, actualSource, actualDest));
             return true;
         }
 
@@ -246,11 +243,11 @@ case SelfTestState::Step::FileOps_ReparseDirectoryMergeIntoExistingFolder:
         return true;
     }
 
-    const std::filesystem::path srcRoot       = state.tempRoot / L"clearflow-reparse-merge-src";
-    const std::filesystem::path dstRoot       = state.tempRoot / L"clearflow-reparse-merge-dst";
-    const std::filesystem::path targetRoot    = state.tempRoot / L"clearflow-reparse-merge-target";
-    const std::filesystem::path targetFile    = targetRoot / L"payload.bin";
-    const std::filesystem::path sourceLink    = srcRoot / L"linkToTarget";
+    const std::filesystem::path srcRoot         = state.tempRoot / L"clearflow-reparse-merge-src";
+    const std::filesystem::path dstRoot         = state.tempRoot / L"clearflow-reparse-merge-dst";
+    const std::filesystem::path targetRoot      = state.tempRoot / L"clearflow-reparse-merge-target";
+    const std::filesystem::path targetFile      = targetRoot / L"payload.bin";
+    const std::filesystem::path sourceLink      = srcRoot / L"linkToTarget";
     const std::filesystem::path destinationLink = dstRoot / L"linkToTarget";
 
     if (state.stepState == 0)
@@ -281,8 +278,7 @@ case SelfTestState::Step::FileOps_ReparseDirectoryMergeIntoExistingFolder:
             sourceLink.c_str(), destinationLink.c_str(), static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE), nullptr, nullptr, nullptr);
         if (noGrantCopyHr != HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS))
         {
-            Fail(std::format(L"Reparse merge copy without overwrite expected ERROR_ALREADY_EXISTS, got 0x{:08X}.",
-                             static_cast<unsigned long>(noGrantCopyHr)));
+            Fail(std::format(L"Reparse merge copy without overwrite expected ERROR_ALREADY_EXISTS, got 0x{:08X}.", static_cast<unsigned long>(noGrantCopyHr)));
             return true;
         }
 
@@ -301,11 +297,11 @@ case SelfTestState::Step::FileOps_ReparseDirectoryMergeIntoExistingFolder:
         }
 
         const HRESULT overwriteCopyHr = state.fsLocal->CopyItem(sourceLink.c_str(),
-                                                               destinationLink.c_str(),
-                                                               static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_OVERWRITE),
-                                                               nullptr,
-                                                               nullptr,
-                                                               nullptr);
+                                                                destinationLink.c_str(),
+                                                                static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_OVERWRITE),
+                                                                nullptr,
+                                                                nullptr,
+                                                                nullptr);
         if (FAILED(overwriteCopyHr))
         {
             Fail(std::format(L"Reparse merge copy with overwrite failed: 0x{:08X}.", static_cast<unsigned long>(overwriteCopyHr)));
@@ -365,8 +361,7 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         ProviderCapabilitySnapshot dummyCaps{};
         ProviderCapabilitySnapshot sevenZipCaps{};
         if (! requireCapabilities(state.fsLocal.get(), L"Local FileSystem", localCaps) ||
-            ! requireCapabilities(state.fsDummy.get(), L"FileSystemDummy", dummyCaps) ||
-            ! requireCapabilities(state.fs7z.get(), L"FileSystem7z", sevenZipCaps))
+            ! requireCapabilities(state.fsDummy.get(), L"FileSystemDummy", dummyCaps) || ! requireCapabilities(state.fs7z.get(), L"FileSystem7z", sevenZipCaps))
         {
             return true;
         }
@@ -401,10 +396,7 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             }
             if (caps.componentComparison != expectedComparison)
             {
-                Fail(std::format(L"{} componentComparison mismatch: expected {} actual {}.",
-                                 providerName,
-                                 expectedComparison,
-                                 caps.componentComparison));
+                Fail(std::format(L"{} componentComparison mismatch: expected {} actual {}.", providerName, expectedComparison, caps.componentComparison));
                 return false;
             }
             if (caps.preferredSeparator != expectedPreferredSeparator)
@@ -414,18 +406,12 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             }
             if (caps.acceptedSeparators != expectedAcceptedSeparators)
             {
-                Fail(std::format(L"{} acceptedSeparators mismatch: expected {} actual {}.",
-                                 providerName,
-                                 expectedAcceptedSeparators,
-                                 caps.acceptedSeparators));
+                Fail(std::format(L"{} acceptedSeparators mismatch: expected {} actual {}.", providerName, expectedAcceptedSeparators, caps.acceptedSeparators));
                 return false;
             }
             if (caps.caseOnlyRename != expectedCaseOnlyRename)
             {
-                Fail(std::format(L"{} caseOnlyRename mismatch: expected {} actual {}.",
-                                 providerName,
-                                 expectedCaseOnlyRename,
-                                 caps.caseOnlyRename));
+                Fail(std::format(L"{} caseOnlyRename mismatch: expected {} actual {}.", providerName, expectedCaseOnlyRename, caps.caseOnlyRename));
                 return false;
             }
             return true;
@@ -466,9 +452,9 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             return true;
         }
 
-        constexpr HRESULT kUnsupported = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+        constexpr HRESULT kUnsupported   = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
         const wchar_t* sevenZipSources[] = {L"/missing.txt"};
-        const auto requireUnsupported = [&](HRESULT hr, std::wstring_view label) noexcept -> bool
+        const auto requireUnsupported    = [&](HRESULT hr, std::wstring_view label) noexcept -> bool
         {
             if (hr != kUnsupported)
             {
@@ -679,7 +665,7 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         }
 
         const std::wstring root = std::format(L"/clearflow-provider-matrix-{}", GetTickCount64());
-        const auto cleanup     = wil::scope_exit([&]() noexcept
+        const auto cleanup      = wil::scope_exit([&]() noexcept
         {
             static_cast<void>(state.fsDummy->DeleteItem(
                 root.c_str(), static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR), nullptr, nullptr, nullptr));
@@ -695,9 +681,7 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         const std::filesystem::path copyDstNestedNew = copyDstFoo / L"nested" / L"child.txt";
 
         const auto ensureDummyDir = [&](const std::filesystem::path& path) noexcept -> bool
-        {
-            return EnsureDummyFolderExists(state.fsDummy.get(), path.generic_wstring());
-        };
+        { return EnsureDummyFolderExists(state.fsDummy.get(), path.generic_wstring()); };
 
         if (! ensureDummyDir(rootPath) || ! ensureDummyDir(rootPath / L"copy-src") || ! ensureDummyDir(copySrcFoo) || ! ensureDummyDir(copySrcNested) ||
             ! ensureDummyDir(copyDstRoot) || ! ensureDummyDir(copyDstFoo))
@@ -715,16 +699,11 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         }
 
         FileOpsRecursiveProgressRecorder copyProgress{};
-        const std::wstring copySrcFooText = copySrcFoo.generic_wstring();
+        const std::wstring copySrcFooText  = copySrcFoo.generic_wstring();
         const std::wstring copyDstRootText = copyDstRoot.generic_wstring();
-        const wchar_t* copySources[]      = {copySrcFooText.c_str()};
-        const HRESULT copyHr              = state.fsDummy->CopyItems(copySources,
-                                                        1,
-                                                        copyDstRootText.c_str(),
-                                                        static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE),
-                                                        nullptr,
-                                                        &copyProgress,
-                                                        nullptr);
+        const wchar_t* copySources[]       = {copySrcFooText.c_str()};
+        const HRESULT copyHr               = state.fsDummy->CopyItems(
+            copySources, 1, copyDstRootText.c_str(), static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE), nullptr, &copyProgress, nullptr);
         if (FAILED(copyHr))
         {
             Fail(std::format(L"FileSystemDummy directory copy merge failed: 0x{:08X}.", static_cast<unsigned long>(copyHr)));
@@ -772,16 +751,11 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         }
 
         FileOpsRecursiveProgressRecorder moveProgress{};
-        const std::wstring moveSrcFooText = moveSrcFoo.generic_wstring();
+        const std::wstring moveSrcFooText  = moveSrcFoo.generic_wstring();
         const std::wstring moveDstRootText = moveDstRoot.generic_wstring();
-        const wchar_t* moveSources[]      = {moveSrcFooText.c_str()};
-        const HRESULT moveHr              = state.fsDummy->MoveItems(moveSources,
-                                                        1,
-                                                        moveDstRootText.c_str(),
-                                                        static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE),
-                                                        nullptr,
-                                                        &moveProgress,
-                                                        nullptr);
+        const wchar_t* moveSources[]       = {moveSrcFooText.c_str()};
+        const HRESULT moveHr               = state.fsDummy->MoveItems(
+            moveSources, 1, moveDstRootText.c_str(), static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE), nullptr, &moveProgress, nullptr);
         if (FAILED(moveHr))
         {
             Fail(std::format(L"FileSystemDummy directory move merge failed: 0x{:08X}.", static_cast<unsigned long>(moveHr)));
@@ -1206,7 +1180,27 @@ case SelfTestState::Step::Phase5_PreCalcCancelReleasesSlot:
                                                  {std::filesystem::path(state.dummyPaths[0])},
                                                  std::filesystem::path(L"/dest-a"),
                                                  flags,
-                                                 false);
+                                                 false,
+                                                 8ull * 1024ull);
+
+        if (! state.taskA.has_value())
+        {
+            Fail(L"Failed to start active dummy copy task for pre-calc cancel test.");
+            return true;
+        }
+
+        state.stepState = 1;
+        return false;
+    }
+
+    if (state.stepState == 1)
+    {
+        FolderWindow::FileOperationState::Task* taskA = state.fileOps->FindTask(state.taskA.value());
+        if (! taskA || ! taskA->HasEnteredOperation())
+        {
+            return false;
+        }
+
         state.taskB = StartFileOperationAndGetId(state.fileOps,
                                                  FILESYSTEM_COPY,
                                                  FolderWindow::Pane::Left,
@@ -1216,18 +1210,80 @@ case SelfTestState::Step::Phase5_PreCalcCancelReleasesSlot:
                                                  std::filesystem::path(L"/dest-b"),
                                                  flags,
                                                  true);
-
-        if (! state.taskA.has_value() || ! state.taskB.has_value())
+        if (! state.taskB.has_value())
         {
-            Fail(L"Failed to start dummy copy tasks for pre-calc cancel test.");
+            Fail(L"Failed to start queued dummy copy task for pre-calc cancel test.");
             return true;
         }
 
-        state.stepState = 1;
+        state.stepState = 2;
         return false;
     }
 
-    if (state.stepState == 1)
+    if (state.stepState == 2)
+    {
+        FolderWindow::FileOperationState::Task* taskB = state.fileOps->FindTask(state.taskB.value());
+        if (! taskB || ! taskB->IsWaitingForOthers())
+        {
+            return false;
+        }
+
+        const HWND popup = state.fileOps ? state.fileOps->GetPopupHwndForSelfTest() : nullptr;
+        if (! popup || IsWindow(popup) == FALSE)
+        {
+            return false;
+        }
+
+        FileOperationsPopupInternal::PopupLayoutDebugSnapshot queuedLayout{};
+        queuedLayout.taskId = state.taskB.value();
+        if (! DebugGetFileOperationsPopupLayoutSnapshot(popup, queuedLayout))
+        {
+            Fail(L"Failed to capture queued file-operation layout for Start now validation.");
+            return true;
+        }
+
+        FileOperationsPopupInternal::TaskSnapshot queuedTaskSnapshot{};
+        static_cast<void>(DebugGetFileOperationsPopupTaskSnapshot(popup, state.taskB.value(), queuedTaskSnapshot));
+        if (! queuedLayout.taskStartNowVisible || ! queuedLayout.taskCancelVisible || ! queuedLayout.taskSpeedLimitVisible)
+        {
+            if (! HasTimedOut(state, GetTickCount64(), 5'000ull))
+            {
+                return false;
+            }
+
+            Fail(std::format(L"Queued copy task should expose Start now, Speed Limit, and Cancel controls; startNow={} speedLimit={} cancel={} "
+                             L"snapshot(started={} waitingForOthers={} waitingInQueue={} preCalc={} status={}).",
+                             queuedLayout.taskStartNowVisible ? 1 : 0,
+                             queuedLayout.taskSpeedLimitVisible ? 1 : 0,
+                             queuedLayout.taskCancelVisible ? 1 : 0,
+                             queuedTaskSnapshot.started ? 1 : 0,
+                             queuedTaskSnapshot.waitingForOthers ? 1 : 0,
+                             queuedTaskSnapshot.waitingInQueue ? 1 : 0,
+                             queuedTaskSnapshot.preCalcInProgress ? 1 : 0,
+                             static_cast<unsigned int>(queuedTaskSnapshot.statusKind)));
+            return true;
+        }
+
+        FileOperationsPopupInternal::PopupSelfTestInvoke startNow{};
+        startNow.kind   = FileOperationsPopupInternal::PopupHitTest::Kind::TaskStartNow;
+        startNow.taskId = state.taskB.value();
+        if (! DebugInvokeFileOperationsPopup(popup, startNow))
+        {
+            Fail(L"Failed to invoke queued task Start now through the File Operations popup.");
+            return true;
+        }
+
+        if (taskB->IsWaitingInQueue() || taskB->IsWaitingForOthers())
+        {
+            Fail(L"Start now did not release the queued task wait state.");
+            return true;
+        }
+
+        state.stepState = 3;
+        return false;
+    }
+
+    if (state.stepState == 3)
     {
         FolderWindow::FileOperationState::Task* taskA = state.fileOps->FindTask(state.taskA.value());
         if (taskA && taskA->_preCalcInProgress.load(std::memory_order_acquire))
@@ -1260,21 +1316,102 @@ case SelfTestState::Step::Phase5_PreCalcCancelReleasesSlot:
 
             if (! layout.taskToggleCollapseVisible || ! layout.taskSkipVisible || ! layout.taskCancelVisible || ! layout.taskSpeedLimitVisible)
             {
-                Fail(std::format(L"Pre-calc copy task should expose collapse, Skip, Speed Limit, and Cancel controls; collapse={} skip={} speedLimit={} cancel={}.",
-                                 layout.taskToggleCollapseVisible ? 1 : 0,
-                                 layout.taskSkipVisible ? 1 : 0,
-                                 layout.taskSpeedLimitVisible ? 1 : 0,
-                                 layout.taskCancelVisible ? 1 : 0));
+                Fail(std::format(
+                    L"Pre-calc copy task should expose collapse, Skip, Speed Limit, and Cancel controls; collapse={} skip={} speedLimit={} cancel={}.",
+                    layout.taskToggleCollapseVisible ? 1 : 0,
+                    layout.taskSkipVisible ? 1 : 0,
+                    layout.taskSpeedLimitVisible ? 1 : 0,
+                    layout.taskCancelVisible ? 1 : 0));
+                return true;
+            }
+
+            if (layout.taskUnderGraphProgressBarCount != 1u || layout.taskDuplicateUnderGraphItemBarVisible)
+            {
+                Fail(std::format(L"Pre-calc copy task should render one under-graph progress bar and no duplicate item bar; bars={} duplicate={}.",
+                                 layout.taskUnderGraphProgressBarCount,
+                                 layout.taskDuplicateUnderGraphItemBarVisible ? 1 : 0));
+                return true;
+            }
+
+            if (! layout.footerQueueModeSegmentedVisible || ! layout.footerAggregateProgressVisible || ! layout.footerDetailsToggleVisible ||
+                ! layout.footerAutoDismissVisible || ! layout.footerDetailsToggleRightAligned || layout.reducedMotionEnabled ||
+                ! layout.autoResizeAnimationEnabled || ! layout.footerQueueModeAnimationEnabled)
+            {
+                Fail(std::format(L"File Operations popup footer should expose segmented mode, auto-dismiss, aggregate progress, animated resize, and a "
+                                  L"right-aligned details toggle during active work. queue={} aggregate={} details={} autoDismiss={} rightAligned={} "
+                                  L"reducedMotion={} animatedResize={} queueAnimation={}.",
+                                  layout.footerQueueModeSegmentedVisible ? 1 : 0,
+                                  layout.footerAggregateProgressVisible ? 1 : 0,
+                                  layout.footerDetailsToggleVisible ? 1 : 0,
+                                  layout.footerAutoDismissVisible ? 1 : 0,
+                                  layout.footerDetailsToggleRightAligned ? 1 : 0,
+                                  layout.reducedMotionEnabled ? 1 : 0,
+                                  layout.autoResizeAnimationEnabled ? 1 : 0,
+                                  layout.footerQueueModeAnimationEnabled ? 1 : 0));
+                return true;
+            }
+
+            if (layout.taskbarProgressState == static_cast<uint32_t>(TBPF_NOPROGRESS))
+            {
+                Fail(L"Active pre-calc copy task should expose a non-empty global taskbar progress model.");
+                return true;
+            }
+
+            if (! layout.taskStatusStripeVisible || ! layout.taskStatusChipVisible ||
+                layout.taskStatusVisualTone != static_cast<uint32_t>(FileOperationsPopupInternal::PopupStatusVisualTone::Accent))
+            {
+                Fail(std::format(L"Active pre-calc copy task should expose an accent status stripe and chip; stripe={} chip={} tone={}.",
+                                 layout.taskStatusStripeVisible ? 1 : 0,
+                                 layout.taskStatusChipVisible ? 1 : 0,
+                                 layout.taskStatusVisualTone));
+                return true;
+            }
+
+            if (layout.taskStatusKind == FileOperationsPopupInternal::TaskSnapshot::StatusKind::Calculating && ! layout.graphStatusAnimationEnabled)
+            {
+                Fail(L"Calculating pre-calc task should expose graph status animation when reduced motion is off.");
+                return true;
+            }
+
+            if (! state.folderWindow)
+            {
+                Fail(L"Pre-calc reduced-motion validation requires the folder window theme source.");
+                return true;
+            }
+
+            const AppTheme motionRestoreTheme = state.folderWindow->GetTheme();
+            const auto restoreMotionTheme     = wil::scope_exit([&]() noexcept { state.folderWindow->ApplyTheme(motionRestoreTheme); });
+            AppTheme reducedMotionTheme       = motionRestoreTheme;
+            reducedMotionTheme.reducedMotionOverride = true;
+            state.folderWindow->ApplyTheme(reducedMotionTheme);
+
+            FileOperationsPopupInternal::PopupLayoutDebugSnapshot reducedMotionLayout{};
+            reducedMotionLayout.taskId = state.taskA.value();
+            if (! DebugGetFileOperationsPopupLayoutSnapshot(popup, reducedMotionLayout))
+            {
+                Fail(L"Failed to capture reduced-motion File Operations popup layout while copy pre-calc was in progress.");
+                return true;
+            }
+
+            if (! reducedMotionLayout.reducedMotionEnabled || reducedMotionLayout.autoResizeAnimationEnabled ||
+                reducedMotionLayout.footerQueueModeAnimationEnabled || reducedMotionLayout.graphStatusAnimationEnabled)
+            {
+                Fail(std::format(L"Reduced-motion pre-calc layout should disable popup animations. reducedMotion={} animatedResize={} queueAnimation={} "
+                                 L"graphStatusAnimation={}.",
+                                 reducedMotionLayout.reducedMotionEnabled ? 1 : 0,
+                                 reducedMotionLayout.autoResizeAnimationEnabled ? 1 : 0,
+                                 reducedMotionLayout.footerQueueModeAnimationEnabled ? 1 : 0,
+                                 reducedMotionLayout.graphStatusAnimationEnabled ? 1 : 0));
                 return true;
             }
 
             taskA->RequestCancel();
-            state.stepState = 2;
+            state.stepState = 4;
         }
         return false;
     }
 
-    if (state.stepState == 2)
+    if (state.stepState == 4)
     {
         const auto itA = state.completedTasks.find(state.taskA.value());
         if (itA == state.completedTasks.end())
@@ -1291,7 +1428,7 @@ case SelfTestState::Step::Phase5_PreCalcCancelReleasesSlot:
 
         if (state.completedTasks.find(state.taskB.value()) != state.completedTasks.end())
         {
-            state.stepState = 3;
+            state.stepState = 5;
             return false;
         }
 
@@ -1302,11 +1439,11 @@ case SelfTestState::Step::Phase5_PreCalcCancelReleasesSlot:
         }
 
         taskB->RequestCancel();
-        state.stepState = 3;
+        state.stepState = 5;
         return false;
     }
 
-    if (state.stepState == 3)
+    if (state.stepState == 5)
     {
         if (state.completedTasks.find(state.taskB.value()) == state.completedTasks.end())
         {
@@ -1446,12 +1583,12 @@ case SelfTestState::Step::Phase5_PreCalcSkipContinues:
         return true;
     }
 
+    const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_OVERWRITE |
+                                                               FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY | FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
+
     if (state.stepState == 0)
     {
         state.fileOps->ApplyQueueMode(true);
-
-        const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_OVERWRITE |
-                                                                   FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY | FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
 
         state.taskA = StartFileOperationAndGetId(state.fileOps,
                                                  FILESYSTEM_COPY,
@@ -1461,7 +1598,32 @@ case SelfTestState::Step::Phase5_PreCalcSkipContinues:
                                                  {std::filesystem::path(state.dummyPaths[0])},
                                                  std::filesystem::path(L"/dest-skip-a"),
                                                  flags,
-                                                 false);
+                                                 false,
+                                                 8ull * 1024ull);
+
+        if (! state.taskA.has_value())
+        {
+            Fail(L"Failed to start active dummy copy task for pre-calc skip test.");
+            return true;
+        }
+
+        state.stepState = 1;
+        return false;
+    }
+
+    if (state.stepState == 1)
+    {
+        FolderWindow::FileOperationState::Task* taskA = state.fileOps->FindTask(state.taskA.value());
+        if (! taskA || ! taskA->HasEnteredOperation())
+        {
+            return false;
+        }
+
+        if (! taskA->_preCalcSkipped.load(std::memory_order_acquire))
+        {
+            taskA->SkipPreCalculation();
+        }
+
         state.taskB = StartFileOperationAndGetId(state.fileOps,
                                                  FILESYSTEM_COPY,
                                                  FolderWindow::Pane::Left,
@@ -1470,32 +1632,22 @@ case SelfTestState::Step::Phase5_PreCalcSkipContinues:
                                                  {std::filesystem::path(state.dummyPaths[1])},
                                                  std::filesystem::path(L"/dest-skip-b"),
                                                  flags,
-                                                 true);
-
-        if (! state.taskA.has_value() || ! state.taskB.has_value())
+                                                 true,
+                                                 8ull * 1024ull);
+        if (! state.taskB.has_value())
         {
-            Fail(L"Failed to start dummy copy tasks for pre-calc skip test.");
+            Fail(L"Failed to start queued dummy copy task for pre-calc skip test.");
             return true;
         }
 
-        if (auto* taskA = state.fileOps->FindTask(state.taskA.value()))
-        {
-            taskA->SetDesiredSpeedLimit(8ull * 1024ull);
-            taskA->SkipPreCalculation();
-        }
-        if (auto* taskB = state.fileOps->FindTask(state.taskB.value()))
-        {
-            taskB->SetDesiredSpeedLimit(8ull * 1024ull);
-        }
-
-        state.stepState = 1;
+        state.stepState = 2;
         return false;
     }
 
     FolderWindow::FileOperationState::Task* taskA = state.fileOps->FindTask(state.taskA.value());
-    FolderWindow::FileOperationState::Task* taskB = state.fileOps->FindTask(state.taskB.value());
+    FolderWindow::FileOperationState::Task* taskB = state.taskB.has_value() ? state.fileOps->FindTask(state.taskB.value()) : nullptr;
 
-    if (state.stepState == 1)
+    if (state.stepState == 2)
     {
         if (state.completedTasks.find(state.taskA.value()) != state.completedTasks.end() ||
             state.completedTasks.find(state.taskB.value()) != state.completedTasks.end())
@@ -1530,19 +1682,23 @@ case SelfTestState::Step::Phase5_PreCalcSkipContinues:
             return false;
         }
 
-        if (! taskB->IsWaitingInQueue())
+        if (taskB->HasEnteredOperation())
         {
             Fail(L"Skipping pre-calc released the queue slot unexpectedly.");
             return true;
         }
+        if (! taskB->IsWaitingInQueue() && ! taskB->IsWaitingForOthers())
+        {
+            return false;
+        }
 
         taskA->RequestCancel();
         taskB->RequestCancel();
-        state.stepState = 2;
+        state.stepState = 3;
         return false;
     }
 
-    if (state.stepState == 2)
+    if (state.stepState == 3)
     {
         if (state.completedTasks.find(state.taskA.value()) == state.completedTasks.end())
         {
@@ -1561,19 +1717,80 @@ case SelfTestState::Step::Phase5_PreCalcSkipContinues:
 }
 case SelfTestState::Step::Phase5_CancelQueuedTask:
 {
+    const auto isCancelHr = [](HRESULT hr) noexcept -> bool
+    {
+        return hr == HRESULT_FROM_WIN32(ERROR_CANCELLED) || hr == E_ABORT;
+    };
+    const auto summarizeTask = [&](std::optional<std::uint64_t> idOpt) -> std::wstring
+    {
+        if (! idOpt.has_value() || ! state.fileOps)
+        {
+            return L"(missing)";
+        }
+
+        const std::uint64_t id                       = idOpt.value();
+        FolderWindow::FileOperationState::Task* task = state.fileOps->FindTask(id);
+        const auto completionIt                      = state.completedTasks.find(id);
+        const bool completed                         = completionIt != state.completedTasks.end();
+        const std::wstring completedText             = completed
+                                                           ? std::format(L" completed=1 hr=0x{:08X} started={} items={}/{} bytes={}",
+                                                                         static_cast<unsigned long>(completionIt->second.hr),
+                                                                         completionIt->second.started,
+                                                                         completionIt->second.progressCompletedItems,
+                                                                         completionIt->second.progressTotalItems,
+                                                                         completionIt->second.progressCompletedBytes)
+                                                           : L" completed=0";
+        if (! task)
+        {
+            return std::format(L"id={} live=0{}", id, completedText);
+        }
+
+        unsigned long totalItems     = 0;
+        unsigned long completedItems = 0;
+        uint64_t completedBytes      = 0;
+        {
+            std::scoped_lock lock(task->_progressMutex);
+            totalItems     = task->_progressTotalItems;
+            completedItems = task->_progressCompletedItems;
+            completedBytes = task->_progressCompletedBytes;
+        }
+
+        return std::format(L"id={} live=1 waiting={} entered={} started={} qpause={} preCalc={} preDone={} preSkipped={} items={}/{} bytes={}{}",
+                           id,
+                           task->IsWaitingInQueue(),
+                           task->HasEnteredOperation(),
+                           task->HasStarted(),
+                           task->IsQueuePaused(),
+                           task->_preCalcInProgress.load(std::memory_order_acquire),
+                           task->_preCalcCompleted.load(std::memory_order_acquire),
+                           task->_preCalcSkipped.load(std::memory_order_acquire),
+                           completedItems,
+                           totalItems,
+                           completedBytes,
+                           completedText);
+    };
+
     const ULONGLONG nowTick = GetTickCount64();
     if (HasTimedOut(state, nowTick))
     {
-        Fail(L"Phase5_CancelQueuedTask timed out.");
+        Fail(std::format(L"Phase5_CancelQueuedTask timed out. stepState={} A: {} B: {} C: {}",
+                         state.stepState,
+                         summarizeTask(state.taskA),
+                         summarizeTask(state.taskB),
+                         summarizeTask(state.taskC)));
         return true;
     }
 
+    constexpr uint64_t kQueueHoldSpeedLimitBytesPerSecond = 8ull * 1024ull;
     const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_OVERWRITE |
                                                                FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY | FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
 
     if (state.stepState == 0)
     {
         state.fileOps->ApplyQueueMode(true);
+        state.taskA.reset();
+        state.taskB.reset();
+        state.taskC.reset();
 
         state.taskA = StartFileOperationAndGetId(state.fileOps,
                                                  FILESYSTEM_COPY,
@@ -1583,7 +1800,55 @@ case SelfTestState::Step::Phase5_CancelQueuedTask:
                                                  {std::filesystem::path(state.dummyPaths[0])},
                                                  std::filesystem::path(L"/dest-queued-a"),
                                                  flags,
-                                                 false);
+                                                 false,
+                                                 kQueueHoldSpeedLimitBytesPerSecond);
+        if (! state.taskA.has_value())
+        {
+            Fail(L"Failed to start the active dummy copy task for queued-cancel test.");
+            return true;
+        }
+
+        if (auto* taskA = state.fileOps->FindTask(state.taskA.value()))
+        {
+            taskA->SetDesiredSpeedLimit(kQueueHoldSpeedLimitBytesPerSecond);
+            taskA->SkipPreCalculation();
+        }
+
+        state.stepState = 1;
+        return false;
+    }
+
+    if (! state.taskA.has_value())
+    {
+        Fail(L"Phase5_CancelQueuedTask lost its active queue-holder task id.");
+        return true;
+    }
+
+    FolderWindow::FileOperationState::Task* taskA = state.fileOps->FindTask(state.taskA.value());
+
+    if (state.stepState == 1)
+    {
+        if (state.completedTasks.find(state.taskA.value()) != state.completedTasks.end())
+        {
+            Fail(std::format(L"Active queue holder completed before the queued task could be created. A: {} B: {}",
+                             summarizeTask(state.taskA),
+                             summarizeTask(state.taskB)));
+            return true;
+        }
+        if (taskA && ! taskA->_preCalcSkipped.load(std::memory_order_acquire))
+        {
+            taskA->SkipPreCalculation();
+        }
+        if (! taskA)
+        {
+            return false;
+        }
+        taskA->SetDesiredSpeedLimit(kQueueHoldSpeedLimitBytesPerSecond);
+        if (! taskA->HasEnteredOperation())
+        {
+            return false;
+        }
+
         state.taskB = StartFileOperationAndGetId(state.fileOps,
                                                  FILESYSTEM_COPY,
                                                  FolderWindow::Pane::Left,
@@ -1592,35 +1857,81 @@ case SelfTestState::Step::Phase5_CancelQueuedTask:
                                                  {std::filesystem::path(state.dummyPaths[1])},
                                                  std::filesystem::path(L"/dest-queued-b"),
                                                  flags,
-                                                 true);
-        if (! state.taskA.has_value() || ! state.taskB.has_value())
+                                                 true,
+                                                 kQueueHoldSpeedLimitBytesPerSecond);
+        if (! state.taskB.has_value())
         {
-            Fail(L"Failed to start dummy copy tasks for queued-cancel test.");
+            Fail(L"Failed to start the queued dummy copy task for queued-cancel test.");
             return true;
         }
 
-        state.stepState = 1;
+        if (auto* taskB = state.fileOps->FindTask(state.taskB.value()))
+        {
+            taskB->SetDesiredSpeedLimit(kQueueHoldSpeedLimitBytesPerSecond);
+        }
+
+        state.stepState = 2;
         return false;
     }
 
-    FolderWindow::FileOperationState::Task* taskA = state.fileOps->FindTask(state.taskA.value());
+    if (! state.taskB.has_value())
+    {
+        Fail(L"Phase5_CancelQueuedTask lost its queued task id.");
+        return true;
+    }
+
     FolderWindow::FileOperationState::Task* taskB = state.fileOps->FindTask(state.taskB.value());
 
-    if (state.stepState == 1)
+    if (state.stepState == 2)
     {
-        if (taskB && taskB->IsWaitingInQueue())
+        if (state.completedTasks.find(state.taskA.value()) != state.completedTasks.end())
+        {
+            Fail(std::format(L"Active queue holder completed before queued cancellation could observe the queue. A: {} B: {}",
+                             summarizeTask(state.taskA),
+                             summarizeTask(state.taskB)));
+            return true;
+        }
+        if (state.completedTasks.find(state.taskB.value()) != state.completedTasks.end())
+        {
+            Fail(std::format(L"Queued task completed before cancellation could observe the queue. A: {} B: {}",
+                             summarizeTask(state.taskA),
+                             summarizeTask(state.taskB)));
+            return true;
+        }
+        if (! taskB)
+        {
+            return false;
+        }
+        taskB->SetDesiredSpeedLimit(kQueueHoldSpeedLimitBytesPerSecond);
+        if (taskB->HasEnteredOperation())
+        {
+            Fail(std::format(L"Queued task entered operation before queued cancellation. A: {} B: {}",
+                             summarizeTask(state.taskA),
+                             summarizeTask(state.taskB)));
+            return true;
+        }
+        if (taskB->IsWaitingInQueue())
         {
             taskB->RequestCancel();
-            state.stepState = 2;
+            state.stepState = 3;
         }
         return false;
     }
 
-    if (state.stepState == 2)
+    if (state.stepState == 3)
     {
-        if (state.completedTasks.find(state.taskB.value()) == state.completedTasks.end())
+        const auto queuedCompletionIt = state.completedTasks.find(state.taskB.value());
+        if (queuedCompletionIt == state.completedTasks.end())
         {
             return false;
+        }
+        if (! isCancelHr(queuedCompletionIt->second.hr))
+        {
+            Fail(std::format(L"Queued task cancellation expected cancel hr, got 0x{:08X}. A: {} B: {}",
+                             static_cast<unsigned long>(queuedCompletionIt->second.hr),
+                             summarizeTask(state.taskA),
+                             summarizeTask(state.taskB)));
+            return true;
         }
 
         state.taskC = StartFileOperationAndGetId(state.fileOps,
@@ -1631,24 +1942,51 @@ case SelfTestState::Step::Phase5_CancelQueuedTask:
                                                  {std::filesystem::path(state.dummyPaths[2 % state.dummyPaths.size()])},
                                                  std::filesystem::path(L"/dest-queued-c"),
                                                  flags,
-                                                 true);
+                                                 true,
+                                                 kQueueHoldSpeedLimitBytesPerSecond);
         if (! state.taskC.has_value())
         {
             Fail(L"Failed to start follow-up task after cancelling queued task.");
             return true;
         }
+        if (auto* taskC = state.fileOps->FindTask(state.taskC.value()))
+        {
+            taskC->SetDesiredSpeedLimit(kQueueHoldSpeedLimitBytesPerSecond);
+        }
 
+        taskA = state.fileOps->FindTask(state.taskA.value());
         if (taskA)
         {
             taskA->RequestCancel();
         }
+        else if (state.completedTasks.find(state.taskA.value()) == state.completedTasks.end())
+        {
+            Fail(std::format(L"Active queue holder disappeared before cancellation. A: {} B: {} C: {}",
+                             summarizeTask(state.taskA),
+                             summarizeTask(state.taskB),
+                             summarizeTask(state.taskC)));
+            return true;
+        }
 
-        state.stepState = 3;
+        state.stepState = 4;
         return false;
     }
 
-    if (state.stepState == 3)
+    if (state.stepState == 4)
     {
+        const auto earlyCompletionIt = state.taskC.has_value() ? state.completedTasks.find(state.taskC.value()) : state.completedTasks.end();
+        if (earlyCompletionIt != state.completedTasks.end())
+        {
+            if (isCancelHr(earlyCompletionIt->second.hr))
+            {
+                state.stepState = 5;
+                return false;
+            }
+
+            Fail(std::format(L"Follow-up queued-cancel task completed before the test could cancel it. C: {}", summarizeTask(state.taskC)));
+            return true;
+        }
+
         FolderWindow::FileOperationState::Task* taskC = state.fileOps->FindTask(state.taskC.value());
         if (! taskC)
         {
@@ -1661,18 +1999,38 @@ case SelfTestState::Step::Phase5_CancelQueuedTask:
         }
 
         taskC->RequestCancel();
-        state.stepState = 4;
+        state.stepState = 5;
         return false;
     }
 
-    if (state.completedTasks.find(state.taskC.value()) == state.completedTasks.end())
+    const auto taskCCompletionIt = state.completedTasks.find(state.taskC.value());
+    if (taskCCompletionIt == state.completedTasks.end())
     {
         return false;
     }
+    if (! isCancelHr(taskCCompletionIt->second.hr))
+    {
+        Fail(std::format(L"Follow-up queued-cancel task expected cancel hr, got 0x{:08X}. A: {} B: {} C: {}",
+                         static_cast<unsigned long>(taskCCompletionIt->second.hr),
+                         summarizeTask(state.taskA),
+                         summarizeTask(state.taskB),
+                         summarizeTask(state.taskC)));
+        return true;
+    }
 
-    if (state.completedTasks.find(state.taskA.value()) == state.completedTasks.end())
+    const auto taskACompletionIt = state.completedTasks.find(state.taskA.value());
+    if (taskACompletionIt == state.completedTasks.end())
     {
         return false;
+    }
+    if (! isCancelHr(taskACompletionIt->second.hr))
+    {
+        Fail(std::format(L"Active queue holder expected cancel hr, got 0x{:08X}. A: {} B: {} C: {}",
+                         static_cast<unsigned long>(taskACompletionIt->second.hr),
+                         summarizeTask(state.taskA),
+                         summarizeTask(state.taskB),
+                         summarizeTask(state.taskC)));
+        return true;
     }
 
     NextStep(state, SelfTestState::Step::Phase5_SwitchParallelToWaitDuringPreCalc);
@@ -1815,6 +2173,12 @@ case SelfTestState::Step::Phase5_SwitchParallelToWaitDuringPreCalc:
         return false;
     }
 
+    {
+        std::scoped_lock lock(pausedTask->_progressMutex);
+        state.pauseResumeBaselineItems = pausedTask->_progressCompletedItems;
+        state.pauseResumeBaselineBytes = pausedTask->_progressCompletedBytes;
+    }
+
     NextStep(state, SelfTestState::Step::Phase5_SwitchWaitToParallelResume);
     return false;
 }
@@ -1880,8 +2244,30 @@ case SelfTestState::Step::Phase5_SwitchWaitToParallelResume:
             const auto it = state.completedTasks.find(pausedId);
             if (it != state.completedTasks.end())
             {
-                Fail(std::format(L"Paused task completed before it resumed (hr=0x{:08X})", static_cast<unsigned long>(it->second.hr)));
-                return true;
+                if (it->second.progressCompletedItems <= state.pauseResumeBaselineItems &&
+                    it->second.progressCompletedBytes <= state.pauseResumeBaselineBytes)
+                {
+                    Fail(std::format(L"Queue-paused task completed without publishing progress after resume (hr=0x{:08X}).",
+                                     static_cast<unsigned long>(it->second.hr)));
+                    return true;
+                }
+
+                if (state.taskA.has_value() && state.taskA.value() != pausedId)
+                {
+                    if (FolderWindow::FileOperationState::Task* task = state.fileOps->FindTask(state.taskA.value()))
+                    {
+                        task->RequestCancel();
+                    }
+                }
+                if (state.taskB.has_value() && state.taskB.value() != pausedId)
+                {
+                    if (FolderWindow::FileOperationState::Task* task = state.fileOps->FindTask(state.taskB.value()))
+                    {
+                        task->RequestCancel();
+                    }
+                }
+                state.stepState = 2;
+                return false;
             }
             return false;
         }
@@ -1892,6 +2278,18 @@ case SelfTestState::Step::Phase5_SwitchWaitToParallelResume:
         }
 
         if (! pausedTask->HasStarted())
+        {
+            return false;
+        }
+
+        unsigned long completedItems = 0;
+        uint64_t completedBytes      = 0;
+        {
+            std::scoped_lock lock(pausedTask->_progressMutex);
+            completedItems = pausedTask->_progressCompletedItems;
+            completedBytes = pausedTask->_progressCompletedBytes;
+        }
+        if (completedItems <= state.pauseResumeBaselineItems && completedBytes <= state.pauseResumeBaselineBytes)
         {
             return false;
         }
@@ -1992,6 +2390,36 @@ case SelfTestState::Step::Phase6_PopupRateSmoothing:
         return true;
     }
 
+    const float graphStartY = DebugEaseFileOperationsGraphLatestPointYForDisplay(80.0f, 20.0f, 0ull);
+    if (std::abs(graphStartY - 80.0f) > 0.01f)
+    {
+        Fail(std::format(L"Graph line easing should start at the previous point, got {}.", graphStartY));
+        return true;
+    }
+
+    const float graphMidY = DebugEaseFileOperationsGraphLatestPointYForDisplay(80.0f, 20.0f, 130ull);
+    if (graphMidY <= 20.0f || graphMidY >= 80.0f)
+    {
+        Fail(std::format(L"Graph line easing should move between previous and target points, got {}.", graphMidY));
+        return true;
+    }
+
+    const float graphEndY = DebugEaseFileOperationsGraphLatestPointYForDisplay(80.0f, 20.0f, 260ull);
+    if (std::abs(graphEndY - 20.0f) > 0.01f)
+    {
+        Fail(std::format(L"Graph line easing should finish at the target point, got {}.", graphEndY));
+        return true;
+    }
+
+    const float resizeStart = DebugEaseFileOperationsAutoResizeFraction(0ull, 240ull);
+    const float resizeMid   = DebugEaseFileOperationsAutoResizeFraction(120ull, 240ull);
+    const float resizeEnd   = DebugEaseFileOperationsAutoResizeFraction(240ull, 240ull);
+    if (std::abs(resizeStart) > 0.01f || resizeMid <= 0.0f || resizeMid >= 1.0f || std::abs(resizeEnd - 1.0f) > 0.01f)
+    {
+        Fail(std::format(L"Auto-resize easing should progress from 0 to 1 without snapping; start={} mid={} end={}.", resizeStart, resizeMid, resizeEnd));
+        return true;
+    }
+
     NextStep(state, SelfTestState::Step::Phase6_PopupSmokeResizeAndPause);
     return false;
 }
@@ -2013,11 +2441,12 @@ case SelfTestState::Step::Phase6_PopupSmokeResizeAndPause:
 
     const std::filesystem::path srcDir  = state.tempRoot / L"phase6-src";
     const std::filesystem::path dstDir  = state.tempRoot / L"phase6-dst";
-    const std::filesystem::path srcFile = srcDir / L"big.bin";
 
     if (state.stepState == 0)
     {
         state.fileOps->ApplyQueueMode(false);
+        state.pauseResumeBaselineItems = 0;
+        state.pauseResumeBaselineBytes = 0;
         if (! RecreateEmptyDirectory(srcDir))
         {
             Fail(L"Failed to reset phase6-src directory.");
@@ -2029,13 +2458,20 @@ case SelfTestState::Step::Phase6_PopupSmokeResizeAndPause:
             return true;
         }
 
-        if (! WriteTestFile(srcFile, 32ull * 1024ull * 1024ull))
+        constexpr size_t kSourceFileCount   = 16u;
+        constexpr uint64_t kSourceFileBytes = 2ull * 1024ull * 1024ull;
+        std::vector<std::filesystem::path> sources;
+        sources.reserve(kSourceFileCount);
+        for (size_t index = 0; index < kSourceFileCount; ++index)
         {
-            Fail(L"Failed to write large source file for popup smoke test.");
-            return true;
+            const std::filesystem::path source = srcDir / std::format(L"part-{:02}.bin", index);
+            if (! WriteTestFile(source, kSourceFileBytes))
+            {
+                Fail(std::format(L"Failed to write popup smoke source file {}.", index));
+                return true;
+            }
+            sources.push_back(source);
         }
-
-        std::vector<std::filesystem::path> sources{srcFile};
 
         const FileSystemFlags flags =
             static_cast<FileSystemFlags>(FILESYSTEM_FLAG_ALLOW_OVERWRITE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY | FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
@@ -2055,6 +2491,7 @@ case SelfTestState::Step::Phase6_PopupSmokeResizeAndPause:
             return true;
         }
 
+        AppendLog(std::format(L"Phase6_PopupSmokeResizeAndPause started task={}", state.taskA.value()));
         state.stepState = 1;
         return false;
     }
@@ -2089,7 +2526,34 @@ case SelfTestState::Step::Phase6_PopupSmokeResizeAndPause:
             return false;
         }
 
-        task->TogglePause();
+        if (! popup)
+        {
+            return false;
+        }
+
+        FileOperationsPopupInternal::PopupLayoutDebugSnapshot layout{};
+        layout.taskId = state.taskA.value();
+        if (! DebugGetFileOperationsPopupLayoutSnapshot(popup, layout))
+        {
+            return false;
+        }
+        if (! layout.footerPauseResumeAllVisible || ! layout.footerPauseResumeAllPauses)
+        {
+            Fail(std::format(L"Popup footer should expose Pause all for an active copy (visible={}, pauses={}).",
+                             layout.footerPauseResumeAllVisible,
+                             layout.footerPauseResumeAllPauses));
+            return true;
+        }
+
+        FileOperationsPopupInternal::PopupSelfTestInvoke pauseAll{};
+        pauseAll.kind = FileOperationsPopupInternal::PopupHitTest::Kind::FooterPauseResumeAll;
+        pauseAll.data = 1u;
+        if (! DebugInvokeFileOperationsPopup(popup, pauseAll))
+        {
+            Fail(L"Failed to invoke file-operations footer Pause all.");
+            return true;
+        }
+        AppendLog(L"Phase6_PopupSmokeResizeAndPause invoked Pause all");
         state.markerTick = nowTick;
         state.stepState  = 2;
         return false;
@@ -2101,9 +2565,25 @@ case SelfTestState::Step::Phase6_PopupSmokeResizeAndPause:
         if (state.taskA.has_value())
         {
             const auto it = state.completedTasks.find(state.taskA.value());
-            if (it != state.completedTasks.end() && state.stepState < 6)
+            if (it != state.completedTasks.end() && state.stepState == 4 && SUCCEEDED(it->second.hr))
             {
-                Fail(std::format(L"Copy task completed before pause/resize validation finished (hr=0x{:08X}).", static_cast<unsigned long>(it->second.hr)));
+                // The copy may finish immediately after Resume. Reaching step 4
+                // proves that pause, resized layout, and resume were all observed.
+                if (popup && state.popupOriginalRectValid)
+                {
+                    const int width  = state.popupOriginalRect.right - state.popupOriginalRect.left;
+                    const int height = state.popupOriginalRect.bottom - state.popupOriginalRect.top;
+                    SetWindowPos(popup, nullptr, state.popupOriginalRect.left, state.popupOriginalRect.top, width, height, SWP_NOZORDER | SWP_NOACTIVATE);
+                }
+                state.stepState = 6;
+            }
+            else if (it != state.completedTasks.end() && state.stepState < 6)
+            {
+                Fail(std::format(L"Copy task completed before pause/resize validation finished (hr=0x{:08X}, stepState={}, popup={}, originalRect={}).",
+                                 static_cast<unsigned long>(it->second.hr),
+                                 state.stepState,
+                                 popup != nullptr,
+                                 state.popupOriginalRectValid));
                 return true;
             }
         }
@@ -2125,16 +2605,58 @@ case SelfTestState::Step::Phase6_PopupSmokeResizeAndPause:
             return false;
         }
 
+        if (! task->IsPaused())
+        {
+            return false;
+        }
+
+        AppendLog(L"Phase6_PopupSmokeResizeAndPause observed paused task");
         const int height = state.popupOriginalRect.bottom - state.popupOriginalRect.top;
         SetWindowPos(popup, nullptr, state.popupOriginalRect.left, state.popupOriginalRect.top, 420, height, SWP_NOZORDER | SWP_NOACTIVATE);
 
+        AppendLog(L"Phase6_PopupSmokeResizeAndPause resized popup");
         state.stepState = 3;
         return false;
     }
 
     if (state.stepState == 3)
     {
-        task->TogglePause();
+        if (! popup)
+        {
+            return false;
+        }
+
+        FileOperationsPopupInternal::PopupLayoutDebugSnapshot layout{};
+        layout.taskId = state.taskA.value();
+        if (! DebugGetFileOperationsPopupLayoutSnapshot(popup, layout))
+        {
+            return false;
+        }
+        if (! layout.footerPauseResumeAllVisible || layout.footerPauseResumeAllPauses)
+        {
+            Fail(std::format(L"Popup footer should expose Resume all after bulk pause (visible={}, pauses={}).",
+                             layout.footerPauseResumeAllVisible,
+                             layout.footerPauseResumeAllPauses));
+            return true;
+        }
+
+        {
+            std::scoped_lock lock(task->_progressMutex);
+            state.pauseResumeBaselineItems = task->_progressCompletedItems;
+            state.pauseResumeBaselineBytes = task->_progressCompletedBytes;
+        }
+
+        FileOperationsPopupInternal::PopupSelfTestInvoke resumeAll{};
+        resumeAll.kind = FileOperationsPopupInternal::PopupHitTest::Kind::FooterPauseResumeAll;
+        resumeAll.data = 2u;
+        if (! DebugInvokeFileOperationsPopup(popup, resumeAll))
+        {
+            Fail(L"Failed to invoke file-operations footer Resume all.");
+            return true;
+        }
+        AppendLog(std::format(L"Phase6_PopupSmokeResizeAndPause invoked Resume all baselineItems={} baselineBytes={}",
+                              state.pauseResumeBaselineItems,
+                              state.pauseResumeBaselineBytes));
         state.markerTick = nowTick;
         state.stepState  = 4;
         return false;
@@ -2147,6 +2669,24 @@ case SelfTestState::Step::Phase6_PopupSmokeResizeAndPause:
             return false;
         }
 
+        if (task->IsPaused())
+        {
+            return false;
+        }
+
+        unsigned long completedItems = 0;
+        uint64_t completedBytes      = 0;
+        {
+            std::scoped_lock lock(task->_progressMutex);
+            completedItems = task->_progressCompletedItems;
+            completedBytes = task->_progressCompletedBytes;
+        }
+        if (completedItems <= state.pauseResumeBaselineItems && completedBytes <= state.pauseResumeBaselineBytes)
+        {
+            return false;
+        }
+
+        AppendLog(std::format(L"Phase6_PopupSmokeResizeAndPause observed resumed progress items={} bytes={}", completedItems, completedBytes));
         if (popup && state.popupOriginalRectValid)
         {
             const int width  = state.popupOriginalRect.right - state.popupOriginalRect.left;
@@ -2160,6 +2700,7 @@ case SelfTestState::Step::Phase6_PopupSmokeResizeAndPause:
 
     if (state.stepState == 5)
     {
+        AppendLog(L"Phase6_PopupSmokeResizeAndPause requesting cancel");
         task->RequestCancel();
         state.stepState = 6;
         return false;
@@ -2326,6 +2867,7 @@ case SelfTestState::Step::Phase6_LocalBandwidthThrottle:
 
     if (state.stepState == 0)
     {
+        AppendLog(L"Phase6_LocalBandwidthThrottle setup begin");
         state.taskA.reset();
         state.taskB.reset();
         state.localBandwidthRunStartTick    = 0;
@@ -2341,23 +2883,29 @@ case SelfTestState::Step::Phase6_LocalBandwidthThrottle:
             Fail(L"Failed to reset phase6-bandwidth source directory.");
             return true;
         }
+        AppendLog(L"Phase6_LocalBandwidthThrottle source directory reset");
         if (! RecreateEmptyDirectory(durationDstDir))
         {
             Fail(L"Failed to reset phase6-bandwidth duration destination directory.");
             return true;
         }
+        AppendLog(L"Phase6_LocalBandwidthThrottle duration destination reset");
         if (! RecreateEmptyDirectory(cancelDstDir))
         {
             Fail(L"Failed to reset phase6-bandwidth cancel destination directory.");
             return true;
         }
+        AppendLog(L"Phase6_LocalBandwidthThrottle cancel destination reset");
 
+        AppendLog(L"Phase6_LocalBandwidthThrottle source seed begin");
         if (! WriteTestFile(srcFile, kDurationFileBytes))
         {
             Fail(L"Failed to seed source file for local bandwidth throttle validation.");
             return true;
         }
+        AppendLog(L"Phase6_LocalBandwidthThrottle source seed complete");
 
+        AppendLog(L"Phase6_LocalBandwidthThrottle duration task start begin");
         state.taskA = StartFileOperationAndGetId(state.fileOps,
                                                  FILESYSTEM_COPY,
                                                  FolderWindow::Pane::Left,
@@ -2368,6 +2916,7 @@ case SelfTestState::Step::Phase6_LocalBandwidthThrottle:
                                                  flags,
                                                  false,
                                                  kDurationSpeedLimitBytes);
+        AppendLog(L"Phase6_LocalBandwidthThrottle duration task start returned");
         if (! state.taskA.has_value())
         {
             Fail(L"Failed to start local bandwidth throttle duration task.");

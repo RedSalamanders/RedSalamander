@@ -107,7 +107,7 @@ void UpdateUiFromWindowBackdropSelection(PreferencesDialogState& state, Common::
                                 : culture == L"fr-FR" ? IDS_PREFS_GENERAL_OPTION_LANGUAGE_FRENCH
                                 : culture == L"ja-JP" ? IDS_PREFS_GENERAL_OPTION_LANGUAGE_JAPANESE
                                 : culture == L"sk-SK" ? IDS_PREFS_GENERAL_OPTION_LANGUAGE_SLOVAK
-                                                       : 0u;
+                                                      : 0u;
         if (resourceId == 0u)
         {
             return culture;
@@ -486,7 +486,7 @@ void GeneralPane::ApplyDxTheme(const PreferencesDialogState& state) noexcept
         return;
     }
 
-    const ThemePalette palette = PrefsUi::MakeDxPalette(state.theme);
+    const ThemePalette palette = MakeAppThemeDxPalette(state.theme);
     _pageHostDx->SetTheme(palette);
 }
 

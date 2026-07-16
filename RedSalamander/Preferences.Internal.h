@@ -22,6 +22,7 @@
 #include "DxUi/DxUi.h"
 #include "DxUiThemePalette.h"
 #include "Helpers.h"
+#include "PluginConfiguration.h"
 #include "SettingsStore.h"
 #include "UiMetrics.h"
 
@@ -46,7 +47,7 @@ enum class PrefCategory : int
     Monitor,
 };
 
-inline constexpr size_t kPrefCategoryCount = static_cast<size_t>(PrefCategory::Monitor) + 1u;
+inline constexpr size_t kPrefCategoryCount                  = static_cast<size_t>(PrefCategory::Monitor) + 1u;
 inline constexpr std::wstring_view kPreferencesMonitorAppId = L"RedSalamanderMonitor";
 
 [[nodiscard]] constexpr size_t PrefCategoryIndex(const PrefCategory category) noexcept
@@ -140,9 +141,7 @@ inline constexpr int kMediumComboWidthDip = 140;
 inline constexpr int kLargeComboWidthDip  = 180;
 } // namespace PrefsLayoutConstants
 
-void PrefsReorderPanelChildren(
-    RedSalamander::DxUi::Panel* root,
-    std::span<RedSalamander::DxUi::Control* const> orderedControls);
+void PrefsReorderPanelChildren(RedSalamander::DxUi::Panel* root, std::span<RedSalamander::DxUi::Control* const> orderedControls);
 
 // Monitor filter mask bits for the Monitor Preferences page.
 enum class MonitorFilterBit : uint32_t
@@ -226,42 +225,9 @@ enum class PrefsInlineMessageSeverity : uint8_t
     Error,
 };
 
-enum class PrefsPluginConfigFieldType : uint8_t
-{
-    Text,
-    Value,
-    Bool,
-    Option,
-    Selection,
-};
-
-struct PrefsPluginConfigChoice
-{
-    std::wstring value;
-    std::wstring label;
-};
-
-struct PrefsPluginConfigField
-{
-    PrefsPluginConfigFieldType type = PrefsPluginConfigFieldType::Text;
-    std::wstring key;
-    std::wstring label;
-    std::wstring description;
-    bool browseFolder = false;
-    bool uiHidden     = false;
-
-    bool hasMin = false;
-    bool hasMax = false;
-    int64_t min = 0;
-    int64_t max = 0;
-
-    std::wstring defaultText;
-    int64_t defaultInt = 0;
-    bool defaultBool   = false;
-    std::wstring defaultOption;
-    std::vector<std::wstring> defaultSelection;
-    std::vector<PrefsPluginConfigChoice> choices;
-};
+using PrefsPluginConfigFieldType = Common::PluginConfiguration::FieldType;
+using PrefsPluginConfigChoice    = Common::PluginConfiguration::Choice;
+using PrefsPluginConfigField     = Common::PluginConfiguration::Field;
 
 struct PrefsPluginConfigChoiceDxControl
 {
@@ -357,6 +323,7 @@ struct PreferencesDialogState
     // Layout and Sizing
     int categoryListWidthPx = 0;
     SIZE minTrackSizePx{};
+    SIZE restoreMinSizePx{};
 
     int pageScrollY             = 0;
     int pageScrollMaxY          = 0;
@@ -464,6 +431,7 @@ struct PreferencesDialogState
     std::wstring pluginsStatusBodyText;
     PrefsInlineMessageSeverity pluginsStatusSeverity = PrefsInlineMessageSeverity::Info;
     std::wstring pluginsDetailsConfigPluginId;
+    std::string pluginsDetailsConfigSourceJsonUtf8;
     std::vector<PrefsPluginConfigFieldControls> pluginsDetailsConfigFields;
     RedSalamander::DxUi::Panel* pluginsDetailsConfigDxPanel = nullptr;
 
@@ -572,11 +540,6 @@ void InvalidateComboBox(HWND combo) noexcept;
 [[nodiscard]] std::optional<uint32_t> TryParseUInt32(std::wstring_view text) noexcept;
 [[nodiscard]] std::optional<uint64_t> TryParseUInt64(std::wstring_view text) noexcept;
 [[nodiscard]] bool EqualsNoCase(std::wstring_view a, std::wstring_view b) noexcept;
-
-[[nodiscard]] inline RedSalamander::DxUi::ThemePalette MakeDxPalette(const AppTheme& theme) noexcept
-{
-    return MakeAppThemeDxPalette(theme);
-}
 
 inline constexpr wchar_t kPrefsTreeRedrawBlockProp[] = L"RedSalamander.Preferences.TreeRedrawBlock";
 

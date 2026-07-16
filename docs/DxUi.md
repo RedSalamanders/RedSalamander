@@ -309,6 +309,13 @@ owned by `WindowHost`. Production code should use:
 - `WindowHost::SyncTextInput(...)` after code mutates retained text while the
   control is focused.
 
+Native text input uses TSF as a thread-level service. A focused edit session may
+push a document/context/text store, but `ITfThreadMgr` stays active for the UI
+thread until `ShutdownNativeTextInputForCurrentThread()` runs during that
+thread's shutdown. Do not call `ITfThreadMgr::Deactivate()` from modal prompt
+close, `WindowHost::Detach()`, or ordinary focus churn. Text stores must detach
+from host/control before retained controls are destroyed.
+
 Do not create hidden edit controls, hidden RichEdit controls, or bridge-specific
 messages for new production code.
 
@@ -360,6 +367,8 @@ Refresh gallery images used by [Themes.md](Themes.md):
 ```powershell
 .\build\x64\Debug\DxUiTests.exe --suite=Gallery --gallery-output-directory=docs\res
 ```
+
+The per-theme generator emits Light, Dark, deterministic Rainbow Light and Rainbow Dark, High Contrast, and one image for every `Specs/Themes/*.theme.json5` ID. Remove or investigate stale `theme-controls-*.png` files rather than leaving undocumented gallery output behind.
 
 ## Common pitfalls
 

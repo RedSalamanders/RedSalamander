@@ -7,6 +7,18 @@
 - Provide a **delayed splash screen** for slow startups that does not add startup tax for fast runs.
 - Provide an **in-process crash front door** with **minidumps** and a **crash-on-next-launch** UX.
 
+## Process and DLL Search Hardening
+
+Both `RedLauncher.exe` and `RedSalamander.exe` establish
+`LOAD_LIBRARY_SEARCH_SYSTEM32 | LOAD_LIBRARY_SEARCH_APPLICATION_DIR` through
+`SetDefaultDllDirectories` before optional or runtime DLL loading. Startup fails and records an error if the
+safe search policy cannot be installed; the processes do not continue with the inherited ambient DLL search
+order and do not use process-global `SetDllDirectoryW`.
+
+`RedLauncher.exe` resolves `RedSalamander.exe` relative to the launcher's final package path and passes that
+trusted package directory as the child's current directory. User-supplied or inherited working directories
+therefore cannot affect the initial child working directory or bare-name DLL discovery.
+
 ## ETW Startup Metrics
 
 RedSalamander records one-time startup milestone events via `Debug::Perf::Emit()`. Debug and ASan Debug builds emit Info/Perf/Debug ETW diagnostics and write JSONL perf capture to the default path by default. Release builds keep ETW traffic quiet unless launched with `--etw`; Release JSONL perf capture is explicitly enabled with `--perf` for the default path or `--perf=PATH` for a custom path (or by selftest/perf harness configuration). `RedSalamanderMonitor` self diagnostics use the same runtime `--etw`, `--perf`, and `--perf=PATH` switches.
@@ -106,13 +118,14 @@ Implementation:
 
 ## Shutdown (Debug-layer safe)
 
-When the user closes the main window (`WM_CLOSE`), RedSalamander MUST ensure any auxiliary top-level windows are shut down before the process exits.
+When the user closes the main window (`WM_CLOSE`), RedSalamander MUST make a best-effort pass to shut down auxiliary top-level windows before the process exits.
 
 Behavior:
 
 - Confirm cancellation of file operations (do not exit while file operations are still running unless the user explicitly chooses to cancel).
 - Close any other **unowned top-level** RedSalamander windows in the same process (Compare Directories, viewers, File Operations popup, item properties, etc.) before destroying the main window.
-- If any such window refuses to close or does not respond within the timeout, abort the main window close (do not proceed to process teardown while any window is still alive).
+- If any such window refuses to close or does not respond within the timeout, log a warning and continue shutdown. Do not trap the user behind an unresponsive auxiliary window.
+- Post a deferred final-close message after the best-effort pass so auxiliary windows that accepted `WM_CLOSE` can process posted teardown before the main window posts `WM_QUIT`.
 
 Implementation notes:
 
@@ -121,7 +134,7 @@ Implementation notes:
   - `GetParent(hwnd) == nullptr` and `GetWindow(hwnd, GW_OWNER) == nullptr`
   - `GetClassNameW(hwnd)` starts with `RedSalamander.`
 - Close windows by sending `WM_CLOSE` via `SendMessageTimeoutW` (use a finite timeout; do not hang shutdown on a stuck window).
-- If the window is still alive after `WM_CLOSE`, treat shutdown as canceled and keep the app running.
+- If the window is still alive after `WM_CLOSE`, treat the auxiliary close as incomplete but continue process shutdown after logging.
 
 Rationale:
 
@@ -129,13 +142,40 @@ Rationale:
 
 Code:
 
-- `CloseUnownedTopLevelRedSalamanderWindowsForShutdown()` in `RedSalamander/RedSalamander.cpp`
+- `CloseUnownedTopLevelRedSalamanderWindowsForShutdown()` and `kFinalizeMainWindowCloseMessage` handling in `RedSalamander/RedSalamander.cpp`
+
+## Windows session-end durability
+
+Windows logoff, restart, and shutdown notifications use a settings-only path that is deliberately separate
+from normal interactive `WM_CLOSE` teardown.
+
+- `WM_QUERYENDSESSION` returns `TRUE` promptly. It does not prompt, cancel File Operations, close windows,
+  unload plugins, or write settings.
+- A confirmed `WM_ENDSESSION` (`wParam != FALSE`) captures current main-window placement, pane paths and
+  view/history state, active pane, and menu/function-bar visibility, then synchronously writes the prepared
+  RedSalamander settings document.
+- A canceled `WM_ENDSESSION` (`wParam == FALSE`) is a no-op.
+- Session-end persistence is idempotent. One atomic save owner arbitrates the confirmed-session path and the
+  later normal `WM_DESTROY` path, so repeated notifications and normal destruction cannot write the runtime
+  snapshot twice.
+- The session-end handler does not run normal close prompts, close viewers, destroy the folder window, shut
+  down either plugin manager, or update the plugin-configuration schema sidecar. Normal process destruction
+  still performs its required teardown after a session-end save, but skips the duplicate settings/schema save.
+- Save failure is best-effort: log one error with the settings path and HRESULT, without showing UI or
+  preventing Windows from ending the session.
+
+Performance and regression contract:
+
+- Emit `App.Shutdown.SessionEndSettingsSave` with the complete capture/write duration and result HRESULT.
+- Commands case `cmd_app_session_end_persists_runtime_state_without_teardown` covers prompt-free query,
+  canceled and repeated delivery, changed pane/menu capture, one writer call, live-window preservation, and
+  zero normal-teardown entries. It writes `session_end_settings_metrics.json` as deterministic perf evidence.
 
 ## Settings
 
 ### Schema
 
-- Settings schema version: **10** (the splash setting was introduced in v8)
+- Settings schema version: **16** (the splash setting was introduced in v8)
 - New section:
   - `startup.showSplash` (bool, default `true`)
 

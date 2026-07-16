@@ -57,6 +57,7 @@ New-Item -ItemType Directory -Path $objDir -Force | Out-Null
 $shippingPdbs = @(
     "RedSalamander.pdb",
     "RedSalamanderMonitor.pdb",
+    "RedSalamanderSearchService.pdb",
     "Common.pdb"
 )
 

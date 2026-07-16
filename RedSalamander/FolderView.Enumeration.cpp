@@ -1,5 +1,6 @@
 #include "FolderViewInternal.h"
 #include "FolderViewSortPolicy.h"
+#include "PathUtils.h"
 #include "StartupMetrics.h"
 #ifdef ENABLE_TESTS
 #include "SelfTestCommon.h"
@@ -41,50 +42,10 @@ struct WStringViewEq
     }
 };
 
-[[nodiscard]] bool LooksLikeWindowsDrivePath(std::wstring_view text) noexcept
-{
-    if (text.size() < 2)
-    {
-        return false;
-    }
-
-    const wchar_t first = text[0];
-    if (! ((first >= L'A' && first <= L'Z') || (first >= L'a' && first <= L'z')))
-    {
-        return false;
-    }
-
-    return text[1] == L':';
-}
-
-[[nodiscard]] bool LooksLikeUncPath(std::wstring_view text) noexcept
-{
-    return text.rfind(L"\\\\", 0) == 0 || text.rfind(L"//", 0) == 0;
-}
-
-[[nodiscard]] bool LooksLikeExtendedPath(std::wstring_view text) noexcept
-{
-    return text.rfind(L"\\\\?\\", 0) == 0 || text.rfind(L"\\\\.\\", 0) == 0 || text.rfind(L"//?/", 0) == 0 || text.rfind(L"//./", 0) == 0;
-}
-
 [[nodiscard]] bool LooksLikeWindowsAbsolutePath(std::wstring_view text) noexcept
 {
-    if (text.empty())
-    {
-        return false;
-    }
-
-    if (LooksLikeExtendedPath(text))
-    {
-        return true;
-    }
-
-    if (LooksLikeUncPath(text))
-    {
-        return true;
-    }
-
-    return LooksLikeWindowsDrivePath(text);
+    const Common::Paths::WindowsPathClass pathClass = Common::Paths::ClassifyWindowsPath(text);
+    return pathClass != Common::Paths::WindowsPathClass::Relative && pathClass != Common::Paths::WindowsPathClass::Rooted;
 }
 
 std::filesystem::path NormalizeFolderPathForFocusMemory(std::filesystem::path folder)
@@ -335,7 +296,7 @@ void FolderView::EnumerationWorker(std::stop_token stopToken)
         const bool thumbnailActive = _thumbnailLoadingActive.load(std::memory_order_acquire);
         if (thumbnailActive)
         {
-            ProcessThumbnailLoadQueue();
+            ProcessThumbnailLoadQueue(stopToken);
         }
     }
 }
@@ -701,6 +662,7 @@ std::unique_ptr<FolderView::EnumerationPayload> FolderView::ExecuteEnumeration(c
                         [](PTP_CALLBACK_INSTANCE, PVOID context, PTP_WORK) noexcept
                     {
                         auto* work = static_cast<QueryWork*>(context);
+                        [[maybe_unused]] auto coInit = wil::CoInitializeEx_failfast(COINIT_MULTITHREADED);
                         if (work->stopRequested->load() ||
                             (work->generationCounter && work->generationCounter->load(std::memory_order_acquire) != work->generation))
                         {
@@ -784,6 +746,7 @@ std::unique_ptr<FolderView::EnumerationPayload> FolderView::ExecuteEnumeration(c
                 {
                     std::vector<size_t> itemIndices;
                     std::wstring fullPath;
+                    DWORD fileAttributes                    = 0;
                     std::atomic<bool>* stopRequested         = nullptr;
                     std::atomic<uint64_t>* generationCounter = nullptr;
                     uint64_t generation                      = 0;
@@ -817,6 +780,7 @@ std::unique_ptr<FolderView::EnumerationPayload> FolderView::ExecuteEnumeration(c
                         auto work = std::make_unique<PerFileWork>();
                         work->itemIndices.push_back(idx);
                         work->fullPath          = std::move(fullPath);
+                        work->fileAttributes    = payload->items[idx].fileAttributes;
                         work->stopRequested     = &perFileStopRequested;
                         work->generationCounter = &_enumerationGeneration;
                         work->generation        = generation;
@@ -835,13 +799,14 @@ std::unique_ptr<FolderView::EnumerationPayload> FolderView::ExecuteEnumeration(c
                         [](PTP_CALLBACK_INSTANCE, PVOID context, PTP_WORK) noexcept
                     {
                         auto* work = static_cast<PerFileWork*>(context);
+                        [[maybe_unused]] auto coInit = wil::CoInitializeEx_failfast(COINIT_MULTITHREADED);
                         if (work->stopRequested->load() ||
                             (work->generationCounter && work->generationCounter->load(std::memory_order_acquire) != work->generation))
                         {
                             return;
                         }
 
-                        const auto iconIndex    = IconCache::GetInstance().QuerySysIconIndexForPath(work->fullPath.c_str(), 0, false);
+                        const auto iconIndex    = IconCache::GetInstance().QuerySysIconIndexForPath(work->fullPath.c_str(), work->fileAttributes, false);
                         work->resolvedIconIndex = iconIndex.value_or(-1);
                     },
                         work.get(),
@@ -1023,6 +988,8 @@ void FolderView::OnDirectoryCacheDirty()
         if (timer != 0)
         {
             _directoryCacheRefreshTimer = timer;
+            _pendingRefreshDebounceDelayMs =
+                (std::max)(_pendingRefreshDebounceDelayMs, static_cast<uint64_t>(intervalMs));
             return;
         }
     }
@@ -1034,6 +1001,7 @@ void FolderView::OnDirectoryCacheDirty()
     }
 
     _lastDirectoryCacheRefreshTick = now;
+    _pendingRefreshDebounceDelayMs = 0u;
     RequestRefreshFromCache();
 }
 
@@ -1049,6 +1017,11 @@ void FolderView::OnDirectoryImpact(std::unique_ptr<DirectoryInfoCache::Directory
         case DirectoryInfoCache::DirectoryImpact::Kind::RefreshCurrentFolder:
             if (! impact->renamedFromDisplayName.empty() && ! impact->renamedToDisplayName.empty())
             {
+                const auto now       = std::chrono::steady_clock::now();
+                const auto expiresAt = now + std::chrono::seconds{30};
+                std::erase_if(_recentlyMissingRefreshSelections,
+                              [&](const RecentlyMissingRefreshSelection& selection) noexcept { return selection.expiresAt <= now; });
+
                 bool fromWasSelected = false;
                 for (const auto& item : _items)
                 {
@@ -1071,8 +1044,38 @@ void FolderView::OnDirectoryImpact(std::unique_ptr<DirectoryInfoCache::Directory
                     }
                 }
 
-                _pendingRefreshSelectionRenames.push_back(
-                    {.fromDisplayName = impact->renamedFromDisplayName, .toDisplayName = impact->renamedToDisplayName, .fromWasSelected = fromWasSelected});
+                if (! fromWasSelected)
+                {
+                    const auto missingIt = std::find_if(_recentlyMissingRefreshSelections.begin(),
+                                                        _recentlyMissingRefreshSelections.end(),
+                                                        [&](const RecentlyMissingRefreshSelection& selection) noexcept
+                    { return WStringViewEq{}(selection.displayName, impact->renamedFromDisplayName); });
+                    if (missingIt != _recentlyMissingRefreshSelections.end())
+                    {
+                        fromWasSelected = true;
+                        _recentlyMissingRefreshSelections.erase(missingIt);
+                    }
+                }
+
+                bool collapsedChain  = false;
+                for (auto& rename : _pendingRefreshSelectionRenames)
+                {
+                    if (WStringViewEq{}(rename.toDisplayName, impact->renamedFromDisplayName))
+                    {
+                        rename.toDisplayName.assign(impact->renamedToDisplayName);
+                        rename.fromWasSelected = rename.fromWasSelected || fromWasSelected;
+                        rename.expiresAt = expiresAt;
+                        collapsedChain = true;
+                    }
+                }
+
+                if (! collapsedChain)
+                {
+                    _pendingRefreshSelectionRenames.push_back({.fromDisplayName = impact->renamedFromDisplayName,
+                                                               .toDisplayName = impact->renamedToDisplayName,
+                                                               .fromWasSelected = fromWasSelected,
+                                                               .expiresAt = expiresAt});
+                }
             }
             OnDirectoryCacheDirty();
             return;
@@ -1109,6 +1112,9 @@ void FolderView::RequestRefreshFromCache()
 
     EnsureEnumerationThread();
     const uint64_t generation = _enumerationGeneration.fetch_add(1, std::memory_order_release) + 1;
+    const uint64_t debounceDelayMs = _pendingRefreshDebounceDelayMs;
+    _pendingRefreshDebounceDelayMs = 0u;
+    RecordPendingRefreshToPaintStart(generation, debounceDelayMs);
 #ifdef ENABLE_TESTS
     SelfTest::AppendSelfTestTrace(std::format(L"FolderView::RequestRefreshFromCache: generation={} folder='{}'", generation, _currentFolder->native()));
 #endif
@@ -1480,6 +1486,7 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
 #endif
     if (payload->generation != currentGeneration)
     {
+        CancelPendingRefreshToPaint(payload->generation);
         if (_pendingExternalCommandAfterEnumeration && _pendingExternalCommandAfterEnumeration->generation == payload->generation)
         {
             _pendingExternalCommandAfterEnumeration.reset();
@@ -1494,6 +1501,7 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
 #ifdef ENABLE_TESTS
         SelfTest::AppendSelfTestTrace(L"FolderView::ProcessEnumerationResult: failed payload status");
 #endif
+        CancelPendingRefreshToPaint(payload->generation);
         if (_pendingExternalCommandAfterEnumeration && _pendingExternalCommandAfterEnumeration->generation == payload->generation)
         {
             _pendingExternalCommandAfterEnumeration.reset();
@@ -1557,14 +1565,18 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
         refreshSelectionRenames = std::move(_pendingRefreshSelectionRenames);
     }
     _pendingRefreshSelectionRenames.clear();
+    std::vector<bool> refreshSelectionRenameTargetsObserved(refreshSelectionRenames.size(), false);
 
     // Incremental refresh: preserve rendering state for unchanged items
     size_t itemsPreserved = 0;
+    size_t selectionPreserved = 0;
+    size_t renameSelectionTransferCount = 0;
     if (isRefresh && ! _items.empty())
     {
         // Build lookup map of old items by path for O(1) access
         std::unordered_map<std::wstring_view, size_t, WStringViewHash, WStringViewEq> oldItemsByPath;
         oldItemsByPath.reserve(_items.size());
+        std::vector<bool> oldItemsObserved(_items.size(), false);
         for (size_t i = 0; i < _items.size(); ++i)
         {
             oldItemsByPath[_items[i].displayName] = i;
@@ -1580,7 +1592,12 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
             }
 
             const auto& oldItem = _items[it->second];
+            oldItemsObserved[it->second] = true;
             newItem.selected    = oldItem.selected;
+            if (oldItem.selected)
+            {
+                ++selectionPreserved;
+            }
 
             // Check if item data is unchanged (same size, time, attributes)
             const bool dataUnchanged = (oldItem.sizeBytes == newItem.sizeBytes && oldItem.lastWriteTime == newItem.lastWriteTime &&
@@ -1608,6 +1625,42 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
             ++itemsPreserved;
         }
 
+        const auto now       = std::chrono::steady_clock::now();
+        const auto expiresAt = now + std::chrono::seconds{30};
+        std::erase_if(_recentlyMissingRefreshSelections,
+                      [&](const RecentlyMissingRefreshSelection& selection) noexcept
+        {
+            if (selection.expiresAt <= now)
+            {
+                return true;
+            }
+
+            return std::ranges::any_of(payload->items,
+                                       [&](const FolderItem& item) noexcept { return WStringViewEq{}(item.displayName, selection.displayName); });
+        });
+
+        for (size_t oldIndex = 0; oldIndex < _items.size(); ++oldIndex)
+        {
+            const FolderItem& oldItem = _items[oldIndex];
+            if (! oldItem.selected || oldItemsObserved[oldIndex])
+            {
+                continue;
+            }
+
+            const auto missingIt = std::find_if(_recentlyMissingRefreshSelections.begin(),
+                                                _recentlyMissingRefreshSelections.end(),
+                                                [&](const RecentlyMissingRefreshSelection& selection) noexcept
+            { return WStringViewEq{}(selection.displayName, oldItem.displayName); });
+            if (missingIt != _recentlyMissingRefreshSelections.end())
+            {
+                missingIt->expiresAt = expiresAt;
+            }
+            else
+            {
+                _recentlyMissingRefreshSelections.push_back({.displayName = std::wstring(oldItem.displayName), .expiresAt = expiresAt});
+            }
+        }
+
         if (! refreshSelectionRenames.empty())
         {
             std::unordered_map<std::wstring_view, std::vector<const PendingRefreshSelectionRename*>, WStringViewHash, WStringViewEq> renamesByTarget;
@@ -1619,11 +1672,6 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
 
             for (auto& newItem : payload->items)
             {
-                if (newItem.selected)
-                {
-                    continue;
-                }
-
                 const auto targetIt = renamesByTarget.find(newItem.displayName);
                 if (targetIt == renamesByTarget.end())
                 {
@@ -1633,6 +1681,17 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
                 for (const auto* rename : targetIt->second)
                 {
                     if (! rename)
+                    {
+                        continue;
+                    }
+
+                    const size_t renameIndex = static_cast<size_t>(rename - refreshSelectionRenames.data());
+                    if (renameIndex < refreshSelectionRenameTargetsObserved.size())
+                    {
+                        refreshSelectionRenameTargetsObserved[renameIndex] = true;
+                    }
+
+                    if (newItem.selected)
                     {
                         continue;
                     }
@@ -1647,6 +1706,8 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
                     if (renameSourceSelected)
                     {
                         newItem.selected = true;
+                        ++selectionPreserved;
+                        ++renameSelectionTransferCount;
                         break;
                     }
                 }
@@ -1657,6 +1718,41 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
         {
             Debug::Info(L"FolderView: Incremental refresh preserved {} of {} items", itemsPreserved, payload->items.size());
         }
+    }
+
+    for (size_t renameIndex = 0; renameIndex < refreshSelectionRenames.size(); ++renameIndex)
+    {
+        PendingRefreshSelectionRename& rename = refreshSelectionRenames[renameIndex];
+        if (! refreshSelectionRenameTargetsObserved[renameIndex] && rename.fromWasSelected && std::chrono::steady_clock::now() < rename.expiresAt)
+        {
+            _pendingRefreshSelectionRenames.push_back(std::move(rename));
+        }
+    }
+
+    if (isRefresh)
+    {
+        const uint64_t itemCount       = static_cast<uint64_t>(payload->items.size());
+        const uint64_t preservedCount  = static_cast<uint64_t>(itemsPreserved);
+        const uint64_t rebuildCount    = itemCount >= preservedCount ? itemCount - preservedCount : 0u;
+        const uint64_t debounceDelayMs = PendingRefreshDebounceDelayMs(payload->generation);
+        Debug::Perf::Emit(L"folder.refresh.preserve_count", L"", 0, preservedCount, itemCount, S_OK);
+        Debug::Perf::Emit(L"folder.refresh.rebuild_count", L"", 0, rebuildCount, itemCount, S_OK);
+        Debug::Perf::Emit(L"folder.refresh.selection_preserve_count", L"", 0, static_cast<uint64_t>(selectionPreserved), itemCount, S_OK);
+        Debug::Perf::Emit(
+            L"folder.refresh.rename_transfer_count", L"", 0, static_cast<uint64_t>(renameSelectionTransferCount), static_cast<uint64_t>(refreshSelectionRenames.size()), S_OK);
+        Debug::Perf::Emit(L"folder.refresh.missing_selection_count",
+                          L"",
+                          0,
+                          static_cast<uint64_t>(_recentlyMissingRefreshSelections.size()),
+                          itemCount,
+                          S_OK);
+        Debug::Perf::Emit(L"folder.refresh.debounce_delay_ms", L"", 0, debounceDelayMs, itemCount, S_OK);
+        Debug::Perf::Emit(L"folder.refresh.enumeration_count", L"", 0, 1u, itemCount, S_OK);
+        UpdatePendingRefreshToPaintResult(payload->generation, itemCount);
+    }
+    else
+    {
+        CancelPendingRefreshToPaint(payload->generation);
     }
 
     _items            = std::move(payload->items);

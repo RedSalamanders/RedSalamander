@@ -22,19 +22,20 @@ constexpr uint64_t kScrollbarInteractionAnimationDurationMs = 140u;
 [[nodiscard]] ResolvedScrollbarVisuals ResolveScrollbarVisuals(const ThemePalette& theme, bool trackHovered, bool thumbHovered, bool thumbDragging) noexcept
 {
     const ScrollbarAnimationTargets targets = ResolveScrollbarAnimationTargets(trackHovered, thumbHovered, thumbDragging);
-    return ResolveScrollbarVisuals(theme, trackHovered, thumbHovered, thumbDragging, targets.track, targets.thumb);
+    return ResolveScrollbarVisuals(theme, targets, targets.track, targets.thumb);
 }
 
-[[nodiscard]] ResolvedScrollbarVisuals ResolveScrollbarVisuals(
-    const ThemePalette& theme, bool trackHovered, bool thumbHovered, bool thumbDragging, float trackHotStrength, float thumbHotStrength) noexcept
+[[nodiscard]] ResolvedScrollbarVisuals ResolveScrollbarVisuals(const ThemePalette& theme,
+                                                               ScrollbarAnimationTargets targets,
+                                                               float trackHotStrength,
+                                                               float thumbHotStrength) noexcept
 {
     ResolvedScrollbarVisuals visuals{};
     visuals.track = theme.scrollbarTrack;
     visuals.thumb = theme.scrollbarThumb;
 
-    const ScrollbarAnimationTargets targets = ResolveScrollbarAnimationTargets(trackHovered, thumbHovered, thumbDragging);
-    const float resolvedTrackStrength       = ClampUnit(theme.reducedMotion ? targets.track : trackHotStrength);
-    const float resolvedThumbStrength       = ClampUnit(theme.reducedMotion ? targets.thumb : thumbHotStrength);
+    const float resolvedTrackStrength = ClampUnit(theme.reducedMotion ? targets.track : trackHotStrength);
+    const float resolvedThumbStrength = ClampUnit(theme.reducedMotion ? targets.thumb : thumbHotStrength);
 
     if (resolvedTrackStrength > 0.0f)
     {
@@ -145,6 +146,24 @@ void UpdateScrollbarAnimation(WindowHost& host, ScrollbarAnimationState& animati
     }
 
     return animation.active || changedThisTick;
+}
+
+[[nodiscard]] float ComputeScrollbarPageStepDip(const D2D1_RECT_F& trackRect,
+                                                ScrollbarOrientation orientation,
+                                                float viewportDip,
+                                                float totalContentDip) noexcept
+{
+    const bool vertical      = orientation == ScrollbarOrientation::Vertical;
+    const float trackLength  = vertical ? (trackRect.bottom - trackRect.top) : (trackRect.right - trackRect.left);
+    const float viewport     = (std::isfinite(viewportDip) && viewportDip > 0.0f) ? viewportDip : 0.0f;
+    const float totalContent = (std::isfinite(totalContentDip) && totalContentDip > 0.0f) ? totalContentDip : 0.0f;
+    const float scrollExtent = totalContent - viewport;
+    if (! std::isfinite(trackLength) || trackLength <= 0.0f || viewport <= 0.0f || scrollExtent <= 0.0f)
+    {
+        return 0.0f;
+    }
+
+    return std::min(viewport, scrollExtent);
 }
 
 [[nodiscard]] D2D1_RECT_F ComputeScrollbarThumbSlotRect(const D2D1_RECT_F& trackRect,

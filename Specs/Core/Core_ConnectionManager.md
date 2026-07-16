@@ -15,6 +15,9 @@ Migration record: `Specs/Plans/Done/UI_ConnectionManagerSingleCanvasPlan.md`.
 - The Connection Manager window and connection credential prompts MUST apply the persisted `ui.windowBackdrop` setting through the shared window chrome/backdrop helper path with tool-window target semantics. High contrast or unsupported OS state MUST resolve to no system backdrop, and activation handling MUST keep title-bar active/inactive state correct without changing the persisted backdrop policy.
 - Profile names are trimmed before save and must be non-empty, unique case-insensitively, and not reserved for Quick Connect. A saved name must resolve to exactly one persisted profile.
 - The settings hot-reload contract matches Preferences: clean windows reload from disk automatically, dirty windows prompt before reloading, and stale save-producing actions prompt before overwriting disk state.
+- Connection credential prompts center over their valid owner without changing size, z-order, or activation.
+  The prompt uses the shared owner-centering geometry contract; an invalid owner or failed geometry query leaves
+  the existing position unchanged.
 
 ## Overview
 
@@ -195,14 +198,14 @@ The Connection Manager is exposed to plugins via a host service queried from `IH
   - Includes an `extra` object containing the full `ConnectionProfile.extra` payload (plugin-specific non-secret fields).
 - `GetConnectionSecret(...)`: returns a secret if available (WinCred when `savePassword == true`, or session cache); does **not** prompt for secret entry.
 - `PromptForConnectionSecret(...)`: prompts and stores a session-only cached secret; does not persist to WinCred.
-- `SetConnectionSecret(...)`: writes a secret into the session cache and optionally persists it to WinCred.
-- `DeleteConnectionSecret(...)`: deletes a secret from the session cache and optionally from WinCred.
+- `SetConnectionSecret(...)`: writes a secret into the session cache and optionally persists it to WinCred. The session value is updated before durable persistence; a WinCred failure is returned to the caller, but the current process continues using the new session value instead of falling back to the stale durable secret.
+- `DeleteConnectionSecret(...)`: removes the secret from the session cache and optionally from WinCred. The host records a session tombstone before durable deletion; a WinCred failure is returned to the caller, and the tombstone prevents a later read in the same process from resurrecting the stale durable secret.
 - `ClearCachedConnectionSecret(...)`: clears a session-cached secret (does not modify WinCred).
 - `UpgradeFtpAnonymousToPassword(...)`: FTP-only: prompts for credentials, persistently flips `authMode` to `password`, and stages a session-only password.
 
 ### Behavioral contract
 
-- Threading: plugins may call from any thread; host marshals UI work internally.
+- Threading: plugins may call from any thread; host marshals UI work internally. If the host window/owner state is unavailable, connection APIs that require host-owned UI/settings/secret state MUST return `HRESULT_FROM_WIN32(ERROR_INVALID_WINDOW_HANDLE)` instead of executing UI-thread bodies on the caller thread.
 - Lifetime: host copies all strings before returning.
 - Security:
   - secrets are never embedded in URIs and are only returned via host APIs,
@@ -290,6 +293,8 @@ Layout (using RedSalamander theming):
   - `Connect` (OK): saves config, resolves selected/edited connection, and closes dialog
   - `Close`: saves config and closes dialog (no navigation)
   - `Cancel`: closes without saving changes (no navigation)
+- `Connect` and `Close` resolve the active profile from the editor's model selection, not only from transient grid-selection chrome. After an in-place rename, the saved selected connection name and the name returned for navigation MUST match the edited model entry even if the visible grid selection was temporarily cleared or rebuilt.
+- `FileSystemPluginManager` remains a UI-thread-owned registry. Connection target refresh prepares an immutable browse request on the UI thread by copying the logical plugin id/path, loading a worker-owned module pin, and resolving `RedSalamanderBrowseConnectionTargets` before work is queued. The picker worker invokes only that prepared export and never accesses the manager. Dialog teardown cancels or waits for every owned picker work item before draining posted results and destroying the receiving window.
 - System close/title-bar close (`WM_CLOSE`) follows `Cancel` only after confirming when the editor is dirty: choosing OK discards unsaved changes and closes without navigation; choosing Cancel keeps the Connection Manager open.
 
 Connect-time secret behavior:

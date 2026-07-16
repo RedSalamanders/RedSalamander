@@ -40,8 +40,5 @@ struct HelperCommandInsertion final
 [[nodiscard]] int ReplacementCustomSubexpressionHelperCommandId() noexcept;
 [[nodiscard]] std::optional<std::wstring_view> TryGetHelperInsertionText(int commandId) noexcept;
 [[nodiscard]] std::optional<HelperCommandInsertion> TryBuildDynamicHelperInsertion(int commandId, std::wstring_view selectedText);
-[[nodiscard]] HelperInsertionResult ApplyHelperInsertion(std::wstring_view text,
-                                                         size_t selectionStart,
-                                                         size_t selectionEnd,
-                                                         std::wstring_view insertion);
+[[nodiscard]] HelperInsertionResult ApplyHelperInsertion(std::wstring_view text, size_t selectionStart, size_t selectionEnd, std::wstring_view insertion);
 } // namespace BatchRenameMenus

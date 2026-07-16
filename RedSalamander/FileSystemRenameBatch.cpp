@@ -36,7 +36,7 @@ namespace
 
         const FileSystemRenameBatch::RenameOp& op   = ops[index];
         const std::filesystem::path destinationPath = op.sourcePath.parent_path() / op.newLeaf;
-        const HRESULT hr = fileSystem.RenameItem(op.sourcePath.c_str(), destinationPath.c_str(), flags, options, callback, cookie);
+        const HRESULT hr                            = fileSystem.RenameItem(op.sourcePath.c_str(), destinationPath.c_str(), flags, options, callback, cookie);
         if (callback)
         {
             // Report each attempted rename (including the failing one) so hosts that track

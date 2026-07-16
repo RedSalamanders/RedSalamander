@@ -1,7 +1,25 @@
 #include "DxUiTestHelpers.h"
 
+#include <cctype>
+#include <fstream>
+#include <string>
+
 namespace
 {
+
+std::string RemoveAsciiWhitespace(const std::string& text)
+{
+    std::string normalized;
+    normalized.reserve(text.size());
+    for (const char ch : text)
+    {
+        if (std::isspace(static_cast<unsigned char>(ch)) == 0)
+        {
+            normalized.push_back(ch);
+        }
+    }
+    return normalized;
+}
 
 void TestGroupedGridHeaderClickTogglesCollapsedStateAndRehomesSelection()
 {
@@ -37,7 +55,7 @@ void TestGroupedGridHeaderClickTogglesCollapsedStateAndRehomesSelection()
             "grouped grid rehomes selection to the nearest visible row after collapse");
 
     const GridVisibleWorkMetrics collapsedMetrics = grid->GetVisibleWorkMetrics();
-    Require(collapsedMetrics.visibleRowCount == 3u, "grouped grid collapse updates visible-work metrics");
+    Require(collapsedMetrics.visibleRowCount == 4u, "grouped grid collapse updates visible-work metrics including partial rows");
 
     Require(grid->OnMouseDown(host, D2D1::Point2F(40.0f, 46.0f), false, 0), "grouped grid handles expand toggle click");
     Require(delegate.groupToggleCount == 2u, "grouped grid reports one expand toggle");
@@ -143,6 +161,614 @@ void TestScrollPanelThumbGutterDragThroughWindowHost()
     Require(handled, "scroll panel handles captured thumb gutter mouse-up");
 }
 
+struct ScrollPanelReentrancyProbeState
+{
+    size_t mouseDownCount  = 0u;
+    size_t mouseMoveCount  = 0u;
+    size_t hoverEnterCount = 0u;
+};
+
+class ScrollPanelClearingChild final : public RedSalamander::DxUi::Control
+{
+public:
+    ScrollPanelClearingChild(RedSalamander::DxUi::ScrollPanel& owner, ScrollPanelReentrancyProbeState& state) noexcept : _owner(&owner), _state(&state)
+    {
+    }
+
+    void Paint(RedSalamander::DxUi::WindowHost& /*host*/) const override
+    {
+    }
+
+    bool OnMouseDown(RedSalamander::DxUi::WindowHost& /*host*/, D2D1_POINT_2F /*point*/, bool rightButton, UINT /*modifiers*/) override
+    {
+        if (rightButton)
+        {
+            return false;
+        }
+
+        ScrollPanelReentrancyProbeState* const state  = _state;
+        RedSalamander::DxUi::ScrollPanel* const owner = _owner;
+        ++state->mouseDownCount;
+        owner->ClearChildren();
+        return true;
+    }
+
+    bool OnMouseMove(RedSalamander::DxUi::WindowHost& /*host*/, D2D1_POINT_2F /*point*/, UINT /*modifiers*/) override
+    {
+        ++_state->mouseMoveCount;
+        return true;
+    }
+
+protected:
+    void OnHoverChanged(RedSalamander::DxUi::WindowHost& host, bool hovered) override
+    {
+        if (hovered)
+        {
+            ScrollPanelReentrancyProbeState* const state  = _state;
+            RedSalamander::DxUi::ScrollPanel* const owner = _owner;
+            ++state->hoverEnterCount;
+            Control::OnHoverChanged(host, hovered);
+            owner->ClearChildren();
+            return;
+        }
+
+        Control::OnHoverChanged(host, hovered);
+    }
+
+private:
+    RedSalamander::DxUi::ScrollPanel* _owner = nullptr;
+    ScrollPanelReentrancyProbeState* _state  = nullptr;
+};
+
+void TestScrollPanelChildCallbacksCanClearChildrenSafely()
+{
+    const std::filesystem::path sourcePath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.Controls.cpp";
+    std::ifstream input(sourcePath);
+    Require(input.good(), "Controls source is readable for ScrollPanel reentrancy guard");
+    const std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+    const size_t scrollPanelMouseDown = source.find("bool ScrollPanel::OnMouseDown");
+    const size_t scrollPanelMouseMove = source.find("bool ScrollPanel::OnMouseMove");
+    const size_t scrollPanelMouseUp   = source.find("bool ScrollPanel::OnMouseUp");
+    Require(scrollPanelMouseDown != std::string::npos && scrollPanelMouseMove != std::string::npos && scrollPanelMouseUp != std::string::npos,
+            "ScrollPanel mouse handlers are present");
+    const std::string mouseDownBlock = source.substr(scrollPanelMouseDown, scrollPanelMouseMove - scrollPanelMouseDown);
+    const std::string mouseMoveBlock = source.substr(scrollPanelMouseMove, scrollPanelMouseUp - scrollPanelMouseMove);
+    Require(mouseDownBlock.find("RevalidateScrollPanelChild") != std::string::npos, "ScrollPanel mouse-down revalidates child pointers after child callbacks");
+    Require(mouseMoveBlock.find("RevalidateScrollPanelChild") != std::string::npos,
+            "ScrollPanel mouse-move revalidates child pointers after child hover/move callbacks");
+    const size_t updateInnerHoverCall = mouseMoveBlock.find("UpdateInnerHover(host, point)");
+    const size_t hoveredChildDispatch = mouseMoveBlock.find("if (_innerHoveredChild)", updateInnerHoverCall);
+    Require(updateInnerHoverCall != std::string::npos && hoveredChildDispatch != std::string::npos && updateInnerHoverCall < hoveredChildDispatch,
+            "ScrollPanel mouse-move UpdateInnerHover and hovered-child dispatch are found");
+    const std::string postUpdateInnerHoverBlock = mouseMoveBlock.substr(updateInnerHoverCall, hoveredChildDispatch - updateInnerHoverCall);
+    Require(postUpdateInnerHoverBlock.find("selfLifetime.expired()") != std::string::npos,
+            "ScrollPanel mouse-move checks its own lifetime after UpdateInnerHover callbacks");
+
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    auto root    = std::make_unique<Panel>();
+    auto* scroll = root->AddChild<ScrollPanel>();
+    scroll->SetBounds(D2D1::RectF(0.0f, 0.0f, 140.0f, 100.0f));
+    scroll->SetContentHeight(100.0f);
+    ScrollPanelReentrancyProbeState captureState;
+    auto* captureChild = scroll->AddChild<ScrollPanelClearingChild>(*scroll, captureState);
+    captureChild->SetBounds(D2D1::RectF(0.0f, 0.0f, 120.0f, 40.0f));
+    host.SetRoot(std::move(root));
+    static_cast<Panel*>(host.GetRoot())->SetBounds(D2D1::RectF(0.0f, 0.0f, 140.0f, 100.0f));
+
+    Require(scroll->OnMouseDown(host, D2D1::Point2F(12.0f, 12.0f), false, 0), "scroll panel forwards mouse-down to clearing child");
+    Require(captureState.mouseDownCount == 1u, "clearing child receives one mouse-down before clearing children");
+    Require(! scroll->OnMouseUp(host, D2D1::Point2F(12.0f, 12.0f), false, 0), "scroll panel does not reuse a cleared captured child on mouse-up");
+    Require(captureState.mouseMoveCount == 0u, "cleared captured child is not reused after mouse-down");
+
+    auto* hoverChild = scroll->AddChild<ScrollPanelClearingChild>(*scroll, captureState);
+    hoverChild->SetBounds(D2D1::RectF(0.0f, 0.0f, 120.0f, 40.0f));
+    Require(scroll->OnMouseMove(host, D2D1::Point2F(12.0f, 12.0f), 0), "scroll panel forwards hover-enter to clearing child");
+    Require(captureState.hoverEnterCount == 1u, "clearing child receives one hover-enter before clearing children");
+    Require(captureState.mouseMoveCount == 0u, "cleared hovered child is not reused for mouse-move");
+}
+
+void TestScrollbarVisualStrengthOverloadReusesResolvedTargets()
+{
+    const std::filesystem::path sourcePath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.Scrollbar.cpp";
+    std::ifstream input(sourcePath);
+    Require(input.good(), "Scrollbar source is readable for visual-resolution hot-path guard");
+    const std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+
+    const size_t strengthParameter = source.find("float trackHotStrength");
+    const size_t strengthOverload  = source.rfind("[[nodiscard]] ResolvedScrollbarVisuals ResolveScrollbarVisuals", strengthParameter);
+    const size_t targetsFunction   = source.find("ScrollbarAnimationTargets ResolveScrollbarAnimationTargets", strengthOverload);
+    Require(strengthParameter != std::string::npos && strengthOverload != std::string::npos && targetsFunction != std::string::npos &&
+                strengthOverload < targetsFunction,
+            "Scrollbar strength-overload source block is found");
+
+    const std::string strengthBlock = source.substr(strengthOverload, targetsFunction - strengthOverload);
+    Require(strengthBlock.find("ScrollbarAnimationTargets targets") != std::string::npos,
+            "scrollbar visual strength overload accepts pre-resolved animation targets");
+    Require(strengthBlock.find("ResolveScrollbarAnimationTargets(") == std::string::npos,
+            "scrollbar visual strength overload does not recompute animation targets");
+}
+
+void TestScrollbarTrackPagingUsesSharedPageStepHelper()
+{
+    const std::filesystem::path repoRoot = FindRepoRootForDxUiTests();
+
+    const auto readTextFile = [](const std::filesystem::path& path, const char* description)
+    {
+        std::ifstream input(path);
+        Require(input.good(), description);
+        return std::string((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+    };
+
+    const std::string internalHeader =
+        readTextFile(repoRoot / L"Common" / L"DxUi" / L"DxUi.Internal.h", "DxUi internal header is readable for scrollbar page-step guard");
+    const std::string scrollbarSource =
+        readTextFile(repoRoot / L"Common" / L"DxUi" / L"DxUi.Scrollbar.cpp", "Scrollbar source is readable for page-step guard");
+    const std::string gridSource = readTextFile(repoRoot / L"Common" / L"DxUi" / L"DxUi.Grid.cpp", "Grid source is readable for scrollbar page-step guard");
+    const std::string treeSource = readTextFile(repoRoot / L"Common" / L"DxUi" / L"DxUi.Tree.cpp", "Tree source is readable for scrollbar page-step guard");
+    const std::string controlsSource =
+        readTextFile(repoRoot / L"Common" / L"DxUi" / L"DxUi.Controls.cpp", "Controls source is readable for scrollbar page-step guard");
+    const std::string comboSource =
+        readTextFile(repoRoot / L"Common" / L"DxUi" / L"DxUi.ComboBox.cpp", "ComboBox source is readable for scrollbar page-step guard");
+
+    Require(internalHeader.find("float ComputeScrollbarPageStepDip(") != std::string::npos,
+            "DxUi internal header declares the shared scrollbar page-step helper");
+    Require(scrollbarSource.find("float ComputeScrollbarPageStepDip(") != std::string::npos, "Scrollbar source defines the shared scrollbar page-step helper");
+
+    const auto requireBlock = [](const std::string& source, const char* beginMarker, const char* endMarker, const char* description)
+    {
+        const size_t begin = source.find(beginMarker);
+        const size_t end   = source.find(endMarker, begin == std::string::npos ? 0u : begin + 1u);
+        Require(begin != std::string::npos && end != std::string::npos && begin < end, description);
+        return source.substr(begin, end - begin);
+    };
+
+    const std::string gridMouseDown = requireBlock(gridSource, "bool Grid::OnMouseDown", "bool Grid::OnMouseDoubleClick", "Grid OnMouseDown block is found");
+    const std::string treeMouseDown = requireBlock(treeSource, "bool Tree::OnMouseDown", "bool Tree::OnMouseDoubleClick", "Tree OnMouseDown block is found");
+    const std::string scrollPanelMouseDown =
+        requireBlock(controlsSource, "bool ScrollPanel::OnMouseDown", "bool ScrollPanel::OnMouseMove", "ScrollPanel OnMouseDown block is found");
+    const std::string comboMouseDown =
+        requireBlock(comboSource, "bool ComboBox::OnMouseDown", "bool ComboBox::OnMouseDoubleClick", "ComboBox OnMouseDown block is found");
+
+    Require(gridMouseDown.find("ComputeScrollbarPageStepDip(") != std::string::npos, "Grid track-click paging uses the shared scrollbar page-step helper");
+    Require(treeMouseDown.find("ComputeScrollbarPageStepDip(") != std::string::npos, "Tree track-click paging uses the shared scrollbar page-step helper");
+    Require(scrollPanelMouseDown.find("ComputeScrollbarPageStepDip(") != std::string::npos,
+            "ScrollPanel track-click paging uses the shared scrollbar page-step helper");
+    Require(comboMouseDown.find("ComputeScrollbarPageStepDip(") != std::string::npos,
+            "ComboBox popup track-click paging uses the shared scrollbar page-step helper");
+
+    Require(gridMouseDown.find("_rowHeightDip * 4.0f") == std::string::npos && gridMouseDown.find("120.0f") == std::string::npos,
+            "Grid track-click paging no longer uses local row/constant page steps");
+    Require(treeMouseDown.find("visibleRows") == std::string::npos, "Tree track-click paging no longer computes its own visible-row page step");
+    Require(scrollPanelMouseDown.find("* 0.8f") == std::string::npos, "ScrollPanel track-click paging no longer uses a local 80-percent page step");
+    Require(comboMouseDown.find("GetPopupVisibleItemCount()) : static_cast<int>(GetPopupVisibleItemCount())") == std::string::npos,
+            "ComboBox popup track-click paging no longer uses a local visible-item-count page step");
+}
+
+void TestToggleAndRadioActivationUseSharedHelpers()
+{
+    const std::filesystem::path repoRoot   = FindRepoRootForDxUiTests();
+    const std::filesystem::path sourcePath = repoRoot / L"Common" / L"DxUi" / L"DxUi.Controls.cpp";
+    const std::filesystem::path headerPath = repoRoot / L"Common" / L"DxUi" / L"DxUi.h";
+
+    std::ifstream sourceInput(sourcePath);
+    Require(sourceInput.good(), "Controls source is readable for Toggle/RadioButton activation guard");
+    const std::string source((std::istreambuf_iterator<char>(sourceInput)), std::istreambuf_iterator<char>());
+
+    std::ifstream headerInput(headerPath);
+    Require(headerInput.good(), "DxUi header is readable for Toggle/RadioButton activation guard");
+    const std::string header((std::istreambuf_iterator<char>(headerInput)), std::istreambuf_iterator<char>());
+
+    Require(header.find("void ApplyCheckedState(WindowHost& host, bool checked, bool notify);") != std::string::npos,
+            "Toggle declares one shared checked-state helper");
+    Require(header.find("void SelectSelf(WindowHost& host);") != std::string::npos, "RadioButton declares one shared select helper");
+    Require(source.find("void Toggle::ApplyCheckedState(WindowHost& host, bool checked, bool notify)") != std::string::npos,
+            "Toggle defines one shared checked-state helper");
+    Require(source.find("void RadioButton::SelectSelf(WindowHost& host)") != std::string::npos, "RadioButton defines one shared select helper");
+
+    const size_t toggleMouse    = source.find("bool Toggle::OnMouseUp");
+    const size_t toggleKey      = source.find("bool Toggle::OnKeyDown", toggleMouse);
+    const size_t toggleMnemonic = source.find("bool Toggle::OnMnemonic", toggleKey);
+    const size_t toggleHelper   = source.find("void Toggle::ApplyCheckedState", toggleMnemonic);
+    Require(toggleMouse != std::string::npos && toggleKey != std::string::npos && toggleMnemonic != std::string::npos && toggleHelper != std::string::npos,
+            "Toggle activation handler blocks are found");
+
+    const std::string toggleHandlers = source.substr(toggleMouse, toggleHelper - toggleMouse);
+    Require(toggleHandlers.find("ApplyCheckedState(host,") != std::string::npos, "Toggle input paths use the shared checked-state helper");
+    Require(toggleHandlers.find("_onToggled") == std::string::npos, "Toggle input paths do not duplicate callback dispatch");
+
+    const size_t radioMouse    = source.find("bool RadioButton::OnMouseUp");
+    const size_t radioKey      = source.find("bool RadioButton::OnKeyDown", radioMouse);
+    const size_t radioMnemonic = source.find("bool RadioButton::OnMnemonic", radioKey);
+    const size_t radioHelper   = source.find("void RadioButton::SelectSelf", radioMnemonic);
+    Require(radioMouse != std::string::npos && radioKey != std::string::npos && radioMnemonic != std::string::npos && radioHelper != std::string::npos,
+            "RadioButton activation handler blocks are found");
+
+    const std::string radioHandlers = source.substr(radioMouse, radioHelper - radioMouse);
+    Require(radioHandlers.find("SelectSelf(host)") != std::string::npos, "RadioButton input paths use the shared select helper");
+    Require(radioHandlers.find("_onSelected") == std::string::npos, "RadioButton input paths do not duplicate callback dispatch");
+}
+
+void TestConstHitTestOverloadsDelegateToMutableImplementations()
+{
+    const std::filesystem::path sourcePath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.Controls.cpp";
+    std::ifstream input(sourcePath);
+    Require(input.good(), "Controls source is readable for const hit-test delegation guard");
+    const std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+
+    const auto requireBlock = [&source](const char* beginMarker, const char* endMarker, const char* description)
+    {
+        const size_t begin = source.find(beginMarker);
+        const size_t end   = source.find(endMarker, begin == std::string::npos ? 0u : begin + 1u);
+        Require(begin != std::string::npos && end != std::string::npos && begin < end, description);
+        return source.substr(begin, end - begin);
+    };
+
+    const std::string panelHitTest =
+        requireBlock("const Control* Panel::HitTest(D2D1_POINT_2F point) const", "Control* Panel::HitTestOverlay", "Panel const HitTest block is found");
+    Require(panelHitTest.find("const_cast<Panel*>(this)->HitTest(point)") != std::string::npos, "Panel const HitTest delegates to the mutable implementation");
+    Require(panelHitTest.find("_children.rbegin()") == std::string::npos, "Panel const HitTest does not duplicate child traversal");
+
+    const std::string panelOverlay =
+        requireBlock("const Control* Panel::HitTestOverlay(D2D1_POINT_2F point) const", "void PageHost::SetPage", "Panel const overlay HitTest block is found");
+    Require(panelOverlay.find("const_cast<Panel*>(this)->HitTestOverlay(point)") != std::string::npos,
+            "Panel const overlay HitTest delegates to the mutable implementation");
+    Require(panelOverlay.find("_children.rbegin()") == std::string::npos, "Panel const overlay HitTest does not duplicate child traversal");
+
+    const std::string scrollFindOverlay = requireBlock("const Control* ScrollPanel::FindOverlayChildAtContent(D2D1_POINT_2F contentPoint) const",
+                                                       "void ScrollPanel::UpdateInnerHover",
+                                                       "ScrollPanel const overlay child lookup block is found");
+    Require(scrollFindOverlay.find("const_cast<ScrollPanel*>(this)->FindOverlayChildAtContent(contentPoint)") != std::string::npos,
+            "ScrollPanel const overlay child lookup delegates to the mutable implementation");
+    Require(scrollFindOverlay.find("GetChildren()") == std::string::npos, "ScrollPanel const overlay child lookup does not duplicate child traversal");
+
+    const std::string scrollHitTest = requireBlock(
+        "const Control* ScrollPanel::HitTest(D2D1_POINT_2F point) const", "Control* ScrollPanel::HitTestOverlay", "ScrollPanel const HitTest block is found");
+    Require(scrollHitTest.find("const_cast<ScrollPanel*>(this)->HitTest(point)") != std::string::npos,
+            "ScrollPanel const HitTest delegates to the mutable implementation");
+
+    const std::string scrollOverlay = requireBlock("const Control* ScrollPanel::HitTestOverlay(D2D1_POINT_2F point) const",
+                                                   "bool ScrollPanel::DismissOverlayOnPointerDown",
+                                                   "ScrollPanel const overlay HitTest block is found");
+    Require(scrollOverlay.find("const_cast<ScrollPanel*>(this)->HitTestOverlay(point)") != std::string::npos,
+            "ScrollPanel const overlay HitTest delegates to the mutable implementation");
+}
+
+void TestMenuBarCachesItemLayoutRectsAndWidths()
+{
+    const std::filesystem::path repoRoot = FindRepoRootForDxUiTests();
+
+    std::ifstream headerInput(repoRoot / L"Common" / L"DxUi" / L"DxUi.h");
+    Require(headerInput.good(), "DxUi header is readable for MenuBar layout cache guard");
+    const std::string header((std::istreambuf_iterator<char>(headerInput)), std::istreambuf_iterator<char>());
+
+    std::ifstream sourceInput(repoRoot / L"Common" / L"DxUi" / L"DxUi.Controls.cpp");
+    Require(sourceInput.good(), "Controls source is readable for MenuBar layout cache guard");
+    const std::string source((std::istreambuf_iterator<char>(sourceInput)), std::istreambuf_iterator<char>());
+
+    const auto requireHeaderBlock = [&header](const char* beginMarker, const char* endMarker, const char* description)
+    {
+        const size_t begin = header.find(beginMarker);
+        const size_t end   = header.find(endMarker, begin == std::string::npos ? 0u : begin + 1u);
+        Require(begin != std::string::npos && end != std::string::npos && begin < end, description);
+        return header.substr(begin, end - begin);
+    };
+
+    const auto requireSourceBlock = [&source](const char* beginMarker, const char* endMarker, const char* description)
+    {
+        const size_t begin = source.find(beginMarker);
+        const size_t end   = source.find(endMarker, begin == std::string::npos ? 0u : begin + 1u);
+        Require(begin != std::string::npos && end != std::string::npos && begin < end, description);
+        return source.substr(begin, end - begin);
+    };
+
+    const std::string menuClassBlock = requireHeaderBlock("class MenuBar final", "class TabControl final", "MenuBar class block is found");
+    Require(menuClassBlock.find("struct MenuBarLayoutCache") != std::string::npos, "MenuBar declares a layout cache");
+    Require(menuClassBlock.find("std::vector<float> itemWidthsDip") != std::string::npos, "MenuBar layout cache stores item widths");
+    Require(menuClassBlock.find("std::vector<D2D1_RECT_F> itemRects") != std::string::npos, "MenuBar layout cache stores item rects");
+    Require(menuClassBlock.find("IDWriteTextFormat* textFormat") != std::string::npos, "MenuBar layout cache keys text format identity");
+    Require(menuClassBlock.find("EnsureMenuBarLayoutCache(const WindowHost& host) const noexcept") != std::string::npos, "MenuBar declares a cache accessor");
+    Require(menuClassBlock.find("InvalidateMenuBarLayoutCache() const noexcept") != std::string::npos, "MenuBar declares a layout cache invalidator");
+    Require(menuClassBlock.find("void PropagateHost(WindowHost* host) noexcept override") != std::string::npos,
+            "MenuBar invalidates cached layout when its host changes");
+    Require(menuClassBlock.find("void OnBoundsChanged() noexcept override") != std::string::npos, "MenuBar invalidates cached layout when bounds change");
+    Require(menuClassBlock.find("void OnFlowDirectionChanged() noexcept override") != std::string::npos,
+            "MenuBar invalidates cached layout when flow direction changes");
+    Require(menuClassBlock.find("void OnDensityChanged() noexcept override") != std::string::npos, "MenuBar invalidates cached layout when density changes");
+    Require(menuClassBlock.find("void OnHostDpiChanged(WindowHost& host) noexcept override") != std::string::npos,
+            "MenuBar invalidates cached layout when host DPI changes");
+
+    const std::string setItemsBlock =
+        requireSourceBlock("void MenuBar::SetItems", "std::span<const MenuBarItem> MenuBar::GetItems", "MenuBar SetItems block is found");
+    Require(setItemsBlock.find("InvalidateMenuBarLayoutCache()") != std::string::npos, "setting MenuBar items invalidates cached layout");
+
+    const std::string ensureBlock = requireSourceBlock("const MenuBar::MenuBarLayoutCache& MenuBar::EnsureMenuBarLayoutCache",
+                                                       "D2D1_RECT_F MenuBar::GetItemRect",
+                                                       "MenuBar layout cache builder block is found");
+    Require(ensureBlock.find("itemWidthsDip.clear()") != std::string::npos, "MenuBar layout rebuild refreshes cached widths");
+    Require(ensureBlock.find("itemRects.clear()") != std::string::npos, "MenuBar layout rebuild refreshes cached rects");
+    Require(ensureBlock.find("MeasureItemWidth(host, item)") != std::string::npos, "MenuBar layout rebuild measures each item once");
+    Require(ensureBlock.find("textFormat == format") != std::string::npos, "MenuBar layout cache invalidates when text format changes");
+    Require(ensureBlock.find("itemPaddingXDip == itemPaddingXDip") != std::string::npos, "MenuBar layout cache invalidates when theme padding changes");
+    Require(ensureBlock.find("dxui.menubar.layout_rebuild_count") != std::string::npos, "MenuBar layout rebuild emits a gated cache-miss metric");
+
+    const std::string rectBlock = requireSourceBlock("D2D1_RECT_F MenuBar::GetItemRect", "float MenuBar::MeasureItemWidth", "MenuBar item rect block is found");
+    Require(rectBlock.find("layout.itemRects[index]") != std::string::npos, "MenuBar item rect lookup reuses cached rects");
+    Require(rectBlock.find("for (size_t itemIndex") == std::string::npos, "MenuBar item rect lookup no longer walks preceding items per query");
+
+    const std::string hitTestBlock =
+        requireSourceBlock("std::optional<size_t> MenuBar::HitTestItem", "D2D1_RECT_F MenuBar::GetItemRect", "MenuBar hit-test block is found");
+    Require(hitTestBlock.find("const MenuBarLayoutCache& layout") != std::string::npos, "MenuBar hit testing reuses cached layout");
+    Require(hitTestBlock.find("GetItemRect(host, index)") == std::string::npos, "MenuBar hit testing no longer asks each item to rebuild preceding geometry");
+
+    const std::string paintBlock = requireSourceBlock("void MenuBar::Paint", "bool MenuBar::OnMouseMove", "MenuBar paint block is found");
+    const std::string normalizedPaintBlock = RemoveAsciiWhitespace(paintBlock);
+    Require(normalizedPaintBlock.find("constMenuBarLayoutCache&layout=EnsureMenuBarLayoutCache(host)") != std::string::npos,
+            "MenuBar paint reuses cached layout");
+    Require(normalizedPaintBlock.find("conststd::optional<size_t>highlightedIndex=GetVisualHighlightIndex()") != std::string::npos,
+            "MenuBar paint resolves the visual highlight once per frame");
+    Require(paintBlock.find("highlightedIndex == std::optional<size_t>{index}") != std::string::npos, "MenuBar paint uses the cached highlight index");
+    Require(paintBlock.find("GetVisualHighlightIndex() ==") == std::string::npos, "MenuBar paint no longer recomputes visual highlight inside the item loop");
+
+    const std::string hostBlock = requireSourceBlock("void MenuBar::PropagateHost", "void MenuBar::OnBoundsChanged", "MenuBar host propagation block is found");
+    Require(hostBlock.find("Control::PropagateHost(host)") != std::string::npos, "MenuBar host propagation delegates to Control");
+    Require(hostBlock.find("InvalidateMenuBarLayoutCache()") != std::string::npos, "MenuBar host propagation invalidates cached layout");
+
+    const std::string boundsBlock =
+        requireSourceBlock("void MenuBar::OnBoundsChanged", "void MenuBar::OnFlowDirectionChanged", "MenuBar bounds-change block is found");
+    Require(boundsBlock.find("InvalidateMenuBarLayoutCache()") != std::string::npos, "MenuBar bounds changes invalidate cached layout");
+
+    const std::string flowBlock =
+        requireSourceBlock("void MenuBar::OnFlowDirectionChanged", "void MenuBar::OnDensityChanged", "MenuBar flow-change block is found");
+    Require(flowBlock.find("Control::OnFlowDirectionChanged()") != std::string::npos, "MenuBar flow changes preserve base focus/text-input behavior");
+    Require(flowBlock.find("InvalidateMenuBarLayoutCache()") != std::string::npos, "MenuBar flow changes invalidate cached layout");
+
+    const std::string densityBlock =
+        requireSourceBlock("void MenuBar::OnDensityChanged", "void MenuBar::OnHostDpiChanged", "MenuBar density-change block is found");
+    Require(densityBlock.find("InvalidateMenuBarLayoutCache()") != std::string::npos, "MenuBar density changes invalidate cached layout");
+
+    const std::string dpiBlock = requireSourceBlock("void MenuBar::OnHostDpiChanged", "bool MenuBar::OnKeyDown", "MenuBar DPI-change block is found");
+    Require(dpiBlock.find("InvalidateMenuBarLayoutCache()") != std::string::npos, "MenuBar DPI changes invalidate cached layout");
+}
+
+void TestMenuBarLayoutCacheRecomputesHitRectsAfterLayoutInvalidations()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    auto root  = std::make_unique<Panel>();
+    auto* menu = root->AddChild<MenuBar>();
+    menu->SetBounds(D2D1::RectF(0.0f, 0.0f, 360.0f, 28.0f));
+    menu->SetItems({
+        MenuBarItem{.text = L"File", .mnemonic = L'F', .enabled = true},
+        MenuBarItem{.text = L"Edit", .mnemonic = L'E', .enabled = true},
+        MenuBarItem{.text = L"View", .mnemonic = L'V', .enabled = true},
+    });
+    root->SetBounds(D2D1::RectF(0.0f, 0.0f, 360.0f, 40.0f));
+    host.SetRoot(std::move(root));
+
+    RECT firstRectPx{};
+    RECT secondRectPx{};
+    Require(menu->TryGetItemScreenRect(host, 0u, firstRectPx), "MenuBar exposes initial first item screen rect");
+    Require(menu->TryGetItemScreenRect(host, 1u, secondRectPx), "MenuBar exposes initial second item screen rect");
+
+    const float firstCenterX  = static_cast<float>(firstRectPx.left + firstRectPx.right) * 0.5f;
+    const float secondCenterX = static_cast<float>(secondRectPx.left + secondRectPx.right) * 0.5f;
+    Require(menu->HitTestPoint(host, MakePointDip(D2D1::Point2F(firstCenterX, 12.0f))).value_or(SIZE_MAX) == 0u,
+            "MenuBar initial cached hit rect resolves the first item");
+    Require(menu->HitTestPoint(host, MakePointDip(D2D1::Point2F(secondCenterX, 12.0f))).value_or(SIZE_MAX) == 1u,
+            "MenuBar initial cached hit rect resolves the second item");
+
+    menu->SetItems({
+        MenuBarItem{.text = L"Extremely wide file menu item", .mnemonic = L'F', .enabled = true},
+        MenuBarItem{.text = L"Edit", .mnemonic = L'E', .enabled = true},
+        MenuBarItem{.text = L"View", .mnemonic = L'V', .enabled = true},
+    });
+    RECT widenedFirstRectPx{};
+    RECT shiftedSecondRectPx{};
+    Require(menu->TryGetItemScreenRect(host, 0u, widenedFirstRectPx), "MenuBar exposes widened first item screen rect");
+    Require(menu->TryGetItemScreenRect(host, 1u, shiftedSecondRectPx), "MenuBar exposes shifted second item screen rect");
+    Require((widenedFirstRectPx.right - widenedFirstRectPx.left) > (firstRectPx.right - firstRectPx.left) + 20,
+            "SetItems invalidation recomputes cached item width");
+    Require(shiftedSecondRectPx.left > secondRectPx.left + 20, "SetItems invalidation recomputes following item hit rects");
+
+    menu->SetBounds(D2D1::RectF(40.0f, 0.0f, 400.0f, 28.0f));
+    RECT movedFirstRectPx{};
+    Require(menu->TryGetItemScreenRect(host, 0u, movedFirstRectPx), "MenuBar exposes moved first item screen rect");
+    Require(movedFirstRectPx.left > widenedFirstRectPx.left + 20, "bounds invalidation recomputes cached item x positions");
+
+    menu->SetFlowDirection(FlowDirection::RightToLeft);
+    RECT rtlFirstRectPx{};
+    Require(menu->TryGetItemScreenRect(host, 0u, rtlFirstRectPx), "MenuBar exposes RTL first item screen rect");
+    Require(rtlFirstRectPx.right > 360, "RTL invalidation recomputes cached item rects from the right edge");
+}
+
+void TestTabControlCachesHeaderLayoutRectsAndWidths()
+{
+    const std::filesystem::path repoRoot = FindRepoRootForDxUiTests();
+
+    std::ifstream headerInput(repoRoot / L"Common" / L"DxUi" / L"DxUi.h");
+    Require(headerInput.good(), "DxUi header is readable for TabControl header-layout cache guard");
+    const std::string header((std::istreambuf_iterator<char>(headerInput)), std::istreambuf_iterator<char>());
+
+    std::ifstream sourceInput(repoRoot / L"Common" / L"DxUi" / L"DxUi.Controls.cpp");
+    Require(sourceInput.good(), "Controls source is readable for TabControl header-layout cache guard");
+    const std::string source((std::istreambuf_iterator<char>(sourceInput)), std::istreambuf_iterator<char>());
+
+    const auto requireHeaderBlock = [&header](const char* beginMarker, const char* endMarker, const char* description)
+    {
+        const size_t begin = header.find(beginMarker);
+        const size_t end   = header.find(endMarker, begin == std::string::npos ? 0u : begin + 1u);
+        Require(begin != std::string::npos && end != std::string::npos && begin < end, description);
+        return header.substr(begin, end - begin);
+    };
+
+    const auto requireSourceBlock = [&source](const char* beginMarker, const char* endMarker, const char* description)
+    {
+        const size_t begin = source.find(beginMarker);
+        const size_t end   = source.find(endMarker, begin == std::string::npos ? 0u : begin + 1u);
+        Require(begin != std::string::npos && end != std::string::npos && begin < end, description);
+        return source.substr(begin, end - begin);
+    };
+
+    const std::string tabClassBlock = requireHeaderBlock("class TabControl final", "class ColorSwatch final", "TabControl class block is found");
+    Require(tabClassBlock.find("struct TabHeaderLayoutCache") != std::string::npos, "TabControl declares a header layout cache");
+    Require(tabClassBlock.find("std::vector<float> tabWidthsDip") != std::string::npos, "TabControl header layout cache stores per-tab widths");
+    Require(tabClassBlock.find("std::vector<D2D1_RECT_F> tabRects") != std::string::npos, "TabControl header layout cache stores per-tab rects");
+    Require(tabClassBlock.find("float totalTabWidthDip") != std::string::npos, "TabControl header layout cache stores total tab width");
+    Require(tabClassBlock.find("bool needsOverflowButtons") != std::string::npos, "TabControl header layout cache stores overflow state");
+    Require(tabClassBlock.find("mutable TabHeaderLayoutCache _tabHeaderLayoutCache") != std::string::npos, "TabControl owns one mutable header layout cache");
+    Require(tabClassBlock.find("void PropagateHost(WindowHost* host) noexcept override") != std::string::npos,
+            "TabControl invalidates cached measurements when its host changes");
+    Require(tabClassBlock.find("EnsureTabHeaderLayoutCache() const noexcept") != std::string::npos, "TabControl declares a cache builder/accessor");
+    Require(tabClassBlock.find("InvalidateTabHeaderLayoutCache() const noexcept") != std::string::npos,
+            "TabControl declares a header layout cache invalidator");
+
+    const std::string addTabBlock = requireHeaderBlock(
+        "template <typename TControl, typename... TArgs> TControl* AddTab", "void RemoveTab(size_t index) noexcept", "TabControl AddTab block is found");
+    Require(addTabBlock.find("InvalidateTabHeaderLayoutCache()") != std::string::npos, "adding a tab invalidates cached header layout");
+
+    const std::string ensureBlock = requireSourceBlock("const TabControl::TabHeaderLayoutCache& TabControl::EnsureTabHeaderLayoutCache",
+                                                       "float TabControl::MeasureTabWidthDip",
+                                                       "TabControl header layout cache builder block is found");
+    Require(ensureBlock.find("tabWidthsDip.clear()") != std::string::npos, "header layout rebuild refreshes cached widths");
+    Require(ensureBlock.find("tabRects.clear()") != std::string::npos, "header layout rebuild refreshes cached rects");
+    Require(ensureBlock.find("MeasureTabWidthDip(index)") != std::string::npos, "header layout rebuild measures each tab width once");
+    Require(ensureBlock.find("dxui.tabcontrol.header_layout_rebuild_count") != std::string::npos, "header layout rebuild emits a gated cache-miss metric");
+
+    const std::string totalBlock =
+        requireSourceBlock("float TabControl::GetTotalTabWidthDip", "D2D1_RECT_F TabControl::GetBackButtonRect", "TabControl total-width block is found");
+    Require(totalBlock.find("EnsureTabHeaderLayoutCache().totalTabWidthDip") != std::string::npos, "total tab width reuses the header layout cache");
+    Require(totalBlock.find("for (size_t index") == std::string::npos, "total tab width no longer walks tabs per query");
+
+    const std::string rectBlock =
+        requireSourceBlock("D2D1_RECT_F TabControl::GetTabRect", "D2D1_RECT_F TabControl::GetCloseButtonRect", "TabControl tab-rect block is found");
+    Require(rectBlock.find("layout.tabRects[index]") != std::string::npos, "tab rect lookup reuses cached rects");
+    Require(rectBlock.find("for (size_t itemIndex") == std::string::npos, "tab rect lookup no longer walks preceding tabs per query");
+
+    const std::string setTitleBlock =
+        requireSourceBlock("void TabControl::SetTabTitle", "std::wstring_view TabControl::GetTabTitle", "TabControl SetTabTitle block is found");
+    Require(setTitleBlock.find("InvalidateTabHeaderLayoutCache()") != std::string::npos, "renaming a tab invalidates cached header layout");
+
+    const std::string setClosableBlock =
+        requireSourceBlock("void TabControl::SetTabClosable", "bool TabControl::IsTabClosable", "TabControl SetTabClosable block is found");
+    Require(setClosableBlock.find("InvalidateTabHeaderLayoutCache()") != std::string::npos, "changing close-button width invalidates cached header layout");
+
+    const std::string reorderBlock =
+        requireSourceBlock("void TabControl::ReorderTab", "void TabControl::UpdateDragReorder", "TabControl reorder block is found");
+    Require(reorderBlock.find("InvalidateTabHeaderLayoutCache()") != std::string::npos, "reordering tabs invalidates cached header layout");
+
+    const std::string boundsBlock =
+        requireSourceBlock("void TabControl::OnBoundsChanged", "#if defined(ENABLE_TESTS)", "TabControl bounds-change block is found");
+    Require(boundsBlock.find("InvalidateTabHeaderLayoutCache()") != std::string::npos, "bounds changes invalidate cached header layout");
+
+    const std::string hostBlock =
+        requireSourceBlock("void TabControl::PropagateHost", "void TabControl::OnBoundsChanged", "TabControl host propagation block is found");
+    Require(hostBlock.find("Panel::PropagateHost(host)") != std::string::npos, "TabControl host propagation still delegates to Panel");
+    Require(hostBlock.find("InvalidateTabTitleMeasurements()") != std::string::npos, "TabControl host changes invalidate title and header measurements");
+}
+
+void TestTabControlHeaderCacheRecomputesRectsAfterLayoutInvalidations()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    auto root  = std::make_unique<Panel>();
+    auto* tabs = root->AddChild<TabControl>();
+    tabs->SetBounds(D2D1::RectF(0.0f, 0.0f, 220.0f, 140.0f));
+    tabs->AddTab<Panel>(L"Alpha");
+    tabs->AddTab<Panel>(L"Bravo");
+    tabs->AddTab<Panel>(L"Charlie");
+    tabs->AddTab<Panel>(L"Delta");
+    tabs->AddTab<Panel>(L"Echo");
+    root->SetBounds(D2D1::RectF(0.0f, 0.0f, 220.0f, 140.0f));
+    host.SetRoot(std::move(root));
+
+    const auto widthOf = [](const D2D1_RECT_F& rect) noexcept { return rect.right - rect.left; };
+
+    Require(tabs->DebugHasOverflowButtons(), "narrow TabControl test setup starts with overflow buttons");
+    const D2D1_RECT_F initialFirstRect = tabs->DebugGetTabRect(0u);
+    RequireRectHasArea(initialFirstRect, "initial cached first-tab rect has area");
+
+    Require(tabs->OnMouseWheel(host, D2D1::Point2F(110.0f, 12.0f), -120.0f, 0u), "TabControl header wheel scroll is handled");
+    Require(tabs->DebugGetHeaderScrollOffsetDip() > 1.0f, "TabControl header wheel changes the scroll offset");
+    const D2D1_RECT_F scrolledFirstRect = tabs->DebugGetTabRect(0u);
+    Require(scrolledFirstRect.left < initialFirstRect.left - 1.0f, "scroll invalidation recomputes cached tab rect positions");
+
+    const float beforeRenameWidth = widthOf(tabs->DebugGetTabRect(1u));
+    tabs->SetTabTitle(1u, L"Bravo tab title that is deliberately much wider than the cached width");
+    const float afterRenameWidth = widthOf(tabs->DebugGetTabRect(1u));
+    Require(afterRenameWidth > beforeRenameWidth + 8.0f, "title invalidation recomputes cached tab rect widths");
+
+    const float beforeClosableWidth = widthOf(tabs->DebugGetTabRect(2u));
+    tabs->SetTabClosable(2u, true);
+    const float afterClosableWidth = widthOf(tabs->DebugGetTabRect(2u));
+    Require(afterClosableWidth > beforeClosableWidth + 4.0f, "closability invalidation recomputes cached tab rect widths");
+    RequireRectHasArea(tabs->DebugGetCloseButtonRect(2u), "closability invalidation exposes the close-button rect");
+
+    tabs->SetBounds(D2D1::RectF(0.0f, 0.0f, 1200.0f, 140.0f));
+    Require(! tabs->DebugHasOverflowButtons(), "bounds invalidation recomputes overflow state for a wide header");
+
+    tabs->SetBounds(D2D1::RectF(0.0f, 0.0f, 220.0f, 140.0f));
+    tabs->SetFlowDirection(FlowDirection::RightToLeft);
+    const D2D1_RECT_F rtlFirstRect = tabs->DebugGetTabRect(0u);
+    Require(rtlFirstRect.right > 180.0f, "RTL invalidation recomputes cached tab rects from the right edge");
+}
+
+void TestTabControlBodyDragReleaseOverCloseButtonDoesNotCloseTab()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    auto root  = std::make_unique<Panel>();
+    auto* tabs = root->AddChild<TabControl>();
+    tabs->SetBounds(D2D1::RectF(0.0f, 0.0f, 640.0f, 180.0f));
+    tabs->AddTab<Panel>(L"Alpha");
+    tabs->AddTab<Panel>(L"Bravo");
+    tabs->AddTab<Panel>(L"Charlie");
+    tabs->SetTabClosable(0u, true);
+    tabs->SetTabClosable(1u, true);
+    tabs->SetTabClosable(2u, true);
+    root->SetBounds(D2D1::RectF(0.0f, 0.0f, 640.0f, 180.0f));
+    host.SetRoot(std::move(root));
+
+    size_t closeRequestedCount = 0u;
+    std::optional<size_t> closeRequestedIndex;
+    size_t closedCount = 0u;
+    tabs->SetOnTabCloseRequested([&](size_t index)
+    {
+        ++closeRequestedCount;
+        closeRequestedIndex = index;
+        return false;
+    });
+    tabs->SetOnTabClosed([&](size_t)
+    {
+        ++closedCount;
+    });
+
+    const auto centerOf = [](const D2D1_RECT_F& rect) noexcept
+    {
+        return D2D1::Point2F((rect.left + rect.right) * 0.5f, (rect.top + rect.bottom) * 0.5f);
+    };
+
+    const D2D1_RECT_F firstTabRect   = tabs->DebugGetTabRect(0u);
+    const D2D1_RECT_F thirdCloseRect = tabs->DebugGetCloseButtonRect(2u);
+    RequireRectHasArea(firstTabRect, "TabControl test exposes the first tab body rect");
+    RequireRectHasArea(thirdCloseRect, "TabControl test exposes the third tab close-button rect");
+
+    const D2D1_POINT_2F firstTabBodyPoint = D2D1::Point2F(firstTabRect.left + 12.0f, (firstTabRect.top + firstTabRect.bottom) * 0.5f);
+    const D2D1_POINT_2F thirdClosePoint   = centerOf(thirdCloseRect);
+
+    Require(tabs->OnMouseDown(host, firstTabBodyPoint, false, 0u), "TabControl handles body mouse-down before a tab drag");
+    Require(tabs->OnMouseMove(host, thirdClosePoint, 0u), "TabControl handles drag hover over another tab's close button");
+    Require(! tabs->OnMouseUp(host, thirdClosePoint, false, 0u), "TabControl body-started drag release over a close button is not a close action");
+
+    Require(tabs->GetTabCount() == 3u, "TabControl body-started drag release over a close button leaves all tabs open");
+    Require(closeRequestedCount == 0u && ! closeRequestedIndex.has_value(), "TabControl does not request close after a body-started drag");
+    Require(closedCount == 0u, "TabControl does not close a tab after a body-started drag");
+}
+
 void TestToggleMouseActivationOnlyFiresToggledCallbackWithUpdatedState()
 {
     using namespace RedSalamander::DxUi;
@@ -228,9 +854,9 @@ void TestTagPickerWrapsBadgesInsideInputFrame()
     using namespace RedSalamander::DxUi;
 
     WindowHost host;
-    auto root        = std::make_unique<Panel>();
-    auto* rootPanel  = root.get();
-    auto* tagPicker  = root->AddChild<TagPicker>();
+    auto root         = std::make_unique<Panel>();
+    auto* rootPanel   = root.get();
+    auto* tagPicker   = root->AddChild<TagPicker>();
     const float width = 220.0f;
     tagPicker->SetOptions(L"All owners", {L"RedSalamander", L"RedSalamanderMonitor", L"FlipSequentialDiscard", L"ViewerText"});
     tagPicker->SetSelectedValues({L"RedSalamander", L"RedSalamanderMonitor", L"FlipSequentialDiscard"});
@@ -242,10 +868,8 @@ void TestTagPickerWrapsBadgesInsideInputFrame()
     tagPicker->SetBounds(D2D1::RectF(0.0f, 0.0f, width, preferredHeight));
 
     const D2D1_RECT_F pickerBounds = tagPicker->GetBounds();
-    const auto rectInside = [](const D2D1_RECT_F& inner, const D2D1_RECT_F& outer) noexcept
-    {
-        return inner.left >= outer.left && inner.top >= outer.top && inner.right <= outer.right && inner.bottom <= outer.bottom;
-    };
+    const auto rectInside          = [](const D2D1_RECT_F& inner, const D2D1_RECT_F& outer) noexcept
+    { return inner.left >= outer.left && inner.top >= outer.top && inner.right <= outer.right && inner.bottom <= outer.bottom; };
 
     Require(tagPicker->DebugGetLaidOutDisplayTagCount() == 3u, "tag picker lays out every visible selected badge");
     for (size_t index = 0u; index < tagPicker->DebugGetLaidOutDisplayTagCount(); ++index)
@@ -300,9 +924,9 @@ void TestTagPickerKeyboardNavigationCommitsFilteredSuggestionOnEnter()
     using namespace RedSalamander::DxUi;
 
     WindowHost host;
-    auto root     = std::make_unique<Panel>();
-    auto* panel   = root.get();
-    auto* picker  = root->AddChild<TagPicker>();
+    auto root    = std::make_unique<Panel>();
+    auto* panel  = root.get();
+    auto* picker = root->AddChild<TagPicker>();
     picker->SetOptions(L"All languages", {L"Beta", L"Binary", L"Bravo", L"Gamma"});
     picker->SetBounds(D2D1::RectF(0.0f, 0.0f, 260.0f, 40.0f));
     ComboBox* combo = picker->DebugGetEmbeddedCombo();
@@ -676,6 +1300,16 @@ void RunControlTests()
     TestToggleStateLabelsFollowCheckedState();
     TestFocusRingPaintPathsHandleMissingDeviceContext();
     TestScrollPanelThumbGutterDragThroughWindowHost();
+    TestScrollPanelChildCallbacksCanClearChildrenSafely();
+    TestScrollbarVisualStrengthOverloadReusesResolvedTargets();
+    TestScrollbarTrackPagingUsesSharedPageStepHelper();
+    TestToggleAndRadioActivationUseSharedHelpers();
+    TestConstHitTestOverloadsDelegateToMutableImplementations();
+    TestMenuBarCachesItemLayoutRectsAndWidths();
+    TestMenuBarLayoutCacheRecomputesHitRectsAfterLayoutInvalidations();
+    TestTabControlCachesHeaderLayoutRectsAndWidths();
+    TestTabControlHeaderCacheRecomputesRectsAfterLayoutInvalidations();
+    TestTabControlBodyDragReleaseOverCloseButtonDoesNotCloseTab();
     TestToggleMouseActivationOnlyFiresToggledCallbackWithUpdatedState();
     TestToggleMouseActivationCanReplaceRootSafely();
     TestColorSwatchStoresConfiguredArgbAndEmptyState();

@@ -32,4 +32,8 @@ BEGIN
     IDS_VIEWERVLC_SNAPSHOT_FAILED_FMT "Échec de la capture (code {0})."
     IDS_VIEWERVLC_LOADING_TITLE "Démarrage de VLC..."
     IDS_VIEWERVLC_LOADING_BODY "Chargement du moteur VLC. La lecture démarrera automatiquement."
+    IDS_VIEWERVLC_DETAILS_CONFIGURATION_REJECTED "La configuration des options VLC contient une valeur non sûre ou incorrecte."
+    IDS_VIEWERVLC_DETAILS_ASYNC_SUBMIT_FAILED "Le chargement de VLC n’a pas pu être mis en file d’attente. Réessayez d’ouvrir le fichier."
+    IDS_VIEWERVLC_DETAILS_ASYNC_RESULT_DELIVERY_FAILED "Le résultat du chargement de VLC n’a pas pu être transmis. Réessayez d’ouvrir le fichier."
+    IDS_VIEWERVLC_DETAILS_LOAD_DLL_FAILED_FMT "Impossible de charger « {0} » (Win32 : {1})."
 END

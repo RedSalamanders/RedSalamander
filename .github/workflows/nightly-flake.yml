@@ -1,0 +1,63 @@
+name: Nightly Flake Convergence
+
+"on":
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  selftest-build:
+    uses: ./.github/workflows/build-reusable.yml
+    with:
+      configuration: Debug
+      platform: x64
+      upload_build_output: true
+
+  nightly-shuffle-repeat:
+    runs-on: windows-latest
+    needs: selftest-build
+    env:
+      REDSALAMANDER_TEST_ROOT: ${{ github.workspace }}\.build\TestSandbox
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download build output
+        uses: actions/download-artifact@v8
+        with:
+          name: build-output-x64
+          path: .build/x64/Debug/
+
+      - name: Stage Themes
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (Test-Path .\Themes) {
+            $dest = Join-Path $env:GITHUB_WORKSPACE ".build\x64\Debug\Themes"
+            New-Item -ItemType Directory -Path $dest -Force | Out-Null
+            Copy-Item -Path .\Themes\* -Destination $dest -Recurse -Force
+          }
+
+      - name: Run nightly shuffle repeat lane
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $seed = if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_RUN_ID)) {
+            $env:GITHUB_RUN_ID
+          } else {
+            [string]([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())
+          }
+          Write-Host "Nightly self-test shuffle seed: $seed"
+          .\Tools\Run-AllTests.ps1 -Suite All -SkipBuild -TimeoutMultiplier 2.0 -SelfTestRepeat 5 -SelfTestShuffleSeed $seed -ClassifyFailures
+        timeout-minutes: 210
+
+      - name: Upload nightly shuffle artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: selftest-artifacts-nightly-shuffle
+          path: ${{ env.REDSALAMANDER_TEST_ROOT }}\
+          retention-days: 14

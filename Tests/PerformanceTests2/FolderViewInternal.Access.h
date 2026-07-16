@@ -56,6 +56,7 @@
 
 #include "DxUi/DxUi.h"
 #include "DxUiThemePalette.h"
+#include "FileMetadataFormatting.h"
 #include "FolderViewAccess.h"
 #include "Helpers.h"
 #include "HostServices.h"
@@ -63,6 +64,7 @@
 #include "ThemedInputFrames.h"
 #include "UiMetrics.h"
 #include "WindowMessages.h"
+#include "WindowSizing.h"
 #include "resource.h"
 
 #ifndef GET_X_LPARAM
@@ -352,61 +354,6 @@ HRESULT HrFromErrorCode(const std::error_code& ec)
     return HRESULT_FROM_WIN32(ERROR_GEN_FAILURE);
 }
 
-std::wstring FormatLocalTime(int64_t fileTime)
-{
-    if (fileTime <= 0)
-    {
-        return {};
-    }
-
-    ULARGE_INTEGER uli{};
-    uli.QuadPart = static_cast<ULONGLONG>(fileTime);
-
-    FILETIME ft{};
-    ft.dwLowDateTime  = uli.LowPart;
-    ft.dwHighDateTime = uli.HighPart;
-
-    FILETIME local{};
-    SYSTEMTIME st{};
-    if (! FileTimeToLocalFileTime(&ft, &local) || ! FileTimeToSystemTime(&local, &st))
-    {
-        return {};
-    }
-
-    return std::format(L"{:04d}-{:02d}-{:02d} {:02d}:{:02d}", st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute);
-}
-
-std::wstring FormatFileAttributes(DWORD attrs)
-{
-    std::wstring result;
-    result.reserve(10);
-
-    auto add = [&](DWORD flag, wchar_t ch)
-    {
-        if ((attrs & flag) != 0)
-        {
-            result.push_back(ch);
-        }
-    };
-
-    add(FILE_ATTRIBUTE_READONLY, L'R');
-    add(FILE_ATTRIBUTE_HIDDEN, L'H');
-    add(FILE_ATTRIBUTE_SYSTEM, L'S');
-    add(FILE_ATTRIBUTE_ARCHIVE, L'A');
-    add(FILE_ATTRIBUTE_COMPRESSED, L'C');
-    add(FILE_ATTRIBUTE_ENCRYPTED, L'E');
-    add(FILE_ATTRIBUTE_TEMPORARY, L'T');
-    add(FILE_ATTRIBUTE_OFFLINE, L'O');
-    add(FILE_ATTRIBUTE_REPARSE_POINT, L'P');
-
-    if (result.empty())
-    {
-        result = L"-";
-    }
-
-    return result;
-}
-
 std::wstring FileTypeLabel(std::wstring_view extension, bool isDirectory)
 {
     if (isDirectory)
@@ -448,12 +395,12 @@ std::wstring PadLeftToWidth(std::wstring_view text, size_t width)
 
 std::wstring BuildDetailsText(bool isDirectory, uint64_t sizeBytes, int64_t lastWriteTime, DWORD fileAttributes, size_t sizeSlotChars)
 {
-    const std::wstring timeText  = FormatLocalTime(lastWriteTime);
-    const std::wstring attrsText = FormatFileAttributes(fileAttributes);
+    const auto fields = Common::FileMetadata::FormatDisplayFields(
+        {.lastWriteTime100nsSince1601 = lastWriteTime, .fileAttributes = fileAttributes}, Common::FileMetadata::DisplayProfile::CompactDetails);
 
     if (isDirectory)
     {
-        return std::format(L"{} • {}", timeText, attrsText);
+        return std::format(L"{} • {}", fields.localTime, fields.attributes);
     }
 
     std::wstring sizeField;
@@ -467,7 +414,7 @@ std::wstring BuildDetailsText(bool isDirectory, uint64_t sizeBytes, int64_t last
         sizeField = FormatBytesCompact(sizeBytes);
     }
 
-    return std::format(L"{} • {} • {}", timeText, sizeField, attrsText);
+    return std::format(L"{} • {} • {}", fields.localTime, sizeField, fields.attributes);
 }
 
 [[nodiscard]] HWND NormalizeOwnerWindow(HWND owner) noexcept
@@ -483,25 +430,6 @@ std::wstring BuildDetailsText(bool isDirectory, uint64_t sizeBytes, int64_t last
     }
 
     return owner;
-}
-
-void CenterWindowOnOwner(HWND window, HWND owner) noexcept
-{
-    if (! window || IsWindow(window) == FALSE || ! owner || IsWindow(owner) == FALSE)
-    {
-        return;
-    }
-
-    RECT ownerRect{};
-    RECT windowRect{};
-    if (GetWindowRect(owner, &ownerRect) == FALSE || GetWindowRect(window, &windowRect) == FALSE)
-    {
-        return;
-    }
-
-    const int x = ownerRect.left + (((ownerRect.right - ownerRect.left) - (windowRect.right - windowRect.left)) / 2);
-    const int y = ownerRect.top + (((ownerRect.bottom - ownerRect.top) - (windowRect.bottom - windowRect.top)) / 2);
-    SetWindowPos(window, nullptr, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
 [[nodiscard]] int ScaleForDpi(const UINT dpi, const int dip) noexcept
@@ -598,7 +526,7 @@ public:
             _hWnd.reset(hwnd);
         }
 
-        CenterWindowOnOwner(_hWnd.get(), _ownerWindow);
+        static_cast<void>(Common::WindowSizing::CenterExistingWindowOnOwner(_hWnd.get(), _ownerWindow));
         ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
         UpdateWindow(_hWnd.get());
         SetForegroundWindow(_hWnd.get());

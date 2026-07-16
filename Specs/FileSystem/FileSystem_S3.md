@@ -129,6 +129,8 @@ Host-level extra keys:
 
 - **Read** is supported. File reads download the remote object to a local delete-on-close temporary file before streaming it to the host.
 - **Write** is supported (uploads/overwrites objects).
-- **Delete** is supported for **objects only** (paths that resolve to a key). Deleting “folders” / prefixes (paths ending with `/`) and recursive prefix deletes are **denied**.
-- **Copy/Move/Rename** are not supported as server-side operations; cross-filesystem copy uses the host bridge via `read`/`write`.
+- **Delete** is supported for objects and for recursive prefixes when the host passes `FILESYSTEM_FLAG_RECURSIVE`. Recursive prefix delete enumerates matching keys and deletes them in bounded S3 batches (up to 1000 keys per service request). Non-recursive delete of a prefix is denied unless the path resolves to a concrete object key.
+- **Copy/Move/Rename** are supported within S3 using provider-side object operations. The implementation uses single-object copy for small objects, multipart copy for large objects, conflict prompts, `.rs-bak` backup objects, and rollback/cleanup paths before deleting move sources.
+- **Cross-filesystem copy/move** uses the host bridge via `read`/`write`.
+- **S3 Table** is read-only: it supports enumeration/properties/read and advertises no write/import capability.
 - `concurrency.deleteMax` is `8` so the host can parallelize deletes when many objects are selected.

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
@@ -96,6 +97,8 @@ static uint64_t g_lastMessageCount               = 0;   // Track message rate fo
 namespace
 {
 using RedSalamander::DxUi::Button;
+using RedSalamander::DxUi::BlendColor;
+using RedSalamander::DxUi::ColorFromArgb;
 using RedSalamander::DxUi::Label;
 using RedSalamander::DxUi::StatusStrip;
 using RedSalamander::DxUi::ThemePalette;
@@ -514,7 +517,7 @@ inline int DipsToPx(HWND hwnd, int dip)
     {
         dpi = GetDpiForWindow(hwnd);
     }
-    return MulDiv(dip, static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI);
+    return Common::WindowSizing::DipToPixelRounded(dpi, dip);
 }
 
 bool IsProcessElevated() noexcept
@@ -764,16 +767,8 @@ void WriteMonitorHelpText(HINSTANCE hInstance) noexcept
             return WriteConsoleW(handle, msg.data(), static_cast<DWORD>(msg.size()), &written, nullptr) != FALSE;
         }
 
-        const int bytesNeeded = WideCharToMultiByte(CP_UTF8, 0, msg.data(), static_cast<int>(msg.size()), nullptr, 0, nullptr, nullptr);
-        if (bytesNeeded <= 0)
-        {
-            return false;
-        }
-
-        std::string utf8;
-        utf8.resize(static_cast<size_t>(bytesNeeded));
-        const int converted = WideCharToMultiByte(CP_UTF8, 0, msg.data(), static_cast<int>(msg.size()), utf8.data(), bytesNeeded, nullptr, nullptr);
-        if (converted != bytesNeeded)
+        const std::string utf8 = Common::Strings::Utf8FromUtf16ReplacingInvalid(msg);
+        if (utf8.empty() && ! msg.empty())
         {
             return false;
         }
@@ -807,26 +802,7 @@ void WriteMonitorHelpText(HINSTANCE hInstance) noexcept
 
 std::wstring GetEnvironmentVariableString(std::wstring_view name) noexcept
 {
-    if (name.empty())
-    {
-        return {};
-    }
-
-    const DWORD required = ::GetEnvironmentVariableW(name.data(), nullptr, 0);
-    if (required == 0u)
-    {
-        return {};
-    }
-
-    std::wstring value(required, L'\0');
-    const DWORD written = ::GetEnvironmentVariableW(name.data(), value.data(), required);
-    if (written == 0u)
-    {
-        return {};
-    }
-
-    value.resize(written);
-    return value;
+    return EnvironmentVariables::Read(name).value_or(std::wstring{});
 }
 
 bool PathExists(const std::filesystem::path& path) noexcept
@@ -892,26 +868,7 @@ std::filesystem::path TryFindRepoRoot() noexcept
 
 std::string Utf8FromWide(std::wstring_view text) noexcept
 {
-    if (text.empty())
-    {
-        return {};
-    }
-
-    const int required = ::WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
-    if (required <= 0)
-    {
-        return {};
-    }
-
-    std::string utf8(static_cast<size_t>(required), '\0');
-    const int written =
-        ::WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), utf8.data(), required, nullptr, nullptr);
-    if (written != required)
-    {
-        return {};
-    }
-
-    return utf8;
+    return Common::Strings::Utf8FromUtf16StrictOrEmpty(text);
 }
 
 bool WriteUtf8TextFile(const std::filesystem::path& path, std::string_view text, bool append) noexcept
@@ -1600,26 +1557,6 @@ int InferLegacyPresetFromMask(uint32_t mask) noexcept
     }
 }
 
-D2D1_COLOR_F D2DFromArgb(uint32_t argb) noexcept
-{
-    const float a = static_cast<float>((argb >> 24) & 0xFFu) / 255.0f;
-    const float r = static_cast<float>((argb >> 16) & 0xFFu) / 255.0f;
-    const float g = static_cast<float>((argb >> 8) & 0xFFu) / 255.0f;
-    const float b = static_cast<float>(argb & 0xFFu) / 255.0f;
-    return D2D1::ColorF(r, g, b, a);
-}
-
-[[nodiscard]] D2D1_COLOR_F BlendColor(const D2D1_COLOR_F& a, const D2D1_COLOR_F& b, float t) noexcept
-{
-    const float clamped = (std::clamp)(t, 0.0f, 1.0f);
-    return D2D1::ColorF(a.r + ((b.r - a.r) * clamped), a.g + ((b.g - a.g) * clamped), a.b + ((b.b - a.b) * clamped), a.a + ((b.a - a.a) * clamped));
-}
-
-[[nodiscard]] float ComputeLuminance(const D2D1_COLOR_F& color) noexcept
-{
-    return (0.2126f * color.r) + (0.7152f * color.g) + (0.0722f * color.b);
-}
-
 const Common::Settings::ThemeDefinition* FindThemeById(std::wstring_view id) noexcept
 {
     for (const auto& def : g_settings.theme.themes)
@@ -1648,7 +1585,7 @@ void ApplyMonitorThemeOverrides(ColorTextView::Theme& theme, const std::unordere
         {
             return;
         }
-        target = D2DFromArgb(it->second);
+        target = ColorFromArgb(it->second);
     };
 
     apply(L"monitor.textView.bg", theme.bg);
@@ -1664,6 +1601,30 @@ void ApplyMonitorThemeOverrides(ColorTextView::Theme& theme, const std::unordere
     apply(L"monitor.textView.metaInfo", theme.metaInfo);
     apply(L"monitor.textView.metaPerf", theme.metaPerf);
     apply(L"monitor.textView.metaDebug", theme.metaDebug);
+}
+
+[[nodiscard]] std::optional<uint32_t> FindMonitorThemeColorArgb(const ColorTextView::Theme& theme, std::wstring_view key) noexcept
+{
+    const auto argb = [](const D2D1_COLOR_F& color) noexcept
+    {
+        const auto channel = [](float value) noexcept
+        { return static_cast<uint32_t>(std::clamp(std::lround(std::clamp(value, 0.0f, 1.0f) * 255.0f), 0l, 255l)); };
+        return (channel(color.a) << 24u) | (channel(color.r) << 16u) | (channel(color.g) << 8u) | channel(color.b);
+    };
+    if (key == L"monitor.textView.bg") return argb(theme.bg);
+    if (key == L"monitor.textView.fg") return argb(theme.fg);
+    if (key == L"monitor.textView.caret") return argb(theme.caret);
+    if (key == L"monitor.textView.selection") return argb(theme.selection);
+    if (key == L"monitor.textView.searchHighlight") return argb(theme.searchHighlight);
+    if (key == L"monitor.textView.gutterBg") return argb(theme.gutterBg);
+    if (key == L"monitor.textView.gutterFg") return argb(theme.gutterFg);
+    if (key == L"monitor.textView.metaText") return argb(theme.metaText);
+    if (key == L"monitor.textView.metaError") return argb(theme.metaError);
+    if (key == L"monitor.textView.metaWarning") return argb(theme.metaWarning);
+    if (key == L"monitor.textView.metaInfo") return argb(theme.metaInfo);
+    if (key == L"monitor.textView.metaPerf") return argb(theme.metaPerf);
+    if (key == L"monitor.textView.metaDebug") return argb(theme.metaDebug);
+    return std::nullopt;
 }
 
 ColorTextView::Theme MakeMonitorThemeHighContrast() noexcept
@@ -1745,10 +1706,10 @@ MonitorResolvedTheme ResolveMonitorTheme() noexcept
 
     std::wstring_view baseThemeId                               = themeId;
     const std::unordered_map<std::wstring, uint32_t>* overrides = nullptr;
+    Common::Settings::ResolvedThemeColors resolvedOverrides;
     if (custom)
     {
         baseThemeId = custom->baseThemeId;
-        overrides   = &custom->colors;
     }
 
     const bool systemDark = IsSystemDarkModeEnabled();
@@ -1780,6 +1741,18 @@ MonitorResolvedTheme ResolveMonitorTheme() noexcept
     {
         resolved.textView = systemDark ? MakeMonitorThemeDark() : MakeMonitorThemeLight();
         resolved.dark     = systemDark;
+    }
+
+    if (custom)
+    {
+        auto context = Common::Settings::MakeSystemThemeResolutionContext(resolved.dark);
+        context.highContrast = resolved.highContrast;
+        const ColorTextView::Theme baseTextView = resolved.textView;
+        context.baseColor = [baseTextView](std::wstring_view key) { return FindMonitorThemeColorArgb(baseTextView, key); };
+        if (SUCCEEDED(Common::Settings::ResolveThemeDefinition(*custom, context, resolvedOverrides)))
+        {
+            overrides = &resolvedOverrides.colors;
+        }
     }
 
     if (overrides)
@@ -1820,7 +1793,9 @@ MonitorResolvedTheme ResolveMonitorTheme() noexcept
     palette.subduedText           = theme.textView.metaText;
     palette.disabledText          = BlendColor(theme.textView.bg, theme.textView.metaText, 0.48f);
     palette.selectionFill         = palette.accent;
-    palette.selectionText         = ComputeLuminance(palette.accent) < 0.56f ? D2D1::ColorF(D2D1::ColorF::White) : D2D1::ColorF(D2D1::ColorF::Black);
+    palette.selectionText = Common::Colors::WeightedSrgbLuminanceWithoutLinearization(palette.accent.r, palette.accent.g, palette.accent.b) < 0.56
+                                ? D2D1::ColorF(D2D1::ColorF::White)
+                                : D2D1::ColorF(D2D1::ColorF::Black);
     palette.selectionInactiveFill = D2D1::ColorF(palette.accent.r, palette.accent.g, palette.accent.b, theme.highContrast ? 1.0f : 0.55f);
     palette.focusStroke           = theme.textView.metaInfo;
     palette.hoverFill             = D2D1::ColorF(palette.accent.r, palette.accent.g, palette.accent.b, theme.dark ? 0.16f : 0.10f);
@@ -2286,17 +2261,7 @@ bool RegisterDxHostClass(HINSTANCE instance) noexcept
 
 [[nodiscard]] std::wstring TrimWhitespace(std::wstring_view text)
 {
-    size_t begin = 0u;
-    size_t end   = text.size();
-    while (begin < end && iswspace(text[begin]) != 0)
-    {
-        ++begin;
-    }
-    while (end > begin && iswspace(text[end - 1u]) != 0)
-    {
-        --end;
-    }
-    return std::wstring(text.substr(begin, end - begin));
+    return StringUtils::TrimWhitespaceCopy(text);
 }
 
 [[nodiscard]] std::wstring StripMenuDecorations(std::wstring_view rawText)
@@ -2530,22 +2495,11 @@ std::wstring ReadFileAsTextUTF(const std::wstring& path)
     if (bytes.size() >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
     {
         // UTF-8 BOM
-        int wlen = MultiByteToWideChar(CP_UTF8, 0, reinterpret_cast<LPCCH>(bytes.data() + 3), static_cast<int>(bytes.size() - 3), nullptr, 0);
-        if (wlen > 0)
-        {
-            result.resize(static_cast<size_t>(wlen));
-            MultiByteToWideChar(CP_UTF8, 0, reinterpret_cast<LPCCH>(bytes.data() + 3), static_cast<int>(bytes.size() - 3), result.data(), wlen);
-        }
-        return result;
+        return Common::Strings::Utf16FromUtf8ReplacingInvalid(
+            std::string_view(reinterpret_cast<const char*>(bytes.data() + 3), bytes.size() - 3));
     }
     // Assume UTF-8 without BOM
-    int wlen = MultiByteToWideChar(CP_UTF8, 0, reinterpret_cast<LPCCH>(bytes.data()), static_cast<int>(bytes.size()), nullptr, 0);
-    if (wlen > 0)
-    {
-        result.resize(static_cast<size_t>(wlen));
-        MultiByteToWideChar(CP_UTF8, 0, reinterpret_cast<LPCCH>(bytes.data()), static_cast<int>(bytes.size()), result.data(), wlen);
-    }
-    return result;
+    return Common::Strings::Utf16FromUtf8ReplacingInvalid(std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
 }
 
 bool DoFileOpen(HWND owner)

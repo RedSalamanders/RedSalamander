@@ -1,7 +1,5 @@
 #include "FileSystemCurl.Internal.h"
 
-#include <bcrypt.h>
-
 #include <atomic>
 #include <condition_variable>
 #include <deque>
@@ -11,8 +9,6 @@
 #include <span>
 #include <thread>
 #include <unordered_map>
-
-#pragma comment(lib, "bcrypt.lib")
 
 using namespace FileSystemCurlInternal;
 
@@ -387,21 +383,6 @@ void ShutdownSharedCopyMoveJobScheduler() noexcept
 
 namespace
 {
-[[nodiscard]] bool EqualsInsensitive(std::wstring_view left, std::wstring_view right) noexcept
-{
-    if (left.size() != right.size())
-    {
-        return false;
-    }
-
-    if (left.size() > static_cast<size_t>((std::numeric_limits<int>::max)()))
-    {
-        return false;
-    }
-
-    return OrdinalString::EqualsNoCase(left, right);
-}
-
 class ConnectionConcurrencyLimiter final
 {
 public:
@@ -810,49 +791,13 @@ private:
     return true;
 }
 
-[[nodiscard]] HRESULT GenerateRandomBytes(std::span<std::byte> bytes) noexcept
-{
-    if (bytes.empty())
-    {
-        return S_OK;
-    }
-
-    const NTSTATUS status = BCryptGenRandom(nullptr, reinterpret_cast<PUCHAR>(bytes.data()), static_cast<ULONG>(bytes.size()), BCRYPT_USE_SYSTEM_PREFERRED_RNG);
-    return BCRYPT_SUCCESS(status) ? S_OK : HRESULT_FROM_NT(status);
-}
-
-void AppendHexToken(std::wstring& value, std::span<const std::byte> bytes)
-{
-    constexpr wchar_t kHex[] = L"0123456789abcdef";
-    value.reserve(value.size() + (bytes.size() * 2u));
-    for (const std::byte byte : bytes)
-    {
-        const unsigned int v = std::to_integer<unsigned int>(byte);
-        value.push_back(kHex[(v >> 4u) & 0x0Fu]);
-        value.push_back(kHex[v & 0x0Fu]);
-    }
-}
-
 [[nodiscard]] HRESULT BuildRemoteSiblingLeaf(std::wstring_view purposeTag, std::wstring& leafOut) noexcept
 {
-    leafOut.clear();
-
-    std::array<std::byte, 16> entropy{};
-    HRESULT hr = GenerateRandomBytes(entropy);
-    if (FAILED(hr))
-    {
-        return hr;
-    }
-
-    std::wstring leaf;
-    leaf.reserve(std::wstring_view(L".redsalamander-").size() + purposeTag.size() + 1u + (entropy.size() * 2u));
-    leaf.append(L".redsalamander-");
-    leaf.append(purposeTag);
-    leaf.push_back(L'-');
-    AppendHexToken(leaf, entropy);
-
-    leafOut = std::move(leaf);
-    return S_OK;
+    std::wstring marker = L".redsalamander-";
+    marker.append(purposeTag);
+    marker.push_back(L'-');
+    return Common::Paths::BuildUniqueSiblingName(
+        std::wstring_view{}, std::wstring_view(marker), std::wstring_view{}, (std::numeric_limits<size_t>::max)(), leafOut);
 }
 
 [[nodiscard]] HRESULT GenerateRemoteSiblingPath(const ConnectionInfo& conn,
@@ -891,19 +836,17 @@ void AppendHexToken(std::wstring& value, std::span<const std::byte> bytes)
     return HRESULT_FROM_WIN32(ERROR_FILE_EXISTS);
 }
 
-#if defined(_DEBUG)
-bool DebugCheck(bool condition, const wchar_t* message, unsigned int& passed, unsigned int& failed) noexcept
-{
-    if (condition)
-    {
-        ++passed;
-        return true;
-    }
+[[nodiscard]] HRESULT CompleteSuccessfulOverwrite(HRESULT cleanupHr) noexcept;
 
-    ++failed;
-    Debug::Error(L"FileSystemCurl debug selftest failed: {}", message);
-    return false;
+// FTP, SFTP, and SCP advertise ordinalCaseSensitive path identity. Only an exact text match is a
+// self-rename for those providers; a case-only destination must reach the server rename operation.
+[[nodiscard]] bool IsCaseSensitiveSelfRename(std::wstring_view sourcePath, std::wstring_view destinationPath) noexcept
+{
+    return sourcePath == destinationPath;
 }
+
+#if defined(_DEBUG)
+constexpr Common::DebugSelfTest::Check DebugCheck{L"FileSystemCurl"};
 
 [[nodiscard]] bool IsHexToken(std::wstring_view token) noexcept
 {
@@ -956,6 +899,26 @@ void RunDebugRemoteSiblingLeafEntropySelfTest(unsigned int& passed, unsigned int
             DebugCheck(leaves[i] != leaves[j], L"remote sibling leaves should be unique across immediate generations", passed, failed);
         }
     }
+}
+
+void RunDebugOverwriteCleanupContractSelfTest(unsigned int& passed, unsigned int& failed) noexcept
+{
+    DebugCheck(CompleteSuccessfulOverwrite(HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED)) == S_OK,
+               L"cleanup failure after successful overwrite should preserve success",
+               passed,
+               failed);
+}
+
+void RunDebugCaseOnlyRenameContractSelfTest(unsigned int& passed, unsigned int& failed) noexcept
+{
+    DebugCheck(IsCaseSensitiveSelfRename(L"/folder/name.txt", L"/folder/name.txt"),
+               L"an exact Curl path match should remain a self-rename",
+               passed,
+               failed);
+    DebugCheck(! IsCaseSensitiveSelfRename(L"/folder/name.txt", L"/folder/Name.txt"),
+               L"a Curl case-only path change must execute the provider rename operation",
+               passed,
+               failed);
 }
 #endif
 
@@ -1039,6 +1002,19 @@ void RunDebugRemoteSiblingLeafEntropySelfTest(unsigned int& passed, unsigned int
     return RemoteDeleteFile(conn, backupPath);
 }
 
+[[nodiscard]] HRESULT CompleteSuccessfulOverwrite(HRESULT cleanupHr) noexcept
+{
+    if (FAILED(cleanupHr))
+    {
+        // The replacement is already the authoritative destination. Reporting failure here would
+        // invite a retry or host cleanup after the point of no return; leave the rollback sibling
+        // for later maintenance and surface the cleanup problem only as a diagnostic.
+        Debug::Warning(L"FileSystemCurl: replacement succeeded but rollback-backup cleanup failed (hr={:#x}).",
+                       static_cast<unsigned long>(cleanupHr));
+    }
+    return S_OK;
+}
+
 [[nodiscard]] HRESULT RenameWithOverwriteRollback(const ConnectionInfo& conn,
                                                   std::wstring_view sourcePath,
                                                   std::wstring_view destinationPath,
@@ -1058,7 +1034,7 @@ void RunDebugRemoteSiblingLeafEntropySelfTest(unsigned int& passed, unsigned int
         return FAILED(restoreHr) ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : hr;
     }
 
-    return FinalizeOverwriteTarget(conn, backupPath);
+    return CompleteSuccessfulOverwrite(FinalizeOverwriteTarget(conn, backupPath));
 }
 
 [[nodiscard]] HRESULT RollbackMovedFileDestination(const ConnectionInfo& conn,
@@ -1264,21 +1240,37 @@ void RunDebugRemoteSiblingLeafEntropySelfTest(unsigned int& passed, unsigned int
         return hr;
     }
 
-    FilesInformationCurl::Entry stagedInfo{};
-    hr = GetEntryInfo(destinationConn, stagedRemotePath, stagedInfo);
-    if (FAILED(hr))
+    // Verify the staged upload landed at the expected size before promoting it. Prefer a targeted SIZE/stat
+    // probe over GetEntryInfo, which lists the whole destination directory -- that LIST costs an extra round
+    // trip per file and grows with every promoted sibling (O(n^2) over a batch). Fall back to the listing
+    // stat when the probe cannot answer (servers without SIZE, or IMAP) so SIZE-less dialects still verify by
+    // existence. Data-safe on both paths: CurlUploadFromFile only returns success after libcurl transmits all
+    // fileSize bytes, and the probe returns S_OK only when the staged file actually exists.
+    uint64_t stagedProbeSize  = 0;
+    bool stagedProbeSizeKnown = false;
+    const HRESULT probeHr     = CurlProbeRemoteFileSize(destinationConn, stagedRemotePath, stagedProbeSize, stagedProbeSizeKnown);
+    if (SUCCEEDED(probeHr))
     {
-        static_cast<void>(RemoteDeleteFile(destinationConn, stagedRemotePath));
-        return hr;
+        if (stagedProbeSizeKnown && stagedProbeSize != fileSize)
+        {
+            static_cast<void>(RemoteDeleteFile(destinationConn, stagedRemotePath));
+            return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+        }
     }
-    // Verify the staged upload landed as a non-directory of the expected size. Some FTP listing
-    // dialects cannot report a file size (the parser leaves sizeKnown == false); for those we fall
-    // back to existence verification instead of failing every non-empty upload. This stays data-safe:
-    // CurlUploadFromFile only returns success after libcurl transmits all fileSize bytes.
-    if ((stagedInfo.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0 || (stagedInfo.sizeKnown && stagedInfo.sizeBytes != fileSize))
+    else
     {
-        static_cast<void>(RemoteDeleteFile(destinationConn, stagedRemotePath));
-        return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+        FilesInformationCurl::Entry stagedInfo{};
+        hr = GetEntryInfo(destinationConn, stagedRemotePath, stagedInfo);
+        if (FAILED(hr))
+        {
+            static_cast<void>(RemoteDeleteFile(destinationConn, stagedRemotePath));
+            return hr;
+        }
+        if ((stagedInfo.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0 || (stagedInfo.sizeKnown && stagedInfo.sizeBytes != fileSize))
+        {
+            static_cast<void>(RemoteDeleteFile(destinationConn, stagedRemotePath));
+            return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+        }
     }
 
     hr = PromoteStagedFileToDestination(destinationConn, stagedRemotePath, destinationRemotePath, allowOverwrite, backupPathOut);
@@ -2094,6 +2086,9 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderCurlDebugSelfTes
     *failed = 0;
 
     RunDebugRemoteSiblingLeafEntropySelfTest(*passed, *failed);
+    RunDebugOverwriteCleanupContractSelfTest(*passed, *failed);
+    RunDebugCaseOnlyRenameContractSelfTest(*passed, *failed);
+    RunDebugCurlStreamingReaderContractSelfTests(*passed, *failed);
 
     return *failed == 0u ? S_OK : E_FAIL;
 }
@@ -2287,7 +2282,7 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItem(const wchar_t* sourcePath,
     {
         FilesInformationCurl::Entry sourceInfo{};
         hr                      = GetEntryInfo(sourceResolved.connection, sourceResolved.remotePath, sourceInfo);
-        const bool isSelfRename = EqualsInsensitive(sourceResolved.remotePath, destinationResolved.remotePath);
+        const bool isSelfRename = IsCaseSensitiveSelfRename(sourceResolved.remotePath, destinationResolved.remotePath);
         if (SUCCEEDED(hr) && ! isSelfRename)
         {
             hr = RenameWithOverwriteRollback(sourceResolved.connection, sourceResolved.remotePath, destinationResolved.remotePath, allowOverwrite);
@@ -2549,7 +2544,7 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::RenameItem(const wchar_t* sourcePath,
     {
         FilesInformationCurl::Entry sourceInfo{};
         hr                      = GetEntryInfo(sourceResolved.connection, sourceResolved.remotePath, sourceInfo);
-        const bool isSelfRename = EqualsInsensitive(sourceResolved.remotePath, destinationResolved.remotePath);
+        const bool isSelfRename = IsCaseSensitiveSelfRename(sourceResolved.remotePath, destinationResolved.remotePath);
         if (SUCCEEDED(hr) && ! isSelfRename)
         {
             hr = RenameWithOverwriteRollback(sourceResolved.connection, sourceResolved.remotePath, destinationResolved.remotePath, allowOverwrite);
@@ -3078,7 +3073,7 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItems(const wchar_t* const* source
         {
             if (task.canServerSideRename)
             {
-                const bool isSelfRename = EqualsInsensitive(task.sourceRemotePath, task.destinationRemotePath);
+                const bool isSelfRename = IsCaseSensitiveSelfRename(task.sourceRemotePath, task.destinationRemotePath);
                 if (! isSelfRename)
                 {
                     itemHr = RenameWithOverwriteRollback(destinationResolved.connection, task.sourceRemotePath, task.destinationRemotePath, allowOverwrite);
@@ -3647,7 +3642,7 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::RenameItems(const FileSystemRenamePair
                             }
                             else
                             {
-                                const bool isSelfRename = EqualsInsensitive(sourceResolved.remotePath, destinationResolved.remotePath);
+                                const bool isSelfRename = IsCaseSensitiveSelfRename(sourceResolved.remotePath, destinationResolved.remotePath);
                                 if (! isSelfRename)
                                 {
                                     itemHr = RenameWithOverwriteRollback(

@@ -1,4 +1,5 @@
 #include "FileSystemS3.Internal.h"
+#include "HandleIo.h"
 
 #include <aws/core/utils/StringUtils.h>
 #include <aws/core/utils/memory/stl/AWSStringStream.h>
@@ -471,14 +472,10 @@ namespace
             return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
         }
 
-        DWORD written = 0;
-        if (WriteFile(file.get(), buffer.data(), static_cast<DWORD>(got), &written, nullptr) == 0)
+        const HRESULT writeHr = Common::HandleIo::WriteAll(file.get(), buffer.data(), static_cast<size_t>(got));
+        if (FAILED(writeHr))
         {
-            return HRESULT_FROM_WIN32(GetLastError());
-        }
-        if (written != static_cast<DWORD>(got))
-        {
-            return HRESULT_FROM_WIN32(ERROR_WRITE_FAULT);
+            return writeHr;
         }
     }
 
@@ -496,25 +493,7 @@ namespace
 {
 [[nodiscard]] HRESULT ReadExactBytesFromFile(HANDLE file, void* buffer, size_t sizeBytes) noexcept
 {
-    auto* out        = static_cast<std::byte*>(buffer);
-    size_t totalRead = 0;
-    while (totalRead < sizeBytes)
-    {
-        const size_t remaining = sizeBytes - totalRead;
-        const DWORD request    = static_cast<DWORD>(std::min<size_t>(remaining, static_cast<size_t>((std::numeric_limits<DWORD>::max)())));
-        DWORD read             = 0;
-        if (ReadFile(file, out + totalRead, request, &read, nullptr) == 0)
-        {
-            return HRESULT_FROM_WIN32(GetLastError());
-        }
-        if (read == 0)
-        {
-            return HRESULT_FROM_WIN32(ERROR_HANDLE_EOF);
-        }
-        totalRead += static_cast<size_t>(read);
-    }
-
-    return S_OK;
+    return Common::HandleIo::ReadExact(file, buffer, sizeBytes);
 }
 
 class HandleReadStreamBuf final : public std::streambuf

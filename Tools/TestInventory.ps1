@@ -138,6 +138,49 @@ function Get-RSRegexInt {
     return [int]$match.Groups[1].Value
 }
 
+function Get-RSRegexInts {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Text,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Pattern
+    )
+
+    return @([Regex]::Matches($Text, $Pattern, [System.Text.RegularExpressions.RegexOptions]::Singleline) |
+        ForEach-Object { [int]$_.Groups[1].Value })
+}
+
+function Get-RSMarkdownTableCountMap {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Text,
+
+        [Parameter(Mandatory = $true)]
+        [string]$StartHeading,
+
+        [Parameter(Mandatory = $true)]
+        [string]$EndHeading
+    )
+
+    $start = $Text.IndexOf($StartHeading, [StringComparison]::Ordinal)
+    $end = $Text.IndexOf($EndHeading, [Math]::Max(0, $start + $StartHeading.Length), [StringComparison]::Ordinal)
+    if ($start -lt 0 -or $end -le $start) {
+        return [pscustomobject]@{}
+    }
+
+    $map = [ordered]@{}
+    $section = $Text.Substring($start, $end - $start)
+    foreach ($match in [Regex]::Matches($section, '(?m)^\|\s*([^|]+?)\s*\|\s*(?:`[^`]+`\s*\|\s*)?(\d+)\s*\|')) {
+        $name = $match.Groups[1].Value.Trim().Trim('`')
+        if ($name -ne 'Family' -and $name -ne 'File') {
+            $map[$name] = [int]$match.Groups[2].Value
+        }
+    }
+
+    return [pscustomobject]$map
+}
+
 function Get-RSTestInventoryDocSnapshot {
     param(
         [Parameter(Mandatory = $true)]
@@ -157,6 +200,39 @@ function Get-RSTestInventoryDocSnapshot {
     }
 }
 
+function Get-RSTestsReadmeInventorySnapshot {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    $text = Get-Content -LiteralPath $Path -Raw
+
+    return [pscustomobject]@{
+        CommandsListedCases = @(
+            Get-RSRegexInt -Text $text -Pattern '\|\s*Self-Tests \(in-process\)\s*\|\s*3\s*\|\s*(\d+)\s+Commands listed cases'
+            Get-RSRegexInt -Text $text -Pattern '## 1\. Commands Self-Test Suite — (\d+) runner-listed cases'
+            Get-RSRegexInt -Text $text -Pattern '--selftest-list-cases --commands-selftest`\s*\r?\nlists (\d+) cases'
+        )
+        CommandsStaticRunCases = @(Get-RSRegexInts -Text $text -Pattern '--selftest-list-cases --commands-selftest`\s*\r?\nlists\s+\d+\s+cases\.\s+The source fallback scan reports\s+(\d+)\s+static')
+        CompareListedCases = @(
+            Get-RSRegexInt -Text $text -Pattern '\|\s*Self-Tests \(in-process\)\s*\|\s*3\s*\|\s*\d+\s+Commands listed cases,\s*(\d+)\s+Compare listed cases'
+            Get-RSRegexInt -Text $text -Pattern '## 2\. Compare Directories Self-Test Suite — (\d+) runner-listed cases'
+            Get-RSRegexInt -Text $text -Pattern '--selftest-list-cases --compare-selftest`\s*\r?\nlists (\d+) cases'
+        )
+        CompareStaticRunCases = @(Get-RSRegexInts -Text $text -Pattern 'source fallback scan reports (\d+) static\s*\r?\n`SelfTest::RunCase` call sites plus explicit')
+        FileOpsListedCases = @(
+            Get-RSRegexInt -Text $text -Pattern '\|\s*Self-Tests \(in-process\)\s*\|\s*3\s*\|[^|]*,\s*(\d+)\s+FileOps listed phases'
+            Get-RSRegexInt -Text $text -Pattern '## 3\. File Operations Self-Test Suite — (\d+) runner-listed phases'
+            Get-RSRegexInt -Text $text -Pattern '--selftest-list-cases --fileops-selftest`\s*\r?\nlists (\d+) phases'
+        )
+        FileOpsActivePhases = @(Get-RSRegexInts -Text $text -Pattern 'phases: setup,\s*(\d+) active ordered phases')
+        ToolsPesterCases = @(Get-RSRegexInts -Text $text -Pattern '(\d+) Pester-style/tool cases')
+        CommandsFamilyCases = Get-RSMarkdownTableCountMap -Text $text -StartHeading '| Family | File | Tests | Coverage |' -EndHeading '## 2. Compare Directories'
+        ToolsPesterFileCases = Get-RSMarkdownTableCountMap -Text $text -StartHeading '| File | Cases | Coverage |' -EndHeading 'Fast vcpkg merge coverage:'
+    }
+}
+
 function Get-RSTestInventory {
     param(
         [Parameter(Mandatory = $true)]
@@ -164,6 +240,7 @@ function Get-RSTestInventory {
     )
 
     $commandsFiles = @(Get-ChildItem -LiteralPath (Join-Path $RepoRoot 'RedSalamander\SelfTest\Commands') -Filter '*.cpp')
+    $commandsCoordinator = Join-Path $RepoRoot 'RedSalamander\SelfTest\Commands\Commands.SelfTest.cpp'
     $compareFiles = @(Get-ChildItem -LiteralPath (Join-Path $RepoRoot 'RedSalamander\SelfTest\CompareDirectories') -Filter '*.cpp')
     $fileOpsCoordinator = Join-Path $RepoRoot 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.cpp'
     $performanceFiles = @(Get-ChildItem -LiteralPath (Join-Path $RepoRoot 'Tests\PerformanceTests2') -Filter '*.cpp')
@@ -171,6 +248,32 @@ function Get-RSTestInventory {
     $toolTestFiles = @(Get-ChildItem -LiteralPath (Join-Path $RepoRoot 'Tools\Tests') -Filter '*.Tests.ps1')
     $syntheticScript = Join-Path $RepoRoot 'Tests\vcpkg-merge-synthetic-test.ps1'
     $lockValidationScript = Join-Path $RepoRoot 'Tests\vcpkg-merge-lock-validation.ps1'
+
+    $commandsFamilyFiles = [ordered]@{
+        Settings = 'Commands.SelfTest.Settings.cpp'
+        BatchRename = 'Commands.SelfTest.BatchRename.cpp'
+        PluginConfig = 'Commands.SelfTest.PluginConfig.cpp'
+        Connections = 'Commands.SelfTest.Connections.cpp'
+        'Preferences Dispatch' = 'Commands.SelfTest.Preferences.Dispatch.cpp'
+        CompareOptions = 'Commands.SelfTest.CompareOptions.cpp'
+        Search = 'Commands.SelfTest.Search.cpp'
+        Shortcuts = 'Commands.SelfTest.Shortcuts.cpp'
+        ViewCommands = 'Commands.SelfTest.ViewCommands.cpp'
+        FileOps = 'Commands.SelfTest.FileOps.cpp'
+        Navigation = 'Commands.SelfTest.Navigation.cpp'
+        Dialogs = 'Commands.SelfTest.Dialogs.cpp'
+        ShellCommands = 'Commands.SelfTest.ShellCommands.cpp'
+    }
+    $commandsFamilyCases = [ordered]@{}
+    foreach ($entry in $commandsFamilyFiles.GetEnumerator()) {
+        $familyPath = Join-Path $RepoRoot (Join-Path 'RedSalamander\SelfTest\Commands' $entry.Value)
+        $commandsFamilyCases[$entry.Key] = Get-RSSelectStringCount -Path @($familyPath) -Pattern 'SelfTest::RunCase\('
+    }
+
+    $toolsPesterFileCases = [ordered]@{}
+    foreach ($file in ($toolTestFiles | Sort-Object Name)) {
+        $toolsPesterFileCases[$file.Name] = Get-RSSelectStringCount -Path @($file.FullName) -Pattern '^\s*It\s'
+    }
 
     $standaloneNames = @(
         'DxUiTests',
@@ -187,6 +290,8 @@ function Get-RSTestInventory {
         SelfTests = [pscustomobject]@{
             Commands = [pscustomobject]@{
                 RunCaseRegistrations = Get-RSSelectStringCount -Path @($commandsFiles.FullName) -Pattern 'SelfTest::RunCase\('
+                CoordinatorRunCaseRegistrations = Get-RSSelectStringCount -Path @($commandsCoordinator) -Pattern 'SelfTest::RunCase\('
+                FamilyRunCaseRegistrations = [pscustomobject]$commandsFamilyCases
             }
             CompareDirectories = [pscustomobject]@{
                 RunCaseRegistrations = Get-RSSelectStringCount -Path @($compareFiles.FullName) -Pattern 'SelfTest::RunCase\('
@@ -208,6 +313,7 @@ function Get-RSTestInventory {
             ToolsPester = [pscustomobject]@{
                 Cases = Get-RSSelectStringCount -Path @($toolTestFiles.FullName) -Pattern '^\s*It\s'
                 RequiresBuildToolchainCases = Get-RSPesterTagCaseCount -Files $toolTestFiles -Tag 'RequiresBuildToolchain'
+                FileCases = [pscustomobject]$toolsPesterFileCases
             }
             VcpkgMergeSynthetic = [pscustomobject]@{
                 Cases = Get-RSSelectStringCount -Path @($syntheticScript) -Pattern "Write-Host\s+'\[\d+\]"
@@ -230,6 +336,8 @@ function ConvertTo-RSTestInventoryJson {
         selfTests = [ordered]@{
             commands = [ordered]@{
                 runCaseRegistrations = $Inventory.SelfTests.Commands.RunCaseRegistrations
+                coordinatorRunCaseRegistrations = $Inventory.SelfTests.Commands.CoordinatorRunCaseRegistrations
+                familyRunCaseRegistrations = $Inventory.SelfTests.Commands.FamilyRunCaseRegistrations
             }
             compareDirectories = [ordered]@{
                 runCaseRegistrations = $Inventory.SelfTests.CompareDirectories.RunCaseRegistrations
@@ -251,6 +359,7 @@ function ConvertTo-RSTestInventoryJson {
             toolsPester = [ordered]@{
                 cases = $Inventory.Scripts.ToolsPester.Cases
                 requiresBuildToolchainCases = $Inventory.Scripts.ToolsPester.RequiresBuildToolchainCases
+                fileCases = $Inventory.Scripts.ToolsPester.FileCases
             }
             vcpkgMergeSynthetic = [ordered]@{
                 cases = $Inventory.Scripts.VcpkgMergeSynthetic.Cases

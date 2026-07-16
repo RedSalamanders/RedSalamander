@@ -37,7 +37,14 @@ struct LocalizationTargetCell
     Localization::PlaceholderValidationResult validation;
     bool hasExistingTranslation = false;
     bool dirty                  = false;
+    bool reviewed               = false;
 };
+
+namespace Workflow
+{
+struct LocalizationBatchPreview;
+struct ValidationSummary;
+} // namespace Workflow
 
 struct LocalizationReviewRow
 {
@@ -103,8 +110,8 @@ struct LocalizationReviewViewOptions
     std::wstring idFilterText;
     std::vector<std::wstring> visibleOwnerNames;
     std::vector<std::wstring> visibleCultureNames;
-    LocalizationStatusFilter statusFilter   = LocalizationStatusFilter::All;
-    LocalizationViewColumn sortColumn       = LocalizationViewColumn::Id;
+    LocalizationStatusFilter statusFilter = LocalizationStatusFilter::All;
+    LocalizationViewColumn sortColumn     = LocalizationViewColumn::Id;
     std::wstring sortCultureName;
     LocalizationSortDirection sortDirection = LocalizationSortDirection::None;
 };
@@ -136,6 +143,18 @@ public:
     [[nodiscard]] bool EnsureLocalizationReviewCulture(std::wstring_view cultureName);
     [[nodiscard]] bool UpdateLocalizationReviewTarget(size_t rowIndex, std::wstring_view cultureName, std::wstring_view targetText);
     [[nodiscard]] bool UpdateThemeColor(std::wstring_view colorKey, std::wstring_view colorText);
+    [[nodiscard]] HRESULT ImportTheme(const std::filesystem::path& path);
+    [[nodiscard]] bool DuplicateActiveTheme(std::wstring_view newId, std::wstring_view newName);
+    [[nodiscard]] bool ResetActiveTheme();
+    [[nodiscard]] bool IsThemeDirty() const noexcept;
+    [[nodiscard]] bool ApplyLocalizationBatch(const Workflow::LocalizationBatchPreview& preview);
+    [[nodiscard]] bool ApplyClipboardMatrix(size_t startRow, size_t startCultureIndex, std::wstring_view clipboardText);
+    [[nodiscard]] bool Undo();
+    [[nodiscard]] bool Redo();
+    [[nodiscard]] bool CanUndo() const noexcept;
+    [[nodiscard]] bool CanRedo() const noexcept;
+    [[nodiscard]] size_t GetDirtyLocalizationCellCount() const noexcept;
+    [[nodiscard]] Workflow::ValidationSummary Validate() const;
 
     [[nodiscard]] std::filesystem::path GetDefaultLocalizationExportPath() const;
     [[nodiscard]] std::filesystem::path GetDefaultThemeExportPath() const;
@@ -147,6 +166,20 @@ public:
     [[nodiscard]] HRESULT ExportTheme(const std::filesystem::path& path) const;
 
 private:
+    struct EditSnapshot
+    {
+        std::vector<TranslationEntry> translations;
+        std::vector<LocalizationReviewRow> localizationReviewRows;
+        Common::Settings::ThemeDefinition theme;
+        Themes::ThemeCatalog themeCatalog;
+        Common::Settings::ThemeDefinition loadedThemeBaseline;
+        size_t activeThemeIndex = 0u;
+        bool hasLocalization = true;
+        bool hasThemeCatalog = true;
+    };
+
+    void RecordUndoSnapshot();
+    void RestoreSnapshot(EditSnapshot snapshot);
     [[nodiscard]] HRESULT LoadLocalizationReview();
     [[nodiscard]] HRESULT LoadLocalizationForActiveOwner();
 
@@ -161,5 +194,8 @@ private:
     std::wstring _activeResourceOwnerName;
     size_t _activeResourceOwnerIndex = 0u;
     size_t _activeThemeIndex         = 0u;
+    Common::Settings::ThemeDefinition _loadedThemeBaseline;
+    std::vector<EditSnapshot> _undoHistory;
+    std::vector<EditSnapshot> _redoHistory;
 };
 } // namespace RedConfigure

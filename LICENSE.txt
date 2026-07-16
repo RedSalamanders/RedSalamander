@@ -27,6 +27,28 @@ are reproduced below.
 
 -------------------------------------------------------------------------------
 
+### Dracula theme palette
+
+- Snapshot: c988d3d1c9e40dffef7c28f4b99079523637d5d2
+- License: MIT
+- Copyright (c) 2023 Dracula Theme
+- Exact license text: `Themes\Licenses\Dracula.LICENSE.txt`
+
+https://github.com/dracula/dracula-theme
+
+-------------------------------------------------------------------------------
+
+### Catppuccin palette
+
+- Version: 1.8.0 (commit 07d02aa110ef9eb7e7427afca5c73ba9cf7f8ebd)
+- License: MIT
+- Copyright (c) 2021 Catppuccin
+- Exact license text: `Themes\Licenses\Catppuccin.LICENSE.txt`
+
+https://github.com/catppuccin/palette
+
+-------------------------------------------------------------------------------
+
 ### WIL (Windows Implementation Libraries)
 
 - Version: 1.0.260126.7

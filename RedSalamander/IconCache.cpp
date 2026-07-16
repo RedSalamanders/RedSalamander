@@ -25,6 +25,9 @@
 
 #include "Helpers.h"
 #include "IconCache.h"
+#ifdef ENABLE_TESTS
+#include "SelfTest/Common/SelfTestLatencyHooks.h"
+#endif
 #include "WSLDistro.h"
 
 namespace
@@ -34,6 +37,18 @@ constexpr std::wstring_view kWslLocalhostPrefix    = L"\\\\wsl.localhost\\";
 constexpr std::wstring_view kWslDollarPrefix       = L"\\\\wsl$\\";
 constexpr uint64_t kSlowIconCacheLockWaitUs        = 250u;
 constexpr uint64_t kSlowIconCacheLockHoldUs        = 250u;
+constexpr std::chrono::seconds kPathIconFailureTtl{5};
+constexpr std::chrono::milliseconds kLivePathIconFailureInitialBackoff{250};
+constexpr std::chrono::milliseconds kLivePathIconFailureMaxBackoff{4000};
+
+[[nodiscard]] std::chrono::milliseconds LivePathIconFailureBackoff(uint32_t consecutiveFailureCount) noexcept
+{
+    constexpr uint32_t kMaxBackoffShift = 4u;
+    const uint32_t failureIndex         = consecutiveFailureCount > 0u ? consecutiveFailureCount - 1u : 0u;
+    const uint32_t shift                = std::min(failureIndex, kMaxBackoffShift);
+    const auto scaledCount = kLivePathIconFailureInitialBackoff.count() * static_cast<int64_t>(uint64_t{1u} << shift);
+    return std::chrono::milliseconds{std::min(scaledCount, kLivePathIconFailureMaxBackoff.count())};
+}
 
 struct AssociationQueryKey
 {
@@ -179,6 +194,17 @@ void PerfEmitDurationWithDetail(
     std::wstring_view name, std::wstring_view detail, uint64_t durationUs, uint64_t value0 = 0, uint64_t value1 = 0, HRESULT hr = S_OK) noexcept
 {
     Debug::Perf::Emit(name, detail, durationUs, value0, value1, hr);
+}
+
+[[nodiscard]] bool ShouldAvoidRecallForIconPathLookup(DWORD fileAttributes) noexcept
+{
+    constexpr DWORD recallAttributes = FILE_ATTRIBUTE_OFFLINE | FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS | FILE_ATTRIBUTE_RECALL_ON_OPEN;
+    return (fileAttributes & recallAttributes) != 0u;
+}
+
+[[nodiscard]] DWORD NormalizeAttributesForShellAttributeIconLookup(DWORD fileAttributes) noexcept
+{
+    return (fileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0u ? FILE_ATTRIBUTE_DIRECTORY : FILE_ATTRIBUTE_NORMAL;
 }
 
 void PerfEmitSlowIconCacheLockWait(std::wstring_view detail, uint64_t durationUs) noexcept
@@ -531,6 +557,11 @@ size_t DebugGetAssociationIconCacheSize() noexcept
     std::lock_guard lock(g_associationCacheMutex);
     return g_associationToIconIndex.size();
 }
+
+uint32_t DebugGetLivePathIconFailureBackoffMs(uint32_t consecutiveFailureCount) noexcept
+{
+    return static_cast<uint32_t>(LivePathIconFailureBackoff(consecutiveFailureCount).count());
+}
 #endif
 
 IconCache& IconCache::GetInstance()
@@ -853,6 +884,10 @@ wil::unique_hicon IconCache::ExtractSystemIcon(int iconIndex, float targetDipSiz
         return {};
     }
 
+#ifdef ENABLE_TESTS
+    SelfTestLatency::Consume(SelfTestLatency::Point::IconExtractSystemIcon);
+#endif
+
     auto tryExtract = [&](IImageList* imageList) -> wil::unique_hicon
     {
         if (! imageList)
@@ -1123,11 +1158,21 @@ std::optional<int> IconCache::QuerySysIconIndexForPath(const wchar_t* path, DWOR
         return std::nullopt;
     }
 
+    const bool recallAvoided = ! useFileAttributes && ShouldAvoidRecallForIconPathLookup(fileAttributes);
+    if (recallAvoided)
+    {
+        useFileAttributes = true;
+        fileAttributes    = NormalizeAttributesForShellAttributeIconLookup(fileAttributes);
+        PerfEmitCounter(L"icons.recall_avoided_count", 1u);
+    }
+
     PathQueryKey cacheKey{};
     cacheKey.path              = path;
     cacheKey.fileAttributes    = fileAttributes;
     cacheKey.useFileAttributes = useFileAttributes;
 
+    bool failureCacheHit     = false;
+    bool failureCacheExpired = false;
     {
         const auto lockWaitStart = std::chrono::steady_clock::now();
         std::lock_guard lock(_mutex);
@@ -1137,9 +1182,41 @@ std::optional<int> IconCache::QuerySysIconIndexForPath(const wchar_t* path, DWOR
         const auto it            = _pathToIconIndex.find(cacheKey);
         if (it != _pathToIconIndex.end())
         {
-            it->second.lastAccessTime = ++_pathQueryAccessCounter;
-            return it->second.iconIndex;
+            if (it->second.lookupFailed)
+            {
+                const auto now = std::chrono::steady_clock::now();
+                const auto failureBackoff = useFileAttributes ? std::chrono::duration_cast<std::chrono::milliseconds>(kPathIconFailureTtl)
+                                                               : LivePathIconFailureBackoff(it->second.consecutiveFailureCount);
+                if (now - it->second.failureStamp < failureBackoff)
+                {
+                    it->second.lastAccessTime = ++_pathQueryAccessCounter;
+                    failureCacheHit           = true;
+                }
+                else
+                {
+                    failureCacheExpired = true;
+                }
+            }
+            else
+            {
+                it->second.lastAccessTime = ++_pathQueryAccessCounter;
+                return it->second.iconIndex;
+            }
         }
+    }
+
+    if (failureCacheHit)
+    {
+        PerfEmitCounter(L"iconcache.path_failed_lookup_cache_hit", 1u);
+        if (! useFileAttributes)
+        {
+            PerfEmitCounter(L"iconcache.path_live_lookup_failure_cache_hit", 1u);
+        }
+        return std::nullopt;
+    }
+    if (failureCacheExpired)
+    {
+        PerfEmitCounter(L"iconcache.path_failed_lookup_cache_expired", 1u);
     }
 
     // SHGetFileInfoW is called outside the lock — concurrent threads may query the same path.
@@ -1151,18 +1228,69 @@ std::optional<int> IconCache::QuerySysIconIndexForPath(const wchar_t* path, DWOR
         flags |= SHGFI_USEFILEATTRIBUTES;
     }
 
+#ifdef ENABLE_TESTS
+    HRESULT forcedLiveLookupFailure = S_OK;
+    if (! useFileAttributes)
+    {
+        SelfTestLatency::Consume(SelfTestLatency::Point::IconPathLiveLookup);
+        forcedLiveLookupFailure = SelfTestLatency::ConsumeFailure(SelfTestLatency::Point::IconPathLiveLookup);
+    }
+#endif
+
     SHFILEINFOW sfi{};
-    const auto shellStart  = std::chrono::steady_clock::now();
-    const DWORD_PTR result = SHGetFileInfoW(path, fileAttributes, &sfi, sizeof(sfi), flags);
+    const auto shellStart = std::chrono::steady_clock::now();
+    DWORD_PTR result      = 0;
+#ifdef ENABLE_TESTS
+    if (SUCCEEDED(forcedLiveLookupFailure))
+#endif
+    {
+        result = SHGetFileInfoW(path, fileAttributes, &sfi, sizeof(sfi), flags);
+    }
+#ifdef ENABLE_TESTS
+    const HRESULT lookupStatus = FAILED(forcedLiveLookupFailure) ? forcedLiveLookupFailure : (result == 0 || sfi.iIcon < 0 ? S_FALSE : S_OK);
+#else
+    const HRESULT lookupStatus = result == 0 || sfi.iIcon < 0 ? S_FALSE : S_OK;
+#endif
     PerfEmitDurationWithDetail(L"iconcache.shgetfileinfo_us",
                                useFileAttributes ? L"path_attributes" : L"path_live",
                                PerfElapsedUs(shellStart),
                                static_cast<uint64_t>(fileAttributes),
                                static_cast<uint64_t>(flags),
-                               result == 0 || sfi.iIcon < 0 ? S_FALSE : S_OK);
-    if (result == 0 || sfi.iIcon < 0)
+                               lookupStatus);
+    if (FAILED(lookupStatus) || result == 0 || sfi.iIcon < 0)
     {
-        // Don't cache failures — they may be transient (network drives, shell extensions loading).
+        if (! useFileAttributes)
+        {
+            PerfEmitCounter(L"iconcache.path_live_lookup_failed_uncached", 1u);
+        }
+
+        const auto failureStamp  = std::chrono::steady_clock::now();
+        const auto lockWaitStart = std::chrono::steady_clock::now();
+        std::lock_guard lock(_mutex);
+        PerfEmitSlowIconCacheLockWait(L"path_failure_store", PerfElapsedUs(lockWaitStart));
+        const auto lockHoldStart = std::chrono::steady_clock::now();
+        auto lockHold            = wil::scope_exit([&] { PerfEmitSlowIconCacheLockHold(L"path_failure_store", PerfElapsedUs(lockHoldStart)); });
+        EvictPathQueryBatch();
+        const auto existing = _pathToIconIndex.find(cacheKey);
+        if (existing == _pathToIconIndex.end())
+        {
+            static_cast<void>(_pathToIconIndex.emplace(
+                std::move(cacheKey), PathIconCacheEntry{-1, ++_pathQueryAccessCounter, true, failureStamp, 1u}));
+            PerfEmitCounter(L"iconcache.path_failed_lookup_cached", 1u);
+        }
+        else if (existing->second.lookupFailed)
+        {
+            existing->second.failureStamp = failureStamp;
+            existing->second.consecutiveFailureCount =
+                existing->second.consecutiveFailureCount == UINT32_MAX ? UINT32_MAX : existing->second.consecutiveFailureCount + 1u;
+            existing->second.lastAccessTime = ++_pathQueryAccessCounter;
+            PerfEmitCounter(L"iconcache.path_failed_lookup_cached", 1u);
+        }
+        else
+        {
+            existing->second.lastAccessTime = ++_pathQueryAccessCounter;
+            PerfEmitCounter(L"iconcache.duplicate_path_query_race", 1u);
+        }
         return std::nullopt;
     }
 
@@ -1173,11 +1301,14 @@ std::optional<int> IconCache::QuerySysIconIndexForPath(const wchar_t* path, DWOR
     const auto lockHoldStart = std::chrono::steady_clock::now();
     auto lockHold            = wil::scope_exit([&] { PerfEmitSlowIconCacheLockHold(L"path_store", PerfElapsedUs(lockHoldStart)); });
     EvictPathQueryBatch();
-    auto [it, inserted] = _pathToIconIndex.emplace(std::move(cacheKey), PathIconCacheEntry{sfi.iIcon, ++_pathQueryAccessCounter});
+    auto [it, inserted] = _pathToIconIndex.emplace(std::move(cacheKey), PathIconCacheEntry{sfi.iIcon, ++_pathQueryAccessCounter, false, {}, 0u});
     if (! inserted)
     {
         duplicateRace             = true;
         it->second.iconIndex      = sfi.iIcon;
+        it->second.lookupFailed   = false;
+        it->second.failureStamp   = {};
+        it->second.consecutiveFailureCount = 0u;
         it->second.lastAccessTime = ++_pathQueryAccessCounter;
     }
     if (duplicateRace)

@@ -62,6 +62,14 @@ void ClearSecretAccessAuthorization(std::wstring_view connectionId) noexcept;
 void ClearAllSecretAccessAuthorizations() noexcept;
 
 #ifdef ENABLE_TESTS
+enum class CredentialPersistenceFault : uint8_t
+{
+    None,
+    SaveOnce,
+    DeleteOnce,
+};
+
+void SetCredentialPersistenceFaultForTesting(CredentialPersistenceFault fault) noexcept;
 // Test hook: allows selftests to simulate an expired authorization timestamp without sleeping.
 void SetSecretAccessAuthorizationTickForTesting(std::wstring_view connectionId, uint64_t tick) noexcept;
 #endif

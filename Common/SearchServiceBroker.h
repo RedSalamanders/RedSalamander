@@ -9,11 +9,16 @@
 #include "LocalSearchIndexCore.h"
 #include "PlugInterfaces/FileSystem.h"
 
+#if defined(ENABLE_TESTS) && (defined(_DEBUG) || defined(RS_ASAN_DEBUG_BUILD))
+#define RS_SEARCH_TEST_HOOKS 1
+#endif
+
 namespace SearchServiceBroker
 {
 inline constexpr uint32_t kProtocolVersion      = 3u;
 inline constexpr wchar_t kPipeNameEnvVar[]      = L"REDSALAMANDER_SEARCH_SERVICE_PIPE";
 inline constexpr wchar_t kDiscoverRootsEnvVar[] = L"REDSALAMANDER_SEARCH_SERVICE_DISCOVER_ROOTS";
+inline constexpr wchar_t kClientMissingPipeRetryMsEnvVar[] = L"REDSALAMANDER_SEARCH_SERVICE_CLIENT_MISSING_PIPE_RETRY_MS";
 
 #ifdef _DEBUG
 inline constexpr wchar_t kServiceName[]     = L"RedSalamanderSearchService.Debug";
@@ -136,6 +141,7 @@ enum ServerRequestType : uint32_t
     SEARCH_SERVICE_SERVER_REQUEST_QUERY,
     SEARCH_SERVICE_SERVER_REQUEST_REBUILD,
     SEARCH_SERVICE_SERVER_REQUEST_COMPACT,
+    SEARCH_SERVICE_SERVER_REQUEST_SHUTDOWN,
 };
 
 struct ServerEvent final
@@ -176,6 +182,16 @@ struct ServerEvent final
 
 using ServerEventCallbackFn = void(STDMETHODCALLTYPE*)(const ServerEvent* event, void* cookie) noexcept;
 
+#if defined(RS_SEARCH_TEST_HOOKS)
+enum class ServerTestHook : uint8_t
+{
+    None = 0,
+    FailClientAuthImpersonationOnce,
+    RejectMarkedRoot,
+    FailMarkedClientDirectoryOpenBadNetPath,
+};
+#endif
+
 struct ServerOptions final
 {
     std::wstring pipeName;
@@ -186,6 +202,10 @@ struct ServerOptions final
     uint32_t maxRequestsBeforeExit      = 0u;
     uint32_t disconnectAfterBatches     = 0u;
     bool allowRebuildRequests           = true;
+    bool allowShutdownRequests          = false;
+#if defined(RS_SEARCH_TEST_HOOKS)
+    ServerTestHook testHook = ServerTestHook::None;
+#endif
     ServerEventCallbackFn eventCallback = nullptr;
     void* eventCookie                   = nullptr;
 };
@@ -211,6 +231,7 @@ HRESULT Query(const QueryRequest& request,
               void* candidateBatchCookie                      = nullptr) noexcept;
 HRESULT RequestRebuild(std::wstring_view rootPath) noexcept;
 HRESULT RequestCompact() noexcept;
+HRESULT RequestShutdown(std::wstring_view pipeName, uint32_t timeoutMs = 2'000u) noexcept;
 
 HRESULT RunServer(const ServerOptions& options, HANDLE stopEvent, ServerRunResult* outResult) noexcept;
 

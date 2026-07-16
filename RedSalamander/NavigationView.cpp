@@ -145,7 +145,8 @@ namespace
     return result != 0 ? L"nonzero" : L"zero";
 }
 
-void TraceNavigationWindowRaw(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam, std::wstring_view phase, std::optional<LRESULT> result = std::nullopt) noexcept
+void TraceNavigationWindowRaw(
+    HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam, std::wstring_view phase, std::optional<LRESULT> result = std::nullopt) noexcept
 {
     if (! RedSalamander::DxUi::IsContextMenuDiagnosticsEnabled())
     {
@@ -153,8 +154,8 @@ void TraceNavigationWindowRaw(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
     }
 
     POINT cursorScreen{};
-    const bool haveCursor = GetCursorPos(&cursorScreen) != FALSE; // getcursorpos-allow: diagnostic-only
-    POINT cursorClient    = cursorScreen;
+    const bool haveCursor       = GetCursorPos(&cursorScreen) != FALSE; // getcursorpos-allow: diagnostic-only
+    POINT cursorClient          = cursorScreen;
     const bool haveCursorClient = hwnd && haveCursor && ScreenToClient(hwnd, &cursorClient) != FALSE;
 
     POINT messageScreen{};
@@ -177,8 +178,8 @@ void TraceNavigationWindowRaw(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
     }
 
     RECT clientRect{};
-    const bool haveClientRect = hwnd && GetClientRect(hwnd, &clientRect) != FALSE;
-    const bool cursorInClient = haveCursorClient && haveClientRect && PtInRect(&clientRect, cursorClient) != FALSE;
+    const bool haveClientRect  = hwnd && GetClientRect(hwnd, &clientRect) != FALSE;
+    const bool cursorInClient  = haveCursorClient && haveClientRect && PtInRect(&clientRect, cursorClient) != FALSE;
     const bool messageInClient = haveMessageClient && haveClientRect && PtInRect(&clientRect, messageClient) != FALSE;
 
     const HWND windowAtCursor = haveCursor ? WindowFromPoint(cursorScreen) : nullptr;
@@ -538,15 +539,26 @@ LRESULT NavigationView::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         case WM_NCDESTROY: static_cast<void>(DrainPostedPayloadsForWindow(hwnd)); break;
         case WM_ERASEBKGND: return 1;
         case WM_NCHITTEST: return HTCLIENT;
-        case WM_MOUSEACTIVATE:
-            TraceNavigationWindowRaw(hwnd, msg, wp, lp, L"return", MA_ACTIVATE);
-            return MA_ACTIVATE;
+        case WM_MOUSEACTIVATE: TraceNavigationWindowRaw(hwnd, msg, wp, lp, L"return", MA_ACTIVATE); return MA_ACTIVATE;
         case WM_PAINT: OnPaint(); return 0;
         case WM_SETREDRAW:
         {
-            const LRESULT result = DefWindowProcW(hwnd, msg, wp, lp);
-            if (wp != FALSE)
+            const bool enableRedraw = wp != FALSE;
+            if (! enableRedraw)
             {
+                _redrawSuspended            = true;
+                _redrawSuspendedUntilTickMs = GetTickCount64() + 1000u;
+            }
+            const LRESULT result = DefWindowProcW(hwnd, msg, wp, lp);
+            if (enableRedraw)
+            {
+                if (! _embeddedDestinationMode && _editMode)
+                {
+                    _pathEditBlurSuppressActive      = true;
+                    _pathEditBlurSuppressUntilTickMs = GetTickCount64() + 2000u;
+                }
+                _redrawSuspended            = false;
+                _redrawSuspendedUntilTickMs = 0;
                 RefreshActiveEditHostAfterParentPaint();
                 InvalidateRect(hwnd, nullptr, FALSE);
             }
@@ -563,6 +575,8 @@ LRESULT NavigationView::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         case WM_SETTINGCHANGE:
         case WM_THEMECHANGED:
             ApplyDxEditHostThemes();
+            UpdatePathEditHostLayout();
+            UpdateFullPathPopupEditHostLayout();
             RefreshActiveEditHostAfterParentPaint();
             InvalidateRect(hwnd, nullptr, FALSE);
             return 0;
@@ -572,9 +586,7 @@ LRESULT NavigationView::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         case WM_CTLCOLOREDIT: return OnCtlColorEdit(reinterpret_cast<HDC>(wp), reinterpret_cast<HWND>(lp));
         case WM_LBUTTONDOWN:
         {
-            if (auto event = RedSalamander::DxUi::TryBuildPointerInputEvent(
-                    hwnd, msg, wp, lp, RedSalamander::DxUi::PointerInputSource::WindowProc);
-                event.has_value())
+            if (auto event = RedSalamander::DxUi::TryBuildPointerInputEvent(hwnd, msg, wp, lp); event.has_value())
             {
                 OnLButtonDown(event.value());
             }
@@ -582,9 +594,7 @@ LRESULT NavigationView::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         }
         case WM_LBUTTONDBLCLK:
         {
-            if (auto event = RedSalamander::DxUi::TryBuildPointerInputEvent(
-                    hwnd, msg, wp, lp, RedSalamander::DxUi::PointerInputSource::WindowProc);
-                event.has_value())
+            if (auto event = RedSalamander::DxUi::TryBuildPointerInputEvent(hwnd, msg, wp, lp); event.has_value())
             {
                 OnLButtonDblClk(event.value());
             }
@@ -592,9 +602,7 @@ LRESULT NavigationView::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         }
         case WM_MOUSEMOVE:
         {
-            if (auto event = RedSalamander::DxUi::TryBuildPointerInputEvent(
-                    hwnd, msg, wp, lp, RedSalamander::DxUi::PointerInputSource::WindowProc);
-                event.has_value())
+            if (auto event = RedSalamander::DxUi::TryBuildPointerInputEvent(hwnd, msg, wp, lp); event.has_value())
             {
                 OnMouseMove(event.value());
             }
@@ -603,9 +611,7 @@ LRESULT NavigationView::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         case WM_MOUSELEAVE: OnMouseLeave(); return 0;
         case WM_SETCURSOR: OnSetCursor(reinterpret_cast<HWND>(wp), LOWORD(lp), HIWORD(lp)); return TRUE;
         case WM_TIMER: OnTimer(static_cast<UINT_PTR>(wp)); return 0;
-        case WM_CANCELMODE:
-            TraceNavigationInputState(L"cancel-mode");
-            break;
+        case WM_CANCELMODE: TraceNavigationInputState(L"cancel-mode"); break;
         case WM_CAPTURECHANGED:
             TraceNavigationViewMenuDiagnostics(L"navigation.capture-changed",
                                                L"hwnd={:#x} newCapture={:#x} focus={:#x} active={:#x} foreground={:#x}",
@@ -678,9 +684,17 @@ LRESULT NavigationView::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             if (_requestFolderViewFocusCallback && _hWnd)
             {
                 const HWND root = GetAncestor(_hWnd.get(), GA_ROOT);
-                if (root && GetActiveWindow() != root)
+                if (! root)
                 {
-                    SetActiveWindow(root);
+                    return 0;
+                }
+                if (const HWND activeWindow = GetActiveWindow(); activeWindow && activeWindow != root)
+                {
+                    return 0;
+                }
+                if (const HWND foregroundWindow = GetForegroundWindow(); foregroundWindow && foregroundWindow != root)
+                {
+                    return 0;
                 }
 
                 _requestFolderViewFocusCallback();
@@ -826,6 +840,9 @@ void NavigationView::UpdateHoverTimerState() noexcept
 
 void NavigationView::OnDestroy()
 {
+    _redrawSuspended            = false;
+    _redrawSuspendedUntilTickMs = 0;
+    _pathEditBlurSuppressActive = false;
 
     // Kill timers
     if (_hoverTimer != 0)
@@ -918,9 +935,7 @@ void NavigationView::OnPaint()
 
     if (_queuedPresentFull)
     {
-        TraceNavigationViewMenuDiagnostics(L"navigation.paint",
-                                           L"hwnd={:#x} action=flush-full",
-                                           reinterpret_cast<uintptr_t>(_hWnd.get()));
+        TraceNavigationViewMenuDiagnostics(L"navigation.paint", L"hwnd={:#x} action=flush-full", reinterpret_cast<uintptr_t>(_hWnd.get()));
         Present(std::nullopt);
     }
     else if (_queuedPresentDirtyRect.has_value())
@@ -937,9 +952,7 @@ void NavigationView::OnPaint()
     }
     else
     {
-        TraceNavigationViewMenuDiagnostics(L"navigation.paint",
-                                           L"hwnd={:#x} action=flush-none",
-                                           reinterpret_cast<uintptr_t>(_hWnd.get()));
+        TraceNavigationViewMenuDiagnostics(L"navigation.paint", L"hwnd={:#x} action=flush-none", reinterpret_cast<uintptr_t>(_hWnd.get()));
     }
 
     _queuedPresentFull = false;
@@ -1184,8 +1197,7 @@ void NavigationView::SetPath(const std::optional<std::filesystem::path>& path)
     // A same-location refresh must not retire edit mode just because the user has edited the buffer.
     // The short-circuit additionally requires byte-equal text so a case-only change (e.g. after a
     // case-only rename of the current location) still refreshes the displayed breadcrumb strings.
-    const bool samePathText = samePath && OptionalPathTextEquals(_currentPath, nextCurrentPath) &&
-                              OptionalPathTextEquals(_currentPluginPath, nextPluginPath) &&
+    const bool samePathText = samePath && OptionalPathTextEquals(_currentPath, nextCurrentPath) && OptionalPathTextEquals(_currentPluginPath, nextPluginPath) &&
                               (_editMode || OptionalPathTextEquals(_currentEditPath, nextEditPath));
     if (samePathText && _breadcrumbLayoutCacheValid)
     {
@@ -1450,18 +1462,18 @@ void NavigationView::UpdatePathEditHostLayout() noexcept
         return;
     }
 
-    const RECT editBounds = GetPathEditBoundsRect(_sectionPathRect, _sectionHistoryRect);
-    const auto chrome     = ComputeEditChromeRects(editBounds, _dpi);
-    const int hostWidth   = static_cast<int>((std::max)(0L, chrome.editRect.right - chrome.editRect.left));
-    const int hostHeight  = static_cast<int>((std::max)(0L, chrome.editRect.bottom - chrome.editRect.top));
+    const RECT editBounds     = GetPathEditBoundsRect(_sectionPathRect, _sectionHistoryRect);
+    const auto chrome         = ComputeEditChromeRects(editBounds, _dpi);
+    const int hostWidth       = static_cast<int>((std::max)(0L, chrome.editRect.right - chrome.editRect.left));
+    const int hostHeight      = static_cast<int>((std::max)(0L, chrome.editRect.bottom - chrome.editRect.top));
     const UINT visibilityFlag = _editMode ? static_cast<UINT>(SWP_SHOWWINDOW) : static_cast<UINT>(SWP_HIDEWINDOW);
-    SetWindowPos(_pathEdit->hwnd.get(),
-                 nullptr,
-                 chrome.editRect.left,
-                 chrome.editRect.top,
-                 hostWidth,
-                 hostHeight,
-                 SWP_NOZORDER | SWP_NOACTIVATE | visibilityFlag);
+    if (_editMode && ! _embeddedDestinationMode)
+    {
+        _pathEditBlurSuppressActive      = true;
+        _pathEditBlurSuppressUntilTickMs = GetTickCount64() + 2000u;
+    }
+    SetWindowPos(
+        _pathEdit->hwnd.get(), nullptr, chrome.editRect.left, chrome.editRect.top, hostWidth, hostHeight, SWP_NOZORDER | SWP_NOACTIVATE | visibilityFlag);
 
     if (_editMode)
     {
@@ -1483,16 +1495,10 @@ void NavigationView::UpdateFullPathPopupEditHostLayout() noexcept
 
     RECT rc{};
     GetClientRect(_fullPathPopup.get(), &rc);
-    const int hostWidth  = static_cast<int>((std::max)(0L, rc.right - rc.left));
-    const int hostHeight = static_cast<int>((std::max)(0L, rc.bottom - rc.top));
+    const int hostWidth       = static_cast<int>((std::max)(0L, rc.right - rc.left));
+    const int hostHeight      = static_cast<int>((std::max)(0L, rc.bottom - rc.top));
     const UINT visibilityFlag = _fullPathPopupEditMode ? static_cast<UINT>(SWP_SHOWWINDOW) : static_cast<UINT>(SWP_HIDEWINDOW);
-    SetWindowPos(_fullPathPopupEdit->hwnd.get(),
-                 nullptr,
-                 rc.left,
-                 rc.top,
-                 hostWidth,
-                 hostHeight,
-                 SWP_NOZORDER | SWP_NOACTIVATE | visibilityFlag);
+    SetWindowPos(_fullPathPopupEdit->hwnd.get(), nullptr, rc.left, rc.top, hostWidth, hostHeight, SWP_NOZORDER | SWP_NOACTIVATE | visibilityFlag);
 
     if (_fullPathPopupEdit->field && ! _fullPathPopupEdit->field->GetAccessibleHelpText().empty())
     {
@@ -1530,26 +1536,26 @@ bool NavigationView::DebugGetSnapshot(NavigationViewDebugSnapshot& out) const no
         return false;
     }
 
-    out.dpi                     = _dpi;
-    out.editMode                = _editMode;
-    out.embeddedDestinationMode = _embeddedDestinationMode;
-    out.fullPathPopupVisible    = _fullPathPopup && IsWindowVisible(_fullPathPopup.get()) != FALSE;
-    out.fullPathPopupEditMode   = _fullPathPopupEditMode;
-    out.showMenuSection         = _showMenuSection;
-    out.showDiskInfoSection     = _showDiskInfoSection;
-    out.menuIconBitmapLoaded    = _menuIconBitmapD2D != nullptr;
-    out.historyCount            = _pathHistory.size();
-    out.historyDropdownOpenCount = _debugHistoryDropdownOpenCount;
-    out.menuRegionRect          = _sectionDriveRect;
-    out.pathRegionRect          = _sectionPathRect;
-    out.historyRegionRect       = _sectionHistoryRect;
-    out.diskInfoRegionRect      = _sectionDiskInfoRect;
-    out.debugEnterEditAttemptCount       = _debugEnterEditAttemptCount;
-    out.debugEnterEditSuccessCount       = _debugEnterEditSuccessCount;
-    out.debugEnterEditAbortCount         = _debugEnterEditAbortCount;
-    out.debugExitEditCount               = _debugExitEditCount;
-    out.debugDoubleClickActivateCount    = _debugDoubleClickActivateCount;
-    out.debugKeyboardActivateCount       = _debugKeyboardActivateCount;
+    out.dpi                               = _dpi;
+    out.editMode                          = _editMode;
+    out.embeddedDestinationMode           = _embeddedDestinationMode;
+    out.fullPathPopupVisible              = _fullPathPopup && IsWindowVisible(_fullPathPopup.get()) != FALSE;
+    out.fullPathPopupEditMode             = _fullPathPopupEditMode;
+    out.showMenuSection                   = _showMenuSection;
+    out.showDiskInfoSection               = _showDiskInfoSection;
+    out.menuIconBitmapLoaded              = _menuIconBitmapD2D != nullptr;
+    out.historyCount                      = _pathHistory.size();
+    out.historyDropdownOpenCount          = _debugHistoryDropdownOpenCount;
+    out.menuRegionRect                    = _sectionDriveRect;
+    out.pathRegionRect                    = _sectionPathRect;
+    out.historyRegionRect                 = _sectionHistoryRect;
+    out.diskInfoRegionRect                = _sectionDiskInfoRect;
+    out.debugEnterEditAttemptCount        = _debugEnterEditAttemptCount;
+    out.debugEnterEditSuccessCount        = _debugEnterEditSuccessCount;
+    out.debugEnterEditAbortCount          = _debugEnterEditAbortCount;
+    out.debugExitEditCount                = _debugExitEditCount;
+    out.debugDoubleClickActivateCount     = _debugDoubleClickActivateCount;
+    out.debugKeyboardActivateCount        = _debugKeyboardActivateCount;
     out.debugLastDoubleClickOnLastSegment = _debugLastDoubleClickOnLastSegment;
     out.debugLastDoubleClickInWhitespace  = _debugLastDoubleClickInWhitespace;
     out.debugLastDoubleClickPoint         = _debugLastDoubleClickPoint;
@@ -1604,7 +1610,7 @@ bool NavigationView::DebugGetSnapshot(NavigationViewDebugSnapshot& out) const no
     out.diskInfoHovered       = _diskInfoHovered;
     out.hoveredSegmentIndex   = _hoveredSegmentIndex;
     out.hoveredSeparatorIndex = _hoveredSeparatorIndex;
-    HWND navDropdownPopup = nullptr;
+    HWND navDropdownPopup     = nullptr;
     if (_navDropdownKind != ModernDropdownKind::None)
     {
         const HWND popup = FindOwnedVisibleDxContextMenuWindow(_hWnd.get());
@@ -1825,11 +1831,11 @@ void NavigationView::UpdateEffectiveTheme() noexcept
         const float sepBlend          = _theme.darkBase ? 0.65f : 0.55f;
         const float accentBlend       = _theme.darkBase ? 0.50f : 0.40f;
 
-        _theme.background        = background;
-        _theme.backgroundHover   = BlendColorF(background, _theme.text, hoverBlend);
-        _theme.backgroundPressed = BlendColorF(background, _theme.text, pressedBlend);
-        _theme.hoverHighlight    = _theme.backgroundHover;
-        _theme.pressedHighlight  = _theme.backgroundPressed;
+        _theme.background         = background;
+        _theme.backgroundHover    = BlendColorF(background, _theme.text, hoverBlend);
+        _theme.backgroundPressed  = BlendColorF(background, _theme.text, pressedBlend);
+        _theme.hoverHighlight     = _theme.backgroundHover;
+        _theme.pressedHighlight   = _theme.backgroundPressed;
         _theme.text               = BlendColorF(_theme.text, _theme.background, textBlend);
         _theme.separator          = BlendColorF(_theme.separator, _theme.background, sepBlend);
         _theme.accent             = BlendColorF(_theme.accent, _theme.background, accentBlend);

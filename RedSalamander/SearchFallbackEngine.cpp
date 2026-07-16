@@ -25,13 +25,13 @@ namespace SearchFallbackEngine
 {
 namespace
 {
-constexpr uint64_t kProgressIntervalItems = 128u;
-constexpr ULONGLONG kProgressIntervalMs   = 200u;
-constexpr HRESULT kCancelledHr            = HRESULT_FROM_WIN32(ERROR_CANCELLED);
-constexpr HRESULT kFileTooLargeHr         = HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
-constexpr HRESULT kAccessDeniedHr         = HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
-constexpr HRESULT kNotSupportedHr         = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
-constexpr uint32_t kMaxFollowSymlinkDepth = 1024u;
+constexpr uint64_t kProgressIntervalItems           = 128u;
+constexpr ULONGLONG kProgressIntervalMs             = 200u;
+constexpr HRESULT kCancelledHr                      = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+constexpr HRESULT kFileTooLargeHr                   = HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+constexpr HRESULT kAccessDeniedHr                   = HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+constexpr HRESULT kNotSupportedHr                   = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+constexpr uint32_t kMaxFollowSymlinkDepth           = 1024u;
 constexpr size_t kMaxQueuedFollowSymlinkDirectories = 1'000'000u;
 
 struct DirectoryVisitIdentity final
@@ -129,11 +129,7 @@ void FlagMalformedDirectoryEntry(SearchRuntime& runtime) noexcept
     runtime.warningFlags |= FILESYSTEM_SEARCH_WARNING_OVERFLOW;
 }
 
-[[nodiscard]] bool ReadFileInfoBufferEntry(SearchRuntime& runtime,
-                                           FileInfo* entry,
-                                           std::byte* base,
-                                           std::byte* end,
-                                           FileInfoBufferEntry& outEntry) noexcept
+[[nodiscard]] bool ReadFileInfoBufferEntry(SearchRuntime& runtime, FileInfo* entry, std::byte* base, std::byte* end, FileInfoBufferEntry& outEntry) noexcept
 {
     outEntry = {};
     if (entry == nullptr)
@@ -429,7 +425,9 @@ void FlagMalformedDirectoryEntry(SearchRuntime& runtime) noexcept
     DirectoryVisitIdentity identity{};
     if (FAILED(TryGetDirectoryVisitIdentity(fullPath, identity)))
     {
-        return true;
+        runtime.queuedDirectories.erase(visitKey);
+        runtime.warningFlags |= FILESYSTEM_SEARCH_WARNING_ACCESS_DENIED_SKIPPED;
+        return false;
     }
 
     if (! runtime.queuedDirectoryIdentities.insert(identity).second)
@@ -952,7 +950,7 @@ HRESULT Execute(IFileSystem* fileSystem, const FileSystemSearchQuery* query, IFi
                 return RejectRegexSearch(runtime, L"name", rejectReason);
             }
 
-            const auto flags  = runtime.matchCaseName ? std::regex_constants::ECMAScript : (std::regex_constants::ECMAScript | std::regex_constants::icase);
+            const auto flags = runtime.matchCaseName ? std::regex_constants::ECMAScript : (std::regex_constants::ECMAScript | std::regex_constants::icase);
             try
             {
                 runtime.nameRegex = std::make_unique<std::wregex>(runtime.namePattern, flags);

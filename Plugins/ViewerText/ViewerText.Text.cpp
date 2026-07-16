@@ -1,5 +1,7 @@
 #include "ViewerText.h"
 
+#include "ViewerText.SafetyHelpers.h"
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -18,6 +20,9 @@
 #include "ViewerText.ThemeHelpers.h"
 
 #include "Helpers.h"
+#include "UnicodeClipboard.h"
+#include "WindowMessages.h"
+#include "WindowSizing.h"
 
 #include "resource.h"
 
@@ -27,103 +32,24 @@ namespace
 {
 constexpr float kMonoFontSizeDip                    = 10.0f * 96.0f / 72.0f;
 constexpr uint32_t kDiffViewportHydrationMarginRows = 32u;
-
-uint32_t StableHash32(std::wstring_view text) noexcept
-{
-    uint32_t hash = 2166136261u;
-    for (wchar_t ch : text)
-    {
-        hash ^= static_cast<uint32_t>(ch);
-        hash *= 16777619u;
-    }
-    return hash;
-}
-
-COLORREF ColorFromHSV(float hueDegrees, float saturation, float value) noexcept
-{
-    const float h = std::fmod(std::max(0.0f, hueDegrees), 360.0f);
-    const float s = std::clamp(saturation, 0.0f, 1.0f);
-    const float v = std::clamp(value, 0.0f, 1.0f);
-
-    const float c = v * s;
-    const float x = c * (1.0f - std::fabs(std::fmod(h / 60.0f, 2.0f) - 1.0f));
-    const float m = v - c;
-
-    float rf = 0.0f;
-    float gf = 0.0f;
-    float bf = 0.0f;
-
-    if (h < 60.0f)
-    {
-        rf = c;
-        gf = x;
-        bf = 0.0f;
-    }
-    else if (h < 120.0f)
-    {
-        rf = x;
-        gf = c;
-        bf = 0.0f;
-    }
-    else if (h < 180.0f)
-    {
-        rf = 0.0f;
-        gf = c;
-        bf = x;
-    }
-    else if (h < 240.0f)
-    {
-        rf = 0.0f;
-        gf = x;
-        bf = c;
-    }
-    else if (h < 300.0f)
-    {
-        rf = x;
-        gf = 0.0f;
-        bf = c;
-    }
-    else
-    {
-        rf = c;
-        gf = 0.0f;
-        bf = x;
-    }
-
-    const auto toByte = [](float v01) noexcept
-    {
-        const float scaled = std::clamp(v01 * 255.0f, 0.0f, 255.0f);
-        return static_cast<BYTE>(std::lround(scaled));
-    };
-
-    const BYTE r = toByte(rf + m);
-    const BYTE g = toByte(gf + m);
-    const BYTE b = toByte(bf + m);
-    return RGB(r, g, b);
-}
+constexpr uint64_t kSparseWrapMaterializationLimit  = 65536u;
+constexpr size_t kSparseViewportLayoutLimit         = 4096u;
+constexpr size_t kSparseCheckpointCacheLimit        = 512u;
+constexpr size_t kVerticalCaretHistoryLimit         = 256u;
+constexpr int kTextStreamModuleAnchor               = 0;
 
 COLORREF ResolveAccentColor(const ViewerTheme& theme, std::wstring_view seed) noexcept
 {
     if (theme.rainbowMode)
     {
-        const uint32_t h = StableHash32(seed);
+        const uint32_t h = StableVisualHash32Utf16V1(seed);
         const float hue  = static_cast<float>(h % 360u);
         const float sat  = theme.darkBase ? 0.70f : 0.55f;
         const float val  = theme.darkBase ? 0.95f : 0.85f;
-        return ColorFromHSV(hue, sat, val);
+        return ColorRefFromHsvClampedNegativeHueToZero(hue, sat, val);
     }
 
     return ColorRefFromArgb(theme.accentArgb);
-}
-
-float DipsFromPixels(int px, UINT dpi) noexcept
-{
-    if (dpi == 0)
-    {
-        return static_cast<float>(px);
-    }
-
-    return static_cast<float>(px) * 96.0f / static_cast<float>(dpi);
 }
 
 size_t DecimalDigits(uint64_t value) noexcept
@@ -267,42 +193,136 @@ bool IsValidUtf8(const uint8_t* data, size_t size) noexcept
     return true;
 }
 
-bool CopyUnicodeTextToClipboard(HWND hwnd, const std::wstring& text) noexcept
+HRESULT HitTestCaretPosition(IDWriteTextLayout* layout,
+                             size_t textLength,
+                             size_t textPosition,
+                             float& x,
+                             float& y,
+                             DWRITE_HIT_TEST_METRICS& metrics) noexcept
 {
-    if (! OpenClipboard(hwnd))
+    x       = 0.0f;
+    y       = 0.0f;
+    metrics = {};
+    if (! layout)
     {
-        return false;
+        return E_INVALIDARG;
+    }
+    if (textLength == 0u)
+    {
+        return S_OK;
+    }
+    textPosition = std::min(textPosition, textLength);
+    const bool atEnd = textPosition == textLength;
+    const UINT32 position = static_cast<UINT32>(atEnd ? (textLength - 1u) : textPosition);
+    return layout->HitTestTextPosition(position, atEnd ? TRUE : FALSE, &x, &y, &metrics);
+}
+
+HRESULT DecodeTextWindow(const std::vector<uint8_t>& bytes,
+                         size_t convertBytes,
+                         ViewerText::FileEncoding encoding,
+                         UINT codePage,
+                         std::wstring& text) noexcept
+{
+    text.clear();
+    convertBytes = std::min(convertBytes, bytes.size());
+    if (convertBytes == 0u)
+    {
+        return S_OK;
     }
 
-    auto closeClipboard = wil::scope_exit([&] { CloseClipboard(); });
-    if (EmptyClipboard() == 0)
+    if ((encoding == ViewerText::FileEncoding::Utf16LE || encoding == ViewerText::FileEncoding::Utf16BE) && (convertBytes % 2u) == 0u)
     {
-        return false;
+        text.resize(convertBytes / 2u);
+        memcpy(text.data(), bytes.data(), convertBytes);
+        if (encoding == ViewerText::FileEncoding::Utf16BE)
+        {
+            for (wchar_t& value : text)
+            {
+                value = static_cast<wchar_t>((static_cast<uint16_t>(value) >> 8u) | (static_cast<uint16_t>(value) << 8u));
+            }
+        }
+        return S_OK;
     }
 
-    const size_t bytes = (text.size() + 1) * sizeof(wchar_t);
-    wil::unique_hglobal storage(GlobalAlloc(GMEM_MOVEABLE, bytes));
-    if (! storage)
+    if ((encoding == ViewerText::FileEncoding::Utf32LE || encoding == ViewerText::FileEncoding::Utf32BE) && (convertBytes % 4u) == 0u)
     {
-        return false;
+        const bool bigEndian = encoding == ViewerText::FileEncoding::Utf32BE;
+        text.reserve(convertBytes / 4u);
+        for (size_t offset = 0u; offset + 3u < convertBytes; offset += 4u)
+        {
+            const uint32_t codePoint = bigEndian
+                                           ? (static_cast<uint32_t>(bytes[offset]) << 24u) | (static_cast<uint32_t>(bytes[offset + 1u]) << 16u) |
+                                                 (static_cast<uint32_t>(bytes[offset + 2u]) << 8u) | static_cast<uint32_t>(bytes[offset + 3u])
+                                           : static_cast<uint32_t>(bytes[offset]) | (static_cast<uint32_t>(bytes[offset + 1u]) << 8u) |
+                                                 (static_cast<uint32_t>(bytes[offset + 2u]) << 16u) | (static_cast<uint32_t>(bytes[offset + 3u]) << 24u);
+            if (codePoint <= 0xFFFFu)
+            {
+                text.push_back(codePoint >= 0xD800u && codePoint <= 0xDFFFu ? static_cast<wchar_t>(0xFFFDu) : static_cast<wchar_t>(codePoint));
+            }
+            else if (codePoint <= 0x10FFFFu)
+            {
+                const uint32_t pair = codePoint - 0x10000u;
+                text.push_back(static_cast<wchar_t>(0xD800u + (pair >> 10u)));
+                text.push_back(static_cast<wchar_t>(0xDC00u + (pair & 0x3FFu)));
+            }
+            else
+            {
+                text.push_back(static_cast<wchar_t>(0xFFFDu));
+            }
+        }
+        return S_OK;
     }
 
-    void* buffer = GlobalLock(storage.get());
-    if (! buffer)
+    if (convertBytes > static_cast<size_t>(std::numeric_limits<int>::max()))
     {
-        return false;
+        return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
     }
-
-    memcpy(buffer, text.c_str(), bytes);
-    GlobalUnlock(storage.get());
-
-    if (SetClipboardData(CF_UNICODETEXT, storage.get()) == nullptr)
+    const int sourceLength = static_cast<int>(convertBytes);
+    const int required = MultiByteToWideChar(codePage, 0, reinterpret_cast<LPCCH>(bytes.data()), sourceLength, nullptr, 0);
+    if (required <= 0)
     {
-        return false;
+        const DWORD error = GetLastError();
+        return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_NO_UNICODE_TRANSLATION);
     }
+    text.resize(static_cast<size_t>(required));
+    const int written = MultiByteToWideChar(codePage, 0, reinterpret_cast<LPCCH>(bytes.data()), sourceLength, text.data(), required);
+    if (written <= 0)
+    {
+        const DWORD error = GetLastError();
+        text.clear();
+        return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_NO_UNICODE_TRANSLATION);
+    }
+    text.resize(static_cast<size_t>(written));
+    return S_OK;
+}
 
-    storage.release();
-    return true;
+void BuildTextLineIndexForBuffer(std::wstring_view text,
+                                 std::vector<uint32_t>& lineStarts,
+                                 std::vector<uint32_t>& lineEnds,
+                                 uint32_t& maxLineLength) noexcept
+{
+    lineStarts.clear();
+    lineEnds.clear();
+    maxLineLength = 0u;
+    size_t start  = 0u;
+    for (;;)
+    {
+        size_t end = start;
+        while (end < text.size() && text[end] != L'\r' && text[end] != L'\n')
+        {
+            end += 1u;
+        }
+        const uint32_t start32 = static_cast<uint32_t>(std::min<size_t>(start, std::numeric_limits<uint32_t>::max()));
+        const uint32_t end32   = static_cast<uint32_t>(std::min<size_t>(end, std::numeric_limits<uint32_t>::max()));
+        lineStarts.push_back(start32);
+        lineEnds.push_back(end32);
+        maxLineLength = std::max(maxLineLength, end32 - start32);
+        if (end >= text.size())
+        {
+            break;
+        }
+        start = end + ((text[end] == L'\r' && end + 1u < text.size() && text[end + 1u] == L'\n') ? 2u : 1u);
+    }
 }
 } // namespace
 
@@ -327,7 +347,7 @@ LRESULT ViewerText::OnTextViewSize(HWND hwnd, UINT32 width, UINT32 height) noexc
 
 LRESULT ViewerText::OnTextViewVScroll(HWND hwnd, UINT scrollCode) noexcept
 {
-    const uint64_t totalLines = _textVisualLineStarts.empty() ? 0u : static_cast<uint64_t>(_textVisualLineStarts.size());
+    const uint64_t totalLines = TextVisualLineCount();
     if (totalLines == 0)
     {
         return 0;
@@ -339,40 +359,82 @@ LRESULT ViewerText::OnTextViewVScroll(HWND hwnd, UINT scrollCode) noexcept
     si.cbSize = sizeof(si);
     si.fMask  = SIF_ALL;
     GetScrollInfo(hwnd, SB_VERT, &si);
+    if (_textSparseWrapActive)
+    {
+        const size_t requestedRows = std::min<size_t>(
+            kSparseViewportLayoutLimit, std::max<size_t>(2u, static_cast<size_t>(std::max<UINT>(1u, si.nPage)) + 1u));
+        RebuildSparseTextViewportLayouts(hwnd, requestedRows);
+    }
 
-    uint64_t top   = _textTopVisualLine;
+    const uint32_t previousTop = _textTopVisualLine;
+    bool rememberSparseTop     = false;
+    uint64_t top               = _textTopVisualLine;
     const int code = static_cast<int>(scrollCode);
     switch (code)
     {
-        case SB_TOP: top = 0; break;
-        case SB_BOTTOM: top = maxLine; break;
+        case SB_TOP:
+            top = 0;
+            _textSparseTopHistory.clear();
+            break;
+        case SB_BOTTOM:
+            top = maxLine;
+            _textSparseTopHistory.clear();
+            break;
         case SB_LINEUP:
-            if (top > 0)
+            if (_textSparseWrapActive && ! _textSparseTopHistory.empty())
+            {
+                top = _textSparseTopHistory.back();
+                _textSparseTopHistory.pop_back();
+            }
+            else if (top > 0)
             {
                 top -= 1;
             }
             break;
         case SB_LINEDOWN:
-            if (top < maxLine)
+            rememberSparseTop = _textSparseWrapActive;
+            if (_textSparseWrapActive && _textSparseViewportAnchors.size() > 1u)
+            {
+                top = _textSparseViewportAnchors[1u];
+            }
+            else if (top < maxLine)
             {
                 top += 1;
             }
             break;
         case SB_PAGEUP:
         {
-            const uint64_t page = std::max<uint64_t>(1u, static_cast<uint64_t>(si.nPage));
-            top                 = (top > page) ? (top - page) : 0;
+            if (_textSparseWrapActive && ! _textSparseTopHistory.empty())
+            {
+                top = _textSparseTopHistory.back();
+                _textSparseTopHistory.pop_back();
+            }
+            else
+            {
+                const uint64_t page = std::max<uint64_t>(1u, static_cast<uint64_t>(si.nPage));
+                top                 = (top > page) ? (top - page) : 0;
+            }
             break;
         }
         case SB_PAGEDOWN:
         {
+            rememberSparseTop = _textSparseWrapActive;
             const uint64_t page = std::max<uint64_t>(1u, static_cast<uint64_t>(si.nPage));
-            top                 = std::min<uint64_t>(maxLine, top + page);
+            if (_textSparseWrapActive && _textSparseViewportAnchors.size() > 1u)
+            {
+                const size_t targetRow = std::min<size_t>(static_cast<size_t>(page), _textSparseViewportAnchors.size() - 1u);
+                top                    = _textSparseViewportAnchors[targetRow];
+            }
+            else
+            {
+                top = std::min<uint64_t>(maxLine, top + page);
+            }
             break;
         }
         case SB_THUMBTRACK:
         case SB_THUMBPOSITION:
         {
+            _textSparseTopHistory.clear();
             const int pos = (code == SB_THUMBTRACK) ? si.nTrackPos : si.nPos;
             if (maxLine <= static_cast<uint64_t>(std::numeric_limits<int>::max()))
             {
@@ -392,6 +454,15 @@ LRESULT ViewerText::OnTextViewVScroll(HWND hwnd, UINT scrollCode) noexcept
     if (top > maxLine)
     {
         top = maxLine;
+    }
+    if (rememberSparseTop && top != previousTop)
+    {
+        constexpr size_t kSparseTopHistoryLimit = 4096u;
+        if (_textSparseTopHistory.size() >= kSparseTopHistoryLimit)
+        {
+            _textSparseTopHistory.erase(_textSparseTopHistory.begin());
+        }
+        _textSparseTopHistory.push_back(previousTop);
     }
 
     if (top == _textTopVisualLine)
@@ -516,7 +587,7 @@ LRESULT ViewerText::OnTextViewMouseWheel(HWND hwnd, int wheelDelta) noexcept
     }
 
     const int signedDelta     = -steps * static_cast<int>(linesPerNotch);
-    const uint64_t totalLines = _textVisualLineStarts.empty() ? 0u : static_cast<uint64_t>(_textVisualLineStarts.size());
+    const uint64_t totalLines = TextVisualLineCount();
     if (totalLines == 0)
     {
         return 0;
@@ -525,13 +596,48 @@ LRESULT ViewerText::OnTextViewMouseWheel(HWND hwnd, int wheelDelta) noexcept
     uint64_t top = _textTopVisualLine;
     if (signedDelta < 0)
     {
-        const uint64_t d = static_cast<uint64_t>(-signedDelta);
-        top              = (top > d) ? (top - d) : 0;
+        if (_textSparseWrapActive && ! _textSparseTopHistory.empty())
+        {
+            top = _textSparseTopHistory.back();
+            _textSparseTopHistory.pop_back();
+        }
+        else
+        {
+            const uint64_t d = static_cast<uint64_t>(-signedDelta);
+            top              = (top > d) ? (top - d) : 0;
+        }
     }
     else
     {
         const uint64_t maxLine = totalLines - 1;
-        top                    = std::min<uint64_t>(maxLine, top + static_cast<uint64_t>(signedDelta));
+        if (_textSparseWrapActive)
+        {
+            const size_t requestedRows = std::min<size_t>(
+                kSparseViewportLayoutLimit, static_cast<size_t>(signedDelta) + 1u);
+            RebuildSparseTextViewportLayouts(hwnd, requestedRows);
+            if (_textSparseViewportAnchors.size() > 1u)
+            {
+                const size_t targetRow = std::min<size_t>(static_cast<size_t>(signedDelta), _textSparseViewportAnchors.size() - 1u);
+                top                    = _textSparseViewportAnchors[targetRow];
+            }
+            else
+            {
+                top = std::min<uint64_t>(maxLine, top + static_cast<uint64_t>(signedDelta));
+            }
+        }
+        else
+        {
+            top = std::min<uint64_t>(maxLine, top + static_cast<uint64_t>(signedDelta));
+        }
+        if (_textSparseWrapActive && top != _textTopVisualLine)
+        {
+            constexpr size_t kSparseTopHistoryLimit = 4096u;
+            if (_textSparseTopHistory.size() >= kSparseTopHistoryLimit)
+            {
+                _textSparseTopHistory.erase(_textSparseTopHistory.begin());
+            }
+            _textSparseTopHistory.push_back(_textTopVisualLine);
+        }
     }
 
     if (top != _textTopVisualLine)
@@ -560,7 +666,7 @@ LRESULT ViewerText::OnTextViewMouseWheel(HWND hwnd, int wheelDelta) noexcept
         {
             static_cast<void>(TryNavigateTextStream(GetAncestor(hwnd, GA_ROOT), true));
         }
-        else if (signedDelta > 0 && ! _textVisualLineStarts.empty() && _textTopVisualLine >= static_cast<uint32_t>(_textVisualLineStarts.size() - 1))
+        else if (signedDelta > 0 && totalLines > 0u && _textTopVisualLine >= static_cast<uint32_t>(std::min<uint64_t>(totalLines - 1u, std::numeric_limits<uint32_t>::max())))
         {
             static_cast<void>(TryNavigateTextStream(GetAncestor(hwnd, GA_ROOT), false));
         }
@@ -569,19 +675,258 @@ LRESULT ViewerText::OnTextViewMouseWheel(HWND hwnd, int wheelDelta) noexcept
     return 0;
 }
 
-std::optional<ViewerText::TextViewHitTestResult> ViewerText::HitTestTextView(HWND hwnd, POINT pt) const noexcept
+void ViewerText::ClearTextLayoutCache() noexcept
 {
-    if (! hwnd || _textVisualLineStarts.empty() || _textVisualLineLogical.empty() || _textVisualLineLayouts.empty())
+    _textLayoutCache.clear();
+    _textUncachedLayout.reset();
+    _textLayoutCacheBytes = 0u;
+    _textSparseViewportLayouts.clear();
+    _textSparseViewportAnchors.clear();
+    _textSparseViewportCheckpoints.clear();
+    _textSparseCheckpointCache.clear();
+    _textSparseTopHistory.clear();
+    _textVerticalCaretHistory.clear();
+    _textPreferredXValid = false;
+    _textSparseViewportTop           = 0u;
+    _textSparseViewportRequestedRows = 0u;
+    _textSparseViewportComplete      = false;
+    if (_textLayoutGeneration == std::numeric_limits<uint64_t>::max())
+    {
+        _textLayoutGeneration = 1u;
+    }
+    else
+    {
+        _textLayoutGeneration += 1u;
+    }
+}
+
+size_t ViewerText::NormalizeTextPosition(size_t index) const noexcept
+{
+    index = std::min(index, _textBuffer.size());
+    if (index > 0u && index < _textBuffer.size())
+    {
+        const wchar_t previous = _textBuffer[index - 1u];
+        const wchar_t current  = _textBuffer[index];
+        if (previous >= static_cast<wchar_t>(0xD800u) && previous <= static_cast<wchar_t>(0xDBFFu) &&
+            current >= static_cast<wchar_t>(0xDC00u) && current <= static_cast<wchar_t>(0xDFFFu))
+        {
+            index += 1u;
+        }
+    }
+    return std::min(index, _textBuffer.size());
+}
+
+size_t ViewerText::NormalizeTextSegmentStart(size_t index) const noexcept
+{
+    index = std::min(index, _textBuffer.size());
+    if (index > 0u && index < _textBuffer.size())
+    {
+        const wchar_t previous = _textBuffer[index - 1u];
+        const wchar_t current  = _textBuffer[index];
+        if (previous >= static_cast<wchar_t>(0xD800u) && previous <= static_cast<wchar_t>(0xDBFFu) &&
+            current >= static_cast<wchar_t>(0xDC00u) && current <= static_cast<wchar_t>(0xDFFFu))
+        {
+            index -= 1u;
+        }
+    }
+    return index;
+}
+
+size_t ViewerText::PreviousTextPosition(size_t index) const noexcept
+{
+    index = std::min(index, _textBuffer.size());
+    if (index == 0u)
+    {
+        return 0u;
+    }
+
+    size_t previous = index - 1u;
+    if (previous > 0u && _textBuffer[previous] >= static_cast<wchar_t>(0xDC00u) && _textBuffer[previous] <= static_cast<wchar_t>(0xDFFFu) &&
+        _textBuffer[previous - 1u] >= static_cast<wchar_t>(0xD800u) && _textBuffer[previous - 1u] <= static_cast<wchar_t>(0xDBFFu))
+    {
+        previous -= 1u;
+    }
+    return previous;
+}
+
+size_t ViewerText::NextTextPosition(size_t index) const noexcept
+{
+    index = std::min(index, _textBuffer.size());
+    if (index >= _textBuffer.size())
+    {
+        return _textBuffer.size();
+    }
+
+    size_t next = index + 1u;
+    if (next < _textBuffer.size() && _textBuffer[index] >= static_cast<wchar_t>(0xD800u) && _textBuffer[index] <= static_cast<wchar_t>(0xDBFFu) &&
+        _textBuffer[next] >= static_cast<wchar_t>(0xDC00u) && _textBuffer[next] <= static_cast<wchar_t>(0xDFFFu))
+    {
+        next += 1u;
+    }
+    return std::min(next, _textBuffer.size());
+}
+
+size_t ViewerText::FindTextSegmentEnd(size_t startIndex, size_t lineEndIndex, float widthDip) noexcept
+{
+    startIndex   = NormalizeTextSegmentStart(std::min(startIndex, _textBuffer.size()));
+    lineEndIndex = NormalizeTextPosition(std::min(std::max(lineEndIndex, startIndex), _textBuffer.size()));
+    if (startIndex >= lineEndIndex)
+    {
+        return startIndex;
+    }
+
+    const float boundedWidth = std::max(1.0f, widthDip);
+    const float charWidth    = std::max(1.0f, _textCharWidthDip);
+    const double estimatedColumnsValue = std::clamp(
+        std::ceil(static_cast<double>(boundedWidth) / static_cast<double>(charWidth)), 1.0, 4096.0);
+    const size_t estimatedColumns = static_cast<size_t>(estimatedColumnsValue);
+    constexpr size_t kCandidateCodeUnitLimit = 16u * 1024u;
+    const size_t candidateCodeUnits = std::min(kCandidateCodeUnitLimit, estimatedColumns * 4u + 16u);
+    const size_t candidateEnd = NormalizeTextPosition(std::min(lineEndIndex, startIndex + candidateCodeUnits));
+    IDWriteTextLayout* layout  = GetTextSegmentLayout(startIndex, candidateEnd, boundedWidth);
+    if (! layout)
+    {
+        return std::min(lineEndIndex, NextTextPosition(startIndex));
+    }
+
+    DWRITE_TEXT_METRICS textMetrics{};
+    if (SUCCEEDED(layout->GetMetrics(&textMetrics)) && textMetrics.widthIncludingTrailingWhitespace <= boundedWidth + 0.25f)
+    {
+        return candidateEnd;
+    }
+
+    BOOL trailing = FALSE;
+    BOOL inside   = FALSE;
+    DWRITE_HIT_TEST_METRICS hitMetrics{};
+    const HRESULT hitHr = layout->HitTestPoint(std::max(0.0f, boundedWidth - 0.25f),
+                                                std::max(1.0f, _textLineHeightDip) * 0.5f,
+                                                &trailing,
+                                                &inside,
+                                                &hitMetrics);
+    if (FAILED(hitHr))
+    {
+        return std::min(lineEndIndex, NextTextPosition(startIndex));
+    }
+
+    size_t localEnd = static_cast<size_t>(hitMetrics.textPosition);
+    if (hitMetrics.left + hitMetrics.width <= boundedWidth + 0.25f)
+    {
+        localEnd += static_cast<size_t>(hitMetrics.length);
+    }
+    size_t segmentEnd = NormalizeTextPosition(std::min(candidateEnd, startIndex + localEnd));
+    if (segmentEnd <= startIndex)
+    {
+        segmentEnd = std::min(lineEndIndex, NextTextPosition(startIndex));
+    }
+    return segmentEnd;
+}
+
+IDWriteTextLayout* ViewerText::GetTextSegmentLayout(size_t startIndex, size_t endIndex, float widthDip) noexcept
+{
+    _textUncachedLayout.reset();
+    if (! _dwriteFactory || ! _textViewFormat)
+    {
+        return nullptr;
+    }
+
+    startIndex = NormalizeTextPosition(std::min(startIndex, _textBuffer.size()));
+    endIndex   = NormalizeTextPosition(std::min(std::max(endIndex, startIndex), _textBuffer.size()));
+    const size_t length = endIndex - startIndex;
+    if (length > static_cast<size_t>(std::numeric_limits<UINT32>::max()))
+    {
+        return nullptr;
+    }
+
+    const float boundedWidth = std::max(1.0f, widthDip);
+    const uint32_t widthKey  = static_cast<uint32_t>(std::min<double>(static_cast<double>(std::numeric_limits<uint32_t>::max()),
+                                                                     std::round(static_cast<double>(boundedWidth) * 1000.0)));
+    for (auto& entry : _textLayoutCache)
+    {
+        if (entry.generation == _textLayoutGeneration && entry.startIndex == static_cast<uint32_t>(startIndex) &&
+            entry.endIndex == static_cast<uint32_t>(endIndex) && entry.widthMilliDip == widthKey && entry.layout)
+        {
+            entry.lastUse = ++_textLayoutUseCounter;
+#ifdef _DEBUG
+            _debugTextLayoutCacheHits += 1u;
+#endif
+            return entry.layout.get();
+        }
+    }
+
+#ifdef _DEBUG
+    _debugTextLayoutCacheMisses += 1u;
+#endif
+    wil::com_ptr<IDWriteTextLayout> layout;
+    const HRESULT createHr = _dwriteFactory->CreateTextLayout(_textBuffer.data() + startIndex,
+                                                               static_cast<UINT32>(length),
+                                                               _textViewFormat.get(),
+                                                               boundedWidth,
+                                                               std::max(1.0f, _textLineHeightDip),
+                                                               layout.put());
+    if (FAILED(createHr) || ! layout)
+    {
+        Debug::Error(L"ViewerText: CreateTextLayout failed for visible text segment (start={}, length={}, hr=0x{:08X}).",
+                     startIndex,
+                     length,
+                     static_cast<unsigned long>(createHr));
+        return nullptr;
+    }
+
+    static_cast<void>(layout->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP));
+    static_cast<void>(layout->SetIncrementalTabStop(std::max(1.0f, _textCharWidthDip * 4.0f)));
+
+    const size_t estimatedBytes    = sizeof(TextLayoutCacheEntry) + length * sizeof(wchar_t) + 4096u;
+    const size_t effectiveMaxBytes = std::max<size_t>(8192u, _textLayoutCacheMaxBytes);
+    if (estimatedBytes > effectiveMaxBytes)
+    {
+        _textUncachedLayout = std::move(layout);
+        return _textUncachedLayout.get();
+    }
+
+    while (! _textLayoutCache.empty() &&
+           (_textLayoutCache.size() >= std::max<size_t>(1u, _textLayoutCacheMaxEntries) ||
+            _textLayoutCacheBytes + estimatedBytes > effectiveMaxBytes))
+    {
+        const auto oldest = std::min_element(_textLayoutCache.begin(), _textLayoutCache.end(), [](const auto& left, const auto& right) noexcept {
+            return left.lastUse < right.lastUse;
+        });
+        _textLayoutCacheBytes -= std::min(_textLayoutCacheBytes, oldest->estimatedBytes);
+        _textLayoutCache.erase(oldest);
+        _textLayoutCacheEvictions += 1u;
+    }
+
+    TextLayoutCacheEntry entry{};
+    entry.startIndex    = static_cast<uint32_t>(startIndex);
+    entry.endIndex      = static_cast<uint32_t>(endIndex);
+    entry.widthMilliDip = widthKey;
+    entry.generation    = _textLayoutGeneration;
+    entry.lastUse       = ++_textLayoutUseCounter;
+    entry.estimatedBytes = estimatedBytes;
+    entry.layout         = std::move(layout);
+    _textLayoutCacheBytes += estimatedBytes;
+    _textLayoutCache.push_back(std::move(entry));
+    return _textLayoutCache.back().layout.get();
+}
+
+std::optional<ViewerText::TextViewHitTestResult> ViewerText::HitTestTextView(HWND hwnd, POINT pt) noexcept
+{
+    const uint64_t totalVisual = TextVisualLineCount();
+    if (! hwnd || totalVisual == 0u)
     {
         return std::nullopt;
     }
 
+    static_cast<void>(EnsureTextViewDirect2D(hwnd));
+
     const UINT dpi        = GetDpiForWindow(hwnd);
-    const float xDip      = DipsFromPixels(pt.x, dpi);
-    const float yDip      = DipsFromPixels(pt.y, dpi);
+    const float xDip      = Common::WindowSizing::PixelToDip(static_cast<float>(pt.x), static_cast<float>(dpi));
+    const float yDip      = Common::WindowSizing::PixelToDip(static_cast<float>(pt.y), static_cast<float>(dpi));
     const float marginDip = RoundDipToDevicePixels(6.0f, dpi);
     const float charW     = (_textCharWidthDip > 0.0f) ? _textCharWidthDip : 8.0f;
     const float lineH     = (_textLineHeightDip > 0.0f) ? _textLineHeightDip : 14.0f;
+    RECT client{};
+    GetClientRect(hwnd, &client);
+    const float widthDip = Common::WindowSizing::PixelToDip(static_cast<float>(client.right - client.left), static_cast<float>(dpi));
     if (lineH <= 0.0f)
     {
         return std::nullopt;
@@ -597,12 +942,62 @@ std::optional<ViewerText::TextViewHitTestResult> ViewerText::HitTestTextView(HWN
 
     const float relY      = std::max(0.0f, yDip - marginDip);
     const uint64_t row    = static_cast<uint64_t>(std::floor(relY / lineH));
-    const uint64_t visual = std::min<uint64_t>(static_cast<uint64_t>(_textTopVisualLine) + row, static_cast<uint64_t>(_textVisualLineStarts.size() - 1u));
-    const TextVisualLineLayoutEntry& layout = _textVisualLineLayouts[static_cast<size_t>(visual)];
+    if (_textSparseWrapActive)
+    {
+        RebuildSparseTextViewportLayouts(hwnd, static_cast<size_t>(std::min<uint64_t>(row + 1u, kSparseViewportLayoutLimit)));
+        if (row >= _textSparseViewportLayouts.size())
+        {
+            return std::nullopt;
+        }
+    }
+    TextVisualLineLayoutEntry layout{};
+    if (_textSparseWrapActive)
+    {
+        layout = _textSparseViewportLayouts[static_cast<size_t>(row)];
+    }
+    else
+    {
+        const uint64_t visual = std::min<uint64_t>(static_cast<uint64_t>(_textTopVisualLine) + row, totalVisual - 1u);
+        if (! TryGetTextVisualLineLayout(visual, layout))
+        {
+            return std::nullopt;
+        }
+    }
     if (layout.logicalLine >= _textLineEnds.size())
     {
         return std::nullopt;
     }
+
+    const auto hitSpan = [&](size_t start, size_t end, float left, float right) noexcept -> size_t
+    {
+        start = NormalizeTextPosition(std::min(start, _textBuffer.size()));
+        end   = NormalizeTextPosition(std::min(std::max(end, start), _textBuffer.size()));
+        const float spanWidth = std::max(1.0f, right - left);
+        if (! _wrap && end > start)
+        {
+            const size_t visibleCodeUnits = static_cast<size_t>(std::ceil(spanWidth / std::max(1.0f, charW))) * 4u + 16u;
+            end = NormalizeTextPosition(std::min(end, start + visibleCodeUnits));
+        }
+
+        IDWriteTextLayout* textLayout = GetTextSegmentLayout(start, end, spanWidth);
+        if (! textLayout)
+        {
+            return start;
+        }
+
+        BOOL trailing = FALSE;
+        BOOL inside   = FALSE;
+        DWRITE_HIT_TEST_METRICS metrics{};
+        const HRESULT hitHr = textLayout->HitTestPoint(std::max(0.0f, xDip - left), lineH * 0.5f, &trailing, &inside, &metrics);
+        if (FAILED(hitHr))
+        {
+            Debug::Error(L"ViewerText: HitTestPoint failed for visible text segment (hr=0x{:08X}).", static_cast<unsigned long>(hitHr));
+            return start;
+        }
+
+        const size_t local = static_cast<size_t>(metrics.textPosition) + (trailing != FALSE ? static_cast<size_t>(metrics.length) : 0u);
+        return NormalizeTextPosition(std::min(end, start + local));
+    };
 
     size_t index = 0u;
     if (layout.splitPanes && charW > 0.0f)
@@ -614,30 +1009,20 @@ std::optional<ViewerText::TextViewHitTestResult> ViewerText::HitTestTextView(HWN
 
         if (xDip < separatorLeft)
         {
-            const float relX      = std::max(0.0f, xDip - textStartX);
-            const uint32_t col    = static_cast<uint32_t>(std::floor(relX / charW));
-            const uint32_t segLen = layout.leftEndIndex >= layout.leftStartIndex ? (layout.leftEndIndex - layout.leftStartIndex) : 0u;
-            const uint32_t idx32  = layout.leftStartIndex + std::min<uint32_t>(col, segLen);
-            index                 = std::min<size_t>(static_cast<size_t>(idx32), _textBuffer.size());
+            index = hitSpan(layout.leftStartIndex, layout.leftEndIndex, textStartX, separatorLeft);
         }
         else if (xDip < separatorRight)
         {
-            index = std::min<size_t>(static_cast<size_t>(layout.separatorStartIndex), _textBuffer.size());
+            index = NormalizeTextPosition(std::min<size_t>(static_cast<size_t>(layout.separatorStartIndex), _textBuffer.size()));
         }
         else
         {
-            const float relX      = std::max(0.0f, xDip - separatorRight);
-            const uint32_t col    = static_cast<uint32_t>(std::floor(relX / charW));
-            const uint32_t segLen = layout.rightEndIndex >= layout.rightStartIndex ? (layout.rightEndIndex - layout.rightStartIndex) : 0u;
-            const uint32_t idx32  = layout.rightStartIndex + std::min<uint32_t>(col, segLen);
-            index                 = std::min<size_t>(static_cast<size_t>(idx32), _textBuffer.size());
+            index = hitSpan(layout.rightStartIndex, layout.rightEndIndex, separatorRight, separatorRight +
+                                                                                              static_cast<float>(layout.rightPaneColumns) * charW);
         }
     }
     else
     {
-        const float relX   = std::max(0.0f, xDip - textStartX);
-        const uint32_t col = charW <= 0.0f ? 0u : static_cast<uint32_t>(std::floor(relX / charW));
-
         uint32_t segmentStart = layout.segmentStartIndex;
         uint32_t segmentEnd   = layout.segmentEndIndex;
         if (! _wrap && segmentEnd >= segmentStart && _textLeftColumn != 0u)
@@ -646,10 +1031,7 @@ std::optional<ViewerText::TextViewHitTestResult> ViewerText::HitTestTextView(HWN
             segmentStart += skip;
         }
 
-        const uint32_t segLen     = segmentEnd >= segmentStart ? (segmentEnd - segmentStart) : 0u;
-        const uint32_t colClamped = std::min<uint32_t>(col, segLen);
-        const uint32_t idx32      = segmentStart + colClamped;
-        index                     = std::min<size_t>(static_cast<size_t>(idx32), _textBuffer.size());
+        index = hitSpan(segmentStart, segmentEnd, textStartX, std::max(textStartX + 1.0f, widthDip - marginDip));
     }
 
     return TextViewHitTestResult{index, layout.logicalLine};
@@ -676,13 +1058,38 @@ bool ViewerText::IsClickableHiddenDiffBannerLogicalLine(uint32_t logicalLine) co
 
 bool ViewerText::DebugClickTextLogicalLine(HWND hwnd, uint32_t logicalLine) noexcept
 {
-    if (! hwnd || _viewMode != ViewMode::Text || logicalLine >= _textLineStarts.size() || _textVisualLineLogical.empty())
+    if (! hwnd || _viewMode != ViewMode::Text || logicalLine >= _textLineStarts.size() ||
+        (! _textSparseWrapActive && _textVisualLineLogical.empty()))
     {
         return false;
     }
 
     const auto findVisibleVisualLine = [&](uint32_t targetLogicalLine) noexcept -> std::optional<size_t>
     {
+        if (_textSparseWrapActive)
+        {
+            RECT client{};
+            GetClientRect(hwnd, &client);
+            const UINT dpi        = GetDpiForWindow(hwnd);
+            const float heightDip = std::max(
+                1.0f, Common::WindowSizing::PixelToDip(static_cast<float>(client.bottom - client.top), static_cast<float>(dpi)));
+            const float lineH     = (_textLineHeightDip > 0.0f) ? _textLineHeightDip : 14.0f;
+            const size_t pageRows = std::max<size_t>(1u, static_cast<size_t>(std::ceil(heightDip / lineH)) + 1u);
+            RebuildSparseTextViewportLayouts(hwnd, pageRows);
+            for (size_t row = 0u; row < _textSparseViewportLayouts.size(); ++row)
+            {
+                if (_textSparseViewportLayouts[row].logicalLine == targetLogicalLine)
+                {
+                    if (row >= _textSparseViewportAnchors.size())
+                    {
+                        return std::nullopt;
+                    }
+                    return static_cast<size_t>(_textSparseViewportAnchors[row]);
+                }
+            }
+            return std::nullopt;
+        }
+
         const auto it =
             std::lower_bound(_textVisualLineLogical.begin(), _textVisualLineLogical.end(), targetLogicalLine, [](uint32_t left, uint32_t right) noexcept {
             return left < right;
@@ -701,7 +1108,7 @@ bool ViewerText::DebugClickTextLogicalLine(HWND hwnd, uint32_t logicalLine) noex
         RECT client{};
         GetClientRect(hwnd, &client);
         const UINT dpi          = GetDpiForWindow(hwnd);
-        const float heightDip   = DipsFromPixels(static_cast<int>(client.bottom - client.top), dpi);
+        const float heightDip   = Common::WindowSizing::PixelToDip(static_cast<float>(client.bottom - client.top), static_cast<float>(dpi));
         const float marginDip   = RoundDipToDevicePixels(6.0f, dpi);
         const float lineH       = (_textLineHeightDip > 0.0f) ? _textLineHeightDip : 14.0f;
         const float rowIndexDip = static_cast<float>(visualLine - static_cast<size_t>(_textTopVisualLine));
@@ -714,12 +1121,12 @@ bool ViewerText::DebugClickTextLogicalLine(HWND hwnd, uint32_t logicalLine) noex
         return visualLine;
     };
 
+    // The debug action is also used to address sparse rows deterministically. Put
+    // the requested logical line at the viewport origin before deriving its hit
+    // coordinates; otherwise an already-visible row retains the preceding sparse
+    // anchor as the top row and cannot validate its own pane checkpoints.
+    ScrollTextViewportToLogicalLine(hwnd, logicalLine);
     std::optional<size_t> visualLine = findVisibleVisualLine(logicalLine);
-    if (! visualLine.has_value())
-    {
-        ScrollTextViewportToLogicalLine(hwnd, logicalLine);
-        visualLine = findVisibleVisualLine(logicalLine);
-    }
 
     if (! visualLine.has_value())
     {
@@ -729,8 +1136,8 @@ bool ViewerText::DebugClickTextLogicalLine(HWND hwnd, uint32_t logicalLine) noex
     RECT client{};
     GetClientRect(hwnd, &client);
     const UINT dpi        = GetDpiForWindow(hwnd);
-    const float widthDip  = DipsFromPixels(static_cast<int>(client.right - client.left), dpi);
-    const float heightDip = DipsFromPixels(static_cast<int>(client.bottom - client.top), dpi);
+    const float widthDip  = Common::WindowSizing::PixelToDip(static_cast<float>(client.right - client.left), static_cast<float>(dpi));
+    const float heightDip = Common::WindowSizing::PixelToDip(static_cast<float>(client.bottom - client.top), static_cast<float>(dpi));
     const float marginDip = RoundDipToDevicePixels(6.0f, dpi);
     const float charW     = (_textCharWidthDip > 0.0f) ? _textCharWidthDip : 8.0f;
     const float lineH     = (_textLineHeightDip > 0.0f) ? _textLineHeightDip : 14.0f;
@@ -743,7 +1150,18 @@ bool ViewerText::DebugClickTextLogicalLine(HWND hwnd, uint32_t logicalLine) noex
         textStartX += static_cast<float>(gutterChars) * charW;
     }
 
-    const float rowIndexDip = static_cast<float>(visualLine.value() - static_cast<size_t>(_textTopVisualLine));
+    size_t visibleRowIndex = visualLine.value() - static_cast<size_t>(_textTopVisualLine);
+    if (_textSparseWrapActive)
+    {
+        const auto anchor = std::find(_textSparseViewportAnchors.begin(), _textSparseViewportAnchors.end(), visualLine.value());
+        if (anchor == _textSparseViewportAnchors.end())
+        {
+            return false;
+        }
+        visibleRowIndex = static_cast<size_t>(std::distance(_textSparseViewportAnchors.begin(), anchor));
+    }
+
+    const float rowIndexDip = static_cast<float>(visibleRowIndex);
     const float xDip        = std::min(widthDip - marginDip, textStartX + std::max(charW, 12.0f));
     const float yDip        = marginDip + rowIndexDip * lineH + lineH * 0.5f;
     if (xDip < 0.0f || yDip < 0.0f || xDip >= widthDip || yDip >= heightDip)
@@ -787,6 +1205,8 @@ LRESULT ViewerText::OnTextViewLButtonDown(HWND hwnd, POINT pt) noexcept
     }
     _textSelActive = index;
     _textSelecting = true;
+    _textPreferredXValid = false;
+    _textVerticalCaretHistory.clear();
 
     InvalidateRect(hwnd, nullptr, TRUE);
     if (_hWnd)
@@ -796,7 +1216,7 @@ LRESULT ViewerText::OnTextViewLButtonDown(HWND hwnd, POINT pt) noexcept
     return 0;
 }
 
-LRESULT ViewerText::OnTextViewMouseMove(HWND hwnd, POINT pt) noexcept
+LRESULT ViewerText::OnTextViewMouseMove(HWND hwnd, POINT pt, WPARAM keyState) noexcept
 {
 #if defined(ENABLE_TESTS) && defined(_DEBUG)
     _debugHasLastTextViewMouseMoveClientPoint = true;
@@ -806,7 +1226,7 @@ LRESULT ViewerText::OnTextViewMouseMove(HWND hwnd, POINT pt) noexcept
     _debugLastTextViewMouseMoveLogicalLine    = debugHit.has_value() ? debugHit->logicalLine : static_cast<size_t>(-1);
 #endif
 
-    if (! _textSelecting || (GetKeyState(VK_LBUTTON) & 0x8000) == 0)
+    if (! _textSelecting || (keyState & MK_LBUTTON) == 0u)
     {
         return 0;
     }
@@ -819,6 +1239,8 @@ LRESULT ViewerText::OnTextViewMouseMove(HWND hwnd, POINT pt) noexcept
 
     _textSelActive  = hit->bufferIndex;
     _textCaretIndex = _textSelActive;
+    _textPreferredXValid = false;
+    _textVerticalCaretHistory.clear();
 
     InvalidateRect(hwnd, nullptr, TRUE);
     return 0;
@@ -905,8 +1327,8 @@ LRESULT ViewerText::OnTextViewPaint(HWND hwnd) noexcept
             RECT rc{};
             GetClientRect(hwnd, &rc);
 
-            const float widthDip  = DipsFromPixels(static_cast<int>(rc.right - rc.left), dpi);
-            const float heightDip = DipsFromPixels(static_cast<int>(rc.bottom - rc.top), dpi);
+            const float widthDip  = Common::WindowSizing::PixelToDip(static_cast<float>(rc.right - rc.left), static_cast<float>(dpi));
+            const float heightDip = Common::WindowSizing::PixelToDip(static_cast<float>(rc.bottom - rc.top), static_cast<float>(dpi));
             const float marginDip = RoundDipToDevicePixels(6.0f, dpi);
             const float charW     = (_textCharWidthDip > 0.0f) ? _textCharWidthDip : 8.0f;
             const float lineH     = (_textLineHeightDip > 0.0f) ? _textLineHeightDip : 14.0f;
@@ -935,7 +1357,7 @@ LRESULT ViewerText::OnTextViewPaint(HWND hwnd) noexcept
 
             _textViewBrush->SetColor(ColorFFromColorRef(fg));
 
-            const uint64_t totalVisual = _textVisualLineStarts.empty() ? 0u : static_cast<uint64_t>(_textVisualLineStarts.size());
+            const uint64_t totalVisual = TextVisualLineCount();
             const uint64_t topVisual   = static_cast<uint64_t>(_textTopVisualLine);
 
             const size_t selStartIndex = std::min(_textSelAnchor, _textSelActive);
@@ -947,21 +1369,21 @@ LRESULT ViewerText::OnTextViewPaint(HWND hwnd) noexcept
             const std::wstring seed      = _currentPath.empty() ? std::wstring(L"viewer") : _currentPath.filename().wstring();
             const COLORREF accent        = _hasTheme ? ResolveAccentColor(_theme, seed) : RGB(0, 120, 215);
             const uint8_t selectionAlpha = (_hasTheme && _theme.darkMode) ? 90u : 70u;
-            const COLORREF selectionBg   = BlendColor(bg, accent, selectionAlpha);
+            const COLORREF selectionBg   = BlendColorRefTruncate(bg, accent, selectionAlpha);
 
             const bool hasSearchHighlights    = ! _searchQuery.empty() && ! _searchMatchStarts.empty();
             const size_t searchLen            = _searchQuery.size();
             const COLORREF searchAccent       = (_hasTheme && ! _theme.highContrast) ? ResolveAccentColor(_theme, L"search") : GetSysColor(COLOR_HIGHLIGHT);
             const uint8_t searchAlpha         = (_hasTheme && _theme.darkMode) ? 60u : 40u;
-            const COLORREF searchBg           = BlendColor(bg, searchAccent, searchAlpha);
+            const COLORREF searchBg           = BlendColorRefTruncate(bg, searchAccent, searchAlpha);
             const bool selectionIsSearchMatch = hasSelection && hasSearchHighlights && searchLen > 0 && (selEndIndex - selStartIndex == searchLen) &&
                                                 std::binary_search(_searchMatchStarts.begin(), _searchMatchStarts.end(), selStartIndex);
             const uint8_t selectionFocusAlpha = (_hasTheme && _theme.darkMode) ? 140u : 120u;
-            const COLORREF selectionFocusedBg = BlendColor(bg, accent, selectionFocusAlpha);
+            const COLORREF selectionFocusedBg = BlendColorRefTruncate(bg, accent, selectionFocusAlpha);
 
             const bool showLineNumbers                           = ShowTextLineNumbersInCurrentPresentation() && gutterWidthDip > 0.0f;
             const uint8_t lineNumberAlpha                        = (_hasTheme && _theme.darkMode) ? 160u : 140u;
-            const COLORREF lineNumberFg                          = BlendColor(bg, fg, lineNumberAlpha);
+            const COLORREF lineNumberFg                          = BlendColorRefTruncate(bg, fg, lineNumberAlpha);
             const ViewerText::DiffTextVariant* activeDiffVariant = HasParsedDiffPresentation() ? CurrentDiffVariant() : nullptr;
             using DiffSemanticRowKind                            = ViewerText::DiffTextVariant::SemanticRowKind;
             const auto findPlaceholderBandPlacement = [&](uint32_t logicalLine) noexcept -> std::optional<ViewerText::DiffTextVariant::PlaceholderBandPlacement>
@@ -993,12 +1415,12 @@ LRESULT ViewerText::OnTextViewPaint(HWND hwnd) noexcept
             const D2D1_COLOR_F diffPlaceholderBg =
                 _hasTheme ? ColorFFromArgb(_theme.diffPlaceholderBackgroundArgb) : ColorFFromColorRef(accent, (_hasTheme && _theme.darkMode) ? 0.18f : 0.12f);
             const D2D1_COLOR_F diffDividerBg = _hasTheme ? ColorFFromArgb(_theme.diffDividerArgb)
-                                                         : ColorFFromColorRef(BlendColor(bg, accent, (_hasTheme && _theme.darkMode) ? 28u : 18u), 0.80f);
+                                                         : ColorFFromColorRef(BlendColorRefTruncate(bg, accent, (_hasTheme && _theme.darkMode) ? 28u : 18u), 0.80f);
             const D2D1_COLOR_F diffStructuralBorderBg =
-                ColorFFromColorRef(BlendColor(bg, fg, (_hasTheme && _theme.darkMode) ? 72u : 48u), (_hasTheme && _theme.darkMode) ? 0.92f : 0.82f);
-            const D2D1_COLOR_F diffActiveHunkBorderBg = ColorFFromColorRef(BlendColor(bg, accent, (_hasTheme && _theme.darkMode) ? 168u : 120u), 0.96f);
-            const COLORREF diffMarkerColorRef         = BlendColor(bg, fg, (_hasTheme && _theme.darkMode) ? 72u : 52u);
-            const COLORREF diffGapHatchColorRef       = BlendColor(bg, fg, (_hasTheme && _theme.darkMode) ? 48u : 34u);
+                ColorFFromColorRef(BlendColorRefTruncate(bg, fg, (_hasTheme && _theme.darkMode) ? 72u : 48u), (_hasTheme && _theme.darkMode) ? 0.92f : 0.82f);
+            const D2D1_COLOR_F diffActiveHunkBorderBg = ColorFFromColorRef(BlendColorRefTruncate(bg, accent, (_hasTheme && _theme.darkMode) ? 168u : 120u), 0.96f);
+            const COLORREF diffMarkerColorRef         = BlendColorRefTruncate(bg, fg, (_hasTheme && _theme.darkMode) ? 72u : 52u);
+            const COLORREF diffGapHatchColorRef       = BlendColorRefTruncate(bg, fg, (_hasTheme && _theme.darkMode) ? 48u : 34u);
             const D2D1_COLOR_F diffMarkerFg           = ColorFFromColorRef(diffMarkerColorRef, (_hasTheme && _theme.darkMode) ? 0.88f : 0.78f);
             const D2D1_COLOR_F diffGapHatchFg         = ColorFFromColorRef(diffGapHatchColorRef, (_hasTheme && _theme.darkMode) ? 0.34f : 0.22f);
 #ifdef _DEBUG
@@ -1032,13 +1454,13 @@ LRESULT ViewerText::OnTextViewPaint(HWND hwnd) noexcept
             if (showLineNumbers)
             {
                 const uint8_t gutterAlpha = (_hasTheme && _theme.darkMode) ? 18u : 12u;
-                const COLORREF gutterBg   = BlendColor(bg, accent, gutterAlpha);
+                const COLORREF gutterBg   = BlendColorRefTruncate(bg, accent, gutterAlpha);
                 const float gutterRight   = std::min(widthDip, std::max(0.0f, textStartX));
 
                 _textViewBrush->SetColor(ColorFFromColorRef(gutterBg));
                 _textViewTarget->FillRectangle(D2D1::RectF(0.0f, 0.0f, gutterRight, heightDip), _textViewBrush.get());
 
-                const COLORREF divider = BlendColor(bg, fg, (_hasTheme && _theme.darkMode) ? 40u : 20u);
+                const COLORREF divider = BlendColorRefTruncate(bg, fg, (_hasTheme && _theme.darkMode) ? 40u : 20u);
                 _textViewBrush->SetColor(ColorFFromColorRef(divider));
                 const float sepX = std::min(widthDip, std::max(0.0f, textStartX - 1.0f));
                 _textViewTarget->DrawLine(D2D1::Point2F(sepX, 0.0f), D2D1::Point2F(sepX, heightDip), _textViewBrush.get(), 1.0f);
@@ -1046,49 +1468,71 @@ LRESULT ViewerText::OnTextViewPaint(HWND hwnd) noexcept
                 _textViewBrush->SetColor(ColorFFromColorRef(fg));
             }
 
-            if (totalVisual > 0 && lineH > 0.0f && _textViewFormat && ! _textVisualLineLogical.empty())
+            if (totalVisual > 0 && lineH > 0.0f && _textViewFormat)
             {
                 const float usableH    = std::max(0.0f, heightDip - 2.0f * marginDip);
                 const uint32_t maxRows = std::max<uint32_t>(1u, static_cast<uint32_t>(std::ceil(usableH / lineH)) + 1u);
+                if (_textSparseWrapActive)
+                {
+                    RebuildSparseTextViewportLayouts(hwnd, maxRows);
+                }
 
                 for (uint32_t row = 0; row < maxRows; ++row)
                 {
-                    const uint64_t visual = topVisual + static_cast<uint64_t>(row);
+                    if (_textSparseWrapActive && row >= _textSparseViewportLayouts.size())
+                    {
+                        break;
+                    }
+                    const uint64_t visual = _textSparseWrapActive ? _textSparseViewportAnchors[row]
+                                                                  : topVisual + static_cast<uint64_t>(row);
                     if (visual >= totalVisual)
                     {
                         break;
                     }
 
-                    const uint32_t logical = _textVisualLineLogical[static_cast<size_t>(visual)];
+                    TextVisualLineLayoutEntry resolvedLayout{};
+                    if (_textSparseWrapActive)
+                    {
+                        resolvedLayout = _textSparseViewportLayouts[row];
+                    }
+                    else if (! TryGetTextVisualLineLayout(visual, resolvedLayout))
+                    {
+                        break;
+                    }
+                    const uint32_t logical = resolvedLayout.logicalLine;
                     if (logical >= _textLineStarts.size() || logical >= _textLineEnds.size())
                     {
                         break;
                     }
 
-                    const TextVisualLineLayoutEntry* visualLayout =
-                        static_cast<size_t>(visual) < _textVisualLineLayouts.size() ? &_textVisualLineLayouts[static_cast<size_t>(visual)] : nullptr;
-                    const uint32_t segStartRaw = visualLayout ? visualLayout->segmentStartIndex : _textVisualLineStarts[static_cast<size_t>(visual)];
+                    const TextVisualLineLayoutEntry* visualLayout = &resolvedLayout;
+                    const uint32_t segStartRaw = visualLayout->segmentStartIndex;
                     uint32_t segStart          = segStartRaw;
                     uint32_t segEnd            = visualLayout ? visualLayout->segmentEndIndex : _textLineEnds[logical];
-                    if (! visualLayout && (visual + 1) < totalVisual && _textVisualLineLogical[static_cast<size_t>(visual + 1)] == logical)
-                    {
-                        segEnd = _textVisualLineStarts[static_cast<size_t>(visual + 1)];
-                    }
-
                     if (! _wrap && (! visualLayout || ! visualLayout->splitPanes) && segEnd >= segStart && _textLeftColumn != 0)
                     {
                         const uint32_t skip = std::min<uint32_t>(_textLeftColumn, segEnd - segStart);
                         segStart += skip;
                     }
 
-                    const size_t startIndex = std::min<size_t>(static_cast<size_t>(segStart), _textBuffer.size());
-                    const size_t endIndex   = std::min<size_t>(static_cast<size_t>(segEnd), _textBuffer.size());
+                    const size_t startIndex = NormalizeTextPosition(std::min<size_t>(static_cast<size_t>(segStart), _textBuffer.size()));
+                    size_t endIndex         = NormalizeTextPosition(std::min<size_t>(static_cast<size_t>(segEnd), _textBuffer.size()));
+                    if (! _wrap && ! visualLayout->splitPanes && endIndex > startIndex)
+                    {
+                        const size_t visibleCodeUnits = static_cast<size_t>(std::ceil(std::max(1.0f, widthDip - textStartX - marginDip) /
+                                                                                    std::max(1.0f, charW))) *
+                                                                4u +
+                                                            16u;
+                        endIndex = NormalizeTextPosition(std::min(endIndex, startIndex + visibleCodeUnits));
+                    }
 
                     const float x                       = textStartX;
                     const float y                       = RoundDipToDevicePixels(marginDip + static_cast<float>(row) * lineH, dpi);
                     const float lineBottom              = RoundDipToDevicePixels(y + lineH, dpi);
                     const D2D1_RECT_F lineRc            = D2D1::RectF(x, y, std::max(x, widthDip - marginDip), lineBottom);
-                    const bool isFirstSegmentForLogical = (visual == 0u) || (_textVisualLineLogical[static_cast<size_t>(visual - 1u)] != logical);
+                    const bool isFirstSegmentForLogical = visualLayout->splitPanes
+                                                              ? visualLayout->leftStartIndex == _textLineStarts[logical]
+                                                              : visualLayout->segmentStartIndex == _textLineStarts[logical];
                     const size_t logicalStartIndex      = static_cast<size_t>(_textLineStarts[logical]);
                     const size_t logicalEndIndex        = static_cast<size_t>(_textLineEnds[logical]);
                     const std::wstring_view logicalLine = logicalEndIndex >= logicalStartIndex && logicalEndIndex <= _textBuffer.size()
@@ -1275,7 +1719,7 @@ LRESULT ViewerText::OnTextViewPaint(HWND hwnd) noexcept
                         if (splitPaneRow)
                         {
                             const float centerX              = std::floor((separatorRc.left + separatorRc.right) * 0.5f);
-                            const D2D1_COLOR_F softDividerBg = ColorFFromColorRef(BlendColor(bg, fg, (_hasTheme && _theme.darkMode) ? 24u : 18u),
+                            const D2D1_COLOR_F softDividerBg = ColorFFromColorRef(BlendColorRefTruncate(bg, fg, (_hasTheme && _theme.darkMode) ? 24u : 18u),
                                                                                   (_hasTheme && _theme.darkMode) ? 0.24f : 0.18f);
                             _textViewBrush->SetColor(softDividerBg);
                             _textViewTarget->FillRectangle(separatorRc, _textViewBrush.get());
@@ -1314,13 +1758,30 @@ LRESULT ViewerText::OnTextViewPaint(HWND hwnd) noexcept
                             return;
                         }
 
-                        const float markerX = spanLeft + static_cast<float>(markerIndex - visibleStart) * charW;
+                        IDWriteTextLayout* spanLayout = GetTextSegmentLayout(visibleStart, visibleEnd, spanRc.right - spanRc.left);
+                        if (! spanLayout)
+                        {
+                            return;
+                        }
+                        float markerLocalX = 0.0f;
+                        float markerLocalY = 0.0f;
+                        DWRITE_HIT_TEST_METRICS markerMetrics{};
+                        if (FAILED(HitTestCaretPosition(spanLayout,
+                                                       visibleEnd - visibleStart,
+                                                       markerIndex - visibleStart,
+                                                       markerLocalX,
+                                                       markerLocalY,
+                                                       markerMetrics)))
+                        {
+                            return;
+                        }
+                        const float markerX = spanLeft + markerLocalX;
                         if (markerX >= spanRc.right)
                         {
                             return;
                         }
 
-                        const D2D1_RECT_F markerRc = D2D1::RectF(markerX, y, std::min(spanRc.right, markerX + charW), lineBottom);
+                        const D2D1_RECT_F markerRc = D2D1::RectF(markerX, y, std::min(spanRc.right, markerX + std::max(1.0f, markerMetrics.width)), lineBottom);
                         _textViewBrush->SetColor(diffMarkerFg);
                         _textViewTarget->DrawTextW(&marker, 1u, _textViewFormat.get(), markerRc, _textViewBrush.get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
                         _textViewBrush->SetColor(ColorFFromColorRef(fg));
@@ -1507,7 +1968,13 @@ LRESULT ViewerText::OnTextViewPaint(HWND hwnd) noexcept
 
                     const auto drawSearchHighlightsForSpan = [&](size_t visibleStart, size_t visibleEnd, float spanLeft, const D2D1_RECT_F& spanRc) noexcept
                     {
-                        if (! hasSearchHighlights || searchLen == 0 || visibleEnd < visibleStart || charW <= 0.0f)
+                        if (! hasSearchHighlights || searchLen == 0 || visibleEnd < visibleStart || spanRc.right <= spanRc.left)
+                        {
+                            return;
+                        }
+
+                        IDWriteTextLayout* spanLayout = GetTextSegmentLayout(visibleStart, visibleEnd, spanRc.right - spanRc.left);
+                        if (! spanLayout)
                         {
                             return;
                         }
@@ -1535,11 +2002,23 @@ LRESULT ViewerText::OnTextViewPaint(HWND hwnd) noexcept
                                 continue;
                             }
 
-                            const size_t colStart  = hlStart - visibleStart;
-                            const size_t colLen    = hlEnd - hlStart;
-                            const float hlX        = spanLeft + static_cast<float>(colStart) * charW;
-                            const float hlW        = static_cast<float>(colLen) * charW;
-                            const D2D1_RECT_F hlRc = D2D1::RectF(hlX, y, std::min(spanRc.right, hlX + hlW), lineBottom);
+                            float startX = 0.0f;
+                            float startY = 0.0f;
+                            float endX   = 0.0f;
+                            float endY   = 0.0f;
+                            DWRITE_HIT_TEST_METRICS startMetrics{};
+                            DWRITE_HIT_TEST_METRICS endMetrics{};
+                            const HRESULT startHr = HitTestCaretPosition(
+                                spanLayout, visibleEnd - visibleStart, hlStart - visibleStart, startX, startY, startMetrics);
+                            const HRESULT endHr =
+                                HitTestCaretPosition(spanLayout, visibleEnd - visibleStart, hlEnd - visibleStart, endX, endY, endMetrics);
+                            if (FAILED(startHr) || FAILED(endHr))
+                            {
+                                continue;
+                            }
+                            const float hlLeft      = spanLeft + std::min(startX, endX);
+                            const float hlRight     = spanLeft + std::max(startX, endX);
+                            const D2D1_RECT_F hlRc = D2D1::RectF(std::max(spanRc.left, hlLeft), y, std::min(spanRc.right, hlRight), lineBottom);
 
                             _textViewBrush->SetColor(ColorFFromColorRef(searchBg));
                             _textViewTarget->FillRectangle(hlRc, _textViewBrush.get());
@@ -1548,7 +2027,7 @@ LRESULT ViewerText::OnTextViewPaint(HWND hwnd) noexcept
                     };
                     const auto drawSelectionForSpan = [&](size_t visibleStart, size_t visibleEnd, float spanLeft, const D2D1_RECT_F& spanRc) noexcept
                     {
-                        if (! hasSelection || visibleEnd < visibleStart || charW <= 0.0f)
+                        if (! hasSelection || visibleEnd < visibleStart || spanRc.right <= spanRc.left)
                         {
                             return;
                         }
@@ -1560,11 +2039,28 @@ LRESULT ViewerText::OnTextViewPaint(HWND hwnd) noexcept
                             return;
                         }
 
-                        const size_t colStart  = hlStart - visibleStart;
-                        const size_t colLength = hlEnd - hlStart;
-                        const float hlX        = spanLeft + static_cast<float>(colStart) * charW;
-                        const float hlW        = static_cast<float>(colLength) * charW;
-                        const D2D1_RECT_F hlRc = D2D1::RectF(hlX, y, std::min(spanRc.right, hlX + hlW), lineBottom);
+                        IDWriteTextLayout* spanLayout = GetTextSegmentLayout(visibleStart, visibleEnd, spanRc.right - spanRc.left);
+                        if (! spanLayout)
+                        {
+                            return;
+                        }
+                        float startX = 0.0f;
+                        float startY = 0.0f;
+                        float endX   = 0.0f;
+                        float endY   = 0.0f;
+                        DWRITE_HIT_TEST_METRICS startMetrics{};
+                        DWRITE_HIT_TEST_METRICS endMetrics{};
+                        const HRESULT startHr =
+                            HitTestCaretPosition(spanLayout, visibleEnd - visibleStart, hlStart - visibleStart, startX, startY, startMetrics);
+                        const HRESULT endHr =
+                            HitTestCaretPosition(spanLayout, visibleEnd - visibleStart, hlEnd - visibleStart, endX, endY, endMetrics);
+                        if (FAILED(startHr) || FAILED(endHr))
+                        {
+                            return;
+                        }
+                        const float hlLeft      = spanLeft + std::min(startX, endX);
+                        const float hlRight     = spanLeft + std::max(startX, endX);
+                        const D2D1_RECT_F hlRc = D2D1::RectF(std::max(spanRc.left, hlLeft), y, std::min(spanRc.right, hlRight), lineBottom);
 
                         _textViewBrush->SetColor(ColorFFromColorRef(selectionIsSearchMatch ? selectionFocusedBg : selectionBg));
                         _textViewTarget->FillRectangle(hlRc, _textViewBrush.get());
@@ -1577,26 +2073,35 @@ LRESULT ViewerText::OnTextViewPaint(HWND hwnd) noexcept
                             return;
                         }
 
-                        const size_t visibleLength = visibleEnd - visibleStart;
-                        const UINT32 visibleLen = visibleLength > static_cast<size_t>(std::numeric_limits<UINT32>::max()) ? std::numeric_limits<UINT32>::max()
-                                                                                                                          : static_cast<UINT32>(visibleLength);
-                        if (visibleLen == 0u)
+                        IDWriteTextLayout* spanLayout = GetTextSegmentLayout(visibleStart, visibleEnd, spanRc.right - spanRc.left);
+                        if (! spanLayout)
                         {
                             return;
                         }
-
-                        _textViewTarget->DrawTextW(
-                            _textBuffer.data() + visibleStart, visibleLen, _textViewFormat.get(), spanRc, _textViewBrush.get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                        _textViewTarget->DrawTextLayout(D2D1::Point2F(spanRc.left, spanRc.top), spanLayout, _textViewBrush.get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
                     };
                     const auto drawCaretForSpan = [&](size_t visibleStart, size_t visibleEnd, float spanLeft, const D2D1_RECT_F& spanRc) noexcept
                     {
-                        if (! hasFocus || charW <= 0.0f || _textCaretIndex < visibleStart || _textCaretIndex > visibleEnd || spanRc.right <= spanRc.left)
+                        if (! hasFocus || _textCaretIndex < visibleStart || _textCaretIndex > visibleEnd || spanRc.right <= spanRc.left)
                         {
                             return;
                         }
 
-                        const size_t caretCol     = _textCaretIndex - visibleStart;
-                        const float caretX        = std::min(spanRc.right, spanLeft + static_cast<float>(caretCol) * charW);
+                        IDWriteTextLayout* spanLayout = GetTextSegmentLayout(visibleStart, visibleEnd, spanRc.right - spanRc.left);
+                        if (! spanLayout)
+                        {
+                            return;
+                        }
+                        float localX = 0.0f;
+                        float localY = 0.0f;
+                        DWRITE_HIT_TEST_METRICS metrics{};
+                        const HRESULT caretHr = HitTestCaretPosition(
+                            spanLayout, visibleEnd - visibleStart, _textCaretIndex - visibleStart, localX, localY, metrics);
+                        if (FAILED(caretHr))
+                        {
+                            return;
+                        }
+                        const float caretX        = std::min(spanRc.right, spanLeft + localX);
                         const D2D1_RECT_F caretRc = D2D1::RectF(caretX, y, std::min(spanRc.right, caretX + 1.0f), lineBottom);
                         _textViewTarget->FillRectangle(caretRc, _textViewBrush.get());
                     };
@@ -1677,7 +2182,7 @@ LRESULT ViewerText::OnTextViewKeyDown(HWND hwnd, WPARAM vk, LPARAM lParam) noexc
 
         const size_t end            = std::min(b, _textBuffer.size());
         const std::wstring selected = _textBuffer.substr(a, end - a);
-        if (! CopyUnicodeTextToClipboard(root, selected))
+        if (! Common::Clipboard::TrySetUnicodeText(root, selected))
         {
             MessageBeep(MB_ICONERROR);
         }
@@ -1691,22 +2196,37 @@ LRESULT ViewerText::OnTextViewKeyDown(HWND hwnd, WPARAM vk, LPARAM lParam) noexc
 
     if (vk == VK_HOME)
     {
+        _textPreferredXValid = false;
+        _textVerticalCaretHistory.clear();
         CommandGoToTop(root, shift);
         return 0;
     }
 
     if (vk == VK_END)
     {
+        _textPreferredXValid = false;
+        _textVerticalCaretHistory.clear();
         CommandGoToBottom(root, shift);
         return 0;
     }
 
-    if (_textVisualLineStarts.empty() || _textVisualLineLogical.empty() || _textVisualLineLayouts.empty() || _textLineStarts.empty() || _textLineEnds.empty())
+    if (TextVisualLineCount() == 0u || _textLineStarts.empty() || _textLineEnds.empty())
     {
         return DefWindowProcW(hwnd, WM_KEYDOWN, vk, lParam);
     }
 
     static_cast<void>(EnsureTextViewDirect2D(hwnd));
+    if (_textSparseWrapActive)
+    {
+        RECT client{};
+        GetClientRect(hwnd, &client);
+        const float heightDip = std::max(
+            1.0f,
+            Common::WindowSizing::PixelToDip(static_cast<float>(client.bottom - client.top), static_cast<float>(GetDpiForWindow(hwnd))));
+        const float lineH     = (_textLineHeightDip > 0.0f) ? _textLineHeightDip : 14.0f;
+        const size_t visibleRows = std::max<size_t>(2u, static_cast<size_t>(std::ceil(heightDip / lineH)) + 1u);
+        RebuildSparseTextViewportLayouts(hwnd, visibleRows);
+    }
 
     auto findVisualForIndex = [&]() noexcept -> uint32_t
     {
@@ -1731,7 +2251,7 @@ LRESULT ViewerText::OnTextViewKeyDown(HWND hwnd, WPARAM vk, LPARAM lParam) noexc
 
     auto ensureCaretVisible = [&]() noexcept
     {
-        const uint32_t totalVisual = static_cast<uint32_t>(_textVisualLineStarts.size());
+        const uint32_t totalVisual = static_cast<uint32_t>(std::min<uint64_t>(TextVisualLineCount(), std::numeric_limits<uint32_t>::max()));
         if (totalVisual == 0)
         {
             return;
@@ -1750,7 +2270,23 @@ LRESULT ViewerText::OnTextViewKeyDown(HWND hwnd, WPARAM vk, LPARAM lParam) noexc
             page = static_cast<uint32_t>(si.nPage);
         }
 
-        if (caretVisual < _textTopVisualLine)
+        if (_textSparseWrapActive)
+        {
+            const auto anchor = std::find(_textSparseViewportAnchors.begin(), _textSparseViewportAnchors.end(), caretVisual);
+            if (anchor == _textSparseViewportAnchors.end())
+            {
+                _textTopVisualLine = caretVisual;
+            }
+            else
+            {
+                const size_t caretRow = static_cast<size_t>(std::distance(_textSparseViewportAnchors.begin(), anchor));
+                if (caretRow >= page)
+                {
+                    _textTopVisualLine = static_cast<uint32_t>(_textSparseViewportAnchors[caretRow - page + 1u]);
+                }
+            }
+        }
+        else if (caretVisual < _textTopVisualLine)
         {
             _textTopVisualLine = caretVisual;
         }
@@ -1765,8 +2301,8 @@ LRESULT ViewerText::OnTextViewKeyDown(HWND hwnd, WPARAM vk, LPARAM lParam) noexc
         {
             uint32_t segStart = 0;
             uint32_t segEnd   = 0;
-            const TextVisualLineLayoutEntry* caretLayout =
-                static_cast<size_t>(caretVisual) < _textVisualLineLayouts.size() ? &_textVisualLineLayouts[static_cast<size_t>(caretVisual)] : nullptr;
+            TextVisualLineLayoutEntry caretLayoutValue{};
+            const TextVisualLineLayoutEntry* caretLayout = TryGetTextVisualLineLayout(caretVisual, caretLayoutValue) ? &caretLayoutValue : nullptr;
             const bool preferRightPane = caretLayout && caretLayout->splitPanes &&
                                          (_textCaretIndex >= caretLayout->rightStartIndex ||
                                           (_textCaretIndex >= caretLayout->separatorStartIndex && caretLayout->rightEndIndex > caretLayout->rightStartIndex));
@@ -1810,7 +2346,7 @@ LRESULT ViewerText::OnTextViewKeyDown(HWND hwnd, WPARAM vk, LPARAM lParam) noexc
 
     auto setCaret = [&](size_t newCaret) noexcept
     {
-        newCaret = std::min(newCaret, _textBuffer.size());
+        newCaret = NormalizeTextPosition(std::min(newCaret, _textBuffer.size()));
 
         _textCaretIndex = newCaret;
         if (! shift)
@@ -1821,8 +2357,8 @@ LRESULT ViewerText::OnTextViewKeyDown(HWND hwnd, WPARAM vk, LPARAM lParam) noexc
     };
 
     const uint32_t currentVisual = findVisualForIndex();
-    const TextVisualLineLayoutEntry* currentLayout =
-        static_cast<size_t>(currentVisual) < _textVisualLineLayouts.size() ? &_textVisualLineLayouts[static_cast<size_t>(currentVisual)] : nullptr;
+    TextVisualLineLayoutEntry currentLayoutValue{};
+    const TextVisualLineLayoutEntry* currentLayout = TryGetTextVisualLineLayout(currentVisual, currentLayoutValue) ? &currentLayoutValue : nullptr;
     const bool preferRightPane = currentLayout && currentLayout->splitPanes &&
                                  (_textCaretIndex >= currentLayout->rightStartIndex ||
                                   (_textCaretIndex >= currentLayout->separatorStartIndex && currentLayout->rightEndIndex > currentLayout->rightStartIndex));
@@ -1831,14 +2367,46 @@ LRESULT ViewerText::OnTextViewKeyDown(HWND hwnd, WPARAM vk, LPARAM lParam) noexc
     static_cast<void>(getSegmentBounds(currentVisual, segStart, segEnd, preferRightPane));
 
     const size_t segStartSize = std::min<size_t>(static_cast<size_t>(segStart), _textBuffer.size());
-    // const size_t segEndSize    = std::min<size_t>(static_cast<size_t>(segEnd), _textBuffer.size());
-    _textPreferredColumn = (_textCaretIndex >= segStartSize) ? (_textCaretIndex - segStartSize) : 0u;
+    const size_t segEndSize   = std::min<size_t>(static_cast<size_t>(segEnd), _textBuffer.size());
+    const bool verticalNavigation = vk == VK_UP || vk == VK_DOWN || vk == VK_PRIOR || vk == VK_NEXT;
+    RECT keyClient{};
+    GetClientRect(hwnd, &keyClient);
+    const float keyWidthDip = std::max(
+        1.0f,
+        Common::WindowSizing::PixelToDip(static_cast<float>(keyClient.right - keyClient.left), static_cast<float>(GetDpiForWindow(hwnd))));
+    const size_t keyVisibleCodeUnits = static_cast<size_t>(std::ceil(keyWidthDip / std::max(1.0f, _textCharWidthDip))) * 4u + 16u;
+    if (! verticalNavigation || ! _textPreferredXValid)
+    {
+        _textPreferredColumn = (_textCaretIndex >= segStartSize) ? (_textCaretIndex - segStartSize) : 0u;
+        _textPreferredXDip   = static_cast<float>(_textPreferredColumn) * std::max(1.0f, _textCharWidthDip);
+        const size_t currentLayoutEnd = _wrap ? segEndSize : NormalizeTextPosition(std::min(segEndSize, segStartSize + keyVisibleCodeUnits));
+        if (_textCaretIndex >= segStartSize && _textCaretIndex <= currentLayoutEnd)
+        {
+            if (IDWriteTextLayout* currentTextLayout = GetTextSegmentLayout(segStartSize, currentLayoutEnd, keyWidthDip))
+            {
+                float caretX = 0.0f;
+                float caretY = 0.0f;
+                DWRITE_HIT_TEST_METRICS caretMetrics{};
+                if (SUCCEEDED(HitTestCaretPosition(currentTextLayout,
+                                                   currentLayoutEnd - segStartSize,
+                                                   _textCaretIndex - segStartSize,
+                                                   caretX,
+                                                   caretY,
+                                                   caretMetrics)))
+                {
+                    _textPreferredXDip = caretX;
+                }
+            }
+        }
+    }
 
-    const uint32_t totalVisual = static_cast<uint32_t>(_textVisualLineStarts.size());
+    const uint32_t totalVisual = static_cast<uint32_t>(std::min<uint64_t>(TextVisualLineCount(), std::numeric_limits<uint32_t>::max()));
     const uint32_t lastVisual  = totalVisual > 0 ? (totalVisual - 1) : 0;
 
     if (vk == VK_LEFT)
     {
+        _textPreferredXValid = false;
+        _textVerticalCaretHistory.clear();
         if (_textCaretIndex == 0 && _textStreamActive)
         {
             if (TryNavigateTextStream(root, true))
@@ -1849,7 +2417,7 @@ LRESULT ViewerText::OnTextViewKeyDown(HWND hwnd, WPARAM vk, LPARAM lParam) noexc
 
         if (_textCaretIndex > 0)
         {
-            setCaret(_textCaretIndex - 1);
+            setCaret(PreviousTextPosition(_textCaretIndex));
             ensureCaretVisible();
             InvalidateRect(hwnd, nullptr, TRUE);
             if (_hWnd)
@@ -1861,6 +2429,8 @@ LRESULT ViewerText::OnTextViewKeyDown(HWND hwnd, WPARAM vk, LPARAM lParam) noexc
     }
     else if (vk == VK_RIGHT)
     {
+        _textPreferredXValid = false;
+        _textVerticalCaretHistory.clear();
         if (_textCaretIndex >= _textBuffer.size() && _textStreamActive)
         {
             if (TryNavigateTextStream(root, false))
@@ -1871,7 +2441,7 @@ LRESULT ViewerText::OnTextViewKeyDown(HWND hwnd, WPARAM vk, LPARAM lParam) noexc
 
         if (_textCaretIndex < _textBuffer.size())
         {
-            setCaret(_textCaretIndex + 1);
+            setCaret(NextTextPosition(_textCaretIndex));
             ensureCaretVisible();
             InvalidateRect(hwnd, nullptr, TRUE);
             if (_hWnd)
@@ -1888,9 +2458,73 @@ LRESULT ViewerText::OnTextViewKeyDown(HWND hwnd, WPARAM vk, LPARAM lParam) noexc
         si.fMask  = SIF_PAGE;
         static_cast<void>(GetScrollInfo(hwnd, SB_VERT, &si));
         const uint32_t page = std::max<uint32_t>(1u, static_cast<uint32_t>(si.nPage == 0 ? 1u : si.nPage));
+        const bool movingDown = vk == VK_DOWN || vk == VK_NEXT;
+        const bool pageMove   = vk == VK_PRIOR || vk == VK_NEXT;
+
+        if (! _textVerticalCaretHistory.empty())
+        {
+            const TextVerticalCaretHistoryEntry previous = _textVerticalCaretHistory.back();
+            if (previous.toCaret == _textCaretIndex && previous.pageMove == pageMove && previous.movingDown != movingDown)
+            {
+                _textVerticalCaretHistory.pop_back();
+                setCaret(previous.fromCaret);
+                _textPreferredXValid = true;
+                ensureCaretVisible();
+                InvalidateRect(hwnd, nullptr, TRUE);
+                if (_hWnd)
+                {
+                    InvalidateRect(_hWnd.get(), &_statusRect, FALSE);
+                }
+                return 0;
+            }
+            if (previous.toCaret != _textCaretIndex || previous.pageMove != pageMove)
+            {
+                _textVerticalCaretHistory.clear();
+            }
+        }
 
         uint32_t targetVisual = currentVisual;
-        if (vk == VK_UP)
+        const auto sparseAnchor = _textSparseWrapActive
+                                      ? std::find(_textSparseViewportAnchors.begin(), _textSparseViewportAnchors.end(), currentVisual)
+                                      : _textSparseViewportAnchors.end();
+        const size_t sparseRow = sparseAnchor != _textSparseViewportAnchors.end()
+                                     ? static_cast<size_t>(std::distance(_textSparseViewportAnchors.begin(), sparseAnchor))
+                                     : 0u;
+        if (_textSparseWrapActive && sparseAnchor != _textSparseViewportAnchors.end())
+        {
+            if (vk == VK_UP || vk == VK_PRIOR)
+            {
+                if (currentVisual == 0u && _textStreamActive && TryNavigateTextStream(root, true))
+                {
+                    return 0;
+                }
+                const size_t rows = vk == VK_UP ? 1u : static_cast<size_t>(page);
+                if (sparseRow >= rows)
+                {
+                    targetVisual = static_cast<uint32_t>(_textSparseViewportAnchors[sparseRow - rows]);
+                }
+                else if (! _textSparseTopHistory.empty())
+                {
+                    targetVisual = _textSparseTopHistory.back();
+                    _textSparseTopHistory.pop_back();
+                }
+                else
+                {
+                    targetVisual = currentVisual > rows ? (currentVisual - static_cast<uint32_t>(rows)) : 0u;
+                }
+            }
+            else
+            {
+                if (currentVisual >= lastVisual && _textStreamActive && TryNavigateTextStream(root, false))
+                {
+                    return 0;
+                }
+                const size_t rows = vk == VK_DOWN ? 1u : static_cast<size_t>(page);
+                const size_t targetRow = std::min<size_t>(sparseRow + rows, _textSparseViewportAnchors.size() - 1u);
+                targetVisual          = static_cast<uint32_t>(_textSparseViewportAnchors[targetRow]);
+            }
+        }
+        else if (vk == VK_UP)
         {
             if (currentVisual == 0 && _textStreamActive)
             {
@@ -1943,8 +2577,39 @@ LRESULT ViewerText::OnTextViewKeyDown(HWND hwnd, WPARAM vk, LPARAM lParam) noexc
         const size_t targetEndSize   = std::min<size_t>(static_cast<size_t>(targetEnd), _textBuffer.size());
         const size_t targetLen       = targetEndSize >= targetStartSize ? (targetEndSize - targetStartSize) : 0u;
 
-        const size_t col = std::min<size_t>(_textPreferredColumn, targetLen);
-        setCaret(targetStartSize + col);
+        size_t targetCaret = targetStartSize + std::min<size_t>(_textPreferredColumn, targetLen);
+        const size_t targetLayoutEnd = _wrap ? targetEndSize : NormalizeTextPosition(std::min(targetEndSize, targetStartSize + keyVisibleCodeUnits));
+        if (IDWriteTextLayout* targetTextLayout = GetTextSegmentLayout(targetStartSize, targetLayoutEnd, keyWidthDip))
+        {
+            BOOL trailing = FALSE;
+            BOOL inside   = FALSE;
+            DWRITE_HIT_TEST_METRICS targetMetrics{};
+            if (SUCCEEDED(targetTextLayout->HitTestPoint(_textPreferredXDip,
+                                                         std::max(1.0f, _textLineHeightDip) * 0.5f,
+                                                         &trailing,
+                                                         &inside,
+                                                         &targetMetrics)))
+            {
+                const size_t local = static_cast<size_t>(targetMetrics.textPosition) +
+                                     (trailing != FALSE ? static_cast<size_t>(targetMetrics.length) : 0u);
+                targetCaret = std::min(targetLayoutEnd, targetStartSize + local);
+            }
+        }
+        if (targetCaret != _textCaretIndex)
+        {
+            if (_textVerticalCaretHistory.size() >= kVerticalCaretHistoryLimit)
+            {
+                _textVerticalCaretHistory.erase(_textVerticalCaretHistory.begin());
+            }
+            _textVerticalCaretHistory.push_back(TextVerticalCaretHistoryEntry{
+                .fromCaret = _textCaretIndex,
+                .toCaret   = targetCaret,
+                .pageMove  = pageMove,
+                .movingDown = movingDown,
+            });
+        }
+        setCaret(targetCaret);
+        _textPreferredXValid = true;
 
         ensureCaretVisible();
         InvalidateRect(hwnd, nullptr, TRUE);
@@ -1971,7 +2636,8 @@ LRESULT ViewerText::TextViewProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noex
         case WM_LBUTTONDOWN:
             return OnTextViewLButtonDown(hwnd, {static_cast<int>(static_cast<short>(LOWORD(lp))), static_cast<int>(static_cast<short>(HIWORD(lp)))});
         case WM_MOUSEMOVE:
-            return OnTextViewMouseMove(hwnd, {static_cast<int>(static_cast<short>(LOWORD(lp))), static_cast<int>(static_cast<short>(HIWORD(lp)))});
+            return OnTextViewMouseMove(
+                hwnd, {static_cast<int>(static_cast<short>(LOWORD(lp))), static_cast<int>(static_cast<short>(HIWORD(lp)))}, wp);
         case WM_LBUTTONUP: return OnTextViewLButtonUp(hwnd);
         case WM_CAPTURECHANGED: _textSelecting = false; return 0;
         case WM_SETCURSOR: return OnTextViewSetCursor(hwnd, lp);
@@ -2050,8 +2716,340 @@ bool ViewerText::HasPaneLocalSideBySideVisualLayout() const noexcept
            _textSideBySideLeftPaneColumns > 0u && _textSideBySideRightPaneColumns > 0u;
 }
 
+uint64_t ViewerText::TextVisualLineCount() const noexcept
+{
+    return _textSparseWrapActive ? _textSparseVisualLineCount : static_cast<uint64_t>(_textVisualLineLayouts.size());
+}
+
+void ViewerText::RebuildSparseTextViewportLayouts(HWND hwnd, size_t minimumRows) noexcept
+{
+    if (! _textSparseWrapActive || _textSparseVisualLines.empty() || _textSparseVisualLineCount == 0u)
+    {
+        _textSparseViewportLayouts.clear();
+        _textSparseViewportAnchors.clear();
+        _textSparseViewportCheckpoints.clear();
+        _textSparseViewportRequestedRows = 0u;
+        _textSparseViewportComplete      = false;
+        return;
+    }
+
+    static_cast<void>(EnsureTextViewDirect2D(hwnd));
+    minimumRows = std::clamp(minimumRows, static_cast<size_t>(1u), kSparseViewportLayoutLimit);
+    const uint64_t top = std::min<uint64_t>(_textTopVisualLine, _textSparseVisualLineCount - 1u);
+    if (_textSparseViewportTop == top && _textSparseViewportRequestedRows >= minimumRows &&
+        (_textSparseViewportLayouts.size() >= minimumRows || _textSparseViewportComplete))
+    {
+        return;
+    }
+
+    _textSparseViewportLayouts.clear();
+    _textSparseViewportAnchors.clear();
+    _textSparseViewportCheckpoints.clear();
+    _textSparseViewportTop           = top;
+    _textSparseViewportRequestedRows = minimumRows;
+    _textSparseViewportComplete      = false;
+    _textSparseViewportLayouts.reserve(minimumRows);
+    _textSparseViewportAnchors.reserve(minimumRows);
+    _textSparseViewportCheckpoints.reserve(minimumRows);
+
+    const auto after = std::upper_bound(_textSparseVisualLines.begin(),
+                                        _textSparseVisualLines.end(),
+                                        top,
+                                        [](uint64_t value, const SparseTextVisualLineSummary& summary) noexcept {
+                                            return value < summary.firstVisualLine;
+                                        });
+    size_t summaryIndex = static_cast<size_t>(std::distance(
+        _textSparseVisualLines.begin(), after == _textSparseVisualLines.begin() ? _textSparseVisualLines.begin() : std::prev(after)));
+    uint64_t rowInSummary = top - _textSparseVisualLines[summaryIndex].firstVisualLine;
+    uint32_t plainCursor = 0u;
+    uint32_t leftCursor  = 0u;
+    uint32_t rightCursor = 0u;
+    uint64_t rowOrdinal  = rowInSummary;
+
+    const auto initializeCursors = [&](size_t targetSummaryIndex, const SparseTextVisualLineSummary& summary, uint64_t rowOffset) noexcept
+    {
+        rowOrdinal = rowOffset;
+        const uint64_t targetVisual = summary.firstVisualLine + rowOffset;
+        const auto cached = std::find_if(_textSparseCheckpointCache.begin(),
+                                         _textSparseCheckpointCache.end(),
+                                         [&](const SparseTextViewportCheckpoint& checkpoint) noexcept
+        {
+            return checkpoint.visualLine == targetVisual && checkpoint.summaryIndex == targetSummaryIndex;
+        });
+        if (cached != _textSparseCheckpointCache.end())
+        {
+            rowOrdinal = cached->rowOrdinal;
+            plainCursor = cached->plainCursor;
+            leftCursor  = cached->leftCursor;
+            rightCursor = cached->rightCursor;
+            return;
+        }
+
+        if (summary.splitPanes)
+        {
+            const uint64_t leftLength  = static_cast<uint64_t>(summary.leftEndIndex - summary.leftStartIndex);
+            const uint64_t rightLength = static_cast<uint64_t>(summary.rightEndIndex - summary.rightStartIndex);
+            leftCursor = static_cast<uint32_t>(NormalizeTextSegmentStart(
+                static_cast<size_t>(summary.leftStartIndex) + static_cast<size_t>(std::min(rowOffset, leftLength))));
+            rightCursor = static_cast<uint32_t>(NormalizeTextSegmentStart(
+                static_cast<size_t>(summary.rightStartIndex) + static_cast<size_t>(std::min(rowOffset, rightLength))));
+        }
+        else
+        {
+            const uint64_t length = static_cast<uint64_t>(summary.lineEndIndex - summary.lineStartIndex);
+            plainCursor = static_cast<uint32_t>(NormalizeTextSegmentStart(
+                static_cast<size_t>(summary.lineStartIndex) + static_cast<size_t>(std::min(rowOffset, length))));
+        }
+    };
+    initializeCursors(summaryIndex, _textSparseVisualLines[summaryIndex], rowInSummary);
+
+    const auto rememberCheckpoint = [&](const SparseTextViewportCheckpoint& checkpoint)
+    {
+        const auto existing = std::find_if(_textSparseCheckpointCache.begin(),
+                                           _textSparseCheckpointCache.end(),
+                                           [&](const SparseTextViewportCheckpoint& candidate) noexcept
+        { return candidate.visualLine == checkpoint.visualLine; });
+        if (existing != _textSparseCheckpointCache.end())
+        {
+            *existing = checkpoint;
+            return;
+        }
+        if (_textSparseCheckpointCache.size() >= kSparseCheckpointCacheLimit)
+        {
+            _textSparseCheckpointCache.erase(_textSparseCheckpointCache.begin());
+        }
+        _textSparseCheckpointCache.push_back(checkpoint);
+    };
+
+    const float charWidth = std::max(1.0f, _textCharWidthDip);
+    while (_textSparseViewportLayouts.size() < minimumRows && summaryIndex < _textSparseVisualLines.size())
+    {
+        const SparseTextVisualLineSummary& summary = _textSparseVisualLines[summaryIndex];
+        TextVisualLineLayoutEntry layout{};
+        layout.logicalLine = summary.logicalLine;
+        bool summaryComplete  = false;
+        const uint64_t boundedRowOrdinal = std::min<uint64_t>(rowOrdinal, static_cast<uint64_t>(summary.visualLineCount - 1u));
+        const SparseTextViewportCheckpoint checkpoint{
+            .visualLine = summary.firstVisualLine + boundedRowOrdinal,
+            .summaryIndex = summaryIndex,
+            .rowOrdinal = boundedRowOrdinal,
+            .plainCursor = plainCursor,
+            .leftCursor = leftCursor,
+            .rightCursor = rightCursor,
+        };
+
+        if (summary.splitPanes)
+        {
+            leftCursor  = std::clamp(leftCursor, summary.leftStartIndex, summary.leftEndIndex);
+            rightCursor = std::clamp(rightCursor, summary.rightStartIndex, summary.rightEndIndex);
+            const uint32_t leftSegmentEnd = static_cast<uint32_t>(FindTextSegmentEnd(
+                leftCursor, summary.leftEndIndex, static_cast<float>(summary.leftPaneColumns) * charWidth));
+            const uint32_t rightSegmentEnd = static_cast<uint32_t>(FindTextSegmentEnd(
+                rightCursor, summary.rightEndIndex, static_cast<float>(summary.rightPaneColumns) * charWidth));
+            layout.splitPanes          = true;
+            layout.leftStartIndex      = leftCursor;
+            layout.leftEndIndex        = std::max(leftCursor, leftSegmentEnd);
+            layout.rightStartIndex     = rightCursor;
+            layout.rightEndIndex       = std::max(rightCursor, rightSegmentEnd);
+            layout.separatorStartIndex = summary.separatorStartIndex;
+            layout.separatorEndIndex   = summary.separatorEndIndex;
+            layout.leftPaneColumns     = summary.leftPaneColumns;
+            layout.rightPaneColumns    = summary.rightPaneColumns;
+            layout.separatorColumns    = summary.separatorColumns;
+            const bool hasLeft         = layout.leftEndIndex > layout.leftStartIndex;
+            const bool hasRight        = layout.rightEndIndex > layout.rightStartIndex;
+            layout.segmentStartIndex   = hasLeft ? layout.leftStartIndex : (hasRight ? layout.rightStartIndex : summary.leftEndIndex);
+            layout.segmentEndIndex     = hasRight ? layout.rightEndIndex : (hasLeft ? layout.leftEndIndex : summary.leftEndIndex);
+
+            leftCursor      = layout.leftEndIndex;
+            rightCursor     = layout.rightEndIndex;
+            summaryComplete = leftCursor >= summary.leftEndIndex && rightCursor >= summary.rightEndIndex;
+        }
+        else
+        {
+            plainCursor = std::clamp(plainCursor, summary.lineStartIndex, summary.lineEndIndex);
+            const uint32_t segmentEnd = static_cast<uint32_t>(FindTextSegmentEnd(plainCursor, summary.lineEndIndex, _textWrapWidthDip));
+            layout.segmentStartIndex = plainCursor;
+            layout.segmentEndIndex   = std::max(plainCursor, segmentEnd);
+            plainCursor              = layout.segmentEndIndex;
+            summaryComplete          = plainCursor >= summary.lineEndIndex;
+        }
+
+        _textSparseViewportAnchors.push_back(checkpoint.visualLine);
+        _textSparseViewportCheckpoints.push_back(checkpoint);
+        rememberCheckpoint(checkpoint);
+        _textSparseViewportLayouts.push_back(layout);
+        rowOrdinal = boundedRowOrdinal + 1u;
+
+        if (! summaryComplete)
+        {
+            continue;
+        }
+
+        ++summaryIndex;
+        rowInSummary = 0u;
+        if (summaryIndex < _textSparseVisualLines.size())
+        {
+            initializeCursors(summaryIndex, _textSparseVisualLines[summaryIndex], rowInSummary);
+        }
+    }
+
+    _textSparseViewportComplete = summaryIndex >= _textSparseVisualLines.size();
+}
+
+bool ViewerText::TryGetTextVisualLineLayout(uint64_t visualLine, TextVisualLineLayoutEntry& layoutOut) noexcept
+{
+    if (! _textSparseWrapActive)
+    {
+        if (_textVisualLineLayouts.empty())
+        {
+            return false;
+        }
+        const size_t index = static_cast<size_t>(std::min<uint64_t>(visualLine, _textVisualLineLayouts.size() - 1u));
+        layoutOut          = _textVisualLineLayouts[index];
+        return true;
+    }
+
+    if (_textSparseVisualLines.empty() || _textSparseVisualLineCount == 0u)
+    {
+        return false;
+    }
+
+    visualLine = std::min<uint64_t>(visualLine, _textSparseVisualLineCount - 1u);
+    const auto cachedAnchor = std::find(_textSparseViewportAnchors.begin(), _textSparseViewportAnchors.end(), visualLine);
+    if (cachedAnchor != _textSparseViewportAnchors.end())
+    {
+        const size_t viewportRow = static_cast<size_t>(std::distance(_textSparseViewportAnchors.begin(), cachedAnchor));
+        layoutOut                = _textSparseViewportLayouts[viewportRow];
+        return true;
+    }
+
+    const auto after = std::upper_bound(_textSparseVisualLines.begin(),
+                                        _textSparseVisualLines.end(),
+                                        visualLine,
+                                        [](uint64_t value, const SparseTextVisualLineSummary& summary) noexcept {
+                                            return value < summary.firstVisualLine;
+                                        });
+    const auto it = after == _textSparseVisualLines.begin() ? _textSparseVisualLines.begin() : std::prev(after);
+    const uint64_t rowInLine = visualLine - it->firstVisualLine;
+    if (it->splitPanes)
+    {
+        const uint32_t leftLength    = it->leftEndIndex - it->leftStartIndex;
+        const uint32_t rightLength   = it->rightEndIndex - it->rightStartIndex;
+        const uint32_t leftOffset    = static_cast<uint32_t>(std::min<uint64_t>(rowInLine, leftLength));
+        const uint32_t rightOffset   = static_cast<uint32_t>(std::min<uint64_t>(rowInLine, rightLength));
+        const uint32_t leftStart     = static_cast<uint32_t>(NormalizeTextSegmentStart(it->leftStartIndex + leftOffset));
+        const uint32_t rightStart    = static_cast<uint32_t>(NormalizeTextSegmentStart(it->rightStartIndex + rightOffset));
+        const uint32_t leftEnd       = static_cast<uint32_t>(FindTextSegmentEnd(
+            leftStart, it->leftEndIndex, static_cast<float>(it->leftPaneColumns) * std::max(1.0f, _textCharWidthDip)));
+        const uint32_t rightEnd      = static_cast<uint32_t>(FindTextSegmentEnd(
+            rightStart, it->rightEndIndex, static_cast<float>(it->rightPaneColumns) * std::max(1.0f, _textCharWidthDip)));
+        layoutOut.logicalLine        = it->logicalLine;
+        layoutOut.segmentStartIndex  = leftEnd > leftStart ? leftStart : (rightEnd > rightStart ? rightStart : it->leftEndIndex);
+        layoutOut.segmentEndIndex    = rightEnd > rightStart ? rightEnd : (leftEnd > leftStart ? leftEnd : it->leftEndIndex);
+        layoutOut.splitPanes          = true;
+        layoutOut.leftStartIndex      = leftStart;
+        layoutOut.leftEndIndex        = leftEnd;
+        layoutOut.rightStartIndex     = rightStart;
+        layoutOut.rightEndIndex       = rightEnd;
+        layoutOut.separatorStartIndex = it->separatorStartIndex;
+        layoutOut.separatorEndIndex   = it->separatorEndIndex;
+        layoutOut.leftPaneColumns     = it->leftPaneColumns;
+        layoutOut.rightPaneColumns    = it->rightPaneColumns;
+        layoutOut.separatorColumns    = it->separatorColumns;
+        return true;
+    }
+    const uint64_t rawStart = static_cast<uint64_t>(it->lineStartIndex) + rowInLine;
+    const uint32_t start = static_cast<uint32_t>(std::min<uint64_t>(NormalizeTextSegmentStart(static_cast<size_t>(rawStart)), it->lineEndIndex));
+    const uint32_t end   = static_cast<uint32_t>(FindTextSegmentEnd(start, it->lineEndIndex, _textWrapWidthDip));
+    layoutOut            = TextVisualLineLayoutEntry{
+                   .logicalLine       = it->logicalLine,
+                   .segmentStartIndex = start,
+                   .segmentEndIndex   = std::max(start, end),
+    };
+    return true;
+}
+
+bool ViewerText::FindFirstTextVisualLineForLogical(uint32_t logicalLine, uint32_t& visualLineOut) const noexcept
+{
+    if (_textSparseWrapActive)
+    {
+        if (logicalLine >= _textSparseVisualLines.size())
+        {
+            visualLineOut = 0u;
+            return false;
+        }
+        visualLineOut = static_cast<uint32_t>(std::min<uint64_t>(_textSparseVisualLines[logicalLine].firstVisualLine,
+                                                                  std::numeric_limits<uint32_t>::max()));
+        return true;
+    }
+
+    const auto it = std::lower_bound(_textVisualLineLogical.begin(), _textVisualLineLogical.end(), logicalLine);
+    if (it == _textVisualLineLogical.end())
+    {
+        visualLineOut = _textVisualLineLogical.empty() ? 0u : static_cast<uint32_t>(_textVisualLineLogical.size() - 1u);
+        return ! _textVisualLineLogical.empty();
+    }
+    visualLineOut = static_cast<uint32_t>(std::distance(_textVisualLineLogical.begin(), it));
+    return true;
+}
+
 bool ViewerText::FindTextVisualLineForIndex(size_t index, uint32_t& visualLineOut) const noexcept
 {
+    if (_textSparseWrapActive)
+    {
+        if (_textSparseVisualLines.empty())
+        {
+            visualLineOut = 0u;
+            return false;
+        }
+
+        for (size_t row = 0u; row < _textSparseViewportLayouts.size(); ++row)
+        {
+            const TextVisualLineLayoutEntry& layout = _textSparseViewportLayouts[row];
+            const bool inPlain = ! layout.splitPanes && index >= layout.segmentStartIndex && index <= layout.segmentEndIndex;
+            const bool inLeft = layout.splitPanes && index >= layout.leftStartIndex && index <= layout.leftEndIndex;
+            const bool inRight = layout.splitPanes && index >= layout.rightStartIndex && index <= layout.rightEndIndex;
+            const bool inSeparator = layout.splitPanes && index >= layout.separatorStartIndex && index <= layout.separatorEndIndex;
+            if (inPlain || inLeft || inRight || inSeparator)
+            {
+                visualLineOut = static_cast<uint32_t>(
+                    std::min<uint64_t>(_textSparseViewportAnchors[row], std::numeric_limits<uint32_t>::max()));
+                return true;
+            }
+        }
+
+        index = NormalizeTextPosition(index);
+        const uint32_t clampedIndex = static_cast<uint32_t>(std::min<size_t>(index, std::numeric_limits<uint32_t>::max()));
+        const auto after = std::upper_bound(_textSparseVisualLines.begin(),
+                                            _textSparseVisualLines.end(),
+                                            clampedIndex,
+                                            [](uint32_t value, const SparseTextVisualLineSummary& summary) noexcept {
+                                                return value < summary.lineStartIndex;
+                                            });
+        const auto it = after == _textSparseVisualLines.begin() ? _textSparseVisualLines.begin() : std::prev(after);
+        uint64_t row = 0u;
+        if (it->splitPanes)
+        {
+            if (clampedIndex >= it->rightStartIndex)
+            {
+                row = static_cast<uint64_t>(clampedIndex - it->rightStartIndex);
+            }
+            else if (clampedIndex <= it->leftEndIndex)
+            {
+                row = static_cast<uint64_t>(clampedIndex - it->leftStartIndex);
+            }
+        }
+        else
+        {
+            const uint64_t column = clampedIndex > it->lineStartIndex ? static_cast<uint64_t>(clampedIndex - it->lineStartIndex) : 0u;
+            row = column;
+        }
+        row = std::min<uint64_t>(it->visualLineCount - 1u, row);
+        visualLineOut = static_cast<uint32_t>(std::min<uint64_t>(it->firstVisualLine + row, std::numeric_limits<uint32_t>::max()));
+        return true;
+    }
+
     if (_textVisualLineLayouts.empty())
     {
         visualLineOut = 0u;
@@ -2095,9 +3093,9 @@ bool ViewerText::FindTextVisualLineForIndex(size_t index, uint32_t& visualLineOu
 }
 
 bool ViewerText::GetTextVisualLineSegment(
-    uint32_t visualLine, uint32_t& logicalLineOut, uint32_t& segmentStartOut, uint32_t& segmentEndOut, bool preferRightPane) const noexcept
+    uint32_t visualLine, uint32_t& logicalLineOut, uint32_t& segmentStartOut, uint32_t& segmentEndOut, bool preferRightPane) noexcept
 {
-    if (_textVisualLineLayouts.empty() || _textLineStarts.empty())
+    if (TextVisualLineCount() == 0u || _textLineStarts.empty())
     {
         logicalLineOut  = 0u;
         segmentStartOut = 0u;
@@ -2105,8 +3103,11 @@ bool ViewerText::GetTextVisualLineSegment(
         return false;
     }
 
-    const size_t visualIndex                = std::min<size_t>(visualLine, _textVisualLineLayouts.size() - 1u);
-    const TextVisualLineLayoutEntry& layout = _textVisualLineLayouts[visualIndex];
+    TextVisualLineLayoutEntry layout{};
+    if (! TryGetTextVisualLineLayout(visualLine, layout))
+    {
+        return false;
+    }
     logicalLineOut                          = std::min<uint32_t>(layout.logicalLine, static_cast<uint32_t>(_textLineStarts.size() - 1u));
 
     if (! layout.splitPanes)
@@ -2149,10 +3150,15 @@ bool ViewerText::GetTextVisualLineSegment(
 
 void ViewerText::RebuildTextVisualLines(HWND hwnd) noexcept
 {
+    ClearTextLayoutCache();
     _textVisualLineStarts.clear();
     _textVisualLineLogical.clear();
     _textVisualLineLayouts.clear();
+    _textSparseVisualLines.clear();
+    _textSparseVisualLineCount = 0u;
+    _textSparseWrapActive      = false;
     _textWrapColumns                = 0;
+    _textWrapWidthDip               = 0.0f;
     _textSideBySideLeftPaneColumns  = 0u;
     _textSideBySideRightPaneColumns = 0u;
     _textSideBySideSeparatorColumns = 0u;
@@ -2179,7 +3185,8 @@ void ViewerText::RebuildTextVisualLines(HWND hwnd) noexcept
         RECT client{};
         GetClientRect(hwnd, &client);
         const UINT dpi        = GetDpiForWindow(hwnd);
-        const float widthDip  = std::max(0.0f, DipsFromPixels(static_cast<int>(client.right - client.left), dpi));
+        const float widthDip = std::max(
+            0.0f, Common::WindowSizing::PixelToDip(static_cast<float>(client.right - client.left), static_cast<float>(dpi)));
         const float marginDip = RoundDipToDevicePixels(6.0f, dpi);
         float availDip        = std::max(0.0f, widthDip - 2.0f * marginDip);
         if (ShowTextLineNumbersInCurrentPresentation() && charW > 0.0f)
@@ -2193,6 +3200,7 @@ void ViewerText::RebuildTextVisualLines(HWND hwnd) noexcept
         maxCols           = std::max<uint32_t>(1u, static_cast<uint32_t>(std::floor(colsF)));
         availableCols     = maxCols;
         _textWrapColumns  = maxCols;
+        _textWrapWidthDip = std::max(1.0f, availDip);
         _textLeftColumn   = 0;
     }
     else if (hwnd)
@@ -2206,7 +3214,8 @@ void ViewerText::RebuildTextVisualLines(HWND hwnd) noexcept
         RECT client{};
         GetClientRect(hwnd, &client);
         const UINT dpi        = GetDpiForWindow(hwnd);
-        const float widthDip  = std::max(0.0f, DipsFromPixels(static_cast<int>(client.right - client.left), dpi));
+        const float widthDip = std::max(
+            0.0f, Common::WindowSizing::PixelToDip(static_cast<float>(client.right - client.left), static_cast<float>(dpi)));
         const float marginDip = RoundDipToDevicePixels(6.0f, dpi);
         float availDip        = std::max(0.0f, widthDip - 2.0f * marginDip);
         if (ShowTextLineNumbersInCurrentPresentation() && charW > 0.0f)
@@ -2222,7 +3231,64 @@ void ViewerText::RebuildTextVisualLines(HWND hwnd) noexcept
 
     const DiffTextVariant* activeDiffVariant = CurrentDiffVariant();
     const bool hasPaneLocalLayout = _documentKind == DocumentKind::Diff && _diffParsedAvailable && _diffPresentation == DiffPresentationMode::SideBySide &&
-                                    activeDiffVariant && activeDiffVariant->logicalRowPaneLayouts.size() == _textLineStarts.size();
+                                     activeDiffVariant && activeDiffVariant->logicalRowPaneLayouts.size() == _textLineStarts.size();
+    if (hasPaneLocalLayout)
+    {
+        const uint32_t separatorColumns = 3u;
+        const uint32_t paneBudget       = availableCols > separatorColumns ? (availableCols - separatorColumns) : 2u;
+        _textSideBySideLeftPaneColumns  = std::max<uint32_t>(1u, paneBudget / 2u);
+        _textSideBySideRightPaneColumns = std::max<uint32_t>(1u, paneBudget - _textSideBySideLeftPaneColumns);
+        _textSideBySideSeparatorColumns = separatorColumns;
+    }
+    if (_wrap)
+    {
+        _textSparseVisualLines.reserve(_textLineStarts.size());
+        uint64_t projectedVisualLines = 0u;
+        for (uint32_t line = 0u; line < static_cast<uint32_t>(_textLineStarts.size()); ++line)
+        {
+            const uint32_t start = _textLineStarts[line];
+            const uint32_t end   = _textLineEnds.size() > line ? _textLineEnds[line] : start;
+            SparseTextVisualLineSummary summary{};
+            summary.logicalLine     = line;
+            summary.lineStartIndex  = start;
+            summary.lineEndIndex    = end;
+            summary.firstVisualLine = projectedVisualLines;
+            if (hasPaneLocalLayout && activeDiffVariant->logicalRowPaneLayouts[line].splitRow)
+            {
+                const auto& pane = activeDiffVariant->logicalRowPaneLayouts[line];
+                summary.splitPanes           = true;
+                summary.leftStartIndex       = start;
+                summary.leftEndIndex         = std::min<uint32_t>(end, start + pane.leftTextColumns);
+                summary.separatorStartIndex  = summary.leftEndIndex;
+                summary.separatorEndIndex    = std::min<uint32_t>(end, summary.separatorStartIndex + pane.separatorColumns);
+                summary.rightStartIndex      = summary.separatorEndIndex;
+                summary.rightEndIndex        = end;
+                summary.leftPaneColumns      = _textSideBySideLeftPaneColumns;
+                summary.rightPaneColumns     = _textSideBySideRightPaneColumns;
+                summary.separatorColumns     = _textSideBySideSeparatorColumns;
+                const uint32_t leftCodeUnits  = summary.leftEndIndex - summary.leftStartIndex;
+                const uint32_t rightCodeUnits = summary.rightEndIndex - summary.rightStartIndex;
+                summary.visualLineCount       = std::max<uint32_t>(1u, std::max(leftCodeUnits, rightCodeUnits));
+            }
+            else
+            {
+                const uint32_t len       = end >= start ? (end - start) : 0u;
+                summary.visualLineCount = std::max<uint32_t>(1u, len);
+            }
+            _textSparseVisualLines.push_back(summary);
+            const uint32_t count = summary.visualLineCount;
+            projectedVisualLines += count;
+        }
+
+        if (projectedVisualLines > kSparseWrapMaterializationLimit)
+        {
+            _textSparseVisualLineCount = projectedVisualLines;
+            _textSparseWrapActive      = true;
+            _textTopVisualLine = static_cast<uint32_t>(std::min<uint64_t>(_textTopVisualLine, projectedVisualLines - 1u));
+            return;
+        }
+        _textSparseVisualLines.clear();
+    }
     size_t reserveVisualCount     = _textLineStarts.size();
     if (_wrap && reserveVisualCount > 0u)
     {
@@ -2231,18 +3297,6 @@ void ViewerText::RebuildTextVisualLines(HWND hwnd) noexcept
     _textVisualLineStarts.reserve(reserveVisualCount);
     _textVisualLineLogical.reserve(reserveVisualCount);
     _textVisualLineLayouts.reserve(reserveVisualCount);
-    if (hasPaneLocalLayout)
-    {
-        const uint32_t separatorColumns = 3u;
-        const uint32_t paneBudget       = availableCols > separatorColumns ? (availableCols - separatorColumns) : 2u;
-        _textSideBySideLeftPaneColumns  = std::max<uint32_t>(1u, paneBudget / 2u);
-        _textSideBySideRightPaneColumns = std::max<uint32_t>(1u, paneBudget - _textSideBySideLeftPaneColumns);
-        _textSideBySideSeparatorColumns = separatorColumns;
-        if (_textSideBySideRightPaneColumns == 0u)
-        {
-            _textSideBySideRightPaneColumns = 1u;
-        }
-    }
 
     if (! _wrap)
     {
@@ -2269,19 +3323,29 @@ void ViewerText::RebuildTextVisualLines(HWND hwnd) noexcept
                                                         ? std::min<uint32_t>(_textSideBySideLeftPaneColumns, paneLayout.leftTextColumns - leftOffset)
                                                         : 0u;
                     const uint32_t rightVisible   = rightOffset < paneLayout.rightTextColumns
-                                                        ? std::min<uint32_t>(_textSideBySideRightPaneColumns, paneLayout.rightTextColumns - rightOffset)
-                                                        : 0u;
+                                                         ? std::min<uint32_t>(_textSideBySideRightPaneColumns, paneLayout.rightTextColumns - rightOffset)
+                                                         : 0u;
+
+                    const uint32_t leftVisibleStart = static_cast<uint32_t>(std::clamp<size_t>(
+                        NormalizeTextSegmentStart(static_cast<size_t>(leftStart) + leftOffset), leftStart, leftEnd));
+                    const uint32_t leftVisibleEnd = static_cast<uint32_t>(std::clamp<size_t>(
+                        NormalizeTextPosition(static_cast<size_t>(leftStart) + leftOffset + leftVisible), leftVisibleStart, leftEnd));
+                    const uint32_t rightVisibleStart = static_cast<uint32_t>(std::clamp<size_t>(
+                        NormalizeTextSegmentStart(static_cast<size_t>(rightStart) + rightOffset), rightStart, rightEnd));
+                    const uint32_t rightVisibleEnd = static_cast<uint32_t>(std::clamp<size_t>(
+                        NormalizeTextPosition(static_cast<size_t>(rightStart) + rightOffset + rightVisible), rightVisibleStart, rightEnd));
+                    const bool hasLeftVisible  = leftVisibleEnd > leftVisibleStart;
+                    const bool hasRightVisible = rightVisibleEnd > rightVisibleStart;
 
                     TextVisualLineLayoutEntry layout{};
                     layout.logicalLine       = line;
-                    layout.segmentStartIndex = leftVisible > 0u ? (leftStart + leftOffset) : (rightVisible > 0u ? (rightStart + rightOffset) : leftEnd);
-                    layout.segmentEndIndex =
-                        rightVisible > 0u ? (rightStart + rightOffset + rightVisible) : (leftVisible > 0u ? (leftStart + leftOffset + leftVisible) : leftEnd);
+                    layout.segmentStartIndex = hasLeftVisible ? leftVisibleStart : (hasRightVisible ? rightVisibleStart : leftEnd);
+                    layout.segmentEndIndex   = hasRightVisible ? rightVisibleEnd : (hasLeftVisible ? leftVisibleEnd : leftEnd);
                     layout.splitPanes          = true;
-                    layout.leftStartIndex      = leftVisible > 0u ? (leftStart + leftOffset) : leftEnd;
-                    layout.leftEndIndex        = layout.leftStartIndex + leftVisible;
-                    layout.rightStartIndex     = rightVisible > 0u ? (rightStart + rightOffset) : rightEnd;
-                    layout.rightEndIndex       = layout.rightStartIndex + rightVisible;
+                    layout.leftStartIndex      = hasLeftVisible ? leftVisibleStart : leftEnd;
+                    layout.leftEndIndex        = hasLeftVisible ? leftVisibleEnd : leftEnd;
+                    layout.rightStartIndex     = hasRightVisible ? rightVisibleStart : rightEnd;
+                    layout.rightEndIndex       = hasRightVisible ? rightVisibleEnd : rightEnd;
                     layout.separatorStartIndex = separatorStart;
                     layout.separatorEndIndex   = separatorEnd;
                     layout.leftPaneColumns     = _textSideBySideLeftPaneColumns;
@@ -2328,38 +3392,27 @@ void ViewerText::RebuildTextVisualLines(HWND hwnd) noexcept
                 const uint32_t separatorEnd   = std::min<uint32_t>(end, separatorStart + paneLayout.separatorColumns);
                 const uint32_t rightStart     = separatorEnd;
                 const uint32_t rightEnd       = end;
-                const auto wrappedRows        = [](uint32_t textColumns, uint32_t paneColumns) noexcept
+                uint32_t leftCursor           = leftStart;
+                uint32_t rightCursor          = rightStart;
+                bool emittedRow               = false;
+                do
                 {
-                    if (textColumns == 0u)
-                    {
-                        return 1u;
-                    }
-                    return std::max<uint32_t>(1u, (textColumns + paneColumns - 1u) / paneColumns);
-                };
-
-                const uint32_t rowCount = std::max<uint32_t>(wrappedRows(paneLayout.leftTextColumns, _textSideBySideLeftPaneColumns),
-                                                             wrappedRows(paneLayout.rightTextColumns, _textSideBySideRightPaneColumns));
-                for (uint32_t wrapRow = 0u; wrapRow < rowCount; ++wrapRow)
-                {
-                    const uint32_t leftOffset   = wrapRow * _textSideBySideLeftPaneColumns;
-                    const uint32_t rightOffset  = wrapRow * _textSideBySideRightPaneColumns;
-                    const uint32_t leftVisible  = leftOffset < paneLayout.leftTextColumns
-                                                      ? std::min<uint32_t>(_textSideBySideLeftPaneColumns, paneLayout.leftTextColumns - leftOffset)
-                                                      : 0u;
-                    const uint32_t rightVisible = rightOffset < paneLayout.rightTextColumns
-                                                      ? std::min<uint32_t>(_textSideBySideRightPaneColumns, paneLayout.rightTextColumns - rightOffset)
-                                                      : 0u;
+                    const uint32_t leftSegmentEnd = static_cast<uint32_t>(FindTextSegmentEnd(
+                        leftCursor, leftEnd, static_cast<float>(_textSideBySideLeftPaneColumns) * std::max(1.0f, _textCharWidthDip)));
+                    const uint32_t rightSegmentEnd = static_cast<uint32_t>(FindTextSegmentEnd(
+                        rightCursor, rightEnd, static_cast<float>(_textSideBySideRightPaneColumns) * std::max(1.0f, _textCharWidthDip)));
+                    const bool hasLeft  = leftSegmentEnd > leftCursor;
+                    const bool hasRight = rightSegmentEnd > rightCursor;
 
                     TextVisualLineLayoutEntry layout{};
                     layout.logicalLine       = line;
-                    layout.segmentStartIndex = leftVisible > 0u ? (leftStart + leftOffset) : (rightVisible > 0u ? (rightStart + rightOffset) : leftEnd);
-                    layout.segmentEndIndex =
-                        rightVisible > 0u ? (rightStart + rightOffset + rightVisible) : (leftVisible > 0u ? (leftStart + leftOffset + leftVisible) : leftEnd);
+                    layout.segmentStartIndex = hasLeft ? leftCursor : (hasRight ? rightCursor : leftEnd);
+                    layout.segmentEndIndex   = hasRight ? rightSegmentEnd : (hasLeft ? leftSegmentEnd : leftEnd);
                     layout.splitPanes          = true;
-                    layout.leftStartIndex      = leftVisible > 0u ? (leftStart + leftOffset) : leftEnd;
-                    layout.leftEndIndex        = layout.leftStartIndex + leftVisible;
-                    layout.rightStartIndex     = rightVisible > 0u ? (rightStart + rightOffset) : rightEnd;
-                    layout.rightEndIndex       = layout.rightStartIndex + rightVisible;
+                    layout.leftStartIndex      = leftCursor;
+                    layout.leftEndIndex        = std::max(leftCursor, leftSegmentEnd);
+                    layout.rightStartIndex     = rightCursor;
+                    layout.rightEndIndex       = std::max(rightCursor, rightSegmentEnd);
                     layout.separatorStartIndex = separatorStart;
                     layout.separatorEndIndex   = separatorEnd;
                     layout.leftPaneColumns     = _textSideBySideLeftPaneColumns;
@@ -2368,7 +3421,10 @@ void ViewerText::RebuildTextVisualLines(HWND hwnd) noexcept
                     _textVisualLineStarts.push_back(layout.segmentStartIndex);
                     _textVisualLineLogical.push_back(line);
                     _textVisualLineLayouts.push_back(layout);
-                }
+                    leftCursor  = layout.leftEndIndex;
+                    rightCursor = layout.rightEndIndex;
+                    emittedRow  = true;
+                } while (! emittedRow || leftCursor < leftEnd || rightCursor < rightEnd);
                 continue;
             }
         }
@@ -2385,16 +3441,18 @@ void ViewerText::RebuildTextVisualLines(HWND hwnd) noexcept
             continue;
         }
 
-        for (uint32_t col = 0; col < len; col += maxCols)
+        uint32_t segStart = start;
+        while (segStart < end)
         {
-            const uint32_t segStart = start + col;
+            const uint32_t segEnd = static_cast<uint32_t>(FindTextSegmentEnd(segStart, end, _textWrapWidthDip));
             _textVisualLineStarts.push_back(segStart);
             _textVisualLineLogical.push_back(line);
             _textVisualLineLayouts.push_back(TextVisualLineLayoutEntry{
                 .logicalLine       = line,
                 .segmentStartIndex = segStart,
-                .segmentEndIndex   = std::min<uint32_t>(end, segStart + maxCols),
+                .segmentEndIndex   = std::max(segStart, segEnd),
             });
+            segStart = static_cast<uint32_t>(segEnd > segStart ? segEnd : NextTextPosition(segStart));
         }
     }
 
@@ -2421,14 +3479,41 @@ std::optional<std::pair<uint32_t, uint32_t>> ViewerText::ComputeVisibleDiffHydra
         RECT client{};
         GetClientRect(textWindow, &client);
         const UINT dpi        = GetDpiForWindow(textWindow);
-        const float heightDip = std::max(1.0f, DipsFromPixels(static_cast<int>(client.bottom - client.top), dpi));
+        const float heightDip = std::max(
+            1.0f, Common::WindowSizing::PixelToDip(static_cast<float>(client.bottom - client.top), static_cast<float>(dpi)));
         const float lineH     = (_textLineHeightDip > 0.0f) ? _textLineHeightDip : 14.0f;
         pageRows              = std::max<uint32_t>(1u, static_cast<uint32_t>(std::floor(heightDip / lineH)));
     }
 
     uint32_t topLogical    = 0u;
     uint32_t bottomLogical = pageRows > 0u ? (pageRows - 1u) : 0u;
-    if (! _textVisualLineLogical.empty())
+    if (_textSparseWrapActive && ! _textSparseVisualLines.empty())
+    {
+        if (_textSparseViewportTop == _textTopVisualLine && ! _textSparseViewportLayouts.empty())
+        {
+            topLogical = _textSparseViewportLayouts.front().logicalLine;
+            const size_t bottomRow = std::min<size_t>(static_cast<size_t>(pageRows - 1u), _textSparseViewportLayouts.size() - 1u);
+            bottomLogical          = _textSparseViewportLayouts[bottomRow].logicalLine;
+        }
+        else
+        {
+            const auto logicalForVisual = [&](uint64_t visual) noexcept
+            {
+                const auto after = std::upper_bound(_textSparseVisualLines.begin(),
+                                                    _textSparseVisualLines.end(),
+                                                    visual,
+                                                    [](uint64_t value, const SparseTextVisualLineSummary& summary) noexcept {
+                                                        return value < summary.firstVisualLine;
+                                                    });
+                const auto it = after == _textSparseVisualLines.begin() ? _textSparseVisualLines.begin() : std::prev(after);
+                return it->logicalLine;
+            };
+            topLogical    = logicalForVisual(_textTopVisualLine);
+            bottomLogical = logicalForVisual(std::min<uint64_t>(
+                _textSparseVisualLineCount - 1u, static_cast<uint64_t>(_textTopVisualLine) + pageRows - 1u));
+        }
+    }
+    else if (! _textVisualLineLogical.empty())
     {
         const size_t topVisual    = std::min<size_t>(_textTopVisualLine, _textVisualLineLogical.size() - 1u);
         const size_t bottomVisual = std::min<size_t>(topVisual + std::max<size_t>(1u, static_cast<size_t>(pageRows)) - 1u, _textVisualLineLogical.size() - 1u);
@@ -2481,13 +3566,14 @@ void ViewerText::UpdateTextViewScrollBars(HWND hwnd) noexcept
         return;
     }
 
-    const uint64_t totalLines = _textVisualLineStarts.empty() ? 1u : static_cast<uint64_t>(_textVisualLineStarts.size());
+    const uint64_t totalLines = std::max<uint64_t>(1u, TextVisualLineCount());
     const uint64_t maxLine    = totalLines > 0 ? (totalLines - 1) : 0;
 
     RECT client{};
     GetClientRect(hwnd, &client);
     const UINT dpi           = GetDpiForWindow(hwnd);
-    const float heightDip    = std::max(1.0f, DipsFromPixels(static_cast<int>(client.bottom - client.top), dpi));
+    const float heightDip = std::max(
+        1.0f, Common::WindowSizing::PixelToDip(static_cast<float>(client.bottom - client.top), static_cast<float>(dpi)));
     const float lineH        = (_textLineHeightDip > 0.0f) ? _textLineHeightDip : 14.0f;
     const uint32_t pageLines = std::max<uint32_t>(1u, static_cast<uint32_t>(std::floor(heightDip / lineH)));
 
@@ -2521,7 +3607,8 @@ void ViewerText::UpdateTextViewScrollBars(HWND hwnd) noexcept
         return;
     }
 
-    float widthDip    = std::max(1.0f, DipsFromPixels(static_cast<int>(client.right - client.left), dpi));
+    float widthDip = std::max(
+        1.0f, Common::WindowSizing::PixelToDip(static_cast<float>(client.right - client.left), static_cast<float>(dpi)));
     const float charW = (_textCharWidthDip > 0.0f) ? _textCharWidthDip : 8.0f;
     if (ShowTextLineNumbersInCurrentPresentation() && charW > 0.0f)
     {
@@ -2591,18 +3678,7 @@ void ViewerText::ScrollTextViewportToLogicalLine(HWND hwnd, uint32_t targetLogic
     targetLogicalLine = std::min<uint32_t>(targetLogicalLine, static_cast<uint32_t>(_textLineStarts.size() - 1u));
 
     uint32_t targetVisualLine = targetLogicalLine;
-    if (! _textVisualLineLogical.empty())
-    {
-        const auto it = std::lower_bound(_textVisualLineLogical.begin(), _textVisualLineLogical.end(), targetLogicalLine);
-        if (it != _textVisualLineLogical.end())
-        {
-            targetVisualLine = static_cast<uint32_t>(std::distance(_textVisualLineLogical.begin(), it));
-        }
-        else
-        {
-            targetVisualLine = static_cast<uint32_t>(_textVisualLineLogical.size() - 1u);
-        }
-    }
+    static_cast<void>(FindFirstTextVisualLineForLogical(targetLogicalLine, targetVisualLine));
 
     _textTopVisualLine = targetVisualLine;
     _textLeftColumn    = 0u;
@@ -2651,7 +3727,7 @@ void ViewerText::ScrollToDiffSection(HWND hwnd, size_t sectionIndex) noexcept
         if (_documentKind == DocumentKind::Diff && ! _diffParsedAvailable && _textStreamActive && sectionIndex < _diffStreamSections.size())
         {
             const uint64_t targetOffset = AlignTextStreamOffset(_diffStreamSections[sectionIndex].startOffset);
-            if (SUCCEEDED(LoadTextToEdit(hwnd, targetOffset, false)))
+            if (StartAsyncTextStreamLoad(hwnd, targetOffset, false))
             {
                 SyncFileComboSelection();
             }
@@ -2702,7 +3778,25 @@ bool ViewerText::NavigateDiffHunk(HWND hwnd, bool previous) noexcept
     }
 
     uint32_t topLogicalLine = 0u;
-    if (! _textVisualLineLogical.empty())
+    if (_textSparseWrapActive && ! _textSparseVisualLines.empty())
+    {
+        if (_textSparseViewportTop == _textTopVisualLine && ! _textSparseViewportLayouts.empty())
+        {
+            topLogicalLine = _textSparseViewportLayouts.front().logicalLine;
+        }
+        else
+        {
+            const auto after = std::upper_bound(_textSparseVisualLines.begin(),
+                                                _textSparseVisualLines.end(),
+                                                static_cast<uint64_t>(_textTopVisualLine),
+                                                [](uint64_t value, const SparseTextVisualLineSummary& summary) noexcept {
+                                                    return value < summary.firstVisualLine;
+                                                });
+            const auto it = after == _textSparseVisualLines.begin() ? _textSparseVisualLines.begin() : std::prev(after);
+            topLogicalLine = it->logicalLine;
+        }
+    }
+    else if (! _textVisualLineLogical.empty())
     {
         const size_t topVisual = std::min<size_t>(_textTopVisualLine, _textVisualLineLogical.size() - 1u);
         topLogicalLine         = _textVisualLineLogical[topVisual];
@@ -2877,6 +3971,7 @@ bool ViewerText::EnsureTextViewDirect2D(HWND hwnd) noexcept
 
 void ViewerText::DiscardTextViewDirect2D() noexcept
 {
+    ClearTextLayoutCache();
     _textViewBrush.reset();
     _textViewFormat.reset();
     _textViewFormatRight.reset();
@@ -2893,9 +3988,10 @@ void ViewerText::SetShowLineNumbers(HWND hwnd, bool showLineNumbers) noexcept
     if (_hEdit)
     {
         RebuildTextVisualLines(_hEdit.get());
-        if (! _textVisualLineStarts.empty())
+        const uint64_t totalVisual = TextVisualLineCount();
+        if (totalVisual > 0u)
         {
-            _textTopVisualLine = std::min<uint32_t>(_textTopVisualLine, static_cast<uint32_t>(_textVisualLineStarts.size() - 1));
+            _textTopVisualLine = static_cast<uint32_t>(std::min<uint64_t>(_textTopVisualLine, totalVisual - 1u));
         }
         else
         {
@@ -2917,9 +4013,10 @@ void ViewerText::SetWrap(HWND hwnd, bool wrap) noexcept
     if (_hEdit)
     {
         RebuildTextVisualLines(_hEdit.get());
-        if (! _textVisualLineStarts.empty())
+        const uint64_t totalVisual = TextVisualLineCount();
+        if (totalVisual > 0u)
         {
-            _textTopVisualLine = std::min<uint32_t>(_textTopVisualLine, static_cast<uint32_t>(_textVisualLineStarts.size() - 1));
+            _textTopVisualLine = static_cast<uint32_t>(std::min<uint64_t>(_textTopVisualLine, totalVisual - 1u));
         }
         else
         {
@@ -2994,13 +4091,13 @@ void ViewerText::CommandFindNext(HWND hwnd, bool backward)
         const size_t matchStart = found;
         const size_t matchEnd   = std::min(found + queryLen, _textBuffer.size());
 
-        _textSelAnchor  = matchStart;
-        _textSelActive  = matchEnd;
-        _textCaretIndex = matchEnd;
+        _textSelAnchor  = NormalizeTextPosition(matchStart);
+        _textSelActive  = NormalizeTextPosition(matchEnd);
+        _textCaretIndex = _textSelActive;
 
         auto ensureCaretVisible = [&]() noexcept
         {
-            if (_textVisualLineStarts.empty() || _textVisualLineLogical.empty() || _textVisualLineLayouts.empty())
+            if (TextVisualLineCount() == 0u)
             {
                 return;
             }
@@ -3028,8 +4125,8 @@ void ViewerText::CommandFindNext(HWND hwnd, bool backward)
 
             if (! _wrap)
             {
-                const TextVisualLineLayoutEntry* caretLayout =
-                    static_cast<size_t>(caretVisual) < _textVisualLineLayouts.size() ? &_textVisualLineLayouts[static_cast<size_t>(caretVisual)] : nullptr;
+                TextVisualLineLayoutEntry caretLayoutValue{};
+                const TextVisualLineLayoutEntry* caretLayout = TryGetTextVisualLineLayout(caretVisual, caretLayoutValue) ? &caretLayoutValue : nullptr;
                 const bool preferRightPane = caretLayout && caretLayout->splitPanes &&
                                              (_textCaretIndex >= caretLayout->rightStartIndex || (_textCaretIndex >= caretLayout->separatorStartIndex &&
                                                                                                   caretLayout->rightEndIndex > caretLayout->rightStartIndex));
@@ -3156,14 +4253,14 @@ void ViewerText::CommandFindNext(HWND hwnd, bool backward)
                 lastStart = _fileSize - chunkBytes;
             }
             lastStart = AlignTextStreamOffset(lastStart);
-            static_cast<void>(LoadTextToEdit(hwnd, lastStart, true));
+            static_cast<void>(StartAsyncTextStreamLoad(hwnd, lastStart, true));
         }
         else
         {
-            static_cast<void>(LoadTextToEdit(hwnd, _textStreamSkipBytes, false));
+            static_cast<void>(StartAsyncTextStreamLoad(hwnd, _textStreamSkipBytes, false));
         }
 
-        UpdateSearchHighlights();
+        return;
     }
 }
 
@@ -3182,6 +4279,10 @@ HRESULT ViewerText::LoadTextToEdit(HWND hwnd, uint64_t startOffset, bool scrollT
     _textVisualLineStarts.clear();
     _textVisualLineLogical.clear();
     _textVisualLineLayouts.clear();
+    _textSparseVisualLines.clear();
+    _textSparseVisualLineCount = 0u;
+    _textSparseWrapActive      = false;
+    ClearTextLayoutCache();
     _textTopVisualLine              = 0;
     _textLeftColumn                 = 0;
     _textCaretIndex                 = 0;
@@ -3206,8 +4307,7 @@ HRESULT ViewerText::LoadTextToEdit(HWND hwnd, uint64_t startOffset, bool scrollT
         return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
     }
 
-    uint64_t newPosition = 0;
-    const HRESULT seekHr = _fileReader->Seek(static_cast<__int64>(clampedStart), FILE_BEGIN, &newPosition);
+    const HRESULT seekHr = ViewerTextSafety::SeekExact(_fileReader.get(), clampedStart);
     if (FAILED(seekHr))
     {
         Debug::Error(L"ViewerText: Seek(FILE_BEGIN, {}) failed for '{}' (hr=0x{:08X}).",
@@ -3234,81 +4334,13 @@ HRESULT ViewerText::LoadTextToEdit(HWND hwnd, uint64_t startOffset, bool scrollT
     size_t wantBytes = static_cast<size_t>(wantBytes64);
 
     std::vector<uint8_t> bytes(wantBytes);
-    size_t bytesReadTotal = 0;
-    while (bytesReadTotal < bytes.size())
+    const HRESULT readHr = ViewerTextSafety::ReadExactly(_fileReader.get(), bytes);
+    if (FAILED(readHr))
     {
-        const size_t remaining   = bytes.size() - bytesReadTotal;
-        const unsigned long want = remaining > static_cast<size_t>(std::numeric_limits<unsigned long>::max()) ? std::numeric_limits<unsigned long>::max()
-                                                                                                              : static_cast<unsigned long>(remaining);
-
-        unsigned long read   = 0;
-        const HRESULT readHr = _fileReader->Read(bytes.data() + bytesReadTotal, want, &read);
-        if (FAILED(readHr))
-        {
-            Debug::Error(L"ViewerText: Read failed for '{}' (hr=0x{:08X}).", _currentPath.c_str(), static_cast<unsigned long>(readHr));
-            return readHr;
-        }
-
-        if (read == 0)
-        {
-            break;
-        }
-
-        bytesReadTotal += static_cast<size_t>(read);
+        Debug::Error(L"ViewerText: exact read failed for '{}' (hr=0x{:08X}).", _currentPath.c_str(), static_cast<unsigned long>(readHr));
+        return readHr;
     }
-
-    bytes.resize(bytesReadTotal);
-
-    auto utf8IncompleteTailSize = [](const uint8_t* data, size_t size) noexcept -> size_t
-    {
-        if (! data || size == 0)
-        {
-            return 0;
-        }
-
-        size_t start = size;
-        for (size_t i = size; i > 0; --i)
-        {
-            const uint8_t b = data[i - 1];
-            if ((b & 0xC0u) != 0x80u)
-            {
-                start = i - 1;
-                break;
-            }
-        }
-
-        if (start >= size)
-        {
-            return 0;
-        }
-
-        const uint8_t lead = data[start];
-        size_t expected    = 1;
-        if (lead <= 0x7Fu)
-        {
-            expected = 1;
-        }
-        else if (lead >= 0xC2u && lead <= 0xDFu)
-        {
-            expected = 2;
-        }
-        else if (lead >= 0xE0u && lead <= 0xEFu)
-        {
-            expected = 3;
-        }
-        else if (lead >= 0xF0u && lead <= 0xF4u)
-        {
-            expected = 4;
-        }
-
-        const size_t available = size - start;
-        if (expected > 1 && available < expected)
-        {
-            return available;
-        }
-
-        return 0;
-    };
+    const size_t bytesReadTotal = bytes.size();
 
     size_t carryBytes = 0;
     if (displayEncoding == FileEncoding::Utf16LE || displayEncoding == FileEncoding::Utf16BE)
@@ -3321,7 +4353,11 @@ HRESULT ViewerText::LoadTextToEdit(HWND hwnd, uint64_t startOffset, bool scrollT
     }
     else if (displayCodePage == CP_UTF8)
     {
-        carryBytes = utf8IncompleteTailSize(bytes.data(), bytes.size());
+        carryBytes = ViewerTextSafety::IncompleteUtf8TailSize(bytes.data(), bytes.size());
+    }
+    else if (ViewerTextSafety::UsesDbcsBoundaryCarry(displayCodePage))
+    {
+        carryBytes = ViewerTextSafety::IncompleteDbcsTailSize(bytes.data(), bytes.size(), displayCodePage);
     }
 
     if (carryBytes > bytes.size())
@@ -3478,9 +4514,10 @@ HRESULT ViewerText::LoadTextToEdit(HWND hwnd, uint64_t startOffset, bool scrollT
     UpdateTextStreamTotalLineCountAfterLoad();
     RebuildTextVisualLines(_hEdit.get());
 
-    if (scrollToEnd && ! _textVisualLineStarts.empty())
+    const uint64_t totalVisual = TextVisualLineCount();
+    if (scrollToEnd && totalVisual > 0u)
     {
-        _textTopVisualLine = static_cast<uint32_t>(_textVisualLineStarts.size() - 1);
+        _textTopVisualLine = static_cast<uint32_t>(std::min<uint64_t>(totalVisual - 1u, std::numeric_limits<uint32_t>::max()));
         _textCaretIndex    = _textBuffer.size();
     }
 
@@ -3618,6 +4655,349 @@ uint64_t ViewerText::AlignTextStreamOffset(uint64_t offset) const noexcept
     return aligned;
 }
 
+bool ViewerText::StartAsyncTextStreamLoad(HWND hwnd, uint64_t startOffset, bool scrollToEnd) noexcept
+{
+    if (! hwnd || ! _hEdit || ! _fileSystem || _currentPath.empty() || _fileSize == 0u || _windowIdentity == 0u)
+    {
+#ifdef _DEBUG
+        _debugTextStreamRejectedCount += 1u;
+#endif
+        return false;
+    }
+
+    const uint64_t clampedStart = AlignTextStreamOffset(std::min<uint64_t>(std::max(startOffset, _textStreamSkipBytes), _fileSize));
+    if (clampedStart > static_cast<uint64_t>(std::numeric_limits<__int64>::max()))
+    {
+#ifdef _DEBUG
+        _debugTextStreamRejectedCount += 1u;
+#endif
+        return false;
+    }
+
+    const uint64_t requestId = _asyncTextStreamRequestId.fetch_add(1u, std::memory_order_relaxed) + 1u;
+    const uint64_t windowIdentity = _windowIdentity;
+    _activeAsyncTextStreamRequestId = requestId;
+    _pendingTextStreamStartOffset   = clampedStart;
+    _textStreamLoadPending          = true;
+    AsyncTextStreamFault injectedFault = AsyncTextStreamFault::None;
+#if defined(_DEBUG) && defined(ENABLE_TESTS)
+    injectedFault                  = _debugNextAsyncTextStreamFault;
+    _debugNextAsyncTextStreamFault = AsyncTextStreamFault::None;
+#endif
+    const uint64_t chunkBytes = TextStreamChunkBytes();
+    const FileEncoding displayEncoding = DisplayEncodingFileEncoding();
+    const UINT displayCodePage = DisplayEncodingCodePage();
+
+    struct AsyncTextStreamWorkItem final
+    {
+        AsyncTextStreamWorkItem() = default;
+        ~AsyncTextStreamWorkItem() = default;
+        AsyncTextStreamWorkItem(const AsyncTextStreamWorkItem&) = delete;
+        AsyncTextStreamWorkItem& operator=(const AsyncTextStreamWorkItem&) = delete;
+        AsyncTextStreamWorkItem(AsyncTextStreamWorkItem&&) = delete;
+        AsyncTextStreamWorkItem& operator=(AsyncTextStreamWorkItem&&) = delete;
+
+        wil::unique_hmodule moduleKeepAlive;
+        ViewerText* viewer = nullptr;
+        HWND hwnd = nullptr;
+        uint64_t windowIdentity = 0u;
+        uint64_t fileSize = 0u;
+        uint64_t chunkBytes = 0u;
+        uint64_t streamSkipBytes = 0u;
+        ViewerText::FileEncoding encoding = ViewerText::FileEncoding::Unknown;
+        UINT codePage = 0u;
+        ViewerText::AsyncTextStreamFault injectedFault = ViewerText::AsyncTextStreamFault::None;
+        wil::com_ptr<IFileSystem> fileSystem;
+        std::filesystem::path path;
+        std::unique_ptr<AsyncTextStreamResult> result;
+    };
+
+    auto result = injectedFault == AsyncTextStreamFault::Allocation
+                      ? std::unique_ptr<AsyncTextStreamResult>{}
+                      : std::unique_ptr<AsyncTextStreamResult>(new (std::nothrow) AsyncTextStreamResult{});
+    auto work   = injectedFault == AsyncTextStreamFault::Allocation
+                      ? std::unique_ptr<AsyncTextStreamWorkItem>{}
+                      : std::unique_ptr<AsyncTextStreamWorkItem>(new (std::nothrow) AsyncTextStreamWorkItem{});
+    if (! result || ! work)
+    {
+#ifdef _DEBUG
+        _debugTextStreamRejectedCount += 1u;
+#endif
+        OnAsyncTextStreamFailure(requestId, windowIdentity, E_OUTOFMEMORY);
+        return false;
+    }
+
+    result->viewer         = this;
+    result->requestId      = requestId;
+    result->windowIdentity = windowIdentity;
+    result->startOffset    = clampedStart;
+    result->scrollToEnd    = scrollToEnd;
+    result->hr             = E_FAIL;
+
+    work->moduleKeepAlive = AcquireModuleReferenceFromAddress(&kTextStreamModuleAnchor);
+    if (! work->moduleKeepAlive)
+    {
+        const DWORD error = GetLastError();
+#ifdef _DEBUG
+        _debugTextStreamRejectedCount += 1u;
+#endif
+        OnAsyncTextStreamFailure(requestId, windowIdentity, HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_MOD_NOT_FOUND));
+        return false;
+    }
+
+    work->viewer         = this;
+    work->hwnd           = hwnd;
+    work->windowIdentity = windowIdentity;
+    work->fileSize       = _fileSize;
+    work->chunkBytes     = chunkBytes;
+    work->streamSkipBytes = _textStreamSkipBytes;
+    work->encoding       = displayEncoding;
+    work->codePage       = displayCodePage;
+    work->injectedFault  = injectedFault;
+    work->fileSystem     = _fileSystem;
+    work->path           = _currentPath;
+    work->result         = std::move(result);
+
+    AddRef();
+    const BOOL submitted = injectedFault == AsyncTextStreamFault::Submit ? FALSE : TrySubmitThreadpoolCallback(
+        [](PTP_CALLBACK_INSTANCE instance, void* context) noexcept
+        {
+            std::unique_ptr<AsyncTextStreamWorkItem> work(static_cast<AsyncTextStreamWorkItem*>(context));
+            if (work && work->moduleKeepAlive)
+            {
+                TransferModulePinToCallbackReturn(instance, work->moduleKeepAlive);
+            }
+            ViewerText* viewer = work ? work->viewer : nullptr;
+            auto releaseViewer = wil::scope_exit([&]() noexcept
+            {
+                if (viewer)
+                {
+                    viewer->Release();
+                }
+            });
+            if (! work || ! viewer || ! work->result)
+            {
+                return;
+            }
+
+            const auto startedAt = std::chrono::steady_clock::now();
+            auto& result = work->result;
+            auto postTerminal = wil::scope_exit([&]() noexcept
+            {
+                if (! result || ! work->hwnd || viewer->_windowIdentity != work->windowIdentity ||
+                    GetWindowLongPtrW(work->hwnd, GWLP_USERDATA) != reinterpret_cast<LONG_PTR>(viewer))
+                {
+                    return;
+                }
+
+                result->elapsedUs = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startedAt).count());
+                const uint64_t terminalRequestId = result->requestId;
+                HRESULT terminalHr = result->hr;
+                const bool posted = work->injectedFault != AsyncTextStreamFault::PayloadPost &&
+                                    PostMessagePayload(work->hwnd,
+                                                       WndMsg::kViewerTextAsyncStreamComplete,
+                                                       static_cast<WPARAM>(terminalRequestId),
+                                                       std::move(result));
+                if (posted)
+                {
+                    return;
+                }
+
+                result.reset();
+                if (SUCCEEDED(terminalHr))
+                {
+                    terminalHr = E_FAIL;
+                }
+                DWORD_PTR ignored = 0u;
+                if (SendMessageTimeoutW(work->hwnd,
+                                        WndMsg::kViewerTextAsyncStreamFailure,
+                                        static_cast<WPARAM>(terminalRequestId),
+                                        static_cast<LPARAM>(terminalHr),
+                                        SMTO_ABORTIFHUNG | SMTO_BLOCK,
+                                        2000u,
+                                        &ignored) == 0)
+                {
+                    Debug::Error(L"ViewerText: failed to deliver streamed text terminal result (request={}, hr=0x{:08X}, lastError={}).",
+                                 terminalRequestId,
+                                 static_cast<unsigned long>(terminalHr),
+                                 GetLastError());
+                }
+            });
+
+            wil::com_ptr<IFileSystemIO> fileIo;
+            const HRESULT ioHr = work->fileSystem->QueryInterface(__uuidof(IFileSystemIO), fileIo.put_void());
+            if (FAILED(ioHr) || ! fileIo)
+            {
+                result->hr = FAILED(ioHr) ? ioHr : E_NOINTERFACE;
+                return;
+            }
+            wil::com_ptr<IFileReader> reader;
+            const HRESULT openHr = fileIo->CreateFileReader(work->path.c_str(), reader.put());
+            if (FAILED(openHr) || ! reader)
+            {
+                result->hr = FAILED(openHr) ? openHr : HRESULT_FROM_WIN32(ERROR_OPEN_FAILED);
+                return;
+            }
+
+            const HRESULT seekHr = ViewerTextSafety::SeekExact(reader.get(), result->startOffset);
+            if (FAILED(seekHr))
+            {
+                result->hr = seekHr;
+                return;
+            }
+
+            const uint64_t available = work->fileSize > result->startOffset ? (work->fileSize - result->startOffset) : 0u;
+            const size_t requested = static_cast<size_t>(std::min<uint64_t>(std::min(available, work->chunkBytes), std::numeric_limits<size_t>::max()));
+            std::vector<uint8_t> bytes(requested);
+            const HRESULT readHr = ViewerTextSafety::ReadExactly(reader.get(), bytes);
+            if (FAILED(readHr))
+            {
+                result->hr = readHr;
+                return;
+            }
+            const size_t totalRead = bytes.size();
+
+            size_t carryBytes = 0u;
+            if (work->encoding == FileEncoding::Utf16LE || work->encoding == FileEncoding::Utf16BE)
+            {
+                carryBytes = bytes.size() % 2u;
+            }
+            else if (work->encoding == FileEncoding::Utf32LE || work->encoding == FileEncoding::Utf32BE)
+            {
+                carryBytes = bytes.size() % 4u;
+            }
+            else if (work->codePage == CP_UTF8)
+            {
+                carryBytes = ViewerTextSafety::IncompleteUtf8TailSize(bytes.data(), bytes.size());
+            }
+            else if (ViewerTextSafety::UsesDbcsBoundaryCarry(work->codePage))
+            {
+                carryBytes = ViewerTextSafety::IncompleteDbcsTailSize(bytes.data(), bytes.size(), work->codePage);
+            }
+            carryBytes = std::min(carryBytes, bytes.size());
+
+            const HRESULT decodeHr = DecodeTextWindow(bytes, bytes.size() - carryBytes, work->encoding, work->codePage, result->textBuffer);
+            if (FAILED(decodeHr))
+            {
+                result->hr = decodeHr;
+                return;
+            }
+            BuildTextLineIndexForBuffer(result->textBuffer, result->textLineStarts, result->textLineEnds, result->textMaxLineLength);
+            if (work->injectedFault == AsyncTextStreamFault::Worker)
+            {
+                result->hr = E_FAIL;
+                return;
+            }
+            result->endOffset = std::min<uint64_t>(work->fileSize,
+                                                   result->startOffset + static_cast<uint64_t>(totalRead) - static_cast<uint64_t>(carryBytes));
+            result->streamActive = work->fileSize > work->streamSkipBytes && (work->fileSize - work->streamSkipBytes) > work->chunkBytes;
+            result->hr = S_OK;
+        },
+        work.get(),
+        nullptr);
+    if (submitted == FALSE)
+    {
+        Release();
+#ifdef _DEBUG
+        _debugTextStreamRejectedCount += 1u;
+#endif
+        OnAsyncTextStreamFailure(requestId, windowIdentity, HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_MEMORY));
+        return false;
+    }
+
+    static_cast<void>(work.release());
+#ifdef _DEBUG
+    _debugTextStreamAcceptedCount += 1u;
+#endif
+    if (_hWnd)
+    {
+        InvalidateRect(_hWnd.get(), &_statusRect, FALSE);
+    }
+    return true;
+}
+
+void ViewerText::OnAsyncTextStreamComplete(std::unique_ptr<AsyncTextStreamResult> result) noexcept
+{
+    if (! result)
+    {
+        return;
+    }
+    if (result->windowIdentity != _windowIdentity || result->requestId != _activeAsyncTextStreamRequestId)
+    {
+#ifdef _DEBUG
+        _debugTextStreamStaleCount += 1u;
+#endif
+        return;
+    }
+    if (FAILED(result->hr))
+    {
+        OnAsyncTextStreamFailure(result->requestId, result->windowIdentity, result->hr);
+        return;
+    }
+
+#ifdef _DEBUG
+    const auto uiApplyStartedAt = std::chrono::steady_clock::now();
+#endif
+    _textStreamLoadPending = false;
+    _textBuffer            = std::move(result->textBuffer);
+    _textLineStarts        = std::move(result->textLineStarts);
+    _textLineEnds          = std::move(result->textLineEnds);
+    _textMaxLineLength     = result->textMaxLineLength;
+    _textStreamStartOffset = result->startOffset;
+    _textStreamEndOffset   = result->endOffset;
+    _textStreamActive      = result->streamActive;
+    _textTopVisualLine     = 0u;
+    _textLeftColumn        = 0u;
+    _textCaretIndex        = 0u;
+    _textSelAnchor         = 0u;
+    _textSelActive         = 0u;
+    _textSelecting         = false;
+    RebuildTextVisualLines(_hEdit.get());
+    if (result->scrollToEnd && TextVisualLineCount() > 0u)
+    {
+        _textTopVisualLine = static_cast<uint32_t>(std::min<uint64_t>(TextVisualLineCount() - 1u, std::numeric_limits<uint32_t>::max()));
+        _textCaretIndex    = NormalizeTextPosition(_textBuffer.size());
+        _textSelAnchor     = _textCaretIndex;
+        _textSelActive     = _textCaretIndex;
+    }
+    UpdateTextStreamTotalLineCountAfterLoad();
+    UpdateSearchHighlights();
+    UpdateTextViewScrollBars(_hEdit.get());
+    InvalidateRect(_hEdit.get(), nullptr, TRUE);
+    if (_hWnd)
+    {
+        InvalidateRect(_hWnd.get(), &_statusRect, FALSE);
+    }
+#ifdef _DEBUG
+    _debugTextStreamTerminalCount += 1u;
+    _debugTextStreamLastTerminalHr = result->hr;
+    _debugTextStreamLastElapsedUs  = result->elapsedUs;
+    _debugTextStreamLastUiApplyUs =
+        static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - uiApplyStartedAt).count());
+#endif
+}
+
+void ViewerText::OnAsyncTextStreamFailure(uint64_t requestId, uint64_t windowIdentity, HRESULT hr) noexcept
+{
+    if (windowIdentity != _windowIdentity || requestId != _activeAsyncTextStreamRequestId)
+    {
+#ifdef _DEBUG
+        _debugTextStreamStaleCount += 1u;
+#endif
+        return;
+    }
+    _textStreamLoadPending = false;
+    Debug::Error(L"ViewerText: streamed text window request {} failed (hr=0x{:08X}).", requestId, static_cast<unsigned long>(hr));
+#ifdef _DEBUG
+    _debugTextStreamTerminalCount += 1u;
+    _debugTextStreamLastTerminalHr = hr;
+#endif
+    if (_hWnd)
+    {
+        InvalidateRect(_hWnd.get(), &_statusRect, FALSE);
+    }
+}
+
 bool ViewerText::TryNavigateTextStream(HWND hwnd, bool backward) noexcept
 {
     if (! hwnd || ! _hEdit || ! _fileReader || _currentPath.empty() || _fileSize == 0)
@@ -3631,47 +5011,39 @@ bool ViewerText::TryNavigateTextStream(HWND hwnd, bool backward) noexcept
         return false;
     }
 
-    uint64_t nextOffset = _textStreamStartOffset;
+    const uint64_t navigationStart = _textStreamLoadPending ? _pendingTextStreamStartOffset : _textStreamStartOffset;
+    const uint64_t navigationEnd = _textStreamLoadPending
+                                       ? navigationStart + std::min<uint64_t>(chunkBytes, _fileSize > navigationStart ? (_fileSize - navigationStart) : 0u)
+                                       : _textStreamEndOffset;
+    uint64_t nextOffset = navigationStart;
     bool scrollToEnd    = false;
     if (backward)
     {
-        if (_textStreamStartOffset <= _textStreamSkipBytes)
+        if (navigationStart <= _textStreamSkipBytes)
         {
             return false;
         }
 
-        const uint64_t delta = std::min<uint64_t>(_textStreamStartOffset - _textStreamSkipBytes, chunkBytes);
-        nextOffset           = _textStreamStartOffset - delta;
+        const uint64_t delta = std::min<uint64_t>(navigationStart - _textStreamSkipBytes, chunkBytes);
+        nextOffset           = navigationStart - delta;
         scrollToEnd          = true;
     }
     else
     {
-        if (_textStreamEndOffset <= _textStreamStartOffset || _textStreamEndOffset >= _fileSize)
+        if (navigationEnd <= navigationStart || navigationEnd >= _fileSize)
         {
             return false;
         }
 
-        nextOffset  = _textStreamEndOffset;
+        nextOffset  = navigationEnd;
         scrollToEnd = false;
     }
 
     nextOffset = AlignTextStreamOffset(nextOffset);
-    if (nextOffset == _textStreamStartOffset)
+    if (nextOffset == navigationStart)
     {
         return false;
     }
 
-    const HRESULT hr = LoadTextToEdit(hwnd, nextOffset, scrollToEnd);
-    if (FAILED(hr))
-    {
-        return false;
-    }
-
-    UpdateSearchHighlights();
-    if (_hWnd)
-    {
-        InvalidateRect(_hWnd.get(), &_statusRect, FALSE);
-    }
-
-    return true;
+    return StartAsyncTextStreamLoad(hwnd, nextOffset, scrollToEnd);
 }

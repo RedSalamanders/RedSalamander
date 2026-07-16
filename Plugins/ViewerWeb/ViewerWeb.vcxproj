@@ -142,8 +142,11 @@
     <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="Factory.cpp" />
     <ClCompile Include="ViewerWeb.cpp" />
+    <ClInclude Include="JsStringEscape.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="ViewerWeb.h" />
+    <ClInclude Include="ViewerWebCleanupTracker.h" />
+    <ClInclude Include="ViewerWebSecurity.h" />
     <ResourceCompile Include="ViewerWebResources.rc" />
   </ItemGroup>
   <ItemGroup>

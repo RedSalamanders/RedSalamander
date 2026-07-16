@@ -100,11 +100,12 @@ The page is present as a placeholder. Mouse behavior is currently the built-in f
 ### Themes
 
 - Choose a built-in, file-based, or user theme from **Theme**.
-- User themes have **Name**, **Base**, and a key/value color override table.
-- **Pick...**, **Set**, and **Clear** edit the selected color key.
+- User themes have **Name**, **Base**, a reusable palette, and authored semantic color sources.
+- **Pick...**, **Set**, and **Clear** edit the selected source without flattening references or functions.
 - **Apply Temporarily** previews without committing; **Cancel** restores the previous theme.
-- **Duplicate**, **Load From File...**, and **Save Theme...** manage `*.theme.json5` files.
+- **Duplicate**, **Load From File...**, and **Save Theme...** preserve the version 2 `palette` and `colors` representation in `*.theme.json5` files.
 - Built-in and disk-loaded themes are read-only until duplicated/imported as user themes.
+- Use RedConfigure for palette rename/delete, dependency inspection, recipes, and fixed-seed dynamic-function previews.
 
 ### Plugins
 
@@ -183,9 +184,9 @@ The page is present as a placeholder. Mouse behavior is currently the built-in f
 
 - Switch between built-in, file-based, and user themes.
 - Create or duplicate a user theme from an existing theme.
-- Edit color overrides while still seeing inherited values.
+- Edit authored semantic values while seeing inherited/resolved values; references and functions remain lossless.
 - Preview a theme immediately with **Apply Temporarily**.
-- Load/save `*.theme.json5` theme files.
+- Load/save required-version-2 `*.theme.json5` theme files.
 
 ### Plugins
 

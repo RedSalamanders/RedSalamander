@@ -56,7 +56,7 @@ enum HelperCommand : int
 
 struct HelperMenuSpec final
 {
-    int commandId = 0;
+    int commandId         = 0;
     unsigned int stringId = 0u;
     std::wstring_view fallbackText;
     std::wstring_view insertionText;
@@ -195,8 +195,7 @@ constexpr std::array<HelperMenuSpec, 5> kReplacementSpecs = {
 
 [[nodiscard]] bool IsAsciiDecimalDigits(std::wstring_view text) noexcept
 {
-    return ! text.empty() &&
-           std::ranges::all_of(text, [](const wchar_t ch) noexcept { return ch >= L'0' && ch <= L'9'; });
+    return ! text.empty() && std::ranges::all_of(text, [](const wchar_t ch) noexcept { return ch >= L'0' && ch <= L'9'; });
 }
 } // namespace
 
@@ -279,16 +278,13 @@ std::optional<HelperCommandInsertion> TryBuildDynamicHelperInsertion(const int c
     return std::nullopt;
 }
 
-HelperInsertionResult ApplyHelperInsertion(std::wstring_view text,
-                                           const size_t selectionStart,
-                                           const size_t selectionEnd,
-                                           std::wstring_view insertion)
+HelperInsertionResult ApplyHelperInsertion(std::wstring_view text, const size_t selectionStart, const size_t selectionEnd, std::wstring_view insertion)
 {
     const size_t textLength = text.size();
-    size_t start           = std::min(selectionStart, selectionEnd);
-    size_t end             = std::max(selectionStart, selectionEnd);
-    start                  = std::min(start, textLength);
-    end                    = std::min(end, textLength);
+    size_t start            = std::min(selectionStart, selectionEnd);
+    size_t end              = std::max(selectionStart, selectionEnd);
+    start                   = std::min(start, textLength);
+    end                     = std::min(end, textLength);
 
     std::wstring result;
     result.reserve(textLength - (end - start) + insertion.size());

@@ -360,20 +360,13 @@
 
 [[nodiscard]] bool TestViewerTextHexByteColorPerfScenario(CaseState& state) noexcept
 {
-    std::error_code ec;
-    const std::filesystem::path tempRoot = std::filesystem::temp_directory_path(ec) / std::format(L"RedSalamander.ViewerTextPerf.{}", NewGuidText());
-    state.Require(! ec, L"ViewerText perf scenario: failed to resolve the temp directory.");
-    if (ec)
+    SelfTest::TestSandbox sandbox = SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::Commands, L"viewer_text_hex_byte_color_perf");
+    state.Require(sandbox.IsValid(), L"ViewerText perf scenario: failed to acquire TestSandbox scratch root.");
+    if (! sandbox.IsValid())
     {
         return false;
     }
-
-    std::filesystem::create_directories(tempRoot, ec);
-    state.Require(! ec, L"ViewerText perf scenario: failed to create the temp directory.");
-    if (ec)
-    {
-        return false;
-    }
+    const std::filesystem::path tempRoot = sandbox.root;
 
     auto cleanupTempRoot = wil::scope_exit([&]() noexcept
     {
@@ -685,20 +678,13 @@
     constexpr WPARAM kViewerTextShowUnchangedCommand = 40213u;
     constexpr WPARAM kViewerTextNextHunkCommand      = 40214u;
 
-    std::error_code ec;
-    const std::filesystem::path tempRoot = std::filesystem::temp_directory_path(ec) / std::format(L"RedSalamander.ViewerTextDiffPerf.{}", NewGuidText());
-    state.Require(! ec, L"ViewerText diff perf scenario: failed to resolve the temp directory.");
-    if (ec)
+    SelfTest::TestSandbox sandbox = SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::Commands, L"viewer_text_diff_perf");
+    state.Require(sandbox.IsValid(), L"ViewerText diff perf scenario: failed to acquire TestSandbox scratch root.");
+    if (! sandbox.IsValid())
     {
         return false;
     }
-
-    std::filesystem::create_directories(tempRoot, ec);
-    state.Require(! ec, L"ViewerText diff perf scenario: failed to create the temp directory.");
-    if (ec)
-    {
-        return false;
-    }
+    const std::filesystem::path tempRoot = sandbox.root;
 
     auto cleanupTempRoot = wil::scope_exit([&]() noexcept
     {
@@ -839,6 +825,7 @@
         return false;
     }
 
+    std::error_code ec;
     const auto largeDiffBytes  = std::filesystem::file_size(largeDiffPath, ec);
     const bool largeDiffSizeOk = ! ec;
     ec.clear();
@@ -1508,7 +1495,20 @@
         },
             missingSnapshot,
             SelfTest::Scale(5000ms));
-        state.Require(snapshotReady, L"ViewerText diff perf scenario 'unresolved_placeholder': placeholder snapshot did not arrive.");
+        state.Require(snapshotReady,
+                      std::format(L"ViewerText diff perf scenario 'unresolved_placeholder': placeholder snapshot did not arrive. "
+                                  L"final documentKind={} diffPresentation={} parsed={} hasPlaceholders={} placeholderRows={} "
+                                  L"placeholderBands={} referencedResolved={} renderCount={} visibleRows={} fileSections={}",
+                                  static_cast<int>(missingSnapshot.documentKind),
+                                  static_cast<int>(missingSnapshot.diffPresentation),
+                                  missingSnapshot.diffParsedAvailable ? 1 : 0,
+                                  missingSnapshot.diffHasPlaceholderRows ? 1 : 0,
+                                  missingSnapshot.placeholderRowCount,
+                                  missingSnapshot.placeholderBandCount,
+                                  missingSnapshot.diffReferencedFilesResolved ? 1 : 0,
+                                  missingSnapshot.renderCount,
+                                  missingSnapshot.visibleRowCount,
+                                  missingSnapshot.fileSectionCount));
         if (! snapshotReady)
         {
             return false;
@@ -1836,20 +1836,13 @@
 
 [[nodiscard]] bool TestViewerImgRawCloseRoundTrip(CaseState& state) noexcept
 {
-    std::error_code ec;
-    const std::filesystem::path tempRoot = std::filesystem::temp_directory_path(ec) / std::format(L"RedSalamander.ViewerImgRawClose.{}", NewGuidText());
-    state.Require(! ec, L"ViewerImgRaw close roundtrip: failed to resolve the temp directory.");
-    if (ec)
+    SelfTest::TestSandbox sandbox = SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::Commands, L"viewer_imgraw_close_roundtrip");
+    state.Require(sandbox.IsValid(), L"ViewerImgRaw close roundtrip: failed to acquire TestSandbox scratch root.");
+    if (! sandbox.IsValid())
     {
         return false;
     }
-
-    std::filesystem::create_directories(tempRoot, ec);
-    state.Require(! ec, L"ViewerImgRaw close roundtrip: failed to create the temp directory.");
-    if (ec)
-    {
-        return false;
-    }
+    const std::filesystem::path tempRoot = sandbox.root;
 
     auto cleanupTempRoot = wil::scope_exit([&]() noexcept
     {
@@ -1887,20 +1880,13 @@
 
 [[nodiscard]] bool TestViewerWebCloseRoundTrip(CaseState& state) noexcept
 {
-    std::error_code ec;
-    const std::filesystem::path tempRoot = std::filesystem::temp_directory_path(ec) / std::format(L"RedSalamander.ViewerWebClose.{}", NewGuidText());
-    state.Require(! ec, L"ViewerWeb close roundtrip: failed to resolve the temp directory.");
-    if (ec)
+    SelfTest::TestSandbox sandbox = SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::Commands, L"viewer_web_close_roundtrip");
+    state.Require(sandbox.IsValid(), L"ViewerWeb close roundtrip: failed to acquire TestSandbox scratch root.");
+    if (! sandbox.IsValid())
     {
         return false;
     }
-
-    std::filesystem::create_directories(tempRoot, ec);
-    state.Require(! ec, L"ViewerWeb close roundtrip: failed to create the temp directory.");
-    if (ec)
-    {
-        return false;
-    }
+    const std::filesystem::path tempRoot = sandbox.root;
 
     auto cleanupTempRoot = wil::scope_exit([&]() noexcept
     {
@@ -2122,6 +2108,149 @@ private:
     wil::unique_handle _thread;
     std::wstring _pipeName;
 };
+
+[[nodiscard]] bool TestPluginConfigurationDialogUsesDxUiCommandButtons(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+
+    const FileSystemPluginManager::PluginEntry* entry = FindFileSystemPluginById(kBuiltinLocalFileSystemId);
+    state.Require(entry != nullptr, L"builtin/file-system plugin entry unavailable for plugin configuration command-button self-test.");
+    if (! entry)
+    {
+        return false;
+    }
+
+    struct WorkerResult
+    {
+        bool sawDialog                 = false;
+        bool ownedByMainWindow         = false;
+        bool capturedSnapshot          = false;
+        bool cancelled                 = false;
+        size_t visibleUiaProviderCount = 0u;
+        std::optional<UiaDescendantPatternStats> patternStats;
+        PluginConfigurationDialogDebugSnapshot snapshot{};
+    };
+
+    const auto commandButtonSnapshotReady = [](const PluginConfigurationDialogDebugSnapshot& value) noexcept
+    {
+        return value.usesDxUiCommandButtons && value.legacyOwnerDrawCommandButtonCount == 0u && value.visibleLegacyCommandButtonCount == 0u &&
+               value.visibleDxCommandButtonHostCount == 2u;
+    };
+
+    WorkerResult workerResult{};
+    const size_t baselineAttachedWindowHostCount = RedSalamander::DxUi::DebugGetAttachedWindowHostCount();
+    const auto waitForAttachedWindowHostCount    = [&](const size_t expectedCount, const auto timeout) noexcept
+    {
+        const auto deadline = std::chrono::steady_clock::now() + timeout;
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            PumpPendingMessages();
+            if (RedSalamander::DxUi::DebugGetAttachedWindowHostCount() == expectedCount)
+            {
+                return true;
+            }
+            std::this_thread::sleep_for(20ms);
+        }
+
+        return RedSalamander::DxUi::DebugGetAttachedWindowHostCount() == expectedCount;
+    };
+
+    std::jthread worker([&](std::stop_token) noexcept
+    {
+        const HWND dialog      = WaitForWindow([] noexcept { return GetPluginConfigurationDialogHandle(); }, SelfTest::Scale(5000ms));
+        workerResult.sawDialog = dialog != nullptr && IsWindow(dialog) != FALSE;
+        if (! workerResult.sawDialog)
+        {
+            return;
+        }
+
+        workerResult.ownedByMainWindow = IsOwnedBy(dialog, mainWindow);
+
+        const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            PumpPendingMessages();
+            workerResult.snapshot = {};
+            if (DebugGetPluginConfigurationDialogSnapshot(workerResult.snapshot) && commandButtonSnapshotReady(workerResult.snapshot))
+            {
+                workerResult.capturedSnapshot = true;
+                break;
+            }
+            std::this_thread::sleep_for(20ms);
+        }
+
+        if (! workerResult.capturedSnapshot)
+        {
+            workerResult.snapshot = {};
+            workerResult.capturedSnapshot =
+                DebugGetPluginConfigurationDialogSnapshot(workerResult.snapshot) && commandButtonSnapshotReady(workerResult.snapshot);
+        }
+
+        if (workerResult.capturedSnapshot)
+        {
+            workerResult.visibleUiaProviderCount = CountVisibleDescendantWindowsExposingUiaProviders(dialog);
+            workerResult.patternStats            = CollectVisibleUiaDescendantPatternStats(dialog);
+        }
+
+        workerResult.cancelled = DebugCancelPluginConfigurationDialog();
+    });
+
+    Common::Settings::Settings baselineSettings = g_settings;
+    Common::Settings::Settings workingSettings  = baselineSettings;
+    const AppTheme theme                        = ResolveAppTheme(ThemeMode::Dark, L"plugin-config-command-buttons-selftest");
+    const HRESULT hr =
+        EditPluginConfigurationDialog(mainWindow, PluginType::FileSystem, kBuiltinLocalFileSystemId, entry->name, baselineSettings, workingSettings, theme);
+    worker.join();
+
+    state.Require(
+        hr == S_FALSE,
+        std::format(L"EditPluginConfigurationDialog returned unexpected HRESULT 0x{:08X} during command-button validation.", static_cast<uint32_t>(hr)));
+    state.Require(workerResult.sawDialog, L"Plugin configuration dialog did not open during command-button validation.");
+    state.Require(workerResult.ownedByMainWindow, L"Plugin configuration dialog should be owned by the main window during command-button validation.");
+    state.Require(workerResult.capturedSnapshot, L"Failed to capture plugin configuration command-button snapshot.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    state.Require(workerResult.snapshot.usesDxUiCommandButtons,
+                  L"Plugin configuration dialog should use shared DxUi command buttons during command-button validation.");
+    state.Require(workerResult.snapshot.legacyOwnerDrawCommandButtonCount == 0u,
+                  L"Plugin configuration dialog should not keep owner-draw command buttons behind the DxUi shell.");
+    state.Require(workerResult.snapshot.visibleLegacyCommandButtonCount == 0u,
+                  L"Plugin configuration dialog should hide legacy OK/Cancel buttons during command-button validation.");
+    state.Require(workerResult.snapshot.visibleDxCommandButtonHostCount == 2u,
+                  std::format(L"Plugin configuration dialog should expose exactly two visible DxUi command-button hosts; saw {}.",
+                              workerResult.snapshot.visibleDxCommandButtonHostCount));
+    state.Require(workerResult.visibleUiaProviderCount >= workerResult.snapshot.visibleDxCommandButtonHostCount,
+                  std::format(L"Plugin configuration dialog should expose UIA providers for visible DxUi command-button hosts; saw {} providers for {} hosts.",
+                              workerResult.visibleUiaProviderCount,
+                              workerResult.snapshot.visibleDxCommandButtonHostCount));
+    state.Require(workerResult.patternStats.has_value(), L"Failed to collect plugin configuration command-button UIA pattern statistics.");
+    if (workerResult.patternStats.has_value())
+    {
+        state.Require(workerResult.patternStats->buttonControlCount >= workerResult.snapshot.visibleDxCommandButtonHostCount,
+                      std::format(L"Plugin configuration dialog should expose UIA Button controls for visible DxUi command-button hosts; saw {}.",
+                                  workerResult.patternStats->buttonControlCount));
+        state.Require(workerResult.patternStats->invokePatternCount >= workerResult.snapshot.visibleDxCommandButtonHostCount,
+                      std::format(L"Plugin configuration dialog should expose InvokePattern for visible DxUi command-button hosts; saw {}.",
+                                  workerResult.patternStats->invokePatternCount));
+    }
+    state.Require(workerResult.cancelled, L"Plugin configuration dialog debug cancel command failed during command-button validation.");
+    state.Require(waitForAttachedWindowHostCount(baselineAttachedWindowHostCount, SelfTest::Scale(3000ms)),
+                  std::format(L"Plugin configuration dialog left {} attached DxUI hosts after command-button validation; expected baseline {}.",
+                              RedSalamander::DxUi::DebugGetAttachedWindowHostCount(),
+                              baselineAttachedWindowHostCount));
+    state.Require(GetPluginConfigurationDialogHandle() == nullptr || IsWindow(GetPluginConfigurationDialogHandle()) == FALSE,
+                  L"Plugin configuration dialog should not remain open after command-button validation.");
+    return state.failure.empty();
+}
 
 [[nodiscard]] bool TestPluginConfigurationDialogUsesDxUiFormSurface(HWND mainWindow, CaseState& state) noexcept
 {
@@ -3085,10 +3214,12 @@ private:
         bool browseRestoredAfterCancel        = false;
         bool mutatedEdit                      = false;
         bool restoredEdit                     = false;
+        bool toggleLabelChangeExpected        = false;
         bool restoredToggle                   = false;
         bool toggleLabelChanged               = false;
         bool toggleLabelRestored              = false;
         bool reopenedEditRestored             = false;
+        bool reopenedToggleLabelChangeExpected = false;
         bool reopenedToggleRestored           = false;
         bool reopenedBrowseRoundTrip          = false;
         bool reopenedEditRoundTrip            = false;
@@ -3106,8 +3237,11 @@ private:
         PluginConfigurationDialogDebugSnapshot reopenedSnapshot{};
     } workerResult{};
 
+    std::atomic<bool> workerDone = false;
+    std::atomic<bool> readyForReopenedDialog = false;
     std::jthread worker([&](std::stop_token) noexcept
     {
+        const auto markWorkerDone = wil::scope_exit([&]() noexcept { workerDone.store(true, std::memory_order_release); });
         const auto traceStep = [&](std::wstring_view step) noexcept
         {
             workerResult.blockedStep.assign(step);
@@ -3259,6 +3393,10 @@ private:
             }
 
             return SetWindowRootOrDescendantValue(focusedHost, UIA_EditControlTypeId, value);
+        };
+        const auto isStateLabelToggleName = [](std::wstring_view name) noexcept
+        {
+            return name == L"True" || name == L"False" || name == L"On" || name == L"Off";
         };
 
         const std::wstring browseButtonText = LoadStringResource(nullptr, IDS_PREFS_PLUGINS_DETAILS_CONFIG_BROWSE_ELLIPSIS);
@@ -3461,15 +3599,27 @@ private:
             workerResult.editDiagnostics += L" | focus-requested=false";
         }
 
-        const auto initialToggleState = CollectVisibleDescendantTogglePatternState(dialog);
+        HWND toggleHost = nullptr;
+        RECT toggleRect{};
+        const HWND toggleTarget =
+            DebugGetPluginConfigurationDialogFirstVisibleToggleHostAndClientRect(toggleHost, toggleRect) && toggleHost && IsWindow(toggleHost) != FALSE
+                ? toggleHost
+                : dialog;
+        const auto collectToggleState = [&]() noexcept -> std::optional<UiaTogglePatternState>
+        {
+            return toggleTarget == dialog ? CollectVisibleDescendantTogglePatternState(dialog) : CollectWindowRootOrDescendantTogglePatternState(toggleTarget);
+        };
+
+        const auto initialToggleState = collectToggleState();
         if (initialToggleState.has_value() && ! initialToggleState->name.empty())
         {
             traceStep(L"toggle phase begin");
             toggleName                           = initialToggleState->name;
             initialToggleValue                   = initialToggleState->toggleState;
+            workerResult.toggleLabelChangeExpected = isStateLabelToggleName(toggleName);
             const ToggleState flippedToggleValue = (*initialToggleValue == ToggleState_On) ? ToggleState_Off : ToggleState_On;
 
-            if (ToggleVisibleDescendantByName(dialog, toggleName))
+            if (ToggleVisibleDescendantByName(toggleTarget, toggleName))
             {
                 const auto waitForToggleState = [&](const ToggleState expectedState) noexcept
                 {
@@ -3477,7 +3627,7 @@ private:
                     while (std::chrono::steady_clock::now() < deadline)
                     {
                         PumpPendingMessages();
-                        const auto toggleState = CollectVisibleDescendantTogglePatternState(dialog);
+                        const auto toggleState = collectToggleState();
                         if (toggleState.has_value() && toggleState->toggleState == expectedState)
                         {
                             return true;
@@ -3485,20 +3635,22 @@ private:
                         std::this_thread::sleep_for(20ms);
                     }
 
-                    const auto toggleState = CollectVisibleDescendantTogglePatternState(dialog);
+                    const auto toggleState = collectToggleState();
                     return toggleState.has_value() && toggleState->toggleState == expectedState;
                 };
 
                 if (waitForToggleState(flippedToggleValue))
                 {
-                    const auto flippedToggleState = CollectVisibleDescendantTogglePatternState(dialog);
-                    workerResult.toggleLabelChanged =
-                        flippedToggleState.has_value() && ! flippedToggleState->name.empty() && flippedToggleState->name != toggleName;
-                    if (flippedToggleState.has_value() && ! flippedToggleState->name.empty() && ToggleVisibleDescendantByName(dialog, flippedToggleState->name))
+                    const auto flippedToggleState = collectToggleState();
+                    workerResult.toggleLabelChanged = flippedToggleState.has_value() && ! flippedToggleState->name.empty() &&
+                                                      (! workerResult.toggleLabelChangeExpected || flippedToggleState->name != toggleName);
+                    if (flippedToggleState.has_value() && ! flippedToggleState->name.empty() &&
+                        ToggleVisibleDescendantByName(toggleTarget, flippedToggleState->name))
                     {
                         workerResult.restoredToggle      = waitForToggleState(*initialToggleValue);
-                        const auto restoredToggleState   = CollectVisibleDescendantTogglePatternState(dialog);
-                        workerResult.toggleLabelRestored = restoredToggleState.has_value() && restoredToggleState->name == toggleName;
+                        const auto restoredToggleState   = collectToggleState();
+                        workerResult.toggleLabelRestored = restoredToggleState.has_value() &&
+                                                           (! workerResult.toggleLabelChangeExpected || restoredToggleState->name == toggleName);
                     }
                 }
             }
@@ -3530,6 +3682,7 @@ private:
             return;
         }
         traceStep(L"cancel invoke done");
+        readyForReopenedDialog.store(true, std::memory_order_release);
 
         traceStep(L"wait reopened dialog");
         const HWND reopenedDialog      = WaitForWindow([] noexcept { return GetPluginConfigurationDialogHandle(); }, SelfTest::Scale(5000ms));
@@ -3628,13 +3781,25 @@ private:
         if (! toggleName.empty() && initialToggleValue.has_value())
         {
             traceStep(L"reopened toggle phase begin");
+            HWND reopenedToggleHost = nullptr;
+            RECT reopenedToggleRect{};
+            const HWND reopenedToggleTarget =
+                DebugGetPluginConfigurationDialogFirstVisibleToggleHostAndClientRect(reopenedToggleHost, reopenedToggleRect) && reopenedToggleHost &&
+                        IsWindow(reopenedToggleHost) != FALSE
+                    ? reopenedToggleHost
+                    : reopenedDialog;
+            const auto collectReopenedToggleState = [&]() noexcept -> std::optional<UiaTogglePatternState>
+            {
+                return reopenedToggleTarget == reopenedDialog ? CollectVisibleDescendantTogglePatternState(reopenedDialog)
+                                                              : CollectWindowRootOrDescendantTogglePatternState(reopenedToggleTarget);
+            };
             const auto waitForReopenedToggleState = [&](const ToggleState expectedState) noexcept
             {
                 const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
                 while (std::chrono::steady_clock::now() < deadline)
                 {
                     PumpPendingMessages();
-                    const auto toggleState = CollectVisibleDescendantTogglePatternState(reopenedDialog);
+                    const auto toggleState = collectReopenedToggleState();
                     if (toggleState.has_value() && toggleState->toggleState == expectedState)
                     {
                         return true;
@@ -3642,26 +3807,31 @@ private:
                     std::this_thread::sleep_for(20ms);
                 }
 
-                const auto toggleState = CollectVisibleDescendantTogglePatternState(reopenedDialog);
+                const auto toggleState = collectReopenedToggleState();
                 return toggleState.has_value() && toggleState->toggleState == expectedState;
             };
             workerResult.reopenedToggleRestored      = waitForReopenedToggleState(*initialToggleValue);
-            const auto reopenedBaselineToggleState   = CollectVisibleDescendantTogglePatternState(reopenedDialog);
-            workerResult.reopenedToggleLabelRestored = reopenedBaselineToggleState.has_value() && reopenedBaselineToggleState->name == toggleName;
+            const auto reopenedBaselineToggleState   = collectReopenedToggleState();
+            workerResult.reopenedToggleLabelChangeExpected =
+                reopenedBaselineToggleState.has_value() && isStateLabelToggleName(reopenedBaselineToggleState->name);
+            workerResult.reopenedToggleLabelRestored =
+                reopenedBaselineToggleState.has_value() && (! workerResult.reopenedToggleLabelChangeExpected || reopenedBaselineToggleState->name == toggleName);
 
             const ToggleState flippedToggleValue = (*initialToggleValue == ToggleState_On) ? ToggleState_Off : ToggleState_On;
-            if (workerResult.reopenedToggleRestored && ToggleVisibleDescendantByName(reopenedDialog, toggleName))
+            if (workerResult.reopenedToggleRestored && reopenedBaselineToggleState.has_value() && ! reopenedBaselineToggleState->name.empty() &&
+                ToggleVisibleDescendantByName(reopenedToggleTarget, reopenedBaselineToggleState->name))
             {
                 const bool sawReopenedFlippedToggleState = waitForReopenedToggleState(flippedToggleValue);
-                const auto reopenedFlippedToggleState    = CollectVisibleDescendantTogglePatternState(reopenedDialog);
+                const auto reopenedFlippedToggleState    = collectReopenedToggleState();
                 if (sawReopenedFlippedToggleState && reopenedFlippedToggleState.has_value() && ! reopenedFlippedToggleState->name.empty() &&
-                    ToggleVisibleDescendantByName(reopenedDialog, reopenedFlippedToggleState->name))
+                    ToggleVisibleDescendantByName(reopenedToggleTarget, reopenedFlippedToggleState->name))
                 {
                     workerResult.reopenedToggleRoundTrip      = waitForReopenedToggleState(*initialToggleValue);
-                    const auto reopenedRestoredToggleState    = CollectVisibleDescendantTogglePatternState(reopenedDialog);
+                    const auto reopenedRestoredToggleState    = collectReopenedToggleState();
                     workerResult.reopenedToggleLabelRoundTrip = reopenedFlippedToggleState.has_value() && ! reopenedFlippedToggleState->name.empty() &&
-                                                                reopenedFlippedToggleState->name != toggleName && reopenedRestoredToggleState.has_value() &&
-                                                                reopenedRestoredToggleState->name == toggleName;
+                                                                (! workerResult.reopenedToggleLabelChangeExpected ||
+                                                                 (reopenedFlippedToggleState->name != toggleName && reopenedRestoredToggleState.has_value() &&
+                                                                  reopenedRestoredToggleState->name == toggleName));
                 }
             }
             traceStep(L"reopened toggle phase done");
@@ -3690,8 +3860,23 @@ private:
     const AppTheme theme                        = ResolveAppTheme(ThemeMode::Dark, L"plugin-config-interaction-selftest");
     const HRESULT cancelHr =
         EditPluginConfigurationDialog(mainWindow, PluginType::FileSystem, kBuiltinS3FileSystemId, entry->name, baselineSettings, workingSettings, theme);
-    const HRESULT okHr =
-        EditPluginConfigurationDialog(mainWindow, PluginType::FileSystem, kBuiltinS3FileSystemId, entry->name, baselineSettings, workingSettings, theme);
+    HRESULT okHr = E_ABORT;
+    if (cancelHr == S_FALSE)
+    {
+        const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
+        while (! readyForReopenedDialog.load(std::memory_order_acquire) && ! workerDone.load(std::memory_order_acquire) &&
+               std::chrono::steady_clock::now() < deadline)
+        {
+            PumpPendingMessages();
+            std::this_thread::sleep_for(20ms);
+        }
+
+        if (readyForReopenedDialog.load(std::memory_order_acquire))
+        {
+            okHr =
+                EditPluginConfigurationDialog(mainWindow, PluginType::FileSystem, kBuiltinS3FileSystemId, entry->name, baselineSettings, workingSettings, theme);
+        }
+    }
     worker.join();
 
     state.Require(workerResult.sawDialog, L"Plugin configuration dialog did not open for live interaction validation.");
@@ -3896,7 +4081,20 @@ private:
                                  std::wstring_view expectedLabel,
                                  std::wstring_view label) noexcept
         {
-            const auto advanceAndWait = [&]() noexcept
+            const auto waitForExpectedSnapshot = [&]() noexcept
+            {
+                return waitForSnapshot(
+                    [&](const PluginConfigurationDialogDebugSnapshot& value) noexcept
+                {
+                    return value.focusKind == expectedKind && value.focusLabel == expectedLabel && value.usesDxUiCommandButtons && value.usesDxUiFormSurface &&
+                           value.usesDxUiFormStatics && value.usesDxUiFormInputs && value.visibleDxCommandButtonHostCount == 2u &&
+                           value.visibleDxFormStaticHostCount > 0u && value.visibleDxFormInputHostCount > 0u && value.visibleLegacyCommandButtonCount == 0u &&
+                           value.visibleLegacyFormControlCount == 0u && value.visibleLegacyFormStaticCount == 0u;
+                },
+                    workerResult.traversalSnapshot);
+            };
+
+            const auto advanceOnce = [&]() noexcept
             {
                 const bool advanced = DebugAdvancePluginConfigurationDialogTab(reverse);
                 PumpPendingMessages();
@@ -3905,22 +4103,12 @@ private:
                     workerResult.failedTraversalStep.assign(label);
                     SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands,
                                                std::format(L"plugin-config tab advance command failed: step='{}' reverse={}", label, reverse ? 1 : 0));
-                    return false;
                 }
-
-                return waitForSnapshot(
-                    [&](const PluginConfigurationDialogDebugSnapshot& value) noexcept
-                {
-                    return value.focusKind == expectedKind && value.focusLabel == expectedLabel && value.usesDxUiCommandButtons && value.usesDxUiFormSurface &&
-                           value.usesDxUiFormStatics && value.usesDxUiFormInputs && value.visibleDxCommandButtonHostCount == 2u &&
-                           value.visibleDxFormStaticHostCount > 0u && value.visibleDxFormInputHostCount > 0u && value.visibleLegacyCommandButtonCount == 0u &&
-                           value.visibleLegacyFormControlCount == 0u && value.visibleLegacyFormStaticCount == 0u && value.panelScrollPosY == 0;
-                },
-                    workerResult.traversalSnapshot);
+                return advanced;
             };
 
-            bool reached = advanceAndWait();
-            if (! reached && ! reverse && label == L"default endpoint override edit" &&
+            bool advanced = advanceOnce();
+            if (! advanced && ! reverse && label == L"default endpoint override edit" &&
                 workerResult.traversalSnapshot.focusKind == PluginConfigurationDialogDebugFocusKind::None && workerResult.traversalSnapshot.focusLabel.empty())
             {
                 const bool recoveredFirstInputFocus = DebugFocusPluginConfigurationDialogFirstInput();
@@ -3936,14 +4124,15 @@ private:
                                value.visibleDxFormInputHostCount >= workerResult.baselineSnapshot.visibleDxFormInputHostCount && value.panelScrollPosY == 0;
                     },
                         workerResult.traversalSnapshot));
-                    reached = advanceAndWait();
+                    advanced = advanceOnce();
                 }
             }
 
+            bool reached = advanced && waitForExpectedSnapshot();
             if (! reached)
             {
                 PumpPendingMessages();
-                reached = advanceAndWait();
+                reached = waitForExpectedSnapshot();
             }
 
             if (! reached)
@@ -4401,7 +4590,16 @@ private:
         }
 
         constexpr std::wstring_view kToggleLabel = L"Use HTTPS";
-        const auto initialToggleState            = CollectVisibleDescendantTogglePatternState(dialog);
+        HWND toggleHost                          = nullptr;
+        RECT toggleRect{};
+        if (! DebugGetPluginConfigurationDialogVisibleToggleHostAndClientRectByLabel(kToggleLabel, toggleHost, toggleRect) || ! toggleHost ||
+            IsWindow(toggleHost) == FALSE)
+        {
+            static_cast<void>(DebugCancelPluginConfigurationDialog());
+            return;
+        }
+
+        const auto initialToggleState = CollectWindowRootOrDescendantTogglePatternState(toggleHost);
         if (! initialToggleState.has_value())
         {
             workerResult.toggleFailureDetails = L"no visible toggle descendant state was available for the Use HTTPS field.";
@@ -4411,14 +4609,6 @@ private:
 
         const ToggleState initialToggleValue = initialToggleState->toggleState;
         const ToggleState flippedToggleValue = (initialToggleValue == ToggleState_On) ? ToggleState_Off : ToggleState_On;
-        HWND toggleHost                      = nullptr;
-        RECT toggleRect{};
-        if (! DebugGetPluginConfigurationDialogVisibleToggleHostAndClientRectByLabel(kToggleLabel, toggleHost, toggleRect) || ! toggleHost ||
-            IsWindow(toggleHost) == FALSE)
-        {
-            static_cast<void>(DebugCancelPluginConfigurationDialog());
-            return;
-        }
 
         const int clickX        = toggleRect.left + ((toggleRect.right - toggleRect.left) / 2);
         const int clickY        = toggleRect.top + ((toggleRect.bottom - toggleRect.top) / 2);
@@ -4435,7 +4625,7 @@ private:
             const bool reached = waitForSnapshot(
                 [&](const PluginConfigurationDialogDebugSnapshot& value) noexcept
             {
-                const auto toggleState = CollectVisibleDescendantTogglePatternState(dialog);
+                const auto toggleState = CollectWindowRootOrDescendantTogglePatternState(toggleHost);
                 return toggleState.has_value() && toggleState->toggleState == expectedState &&
                        value.focusKind == PluginConfigurationDialogDebugFocusKind::Toggle && value.focusLabel == kToggleLabel &&
                        value.visibleDxCommandButtonHostCount == workerResult.baselineSnapshot.visibleDxCommandButtonHostCount &&
@@ -4446,7 +4636,7 @@ private:
                 workerResult.finalSnapshot);
             if (! reached)
             {
-                const auto toggleState            = CollectVisibleDescendantTogglePatternState(dialog);
+                const auto toggleState            = CollectWindowRootOrDescendantTogglePatternState(toggleHost);
                 workerResult.toggleFailureDetails = std::format(L"expectedState={} actualState={} focusKind={} focusLabel='{}' dxButtons={} dxStatics={} "
                                                                 L"dxInputs={} legacyButtons={} legacyControls={} scrollY={} rect=({},{}-{}, {})",
                                                                 static_cast<int>(expectedState),
@@ -4507,33 +4697,6 @@ private:
     return state.failure.empty();
 }
 
-[[nodiscard]] std::filesystem::path FindRepoRootForPluginManagerSourceGuard() noexcept
-{
-    std::error_code currentPathError;
-    std::filesystem::path cursor = std::filesystem::current_path(currentPathError);
-    if (currentPathError || cursor.empty())
-    {
-        return {};
-    }
-
-    for (int depth = 0; depth < 8; ++depth)
-    {
-        std::error_code ec;
-        if (std::filesystem::exists(cursor / L"RedSalamander.sln", ec) && std::filesystem::exists(cursor / L"RedSalamander" / L"ViewerPluginManager.cpp", ec))
-        {
-            return cursor;
-        }
-
-        if (! cursor.has_parent_path())
-        {
-            break;
-        }
-        cursor = cursor.parent_path();
-    }
-
-    return {};
-}
-
 [[nodiscard]] bool ReadSourceFileUtf8(const std::filesystem::path& path, std::string& outSource) noexcept
 {
     outSource.clear();
@@ -4582,7 +4745,7 @@ private:
             break;
         }
 
-        int depth = 0;
+        int depth     = 0;
         bool foundEnd = false;
         for (size_t index = openBrace; index < source.size(); ++index)
         {
@@ -4597,7 +4760,7 @@ private:
                 {
                     bodies.push_back(source.substr(signature, index + 1u - signature));
                     searchOffset = index + 1u;
-                    foundEnd = true;
+                    foundEnd     = true;
                     break;
                 }
             }
@@ -4612,158 +4775,9 @@ private:
     return bodies;
 }
 
-[[nodiscard]] bool TestViewerPluginManagerUnloadLifecycleSourceGuard(CaseState& state) noexcept
-{
-    const std::filesystem::path repoRoot = FindRepoRootForPluginManagerSourceGuard();
-    state.Require(! repoRoot.empty(), L"Repository root unavailable for ViewerPluginManager source guard.");
-    if (repoRoot.empty())
-    {
-        return false;
-    }
-
-    std::string source;
-    const std::filesystem::path managerPath = repoRoot / L"RedSalamander" / L"ViewerPluginManager.cpp";
-    state.Require(ReadSourceFileUtf8(managerPath, source), std::format(L"Failed to read {}.", managerPath.wstring()));
-    if (source.empty())
-    {
-        return false;
-    }
-
-    const std::string_view disableBody =
-        SourceBetween(source, "HRESULT ViewerPluginManager::DisablePlugin", "HRESULT ViewerPluginManager::EnablePlugin");
-    state.Require(! disableBody.empty(), L"ViewerPluginManager::DisablePlugin body was not found.");
-    state.Require(disableBody.find("Unload(") == std::string_view::npos,
-                  L"ViewerPluginManager::DisablePlugin must not FreeLibrary a viewer DLL because external IViewer references may still be alive.");
-
-    const std::string_view discoverBody = SourceBetween(source, "HRESULT ViewerPluginManager::Discover", "struct Candidate");
-    state.Require(! discoverBody.empty(), L"ViewerPluginManager::Discover body was not found.");
-    state.Require(source.find("void ViewerPluginManager::UnloadAll(") != std::string::npos,
-                  L"ViewerPluginManager must centralize plugin unload through an explicit quiet-point helper.");
-    state.Require(discoverBody.find("UnloadAll(ModuleUnloadMode::FreeLibrary);") != std::string_view::npos,
-                  L"ViewerPluginManager::Discover must unload existing modules through the quiet-point helper before clearing plugin entries.");
-
-    std::string appSource;
-    const std::filesystem::path appPath = repoRoot / L"RedSalamander" / L"RedSalamander.cpp";
-    state.Require(ReadSourceFileUtf8(appPath, appSource), std::format(L"Failed to read {}.", appPath.wstring()));
-    const std::string_view refreshBody = SourceBetween(appSource, "void RefreshRunningPluginsFromSettings", "[[nodiscard]] std::vector<std::wstring_view>");
-    state.Require(! refreshBody.empty(), L"RefreshRunningPluginsFromSettings body was not found.");
-    const size_t closeAllViewersPos = refreshBody.find("g_folderWindow.CloseAllViewers();");
-    const size_t releaseFileSystemsPos = refreshBody.find("g_folderWindow.ReleaseFileSystemPluginsForRefresh();");
-    const size_t fileSystemRefreshPos = refreshBody.find("FileSystemPluginManager::GetInstance().Refresh");
-    const size_t viewerRefreshPos     = refreshBody.find("ViewerPluginManager::GetInstance().Refresh");
-    state.Require(closeAllViewersPos != std::string_view::npos && fileSystemRefreshPos != std::string_view::npos &&
-                      viewerRefreshPos != std::string_view::npos && releaseFileSystemsPos != std::string_view::npos &&
-                      closeAllViewersPos < releaseFileSystemsPos && releaseFileSystemsPos < fileSystemRefreshPos && closeAllViewersPos < viewerRefreshPos,
-                  L"Runtime plugin refresh must close live viewers and release pane file-system references before rediscovering/unloading plugin DLLs.");
-
-    std::string viewerSpaceSource;
-    const std::filesystem::path viewerSpacePath = repoRoot / L"Plugins" / L"ViewerSpace" / L"ViewerSpace.cpp";
-    state.Require(ReadSourceFileUtf8(viewerSpacePath, viewerSpaceSource), std::format(L"Failed to read {}.", viewerSpacePath.wstring()));
-    state.Require(viewerSpaceSource.find("std::unique_ptr<ScanScheduler> g_scanScheduler") != std::string::npos,
-                  L"ViewerSpace scan scheduler module state must be a resettable unique_ptr.");
-    state.Require(viewerSpaceSource.find("std::mutex g_scanSchedulerMutex") != std::string::npos,
-                  L"ViewerSpace scan scheduler lazy initialization must be guarded by a mutex.");
-    state.Require(viewerSpaceSource.find("ScanScheduler* g_scanScheduler") == std::string::npos,
-                  L"ViewerSpace scan scheduler must not regress to an unlocked raw pointer singleton.");
-    state.Require(viewerSpaceSource.find("std::unique_ptr<ScanResultCache> g_scanResultCache") != std::string::npos,
-                  L"ViewerSpace scan result cache module state must be a resettable unique_ptr.");
-    state.Require(viewerSpaceSource.find("std::mutex g_scanResultCacheMutex") != std::string::npos,
-                  L"ViewerSpace scan result cache lazy initialization must be guarded by a mutex.");
-    state.Require(viewerSpaceSource.find("ScanResultCache* g_scanResultCache") == std::string::npos,
-                  L"ViewerSpace scan result cache must not regress to an unlocked raw pointer singleton.");
-    state.Require(viewerSpaceSource.find("uint32_t ViewerSpace::ComputeAdaptiveFileCandidateBudget() const noexcept") != std::string::npos,
-                  L"ViewerSpace must derive file-candidate retention through an explicit adaptive-budget helper.");
-    state.Require(viewerSpaceSource.find("_scanTopFilesPerDirectory = effectiveTopFilesPerDirectory;") != std::string::npos,
-                  L"ViewerSpace scan startup must retain the effective file-candidate budget for later cache storage.");
-    state.Require(viewerSpaceSource.find("cacheKey.topFilesPerDirectory = effectiveTopFilesPerDirectory;") != std::string::npos,
-                  L"ViewerSpace scan-cache lookup keys must use the same adaptive file-candidate budget as live scans.");
-    state.Require(viewerSpaceSource.find("cacheKey.topFilesPerDirectory = _scanTopFilesPerDirectory;") != std::string::npos,
-                  L"ViewerSpace scan-cache storage keys must use the stored scan-start file-candidate budget.");
-    state.Require(viewerSpaceSource.find("constexpr uint32_t kAdaptiveFileCandidateCeiling = 20000u;") != std::string::npos,
-                  L"ViewerSpace adaptive file-candidate cap must be named as a ceiling.");
-    state.Require(viewerSpaceSource.find("kAdaptiveFileCandidateFloor") == std::string::npos,
-                  L"ViewerSpace adaptive file-candidate cap must not use the misleading Floor name.");
-    state.Require(viewerSpaceSource.find("std::max(topFilesPerDirectoryConfig, kAdaptiveFileCandidateCeiling)") == std::string::npos,
-                  L"ViewerSpace must not collapse topFilesPerDirectory to the 20k ceiling during scan startup.");
-    state.Require(viewerSpaceSource.find("std::max(_config.topFilesPerDirectory, kAdaptiveFileCandidateCeiling)") == std::string::npos,
-                  L"ViewerSpace must not collapse topFilesPerDirectory to the 20k ceiling when building scan-cache keys.");
-
-    std::string viewerSpaceFactorySource;
-    const std::filesystem::path viewerSpaceFactoryPath = repoRoot / L"Plugins" / L"ViewerSpace" / L"Factory.cpp";
-    state.Require(ReadSourceFileUtf8(viewerSpaceFactoryPath, viewerSpaceFactorySource), std::format(L"Failed to read {}.", viewerSpaceFactoryPath.wstring()));
-    state.Require(viewerSpaceFactorySource.find("std::unique_ptr<PluginMetaDataStorage> g_pluginMetaDataStorage") != std::string::npos,
-                  L"ViewerSpace plugin metadata module state must be a resettable unique_ptr.");
-    state.Require(viewerSpaceFactorySource.find("std::mutex g_pluginMetaDataStorageMutex") != std::string::npos,
-                  L"ViewerSpace plugin metadata lazy initialization must be guarded by a mutex.");
-    state.Require(viewerSpaceFactorySource.find("PluginMetaDataStorage* g_pluginMetaDataStorage") == std::string::npos,
-                  L"ViewerSpace plugin metadata must not regress to an unlocked raw pointer singleton.");
-
-    return state.failure.empty();
-}
-
-[[nodiscard]] bool TestFileSystemPluginManagerUnloadLifecycleSourceGuard(CaseState& state) noexcept
-{
-    const std::filesystem::path repoRoot = FindRepoRootForPluginManagerSourceGuard();
-    state.Require(! repoRoot.empty(), L"Repository root unavailable for FileSystemPluginManager source guard.");
-    if (repoRoot.empty())
-    {
-        return false;
-    }
-
-    std::string source;
-    const std::filesystem::path managerPath = repoRoot / L"RedSalamander" / L"FileSystemPluginManager.cpp";
-    state.Require(ReadSourceFileUtf8(managerPath, source), std::format(L"Failed to read {}.", managerPath.wstring()));
-    if (source.empty())
-    {
-        return false;
-    }
-
-    const std::string_view disableBody =
-        SourceBetween(source, "HRESULT FileSystemPluginManager::DisablePlugin", "HRESULT FileSystemPluginManager::EnablePlugin");
-    state.Require(! disableBody.empty(), L"FileSystemPluginManager::DisablePlugin body was not found.");
-    state.Require(disableBody.find("Unload(") == std::string_view::npos,
-                  L"FileSystemPluginManager::DisablePlugin must not FreeLibrary a file system DLL because external IFileSystem references may still be alive.");
-
-    const std::string_view shutdownBody =
-        SourceBetween(source, "void FileSystemPluginManager::Shutdown", "const std::vector<FileSystemPluginManager::PluginEntry>&");
-    state.Require(! shutdownBody.empty(), L"FileSystemPluginManager::Shutdown body was not found.");
-    state.Require(shutdownBody.find("UnloadAll(ModuleUnloadMode::ProcessShutdown);") != std::string_view::npos,
-                  L"FileSystemPluginManager::Shutdown must unload modules through the process-shutdown quiet-point helper.");
-
-    const std::string_view discoverBody = SourceBetween(source, "HRESULT FileSystemPluginManager::Discover", "    if (_exeDir.empty())");
-    state.Require(! discoverBody.empty(), L"FileSystemPluginManager::Discover body was not found.");
-    state.Require(source.find("void FileSystemPluginManager::UnloadAll(") != std::string::npos,
-                  L"FileSystemPluginManager must centralize plugin unload through an explicit quiet-point helper.");
-    state.Require(discoverBody.find("UnloadAll(ModuleUnloadMode::FreeLibrary);") != std::string_view::npos,
-                  L"FileSystemPluginManager::Discover must unload existing modules through the quiet-point helper before clearing plugin entries.");
-
-    const std::string_view unloadBody = SourceBetween(source, "void FileSystemPluginManager::Unload(", "HRESULT FileSystemPluginManager::ApplyConfigurationFromSettings");
-    state.Require(! unloadBody.empty(), L"FileSystemPluginManager::Unload body was not found.");
-    state.Require(unloadBody.find("RedSalamanderPluginShutdown") != std::string_view::npos,
-                  L"FileSystemPluginManager::Unload must call optional plugin shutdown hooks before unloading.");
-    state.Require(unloadBody.find("RedSalamanderPluginRetainModuleUntilProcessExit") != std::string_view::npos,
-                  L"FileSystemPluginManager::Unload must honor process-shutdown module retention hooks.");
-
-    std::string folderWindowSource;
-    const std::filesystem::path folderWindowPath = repoRoot / L"RedSalamander" / L"FolderWindow.FileSystem.cpp";
-    state.Require(ReadSourceFileUtf8(folderWindowPath, folderWindowSource), std::format(L"Failed to read {}.", folderWindowPath.wstring()));
-    if (folderWindowSource.empty())
-    {
-        return false;
-    }
-
-    const std::string_view releaseBody =
-        SourceBetween(folderWindowSource, "void FolderWindow::ReleaseFileSystemPluginsForRefresh", "HRESULT FolderWindow::SetFileSystemPluginForPane");
-    state.Require(! releaseBody.empty(), L"FolderWindow::ReleaseFileSystemPluginsForRefresh body was not found.");
-    state.Require(releaseBody.find("state.fileSystemModule.reset();") != std::string_view::npos,
-                  L"FolderWindow::ReleaseFileSystemPluginsForRefresh must release pane module keep-alive handles before plugin-manager refresh unloads DLLs.");
-
-    return state.failure.empty();
-}
-
 [[nodiscard]] bool TestFileSystemCapabilitiesContractSourceGuard(CaseState& state) noexcept
 {
-    const std::filesystem::path repoRoot = FindRepoRootForPluginManagerSourceGuard();
+    const std::filesystem::path repoRoot = SelfTest::TryFindRepoRoot();
     state.Require(! repoRoot.empty(), L"Repository root unavailable for filesystem capabilities contract source guard.");
     if (repoRoot.empty())
     {
@@ -4804,8 +4818,7 @@ private:
         const std::string pathText(path.string());
         const std::wstring pathMessage(pathText.begin(), pathText.end());
         const std::vector<std::string_view> capabilitiesBodies = SourceFunctionBodies(source, "HRESULT STDMETHODCALLTYPE GetCapabilities");
-        state.Require(! capabilitiesBodies.empty(),
-                      std::format(L"{} must implement GetCapabilities.", std::wstring(pathText.begin(), pathText.end())));
+        state.Require(! capabilitiesBodies.empty(), std::format(L"{} must implement GetCapabilities.", std::wstring(pathText.begin(), pathText.end())));
         for (const std::string_view capabilitiesBody : capabilitiesBodies)
         {
             state.Require(capabilitiesBody.find("return E_NOTIMPL;") == std::string_view::npos,
@@ -4823,7 +4836,7 @@ private:
 
 [[nodiscard]] bool TestFolderViewClipboardRetryNoReentrantPumpSourceGuard(CaseState& state) noexcept
 {
-    const std::filesystem::path repoRoot = FindRepoRootForPluginManagerSourceGuard();
+    const std::filesystem::path repoRoot = SelfTest::TryFindRepoRoot();
     state.Require(! repoRoot.empty(), L"Repository root unavailable for FolderView clipboard retry source guard.");
     if (repoRoot.empty())
     {
@@ -4865,12 +4878,6 @@ void RunPluginConfigCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfT
     SelfTest::RunCase(options, suite, L"viewer_pe_close_roundtrip", [](CaseState& state) noexcept { return TestViewerPECloseRoundTrip(state); });
     SelfTest::RunCase(options, suite, L"viewer_imgraw_close_roundtrip", [](CaseState& state) noexcept { return TestViewerImgRawCloseRoundTrip(state); });
     SelfTest::RunCase(options, suite, L"viewer_web_close_roundtrip", [](CaseState& state) noexcept { return TestViewerWebCloseRoundTrip(state); });
-    SelfTest::RunCase(options, suite, L"viewer_plugin_manager_unload_lifecycle_source_guard", [](CaseState& state) noexcept {
-        return TestViewerPluginManagerUnloadLifecycleSourceGuard(state);
-    });
-    SelfTest::RunCase(options, suite, L"file_system_plugin_manager_unload_lifecycle_source_guard", [](CaseState& state) noexcept {
-        return TestFileSystemPluginManagerUnloadLifecycleSourceGuard(state);
-    });
     SelfTest::RunCase(options, suite, L"file_system_capabilities_contract_source_guard", [](CaseState& state) noexcept {
         return TestFileSystemCapabilitiesContractSourceGuard(state);
     });
@@ -4878,7 +4885,7 @@ void RunPluginConfigCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfT
         return TestFolderViewClipboardRetryNoReentrantPumpSourceGuard(state);
     });
     SelfTest::RunCase(options, suite, L"cmd_plugin_configuration_dialog_uses_dxui_command_buttons", [=](CaseState& state) noexcept {
-        return TestPluginConfigurationDialogUsesDxUiFormSurface(mainWindow, state);
+        return TestPluginConfigurationDialogUsesDxUiCommandButtons(mainWindow, state);
     });
     SelfTest::RunCase(options, suite, L"cmd_plugin_configuration_dialog_uses_dxui_form_surface", [=](CaseState& state) noexcept {
         return TestPluginConfigurationDialogUsesDxUiFormSurface(mainWindow, state);

@@ -9,15 +9,6 @@
 
 namespace RedSalamander::DxUi
 {
-enum class PointerInputSource : uint8_t
-{
-    WindowProc,
-    ModalLoopMessage,
-    PopupWindowProc,
-    ForwardedChild,
-    DiagnosticOnly,
-};
-
 enum class PointerInputKind : uint8_t
 {
     Move,
@@ -33,30 +24,21 @@ enum class PointerInputKind : uint8_t
 
 struct PointerInputEvent
 {
-    PointerInputSource source = PointerInputSource::WindowProc;
-    PointerInputKind kind     = PointerInputKind::Unknown;
-    HWND targetHwnd           = nullptr;
-    HWND rootHwnd             = nullptr;
-    HWND captureHwnd          = nullptr;
-    UINT message              = 0;
-    WPARAM wParam             = 0;
-    LPARAM lParam             = 0;
-    DWORD messageTime         = 0;
+    PointerInputKind kind = PointerInputKind::Unknown;
+    HWND targetHwnd       = nullptr;
+    HWND rootHwnd         = nullptr;
+    HWND captureHwnd      = nullptr;
+    UINT message          = 0;
+    WPARAM wParam         = 0;
+    LPARAM lParam         = 0;
+    DWORD messageTime     = 0;
     POINT clientPointPx{};
     POINT screenPointPx{};
-    int wheelDelta     = 0;
+    int wheelDelta      = 0;
     bool hasClientPoint = false;
     bool hasScreenPoint = false;
 };
 
 [[nodiscard]] std::optional<PointerInputKind> PointerInputKindFromMessage(UINT message) noexcept;
-[[nodiscard]] std::optional<PointerInputEvent> TryBuildPointerInputEvent(
-    HWND targetHwnd,
-    UINT message,
-    WPARAM wParam,
-    LPARAM lParam,
-    PointerInputSource source) noexcept;
-[[nodiscard]] std::optional<PointerInputEvent> TryBuildPointerInputEventFromMsg(
-    const MSG& message,
-    PointerInputSource source) noexcept;
+[[nodiscard]] std::optional<PointerInputEvent> TryBuildPointerInputEvent(HWND targetHwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
 } // namespace RedSalamander::DxUi

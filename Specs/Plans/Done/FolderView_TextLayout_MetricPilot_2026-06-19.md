@@ -8,7 +8,7 @@ contract merged into `Specs/UI/UI_FolderView.md`,
 evidence accepted at closeout; cross-machine re-confirmation and the
 `render.layout_items_us` follow-up are optional future work.
 **Created:** 2026-06-19.
-**Parent backlog:** `Specs/Plans/WIP/DxUi_FolderView_Monitor_FuturePerformanceIdeas_2026-05-20.md`
+**Parent backlog:** `Specs/Plans/WIP/Operation_FolderView_WarpDrive_AnyCircumstancePerformance_2026-06-28.md`
 (Candidate 2, and the "Proposed First Implementation Plan").
 **Scope:** Instrument per-item `IDWriteTextLayout` creation in FolderView so we can
 decide — with archived same-machine evidence and a variance band — whether a text

@@ -32,8 +32,8 @@
 #include <wil/resource.h>
 #pragma warning(pop)
 
-#include "DxUi/DxUi.h"
 #include "DxUi/DxUi.Typography.h"
+#include "DxUi/DxUi.h"
 
 namespace RedSalamander::Ui
 {
@@ -382,12 +382,12 @@ public:
         const float panelLeft          = (clientWidthDip - panelWidth) * 0.5f;
         const float panelTop           = (clientHeightDip - clampedPanelHeight) * 0.5f;
 
-        _panelRect = D2D1::RectF(panelLeft, panelTop, panelLeft + panelWidth, panelTop + clampedPanelHeight);
-        _hasLayout = true;
-        _layoutPanelWidthDip     = panelWidth;
-        _layoutPanelHeightDip    = clampedPanelHeight;
+        _panelRect                = D2D1::RectF(panelLeft, panelTop, panelLeft + panelWidth, panelTop + clampedPanelHeight);
+        _hasLayout                = true;
+        _layoutPanelWidthDip      = panelWidth;
+        _layoutPanelHeightDip     = clampedPanelHeight;
         _layoutButtonRowHeightDip = buttonRowHeightDip;
-        _layoutShowIcon          = showIcon;
+        _layoutShowIcon           = showIcon;
 
         D2D1_RECT_F contentRect = D2D1::RectF(
             _panelRect.left + innerPaddingDip, _panelRect.top + innerPaddingDip, _panelRect.right - innerPaddingDip, _panelRect.bottom - innerPaddingDip);
@@ -522,11 +522,11 @@ public:
             return;
         }
 
-        const float panelWidth            = _layoutPanelWidthDip;
-        const float clampedPanelHeight    = _layoutPanelHeightDip;
-        const float buttonRowHeightDip    = _layoutButtonRowHeightDip;
-        const bool showIcon               = _layoutShowIcon;
-        const float titleHeightDip        = _titleLayoutHeightDip;
+        const float panelWidth         = _layoutPanelWidthDip;
+        const float clampedPanelHeight = _layoutPanelHeightDip;
+        const float buttonRowHeightDip = _layoutButtonRowHeightDip;
+        const bool showIcon            = _layoutShowIcon;
+        const float titleHeightDip     = _titleLayoutHeightDip;
 
         const uint64_t elapsedMs      = (nowTickMs >= _startTickMs) ? (nowTickMs - _startTickMs) : 0u;
         const float showT             = static_cast<float>(std::min<uint64_t>(elapsedMs, kShowAnimationMs)) / static_cast<float>(kShowAnimationMs);
@@ -827,15 +827,15 @@ private:
 
     void InvalidateLayout() noexcept
     {
-        _panelRect          = {};
-        _closeRect          = {};
-        _layoutBodyTextRect = {};
-        _layoutIconRect     = {};
-        _layoutTextRect     = {};
-        _layoutPanelWidthDip = 0.0f;
-        _layoutPanelHeightDip = 0.0f;
+        _panelRect                = {};
+        _closeRect                = {};
+        _layoutBodyTextRect       = {};
+        _layoutIconRect           = {};
+        _layoutTextRect           = {};
+        _layoutPanelWidthDip      = 0.0f;
+        _layoutPanelHeightDip     = 0.0f;
         _layoutButtonRowHeightDip = 0.0f;
-        _layoutShowIcon = false;
+        _layoutShowIcon           = false;
         _buttonRects.clear();
         _hasLayout = false;
     }
@@ -950,7 +950,7 @@ private:
             return;
         }
 
-        const bool hot = (_hot.part == AlertHitTest::Part::Close);
+        const bool hot     = (_hot.part == AlertHitTest::Part::Close);
         const float w      = std::max(0.0f, rect.right - rect.left);
         const float h      = std::max(0.0f, rect.bottom - rect.top);
         const float size   = std::min(w, h);
@@ -1029,9 +1029,10 @@ private:
         // chrome path can read from the overlay theme so the ring stays visible
         // and theme-correct instead of relying on default-palette colors.
         RedSalamander::DxUi::ThemePalette palette{};
-        palette.dark             = _theme.darkBase;
-        palette.highContrast     = _theme.highContrast;
-        palette.accent           = _theme.accent;
+        palette.dark         = _theme.darkBase;
+        palette.highContrast = _theme.highContrast;
+        palette.accent       = _theme.accent;
+        RedSalamander::DxUi::RefreshAccentVariants(palette, _theme.darkBase);
         palette.text             = _theme.text;
         palette.windowBackground = _theme.background;
         palette.focusStroke      = _theme.accent;
@@ -1045,8 +1046,10 @@ private:
         return palette;
     }
 
-    [[nodiscard]] RedSalamander::DxUi::ButtonChromeCustomStyle MakeOverlayButtonChromeStyle(const ButtonRect& btn, bool hot, bool focused, float cornerDip) const
-        noexcept
+    [[nodiscard]] RedSalamander::DxUi::ButtonChromeCustomStyle MakeOverlayButtonChromeStyle(const ButtonRect& btn,
+                                                                                            bool hot,
+                                                                                            bool focused,
+                                                                                            float cornerDip) const noexcept
     {
         if (btn.primary)
         {
@@ -1272,19 +1275,19 @@ private:
     D2D1_RECT_F _layoutBodyTextRect{};
     D2D1_RECT_F _layoutIconRect{};
     D2D1_RECT_F _layoutTextRect{};
-    float _layoutPanelWidthDip = 0.0f;
-    float _layoutPanelHeightDip = 0.0f;
+    float _layoutPanelWidthDip      = 0.0f;
+    float _layoutPanelHeightDip     = 0.0f;
     float _layoutButtonRowHeightDip = 0.0f;
-    bool _layoutShowIcon = false;
-    bool _hasLayout = false;
+    bool _layoutShowIcon            = false;
+    bool _hasLayout                 = false;
 
     AlertHitTest _hot{};
     std::optional<uint32_t> _focusedButtonId;
     uint64_t _startTickMs = 0;
 #if defined(ENABLE_TESTS)
-    float _debugLastDrawOpacity = 0.0f;
-    float _debugLastDrawScrimOpacity = 0.0f;
-    bool _debugUsesSharedCloseChrome = false;
+    float _debugLastDrawOpacity       = 0.0f;
+    float _debugLastDrawScrimOpacity  = 0.0f;
+    bool _debugUsesSharedCloseChrome  = false;
     bool _debugUsesSharedButtonChrome = false;
 #endif
 };

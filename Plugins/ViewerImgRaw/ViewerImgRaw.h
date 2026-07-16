@@ -132,11 +132,13 @@ private:
         uint32_t rawHeight      = 0;
         uint16_t rawOrientation = 1; // orientation to apply when displaying RAW frame (1..8)
         std::vector<uint8_t> rawBgra;
+        uint64_t rawBudgetBytes = 0u;
 
         uint32_t thumbWidth       = 0;
         uint32_t thumbHeight      = 0;
         uint16_t thumbOrientation = 1; // orientation to apply when displaying thumbnail frame (1..8)
         std::vector<uint8_t> thumbBgra;
+        uint64_t thumbBudgetBytes = 0u;
 
         bool thumbAvailable     = false;
         bool thumbDecoded       = false;
@@ -182,6 +184,9 @@ private:
         std::wstring statusMessage;
     };
 
+    struct AsyncOpenRequest;
+    struct AsyncOpenSchedulerState;
+
     static ATOM RegisterWndClass(HINSTANCE instance) noexcept;
     static constexpr wchar_t kClassName[] = L"RedSalamander.ViewerImgRaw";
 
@@ -207,7 +212,7 @@ private:
     void OnCaptureChanged() noexcept;
     void OnDpiChanged(HWND hwnd, UINT newDpi, const RECT* suggested) noexcept;
     void OnAsyncOpenComplete(std::unique_ptr<AsyncOpenResult> result) noexcept;
-    void OnAsyncProgress(int stage, int percent) noexcept;
+    void OnAsyncProgress(uint64_t requestId, int stage, int percent) noexcept;
     void OnAsyncExportComplete(std::unique_ptr<AsyncExportResult> result) noexcept;
     void OnNcActivate(bool windowActive) noexcept;
     LRESULT OnNcDestroy(HWND hwnd, WPARAM wp, LPARAM lp) noexcept;
@@ -224,7 +229,15 @@ private:
     void RefreshFileCombo(HWND hwnd) noexcept;
     void SyncFileComboSelection() noexcept;
     void BeginExport(HWND hwnd);
+    void BeginExportImpl(HWND hwnd, const wchar_t* outputPathOverride);
     void StartAsyncOpen(HWND hwnd, std::wstring_view path, bool updateOtherFiles) noexcept;
+    void InitializeAsyncOpenScheduler();
+    [[nodiscard]] uint64_t AdvanceOpenRequestId() noexcept;
+    void CancelAsyncOpenRequests(bool detachWindow) noexcept;
+    void PollAsyncOpenTerminalFallback() noexcept;
+#if defined(ENABLE_TESTS)
+    void PopulateAsyncOpenDebugSnapshot(WndMsg::ViewerImgRawResourceDebugSnapshot& snapshot) noexcept;
+#endif
 
     void BeginLoadingUi() noexcept;
     void EndLoadingUi() noexcept;
@@ -241,6 +254,12 @@ private:
     void ClearImageCache() noexcept;
     void UpdateNeighborCache(uint64_t requestId) noexcept;
     void StartPrefetchNeighbors(uint64_t requestId) noexcept;
+    [[nodiscard]] bool TryReserveSpeculativeDecodedBytes(uint64_t bytes) noexcept;
+    void ReleaseSpeculativeDecodedBytes(uint64_t bytes) noexcept;
+    [[nodiscard]] bool TryReserveSpeculativeDecodedBytesLocked(uint64_t bytes) noexcept;
+    void ReleaseSpeculativeDecodedBytesLocked(uint64_t bytes) noexcept;
+    void ReleaseCachedImageBudgetLocked(CachedImage& image) noexcept;
+    [[nodiscard]] uint64_t SpeculativeDecodedByteLimit() const noexcept;
     bool TryUseCachedImage(HWND hwnd, const std::wstring& path, bool& outContinueDecoding) noexcept;
     bool HasDisplayImage() const noexcept;
     bool IsDisplayingThumbnail() const noexcept;
@@ -296,6 +315,17 @@ private:
 
     // Loading/image state
     std::atomic_uint64_t _openRequestId{0};
+    std::shared_ptr<AsyncOpenSchedulerState> _asyncOpenScheduler;
+#if defined(ENABLE_TESTS)
+    uint64_t _debugFinalSuccessCount   = 0u;
+    uint64_t _debugFinalFailureCount   = 0u;
+    uint64_t _debugPreviewSuccessCount = 0u;
+    uint64_t _debugApplyOrdinal = 0u;
+    uint64_t _debugLastPreviewApplyOrdinal = 0u;
+    uint64_t _debugLastFinalApplyOrdinal = 0u;
+    uint64_t _debugProgressApplyCount = 0u;
+    std::atomic_bool _debugPrefetchCommitPaused{false};
+#endif
     bool _isLoading = false;
     std::wstring _statusMessage;
     bool _alertVisible = false;
@@ -319,6 +349,10 @@ private:
     std::mutex _cacheMutex;
     std::unordered_map<std::wstring, std::unique_ptr<CachedImage>> _imageCache;
     std::unordered_set<std::wstring> _inflightDecodes;
+    uint64_t _speculativeDecodedBytes        = 0u;
+    uint64_t _speculativeDecodedBytesPeak    = 0u;
+    uint64_t _speculativeBudgetAcceptedCount = 0u;
+    uint64_t _speculativeBudgetRejectedCount = 0u;
     std::unique_ptr<CachedImage> _currentImageOwned;
     CachedImage* _currentImage = nullptr;
     std::wstring _currentImageKey;
@@ -368,3 +402,8 @@ inline constexpr UINT kAsyncProgressMessage       = WndMsg::kViewerImgRawAsyncPr
 inline constexpr UINT kAsyncExportCompleteMessage = WndMsg::kViewerImgRawAsyncExportComplete;
 
 extern HINSTANCE g_hInstance;
+
+void NotifyViewerImgRawAsyncWorkQueued() noexcept;
+void NotifyViewerImgRawAsyncWorkCompleted() noexcept;
+void ShutdownViewerImgRawModuleState() noexcept;
+[[nodiscard]] bool CanUnloadViewerImgRawModuleNow() noexcept;

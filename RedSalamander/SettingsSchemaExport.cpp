@@ -26,26 +26,7 @@ namespace
 {
 [[nodiscard]] std::string Utf8FromUtf16(std::wstring_view text) noexcept
 {
-    if (text.empty())
-    {
-        return {};
-    }
-
-    const int required = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
-    if (required <= 0)
-    {
-        return {};
-    }
-
-    std::string result(static_cast<size_t>(required), '\0');
-    const int written =
-        WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), result.data(), required, nullptr, nullptr);
-    if (written != required)
-    {
-        return {};
-    }
-
-    return result;
+    return Common::Strings::Utf8FromUtf16StrictOrEmpty(text);
 }
 
 [[nodiscard]] HRESULT ApplyAppSpecificSettingsSchemaFilter(std::wstring_view appId, yyjson_mut_val* root) noexcept

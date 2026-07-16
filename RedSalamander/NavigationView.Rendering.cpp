@@ -968,10 +968,8 @@ void NavigationView::Present(std::optional<RECT*> dirtyRect)
         // First present must be a regular Present without dirty rects
         hr            = _swapChain->Present(0, 0);
         _hasPresented = true;
-        TraceNavigationViewMenuDiagnostics(L"navigation.present",
-                                           L"hwnd={:#x} action=present-first hr={:#x}",
-                                           reinterpret_cast<uintptr_t>(_hWnd.get()),
-                                           static_cast<unsigned int>(hr));
+        TraceNavigationViewMenuDiagnostics(
+            L"navigation.present", L"hwnd={:#x} action=present-first hr={:#x}", reinterpret_cast<uintptr_t>(_hWnd.get()), static_cast<unsigned int>(hr));
         if (FAILED(hr))
         {
             Debug::Error(L"[NavigationView] Present failed (hr=0x{:08X})", static_cast<unsigned long>(hr));
@@ -1006,10 +1004,8 @@ void NavigationView::Present(std::optional<RECT*> dirtyRect)
     }
     else
     {
-        TraceNavigationViewMenuDiagnostics(L"navigation.present",
-                                           L"hwnd={:#x} action=present-full hr={:#x}",
-                                           reinterpret_cast<uintptr_t>(_hWnd.get()),
-                                           static_cast<unsigned int>(hr));
+        TraceNavigationViewMenuDiagnostics(
+            L"navigation.present", L"hwnd={:#x} action=present-full hr={:#x}", reinterpret_cast<uintptr_t>(_hWnd.get()), static_cast<unsigned int>(hr));
     }
     if (FAILED(hr))
     {

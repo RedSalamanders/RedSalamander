@@ -20,6 +20,7 @@
 #include "FileSystemPluginManager.h"
 #include "Helpers.h"
 #include "HostServices.h"
+#include "PluginConfiguration.h"
 #include "SelfTestCommon.h"
 #include "SettingsHotReload.h"
 #include "ThemedInputFrames.h"
@@ -40,13 +41,6 @@
 #include "DxUi/DxUi.h"
 #include <uxtheme.h>
 
-#pragma warning(push)
-// (C6297) Arithmetic overflow. Results might not be an expected value.
-// (C28182) Dereferencing NULL pointer.
-#pragma warning(disable : 6297 28182)
-#include <yyjson.h>
-#pragma warning(pop)
-
 namespace
 {
 using RedSalamander::DxUi::Button;
@@ -59,7 +53,6 @@ using RedSalamander::DxUi::TextField;
 using RedSalamander::DxUi::ThemePalette;
 using RedSalamander::DxUi::Toggle;
 using RedSalamander::DxUi::WindowHost;
-using UiMetrics::BlendColor;
 using UiMetrics::GetControlSurfaceColor;
 using UiMetrics::ScaleDip;
 namespace Typography = RedSalamander::DxUi::Typography;
@@ -94,6 +87,8 @@ enum class DxCommandButtonIndex : size_t
 };
 
 #ifdef ENABLE_TESTS
+constexpr size_t kInvalidPluginConfigDebugFocusIndex = std::numeric_limits<size_t>::max();
+
 enum class PluginConfigDebugCommand : WPARAM
 {
     GetSnapshot = 1,
@@ -197,11 +192,6 @@ void RestoreWndProcHook(HWND hwnd, const wchar_t* originalWndProcProp) noexcept
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
-[[nodiscard]] ThemePalette MakeDxPalette(const AppTheme& theme) noexcept
-{
-    return MakeAppThemeDxPalette(theme, theme.windowBackground);
-}
-
 void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& title, const std::wstring& message) noexcept
 {
     if (! dlg || message.empty())
@@ -223,93 +213,9 @@ void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& t
     static_cast<void>(HostShowAlert(request));
 }
 
-[[nodiscard]] std::wstring Utf16FromUtf8(std::string_view text) noexcept
-{
-    if (text.empty())
-    {
-        return {};
-    }
-
-    const int required = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0);
-    if (required <= 0)
-    {
-        return {};
-    }
-
-    std::wstring result(static_cast<size_t>(required), L'\0');
-    const int written = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), result.data(), required);
-    if (written != required)
-    {
-        return {};
-    }
-
-    return result;
-}
-
-[[nodiscard]] std::string Utf8FromUtf16(std::wstring_view text) noexcept
-{
-    if (text.empty())
-    {
-        return {};
-    }
-
-    const int required = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
-    if (required <= 0)
-    {
-        return {};
-    }
-
-    std::string result(static_cast<size_t>(required), '\0');
-    const int written =
-        WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), result.data(), required, nullptr, nullptr);
-    if (written != required)
-    {
-        return {};
-    }
-
-    return result;
-}
-
-enum class PluginConfigFieldType : uint8_t
-{
-    Text,
-    Value,
-    Bool,
-    Option,
-    Selection,
-};
-
-struct PluginConfigChoice
-{
-    std::wstring value;
-    std::wstring label;
-};
-
-struct PluginConfigField
-{
-    PluginConfigFieldType type = PluginConfigFieldType::Text;
-    std::wstring key;
-    std::wstring label;
-    std::wstring description;
-
-    bool hasMin = false;
-    bool hasMax = false;
-    int64_t min = 0;
-    int64_t max = 0;
-
-    std::wstring defaultText;
-    int64_t defaultInt = 0;
-    bool defaultBool   = false;
-    std::wstring defaultOption;
-    std::vector<std::wstring> defaultSelection;
-    std::vector<PluginConfigChoice> choices;
-
-    // UI metadata (optional x-ui-* attributes from schema)
-    std::wstring uiSection; // x-ui-section: group fields under section headers
-    int uiOrder = 0;        // x-ui-order: display order within plugin config dialog
-    std::wstring uiControl; // x-ui-control: override control type (e.g., "custom" for future extensibility)
-    bool uiHidden = false;  // x-ui-hidden: keep the field in JSON but do not render it in the editor
-};
+using PluginConfigFieldType = Common::PluginConfiguration::FieldType;
+using PluginConfigChoice    = Common::PluginConfiguration::Choice;
+using PluginConfigField     = Common::PluginConfiguration::Field;
 
 struct PluginConfigDxHostSlot
 {
@@ -477,6 +383,7 @@ struct PluginConfigDialogState
     std::vector<PluginConfigFieldControls> controls;
 #ifdef ENABLE_TESTS
     HWND lastDebugFocusedHost = nullptr;
+    size_t lastDebugFocusedHostIndex = kInvalidPluginConfigDebugFocusIndex;
 #endif
 };
 
@@ -524,214 +431,6 @@ INT_PTR OnPluginConfigDialogCtlColorListBox(PluginConfigDialogState* state, HDC 
         return state.pluginId;
     }
     return LoadStringResource(nullptr, IDS_CAPTION_PLUGINS_MANAGER);
-}
-
-PluginConfigFieldType ParseFieldType(std::string_view type) noexcept
-{
-    if (type == "text")
-    {
-        return PluginConfigFieldType::Text;
-    }
-    if (type == "value")
-    {
-        return PluginConfigFieldType::Value;
-    }
-    if (type == "bool" || type == "boolean")
-    {
-        return PluginConfigFieldType::Bool;
-    }
-    if (type == "option")
-    {
-        return PluginConfigFieldType::Option;
-    }
-    if (type == "selection")
-    {
-        return PluginConfigFieldType::Selection;
-    }
-    return PluginConfigFieldType::Text;
-}
-
-std::optional<std::string_view> TryGetUtf8String(yyjson_val* obj, const char* key) noexcept
-{
-    if (! obj || ! key)
-    {
-        return std::nullopt;
-    }
-
-    yyjson_val* v = yyjson_obj_get(obj, key);
-    if (! v || ! yyjson_is_str(v))
-    {
-        return std::nullopt;
-    }
-
-    const char* s = yyjson_get_str(v);
-    if (! s)
-    {
-        return std::nullopt;
-    }
-
-    return std::string_view(s);
-}
-
-bool TryGetInt64(yyjson_val* obj, const char* key, int64_t& out) noexcept
-{
-    if (! obj || ! key)
-    {
-        return false;
-    }
-
-    yyjson_val* v = yyjson_obj_get(obj, key);
-    if (! v)
-    {
-        return false;
-    }
-
-    if (yyjson_is_sint(v))
-    {
-        out = yyjson_get_sint(v);
-        return true;
-    }
-
-    if (yyjson_is_uint(v))
-    {
-        out = static_cast<int64_t>(std::min<uint64_t>(yyjson_get_uint(v), static_cast<uint64_t>(std::numeric_limits<int64_t>::max())));
-        return true;
-    }
-
-    if (yyjson_is_real(v))
-    {
-        out = static_cast<int64_t>(yyjson_get_real(v));
-        return true;
-    }
-
-    return false;
-}
-
-[[nodiscard]] std::optional<bool> TryParseBoolToggleToken(std::wstring_view token) noexcept;
-
-bool TryGetBoolValue(yyjson_val* obj, const char* key, bool& out) noexcept
-{
-    if (! obj || ! key)
-    {
-        return false;
-    }
-
-    yyjson_val* v = yyjson_obj_get(obj, key);
-    if (! v)
-    {
-        return false;
-    }
-
-    if (yyjson_is_bool(v))
-    {
-        out = yyjson_get_bool(v);
-        return true;
-    }
-
-    if (yyjson_is_sint(v))
-    {
-        out = yyjson_get_sint(v) != 0;
-        return true;
-    }
-
-    if (yyjson_is_uint(v))
-    {
-        out = yyjson_get_uint(v) != 0;
-        return true;
-    }
-
-    if (yyjson_is_str(v))
-    {
-        const char* s = yyjson_get_str(v);
-        if (! s)
-        {
-            return false;
-        }
-
-        const std::optional<bool> parsed = TryParseBoolToggleToken(Utf16FromUtf8(s));
-        if (parsed.has_value())
-        {
-            out = parsed.value();
-            return true;
-        }
-    }
-
-    return false;
-}
-
-[[nodiscard]] bool EqualsNoCase(std::wstring_view a, std::wstring_view b) noexcept
-{
-    if (a.size() > static_cast<size_t>(std::numeric_limits<int>::max()) || b.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
-    {
-        return false;
-    }
-
-    return OrdinalString::EqualsNoCase(a, b);
-}
-
-[[nodiscard]] std::optional<bool> TryParseBoolToggleToken(const std::wstring_view token) noexcept
-{
-    if (EqualsNoCase(token, L"on") || EqualsNoCase(token, L"true") || token == L"1")
-    {
-        return true;
-    }
-
-    if (EqualsNoCase(token, L"off") || EqualsNoCase(token, L"false") || token == L"0")
-    {
-        return false;
-    }
-
-    return std::nullopt;
-}
-
-[[nodiscard]] bool TryGetBoolToggleChoiceIndices(const PluginConfigField& field, size_t& outOnIndex, size_t& outOffIndex) noexcept
-{
-    if (field.type != PluginConfigFieldType::Option)
-    {
-        return false;
-    }
-
-    if (field.choices.size() != 2)
-    {
-        return false;
-    }
-
-    std::optional<size_t> onIndex;
-    std::optional<size_t> offIndex;
-
-    for (size_t i = 0; i < field.choices.size(); ++i)
-    {
-        const PluginConfigChoice& choice = field.choices[i];
-
-        std::optional<bool> parsed = TryParseBoolToggleToken(choice.label);
-        if (! parsed.has_value())
-        {
-            parsed = TryParseBoolToggleToken(choice.value);
-        }
-
-        if (! parsed.has_value())
-        {
-            continue;
-        }
-
-        if (parsed.value())
-        {
-            onIndex = i;
-        }
-        else
-        {
-            offIndex = i;
-        }
-    }
-
-    if (! onIndex.has_value() || ! offIndex.has_value() || onIndex.value() == offIndex.value())
-    {
-        return false;
-    }
-
-    outOnIndex  = onIndex.value();
-    outOffIndex = offIndex.value();
-    return true;
 }
 
 [[nodiscard]] std::wstring_view TryGetChoiceLabelForValue(const PluginConfigField& field, std::wstring_view value) noexcept
@@ -856,6 +555,198 @@ int MeasureInfoHeight(HWND dlg, int width, const std::wstring& text) noexcept
 {
     return hwnd && focused && (hwnd == focused || IsChild(hwnd, focused) != FALSE);
 }
+
+#ifdef ENABLE_TESTS
+template <typename ControlT>
+[[nodiscard]] bool IsPluginConfigDebugFieldHostInteractive(const PluginConfigDxHostSlot& slot, ControlT* control) noexcept
+{
+    return control && slot.hostHwnd && IsWindowVisible(slot.hostHwnd.get()) != FALSE && control->IsVisible() && control->IsEnabled();
+}
+
+template <typename Visitor> [[nodiscard]] bool VisitPluginConfigDebugInteractiveHosts(const PluginConfigDialogState& state, Visitor&& visitor) noexcept
+{
+    size_t index = 0u;
+
+    const auto visitFieldHost = [&](const PluginConfigDxHostSlot& slot, auto* control) noexcept
+    {
+        if (! IsPluginConfigDebugFieldHostInteractive(slot, control))
+        {
+            return false;
+        }
+
+        if (visitor(index, slot.hostHwnd.get()))
+        {
+            return true;
+        }
+
+        ++index;
+        return false;
+    };
+
+    for (const auto& controls : state.controls)
+    {
+        if (visitFieldHost(controls.dxEditSlot, controls.dxEditControl) || visitFieldHost(controls.dxComboSlot, controls.dxComboControl) ||
+            visitFieldHost(controls.dxToggleSlot, controls.dxToggleControl))
+        {
+            return true;
+        }
+
+        for (const auto& choiceControl : controls.dxChoiceControls)
+        {
+            if (visitFieldHost(choiceControl.slot, choiceControl.checkbox))
+            {
+                return true;
+            }
+        }
+    }
+
+    for (const DxCommandButtonHost& slot : state.dxCommandButtons)
+    {
+        if (! slot.button || ! slot.hostHwnd || IsWindowVisible(slot.hostHwnd.get()) == FALSE || ! slot.button->IsVisible() || ! slot.button->IsEnabled())
+        {
+            continue;
+        }
+
+        if (visitor(index, slot.hostHwnd.get()))
+        {
+            return true;
+        }
+
+        ++index;
+    }
+
+    return false;
+}
+
+[[nodiscard]] bool FindPluginConfigDebugInteractiveHostIndex(const PluginConfigDialogState& state, const HWND host, size_t& outIndex) noexcept
+{
+    outIndex = kInvalidPluginConfigDebugFocusIndex;
+    if (! host)
+    {
+        return false;
+    }
+
+    return VisitPluginConfigDebugInteractiveHosts(
+        state,
+        [&](const size_t index, const HWND candidate) noexcept
+    {
+        if (candidate != host)
+        {
+            return false;
+        }
+
+        outIndex = index;
+        return true;
+    });
+}
+
+[[nodiscard]] bool TryResolvePluginConfigDebugFocusHostByIndex(const PluginConfigDialogState& state, HWND& outHost) noexcept
+{
+    outHost = nullptr;
+    if (state.lastDebugFocusedHostIndex == kInvalidPluginConfigDebugFocusIndex)
+    {
+        return false;
+    }
+
+    return VisitPluginConfigDebugInteractiveHosts(
+        state,
+        [&](const size_t index, const HWND candidate) noexcept
+    {
+        if (index != state.lastDebugFocusedHostIndex)
+        {
+            return false;
+        }
+
+        outHost = candidate;
+        return outHost != nullptr;
+    });
+}
+
+void RememberPluginConfigDebugFocusedHost(PluginConfigDialogState& state, const HWND host, const size_t hostIndex) noexcept
+{
+    state.lastDebugFocusedHost      = host;
+    state.lastDebugFocusedHostIndex = hostIndex;
+}
+
+void RememberPluginConfigDebugFocusedHost(PluginConfigDialogState& state, const HWND host) noexcept
+{
+    size_t hostIndex = kInvalidPluginConfigDebugFocusIndex;
+    static_cast<void>(FindPluginConfigDebugInteractiveHostIndex(state, host, hostIndex));
+    RememberPluginConfigDebugFocusedHost(state, host, hostIndex);
+}
+
+[[nodiscard]] bool TryRecoverPluginConfigDebugFocusedHost(const PluginConfigDialogState& state, HWND& outHost) noexcept
+{
+    outHost = nullptr;
+
+    if (state.lastDebugFocusedHost && IsWindow(state.lastDebugFocusedHost) != FALSE && IsWindowVisible(state.lastDebugFocusedHost) != FALSE)
+    {
+        outHost = state.lastDebugFocusedHost;
+        return true;
+    }
+
+    return TryResolvePluginConfigDebugFocusHostByIndex(state, outHost);
+}
+
+[[nodiscard]] bool TryFillPluginConfigFocusSnapshotFromDebugHost(const HWND dlg,
+                                                                 const PluginConfigDialogState& state,
+                                                                 const HWND host,
+                                                                 PluginConfigurationDialogDebugSnapshot& snapshot) noexcept
+{
+    if (! host)
+    {
+        return false;
+    }
+
+    for (const auto& controls : state.controls)
+    {
+        if (controls.dxEditSlot.hostHwnd.get() == host)
+        {
+            snapshot.focusKind  = PluginConfigurationDialogDebugFocusKind::Edit;
+            snapshot.focusLabel = controls.field.label;
+            return true;
+        }
+
+        if (controls.dxComboSlot.hostHwnd.get() == host)
+        {
+            snapshot.focusKind  = PluginConfigurationDialogDebugFocusKind::Combo;
+            snapshot.focusLabel = controls.field.label;
+            return true;
+        }
+
+        if (controls.dxToggleSlot.hostHwnd.get() == host)
+        {
+            snapshot.focusKind  = PluginConfigurationDialogDebugFocusKind::Toggle;
+            snapshot.focusLabel = controls.field.label;
+            return true;
+        }
+
+        for (const auto& choiceControl : controls.dxChoiceControls)
+        {
+            if (choiceControl.slot.hostHwnd.get() == host)
+            {
+                snapshot.focusKind  = PluginConfigurationDialogDebugFocusKind::Choice;
+                snapshot.focusLabel = controls.field.label;
+                return true;
+            }
+        }
+    }
+
+    for (size_t i = 0; i < static_cast<size_t>(DxCommandButtonIndex::Count); ++i)
+    {
+        if (state.dxCommandButtons[i].hostHwnd.get() == host)
+        {
+            const auto index     = static_cast<DxCommandButtonIndex>(i);
+            const HWND legacyBtn = GetLegacyCommandButton(dlg, index);
+            snapshot.focusKind   = PluginConfigurationDialogDebugFocusKind::CommandButton;
+            snapshot.focusLabel  = GetWindowTextString(legacyBtn);
+            return true;
+        }
+    }
+
+    return false;
+}
+#endif
 
 [[nodiscard]] bool TryRoutePluginConfigDialogCommandKey(const HWND hostHwnd, const WPARAM vk) noexcept
 {
@@ -1070,6 +961,12 @@ void FillPluginConfigFocusSnapshot(const HWND dlg, const PluginConfigDialogState
             snapshot.focusLabel = GetWindowTextString(legacyButton);
             return;
         }
+    }
+
+    HWND recoveredHost = nullptr;
+    if (TryRecoverPluginConfigDebugFocusedHost(state, recoveredHost))
+    {
+        static_cast<void>(TryFillPluginConfigFocusSnapshotFromDebugHost(dlg, state, recoveredHost, snapshot));
     }
 }
 #endif
@@ -1332,7 +1229,7 @@ template <typename ControlT> void LayoutDxHost(const PluginConfigDxHostSlot& slo
 
 void ApplyDxFieldTheme(const PluginConfigDialogState& state, PluginConfigFieldControls& controls) noexcept
 {
-    const ThemePalette palette = MakeDxPalette(state.theme);
+    const ThemePalette palette = MakeAppThemeDxPalette(state.theme, state.theme.windowBackground);
 
     const auto applyTheme = [&](PluginConfigDxHostSlot& slot) noexcept
     {
@@ -1787,7 +1684,7 @@ void AttachDxFieldHosts(
 #ifdef ENABLE_TESTS
     if (focused)
     {
-        state->lastDebugFocusedHost = hosts[nextIndex].host;
+        RememberPluginConfigDebugFocusedHost(*state, hosts[nextIndex].host, nextIndex);
     }
     TracePluginConfigDebug(
         std::format(L"plugin-config advance: currentHost={:#x} currentIndex={} nextIndex={} nextHost={:#x} reverse={} focused={} finalFocus={:#x}",
@@ -1844,7 +1741,7 @@ void ApplyDxCommandButtonTheme(PluginConfigDialogState& state) noexcept
         return;
     }
 
-    const ThemePalette palette = MakeDxPalette(state.theme);
+    const ThemePalette palette = MakeAppThemeDxPalette(state.theme, state.theme.windowBackground);
     for (DxCommandButtonHost& slot : state.dxCommandButtons)
     {
         slot.host.SetTheme(palette);
@@ -2407,625 +2304,142 @@ LRESULT CALLBACK PluginConfigPanelWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM
     return CallStoredWndProc(hwnd, kPluginConfigPanelOriginalWndProcProp, msg, wp, lp);
 }
 
-std::vector<PluginConfigField> ParseConfigurationSchema(std::string_view schemaJsonUtf8)
+Common::PluginConfiguration::SchemaParseResult ParseConfigurationSchema(std::string_view schemaJsonUtf8) noexcept
+{
+    return Common::PluginConfiguration::ParseSchema(schemaJsonUtf8);
+}
+std::string BuildConfigurationJson(const std::vector<PluginConfigFieldControls>& controls, std::string_view originalConfigurationJsonUtf8)
 {
     std::vector<PluginConfigField> fields;
+    std::vector<Common::PluginConfiguration::FieldValue> values;
+    fields.reserve(controls.size());
+    values.reserve(controls.size());
 
-    if (schemaJsonUtf8.empty())
+    for (const PluginConfigFieldControls& controlsForField : controls)
     {
-        return fields;
-    }
+        const PluginConfigField& field = controlsForField.field;
+        fields.push_back(field);
 
-    yyjson_doc* doc = yyjson_read(schemaJsonUtf8.data(), schemaJsonUtf8.size(), YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM);
-    if (! doc)
-    {
-        return fields;
-    }
-
-    auto freeDoc = wil::scope_exit([&] { yyjson_doc_free(doc); });
-
-    yyjson_val* root = yyjson_doc_get_root(doc);
-    if (! root || ! yyjson_is_obj(root))
-    {
-        return fields;
-    }
-
-    yyjson_val* fieldsArr = yyjson_obj_get(root, "fields");
-    if (! fieldsArr || ! yyjson_is_arr(fieldsArr))
-    {
-        return fields;
-    }
-
-    const size_t count = yyjson_arr_size(fieldsArr);
-    fields.reserve(count);
-
-    for (size_t i = 0; i < count; ++i)
-    {
-        yyjson_val* item = yyjson_arr_get(fieldsArr, i);
-        if (! item || ! yyjson_is_obj(item))
-        {
-            continue;
-        }
-
-        const auto keyUtf8  = TryGetUtf8String(item, "key");
-        const auto typeUtf8 = TryGetUtf8String(item, "type");
-        if (! keyUtf8.has_value() || ! typeUtf8.has_value())
-        {
-            continue;
-        }
-
-        PluginConfigField field;
-        field.key = Utf16FromUtf8(keyUtf8.value());
-        if (field.key.empty())
-        {
-            continue;
-        }
-
-        field.type = ParseFieldType(typeUtf8.value());
-
-        const auto labelUtf8 = TryGetUtf8String(item, "label");
-        field.label          = labelUtf8.has_value() ? Utf16FromUtf8(labelUtf8.value()) : field.key;
-        if (field.label.empty())
-        {
-            field.label = field.key;
-        }
-
-        const auto descriptionUtf8 = TryGetUtf8String(item, "description");
-        if (descriptionUtf8.has_value())
-        {
-            field.description = Utf16FromUtf8(descriptionUtf8.value());
-        }
-
-        // Parse x-ui-* attributes for UI customization
-        const auto uiSectionUtf8 = TryGetUtf8String(item, "x-ui-section");
-        if (uiSectionUtf8.has_value())
-        {
-            field.uiSection = Utf16FromUtf8(uiSectionUtf8.value());
-        }
-
-        int64_t uiOrderValue = 0;
-        if (TryGetInt64(item, "x-ui-order", uiOrderValue))
-        {
-            field.uiOrder = static_cast<int>(uiOrderValue);
-        }
-
-        const auto uiControlUtf8 = TryGetUtf8String(item, "x-ui-control");
-        if (uiControlUtf8.has_value())
-        {
-            field.uiControl = Utf16FromUtf8(uiControlUtf8.value());
-        }
-
-        bool uiHidden = false;
-        if (TryGetBoolValue(item, "x-ui-hidden", uiHidden))
-        {
-            field.uiHidden = uiHidden;
-        }
-
-        int64_t minValue = 0;
-        if (TryGetInt64(item, "min", minValue))
-        {
-            field.hasMin = true;
-            field.min    = minValue;
-        }
-
-        int64_t maxValue = 0;
-        if (TryGetInt64(item, "max", maxValue))
-        {
-            field.hasMax = true;
-            field.max    = maxValue;
-        }
-
+        Common::PluginConfiguration::FieldValue value;
+        value.type = field.type;
         if (field.type == PluginConfigFieldType::Text)
         {
-            const auto def    = TryGetUtf8String(item, "default");
-            field.defaultText = def.has_value() ? Utf16FromUtf8(def.value()) : std::wstring();
+            value.text = field.defaultText;
+            if (controlsForField.hEdit)
+            {
+                const int length = GetWindowTextLengthW(controlsForField.hEdit);
+                value.text.clear();
+                if (length > 0)
+                {
+                    value.text.resize(static_cast<size_t>(length) + 1u);
+                    GetWindowTextW(controlsForField.hEdit, value.text.data(), length + 1);
+                    value.text.resize(static_cast<size_t>(length));
+                }
+            }
         }
         else if (field.type == PluginConfigFieldType::Value)
         {
-            int64_t defValue = 0;
-            if (TryGetInt64(item, "default", defValue))
-            {
-                field.defaultInt = defValue;
-            }
-        }
-        else if (field.type == PluginConfigFieldType::Bool)
-        {
-            bool def = false;
-            if (TryGetBoolValue(item, "default", def))
-            {
-                field.defaultBool = def;
-            }
-        }
-        else if (field.type == PluginConfigFieldType::Option)
-        {
-            const auto def      = TryGetUtf8String(item, "default");
-            field.defaultOption = def.has_value() ? Utf16FromUtf8(def.value()) : std::wstring();
-
-            yyjson_val* options = yyjson_obj_get(item, "options");
-            if (options && yyjson_is_arr(options))
-            {
-                const size_t optCount = yyjson_arr_size(options);
-                field.choices.reserve(optCount);
-                for (size_t o = 0; o < optCount; ++o)
-                {
-                    yyjson_val* opt = yyjson_arr_get(options, o);
-                    if (! opt || ! yyjson_is_obj(opt))
-                    {
-                        continue;
-                    }
-
-                    const auto valueUtf8 = TryGetUtf8String(opt, "value");
-                    if (! valueUtf8.has_value())
-                    {
-                        continue;
-                    }
-
-                    PluginConfigChoice choice;
-                    choice.value = Utf16FromUtf8(valueUtf8.value());
-                    if (choice.value.empty())
-                    {
-                        continue;
-                    }
-
-                    const auto optLabelUtf8 = TryGetUtf8String(opt, "label");
-                    choice.label            = optLabelUtf8.has_value() ? Utf16FromUtf8(optLabelUtf8.value()) : choice.value;
-                    if (choice.label.empty())
-                    {
-                        choice.label = choice.value;
-                    }
-
-                    field.choices.push_back(std::move(choice));
-                }
-            }
-        }
-        else if (field.type == PluginConfigFieldType::Selection)
-        {
-            yyjson_val* options = yyjson_obj_get(item, "options");
-            if (options && yyjson_is_arr(options))
-            {
-                const size_t optCount = yyjson_arr_size(options);
-                field.choices.reserve(optCount);
-                for (size_t o = 0; o < optCount; ++o)
-                {
-                    yyjson_val* opt = yyjson_arr_get(options, o);
-                    if (! opt || ! yyjson_is_obj(opt))
-                    {
-                        continue;
-                    }
-
-                    const auto valueUtf8 = TryGetUtf8String(opt, "value");
-                    if (! valueUtf8.has_value())
-                    {
-                        continue;
-                    }
-
-                    PluginConfigChoice choice;
-                    choice.value = Utf16FromUtf8(valueUtf8.value());
-                    if (choice.value.empty())
-                    {
-                        continue;
-                    }
-
-                    const auto optLabelUtf8 = TryGetUtf8String(opt, "label");
-                    choice.label            = optLabelUtf8.has_value() ? Utf16FromUtf8(optLabelUtf8.value()) : choice.value;
-                    if (choice.label.empty())
-                    {
-                        choice.label = choice.value;
-                    }
-
-                    field.choices.push_back(std::move(choice));
-                }
-            }
-
-            yyjson_val* def = yyjson_obj_get(item, "default");
-            if (def && yyjson_is_arr(def))
-            {
-                const size_t defCount = yyjson_arr_size(def);
-                field.defaultSelection.reserve(defCount);
-                for (size_t d = 0; d < defCount; ++d)
-                {
-                    yyjson_val* v = yyjson_arr_get(def, d);
-                    if (! v || ! yyjson_is_str(v))
-                    {
-                        continue;
-                    }
-
-                    const char* s = yyjson_get_str(v);
-                    if (! s)
-                    {
-                        continue;
-                    }
-
-                    std::wstring value = Utf16FromUtf8(s);
-                    if (! value.empty())
-                    {
-                        field.defaultSelection.push_back(std::move(value));
-                    }
-                }
-            }
-        }
-
-        fields.push_back(std::move(field));
-    }
-
-    // Sort fields by uiOrder (if specified), then by original order
-    std::stable_sort(fields.begin(),
-                     fields.end(),
-                     [](const PluginConfigField& a, const PluginConfigField& b)
-    {
-        // Fields with explicit uiOrder come first, sorted by order value
-        // Fields without uiOrder (order=0) maintain original order via stable_sort
-        if (a.uiOrder != 0 && b.uiOrder != 0)
-        {
-            return a.uiOrder < b.uiOrder;
-        }
-        if (a.uiOrder != 0)
-        {
-            return true; // a has order, b doesn't → a comes first
-        }
-        if (b.uiOrder != 0)
-        {
-            return false; // b has order, a doesn't → b comes first
-        }
-        return false; // both have no order → maintain original order
-    });
-
-    return fields;
-}
-
-yyjson_doc* ParseJsonToDoc(std::string_view textUtf8) noexcept
-{
-    if (textUtf8.empty())
-    {
-        return nullptr;
-    }
-
-    return yyjson_read(textUtf8.data(), textUtf8.size(), YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM);
-}
-
-std::string BuildConfigurationJson(const std::vector<PluginConfigFieldControls>& controls)
-{
-    yyjson_mut_doc* doc = yyjson_mut_doc_new(nullptr);
-    if (! doc)
-    {
-        return {};
-    }
-
-    auto freeDoc = wil::scope_exit([&] { yyjson_mut_doc_free(doc); });
-
-    yyjson_mut_val* root = yyjson_mut_obj(doc);
-    if (! root)
-    {
-        return {};
-    }
-    yyjson_mut_doc_set_root(doc, root);
-
-    for (const auto& c : controls)
-    {
-        const std::string keyUtf8 = Utf8FromUtf16(c.field.key);
-        if (keyUtf8.empty() && ! c.field.key.empty())
-        {
-            continue;
-        }
-
-        if (keyUtf8.empty())
-        {
-            continue;
-        }
-
-        yyjson_mut_val* key = yyjson_mut_strncpy(doc, keyUtf8.c_str(), keyUtf8.size());
-        if (! key)
-        {
-            return {};
-        }
-
-        if (c.field.type == PluginConfigFieldType::Text)
-        {
-            std::wstring value = c.field.defaultText;
-            if (c.hEdit)
-            {
-                const int len = GetWindowTextLengthW(c.hEdit);
-                if (len > 0)
-                {
-                    value.resize(static_cast<size_t>(len) + 1u);
-                    GetWindowTextW(c.hEdit, value.data(), len + 1);
-                    value.resize(static_cast<size_t>(len));
-                }
-            }
-
-            const std::string utf8 = Utf8FromUtf16(value);
-            yyjson_mut_val* val    = yyjson_mut_strncpy(doc, utf8.c_str(), utf8.size());
-            if (! val)
-            {
-                return {};
-            }
-            if (! yyjson_mut_obj_add(root, key, val))
-            {
-                return {};
-            }
-        }
-        else if (c.field.type == PluginConfigFieldType::Value)
-        {
-            int64_t v = c.field.defaultInt;
-            if (c.hEdit)
+            value.integer = field.defaultInt;
+            if (controlsForField.hEdit)
             {
                 std::array<wchar_t, 64> buffer{};
-                GetWindowTextW(c.hEdit, buffer.data(), static_cast<int>(buffer.size()));
-
+                GetWindowTextW(controlsForField.hEdit, buffer.data(), static_cast<int>(buffer.size()));
                 wchar_t* end           = nullptr;
                 errno                  = 0;
                 const long long parsed = wcstoll(buffer.data(), &end, 10);
                 if (errno == 0 && end != buffer.data())
                 {
-                    v = static_cast<int64_t>(parsed);
+                    value.integer = static_cast<int64_t>(parsed);
                 }
             }
-
-            if (c.field.hasMin)
+        }
+        else if (field.type == PluginConfigFieldType::Bool)
+        {
+            value.boolean = field.defaultBool;
+            if (controlsForField.hToggle)
             {
-                v = std::max(v, c.field.min);
+                value.boolean = GetLegacyToggleState(controlsForField.hToggle);
             }
-            if (c.field.hasMax)
+            else if (! controlsForField.choiceButtons.empty())
             {
-                v = std::min(v, c.field.max);
-            }
-
-            yyjson_mut_val* val = yyjson_mut_int(doc, v);
-            if (! val)
-            {
-                return {};
-            }
-            if (! yyjson_mut_obj_add(root, key, val))
-            {
-                return {};
+                value.boolean = SendMessageW(controlsForField.choiceButtons.front(), BM_GETCHECK, 0, 0) == BST_CHECKED;
             }
         }
-        else if (c.field.type == PluginConfigFieldType::Bool)
+        else if (field.type == PluginConfigFieldType::Option)
         {
-            bool v = c.field.defaultBool;
-            if (c.hToggle)
+            value.text = field.defaultOption;
+            if (controlsForField.hToggle)
             {
-                v = GetLegacyToggleState(c.hToggle);
-            }
-            else if (! c.choiceButtons.empty())
-            {
-                v = SendMessageW(c.choiceButtons.front(), BM_GETCHECK, 0, 0) == BST_CHECKED;
-            }
-
-            yyjson_mut_val* val = yyjson_mut_bool(doc, v ? true : false);
-            if (! val)
-            {
-                return {};
-            }
-            if (! yyjson_mut_obj_add(root, key, val))
-            {
-                return {};
-            }
-        }
-        else if (c.field.type == PluginConfigFieldType::Option)
-        {
-            std::wstring selected = c.field.defaultOption;
-            if (c.hToggle)
-            {
-                const bool isOn    = GetLegacyToggleState(c.hToggle);
-                const size_t index = isOn ? c.toggleOnChoiceIndex : c.toggleOffChoiceIndex;
-                if (index < c.field.choices.size())
+                const bool isOn    = GetLegacyToggleState(controlsForField.hToggle);
+                const size_t index = isOn ? controlsForField.toggleOnChoiceIndex : controlsForField.toggleOffChoiceIndex;
+                if (index < field.choices.size())
                 {
-                    selected = c.field.choices[index].value;
+                    value.text = field.choices[index].value;
                 }
             }
-            else if (c.hCombo)
+            else if (controlsForField.hCombo)
             {
-                const LRESULT index = SendMessageW(c.hCombo, CB_GETCURSEL, 0, 0);
-                if (index >= 0 && index <= static_cast<LRESULT>(std::numeric_limits<int>::max()))
+                const LRESULT index = SendMessageW(controlsForField.hCombo, CB_GETCURSEL, 0, 0);
+                if (index >= 0 && index <= static_cast<LRESULT>((std::numeric_limits<int>::max)()))
                 {
                     const size_t choiceIndex = static_cast<size_t>(index);
-                    if (choiceIndex < c.field.choices.size())
+                    if (choiceIndex < field.choices.size())
                     {
-                        selected = c.field.choices[choiceIndex].value;
+                        value.text = field.choices[choiceIndex].value;
                     }
                 }
             }
             else
             {
-                for (size_t i = 0; i < c.choiceButtons.size() && i < c.field.choices.size(); ++i)
+                for (size_t index = 0; index < controlsForField.choiceButtons.size() && index < field.choices.size(); ++index)
                 {
-                    if (SendMessageW(c.choiceButtons[i], BM_GETCHECK, 0, 0) == BST_CHECKED)
+                    if (SendMessageW(controlsForField.choiceButtons[index], BM_GETCHECK, 0, 0) == BST_CHECKED)
                     {
-                        selected = c.field.choices[i].value;
+                        value.text = field.choices[index].value;
                         break;
                     }
                 }
             }
-
-            const std::string utf8 = Utf8FromUtf16(selected);
-            yyjson_mut_val* val    = yyjson_mut_strncpy(doc, utf8.c_str(), utf8.size());
-            if (! val)
-            {
-                return {};
-            }
-            if (! yyjson_mut_obj_add(root, key, val))
-            {
-                return {};
-            }
         }
-        else if (c.field.type == PluginConfigFieldType::Selection)
+        else if (field.type == PluginConfigFieldType::Selection)
         {
-            std::vector<std::wstring> selectedValues = c.field.defaultSelection;
-            if (! c.choiceButtons.empty())
+            value.selection = field.defaultSelection;
+            if (! controlsForField.choiceButtons.empty())
             {
-                selectedValues.clear();
-                for (size_t i = 0; i < c.choiceButtons.size() && i < c.field.choices.size(); ++i)
+                value.selection.clear();
+                for (size_t index = 0; index < controlsForField.choiceButtons.size() && index < field.choices.size(); ++index)
                 {
-                    if (SendMessageW(c.choiceButtons[i], BM_GETCHECK, 0, 0) != BST_CHECKED)
+                    if (SendMessageW(controlsForField.choiceButtons[index], BM_GETCHECK, 0, 0) == BST_CHECKED)
                     {
-                        continue;
+                        value.selection.push_back(field.choices[index].value);
                     }
-
-                    selectedValues.push_back(c.field.choices[i].value);
-                }
-            }
-
-            yyjson_mut_val* arr = yyjson_mut_arr(doc);
-            if (! arr)
-            {
-                return {};
-            }
-            if (! yyjson_mut_obj_add(root, key, arr))
-            {
-                return {};
-            }
-
-            for (const auto& selectedValue : selectedValues)
-            {
-                const std::string utf8 = Utf8FromUtf16(selectedValue);
-                yyjson_mut_val* val    = yyjson_mut_strncpy(doc, utf8.c_str(), utf8.size());
-                if (! val)
-                {
-                    return {};
-                }
-                if (! yyjson_mut_arr_add_val(arr, val))
-                {
-                    return {};
                 }
             }
         }
+        values.push_back(std::move(value));
     }
 
-    yyjson_write_err err{};
-    size_t len = 0;
-    wil::unique_any<char*, decltype(&::free), ::free> json(yyjson_mut_write_opts(doc, YYJSON_WRITE_NOFLAG, nullptr, &len, &err));
-    if (! json || len == 0)
+    std::string serialized;
+    if (FAILED(Common::PluginConfiguration::SerializeConfiguration(originalConfigurationJsonUtf8, fields, values, serialized)))
     {
-        Debug::Error(L"Failed to serialize plugin configuration to JSON: code: {}", err.code);
+        Debug::Error(L"Failed to serialize plugin configuration through the shared codec.");
         return {};
     }
-
-    return std::string(json.get(), len);
+    return serialized;
 }
 
-void ApplyFieldDefaultToControls(const PluginConfigField& field, PluginConfigFieldControls& out, yyjson_val* configRoot)
+void ApplyFieldValueToControls(const PluginConfigField& field,
+                               const Common::PluginConfiguration::FieldValue& value,
+                               PluginConfigFieldControls& out)
 {
     out.field = field;
-
-    const std::string keyUtf8 = Utf8FromUtf16(field.key);
-    yyjson_val* current       = nullptr;
-    if (configRoot && ! keyUtf8.empty())
+    switch (field.type)
     {
-        current = yyjson_obj_get(configRoot, keyUtf8.c_str());
-    }
-
-    if (field.type == PluginConfigFieldType::Text)
-    {
-        std::wstring value = field.defaultText;
-        if (current && yyjson_is_str(current))
-        {
-            const char* s = yyjson_get_str(current);
-            if (s)
-            {
-                value = Utf16FromUtf8(s);
-            }
-        }
-
-        out.field.defaultText = value;
-    }
-    else if (field.type == PluginConfigFieldType::Value)
-    {
-        int64_t value = field.defaultInt;
-        if (current)
-        {
-            if (yyjson_is_sint(current))
-            {
-                value = yyjson_get_sint(current);
-            }
-            else if (yyjson_is_uint(current))
-            {
-                value = static_cast<int64_t>(std::min<uint64_t>(yyjson_get_uint(current), static_cast<uint64_t>(std::numeric_limits<int64_t>::max())));
-            }
-            else if (yyjson_is_real(current))
-            {
-                value = static_cast<int64_t>(yyjson_get_real(current));
-            }
-        }
-
-        out.field.defaultInt = value;
-    }
-    else if (field.type == PluginConfigFieldType::Bool)
-    {
-        bool value = field.defaultBool;
-        if (current)
-        {
-            if (yyjson_is_bool(current))
-            {
-                value = yyjson_get_bool(current);
-            }
-            else if (yyjson_is_sint(current))
-            {
-                value = yyjson_get_sint(current) != 0;
-            }
-            else if (yyjson_is_uint(current))
-            {
-                value = yyjson_get_uint(current) != 0;
-            }
-            else if (yyjson_is_str(current))
-            {
-                const char* s = yyjson_get_str(current);
-                if (s)
-                {
-                    const std::optional<bool> parsed = TryParseBoolToggleToken(Utf16FromUtf8(s));
-                    if (parsed.has_value())
-                    {
-                        value = parsed.value();
-                    }
-                }
-            }
-        }
-
-        out.field.defaultBool = value;
-    }
-    else if (field.type == PluginConfigFieldType::Option)
-    {
-        std::wstring value = field.defaultOption;
-        if (current && yyjson_is_str(current))
-        {
-            const char* s = yyjson_get_str(current);
-            if (s)
-            {
-                value = Utf16FromUtf8(s);
-            }
-        }
-
-        out.field.defaultOption = value;
-    }
-    else if (field.type == PluginConfigFieldType::Selection)
-    {
-        std::vector<std::wstring> values = field.defaultSelection;
-        if (current && yyjson_is_arr(current))
-        {
-            values.clear();
-            const size_t count = yyjson_arr_size(current);
-            values.reserve(count);
-            for (size_t i = 0; i < count; ++i)
-            {
-                yyjson_val* v = yyjson_arr_get(current, i);
-                if (! v || ! yyjson_is_str(v))
-                {
-                    continue;
-                }
-                const char* s = yyjson_get_str(v);
-                if (! s)
-                {
-                    continue;
-                }
-                std::wstring t = Utf16FromUtf8(s);
-                if (! t.empty())
-                {
-                    values.push_back(std::move(t));
-                }
-            }
-        }
-
-        out.field.defaultSelection = std::move(values);
+        case PluginConfigFieldType::Text: out.field.defaultText = value.text; break;
+        case PluginConfigFieldType::Value: out.field.defaultInt = value.integer; break;
+        case PluginConfigFieldType::Bool: out.field.defaultBool = value.boolean; break;
+        case PluginConfigFieldType::Option: out.field.defaultOption = value.text; break;
+        case PluginConfigFieldType::Selection: out.field.defaultSelection = value.selection; break;
     }
 }
 
@@ -3054,7 +2468,7 @@ INT_PTR OnPluginConfigDialogInit(HWND dlg, PluginConfigDialogState* state)
     state->inputFrameStyle.inputBackgroundColor        = state->inputBackgroundColor;
     state->inputFrameStyle.inputFocusedBackgroundColor = state->inputBackgroundColor;
     state->inputFrameStyle.inputDisabledBackgroundColor =
-        UiMetrics::BlendColor(state->theme.windowBackground, state->inputBackgroundColor, state->theme.dark ? 70 : 40, 255);
+        UiMetrics::BlendColorRefWeightedTruncate(state->theme.windowBackground, state->inputBackgroundColor, state->theme.dark ? 70 : 40, 255);
     state->contentHeight = 0;
     state->scrollPosY    = 0;
 
@@ -3117,18 +2531,10 @@ INT_PTR OnPluginConfigDialogInit(HWND dlg, PluginConfigDialogState* state)
 
     LayoutPluginConfigDialog(dlg, *state);
 
-    const std::vector<PluginConfigField> fields = ParseConfigurationSchema(state->schemaJsonUtf8);
-
-    yyjson_doc* configDoc  = ParseJsonToDoc(state->configurationJsonUtf8);
-    yyjson_val* configRoot = nullptr;
-    if (configDoc)
-    {
-        configRoot = yyjson_doc_get_root(configDoc);
-        if (! configRoot || ! yyjson_is_obj(configRoot))
-        {
-            configRoot = nullptr;
-        }
-    }
+    const Common::PluginConfiguration::SchemaParseResult schema = ParseConfigurationSchema(state->schemaJsonUtf8);
+    const std::vector<PluginConfigField>& fields                 = schema.fields;
+    const Common::PluginConfiguration::ConfigurationParseResult configuration =
+        Common::PluginConfiguration::ParseConfiguration(fields, state->configurationJsonUtf8);
 
     state->controls.clear();
     state->controls.reserve(fields.size());
@@ -3136,10 +2542,6 @@ INT_PTR OnPluginConfigDialogInit(HWND dlg, PluginConfigDialogState* state)
     HWND panel = state->panel;
     if (! panel)
     {
-        if (configDoc)
-        {
-            yyjson_doc_free(configDoc);
-        }
         return TRUE;
     }
 
@@ -3189,10 +2591,11 @@ INT_PTR OnPluginConfigDialogInit(HWND dlg, PluginConfigDialogState* state)
 
     int y = top;
 
-    for (const auto& field : fields)
+    for (size_t fieldIndex = 0; fieldIndex < fields.size(); ++fieldIndex)
     {
+        const PluginConfigField& field = fields[fieldIndex];
         PluginConfigFieldControls controls;
-        ApplyFieldDefaultToControls(field, controls, configRoot);
+        ApplyFieldValueToControls(field, configuration.values[fieldIndex], controls);
 
         if (controls.field.uiHidden)
         {
@@ -3357,7 +2760,7 @@ INT_PTR OnPluginConfigDialogInit(HWND dlg, PluginConfigDialogState* state)
 
             size_t onIndex  = 0;
             size_t offIndex = 0;
-            if (TryGetBoolToggleChoiceIndices(controls.field, onIndex, offIndex))
+            if (Common::PluginConfiguration::TryGetBoolToggleChoiceIndices(controls.field, onIndex, offIndex))
             {
                 leftIndex  = onIndex;
                 rightIndex = offIndex;
@@ -3586,13 +2989,8 @@ INT_PTR OnPluginConfigDialogInit(HWND dlg, PluginConfigDialogState* state)
         }
     }
 
-    if (configDoc)
-    {
-        yyjson_doc_free(configDoc);
-    }
-
     state->contentHeight         = y + margin;
-    state->configurationJsonUtf8 = BuildConfigurationJson(state->controls);
+    state->configurationJsonUtf8 = BuildConfigurationJson(state->controls, state->configurationJsonUtf8);
     if (state->baselineConfigurationJsonUtf8.empty())
     {
         state->baselineConfigurationJsonUtf8 = state->configurationJsonUtf8;
@@ -3794,14 +3192,14 @@ void DestroyPluginConfigChildWindows(PluginConfigDialogState& state) noexcept
 
     if (state.baselineConfigurationJsonUtf8.empty())
     {
-        state.baselineConfigurationJsonUtf8 = BuildConfigurationJson(state.controls);
+        state.baselineConfigurationJsonUtf8 = BuildConfigurationJson(state.controls, state.configurationJsonUtf8);
     }
     return S_OK;
 }
 
 [[nodiscard]] bool IsPluginConfigDialogDirty(const PluginConfigDialogState& state) noexcept
 {
-    return BuildConfigurationJson(state.controls) != state.baselineConfigurationJsonUtf8;
+    return BuildConfigurationJson(state.controls, state.configurationJsonUtf8) != state.baselineConfigurationJsonUtf8;
 }
 
 [[nodiscard]] bool ResolvePluginConfigStaleSaveConflict(HWND dlg, PluginConfigDialogState& state) noexcept
@@ -3859,7 +3257,7 @@ INT_PTR OnPluginConfigDialogSettingsReloadedFromDisk(HWND dlg, PluginConfigDialo
 
     if (IsPluginConfigDialogDirty(state))
     {
-        const std::string currentConfig = BuildConfigurationJson(state.controls);
+        const std::string currentConfig = BuildConfigurationJson(state.controls, state.configurationJsonUtf8);
 
         SettingsHotReload::ExternalReloadChoice choice = SettingsHotReload::ExternalReloadChoice::KeepEditing;
         const HRESULT promptHr                         = SettingsHotReload::PromptExternalReloadConflict(dlg, GetPluginConfigEditorName(state), choice);
@@ -3901,7 +3299,7 @@ INT_PTR OnPluginConfigDialogCommand(HWND dlg, PluginConfigDialogState* state, UI
             return TRUE;
         }
 
-        const std::string configJson = BuildConfigurationJson(state->controls);
+        const std::string configJson = BuildConfigurationJson(state->controls, state->configurationJsonUtf8);
         if (configJson.empty())
         {
             EndDialog(dlg, IDCANCEL);
@@ -4203,7 +3601,7 @@ INT_PTR OnPluginConfigDialogDebug(HWND dlg, PluginConfigDialogState* state, WPAR
                 {
                     focusedHost->host = controls.dxEditSlot.hostHwnd.get();
 #ifdef ENABLE_TESTS
-                    state->lastDebugFocusedHost = focusedHost->host;
+                    RememberPluginConfigDebugFocusedHost(*state, focusedHost->host);
 #endif
                     SetWindowLongPtrW(dlg, DWLP_MSGRESULT, TRUE);
                     return TRUE;
@@ -4212,7 +3610,7 @@ INT_PTR OnPluginConfigDialogDebug(HWND dlg, PluginConfigDialogState* state, WPAR
                 {
                     focusedHost->host = controls.dxComboSlot.hostHwnd.get();
 #ifdef ENABLE_TESTS
-                    state->lastDebugFocusedHost = focusedHost->host;
+                    RememberPluginConfigDebugFocusedHost(*state, focusedHost->host);
 #endif
                     SetWindowLongPtrW(dlg, DWLP_MSGRESULT, TRUE);
                     return TRUE;
@@ -4221,7 +3619,7 @@ INT_PTR OnPluginConfigDialogDebug(HWND dlg, PluginConfigDialogState* state, WPAR
                 {
                     focusedHost->host = controls.dxToggleSlot.hostHwnd.get();
 #ifdef ENABLE_TESTS
-                    state->lastDebugFocusedHost = focusedHost->host;
+                    RememberPluginConfigDebugFocusedHost(*state, focusedHost->host);
 #endif
                     SetWindowLongPtrW(dlg, DWLP_MSGRESULT, TRUE);
                     return TRUE;
@@ -4232,7 +3630,7 @@ INT_PTR OnPluginConfigDialogDebug(HWND dlg, PluginConfigDialogState* state, WPAR
                     {
                         focusedHost->host = controls.dxChoiceControls[choiceIndex].slot.hostHwnd.get();
 #ifdef ENABLE_TESTS
-                        state->lastDebugFocusedHost = focusedHost->host;
+                        RememberPluginConfigDebugFocusedHost(*state, focusedHost->host);
 #endif
                         SetWindowLongPtrW(dlg, DWLP_MSGRESULT, TRUE);
                         return TRUE;
@@ -4248,7 +3646,7 @@ INT_PTR OnPluginConfigDialogDebug(HWND dlg, PluginConfigDialogState* state, WPAR
                 {
                     focusedHost->host = slot.hostHwnd.get();
 #ifdef ENABLE_TESTS
-                    state->lastDebugFocusedHost = focusedHost->host;
+                    RememberPluginConfigDebugFocusedHost(*state, focusedHost->host);
 #endif
                     SetWindowLongPtrW(dlg, DWLP_MSGRESULT, TRUE);
                     return TRUE;
@@ -4316,12 +3714,12 @@ INT_PTR OnPluginConfigDialogDebug(HWND dlg, PluginConfigDialogState* state, WPAR
 
             if (! focusedHost.host)
             {
-                if (state->lastDebugFocusedHost && IsWindow(state->lastDebugFocusedHost) != FALSE)
+                if (TryRecoverPluginConfigDebugFocusedHost(*state, focusedHost.host))
                 {
-                    focusedHost.host = state->lastDebugFocusedHost;
 #ifdef ENABLE_TESTS
-                    TracePluginConfigDebug(std::format(L"plugin-config advance command: reusing last focused host={:#x} after focus loss",
-                                                       reinterpret_cast<uintptr_t>(focusedHost.host)));
+                    TracePluginConfigDebug(std::format(L"plugin-config advance command: reusing logical focused host={:#x} index={} after focus loss",
+                                                       reinterpret_cast<uintptr_t>(focusedHost.host),
+                                                       static_cast<unsigned long long>(state->lastDebugFocusedHostIndex)));
 #endif
                 }
             }
@@ -4437,7 +3835,7 @@ INT_PTR CALLBACK PluginConfigDialogProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp
                 return FALSE;
             }
 
-            const std::string currentConfig   = BuildConfigurationJson(state->controls);
+            const std::string currentConfig   = BuildConfigurationJson(state->controls, state->configurationJsonUtf8);
             const std::string displayedConfig = currentConfig.empty() ? state->configurationJsonUtf8 : currentConfig;
             const std::string baselineConfig  = state->baselineConfigurationJsonUtf8.empty() ? displayedConfig : state->baselineConfigurationJsonUtf8;
             const HRESULT rebuildHr           = RebuildPluginConfigDialog(dlg, *state, state->schemaJsonUtf8, displayedConfig, baselineConfig, *theme);

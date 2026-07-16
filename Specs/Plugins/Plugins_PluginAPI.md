@@ -94,6 +94,7 @@ extern "C"
 extern "C"
 {
     PLUGFACTORY_API void __stdcall RedSalamanderPluginShutdown() noexcept;
+    PLUGFACTORY_API BOOL __stdcall RedSalamanderPluginCanUnloadNow() noexcept;
     PLUGFACTORY_API BOOL __stdcall RedSalamanderPluginRetainModuleUntilProcessExit() noexcept;
 }
 ```
@@ -102,9 +103,11 @@ These exports are not a default plugin requirement. A plugin SHOULD omit them un
 
 `RedSalamanderPluginShutdown()` must be idempotent and non-throwing. After it returns, no DLL-global worker may call host callbacks or touch state that the host can release before `FreeLibrary`. A host manager MUST still release or close live plugin instances through their normal interface contract before unloading a module; the export is a final module quiet point, not a replacement for `Close()`, `SetCallback(nullptr, nullptr)`, cancellation, or COM `Release()`.
 
+`RedSalamanderPluginCanUnloadNow()` is optional and is queried after `RedSalamanderPluginShutdown()` but before runtime resource-owner unregister and `FreeLibrary`. Omitted export means `TRUE`. Returning `FALSE` means DLL-global work is still unwinding and explicit runtime unload is unsafe; the host MUST keep the DLL mapped, keep the resource owner registered, mark the plugin entry as unload-deferred, skip same-path reload during rediscovery, and retry automatically. Recovery MUST NOT depend only on a user-initiated Refresh/Apply path: a host manager that receives `ERROR_BUSY` from a configuration/schema query because an unload-deferred entry still owns the plugin path MUST trigger an unload-deferred sweep on that busy result or schedule a bounded retry timer until the entry unloads or the manager shuts down. Plugins that return `FALSE` MUST do so from a non-blocking state check and MUST eventually return `TRUE` after the outstanding work exits.
+
 `RedSalamanderPluginRetainModuleUntilProcessExit()` is only meaningful during process shutdown. Returning `TRUE` asks the host to run the quiet point but leave the DLL mapped until OS process teardown. This is reserved for modules where explicit process-shutdown `FreeLibrary` is known to race with driver or library teardown after the plugin has already gone quiet.
 
-Host plugin managers that load DLLs through `RedSalamanderCreate` MUST centralize unload through a helper that releases normal COM instances first, calls `RedSalamanderPluginShutdown()` when present, unregisters resource owners, and honors `RedSalamanderPluginRetainModuleUntilProcessExit()` only for process-shutdown unload.
+Host plugin managers that load DLLs through `RedSalamanderCreate` MUST centralize unload through a helper that releases normal COM instances first, calls `RedSalamanderPluginShutdown()` when present, honors runtime `RedSalamanderPluginCanUnloadNow()` deferral before unregistering resources, unregisters resource owners only when unload is allowed, and honors `RedSalamanderPluginRetainModuleUntilProcessExit()` only for process-shutdown unload.
 
 Lifetime/ownership:
 - `host` is caller-owned and remains valid for the lifetime of the plugin instance created from this call.
@@ -139,6 +142,14 @@ enum HostAlertScope : uint32_t
     HOST_ALERT_SCOPE_PANE         = 2, // pane with navigation bar
     HOST_ALERT_SCOPE_APPLICATION  = 3, // application window
     HOST_ALERT_SCOPE_WINDOW       = 4, // specific HWND (request.targetWindow)
+};
+
+// Non-null pane-routing cookies for HOST_ALERT_SCOPE_PANE_CONTENT / HOST_ALERT_SCOPE_PANE.
+// nullptr preserves legacy focused-pane routing.
+enum HostPaneCookie : uintptr_t
+{
+    HOST_PANE_COOKIE_LEFT  = 1,
+    HOST_PANE_COOKIE_RIGHT = 2,
 };
 
 enum HostAlertModality : uint32_t
@@ -254,11 +265,17 @@ interface __declspec(uuid("afb5a715-1110-41f3-b7bb-133d6ca735fd")) __declspec(no
   - plugin-provided strings must be localized by the plugin (the host treats them as already-localized).
 - **Alerts**:
   - replacement policy: each `(scope, cookie)` pair has at most **one** active alert; `ShowAlert` replaces it.
+  - pane routing:
+    - `HOST_ALERT_SCOPE_PANE_CONTENT` and `HOST_ALERT_SCOPE_PANE` callers SHOULD pass
+      `reinterpret_cast<void*>(HOST_PANE_COOKIE_LEFT)` or `reinterpret_cast<void*>(HOST_PANE_COOKIE_RIGHT)`,
+    - `nullptr` is accepted only for legacy focused-pane routing,
+    - unknown non-null pane cookies are treated as legacy focused-pane routing for compatibility.
   - dismissal:
     - if `closable == TRUE`, the host provides a close “X” and Esc dismiss behavior (within that scope),
     - if `closable == FALSE`, dismissal is programmatic (host clears on navigation/path change where appropriate, or plugin calls `ClearAlert`).
 - **Prompts**:
   - `ShowPrompt` is blocking until the user responds.
+  - pane-scoped prompts follow the same pane-cookie routing rules as alerts.
   - button labels are host-localized (standard button sets only); plugins do not provide button text.
   - closing the prompt via window close (if allowed by the host) returns:
     - `HOST_PROMPT_RESULT_OK` for `HOST_PROMPT_BUTTONS_OK`

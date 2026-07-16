@@ -1,5 +1,7 @@
 #include "DxUi.Internal.h"
 
+#include "Helpers.h"
+
 #include <algorithm>
 #include <atomic>
 #include <limits>
@@ -106,6 +108,23 @@ struct AcpRange
                                                                                const AcpRange& range,
                                                                                const D2D1_RECT_F& bounds) noexcept
 {
+    if (range.start < range.end)
+    {
+        const std::optional<std::vector<D2D1_RECT_F>> rangeRects = control.TryGetTextInputRangeRects(host, range.start, range.end);
+        if (rangeRects.has_value() && ! rangeRects.value().empty())
+        {
+            D2D1_RECT_F rect = rangeRects.value().front();
+            for (const D2D1_RECT_F& rangeRect : rangeRects.value())
+            {
+                rect.left   = (std::min)(rect.left, rangeRect.left);
+                rect.top    = (std::min)(rect.top, rangeRect.top);
+                rect.right  = (std::max)(rect.right, rangeRect.right);
+                rect.bottom = (std::max)(rect.bottom, rangeRect.bottom);
+            }
+            return ClipTextStoreRectToBounds(rect, bounds);
+        }
+    }
+
     std::optional<D2D1_RECT_F> result;
     for (size_t index = range.start;; ++index)
     {
@@ -138,10 +157,36 @@ struct AcpRange
     return ClipTextStoreRectToBounds(result.value(), bounds);
 }
 
+[[nodiscard]] bool TextStoreControlBelongsToTree(const Control* root, const Control* target) noexcept
+{
+    if (! root || ! target)
+    {
+        return false;
+    }
+    if (root == target)
+    {
+        return true;
+    }
+    const auto* panel = dynamic_cast<const Panel*>(root);
+    if (! panel)
+    {
+        return false;
+    }
+    for (const auto& child : panel->GetChildren())
+    {
+        if (child && TextStoreControlBelongsToTree(child.get(), target))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 class DxUiTextStoreACP final : public ITextStoreACP, public ITextStoreACP2, public ITfContextOwnerCompositionSink
 {
 public:
-    DxUiTextStoreACP(WindowHost& host, Control& control) noexcept : _host(&host), _control(&control)
+    DxUiTextStoreACP(WindowHost& host, Control& control) noexcept :
+        _host(&host), _control(&control), _controlLifetime(GetControlLifetimeToken(control))
     {
     }
 
@@ -149,6 +194,16 @@ public:
     DxUiTextStoreACP& operator=(const DxUiTextStoreACP&) = delete;
     DxUiTextStoreACP(DxUiTextStoreACP&&)                 = delete;
     DxUiTextStoreACP& operator=(DxUiTextStoreACP&&)      = delete;
+
+    ~DxUiTextStoreACP() noexcept
+    {
+        DetachHost();
+    }
+
+    void DetachHost() noexcept
+    {
+        Disconnect();
+    }
 
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppvObject) noexcept override
     {
@@ -193,6 +248,20 @@ public:
             delete this;
         }
         return remaining;
+    }
+
+    void Disconnect() noexcept
+    {
+        _sink.reset();
+        _sinkMask  = 0u;
+        _lockFlags = 0u;
+        _host      = nullptr;
+        _control   = nullptr;
+        _controlLifetime.reset();
+        SecureWipe::SecureClear(_observedState.text);
+        _observedState    = TextInputState{};
+        _observedViewport = D2D1::RectF();
+        _hasObservedState = false;
     }
 
     HRESULT STDMETHODCALLTYPE OnStartComposition(ITfCompositionView* /*composition*/, BOOL* outAccepted) noexcept override
@@ -379,7 +448,7 @@ public:
         const AcpRange range             = GetSelectionRange(state);
         pSelection[0].acpStart           = ToAcp(range.start);
         pSelection[0].acpEnd             = ToAcp(range.end);
-        pSelection[0].style.ase          = TS_AE_END;
+        pSelection[0].style.ase          = (HasSelection(state) && state.caretIndex < state.selectionAnchorIndex.value()) ? TS_AE_START : TS_AE_END;
         pSelection[0].style.fInterimChar = FALSE;
         *pcFetched                       = 1u;
         return S_OK;
@@ -614,7 +683,8 @@ public:
         }
 
         TextInputState state{};
-        if (! ReadState(state) || ! _host || ! _control)
+        Control* const control = GetLiveControl();
+        if (! ReadState(state) || ! control)
         {
             return TS_E_INVALIDPOS;
         }
@@ -637,13 +707,13 @@ public:
         }
 
         const D2D1_POINT_2F queryPoint = D2D1::Point2F(pointDip->x, pointDip->y);
-        if (const std::optional<size_t> hitIndex = _control->TryHitTestTextInputPoint(*_host, queryPoint); hitIndex.has_value())
+        if (const std::optional<size_t> hitIndex = control->TryHitTestTextInputPoint(*_host, queryPoint); hitIndex.has_value())
         {
             *pacp = ToAcp((std::min)(hitIndex.value(), state.text.size()));
             return S_OK;
         }
 
-        const DWRITE_READING_DIRECTION readingDirection = ResolveReadingDirection(_control->GetFlowDirection());
+        const DWRITE_READING_DIRECTION readingDirection = ResolveReadingDirection(control->GetFlowDirection());
         *pacp = ToAcp(HitTestCaretIndexDip(_host, state.text, FontRole::Body, bounds, 0.0f, queryPoint, readingDirection));
         return S_OK;
     }
@@ -664,7 +734,8 @@ public:
         }
 
         TextInputState state{};
-        if (! ReadState(state) || ! _host || ! _control)
+        Control* const control = GetLiveControl();
+        if (! ReadState(state) || ! control)
         {
             return TS_E_INVALIDPOS;
         }
@@ -679,7 +750,7 @@ public:
         const AcpRange range = ClampAcpRange(acpStart, acpEnd, state.text.size(), false);
         if (state.multiline)
         {
-            const std::optional<D2D1_RECT_F> rectDip = TryResolveMultilineTextStoreRangeRect(*_host, *_control, range, bounds);
+            const std::optional<D2D1_RECT_F> rectDip = TryResolveMultilineTextStoreRangeRect(*_host, *control, range, bounds);
             if (! rectDip.has_value())
             {
                 *prc       = RECT{};
@@ -694,7 +765,7 @@ public:
 
         const float heightDip                           = (std::max)(1.0f, bounds.bottom - bounds.top);
         const float layoutWidth                         = (std::max)(1.0f, bounds.right - bounds.left);
-        const DWRITE_READING_DIRECTION readingDirection = ResolveReadingDirection(_control->GetFlowDirection());
+        const DWRITE_READING_DIRECTION readingDirection = ResolveReadingDirection(control->GetFlowDirection());
         const float startOffset = MeasureCaretOffsetDip(_host, state.text, FontRole::Body, range.start, heightDip, readingDirection, layoutWidth);
         const float endOffset   = MeasureCaretOffsetDip(_host, state.text, FontRole::Body, range.end, heightDip, readingDirection, layoutWidth);
         D2D1_RECT_F rectDip     = bounds;
@@ -717,7 +788,7 @@ public:
         {
             return E_INVALIDARG;
         }
-        if (! _host || ! _control)
+        if (! GetLiveControl())
         {
             return TS_E_INVALIDPOS;
         }
@@ -811,15 +882,25 @@ private:
         return (_lockFlags & TS_LF_READWRITE) == TS_LF_READWRITE;
     }
 
+    [[nodiscard]] Control* GetLiveControl() const noexcept
+    {
+        if (! _host || ! _control || _controlLifetime.expired() || ! TextStoreControlBelongsToTree(_host->GetRoot(), _control))
+        {
+            return nullptr;
+        }
+        return _control;
+    }
+
     [[nodiscard]] bool ReadState(TextInputState& outState) const noexcept
     {
-        if (! _host || ! _control)
+        Control* const control = GetLiveControl();
+        if (! control)
         {
             return false;
         }
 
         NativeTextInputState nativeState{};
-        if (_host->TryReadNativeTextInputState(_control, nativeState))
+        if (_host->TryReadNativeTextInputState(control, nativeState))
         {
             outState.text                 = nativeState.text;
             outState.selectionAnchorIndex = nativeState.selectionAnchorIndex;
@@ -831,7 +912,7 @@ private:
             return true;
         }
 
-        if (const auto* textField = dynamic_cast<const TextField*>(_control))
+        if (const auto* textField = dynamic_cast<const TextField*>(control))
         {
             outState.text       = textField->GetText();
             outState.readOnly   = textField->IsReadOnly();
@@ -845,7 +926,7 @@ private:
             return true;
         }
 
-        if (const auto* comboBox = dynamic_cast<const ComboBox*>(_control); comboBox && comboBox->IsEditable())
+        if (const auto* comboBox = dynamic_cast<const ComboBox*>(control); comboBox && comboBox->IsEditable())
         {
             outState.text       = comboBox->GetText();
             outState.caretIndex = outState.text.size();
@@ -862,12 +943,13 @@ private:
 
     [[nodiscard]] bool ApplyState(const TextInputState& state, bool notifyChange) noexcept
     {
-        if (! _host || ! _control || state.readOnly)
+        Control* const control = GetLiveControl();
+        if (! control || state.readOnly)
         {
             return false;
         }
 
-        if (auto* textField = dynamic_cast<TextField*>(_control))
+        if (auto* textField = dynamic_cast<TextField*>(control))
         {
             if (notifyChange)
             {
@@ -880,12 +962,12 @@ private:
 
             const size_t selectionStart = state.selectionAnchorIndex.value_or(state.caretIndex);
             textField->SetSelectionRange(selectionStart, state.caretIndex);
-            _host->SyncTextInput(_control);
+            _host->SyncTextInput(control);
             _host->Invalidate();
             return true;
         }
 
-        if (auto* comboBox = dynamic_cast<ComboBox*>(_control); comboBox && comboBox->IsEditable())
+        if (auto* comboBox = dynamic_cast<ComboBox*>(control); comboBox && comboBox->IsEditable())
         {
             if (notifyChange)
             {
@@ -898,7 +980,7 @@ private:
 
             const size_t selectionStart = state.selectionAnchorIndex.value_or(state.caretIndex);
             comboBox->SetEditableSelectionRange(selectionStart, state.caretIndex);
-            _host->SyncTextInput(_control);
+            _host->SyncTextInput(control);
             _host->Invalidate();
             return true;
         }
@@ -1047,20 +1129,22 @@ private:
 
     [[nodiscard]] D2D1_RECT_F ResolveTextViewportBounds() const noexcept
     {
-        if (! _control)
+        Control* const control = GetLiveControl();
+        if (! control)
         {
             return D2D1::RectF();
         }
-        if (const std::optional<D2D1_RECT_F> viewport = _control->TryGetTextInputViewportRect(); viewport.has_value())
+        if (const std::optional<D2D1_RECT_F> viewport = control->TryGetTextInputViewportRect(); viewport.has_value())
         {
             return viewport.value();
         }
-        return _control->GetHitBounds();
+        return control->GetHitBounds();
     }
 
     std::atomic<ULONG> _referenceCount{1u};
     WindowHost* _host = nullptr;
     Control* _control = nullptr;
+    std::weak_ptr<int> _controlLifetime;
     DWORD _lockFlags  = 0u;
     DWORD _sinkMask   = 0u;
     wil::com_ptr_nothrow<ITextStoreACPSink> _sink;
@@ -1074,6 +1158,32 @@ ITextStoreACP* CreateNativeTextInputTextStore(WindowHost& host, Control& control
 {
     auto* store = new (std::nothrow) DxUiTextStoreACP(host, control);
     return store ? static_cast<ITextStoreACP*>(store) : nullptr;
+}
+
+void DetachNativeTextInputTextStore(IUnknown* store) noexcept
+{
+    if (! store)
+    {
+        return;
+    }
+
+    wil::com_ptr_nothrow<ITextStoreACP> textStore;
+    if (FAILED(store->QueryInterface(IID_PPV_ARGS(textStore.put()))) || ! textStore)
+    {
+        return;
+    }
+
+    auto* concreteStore = static_cast<DxUiTextStoreACP*>(textStore.get());
+    concreteStore->DetachHost();
+}
+
+void DisconnectNativeTextInputTextStore(IUnknown* textStore) noexcept
+{
+    auto* store = dynamic_cast<DxUiTextStoreACP*>(textStore);
+    if (store)
+    {
+        store->Disconnect();
+    }
 }
 
 #if defined(ENABLE_TESTS)

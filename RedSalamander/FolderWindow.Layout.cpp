@@ -2,6 +2,7 @@
 
 #include "D2DHdcPaint.h"
 #include "DxUiThemePalette.h"
+#include "Helpers.h"
 
 #include <fstream>
 
@@ -681,15 +682,15 @@ void FolderWindow::LayoutEmbeddedPreviewViewer(Pane hostPane) noexcept
     GetClientRect(host.hPreviewContent.get(), &client);
     const int width  = std::max(0L, client.right - client.left);
     const int height = std::max(0L, client.bottom - client.top);
-    for (HWND child = GetWindow(host.hPreviewContent.get(), GW_CHILD); child != nullptr; child = GetWindow(child, GW_HWNDNEXT))
+    ViewerInstance* instance = host.previewViewerInstance;
+    const HWND viewerHwnd    = instance ? instance->embeddedHwnd : nullptr;
+    if (! IsOwnedPreviewEmbeddedHwnd(host, instance, viewerHwnd))
     {
-        if (GetParent(child) != host.hPreviewContent.get())
-        {
-            continue;
-        }
-        SetWindowPos(child, HWND_TOP, 0, 0, width, height, SWP_NOACTIVATE);
-        ShowWindow(child, host.previewTabSelected && host.previewViewerInstance != nullptr ? SW_SHOWNA : SW_HIDE);
+        return;
     }
+
+    SetWindowPos(viewerHwnd, nullptr, 0, 0, width, height, SWP_NOZORDER | SWP_NOACTIVATE);
+    ShowWindow(viewerHwnd, host.previewTabSelected && host.previewViewerInstance != nullptr ? SW_SHOWNA : SW_HIDE);
 }
 
 void FolderWindow::SetPreviewPlaceholder(Pane hostPane, std::wstring text) noexcept
@@ -1283,20 +1284,12 @@ std::wstring FolderWindow::BuildPreviewTextForPath(Pane sourcePane, const std::f
         }
     }
 
-    const int wideCount = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, buffer.data(), static_cast<int>(bytesRead), nullptr, 0);
-    if (wideCount <= 0)
+    const std::optional<std::wstring> text = Common::Strings::TryUtf16FromUtf8Strict(std::string_view(buffer.data(), bytesRead));
+    if (! text.has_value())
     {
         return FormatStringResource(nullptr, IDS_PREVIEW_BINARY_FALLBACK_FMT, outBytes);
     }
-
-    std::wstring text(static_cast<size_t>(wideCount), L'\0');
-    const int converted = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, buffer.data(), static_cast<int>(bytesRead), text.data(), wideCount);
-    if (converted <= 0)
-    {
-        return FormatStringResource(nullptr, IDS_PREVIEW_BINARY_FALLBACK_FMT, outBytes);
-    }
-    text.resize(static_cast<size_t>(converted));
-    return text;
+    return text.value();
 }
 
 void FolderWindow::SetNameFilterState(Pane pane, const FolderView::NameFilterState& state, bool refresh)

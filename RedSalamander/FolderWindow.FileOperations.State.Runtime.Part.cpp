@@ -25,6 +25,56 @@ FolderWindow::FileOperationState::~FileOperationState()
     Shutdown();
 }
 
+void FolderWindow::FileOperationState::QueueSettingsSave(std::wstring_view context) noexcept
+{
+    if (! _owner._settings)
+    {
+        return;
+    }
+
+    const uint64_t enqueueStartUs = PerfNowUs();
+    const HRESULT queueHr = SettingsHotReload::QueueSettingsSave(kFileOpsAppId, *_owner._settings, L"FileOps.Settings.SaveUs", context);
+    if (Debug::Perf::IsCaptureEnabled())
+    {
+        Debug::Perf::Emit(L"FileOps.Settings.EnqueueUs", context, PerfElapsedUs(enqueueStartUs), SUCCEEDED(queueHr) ? 1u : 0u, 0u, queueHr);
+    }
+    if (FAILED(queueHr))
+    {
+        Debug::Error(L"FileOperations: failed to queue settings persistence ({}) hr=0x{:08X}", context, static_cast<unsigned long>(queueHr));
+    }
+}
+
+void FolderWindow::FileOperationState::FlushPendingSettingsSave() noexcept
+{
+    constexpr DWORD kShutdownFlushTimeoutMs = 5000u;
+    if (! SettingsHotReload::FlushQueuedSettingsSaves(kShutdownFlushTimeoutMs))
+    {
+        Debug::Warning(L"FileOperations: queued settings persistence exceeded the {} ms shutdown deadline; copied snapshots remain owned by the worker.",
+                       kShutdownFlushTimeoutMs);
+    }
+}
+
+#ifdef ENABLE_TESTS
+bool FolderWindow::FileOperationState::DebugFlushPendingSettingsSaveForSelfTest(DWORD timeoutMs) noexcept
+{
+    return SettingsHotReload::FlushQueuedSettingsSaves(timeoutMs);
+}
+
+FolderWindow::FileOperationState::SettingsSaveDebugSnapshot FolderWindow::FileOperationState::DebugGetSettingsSaveSnapshotForSelfTest() noexcept
+{
+    const SettingsHotReload::SettingsSaveDebugSnapshot source = SettingsHotReload::DebugGetSettingsSaveSnapshotForSelfTest();
+    SettingsSaveDebugSnapshot result{};
+    result.queuedGeneration    = source.queuedGeneration;
+    result.completedGeneration = source.completedGeneration;
+    result.coalescedCount      = source.coalescedCount;
+    result.lastQueueThreadId   = source.lastQueueThreadId;
+    result.lastSaveThreadId    = source.lastSaveThreadId;
+    result.pending             = source.pending;
+    result.saveInProgress      = source.saveInProgress;
+    return result;
+}
+#endif
+
 HRESULT FolderWindow::FileOperationState::StartOperation(FileSystemOperation operation,
                                                          FolderWindow::Pane sourcePane,
                                                          std::optional<FolderWindow::Pane> destinationPane,
@@ -37,11 +87,46 @@ HRESULT FolderWindow::FileOperationState::StartOperation(FileSystemOperation ope
                                                          ExecutionMode executionMode,
                                                          bool requireConfirmation,
                                                          wil::com_ptr<IFileSystem> destinationFileSystem,
-                                                         uint64_t* taskIdOut)
+                                                         uint64_t* taskIdOut,
+                                                         std::vector<FolderWindow::ResolvedFileOperationItem> resolvedItems,
+                                                         std::wstring confirmationMessage)
 {
     if (taskIdOut)
     {
         *taskIdOut = 0;
+    }
+
+    const bool useResolvedItems = ! resolvedItems.empty();
+    if (useResolvedItems)
+    {
+        if (operation != FILESYSTEM_COPY && operation != FILESYSTEM_MOVE)
+        {
+            Debug::Error(L"FolderWindow StartOperation resolved items require copy/move op={}", static_cast<unsigned int>(operation));
+            return E_INVALIDARG;
+        }
+
+        if (resolvedItems.size() != sourcePaths.size())
+        {
+            Debug::Error(L"FolderWindow StartOperation resolved item/source count mismatch resolved={} source={}", resolvedItems.size(), sourcePaths.size());
+            return E_INVALIDARG;
+        }
+
+        for (size_t index = 0; index < resolvedItems.size(); ++index)
+        {
+            if (resolvedItems[index].sourcePath.empty() || resolvedItems[index].destinationPath.empty() ||
+                resolvedItems[index].sourcePath != sourcePaths[index])
+            {
+                Debug::Error(L"FolderWindow StartOperation rejected invalid resolved item index={}", index);
+                return E_INVALIDARG;
+            }
+        }
+
+        Debug::Perf::Emit(L"compare.sync.manifest.submitted_items",
+                          operation == FILESYSTEM_MOVE ? L"move" : L"copy",
+                          0,
+                          static_cast<uint64_t>(resolvedItems.size()),
+                          0,
+                          S_OK);
     }
 
     if (! fileSystem)
@@ -58,24 +143,30 @@ HRESULT FolderWindow::FileOperationState::StartOperation(FileSystemOperation ope
 
     const std::wstring& sourcePluginId      = sourcePane == FolderWindow::Pane::Left ? _owner._leftPane.pluginId : _owner._rightPane.pluginId;
     const std::wstring& sourcePluginShortId = sourcePane == FolderWindow::Pane::Left ? _owner._leftPane.pluginShortId : _owner._rightPane.pluginShortId;
+    std::wstring destinationPluginId;
+    std::wstring destinationPluginShortId;
+    std::wstring destinationInstanceContext;
+    if (destinationPane.has_value())
+    {
+        const FolderWindow::PaneState& destinationState =
+            destinationPane.value() == FolderWindow::Pane::Left ? _owner._leftPane : _owner._rightPane;
+        if (! destinationFileSystem || destinationFileSystem.get() == destinationState.fileSystem.get())
+        {
+            destinationPluginId        = destinationState.pluginId;
+            destinationPluginShortId   = destinationState.pluginShortId;
+            destinationInstanceContext = destinationState.instanceContext;
+        }
+    }
 
     if (! destinationFileSystem && ! CanSameFileSystemOperation(fileSystem, operation, sourcePluginId))
     {
-        Debug::Error(L"FolderWindow StartOperation provider rejected same-filesystem operation plugin:{} op={}",
-                     sourcePluginId,
-                     static_cast<unsigned int>(operation));
+        Debug::Error(
+            L"FolderWindow StartOperation provider rejected same-filesystem operation plugin:{} op={}", sourcePluginId, static_cast<unsigned int>(operation));
         return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
     }
 
     if (operation == FILESYSTEM_COPY || operation == FILESYSTEM_MOVE)
     {
-        std::wstring_view destinationPluginId;
-        if (destinationPane.has_value())
-        {
-            destinationPluginId = destinationPane.value() == FolderWindow::Pane::Left ? std::wstring_view(_owner._leftPane.pluginId)
-                                                                                      : std::wstring_view(_owner._rightPane.pluginId);
-        }
-
         SessionState::UpdateActiveFileSystemPluginIdsAndOperation({sourcePluginId, destinationPluginId}, SessionState::OperationKind::Copy);
     }
 
@@ -86,7 +177,10 @@ HRESULT FolderWindow::FileOperationState::StartOperation(FileSystemOperation ope
                                            // For Recycle Bin deletes, the shell can provide progress without blocking on a full recursive preflight scan.
                                            deleteBypassesRecycleBin;
     const unsigned int preCalcMaxWorkers = GetPreCalcMaxWorkersFromSettings(_owner._settings);
-    const bool enablePreCalc             = allowPreCalcForOperation && GetPreCalcEnabledFromSettings(_owner._settings);
+    const bool enablePreCalc             = allowPreCalcForOperation && ! useResolvedItems && GetPreCalcEnabledFromSettings(_owner._settings);
+    const bool suppressPreCalcForHighMetadataCrossFs =
+        enablePreCalc && destinationFileSystem && (operation == FILESYSTEM_COPY || operation == FILESYSTEM_MOVE) &&
+        HasHighMetadataCostTransferHint(*fileSystem, sourcePaths, operation, FILESYSTEM_TRANSFER_SOURCE_READ);
     const bool supportsBandwidthLimit    = operation == FILESYSTEM_COPY || operation == FILESYSTEM_MOVE;
     const uint64_t taskDesiredSpeedLimit = (supportsBandwidthLimit && initialSpeedLimitBytesPerSecond == 0)
                                                ? GetDefaultBandwidthLimitBytesPerSecondFromSettings(_owner._settings)
@@ -245,7 +339,8 @@ HRESULT FolderWindow::FileOperationState::StartOperation(FileSystemOperation ope
         normalizeSlashes(toText);
 
         const UINT messageId = operation == FILESYSTEM_COPY ? static_cast<UINT>(IDS_FMT_FILEOPS_CONFIRM_COPY) : static_cast<UINT>(IDS_FMT_FILEOPS_CONFIRM_MOVE);
-        const std::wstring message = FormatStringResource(nullptr, messageId, what, fromText, toText);
+        const std::wstring message =
+            confirmationMessage.empty() ? FormatStringResource(nullptr, messageId, what, fromText, toText) : std::move(confirmationMessage);
 
         const std::wstring caption = LoadStringResource(nullptr, IDS_CAPTION_CONFIRM);
 
@@ -538,7 +633,7 @@ HRESULT FolderWindow::FileOperationState::StartOperation(FileSystemOperation ope
 
         const std::wstring destinationFolderText      = destinationFolder.wstring();
         const std::wstring destinationFolderCanonical = canonicalizeExistingPath(destinationFolderText);
-        const auto normalizePathCandidate = [&](std::wstring text) noexcept -> std::wstring
+        const auto normalizePathCandidate             = [&](std::wstring text) noexcept -> std::wstring
         {
             normalizeSlashes(text);
             return text;
@@ -551,18 +646,28 @@ HRESULT FolderWindow::FileOperationState::StartOperation(FileSystemOperation ope
         for (size_t index = 0; index < sourcePaths.size(); ++index)
         {
             const bool hintIsDirectory = haveAttributesHint && ((sourcePathAttributesHint[index] & FILE_ATTRIBUTE_DIRECTORY) != 0);
-            // If we have hints, only directories can cause "copy into self/descendant" recursion.
-            // If we don't have hints, be conservative and validate all sources.
-            if (haveAttributesHint && ! hintIsDirectory)
+            // Normal pane copies derive destinations from one folder, so only directories can
+            // recurse into themselves. Resolved-item destinations are arbitrary and must also
+            // guard exact file-to-self targets.
+            if (! useResolvedItems && haveAttributesHint && ! hintIsDirectory)
             {
                 continue;
             }
 
             const std::wstring sourceText = sourcePaths[index].wstring();
-            const std::wstring_view leaf  = GetPathLeaf(sourceText);
-            if (leaf.empty())
+            std::wstring destinationItemText;
+            if (useResolvedItems)
             {
-                continue;
+                destinationItemText = resolvedItems[index].destinationPath.wstring();
+            }
+            else
+            {
+                const std::wstring_view leaf = GetPathLeaf(sourceText);
+                if (leaf.empty())
+                {
+                    continue;
+                }
+                destinationItemText = JoinFolderAndLeaf(destinationFolderText, leaf);
             }
 
             const std::array<std::wstring, 2> sourceCandidates{
@@ -570,8 +675,9 @@ HRESULT FolderWindow::FileOperationState::StartOperation(FileSystemOperation ope
                 normalizePathCandidate(canonicalizeExistingPath(sourceText)),
             };
             const std::array<std::wstring, 2> destinationCandidates{
-                normalizePathCandidate(JoinFolderAndLeaf(destinationFolderText, leaf)),
-                normalizePathCandidate(JoinFolderAndLeaf(destinationFolderCanonical, leaf)),
+                normalizePathCandidate(destinationItemText),
+                normalizePathCandidate(useResolvedItems ? canonicalizeExistingPath(destinationItemText)
+                                                        : JoinFolderAndLeaf(destinationFolderCanonical, GetPathLeaf(sourceText))),
             };
 
             bool overlaps = false;
@@ -597,7 +703,7 @@ HRESULT FolderWindow::FileOperationState::StartOperation(FileSystemOperation ope
             }
 
             invalidSourceText          = sourceText;
-            invalidDestinationItemText = JoinFolderAndLeaf(destinationFolderText, leaf);
+            invalidDestinationItemText = destinationItemText;
             break;
         }
 
@@ -626,13 +732,19 @@ HRESULT FolderWindow::FileOperationState::StartOperation(FileSystemOperation ope
         task->_executionMode            = executionMode;
         task->_sourcePane               = sourcePane;
         task->_destinationPane          = destinationPane;
+        task->_sourcePluginId           = sourcePluginId;
+        task->_destinationPluginId      = std::move(destinationPluginId);
+        task->_destinationPluginShortId = std::move(destinationPluginShortId);
+        task->_destinationInstanceContext = std::move(destinationInstanceContext);
         task->_fileSystem               = fileSystem;
         task->_destinationFileSystem    = std::move(destinationFileSystem);
         task->_sourcePaths              = std::move(sourcePaths);
         task->_sourcePathAttributesHint = std::move(sourcePathAttributesHint);
         task->_destinationFolder        = std::move(destinationFolder);
         task->_flags                    = flags;
-        task->_enablePreCalc            = enablePreCalc;
+        task->_enablePreCalc            = enablePreCalc && ! suppressPreCalcForHighMetadataCrossFs;
+        task->_preCalcSuppressedForHighMetadataCrossFs = suppressPreCalcForHighMetadataCrossFs;
+        task->_resolvedItems            = std::move(resolvedItems);
         task->_preCalcMaxWorkers        = preCalcMaxWorkers;
         task->_crossFsBridgeBufferBytes = GetCrossFsBridgeBufferBytesFromSettings(_owner._settings);
         task->_waitForOthers.store(waitForOthers, std::memory_order_release);
@@ -697,7 +809,7 @@ HRESULT FolderWindow::FileOperationState::StartOperation(FileSystemOperation ope
         PublishDiagnosticPathSnapshotLocked(*task);
     }
 
-    Task* rawTask = task.get();
+    Task* rawTask                = task.get();
     const uint64_t startedTaskId = rawTask->_taskId;
 
     {
@@ -767,14 +879,11 @@ void FolderWindow::FileOperationState::Shutdown() noexcept
 
         if (popupHwnd || issuesPaneHwnd)
         {
-            const HRESULT saveHr = SettingsHotReload::SaveSettingsAndSchema(kFileOpsAppId, *_owner._settings);
-            if (FAILED(saveHr))
-            {
-                const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(kFileOpsAppId);
-                Debug::Error(L"SaveSettings failed (hr=0x{:08X}) path={}", static_cast<unsigned long>(saveHr), settingsPath.wstring());
-            }
+            QueueSettingsSave(L"shutdown");
         }
     }
+
+    FlushPendingSettingsSave();
 
     for (auto& task : tasks)
     {
@@ -861,6 +970,42 @@ void FolderWindow::FileOperationState::ApplyQueueMode(bool queue) noexcept
 
     UpdateQueuePausedTasks();
     NotifyQueueChanged();
+}
+
+bool FolderWindow::FileOperationState::RunQueuedTaskNow(uint64_t taskId) noexcept
+{
+    if (taskId == 0)
+    {
+        return false;
+    }
+
+    Task* task = FindTask(taskId);
+    if (! task || task->HasStarted() || (! task->IsWaitingForOthers() && ! task->IsWaitingInQueue()))
+    {
+        return false;
+    }
+
+    task->SetWaitForOthers(false);
+    task->SetWaitingInQueue(false);
+    UpdateQueuePausedTasks();
+    NotifyQueueChanged();
+    return true;
+}
+
+void FolderWindow::FileOperationState::SetAllRunningTasksPaused(bool paused) noexcept
+{
+    std::vector<Task*> tasks;
+    CollectTasks(tasks);
+
+    for (Task* task : tasks)
+    {
+        if (! task || ! task->HasStarted())
+        {
+            continue;
+        }
+
+        task->SetPaused(paused);
+    }
 }
 
 void FolderWindow::FileOperationState::CancelAll() noexcept
@@ -1130,6 +1275,11 @@ void FolderWindow::FileOperationState::SetAutoDismissSuccess(bool enabled) noexc
     const bool previous = GetAutoDismissSuccessFromSettings(*_owner._settings);
     SetAutoDismissSuccessInSettings(*_owner._settings, enabled);
 
+    if (previous != enabled)
+    {
+        QueueSettingsSave(L"auto-dismiss");
+    }
+
     if (enabled && ! previous)
     {
         wil::unique_hwnd popupToClose;
@@ -1163,4 +1313,58 @@ void FolderWindow::FileOperationState::SetAutoDismissSuccess(bool enabled) noexc
             InvalidateRect(popup, nullptr, FALSE);
         }
     }
+}
+
+bool FolderWindow::FileOperationState::GetPopupFooterOnly() const noexcept
+{
+    if (! _owner._settings)
+    {
+        return false;
+    }
+
+    return GetPopupFooterOnlyFromSettings(*_owner._settings);
+}
+
+void FolderWindow::FileOperationState::SetPopupFooterOnly(bool footerOnly) noexcept
+{
+    if (! _owner._settings)
+    {
+        return;
+    }
+
+    const bool previous = GetPopupFooterOnlyFromSettings(*_owner._settings);
+    if (previous == footerOnly)
+    {
+        return;
+    }
+
+    SetPopupFooterOnlyInSettings(*_owner._settings, footerOnly);
+    QueueSettingsSave(L"popup footer-only");
+}
+
+bool FolderWindow::FileOperationState::GetPopupCompactDensity() const noexcept
+{
+    if (! _owner._settings)
+    {
+        return false;
+    }
+
+    return GetPopupCompactDensityFromSettings(*_owner._settings);
+}
+
+void FolderWindow::FileOperationState::SetPopupCompactDensity(bool compactDensity) noexcept
+{
+    if (! _owner._settings)
+    {
+        return;
+    }
+
+    const bool previous = GetPopupCompactDensityFromSettings(*_owner._settings);
+    SetPopupCompactDensityInSettings(*_owner._settings, compactDensity);
+    if (previous == compactDensity)
+    {
+        return;
+    }
+
+    QueueSettingsSave(L"popup density");
 }

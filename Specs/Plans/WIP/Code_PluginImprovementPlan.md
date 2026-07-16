@@ -1,71 +1,49 @@
 # Plugin Improvement Plan — FileSystem7z, FileSystemCurl, Cloud Plugins
 
-**Status:** WIP - one deferred FileSystem7z cancellation gap plus closeout verification remains
-**Branch:** `squad/dxui-filesystem-improvements`
-**Worktree:** `Z:\src\RedSalamander-improvements`
-**Based on:** Squad deep review of 5 filesystem plugins (~37K LOC)
+Squad safety review of 5 filesystem plugins (~37K LOC). All Phase 1-3 and 4.2 safety fixes verified landed at HEAD `275c04034` (2026-07-02 folder review). Two items remain open: 4.1 (below — was wrongly checked done) and 4.3.
+
+Scope exclusions (unchanged): FileSystemS3 (clean, no changes), FileSystemDummy (test stub), Google Drive feature parity, shared-utility extraction across cloud plugins (separate initiative).
 
 ---
 
-## Closeout audit (`2026-04-25`)
+## Completed & verified (2026-07-02)
 
-The checked safety items still match the current code at a targeted symbol level: FileSystem7z has module pinning for extract threads, and the cloud/Curl plugin hardening work is represented in the plugin implementations. This plan stays in WIP because `FileSystem7z::EnsureIndex()` still builds synchronously and waits behind `_indexBuildInProgress`; it is not yet non-blocking or cancellable for large archives.
-
-Remaining closeout checklist:
-
-- [ ] Decide whether `FileSystem7z::EnsureIndex()` remains a documented synchronous limitation or gets a cancellable/non-blocking index-build path.
-- [ ] Refresh full solution and targeted plugin verification after that decision.
-- [ ] Move this plan to Done after verification, or split the 7z indexing limitation into a separate WIP plan and close the completed safety slice.
-
-## Summary
-
-Deep reviews by Sysadm (FileSystem7z, FileSystemCurl, FileSystemS3) and Ripley (FileSystemGoogleDrive, FileSystemMicrosoftDrive) identified critical module-pinning gaps, callback safety issues, and several medium-priority improvements. FileSystemS3 is clean — no changes needed.
+- [x] **1.1-1.4** Module pinning via `AcquireModuleReferenceFromAddress` at each thread launch site (FileSystemCurl scheduler/reader/writer, FileSystem7z extract thread).
+- [x] **2.1** FileSystemMicrosoftDrive `SetCallback` generation tracking + condition-variable drain guard (FileSystemMicrosoftDrive.cpp:4970-5020).
+- [x] **2.2** `GetConfiguration` double-buffer fix — no more `.c_str()` returned after lock release (FileSystemMicrosoftDrive.cpp:4909).
+- [x] **3.1** FileReader/FileWriter own the plugin via `wil::com_ptr<IFileSystem>` instead of manual AddRef/Release (FileSystemMicrosoftDrive.cpp:4561 / :4678).
+- [x] **4.2** FileSystemCurl retry infrastructure for transient network errors (landed in commit `e5bbfb023`).
 
 ---
 
-## Phase 1 — Critical: Module Pinning (P0)
+## OPEN 4.1 — FileSystemCurl shutdown coordination (was WRONGLY checked done)
 
-Same crash-on-FreeLibrary pattern already fixed in core FileSystem plugin. Copy-paste fix: `AcquireModuleReferenceFromAddress(...)` at each thread launch site.
+- [ ] **4.1** Add `curl_global_cleanup` coordination for the static `CurlEasyPool` — prevent crash during `DLL_PROCESS_DETACH` when the pool is still active.
 
-- [x] **1.1** FileSystemCurl: Pin `SharedCopyMoveJobScheduler` singleton (static jthread pool survives DLL unload)
-- [x] **1.2** FileSystemCurl: Pin `CurlStreamingReader` jthread (COM object returned to host, thread captures `this`)
-- [x] **1.3** FileSystemCurl: Pin `CurlStreamingWriter` jthread (same pattern as reader)
-- [x] **1.4** FileSystem7z: Pin `SevenZipItemFileReader` extract jthread (COM object returned to host)
+The box was previously checked on the strength of commit `e5bbfb023` (2026-03-21), whose MESSAGE claims `DrainPool`/`ShutdownCurlEasyPool`/`curl_global_cleanup` were added — but its diff (1 file, 56 insertions) contains only the 4.2 retry helpers.
 
-## Phase 2 — Critical: Callback Safety (P0)
+Verified 2026-07-02 folder review:
 
-- [x] **2.1** FileSystemMicrosoftDrive: Add drain guard to `SetCallback` — generation tracking + condition variable drain, matching the pattern already used in FileSystemGoogleDrive
-- [x] **2.2** FileSystemGoogleDrive + FileSystemMicrosoftDrive: Fix `GetConfiguration` returning `.c_str()` under lock — caller uses pointer after lock release. Return `std::wstring` copy or use a shared lock that outlives the return.
+- No `ShutdownCurlEasyPool`/`curl_global_cleanup` exists anywhere in the tree; the only mention is the original defect record (`.squad/decisions.md:987`).
+- The instance=0 quiet point (FileSystemCurl.Shared.cpp:3635-3638) shuts down only the copy/move job scheduler.
+- The static `CurlEasyPool` (FileSystemCurl.Shared.cpp:2211) still destructs during DLL-unload CRT teardown under loader lock — the exact `DLL_PROCESS_DETACH` crash hazard 4.1 was filed to prevent.
 
-## Phase 3 — High: COM Ownership (P1)
-
-- [x] **3.1** FileSystemMicrosoftDrive: Replace raw `FileSystemMicrosoftDrive*` with `wil::com_ptr<IFileSystem>` in FileReader/FileWriter classes (manual AddRef/Release violates AGENTS.md rule)
-
-## Phase 4 — Medium: Reliability & Performance (P2)
-
-- [x] **4.1** FileSystemCurl: Add `curl_global_cleanup` coordination for static `CurlEasyPool` — prevent crash during `DLL_PROCESS_DETACH` when pool is still active
-- [x] **4.2** FileSystemCurl: Add retry policy for transient network errors (single-attempt curl operations currently fail permanently on transient errors)
-- [ ] **4.3** FileSystem7z: Make `EnsureIndex()` non-blocking or cancellable — currently blocks UI thread with no way to cancel on large archives (DEFERRED: requires threading cancellation through 7zip COM interface — complex)
-
-## Phase 5 — Verification
-
-- [ ] **5.1** Full solution build — zero new warnings
-- [ ] **5.2** Commit all changes with descriptive messages
-- [ ] **5.3** Update this plan status to ✅ Complete
+**Fix direction:** add explicit pool drain + `curl_global_cleanup` coordination at the plugin quiet point (before module release), mirroring the ordering contract in `Specs/Plugins/Plugins_VirtualFileSystem.md`.
 
 ---
 
-## Scope Exclusions
+## OPEN 4.3 — FileSystem7z::EnsureIndex non-blocking/cancellable (deferred since 2026-03-21, idle)
 
-- **FileSystemS3** — Gold standard, zero issues found. No changes.
-- **FileSystemDummy** — Test stub, not reviewed.
-- **Google Drive feature parity** — Out of scope. Google Drive is an early alpha; feature additions are a separate initiative.
-- **Shared utility extraction** — ~400 lines duplicated across cloud plugins. Worth doing but separate from safety fixes.
+- [ ] **4.3** Decide: documented synchronous limitation vs cancellable index build.
+
+FileSystem7z.cpp:852-948 still builds the index inline on the calling thread (`BuildIndex` at :907, `_indexBuildCv.wait` at :878-882, no cancellation token) — the UI blocks uncancellably on large archives. Deferred because cancellation must be threaded through the 7zip COM interface. (Distinct from Clearwater CW-4, which is the normalized-key collision bug in the same file.)
 
 ---
 
-## Review Sources
+## Next action
 
-- Sysadm: FileSystem7z (~4.7K LOC), FileSystemCurl (~15.3K LOC), FileSystemS3 (~8.6K LOC)
-- Ripley: FileSystemGoogleDrive (~2.8K LOC), FileSystemMicrosoftDrive (~6.4K LOC)
-- Review criteria: threading safety, RAII compliance, error handling, module pinning, performance, API compliance
+Implement 4.1 — it is a real crash-hazard item that was believed done.
+
+## Closeout
+
+After 4.1 lands and the 4.3 decision is recorded, move this plan to Done.

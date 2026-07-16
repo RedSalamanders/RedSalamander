@@ -178,6 +178,11 @@ The `userMenu` section stores external commands shown by `F9` and **Commands -> 
 
 Useful macros include `{Path}`, `{FullPath}`, `{PathAndFilename}`, `{Filename}`, `{SelectedPathsFile}`, `{OppositePanePath}`, and `{ComputerName}`.
 
+External-action `executablePath` values must be explicit absolute drive, UNC, or Win32 extended paths, or use
+the supported macros above when the expanded result is still explicit and absolute. Bare program names such as
+`notepad.exe` and relative paths are preserved for repair but forced disabled; they are never resolved through
+`PATH` or the current working directory. Arguments and working directories may also use the macros above.
+
 After editing `fileActions`, User Menu, plugin, or file-system extension association settings outside the app, use **Commands -> Reread Associations** to reload those sections without restarting. The command preserves the current pane folders, rebuilds dynamic action menus, refreshes both panes, and leaves the previous valid runtime settings in place if the file is invalid.
 
 ### Configure Make File List defaults
@@ -247,6 +252,8 @@ The settings file has additional top-level sections beyond the ones above. Sever
 - `monitor` - RedSalamanderMonitor window preferences. See [Monitor](Monitor.md).
 - `mainMenu` - menu-bar and function-bar visibility (`menuBarVisible`, `functionBarVisible`). See the **View** menu in [Main Window](MainWindow.md).
 - `ui.language` - application language override. See [Localization](dev/Localization.md).
+
+The `theme.themes[]` entries and standalone `Themes\*.theme.json5` files require `formatVersion: 2`. They store reusable authored values under `palette` and map semantic application keys under `colors`; values may be literals, references, supported transforms, system sources, or allowlisted stable runtime sources. Missing-version/version-1 themes are rejected, and exports are never flattened to legacy direct colors. Prefer Preferences for selection/import/export and RedConfigure for dependency-aware authoring. See [Themes](Themes.md) for examples and the function overview.
 
 A few sections have no dedicated page. Brief guidance for editing them by hand:
 

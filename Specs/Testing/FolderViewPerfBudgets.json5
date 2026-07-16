@@ -1,0 +1,183 @@
+{
+  "version": 1,
+  "machines": [
+    {
+      "machineHash": "4cb089111a23",
+      "build": "Release",
+      "notes": [
+        "Hard thresholds are intentionally conservative and apply only on the matching machine hash.",
+        "Frame p95 budgets require 200 samples. Event-scoped metrics use their deterministic case sample count.",
+        "Source archives were captured after Task 6 under commit dd97575d566c202e6e5365ed46707e235568662f."
+      ],
+      "budgets": [
+    {
+      "case": "folderView_perf_scroll_render_stress",
+      "build": "Release",
+      "field": "folder.frame.total_us.p95.max",
+      "metric": "folder.frame.total_us",
+      "stat": "p95",
+      "max": 20000,
+      "minimumSamples": 200,
+      "measured": 8312,
+      "sourceArchive": "Specs/TestRuns/4cb089111a23/Commands/2026-06-28_174423"
+    },
+    {
+      "case": "folderView_perf_scroll_render_stress",
+      "build": "Release",
+      "field": "folder.frame.input_to_paint_us.p95.max",
+      "metric": "folder.frame.input_to_paint_us",
+      "stat": "p95",
+      "max": 20000,
+      "minimumSamples": 40,
+      "measured": 8527,
+      "sourceArchive": "Specs/TestRuns/4cb089111a23/Commands/2026-06-28_174423"
+    },
+    {
+      "case": "folderView_perf_scroll_render_stress",
+      "build": "Release",
+      "field": "folder.frame.present_us.p95.max",
+      "metric": "folder.frame.present_us",
+      "stat": "p95",
+      "max": 20000,
+      "minimumSamples": 200,
+      "measured": 7610,
+      "sourceArchive": "Specs/TestRuns/4cb089111a23/Commands/2026-06-28_174423"
+    },
+    {
+      "case": "folderView_perf_overlay_invalidation_stress",
+      "build": "Release",
+      "field": "folder.frame.total_us.p95.max",
+      "metric": "folder.frame.total_us",
+      "stat": "p95",
+      "max": 10000,
+      "minimumSamples": 200,
+      "measured": 2822,
+      "sourceArchive": "Specs/TestRuns/4cb089111a23/Commands/2026-06-28_174547"
+    },
+    {
+      "case": "folderView_perf_overlay_invalidation_stress",
+      "build": "Release",
+      "field": "folder.frame.present_us.p95.max",
+      "metric": "folder.frame.present_us",
+      "stat": "p95",
+      "max": 5000,
+      "minimumSamples": 200,
+      "measured": 120,
+      "sourceArchive": "Specs/TestRuns/4cb089111a23/Commands/2026-06-28_174547"
+    },
+    {
+      "case": "folderView_perf_huge_folder_scale",
+      "build": "Release",
+      "field": "folder.scale.working_set_bytes.max",
+      "metric": "folder.scale.working_set_bytes",
+      "stat": "max",
+      "max": 268435456,
+      "minimumSamples": 3,
+      "measured": 126402560,
+      "sourceArchive": "Specs/TestRuns/4cb089111a23/Commands/2026-06-28_174912"
+    },
+    {
+      "case": "folderView_perf_huge_folder_scale",
+      "build": "Release",
+      "field": "folder.scale.working_set_bytes_per_item.max",
+      "metric": "folder.scale.working_set_bytes_per_item",
+      "stat": "max",
+      "max": 30000,
+      "minimumSamples": 3,
+      "measured": 12640,
+      "sourceArchive": "Specs/TestRuns/4cb089111a23/Commands/2026-06-28_174912"
+    },
+    {
+      "case": "folderView_perf_huge_folder_scale",
+      "build": "Release",
+      "field": "folder.filter.keystroke_to_paint_us.p95.max",
+      "metric": "folder.filter.keystroke_to_paint_us",
+      "stat": "p95",
+      "max": 60000,
+      "minimumSamples": 10,
+      "measured": 13838,
+      "sourceArchive": "Specs/TestRuns/4cb089111a23/Commands/2026-06-28_174912"
+    },
+    {
+      "case": "folderView_perf_huge_folder_scale",
+      "build": "Release",
+      "field": "folder.sort_toggle_us.p95.max",
+      "metric": "folder.sort_toggle_us",
+      "stat": "p95",
+      "max": 60000,
+      "minimumSamples": 1,
+      "measured": 12496,
+      "sourceArchive": "Specs/TestRuns/4cb089111a23/Commands/2026-06-28_174912"
+    },
+    {
+      "case": "folderView_perf_slow_virtual_provider",
+      "build": "Release",
+      "field": "folder.slow_provider.enumeration_us.max",
+      "metric": "folder.slow_provider.enumeration_us",
+      "stat": "max",
+      "max": 500000,
+      "minimumSamples": 1,
+      "measured": 144319,
+      "sourceArchive": "Specs/TestRuns/4cb089111a23/Commands/2026-06-28_174916"
+    },
+    {
+      "case": "folderView_perf_slow_virtual_provider",
+      "build": "Release",
+      "field": "icons.repeated_failed_lookup_count.max",
+      "metric": "icons.repeated_failed_lookup_count",
+      "stat": "max",
+      "max": 0,
+      "minimumSamples": 1,
+      "measured": 0,
+      "sourceArchive": "Specs/TestRuns/4cb089111a23/Commands/2026-06-28_174916"
+    },
+    {
+      "case": "folderView_perf_relayout_churn_while_scrolled",
+      "build": "Release",
+      "field": "folder.relayout_to_paint_us.p95.max",
+      "metric": "folder.relayout_to_paint_us",
+      "stat": "p95",
+      "max": 150000,
+      "minimumSamples": 6,
+      "measured": 40736,
+      "sourceArchive": "Specs/TestRuns/4cb089111a23/Commands/2026-06-28_174919"
+    },
+    {
+      "case": "folderView_thumbnail_cached_only_no_close_stall",
+      "build": "Release",
+      "field": "thumbnails.close_to_idle_us.max",
+      "metric": "thumbnails.close_to_idle_us",
+      "stat": "max",
+      "max": 50000,
+      "minimumSamples": 1,
+      "measured": 8244,
+      "sourceArchive": "Specs/TestRuns/4cb089111a23/Commands/2026-06-28_174922"
+    },
+    {
+      "case": "folderView_thumbnail_cached_only_no_close_stall",
+      "build": "Release",
+      "field": "thumbnails.shell_provider_allowed_count.max",
+      "metric": "thumbnails.shell_provider_allowed_count",
+      "detail": "visible_cached",
+      "stat": "max",
+      "max": 0,
+      "minimumSamples": 1,
+      "measured": 0,
+      "sourceArchive": "Specs/TestRuns/4cb089111a23/Commands/2026-06-28_174922"
+    },
+    {
+      "case": "folderView_thumbnail_cached_only_no_close_stall",
+      "build": "Release",
+      "field": "thumbnails.shell_provider_timeout_count.max",
+      "metric": "thumbnails.shell_provider_timeout_count",
+      "detail": "visible_cached",
+      "stat": "max",
+      "max": 0,
+      "minimumSamples": 1,
+      "measured": 0,
+      "sourceArchive": "Specs/TestRuns/4cb089111a23/Commands/2026-06-28_174922"
+    }
+      ]
+    }
+  ]
+}

@@ -12,8 +12,9 @@
       4. Displays a color-coded summary with pass/fail/skip counts, timing, and failure details.
       5. Returns exit code 0 on full success, 1 on any failure.
 
-    Self-test artifacts are written to:
-      %LOCALAPPDATA%\RedSalamander\SelfTest\last_run\
+    Self-test artifacts are written under:
+      REDSALAMANDER_TEST_ROOT\runs\<runId>\artifacts\selftest\last_run\
+    The runner sets REDSALAMANDER_TEST_ROOT to .build\TestSandbox by default.
 
 .PARAMETER Suite
     Which suite(s) to run:
@@ -21,10 +22,14 @@
       Compare   - Run only --compare-selftest
       Commands  - Run only --commands-selftest
       FileOps   - Run only --fileops-selftest
+      CI        - Run the GitHub Actions PR gate through the unified runner
       Full      - Run all self-tests plus standalone/native and script tests
 
 .PARAMETER SkipBuild
     When set, skips the build step and uses the existing Debug binary.
+
+.PARAMETER SkipLegacySandboxCleanup
+    When set, skips the pre-run legacy test-sandbox cleanup reaper.
 
 .PARAMETER FailFast
     When set, passes --selftest-fail-fast to abort after first case failure.
@@ -34,6 +39,32 @@
 
 .PARAMETER CaseFilter
     Run only the matching case name or prefix (passed as --selftest-case=...).
+
+.PARAMETER SelfTestRepeat
+    Repeat each matched in-product self-test case N times in-process (passed as --selftest-repeat=N).
+
+.PARAMETER SelfTestShuffleSeed
+    Shuffle matched in-product self-test case/phase order with the supplied seed (passed as --selftest-shuffle=SEED).
+
+.PARAMETER SelfTestFlakyProofCase
+    Debug self-test classifier proof hook. The named case fails only in the suite context and passes isolated/shuffle retries.
+
+.PARAMETER SelfTestOrderProofCase
+    Debug self-test classifier proof hook. The named case fails in suite/shuffle context and passes isolated retries.
+
+.PARAMETER PerfBudgetPath
+    Optional JSON5 perf budget file passed to native in-product self-test suites.
+
+.PARAMETER RequirePerfBudgets
+    Fail native perf selftests when the budget file is missing, has no current-machine entry, or has no hard entry for the current build.
+
+.PARAMETER ClassifyFailures
+    Rerun failed entries/cases once to classify blocking failures as FLAKY, REGRESSION,
+    or ISOLATION_SUSPECT. Suite CI enables this automatically.
+
+.PARAMETER QuarantinePath
+    Optional JSONL quarantine metadata file. Defaults to Tools\test-quarantine.jsonl.
+    Invalid or active entries keep the aggregate run red.
 
 .PARAMETER Platform
     Target platform. Default: x64.
@@ -59,16 +90,35 @@
 
 [CmdletBinding()]
 param(
-    [ValidateSet('All', 'Compare', 'Commands', 'FileOps', 'Full')]
+    [ValidateSet('All', 'Compare', 'Commands', 'FileOps', 'CI', 'Full')]
     [string]$Suite = 'All',
 
     [switch]$SkipBuild,
+
+    [switch]$SkipLegacySandboxCleanup,
 
     [switch]$FailFast,
 
     [double]$TimeoutMultiplier = 1.0,
 
     [string]$CaseFilter = '',
+
+    [uint32]$SelfTestRepeat = 1,
+
+    [string]$SelfTestShuffleSeed = '',
+
+    [string]$SelfTestFlakyProofCase = '',
+
+    [string]$SelfTestOrderProofCase = '',
+
+    [string]$PerfBudgetPath = '',
+
+
+    [switch]$RequirePerfBudgets,
+
+    [switch]$ClassifyFailures,
+
+    [string]$QuarantinePath = '',
 
     [ValidateSet('x64', 'ARM64')]
     [string]$Platform = 'x64',
@@ -102,6 +152,14 @@ if (-not (Test-Path $processStreamingScript)) {
 
 . $processStreamingScript
 
+$artifactOperationLockScript = Join-Path $repoRoot 'Tools\ArtifactOperationLock.ps1'
+if (-not (Test-Path $artifactOperationLockScript)) {
+    Write-Host "ERROR: artifact operation lock helper not found at $artifactOperationLockScript" -ForegroundColor Red
+    exit 1
+}
+
+. $artifactOperationLockScript
+
 function Write-Header([string]$text) {
     $line = '=' * 70
     Write-Host ""
@@ -127,6 +185,7 @@ function Get-StatusColor([string]$status) {
     switch ($status) {
         'passed'  { return 'Green' }
         'failed'  { return 'Red' }
+        'crashed' { return 'Red' }
         'skipped' { return 'DarkYellow' }
         default   { return 'Gray' }
     }
@@ -134,6 +193,14 @@ function Get-StatusColor([string]$status) {
 
 function Get-JsonValue($object, [string[]]$names, $defaultValue = $null) {
     if ($null -eq $object) { return $defaultValue }
+    if ($object -is [System.Collections.IDictionary]) {
+        foreach ($name in $names) {
+            if ($object.Contains($name)) {
+                return $object[$name]
+            }
+        }
+        return $defaultValue
+    }
     foreach ($name in $names) {
         $property = $object.PSObject.Properties[$name]
         if ($null -ne $property) {
@@ -229,7 +296,8 @@ function Invoke-RSTestPlanEntry {
                     throw "Pester test path not found: $($Entry.Path)"
                 }
 
-                $pesterResult = Invoke-Pester -Path $Entry.Path -PassThru
+                $pesterParameters = New-RSPesterInvokeParameters -Path $Entry.Path -Arguments @($Entry.Arguments)
+                $pesterResult = Invoke-Pester @pesterParameters
                 $failedCount = Get-JsonValue $pesterResult @('FailedCount', 'Failed') 0
                 $exitCode = if ($failedCount -gt 0) { 1 } else { 0 }
             }
@@ -289,6 +357,207 @@ function Invoke-RSTestPlanEntry {
     }
 }
 
+function New-RSTestRetryPlanEntry {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Entry,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
+
+        [string[]]$Arguments = @()
+    )
+
+    [pscustomobject]@{
+        Name = $Name
+        Kind = [string](Get-RSObjectValue -Object $Entry -Names @('Kind', 'kind') -DefaultValue '')
+        Path = [string](Get-RSObjectValue -Object $Entry -Names @('Path', 'path') -DefaultValue '')
+        Arguments = @($Arguments)
+        WorkingDirectory = [string](Get-RSObjectValue -Object $Entry -Names @('WorkingDirectory', 'working_directory') -DefaultValue '')
+        JsonName = [string](Get-RSObjectValue -Object $Entry -Names @('JsonName', 'json_name') -DefaultValue '')
+    }
+}
+
+function New-RSTestRetryAttempt {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Mode,
+
+        [Parameter(Mandatory = $true)]
+        [int]$ExitCode,
+
+        [uint64]$DurationMs = 0,
+
+        [string]$OutputLogPath = '',
+
+        [string]$Reason = '',
+
+        [string]$ShuffleSeed = ''
+    )
+
+    [pscustomobject]@{
+        name = $Name
+        mode = $Mode
+        exit_code = $ExitCode
+        passed = ($ExitCode -eq 0)
+        duration_ms = $DurationMs
+        output_log_path = $OutputLogPath
+        reason = $Reason
+        shuffle_seed = $ShuffleSeed
+    }
+}
+
+function Get-RSSelfTestShuffleTriageSeeds {
+    param(
+        [string[]]$Arguments = @(),
+
+        [int]$Count = 3
+    )
+
+    $seeds = @()
+    foreach ($argument in @($Arguments)) {
+        if ($argument -match '^--selftest-shuffle=(.+)$') {
+            $seed = $Matches[1]
+            if (-not [string]::IsNullOrWhiteSpace($seed) -and $seed -notin $seeds) {
+                $seeds += $seed
+            }
+        }
+    }
+
+    while (@($seeds).Count -lt $Count) {
+        $seed = [string](Get-Random -Minimum 1 -Maximum ([int]::MaxValue))
+        if ($seed -notin $seeds) {
+            $seeds += $seed
+        }
+    }
+
+    return $seeds
+}
+
+function Get-RSTestResultFailureReason {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Result
+    )
+
+    $failureReasons = @(Get-RSObjectValue -Object $Result -Names @('Failures', 'failures') -DefaultValue @() | ForEach-Object {
+            [string](Get-RSObjectValue -Object $_ -Names @('reason', 'Reason') -DefaultValue '')
+        } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+
+    if (@($failureReasons).Count -eq 0) {
+        return ''
+    }
+
+    return ($failureReasons -join '; ')
+}
+
+function Invoke-RSTestEntryClassificationRetry {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Entry,
+
+        [Parameter(Mandatory = $true)]
+        [string]$RepoRoot,
+
+        [string]$ArtifactRoot = ''
+    )
+
+    $retryEntry = New-RSTestRetryPlanEntry `
+        -Entry $Entry `
+        -Name "$($Entry.Name).retry1" `
+        -Arguments @($Entry.Arguments)
+    $retryResult = Invoke-RSTestPlanEntry -Entry $retryEntry -RepoRoot $RepoRoot -ArtifactRoot $ArtifactRoot
+    $retryPassed = Test-RSTestResultPassed -Result $retryResult
+    $retryExitCode = if ($retryPassed) { 0 } else { [int](Get-RSObjectValue -Object $retryResult -Names @('ExitCode', 'exit_code') -DefaultValue 1) }
+
+    return New-RSTestRetryAttempt `
+        -Name $Entry.Name `
+        -Mode 'entry' `
+        -ExitCode $retryExitCode `
+        -DurationMs ([uint64](Get-RSObjectValue -Object $retryResult -Names @('WallMs', 'DurationMs', 'duration_ms') -DefaultValue 0)) `
+        -OutputLogPath ([string](Get-RSObjectValue -Object $retryResult -Names @('OutputLogPath', 'output_log_path') -DefaultValue '')) `
+        -Reason (Get-RSTestResultFailureReason -Result $retryResult)
+}
+
+function Invoke-RSSelfTestClassificationRetry {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Entry,
+
+        [Parameter(Mandatory = $true)]
+        [object]$SuiteResult
+    )
+
+    $failureNames = @(Get-RSObjectValue -Object $SuiteResult -Names @('Failures', 'failures') -DefaultValue @() | ForEach-Object {
+            [string](Get-RSObjectValue -Object $_ -Names @('name', 'Name') -DefaultValue '')
+        } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object -Unique)
+    $nonCaseFailureNames = @($failureNames | Where-Object { $_ -in @('selftest_result_coverage', 'setup') })
+    $failedCaseNames = @($failureNames | Where-Object { $_ -notin @('selftest_result_coverage', 'setup') })
+
+    if (@($failedCaseNames).Count -eq 0 -or @($nonCaseFailureNames).Count -gt 0) {
+        $started = Get-Date
+        $exitCode = Invoke-RSSelfTestProcess -Entry $Entry -Arguments @($Entry.Arguments)
+        $ended = Get-Date
+        return @(
+            New-RSTestRetryAttempt `
+                -Name $Entry.Name `
+                -Mode 'entry' `
+                -ExitCode $exitCode `
+                -DurationMs ([uint64](($ended - $started).TotalMilliseconds)) `
+                -Reason $(if ($exitCode -ne 0) { "Process exited with code $exitCode." } else { '' })
+        )
+    }
+
+    $retryAttempts = @()
+    $retryPlan = @(Get-RSSelfTestClassificationRetryPlan `
+            -Entry $Entry `
+            -FailureNames $failedCaseNames)
+
+    foreach ($plan in @($retryPlan | Where-Object { [string]$_.mode -eq 'failed-case' })) {
+        $started = Get-Date
+        $exitCode = Invoke-RSSelfTestProcess -Entry $Entry -Arguments @($plan.arguments)
+        $ended = Get-Date
+        $retryAttempts += New-RSTestRetryAttempt `
+            -Name $plan.name `
+            -Mode 'failed-case' `
+            -ExitCode $exitCode `
+            -DurationMs ([uint64](($ended - $started).TotalMilliseconds)) `
+            -Reason $(if ($exitCode -ne 0) { "Process exited with code $exitCode." } else { '' })
+    }
+
+    $allFailedCaseRetriesPassed = $true
+    foreach ($retryAttempt in @($retryAttempts)) {
+        if (-not [bool](Get-RSObjectValue -Object $retryAttempt -Names @('passed', 'Passed') -DefaultValue $false)) {
+            $allFailedCaseRetriesPassed = $false
+            break
+        }
+    }
+
+    if ($allFailedCaseRetriesPassed) {
+        $shuffleRetryPlan = @(Get-RSSelfTestClassificationRetryPlan `
+                -Entry $Entry `
+                -FailureNames $failedCaseNames `
+                -ShuffleTriageSeeds @(Get-RSSelfTestShuffleTriageSeeds -Arguments @($Entry.Arguments) -Count 3) | Where-Object { [string]$_.mode -eq 'shuffle-triage' })
+        foreach ($plan in $shuffleRetryPlan) {
+            $started = Get-Date
+            $exitCode = Invoke-RSSelfTestProcess -Entry $Entry -Arguments @($plan.arguments)
+            $ended = Get-Date
+            $retryAttempts += New-RSTestRetryAttempt `
+                -Name $Entry.Name `
+                -Mode 'shuffle-triage' `
+                -ExitCode $exitCode `
+                -DurationMs ([uint64](($ended - $started).TotalMilliseconds)) `
+                -Reason $(if ($exitCode -ne 0) { "Shuffle triage seed $($plan.shuffle_seed) exited with code $exitCode." } else { '' }) `
+                -ShuffleSeed $plan.shuffle_seed
+        }
+    }
+
+    return $retryAttempts
+}
+
 function Invoke-RSSelfTestCaseList {
     param(
         [Parameter(Mandatory = $true)]
@@ -312,15 +581,25 @@ function Invoke-RSSelfTestCaseList {
         $startInfo.Arguments = (($arguments | ForEach-Object { ConvertTo-RSStreamingQuotedArgument $_ }) -join ' ')
     }
 
-    $process = [System.Diagnostics.Process]::new()
-    $process.StartInfo = $startInfo
-    [void]$process.Start()
-    $stdout = $process.StandardOutput.ReadToEnd()
-    $stderr = $process.StandardError.ReadToEnd()
-    $process.WaitForExit()
+    $process = $null
+    $stdout = ''
+    $stderr = ''
+    $exitCode = 1
+    try {
+        $process = Start-RSContainedProcess -ProcessStartInfo $startInfo
+        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+        $stderrTask = $process.StandardError.ReadToEndAsync()
+        $process.WaitForExit()
+        $stdout = $stdoutTask.GetAwaiter().GetResult()
+        $stderr = $stderrTask.GetAwaiter().GetResult()
+        $exitCode = $process.ExitCode
+    }
+    finally {
+        Close-RSContainedProcess -Process $process
+    }
 
-    if ($process.ExitCode -ne 0) {
-        throw "Case listing failed with exit code $($process.ExitCode): $stderr"
+    if ($exitCode -ne 0) {
+        throw "Case listing failed with exit code ${exitCode}: $stderr"
     }
 
     if ([string]::IsNullOrWhiteSpace($stdout)) {
@@ -328,6 +607,115 @@ function Invoke-RSSelfTestCaseList {
     }
 
     return ($stdout | ConvertFrom-Json)
+}
+
+function Invoke-RSSelfTestProcess {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Entry,
+
+        [Parameter(Mandatory = $true)]
+        [string[]]$Arguments
+    )
+
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $Entry.Path
+    $startInfo.WorkingDirectory = $Entry.WorkingDirectory
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    if ($startInfo.PSObject.Properties['ArgumentList'] -and $null -ne $startInfo.ArgumentList) {
+        foreach ($argument in $Arguments) {
+            [void]$startInfo.ArgumentList.Add($argument)
+        }
+    } else {
+        $startInfo.Arguments = (($Arguments | ForEach-Object { ConvertTo-RSStreamingQuotedArgument $_ }) -join ' ')
+    }
+
+    $process = $null
+    try {
+        $process = Start-RSContainedProcess -ProcessStartInfo $startInfo
+        $process.WaitForExit()
+        return $process.ExitCode
+    }
+    finally {
+        Close-RSContainedProcess -Process $process
+    }
+}
+
+function Invoke-RSTestQuarantineRepairAttempt {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Attempt,
+
+        [Parameter(Mandatory = $true)]
+        [string]$RepoRoot,
+
+        [Parameter(Mandatory = $true)]
+        [string]$ArtifactRoot
+    )
+
+    $harness = [string](Get-RSObjectValue -Object $Attempt -Names @('harness') -DefaultValue '')
+    $name = [string](Get-RSObjectValue -Object $Attempt -Names @('name') -DefaultValue '')
+    $mode = [string](Get-RSObjectValue -Object $Attempt -Names @('mode') -DefaultValue '')
+    $safeName = ("$harness.$name" -replace '[^A-Za-z0-9_.-]', '_')
+    $repairArtifactRoot = Join-Path $ArtifactRoot 'quarantine'
+    New-Item -ItemType Directory -Path $repairArtifactRoot -Force | Out-Null
+
+    $attemptEntry = [pscustomobject]@{
+        Name = "$safeName.repair"
+        Kind = [string](Get-RSObjectValue -Object $Attempt -Names @('kind') -DefaultValue '')
+        Path = [string](Get-RSObjectValue -Object $Attempt -Names @('path') -DefaultValue '')
+        Arguments = @(Get-RSObjectValue -Object $Attempt -Names @('arguments') -DefaultValue @())
+        WorkingDirectory = [string](Get-RSObjectValue -Object $Attempt -Names @('working_directory') -DefaultValue '')
+        JsonName = [string](Get-RSObjectValue -Object $Attempt -Names @('json_name') -DefaultValue '')
+    }
+
+    $started = Get-Date
+    $exitCode = 1
+    $outputLogPath = ''
+    $reason = ''
+
+    try {
+        if ($mode -eq 'selftest-case') {
+            $previousSelfTestRoot = [Environment]::GetEnvironmentVariable('REDSALAMANDER_SELFTEST_ROOT', 'Process')
+            $repairSelfTestRoot = Join-Path $repairArtifactRoot $safeName
+            try {
+                [Environment]::SetEnvironmentVariable('REDSALAMANDER_SELFTEST_ROOT', $repairSelfTestRoot, 'Process')
+                New-Item -ItemType Directory -Path $repairSelfTestRoot -Force | Out-Null
+                $exitCode = Invoke-RSSelfTestProcess -Entry $attemptEntry -Arguments @($attemptEntry.Arguments)
+                $outputLogPath = Join-Path $repairSelfTestRoot 'last_run'
+            } finally {
+                [Environment]::SetEnvironmentVariable('REDSALAMANDER_SELFTEST_ROOT', $previousSelfTestRoot, 'Process')
+            }
+        } else {
+            $result = Invoke-RSTestPlanEntry -Entry $attemptEntry -RepoRoot $RepoRoot -ArtifactRoot $repairArtifactRoot
+            $exitCode = [int](Get-RSObjectValue -Object $result -Names @('ExitCode', 'exit_code') -DefaultValue 1)
+            $outputLogPath = [string](Get-RSObjectValue -Object $result -Names @('OutputLogPath', 'output_log_path') -DefaultValue '')
+            $reason = Get-RSTestResultFailureReason -Result $result
+        }
+    } catch {
+        $exitCode = 1
+        $reason = $_.Exception.Message
+    }
+
+    $ended = Get-Date
+    if ($exitCode -ne 0 -and [string]::IsNullOrWhiteSpace($reason)) {
+        $reason = "Repair lane exited with code $exitCode."
+    }
+
+    [pscustomobject]@{
+        harness = $harness
+        name = $name
+        mode = $mode
+        owner = [string](Get-RSObjectValue -Object $Attempt -Names @('owner') -DefaultValue '')
+        expires = [string](Get-RSObjectValue -Object $Attempt -Names @('expires') -DefaultValue '')
+        issue = [string](Get-RSObjectValue -Object $Attempt -Names @('issue') -DefaultValue '')
+        exit_code = $exitCode
+        passed = ($exitCode -eq 0)
+        duration_ms = [uint64](($ended - $started).TotalMilliseconds)
+        output_log_path = $outputLogPath
+        reason = $reason
+    }
 }
 
 function Format-RSCoverageReason {
@@ -360,6 +748,34 @@ function Format-RSCoverageReason {
     return ($parts -join '; ')
 }
 
+$artifactOperationLock = $null
+try {
+    $operationMode = if ($SkipBuild) { 'existing artifacts' } else { 'build and test' }
+    $artifactOperationLock = Enter-RSArtifactOperationLock `
+        -RepoRoot $repoRoot `
+        -Operation "Run-AllTests $Suite ($operationMode) $Configuration|$Platform" `
+        -Scope @{
+            kind = 'test'
+            target = $operationMode
+            suite = $Suite
+            configuration = $Configuration
+            platform = $Platform
+        }
+
+    if ($artifactOperationLock.WasAbandoned) {
+        [void](Set-RSArtifactOperationContaminated `
+                -RepoRoot $repoRoot `
+                -Reason "The previous build/test owner exited without clearing the exclusive artifact-operation lock." `
+                -AbandonedOwner $artifactOperationLock.AbandonedOwner)
+    }
+
+    if (Test-RSArtifactOperationContaminated -RepoRoot $repoRoot) {
+        $markerPath = Get-RSArtifactContaminationMarkerPath -RepoRoot $repoRoot
+        throw "Shared build artifacts may be mixed after an interrupted operation. Run build.ps1 -Rebuild before starting tests. Marker: $markerPath"
+    }
+
+    Assert-RSNoResidualArtifactToolProcesses -RepoRoot $repoRoot
+
 # --- Resolve paths ---
 
 if ($ExePath) {
@@ -368,7 +784,33 @@ if ($ExePath) {
     $exeFullPath = Join-Path $repoRoot ".build\$Platform\$Configuration\RedSalamander.exe"
 }
 
-$artifactRoot = Get-RSSelfTestArtifactRoot
+$testRunContext = New-RSTestRunContext `
+    -RepoRoot $repoRoot `
+    -SelfTestRootOverride ''
+$env:REDSALAMANDER_TEST_ROOT = $testRunContext.TestRoot
+$env:REDSALAMANDER_TEST_RUN_ID = $testRunContext.RunId
+[Environment]::SetEnvironmentVariable('REDSALAMANDER_SELFTEST_ROOT', $null, 'Process')
+$artifactRoot = $testRunContext.ArtifactRoot
+New-Item -ItemType Directory -Path $artifactRoot -Force | Out-Null
+
+$staleRunCleanupResults = @(Remove-RSTestSandboxStaleRunDirectories `
+        -TestRoot $testRunContext.TestRoot `
+        -RunId $testRunContext.RunId)
+if (@($staleRunCleanupResults).Count -gt 0) {
+    $removedStaleRuns = @($staleRunCleanupResults | Where-Object { $_.Status -eq 'Removed' }).Count
+    $failedStaleRuns = @($staleRunCleanupResults | Where-Object { $_.Status -eq 'Failed' }).Count
+    Write-Host "Stale TestSandbox run cleanup: $removedStaleRuns removed, $failedStaleRuns failed." -ForegroundColor DarkGray
+}
+
+if (-not $SkipLegacySandboxCleanup) {
+    $cleanupScript = Join-Path $repoRoot 'Tools\Clean-TestSandbox.ps1'
+    & $cleanupScript -Apply -Confirm:$false | Out-Null
+}
+
+if ([string]::IsNullOrWhiteSpace($QuarantinePath)) {
+    $QuarantinePath = Join-Path $repoRoot 'Tools\test-quarantine.jsonl'
+}
+$quarantineStatus = Read-RSTestQuarantineFile -Path $QuarantinePath
 
 # --- Build step ---
 
@@ -423,14 +865,51 @@ $testPlan = @(Get-RSTestRunPlan `
         -RedSalamanderExePath $exeFullPath `
         -TimeoutMultiplier $TimeoutMultiplier `
         -FailFast:$FailFast `
-        -CaseFilter $CaseFilter)
+        -CaseFilter $CaseFilter `
+        -RepeatCount $SelfTestRepeat `
+        -ShuffleSeed $SelfTestShuffleSeed `
+        -PerfBudgetPath $PerfBudgetPath `
+        -RequirePerfBudgets:$RequirePerfBudgets `
+        -SelfTestFlakyProofCase $SelfTestFlakyProofCase `
+        -SelfTestOrderProofCase $SelfTestOrderProofCase)
 
 $suiteConfigs = @($testPlan | Where-Object { $_.Kind -eq 'SelfTest' })
 $standaloneConfigs = @($testPlan | Where-Object { $_.Kind -ne 'SelfTest' })
+$failureClassificationEnabled = ($ClassifyFailures -or $Suite -eq 'CI')
+$quarantineHarnessCaseMap = @{}
+$activeQuarantineEntries = @(Get-RSObjectValue -Object $quarantineStatus -Names @('ActiveEntries', 'active_entries') -DefaultValue @())
+$activeQuarantineHarnesses = @($activeQuarantineEntries | ForEach-Object {
+        [string](Get-RSObjectValue -Object $_ -Names @('harness') -DefaultValue '')
+    } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object -Unique)
+foreach ($selfTestEntry in @($suiteConfigs | Where-Object { [string]$_.Name -in $activeQuarantineHarnesses })) {
+    try {
+        $caseList = Invoke-RSSelfTestCaseList -Entry $selfTestEntry
+        $suiteCases = @($caseList.suites | Where-Object { $_.suite -eq $selfTestEntry.Name } | Select-Object -First 1)
+        if (@($suiteCases).Count -eq 0) {
+            $quarantineHarnessCaseMap[$selfTestEntry.Name] = @()
+        } else {
+            $quarantineHarnessCaseMap[$selfTestEntry.Name] = @($suiteCases[0].cases | ForEach-Object { [string]$_.name })
+        }
+    } catch {
+        $quarantineHarnessCaseMap[$selfTestEntry.Name] = @()
+    }
+}
+$quarantineRepairPlan = Get-RSTestQuarantineRepairPlan -QuarantineStatus $quarantineStatus -TestPlan $testPlan -HarnessCaseMap $quarantineHarnessCaseMap
+if (-not $quarantineRepairPlan.IsValid) {
+    $quarantineStatus = [pscustomobject]@{
+        IsValid = $false
+        HasBlockingEntries = $true
+        TotalCount = [int](Get-RSObjectValue -Object $quarantineStatus -Names @('TotalCount', 'total_count') -DefaultValue 0)
+        ActiveEntries = @(Get-RSObjectValue -Object $quarantineStatus -Names @('ActiveEntries', 'active_entries') -DefaultValue @())
+        InvalidEntries = @($quarantineRepairPlan.InvalidEntries)
+        Errors = @($quarantineRepairPlan.Errors)
+    }
+}
 
 # --- Run suites ---
 
 $allResults = @()
+$quarantineRepairAttempts = @()
 $overallStartTime = Get-Date
 $overallExitCode = 0
 
@@ -455,8 +934,7 @@ foreach ($sc in $suiteConfigs) {
         }
     }
 
-    $process = Start-Process -FilePath $sc.Path -ArgumentList $args -WorkingDirectory $sc.WorkingDirectory -Wait -PassThru
-    $suiteExitCode = if ($null -ne $process.ExitCode) { $process.ExitCode } else { 0 }
+    $suiteExitCode = Invoke-RSSelfTestProcess -Entry $sc -Arguments $args
     $suiteEnd = Get-Date
     $suiteWallMs = [uint64](($suiteEnd - $suiteStart).TotalMilliseconds)
 
@@ -490,9 +968,14 @@ foreach ($sc in $suiteConfigs) {
         Skipped    = 0
         DurationMs = 0
         Failures   = @()
+        ShuffleSeed = ''
+        RepeatCount = 1
     }
 
     if ($resultsParsed) {
+        $suiteResult.ShuffleSeed = Get-JsonValue $resultsParsed @('shuffle_seed') ''
+        $suiteResult.RepeatCount = Get-JsonValue $resultsParsed @('repeat_count') 1
+
         # Handle both direct suite results and aggregated run results
         $casesArray = $null
         $hasCasesArray = $false
@@ -517,6 +1000,8 @@ foreach ($sc in $suiteConfigs) {
                     $suiteResult.Failed     = Get-JsonValue $s @('failed') 0
                     $suiteResult.Skipped    = Get-JsonValue $s @('skipped') 0
                     $suiteResult.DurationMs = Get-JsonValue $s @('durationMs', 'duration_ms') 0
+                    $suiteResult.ShuffleSeed = Get-JsonValue $s @('shuffle_seed') $suiteResult.ShuffleSeed
+                    $suiteResult.RepeatCount = Get-JsonValue $s @('repeat_count') $suiteResult.RepeatCount
                     break
                 }
             }
@@ -524,7 +1009,7 @@ foreach ($sc in $suiteConfigs) {
 
         if ($hasCasesArray) {
             $suiteResult.Cases = @($casesArray)
-            $suiteResult.Failures = @($suiteResult.Cases | Where-Object { (Get-JsonValue $_ @('status') '') -eq 'failed' })
+            $suiteResult.Failures = @($suiteResult.Cases | Where-Object { (Get-JsonValue $_ @('status') '') -in @('failed', 'crashed') })
 
             try {
                 $caseList = Invoke-RSSelfTestCaseList -Entry $sc
@@ -539,6 +1024,7 @@ foreach ($sc in $suiteConfigs) {
                     -ExpectedCaseNames $expectedNames `
                     -ActualCases $suiteResult.Cases `
                     -AllowedExtraCaseNames $allowedExtraNames `
+                    -ExpectedRepeatCount $SelfTestRepeat `
                     -RequireExpectedCases:(-not [string]::IsNullOrWhiteSpace($CaseFilter))
                 if (-not $coverage.IsValid) {
                     $suiteResult.Failures += [pscustomobject]@{
@@ -567,6 +1053,16 @@ foreach ($sc in $suiteConfigs) {
         $overallExitCode = 1
     }
 
+    if ($failureClassificationEnabled -and $suiteResult.ExitCode -ne 0) {
+        Write-SubHeader "CLASSIFYING FAILURE: $($sc.Name)"
+        $retryAttempts = @(Invoke-RSSelfTestClassificationRetry -Entry $sc -SuiteResult $suiteResult)
+        $suiteResult = Add-RSTestResultClassification -Result $suiteResult -RetryResults $retryAttempts
+        Write-Host "  Classification: $($suiteResult.Classification)" -ForegroundColor Yellow
+        Write-Host "  Reason: $($suiteResult.ClassificationReason)" -ForegroundColor DarkGray
+    } else {
+        $suiteResult = Add-RSTestResultClassification -Result $suiteResult
+    }
+
     $allResults += $suiteResult
 }
 
@@ -584,11 +1080,46 @@ foreach ($entry in $standaloneConfigs) {
         $overallExitCode = 1
     }
 
+    if ($failureClassificationEnabled -and $suiteResult.ExitCode -ne 0) {
+        Write-SubHeader "CLASSIFYING FAILURE: $($entry.Name)"
+        $retryAttempts = @(Invoke-RSTestEntryClassificationRetry -Entry $entry -RepoRoot $repoRoot -ArtifactRoot $artifactRoot)
+        $suiteResult = Add-RSTestResultClassification -Result $suiteResult -RetryResults $retryAttempts
+        Write-Host "  Classification: $($suiteResult.Classification)" -ForegroundColor Yellow
+        Write-Host "  Reason: $($suiteResult.ClassificationReason)" -ForegroundColor DarkGray
+    } else {
+        $suiteResult = Add-RSTestResultClassification -Result $suiteResult
+    }
+
     $allResults += $suiteResult
+}
+
+if (@($quarantineRepairPlan.Attempts).Count -gt 0) {
+    Write-Header "Running quarantine repair lane"
+    foreach ($attempt in @($quarantineRepairPlan.Attempts)) {
+        $harness = Get-RSObjectValue -Object $attempt -Names @('harness') -DefaultValue '(missing harness)'
+        $name = Get-RSObjectValue -Object $attempt -Names @('name') -DefaultValue '(missing name)'
+        $owner = Get-RSObjectValue -Object $attempt -Names @('owner') -DefaultValue '(missing owner)'
+        $expires = Get-RSObjectValue -Object $attempt -Names @('expires') -DefaultValue '(missing expiry)'
+        Write-Host "  Repair: [$harness] $name owner=$owner expires=$expires" -ForegroundColor Yellow
+
+        $attemptResult = Invoke-RSTestQuarantineRepairAttempt -Attempt $attempt -RepoRoot $repoRoot -ArtifactRoot $artifactRoot
+        $quarantineRepairAttempts += $attemptResult
+        if (-not [bool]$attemptResult.passed) {
+            $overallExitCode = 1
+        }
+    }
 }
 
 $overallEndTime = Get-Date
 $overallWallMs = [uint64](($overallEndTime - $overallStartTime).TotalMilliseconds)
+if ($quarantineStatus.HasBlockingEntries) {
+    $overallExitCode = 1
+}
+
+$testSandboxAudit = Get-RSTestSandboxDiskAudit `
+    -TestRoot $testRunContext.TestRoot `
+    -RunId $testRunContext.RunId `
+    -DriveRoots (Get-RSFixedDriveRoots)
 
 # Preserve a runner-owned aggregate artifact before any suite can overwrite the
 # native root results.json on a multi-suite run.
@@ -607,8 +1138,28 @@ $runSummary = New-RSTestRunSummary `
     -TimeoutMultiplier $TimeoutMultiplier `
     -FailFast:$FailFast `
     -CaseFilter $CaseFilter `
+    -TestRoot $testRunContext.TestRoot `
+    -RunId $testRunContext.RunId `
+    -QuarantineStatus $quarantineStatus `
+    -QuarantineRepairAttempts $quarantineRepairAttempts `
+    -TestSandboxAudit $testSandboxAudit `
     -Results $allResults
 $runSummary | ConvertTo-Json -Depth 32 | Set-Content -LiteralPath $runSummaryPath -Encoding UTF8
+$caseHistoryRows = @(Convert-RSTestRunSummaryToCaseHistoryRows -Summary $runSummary)
+$caseHistoryPath = Join-Path $artifactRoot 'run-all-tests-case-history.jsonl'
+Convert-RSTestCaseHistoryRowsToJsonl -Rows $caseHistoryRows | Set-Content -LiteralPath $caseHistoryPath -Encoding UTF8
+$caseDashboardPath = Join-Path $artifactRoot 'run-all-tests-dashboard.md'
+Convert-RSTestCaseHistoryRowsToDashboardMarkdown -Rows $caseHistoryRows -Summary $runSummary | Set-Content -LiteralPath $caseDashboardPath -Encoding UTF8
+
+$githubStepSummaryPath = [Environment]::GetEnvironmentVariable('GITHUB_STEP_SUMMARY', 'Process')
+if (-not [string]::IsNullOrWhiteSpace($githubStepSummaryPath)) {
+    try {
+        $githubSummaryMarkdown = Convert-RSTestRunSummaryToGitHubStepSummary -Summary $runSummary
+        Add-Content -LiteralPath $githubStepSummaryPath -Value $githubSummaryMarkdown -Encoding UTF8
+    } catch {
+        Write-Host "WARNING: Failed to write GitHub step summary: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+}
 
 # --- Display comprehensive summary ---
 
@@ -640,6 +1191,18 @@ foreach ($r in $allResults) {
     } else {
         Write-Host "         (results.json not found - exit code: $($r.ExitCode))" -ForegroundColor Yellow
     }
+    $classification = Get-JsonValue $r @('Classification', 'classification') ''
+    if (-not [string]::IsNullOrWhiteSpace($classification) -and $classification -ne 'PASSED') {
+        $classificationReason = Get-JsonValue $r @('ClassificationReason', 'classification_reason') ''
+        Write-Host "         Classification: $classification" -ForegroundColor Yellow
+        if (-not [string]::IsNullOrWhiteSpace($classificationReason)) {
+            Write-Host "         $classificationReason" -ForegroundColor DarkGray
+        }
+    }
+    $retryAttempts = @(Get-JsonValue $r @('RetryAttempts', 'retry_attempts') @())
+    if (@($retryAttempts).Count -gt 0) {
+        Write-Host "         Retry attempts: $(@($retryAttempts).Count)" -ForegroundColor DarkGray
+    }
     $outputLogPath = Get-JsonValue $r @('OutputLogPath', 'output_log_path') ''
     if (-not [string]::IsNullOrWhiteSpace($outputLogPath)) {
         Write-Host "         Output: $outputLogPath" -ForegroundColor DarkGray
@@ -662,6 +1225,21 @@ Write-Host "  Passed: $totalPassed" -ForegroundColor Green -NoNewline
 Write-Host "  Failed: $totalFailed" -ForegroundColor $(if ($totalFailed -gt 0) { 'Red' } else { 'Green' }) -NoNewline
 Write-Host "  Skipped: $totalSkipped" -ForegroundColor $(if ($totalSkipped -gt 0) { 'DarkYellow' } else { 'Green' })
 Write-Host "  Wall time: $(Format-Duration $overallWallMs)" -ForegroundColor DarkGray
+
+if ($runSummary.PSObject.Properties['classifications']) {
+    Write-Host "  Classifications: " -ForegroundColor DarkGray -NoNewline
+    Write-Host "flaky=$($runSummary.classifications.flaky) " -ForegroundColor Yellow -NoNewline
+    Write-Host "regression=$($runSummary.classifications.regression) " -ForegroundColor Red -NoNewline
+    Write-Host "isolation_suspect=$($runSummary.classifications.isolation_suspect) " -ForegroundColor Yellow -NoNewline
+    Write-Host "unclassified_failure=$($runSummary.classifications.unclassified_failure)" -ForegroundColor Yellow
+}
+if ($runSummary.PSObject.Properties['quarantine']) {
+    Write-Host "  Quarantine: " -ForegroundColor DarkGray -NoNewline
+    Write-Host "active=$($runSummary.quarantine.active_count) " -ForegroundColor Yellow -NoNewline
+    Write-Host "invalid=$($runSummary.quarantine.invalid_count) " -ForegroundColor Yellow -NoNewline
+    Write-Host "repair_attempts=$($runSummary.quarantine.repair_attempt_count) " -ForegroundColor Yellow -NoNewline
+    Write-Host "repair_reproduced=$($runSummary.quarantine.repair_reproduced_count)" -ForegroundColor Yellow
+}
 
 # --- Failure details ---
 
@@ -721,9 +1299,37 @@ if ($allSkipped.Count -gt 0) {
     }
 }
 
+if ($quarantineStatus.HasBlockingEntries) {
+    Write-SubHeader "QUARANTINE BLOCKERS"
+    foreach ($errorMessage in @($quarantineStatus.Errors)) {
+        Write-Host "  INVALID " -ForegroundColor Red -NoNewline
+        Write-Host $errorMessage -ForegroundColor Red
+    }
+    foreach ($entry in @($quarantineStatus.ActiveEntries)) {
+        $harness = Get-RSObjectValue -Object $entry -Names @('harness') -DefaultValue '(missing harness)'
+        $name = Get-RSObjectValue -Object $entry -Names @('name') -DefaultValue '(missing name)'
+        $owner = Get-RSObjectValue -Object $entry -Names @('owner') -DefaultValue '(missing owner)'
+        $expires = Get-RSObjectValue -Object $entry -Names @('expires') -DefaultValue '(missing expiry)'
+        Write-Host "  ACTIVE " -ForegroundColor Yellow -NoNewline
+        Write-Host "[$harness] $name owner=$owner expires=$expires" -ForegroundColor Yellow
+    }
+    foreach ($attempt in @($quarantineRepairAttempts)) {
+        $statusText = if ([bool]$attempt.passed) { 'REPAIR PASS' } else { 'REPAIR FAIL' }
+        $statusColor = if ([bool]$attempt.passed) { 'Green' } else { 'Red' }
+        Write-Host "  $statusText " -ForegroundColor $statusColor -NoNewline
+        Write-Host "[$($attempt.harness)] $($attempt.name)" -ForegroundColor $statusColor
+        if (-not [string]::IsNullOrWhiteSpace($attempt.reason)) {
+            Write-Host "         $($attempt.reason)" -ForegroundColor DarkGray
+        }
+    }
+}
+
 # --- Artifact locations ---
 
 Write-SubHeader "ARTIFACTS"
+Write-Host "  Test root: $($testRunContext.TestRoot)" -ForegroundColor DarkGray
+Write-Host "  Run id:    $($testRunContext.RunId)" -ForegroundColor DarkGray
+Write-Host "  Disk audit issues: $($testSandboxAudit.issue_count)" -ForegroundColor $(if ($testSandboxAudit.issue_count -eq 0) { 'DarkGray' } else { 'Yellow' })
 Write-Host "  Last run: $artifactRoot" -ForegroundColor DarkGray
 if (Test-Path $artifactRoot) {
     $jsonFiles = Get-ChildItem $artifactRoot -Filter '*.json' -Recurse -ErrorAction SilentlyContinue
@@ -747,4 +1353,8 @@ if ($overallExitCode -ne 0) {
     Write-Host ""
 }
 
-exit $overallExitCode
+    exit $overallExitCode
+}
+finally {
+    Exit-RSArtifactOperationLock -Lock $artifactOperationLock
+}

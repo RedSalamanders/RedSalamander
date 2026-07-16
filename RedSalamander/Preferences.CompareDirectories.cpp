@@ -280,6 +280,22 @@ bool CompareDirectoriesPane::EnsureDxHosts(HWND parent, PreferencesDialogState& 
                 return;
             }
 
+            DeferredFocusTarget focusAfterLayout = DeferredFocusTarget::None;
+            if (_pageHostDx && _dxState)
+            {
+                const RedSalamander::DxUi::Control* const focused = _pageHostDx->GetFocusControl();
+                if (commandId == IDC_PREFS_ADV_COMPARE_IGNORE_FILES_TOGGLE &&
+                    focused == _dxState->page.toggleCards[kCompareIgnoreFilesIndex].toggle)
+                {
+                    focusAfterLayout = DeferredFocusTarget::IgnoreFilesToggle;
+                }
+                else if (commandId == IDC_PREFS_ADV_COMPARE_IGNORE_DIRECTORIES_TOGGLE &&
+                         focused == _dxState->page.toggleCards[kCompareIgnoreDirectoriesIndex].toggle)
+                {
+                    focusAfterLayout = DeferredFocusTarget::IgnoreDirectoriesToggle;
+                }
+            }
+
             switch (commandId)
             {
                 case IDC_PREFS_ADV_COMPARE_SIZE_TOGGLE: compare->compareSize = checked; break;
@@ -308,9 +324,15 @@ bool CompareDirectoriesPane::EnsureDxHosts(HWND parent, PreferencesDialogState& 
                 default: return;
             }
 
+            if (focusAfterLayout != DeferredFocusTarget::None)
+            {
+                _deferredFocusAfterLayout = focusAfterLayout;
+            }
+
             MaybeResetWorkingCompareDirectoriesSettingsIfEmpty(dialogState->workingSettings);
             SetDirty(GetParent(host), *dialogState);
             Refresh(host, *dialogState);
+            RestoreDeferredFocusTarget(focusAfterLayout);
 
             if (commandId == IDC_PREFS_ADV_COMPARE_IGNORE_FILES_TOGGLE || commandId == IDC_PREFS_ADV_COMPARE_IGNORE_DIRECTORIES_TOGGLE)
             {
@@ -449,16 +471,17 @@ bool CompareDirectoriesPane::EnsureDxHosts(HWND parent, PreferencesDialogState& 
         };
 
         appendHeader(0u);
+        appendHeader(1u);
         appendToggleCard(0u, false);
 
-        appendHeader(1u);
+        appendHeader(2u);
         appendToggleCard(1u, false);
         appendToggleCard(2u, false);
         appendToggleCard(3u, false);
         appendToggleCard(4u, false);
         appendComboCard();
 
-        appendHeader(2u);
+        appendHeader(3u);
         appendToggleCard(5u, false);
         appendToggleCard(6u, false);
         appendToggleCard(7u, false);
@@ -467,8 +490,6 @@ bool CompareDirectoriesPane::EnsureDxHosts(HWND parent, PreferencesDialogState& 
         appendHeader(4u);
         appendToggleCard(9u, true);
         appendToggleCard(10u, true);
-
-        appendHeader(3u);
 
         ReorderPanelChildren(_pageContentRoot, orderedChildren);
     }
@@ -481,6 +502,7 @@ bool CompareDirectoriesPane::EnsureDxHosts(HWND parent, PreferencesDialogState& 
 
 void CompareDirectoriesPane::DetachDxHosts() noexcept
 {
+    _deferredFocusAfterLayout = DeferredFocusTarget::None;
     if (_pageContentRoot && _pageHostDx && _pageHost && IsWindow(_pageHost) != FALSE)
     {
         _pageHostDx->ResetInteractionState();
@@ -503,7 +525,7 @@ void CompareDirectoriesPane::ApplyDxTheme(const PreferencesDialogState& state) n
         return;
     }
 
-    _pageHostDx->SetTheme(PrefsUi::MakeDxPalette(state.theme));
+    _pageHostDx->SetTheme(MakeAppThemeDxPalette(state.theme));
 }
 
 void CompareDirectoriesPane::SyncDxControlsFromState(const PreferencesDialogState& state) noexcept
@@ -680,6 +702,7 @@ void CompareDirectoriesPane::LayoutDxPage(
     const int cardGapY     = UiMetrics::ScaleDip(dpi, kCardGapYDip);
     const int cardGapX     = UiMetrics::ScaleDip(dpi, kCardGapXDip);
     const int cardSpacingY = UiMetrics::ScaleDip(dpi, kCardSpacingYDip);
+    const int headerHeight = UiMetrics::ScaleDip(dpi, kHeaderHeightDip);
 
     const int minToggleWidth    = UiMetrics::ScaleDip(dpi, kMinToggleWidthDip);
     const std::wstring onLabel  = LoadStringResource(nullptr, IDS_PREFS_COMMON_ON);
@@ -757,6 +780,18 @@ void CompareDirectoriesPane::LayoutDxPage(
     }
 
     auto pushCard = [&](const RECT& card) noexcept { state.pageSettingCards.push_back(card); };
+
+    auto layoutHeader = [&](Label* header) noexcept
+    {
+        if (! header)
+        {
+            return;
+        }
+
+        header->SetVisible(true);
+        header->SetBounds(D2D1::RectF(pxToDip(x), pxToDip(y), pxToDip(x + width), pxToDip(y + headerHeight)));
+        y += headerHeight + std::max(2, gapY / 2);
+    };
 
     auto layoutToggleCard = [&](std::wstring_view labelText, std::wstring_view descText, const size_t index) noexcept
     {
@@ -925,9 +960,11 @@ void CompareDirectoriesPane::LayoutDxPage(
         y += cardHeight + cardSpacingY;
     };
 
+    layoutHeader(dxPage.headers[1]);
     layoutToggleCard(LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SUBDIRS_TITLE), LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SUBDIRS_DESC), 0u);
     y += gapY;
 
+    layoutHeader(dxPage.headers[2]);
     layoutToggleCard(LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SIZE_TITLE), LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SIZE_DESC), 1u);
     layoutToggleCard(LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_DATETIME_TITLE), LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_DATETIME_DESC), 2u);
     layoutToggleCard(LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_ATTRIBUTES_TITLE), LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_ATTRIBUTES_DESC), 3u);
@@ -936,6 +973,7 @@ void CompareDirectoriesPane::LayoutDxPage(
                     LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_CONTENT_WORKERS_DESC));
     y += gapY;
 
+    layoutHeader(dxPage.headers[3]);
     layoutToggleCard(
         LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SUBDIR_ATTRIBUTES_TITLE), LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SUBDIR_ATTRIBUTES_DESC), 5u);
     layoutToggleCard(
@@ -946,6 +984,7 @@ void CompareDirectoriesPane::LayoutDxPage(
         LoadStringResource(nullptr, IDS_PREFS_COMPARE_SHOW_IDENTICAL_TITLE), LoadStringResource(nullptr, IDS_PREFS_COMPARE_SHOW_IDENTICAL_DESC), 8u);
     y += gapY;
 
+    layoutHeader(dxPage.headers[4]);
     layoutIgnoreCard(LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_IGNORE_FILES_TITLE),
                      LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_IGNORE_FILES_DESC),
                      compare.ignoreFiles,
@@ -988,10 +1027,51 @@ bool CompareDirectoriesPane::HandleDeferredAction(HWND host, PreferencesDialogSt
         return false;
     }
 
+    if (_deferredFocusAfterLayout == DeferredFocusTarget::None && _pageHostDx && _dxState)
+    {
+        const RedSalamander::DxUi::Control* const focused = _pageHostDx->GetFocusControl();
+        if (focused == _dxState->page.toggleCards[kCompareIgnoreFilesIndex].toggle)
+        {
+            _deferredFocusAfterLayout = DeferredFocusTarget::IgnoreFilesToggle;
+        }
+        else if (focused == _dxState->page.toggleCards[kCompareIgnoreDirectoriesIndex].toggle)
+        {
+            _deferredFocusAfterLayout = DeferredFocusTarget::IgnoreDirectoriesToggle;
+        }
+    }
+
     // Relayout is performed by the caller (HandleDeferredPaneAction) via
     // LayoutPreferencesPageHost so scroll, background cards, and DxUi are all
     // updated through the proper channel.
     return true;
+}
+
+void CompareDirectoriesPane::RestoreDeferredFocusAfterLayout() noexcept
+{
+    const DeferredFocusTarget target = _deferredFocusAfterLayout;
+    _deferredFocusAfterLayout       = DeferredFocusTarget::None;
+    RestoreDeferredFocusTarget(target);
+}
+
+void CompareDirectoriesPane::RestoreDeferredFocusTarget(const DeferredFocusTarget target) noexcept
+{
+    if (target == DeferredFocusTarget::None || ! _pageHostDx || ! _dxState)
+    {
+        return;
+    }
+
+    RedSalamander::DxUi::Control* focusControl = nullptr;
+    switch (target)
+    {
+        case DeferredFocusTarget::IgnoreFilesToggle: focusControl = _dxState->page.toggleCards[kCompareIgnoreFilesIndex].toggle; break;
+        case DeferredFocusTarget::IgnoreDirectoriesToggle: focusControl = _dxState->page.toggleCards[kCompareIgnoreDirectoriesIndex].toggle; break;
+        case DeferredFocusTarget::None: return;
+    }
+
+    if (focusControl && focusControl->IsVisible() && focusControl->IsEnabled())
+    {
+        _pageHostDx->SetFocusControl(focusControl);
+    }
 }
 
 #ifdef ENABLE_TESTS
@@ -1151,5 +1231,25 @@ bool CompareDirectoriesPane::DebugSelectContentWorkersByText(std::wstring_view d
     combo->SetSelectedIndex(itemIndex);
     _pageHostDx->Invalidate();
     return combo->GetSelectedIndex().has_value() && combo->GetSelectedIndex().value() == itemIndex && combo->GetDisplayedText() == displayText;
+}
+
+size_t CompareDirectoriesPane::DebugVisibleSectionHeaderCount() const noexcept
+{
+    if (! _dxState)
+    {
+        return 0u;
+    }
+
+    size_t visible = 0u;
+    for (size_t i = 1u; i < _dxState->page.headers.size(); ++i)
+    {
+        const Label* header = _dxState->page.headers[i];
+        if (header && header->IsVisible())
+        {
+            ++visible;
+        }
+    }
+
+    return visible;
 }
 #endif

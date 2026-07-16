@@ -25,6 +25,7 @@ public:
 
 #ifdef ENABLE_TESTS
     [[nodiscard]] PreferencesHotPathsDebugFocusTarget DebugGetFocusTarget() const noexcept;
+    void DebugPopulateSnapshot(PreferencesDebugSnapshot& out) const noexcept;
     [[nodiscard]] bool DebugFocusFirstPathField() noexcept;
     [[nodiscard]] bool DebugGetFirstPathText(std::wstring& outText) const noexcept;
     [[nodiscard]] bool DebugSetFirstPathText(std::wstring_view text) noexcept;

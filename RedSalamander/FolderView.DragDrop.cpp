@@ -559,7 +559,7 @@ HRESULT FolderView::PerformDrop(IDataObject* dataObject, DWORD keyState, DWORD a
             }
 
             const FileSystemOperation operationType = effect == DROPEFFECT_COPY ? FILESYSTEM_COPY : FILESYSTEM_MOVE;
-            const FileSystemFlags flags            = FILESYSTEM_FLAG_RECURSIVE;
+            const FileSystemFlags flags             = FILESYSTEM_FLAG_RECURSIVE;
 
             if (_fileOperationRequestCallback)
             {
@@ -667,7 +667,7 @@ HRESULT FolderView::PerformDrop(IDataObject* dataObject, DWORD keyState, DWORD a
                     break;
                 }
 
-                hrLink = persist->Save(linkPath.c_str(), TRUE);
+                hrLink = SaveShellShortcutExactPath(persist.get(), linkPath);
                 if (FAILED(hrLink))
                 {
                     operationHr = hrLink;

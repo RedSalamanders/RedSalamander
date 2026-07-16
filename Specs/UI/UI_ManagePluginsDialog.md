@@ -54,6 +54,7 @@ Related specs:
 - Committing the dialog MUST update the owning settings model and persist through the existing settings-save path.
 - The dialog MUST surface save failures to the user instead of failing silently.
 - If the underlying settings source changes externally while the dialog is open, the user MUST be offered an explicit reload-or-keep-edit decision before stale data is overwritten.
+- If schema/configuration loading returns `ERROR_BUSY` because the plugin manager has an unload-deferred entry, the dialog/manager path MUST trigger the plugin manager's automatic unload-deferred retry sweep (busy-triggered or bounded timer) and retry or surface a transient busy state. Manual Apply/Refresh MUST NOT be the only recovery path for a kept-open configuration panel.
 
 ## DXUI Contract
 

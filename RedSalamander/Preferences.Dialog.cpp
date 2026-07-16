@@ -517,7 +517,7 @@ struct PreferencesPageHostSurfaceControl final : RedSalamander::DxUi::Control
         }
 
         const COLORREF surfaceColor = UiMetrics::GetControlSurfaceColor(_state->theme);
-        const COLORREF borderColor  = UiMetrics::BlendColor(surfaceColor, _state->theme.menu.text, _state->theme.dark ? 40 : 30, 255);
+        const COLORREF borderColor  = UiMetrics::BlendColorRefWeightedTruncate(surfaceColor, _state->theme.menu.text, _state->theme.dark ? 40 : 30, 255);
         auto* fillBrush             = host.GetSolidBrush(ColorFromCOLORREF(surfaceColor));
         auto* borderBrush           = host.GetSolidBrush(ColorFromCOLORREF(borderColor));
         if (! fillBrush || ! borderBrush)
@@ -670,7 +670,7 @@ void ApplySharedEmptyStatePalette(PreferencesDialogState& state, const Preferenc
         return;
     }
 
-    const ThemePalette palette = PrefsUi::MakeDxPalette(state.theme);
+    const ThemePalette palette = MakeAppThemeDxPalette(state.theme);
     D2D1_COLOR_F iconColor     = palette.subduedText;
     iconColor.a                = state.theme.dark ? 0.28f : 0.20f;
 
@@ -1049,10 +1049,10 @@ void DestroyInactivePreferencesPageState(PreferencesDialogState& state, const Pr
         return bgDiff >= minBgDiff && normalDiff >= minNormalDiff;
     };
 
-    auto blended = UiMetrics::BlendColor(background, normal, state.theme.dark ? 140 : 90, 255);
+    auto blended = UiMetrics::BlendColorRefWeightedTruncate(background, normal, state.theme.dark ? 140 : 90, 255);
     if (std::abs(ColorLuma(blended) - ColorLuma(background)) < minBgDiff)
     {
-        blended = UiMetrics::BlendColor(background, normal, state.theme.dark ? 170 : 120, 255);
+        blended = UiMetrics::BlendColorRefWeightedTruncate(background, normal, state.theme.dark ? 170 : 120, 255);
     }
 
     if (isReadableAndDim(candidate))
@@ -1194,7 +1194,7 @@ void PaintPageHostBackgroundAndCards(HDC hdc, HWND host, const PreferencesDialog
     const UINT dpi         = GetDpiForWindow(host);
     const float radius     = static_cast<float>(UiMetrics::ScaleDip(dpi, 6));
     const COLORREF surface = UiMetrics::GetControlSurfaceColor(state.theme);
-    const COLORREF border  = UiMetrics::BlendColor(surface, state.theme.menu.text, state.theme.dark ? 40 : 30, 255);
+    const COLORREF border  = UiMetrics::BlendColorRefWeightedTruncate(surface, state.theme.menu.text, state.theme.dark ? 40 : 30, 255);
 
     for (const RECT& baseCard : state.pageSettingCards)
     {
@@ -1370,6 +1370,11 @@ LRESULT CALLBACK PreferencesDxCategoryHostWndProc(HWND hwnd, UINT msg, WPARAM wp
         return originalWndProc ? RedSalamander::Win32Callback::CallWindowProcNoThrow(originalWndProc, hwnd, msg, wp, lp) : DefWindowProcW(hwnd, msg, wp, lp);
     }
 
+    if (msg == WM_LBUTTONDOWN && GetFocus() != hwnd)
+    {
+        static_cast<void>(SetFocus(hwnd));
+    }
+
     bool handled           = false;
     const LRESULT dxResult = hostState._categoryTreeHost.HandleMessage(hwnd, msg, wp, lp, handled);
     if (handled)
@@ -1460,7 +1465,7 @@ void UpdateDxShellButtons(HWND dlg, PreferencesDialogHost& hostState, const Pref
 
 void ApplyDxShellTheme(PreferencesDialogHost& hostState, const AppTheme& theme) noexcept
 {
-    const ThemePalette palette = PrefsUi::MakeDxPalette(theme);
+    const ThemePalette palette = MakeAppThemeDxPalette(theme);
     hostState._shellHost.SetTheme(palette);
 }
 
@@ -1622,7 +1627,7 @@ void AttachPreferencesPageHostDxSurface(PreferencesDialogHost& hostState) noexce
         }
     }
 
-    hostState._pageHostHost.SetTheme(PrefsUi::MakeDxPalette(hostState.theme));
+    hostState._pageHostHost.SetTheme(MakeAppThemeDxPalette(hostState.theme));
     auto root               = std::make_unique<Panel>();
     auto* rawRoot           = root.get();
     auto* surface           = rawRoot->AddChild<PreferencesPageHostSurfaceControl>(&hostState);
@@ -1827,26 +1832,11 @@ void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& t
 
 [[nodiscard]] bool AreEquivalentThemeDefinition(const Common::Settings::ThemeDefinition& a, const Common::Settings::ThemeDefinition& b) noexcept
 {
-    if (a.id != b.id || a.name != b.name || a.baseThemeId != b.baseThemeId)
+    if (a.formatVersion != b.formatVersion || a.id != b.id || a.name != b.name || a.baseThemeId != b.baseThemeId || a.palette != b.palette)
     {
         return false;
     }
-
-    if (a.colors.size() != b.colors.size())
-    {
-        return false;
-    }
-
-    for (const auto& [key, value] : a.colors)
-    {
-        const auto it = b.colors.find(key);
-        if (it == b.colors.end() || it->second != value)
-        {
-            return false;
-        }
-    }
-
-    return true;
+    return a.colors == b.colors;
 }
 
 [[nodiscard]] bool AreEquivalentThemeSettings(const Common::Settings::ThemeSettings& a, const Common::Settings::ThemeSettings& b) noexcept
@@ -2502,7 +2492,7 @@ void ReloadPreferencesDialogFromDisk(HWND dlg, PreferencesDialogState& state) no
     state.staleFromExternalReload = false;
     state.baselineSettings        = *state.settings;
     state.baselineSettings.monitor.reset();
-    state.workingSettings         = *state.settings;
+    state.workingSettings = *state.settings;
     state.workingSettings.monitor.reset();
     Common::Settings::Settings monitorSettings{};
     static_cast<void>(Common::Settings::LoadSettings(kPreferencesMonitorAppId, monitorSettings));
@@ -2572,7 +2562,7 @@ void ResetAllPreferencesToDefaults(HWND dlg, PreferencesDialogState& state) noex
 #ifdef ENABLE_TESTS
     SelfTest::AppendSelfTestTrace(L"Preferences reset-all: resetting working settings");
 #endif
-    state.workingSettings = Common::Settings::Settings{};
+    state.workingSettings        = Common::Settings::Settings{};
     state.workingMonitorSettings = Common::Settings::Settings{};
 
     // Shortcuts require explicit default initialization via the factory.
@@ -2835,7 +2825,7 @@ void RefreshPreferencesDialogThemeImpl(HWND dlg, PreferencesDialogState& state) 
     // No ScopedWindowRedrawBlock — see comment in UpdatePageText.
     if (state.categoryTreeUsesDxUi)
     {
-        hostState._categoryTreeHost.SetTheme(PrefsUi::MakeDxPalette(state.theme));
+        hostState._categoryTreeHost.SetTheme(MakeAppThemeDxPalette(state.theme));
     }
     ApplyDxShellTheme(hostState, state.theme);
     UpdateDxShellButtons(dlg, hostState, state);
@@ -2850,7 +2840,7 @@ void RefreshPreferencesDialogThemeImpl(HWND dlg, PreferencesDialogState& state) 
 
     if (state.pageHostUsesDxUi)
     {
-        hostState._pageHostHost.SetTheme(PrefsUi::MakeDxPalette(state.theme));
+        hostState._pageHostHost.SetTheme(MakeAppThemeDxPalette(state.theme));
     }
 
     // Set pageHostIgnoreSize BEFORE creating pane controls so that any WM_SIZE
@@ -3785,6 +3775,7 @@ void LayoutPreferencesPageHost(HWND host, PreferencesDialogState& state) noexcep
     {
         hostState._compareDirectoriesPane.LayoutPage(host, state, x, y, width, margin, gapY, pageTypography);
         FinalizePreferencesPageHostLayout(host, state, margin, width);
+        hostState._compareDirectoriesPane.RestoreDeferredFocusAfterLayout();
         return;
     }
 
@@ -3871,6 +3862,9 @@ void UpdatePageText(HWND dlg, PreferencesDialogState& state, PrefCategory catego
     }
     state.updatingPageText = true;
     const auto clearGuard  = wil::scope_exit([&]() noexcept { state.updatingPageText = false; });
+
+    const bool restoreCategoryTreeFocus =
+        state.categoryTreeWindow && IsWindow(state.categoryTreeWindow) != FALSE && GetFocus() == state.categoryTreeWindow;
 
     const PrefCategory previousCategory = state.currentCategory;
     const bool categoryChanged          = previousCategory != category;
@@ -4015,10 +4009,27 @@ void UpdatePageText(HWND dlg, PreferencesDialogState& state, PrefCategory catego
         LogPreferencesPageHostState(state.pageHostWindow, state, L"page-switch");
     }
 
-    // Force a single synchronous repaint of the dialog and all children.
-    // All intermediate InvalidateRect calls during the update phase are
-    // coalesced into this one paint pass — no intermediate frames.
-    RedrawWindow(dlg, nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_UPDATENOW);
+    // Repaint only the surfaces whose page content changed. Redrawing every
+    // child also repaints the category tree after its input/selection paint,
+    // creating an unrelated fourth frame for a single category transition.
+    RedrawWindow(dlg, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW);
+    if (hostState._shellHostHwnd && IsWindow(hostState._shellHostHwnd) != FALSE)
+    {
+        RedrawWindow(hostState._shellHostHwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW);
+    }
+    if (state.pageHostWindow && IsWindow(state.pageHostWindow) != FALSE)
+    {
+        RedrawWindow(state.pageHostWindow, nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_UPDATENOW);
+    }
+
+    if (restoreCategoryTreeFocus && state.categoryTreeWindow && IsWindow(state.categoryTreeWindow) != FALSE)
+    {
+        static_cast<void>(SetFocus(state.categoryTreeWindow));
+        if (PostMessageW(dlg, WndMsg::kPreferencesRestoreCategoryTreeFocus, 0, 0) == FALSE)
+        {
+            Debug::Warning(L"Preferences: failed to queue deferred category-tree focus restoration");
+        }
+    }
 }
 
 void PopulateCategoryTree(HWND dlg, PreferencesDialogState& state) noexcept
@@ -4076,7 +4087,7 @@ void PopulateCategoryTree(HWND dlg, PreferencesDialogState& state) noexcept
 
     hostState._categoryTreeDelegate.Attach(dlg, &state, &hostState._categoryTreeModel, hostState._categoryTreeControl);
     hostState._categoryTreeModel.Rebuild();
-    hostState._categoryTreeHost.SetTheme(PrefsUi::MakeDxPalette(state.theme));
+    hostState._categoryTreeHost.SetTheme(MakeAppThemeDxPalette(state.theme));
     hostState._categoryTreeHost.SetOnTabBoundary([dlg, categoryHost = state.categoryTreeWindow, hostStatePtr = &hostState](const bool reverse) noexcept
     {
         if (! dlg || IsWindow(dlg) == FALSE || ! categoryHost || IsWindow(categoryHost) == FALSE)
@@ -4134,6 +4145,7 @@ void SelectCategory(HWND dlg, PreferencesDialogState& state, PrefCategory catego
     state.initialCategory = category;
     state.pluginsSelectedPlugin.reset();
     state.pluginsSelectedPluginId.clear();
+    state.pluginsRetainedSelectedPluginId.clear();
     state.pluginsDetailsActive = false;
 
     if (! dlg || ! state.categoryTreeWindow)
@@ -4829,9 +4841,9 @@ INT_PTR OnInitDialog(HWND dlg, PreferencesDialogState* state)
     state->backgroundBrush.reset(CreateSolidBrush(state->theme.windowBackground));
     state->cardBackgroundColor = UiMetrics::GetControlSurfaceColor(state->theme);
 
-    state->inputBackgroundColor         = UiMetrics::BlendColor(state->cardBackgroundColor, state->theme.windowBackground, state->theme.dark ? 50 : 30, 255);
-    state->inputFocusedBackgroundColor  = UiMetrics::BlendColor(state->inputBackgroundColor, state->theme.menu.text, state->theme.dark ? 20 : 16, 255);
-    state->inputDisabledBackgroundColor = UiMetrics::BlendColor(state->theme.windowBackground, state->inputBackgroundColor, state->theme.dark ? 70 : 40, 255);
+    state->inputBackgroundColor         = UiMetrics::BlendColorRefWeightedTruncate(state->cardBackgroundColor, state->theme.windowBackground, state->theme.dark ? 50 : 30, 255);
+    state->inputFocusedBackgroundColor  = UiMetrics::BlendColorRefWeightedTruncate(state->inputBackgroundColor, state->theme.menu.text, state->theme.dark ? 20 : 16, 255);
+    state->inputDisabledBackgroundColor = UiMetrics::BlendColorRefWeightedTruncate(state->theme.windowBackground, state->inputBackgroundColor, state->theme.dark ? 70 : 40, 255);
     state->cardBrush.reset();
     state->inputBrush.reset();
     state->inputFocusedBrush.reset();
@@ -4849,6 +4861,7 @@ INT_PTR OnInitDialog(HWND dlg, PreferencesDialogState* state)
     {
         state->minTrackSizePx.cx = std::max(0l, initial.right - initial.left);
         state->minTrackSizePx.cy = std::max(0l, initial.bottom - initial.top);
+        state->restoreMinSizePx  = state->minTrackSizePx;
 
         HWND ok     = GetDlgItem(dlg, IDOK);
         HWND cancel = GetDlgItem(dlg, IDCANCEL);
@@ -4937,6 +4950,7 @@ INT_PTR OnInitDialog(HWND dlg, PreferencesDialogState* state)
                 const int newH = std::max(0l, wr.bottom - wr.top) + chromeExtraPx;
                 SetWindowPos(dlg, nullptr, 0, 0, wr.right - wr.left, newH, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
                 state->minTrackSizePx.cy += chromeExtraPx;
+                state->restoreMinSizePx.cy += chromeExtraPx;
             }
         }
     }
@@ -5038,14 +5052,16 @@ enum class PreferencesSettingsFileTarget : uint8_t
     return target == PreferencesSettingsFileTarget::Monitor ? kPreferencesMonitorAppId : std::wstring_view{state.appId};
 }
 
-[[nodiscard]] const Common::Settings::Settings& GetPreferencesSettingsFileSourceSettings(
-    const PreferencesDialogState& state, const PreferencesSettingsFileTarget target) noexcept
+[[nodiscard]] const Common::Settings::Settings& GetPreferencesSettingsFileSourceSettings(const PreferencesDialogState& state,
+                                                                                         const PreferencesSettingsFileTarget target) noexcept
 {
     return target == PreferencesSettingsFileTarget::Monitor ? state.monitorBaselineSettings : state.baselineSettings;
 }
 
-[[nodiscard]] HRESULT OpenPreferencesSettingsFile(
-    HWND owner, const PreferencesDialogState& state, const PreferencesSettingsFileTarget target, std::filesystem::path& outPath) noexcept
+[[nodiscard]] HRESULT OpenPreferencesSettingsFile(HWND owner,
+                                                  const PreferencesDialogState& state,
+                                                  const PreferencesSettingsFileTarget target,
+                                                  std::filesystem::path& outPath) noexcept
 {
     outPath.clear();
 
@@ -5104,7 +5120,7 @@ enum class PreferencesSettingsFileTarget : uint8_t
     }
 #endif
 
-    const HINSTANCE result = ShellExecuteW(owner, L"open", outPath.c_str(), nullptr, parent.c_str(), SW_SHOWNORMAL);
+    const HINSTANCE result   = ShellExecuteW(owner, L"open", outPath.c_str(), nullptr, parent.c_str(), SW_SHOWNORMAL);
     const INT_PTR resultCode = reinterpret_cast<INT_PTR>(result);
     if (resultCode > 32)
     {
@@ -5258,6 +5274,18 @@ INT_PTR CALLBACK PreferencesDialogProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
                 return state ? (HandleDeferredPaneAction(dlg, *state, std::move(*payload)) ? TRUE : FALSE) : FALSE;
             }
             return FALSE;
+        case WndMsg::kPreferencesRestoreCategoryTreeFocus:
+            if (state && GetActiveWindow() == dlg && state->categoryTreeWindow && IsWindow(state->categoryTreeWindow) != FALSE)
+            {
+                const HWND focus = GetFocus();
+                const bool pageHostOwnsFocus =
+                    state->pageHostWindow && (focus == state->pageHostWindow || (focus && IsChild(state->pageHostWindow, focus) != FALSE));
+                if (! focus || pageHostOwnsFocus)
+                {
+                    static_cast<void>(SetFocus(state->categoryTreeWindow));
+                }
+            }
+            return TRUE;
         case WM_ERASEBKGND:
             if (state && state->backgroundBrush && wp)
             {
@@ -5549,11 +5577,11 @@ void RefreshPreferencesDialogTheme(HWND dlg, PreferencesDialogState& state) noex
         effectiveOwner = nullptr;
     }
 
-    state->owner           = effectiveOwner;
-    state->settings        = &settings;
-    state->appId           = std::wstring(appId);
-    state->theme           = theme;
-    state->initialCategory = initialCategory;
+    state->owner                                                                     = effectiveOwner;
+    state->settings                                                                  = &settings;
+    state->appId                                                                     = std::wstring(appId);
+    state->theme                                                                     = theme;
+    state->initialCategory                                                           = initialCategory;
     const std::optional<Common::Settings::MonitorSettings> legacyMainMonitorSettings = settings.monitor;
 
     if (! EnsurePrefsPageHostClassRegistered())
@@ -5595,6 +5623,21 @@ void RefreshPreferencesDialogTheme(HWND dlg, PreferencesDialogState& state) noex
     g_preferencesDialog.reset(dlg);
     static_cast<void>(statePtr.release());
     const int showCmd = WindowPlacementPersistence::Restore(settings, kPreferencesWindowId, dlg);
+    if (showCmd != SW_MAXIMIZE && state->restoreMinSizePx.cx > 0 && state->restoreMinSizePx.cy > 0)
+    {
+        RECT restored{};
+        if (GetWindowRect(dlg, &restored))
+        {
+            const int restoredWidth  = std::max(0l, restored.right - restored.left);
+            const int restoredHeight = std::max(0l, restored.bottom - restored.top);
+            const int clampedWidth   = std::max(restoredWidth, static_cast<int>(state->minTrackSizePx.cx));
+            const int clampedHeight  = std::max(restoredHeight, static_cast<int>(state->restoreMinSizePx.cy));
+            if (clampedWidth != restoredWidth || clampedHeight != restoredHeight)
+            {
+                SetWindowPos(dlg, nullptr, restored.left, restored.top, clampedWidth, clampedHeight, SWP_NOZORDER | SWP_NOACTIVATE);
+            }
+        }
+    }
     static_cast<void>(ShowWindow(dlg, showCmd));
     static_cast<void>(SetForegroundWindow(dlg));
     return true;
@@ -5683,7 +5726,29 @@ bool PreferencesDialog::DebugGetSnapshot(::PreferencesDebugSnapshot& out) noexce
             }
         }
     }
-    out.categoryTreeFocused        = state->categoryTreeWindow && GetFocus() == state->categoryTreeWindow;
+    const HWND nativeFocus         = GetFocus();
+    out.categoryTreeFocused        = state->categoryTreeWindow && nativeFocus == state->categoryTreeWindow;
+    out.nativeFocusWindow          = reinterpret_cast<UINT_PTR>(nativeFocus);
+    out.nativeFocusControlId       = nativeFocus ? GetDlgCtrlID(nativeFocus) : 0;
+    out.nativeFocusWithinPageHost  = nativeFocus && state->pageHostWindow &&
+                                    (nativeFocus == state->pageHostWindow || IsChild(state->pageHostWindow, nativeFocus) != FALSE);
+    out.activeWindow               = reinterpret_cast<UINT_PTR>(GetActiveWindow());
+    const HWND foregroundWindow    = GetForegroundWindow();
+    out.foregroundWindow           = reinterpret_cast<UINT_PTR>(foregroundWindow);
+    if (foregroundWindow)
+    {
+        DWORD foregroundProcessId = 0u;
+        static_cast<void>(GetWindowThreadProcessId(foregroundWindow, &foregroundProcessId));
+        out.foregroundProcessId = foregroundProcessId;
+    }
+    if (nativeFocus)
+    {
+        std::array<wchar_t, 128> className{};
+        if (GetClassNameW(nativeFocus, className.data(), static_cast<int>(className.size())) > 0)
+        {
+            out.nativeFocusClassName.assign(className.data());
+        }
+    }
     out.pluginItemSelected         = state->pluginsSelectedPlugin.has_value();
     out.pluginsDetailsActive       = state->pluginsDetailsActive;
     out.currentCategory            = state->currentCategory;
@@ -5816,7 +5881,7 @@ bool PreferencesDialog::DebugGetSnapshot(::PreferencesDebugSnapshot& out) noexce
             };
 
             const auto colorComponent = [](const float value) noexcept { return static_cast<uint8_t>(std::clamp(std::lround(value * 255.0f), 0l, 255l)); };
-            const ThemePalette expectedPalette   = PrefsUi::MakeDxPalette(state->theme);
+            const ThemePalette expectedPalette   = MakeAppThemeDxPalette(state->theme);
             const uint8_t expectedB              = colorComponent(expectedPalette.windowBackground.b);
             const uint8_t expectedG              = colorComponent(expectedPalette.windowBackground.g);
             const uint8_t expectedR              = colorComponent(expectedPalette.windowBackground.r);
@@ -5843,9 +5908,7 @@ bool PreferencesDialog::DebugGetSnapshot(::PreferencesDebugSnapshot& out) noexce
 
             if (out.shellHostClientWidthPx > 0 && out.shellOkButtonBoundsPx.bottom > out.shellOkButtonBoundsPx.top)
             {
-                const std::array buttonRects{out.shellOkButtonBoundsPx,
-                                             out.shellCancelButtonBoundsPx,
-                                             out.shellApplyButtonBoundsPx};
+                const std::array buttonRects{out.shellOkButtonBoundsPx, out.shellCancelButtonBoundsPx, out.shellApplyButtonBoundsPx};
                 const auto insideAnyButton = [&](const int x, const int y) noexcept
                 {
                     for (const RECT& rect : buttonRects)
@@ -5862,9 +5925,10 @@ bool PreferencesDialog::DebugGetSnapshot(::PreferencesDebugSnapshot& out) noexce
                 int sampleX       = out.shellHostClientWidthPx / 2;
                 if (insideAnyButton(sampleX, sampleY))
                 {
-                    sampleX = -1;
+                    sampleX                                      = -1;
                     constexpr int kFooterBackgroundSamplePadding = 8;
-                    for (int candidateX = kFooterBackgroundSamplePadding; candidateX < out.shellHostClientWidthPx - kFooterBackgroundSamplePadding; ++candidateX)
+                    for (int candidateX = kFooterBackgroundSamplePadding; candidateX < out.shellHostClientWidthPx - kFooterBackgroundSamplePadding;
+                         ++candidateX)
                     {
                         if (! insideAnyButton(candidateX, sampleY))
                         {
@@ -5915,7 +5979,10 @@ bool PreferencesDialog::DebugGetSnapshot(::PreferencesDebugSnapshot& out) noexce
     {
         const auto& hostState                   = static_cast<const PreferencesDialogHost&>(*state);
         out.categoryTreeDxHostRenderCount       = GetDxHostDebugRenderCount(hostState._categoryTreeHost);
+        out.categoryTreeDxHostInvalidateCount   = hostState._categoryTreeHost.DebugGetInvalidateCount();
         out.categoryTreeDxHostHasResizeFailures = GetDxHostDebugResizeFailureCount(hostState._categoryTreeHost) != 0u;
+        out.categoryTreeDxHostFocusControlActive =
+            hostState._categoryTreeControl && hostState._categoryTreeHost.GetFocusControl() == hostState._categoryTreeControl;
         if (hostState._categoryTreeControl)
         {
             const auto treeScrollbarState        = hostState._categoryTreeControl->DebugGetScrollbarVisualState(hostState._categoryTreeHost.GetTheme());
@@ -5994,38 +6061,40 @@ bool PreferencesDialog::DebugGetSnapshot(::PreferencesDebugSnapshot& out) noexce
             }
             out.currentPageRenderedDxHostCount = out.currentPageDxHostRenderCountTotal != 0u ? 1u : 0u;
         }
-        out.pluginsExpanded                   = hostState._categoryTreeModel.IsPluginsExpanded();
-        out.pluginsTreeChildCount             = hostState._categoryTreeModel.GetPluginItemCount();
-        out.themesListRowCount                = hostState._themesPane.DebugListRowCount();
-        const auto themesListMetrics          = hostState._themesPane.DebugListVisibleWorkMetrics();
-        out.themesListVisibleRowCount         = static_cast<size_t>(themesListMetrics.visibleRowCount);
-        out.themesListVisibleColumnCount      = static_cast<size_t>(themesListMetrics.visibleColumnCount);
-        out.themesListVisibleCellCount        = static_cast<size_t>(themesListMetrics.visibleCellCount);
-        out.themesListHasVerticalScrollbar    = themesListMetrics.hasVerticalScrollbar;
-        out.themesListVerticalScrollDip       = themesListMetrics.verticalScrollDip;
-        out.themesListRenderCount             = hostState._themesPane.DebugListRenderCount();
-        out.themesListResizeCount             = hostState._themesPane.DebugListResizeCount();
-        out.themesListResizeFailureCount      = hostState._themesPane.DebugListResizeFailureCount();
-        out.themesSearchText                  = state->themesSearchText;
-        out.themesSelectedThemeIdText         = state->workingSettings.theme.currentThemeId;
-        out.themesSelectedColorKeyText        = state->themesSelectedColorKey;
-        out.themesColorText                   = state->themesColorText;
-        out.themesSelectedColorOverrideActive = false;
-        out.generalFocusTarget                = hostState._generalPane.DebugGetFocusTarget();
-        out.generalUsesDxUiTypographyContext  = hostState._generalPane.DebugUsesDxUiTypographyContext();
-        out.generalUsesDxUiTypographyMetrics  = hostState._generalPane.DebugUsesDxUiTypographyMetrics();
-        out.panesFocusTarget                  = hostState._panesPane.DebugGetFocusTarget();
-        out.panesUsesDxUiTypographyContext    = hostState._panesPane.DebugUsesDxUiTypographyContext();
-        out.panesUsesDxUiTypographyMetrics    = hostState._panesPane.DebugUsesDxUiTypographyMetrics();
-        out.viewersUsesDxUiTypographyContext  = hostState._viewersPane.DebugUsesDxUiTypographyContext();
-        out.viewersUsesDxUiTypographyMetrics  = hostState._viewersPane.DebugUsesDxUiTypographyMetrics();
-        out.hotPathsFocusTarget               = hostState._hotPathsPane.DebugGetFocusTarget();
-        out.advancedFocusTarget               = hostState._advancedPane.DebugGetFocusTarget();
-        out.monitorFocusTarget                = hostState._monitorPane.DebugGetFocusTarget();
-        out.monitorSettingsFileCardLast       = hostState._monitorPane.DebugSettingsFileCardIsLast();
-        out.fileOperationsFocusTarget         = hostState._fileOperationsPane.DebugGetFocusTarget();
-        out.compareDirectoriesFocusTarget     = hostState._compareDirectoriesPane.DebugGetFocusTarget();
-        out.themesFocusTarget                 = hostState._themesPane.DebugGetFocusTarget();
+        out.pluginsExpanded                             = hostState._categoryTreeModel.IsPluginsExpanded();
+        out.pluginsTreeChildCount                       = hostState._categoryTreeModel.GetPluginItemCount();
+        out.themesListRowCount                          = hostState._themesPane.DebugListRowCount();
+        const auto themesListMetrics                    = hostState._themesPane.DebugListVisibleWorkMetrics();
+        out.themesListVisibleRowCount                   = static_cast<size_t>(themesListMetrics.visibleRowCount);
+        out.themesListVisibleColumnCount                = static_cast<size_t>(themesListMetrics.visibleColumnCount);
+        out.themesListVisibleCellCount                  = static_cast<size_t>(themesListMetrics.visibleCellCount);
+        out.themesListHasVerticalScrollbar              = themesListMetrics.hasVerticalScrollbar;
+        out.themesListVerticalScrollDip                 = themesListMetrics.verticalScrollDip;
+        out.themesListRenderCount                       = hostState._themesPane.DebugListRenderCount();
+        out.themesListResizeCount                       = hostState._themesPane.DebugListResizeCount();
+        out.themesListResizeFailureCount                = hostState._themesPane.DebugListResizeFailureCount();
+        out.themesSearchText                            = state->themesSearchText;
+        out.themesSelectedThemeIdText                   = state->workingSettings.theme.currentThemeId;
+        out.themesSelectedColorKeyText                  = state->themesSelectedColorKey;
+        out.themesColorText                             = state->themesColorText;
+        out.themesSelectedColorOverrideActive           = false;
+        out.generalFocusTarget                          = hostState._generalPane.DebugGetFocusTarget();
+        out.generalUsesDxUiTypographyContext            = hostState._generalPane.DebugUsesDxUiTypographyContext();
+        out.generalUsesDxUiTypographyMetrics            = hostState._generalPane.DebugUsesDxUiTypographyMetrics();
+        out.panesFocusTarget                            = hostState._panesPane.DebugGetFocusTarget();
+        out.panesUsesDxUiTypographyContext              = hostState._panesPane.DebugUsesDxUiTypographyContext();
+        out.panesUsesDxUiTypographyMetrics              = hostState._panesPane.DebugUsesDxUiTypographyMetrics();
+        out.viewersUsesDxUiTypographyContext            = hostState._viewersPane.DebugUsesDxUiTypographyContext();
+        out.viewersUsesDxUiTypographyMetrics            = hostState._viewersPane.DebugUsesDxUiTypographyMetrics();
+        out.hotPathsFocusTarget                         = hostState._hotPathsPane.DebugGetFocusTarget();
+        hostState._hotPathsPane.DebugPopulateSnapshot(out);
+        out.advancedFocusTarget                         = hostState._advancedPane.DebugGetFocusTarget();
+        out.monitorFocusTarget                          = hostState._monitorPane.DebugGetFocusTarget();
+        out.monitorSettingsFileCardLast                 = hostState._monitorPane.DebugSettingsFileCardIsLast();
+        out.fileOperationsFocusTarget                   = hostState._fileOperationsPane.DebugGetFocusTarget();
+        out.compareDirectoriesFocusTarget               = hostState._compareDirectoriesPane.DebugGetFocusTarget();
+        out.compareDirectoriesVisibleSectionHeaderCount = hostState._compareDirectoriesPane.DebugVisibleSectionHeaderCount();
+        out.themesFocusTarget                           = hostState._themesPane.DebugGetFocusTarget();
         if (const auto* focusControl = hostState._shellHost.GetFocusControl(); focusControl != nullptr)
         {
             if (focusControl == hostState._resetAllButtonControl)
@@ -6045,7 +6114,7 @@ bool PreferencesDialog::DebugGetSnapshot(::PreferencesDebugSnapshot& out) noexce
                 out.shellFocusTarget = PreferencesShellDebugFocusTarget::ApplyButton;
             }
         }
-        const ThemePalette palette = PrefsUi::MakeDxPalette(state->theme);
+        const ThemePalette palette = MakeAppThemeDxPalette(state->theme);
         out.previewApplied         = state->previewApplied;
         out.themeDark              = state->theme.dark;
         out.themeHighContrast      = state->theme.highContrast;
@@ -6229,10 +6298,47 @@ bool PreferencesDialog::DebugSelectCategory(const PrefCategory category) noexcep
         return false;
     }
 
-    SelectCategory(dlg, *state, category);
+    if (state->categoryTreeUsesDxUi)
+    {
+        auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+        if (! hostState._categoryTreeControl)
+        {
+            return false;
+        }
 
+        state->initialCategory = category;
+        const uint64_t targetItemId =
+            PreferencesDialogHost::PreferencesCategoryTreeModel::EncodeCategoryNodeId(category);
+        const size_t visibleItemCount = hostState._categoryTreeModel.GetVisibleItemCount();
+        for (size_t visibleIndex = 0u; visibleIndex < visibleItemCount; ++visibleIndex)
+        {
+            TreeItemData item{};
+            hostState._categoryTreeModel.GetVisibleItem(visibleIndex, item);
+            if (item.id != targetItemId)
+            {
+                continue;
+            }
+
+            if (! hostState._categoryTreeControl->RequestSelectVisibleItem(visibleIndex))
+            {
+                return false;
+            }
+
+            PreferencesDebugSnapshot snapshot{};
+            return DebugGetSnapshot(snapshot) && snapshot.currentCategory == category && ! snapshot.pluginItemSelected;
+        }
+
+        return false;
+    }
+
+    SelectCategory(dlg, *state, category);
     PreferencesDebugSnapshot snapshot{};
-    return DebugGetSnapshot(snapshot) && snapshot.currentCategory == category;
+    if (DebugGetSnapshot(snapshot) && snapshot.currentCategory == category)
+    {
+        return true;
+    }
+
+    return state->currentCategory == category;
 }
 
 bool PreferencesDialog::DebugSelectPluginsTreeChild(const size_t childIndex) noexcept
@@ -6288,6 +6394,63 @@ bool PreferencesDialog::DebugSelectPluginsTreeChild(const size_t childIndex) noe
     }
 
     return false;
+}
+
+bool PreferencesDialog::DebugFocusCategoryTree() noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg || IsWindow(dlg) == FALSE)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state || ! state->categoryTreeUsesDxUi || ! state->categoryTreeWindow || IsWindow(state->categoryTreeWindow) == FALSE)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    if (! hostState._categoryTreeControl)
+    {
+        return false;
+    }
+
+    hostState._categoryTreeHost.ResetInteractionState();
+    hostState._categoryTreeHost.SetFocusControl(hostState._categoryTreeControl);
+    return GetFocus() == state->categoryTreeWindow && hostState._categoryTreeHost.GetFocusControl() == hostState._categoryTreeControl;
+}
+
+bool PreferencesDialog::DebugSendCategoryTreeKey(const UINT virtualKey) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg || IsWindow(dlg) == FALSE)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state || ! state->categoryTreeUsesDxUi || ! state->categoryTreeWindow || IsWindow(state->categoryTreeWindow) == FALSE)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    if (! hostState._categoryTreeControl || ! DebugFocusCategoryTree())
+    {
+        return false;
+    }
+
+    const UINT scanCode = MapVirtualKeyW(virtualKey, MAPVK_VK_TO_VSC_EX);
+    LPARAM keyDownLParam = static_cast<LPARAM>(1u | ((scanCode & 0xFFu) << 16u));
+    if ((scanCode & 0xFF00u) != 0u)
+    {
+        keyDownLParam |= static_cast<LPARAM>(1ull << 24u);
+    }
+    const LPARAM keyUpLParam = keyDownLParam | static_cast<LPARAM>(1ull << 30u) | static_cast<LPARAM>(1ull << 31u);
+    static_cast<void>(SendMessageW(state->categoryTreeWindow, WM_KEYDOWN, virtualKey, keyDownLParam));
+    static_cast<void>(SendMessageW(state->categoryTreeWindow, WM_KEYUP, virtualKey, keyUpLParam));
+    return true;
 }
 
 namespace

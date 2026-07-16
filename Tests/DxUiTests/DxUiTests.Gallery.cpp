@@ -58,8 +58,14 @@ void ResizeClientArea(HWND hwnd, UINT widthPx, UINT heightPx);
 
 [[nodiscard]] uint32_t ResolveColor(const Common::Settings::ThemeDefinition& theme, std::wstring_view key, uint32_t fallback)
 {
-    const auto it = theme.colors.find(std::wstring(key));
-    return it == theme.colors.end() ? fallback : it->second;
+    auto context = Common::Settings::MakeSystemThemeResolutionContext(theme.baseThemeId == L"builtin/dark");
+    Common::Settings::ResolvedThemeColors resolved;
+    if (FAILED(Common::Settings::ResolveThemeDefinition(theme, context, resolved)))
+    {
+        return fallback;
+    }
+    const auto it = resolved.colors.find(std::wstring(key));
+    return it == resolved.colors.end() ? fallback : it->second;
 }
 
 [[nodiscard]] bool IsDarkArgb(uint32_t argb) noexcept
@@ -155,7 +161,8 @@ void ApplyCustomThemePaletteOverrides(ThemePalette& palette, const Common::Setti
     const uint32_t selectFg = ResolveColor(theme, L"menu.selectionText", PackArgbForGallery(base.selectionText));
     const uint32_t accent   = ResolveColor(theme, L"app.accent", PackArgbForGallery(base.accent));
 
-    ThemePalette palette = MakeViewerBackedPalette(bgArgb, textArgb, selectBg, selectFg, accent, dark, false, false);
+    const bool rainbowBase = theme.baseThemeId == L"builtin/rainbow";
+    ThemePalette palette   = MakeViewerBackedPalette(bgArgb, textArgb, selectBg, selectFg, accent, dark, false, rainbowBase);
     ApplyCustomThemePaletteOverrides(palette, theme);
     palette.reducedMotion = true;
     return palette;
@@ -164,6 +171,7 @@ void ApplyCustomThemePaletteOverrides(ThemePalette& palette, const Common::Setti
 struct GalleryTheme
 {
     std::wstring name;
+    std::wstring slug;
     ThemePalette palette;
 };
 
@@ -174,14 +182,37 @@ struct GalleryTheme
     return palette;
 }
 
+[[nodiscard]] ThemePalette MakeRainbowGalleryPalette(bool dark, std::wstring_view seed)
+{
+    const uint32_t hash       = StableHash32(seed);
+    const float hue           = static_cast<float>(hash % 360u);
+    const D2D1::ColorF accent = ColorFromHSV(hue, 0.85f, dark ? 0.80f : 0.90f, 1.0f);
+
+    AppTheme appTheme               = ResolveAppTheme(dark ? ThemeMode::Dark : ThemeMode::Light, seed, accent);
+    appTheme.requestedMode          = ThemeMode::Rainbow;
+    appTheme.folderView.rainbowMode = true;
+    appTheme.folderView.darkBase    = dark;
+    appTheme.folderView.itemBackgroundSelectedUsesInheritedRainbow = true;
+    appTheme.navigationView.rainbowMode = true;
+    appTheme.navigationView.darkBase    = dark;
+    appTheme.menu.rainbowMode            = true;
+    appTheme.menu.darkBase               = dark;
+
+    ThemePalette palette  = MakeAppThemeDxPalette(appTheme);
+    palette.reducedMotion = true;
+    return palette;
+}
+
 [[nodiscard]] std::vector<GalleryTheme> BuildGalleryThemes()
 {
     std::vector<GalleryTheme> themes;
 
-    themes.push_back(GalleryTheme{.name = L"Light", .palette = MakeBuiltInGalleryPalette(ThemeMode::Light, L"dxui-gallery-light")});
-    themes.push_back(GalleryTheme{.name = L"Dark", .palette = MakeBuiltInGalleryPalette(ThemeMode::Dark, L"dxui-gallery-dark")});
-    themes.push_back(GalleryTheme{.name = L"Rainbow", .palette = MakeBuiltInGalleryPalette(ThemeMode::Rainbow, L"dxui-gallery-rainbow")});
-    themes.push_back(GalleryTheme{.name = L"High Contrast", .palette = MakeBuiltInGalleryPalette(ThemeMode::HighContrast, L"dxui-gallery-high-contrast")});
+    themes.push_back(GalleryTheme{.name = L"Light", .slug = L"light", .palette = MakeBuiltInGalleryPalette(ThemeMode::Light, L"dxui-gallery-light")});
+    themes.push_back(GalleryTheme{.name = L"Dark", .slug = L"dark", .palette = MakeBuiltInGalleryPalette(ThemeMode::Dark, L"dxui-gallery-dark")});
+    themes.push_back(GalleryTheme{.name = L"Rainbow (Light)", .slug = L"rainbow-light", .palette = MakeRainbowGalleryPalette(false, L"dxui-gallery-rainbow")});
+    themes.push_back(GalleryTheme{.name = L"Rainbow (Dark)", .slug = L"rainbow-dark", .palette = MakeRainbowGalleryPalette(true, L"dxui-gallery-rainbow")});
+    themes.push_back(GalleryTheme{
+        .name = L"High Contrast", .slug = L"high-contrast", .palette = MakeBuiltInGalleryPalette(ThemeMode::HighContrast, L"dxui-gallery-high-contrast")});
 
     std::vector<Common::Settings::ThemeDefinition> customThemes;
     const std::filesystem::path themeDirectory = FindRepoRootForDxUiTests() / L"Specs" / L"Themes";
@@ -190,7 +221,13 @@ struct GalleryTheme
 
     for (const auto& theme : customThemes)
     {
-        themes.push_back(GalleryTheme{.name = theme.name, .palette = MakeCustomThemePalette(theme)});
+        std::wstring slug = theme.id;
+        constexpr std::wstring_view kUserPrefix = L"user/";
+        if (slug.starts_with(kUserPrefix))
+        {
+            slug.erase(0u, kUserPrefix.size());
+        }
+        themes.push_back(GalleryTheme{.name = theme.name, .slug = std::move(slug), .palette = MakeCustomThemePalette(theme)});
     }
 
     return themes;
@@ -1311,7 +1348,7 @@ void ResizeClientArea(HWND hwnd, UINT widthPx, UINT heightPx)
                                                                const GalleryTheme& theme,
                                                                std::unordered_map<std::wstring, size_t>& slugCounts)
 {
-    const std::wstring slug = MakeThemeGalleryFileSlug(theme.name);
+    const std::wstring slug = MakeThemeGalleryFileSlug(theme.slug.empty() ? std::wstring_view(theme.name) : std::wstring_view(theme.slug));
     const size_t count      = ++slugCounts[slug];
 
     std::wstring fileName = L"theme-controls-" + slug;

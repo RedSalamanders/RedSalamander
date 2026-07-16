@@ -1,10 +1,14 @@
 #pragma once
 
+#include "StringConversion.h"
+
 #include <algorithm>
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <condition_variable>
+#include <concepts>
 #include <cstdint>
 #include <cstring>
 #include <cwctype>
@@ -14,6 +18,7 @@
 #include <limits>
 #include <locale>
 #include <mutex>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -26,7 +31,10 @@
 #include "Win32CallbackHelpers.h"
 #include <windows.h>
 
+#include <bcrypt.h>
 #include <evntrace.h>
+
+#pragma comment(lib, "bcrypt.lib")
 
 #pragma warning(push)
 // WIL and TraceLogging: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted),
@@ -86,6 +94,319 @@ namespace LocaleFormatting
 inline void InvalidateFormatLocaleCache() noexcept;
 inline const std::locale& GetFormatLocale() noexcept;
 } // namespace LocaleFormatting
+
+namespace Common::Colors
+{
+// Drops the packed ARGB alpha channel and converts the remaining RGB bytes to Win32 COLORREF order.
+[[nodiscard]] inline COLORREF ColorRefFromArgb(uint32_t argb) noexcept
+{
+    return RGB(static_cast<BYTE>((argb >> 16u) & 0xFFu),
+               static_cast<BYTE>((argb >> 8u) & 0xFFu),
+               static_cast<BYTE>(argb & 0xFFu));
+}
+
+// Interpolates COLORREF channels with an explicit integer denominator. Invalid denominators preserve
+// the base color, the overlay weight clamps to the denominator, and division intentionally truncates.
+[[nodiscard]] inline COLORREF BlendColorRefWeightedTruncate(COLORREF base, COLORREF overlay, int overlayWeight, int denominator) noexcept
+{
+    if (denominator <= 0)
+    {
+        return base;
+    }
+
+    overlayWeight       = std::clamp(overlayWeight, 0, denominator);
+    const int baseWeight = denominator - overlayWeight;
+    const auto channel = [baseWeight, overlayWeight, denominator](BYTE baseChannel, BYTE overlayChannel) noexcept
+    {
+        return static_cast<BYTE>((static_cast<int>(baseChannel) * baseWeight + static_cast<int>(overlayChannel) * overlayWeight) / denominator);
+    };
+
+    return RGB(channel(GetRValue(base), GetRValue(overlay)),
+               channel(GetGValue(base), GetGValue(overlay)),
+               channel(GetBValue(base), GetBValue(overlay)));
+}
+
+// Convenience form for the repeated 8-bit overlay-alpha policy.
+[[nodiscard]] inline COLORREF BlendColorRefTruncate(COLORREF under, COLORREF over, uint8_t overlayAlpha) noexcept
+{
+    return BlendColorRefWeightedTruncate(under, over, overlayAlpha, 255);
+}
+
+// Version 1 hashes each UTF-16 code unit as one FNV-1a input value. This is intentionally different
+// from byte-wise UTF-16 hashing used by persisted AppTheme identities.
+[[nodiscard]] inline uint32_t StableVisualHash32Utf16V1(std::wstring_view text) noexcept
+{
+    uint32_t hash = 2166136261u;
+    for (const wchar_t codeUnit : text)
+    {
+        hash ^= static_cast<uint32_t>(codeUnit);
+        hash *= 16777619u;
+    }
+    return hash;
+}
+
+namespace Detail
+{
+[[nodiscard]] inline COLORREF ColorRefFromNormalizedHsv(float hueDegrees, float saturation, float value) noexcept
+{
+    const float chroma = value * saturation;
+    const float x      = chroma * (1.0f - std::fabs(std::fmod(hueDegrees / 60.0f, 2.0f) - 1.0f));
+    const float m      = value - chroma;
+
+    float red   = 0.0f;
+    float green = 0.0f;
+    float blue  = 0.0f;
+    if (hueDegrees < 60.0f)
+    {
+        red = chroma;
+        green = x;
+    }
+    else if (hueDegrees < 120.0f)
+    {
+        red = x;
+        green = chroma;
+    }
+    else if (hueDegrees < 180.0f)
+    {
+        green = chroma;
+        blue = x;
+    }
+    else if (hueDegrees < 240.0f)
+    {
+        green = x;
+        blue = chroma;
+    }
+    else if (hueDegrees < 300.0f)
+    {
+        red = x;
+        blue = chroma;
+    }
+    else
+    {
+        red = chroma;
+        blue = x;
+    }
+
+    const auto toByte = [](float channel) noexcept
+    {
+        return static_cast<BYTE>(std::lround(std::clamp(channel * 255.0f, 0.0f, 255.0f)));
+    };
+    return RGB(toByte(red + m), toByte(green + m), toByte(blue + m));
+}
+} // namespace Detail
+
+// Matches the majority viewer policy: negative hue clamps to red, hue wraps above 360 degrees,
+// and saturation/value clamp to [0, 1].
+[[nodiscard]] inline COLORREF ColorRefFromHsvClampedNegativeHueToZero(float hueDegrees, float saturation, float value) noexcept
+{
+    const float normalizedHue = std::fmod(std::max(0.0f, hueDegrees), 360.0f);
+    return Detail::ColorRefFromNormalizedHsv(normalizedHue, std::clamp(saturation, 0.0f, 1.0f), std::clamp(value, 0.0f, 1.0f));
+}
+
+// Matches ViewerWeb's browser-style hue policy: negative hue wraps around the wheel. Saturation and
+// value remain unbounded until the final RGB channels are clamped, preserving its existing behavior.
+[[nodiscard]] inline COLORREF ColorRefFromHsvWrappedHue(float hueDegrees, float saturation, float value) noexcept
+{
+    const float normalizedHue = std::fmod(std::fmod(hueDegrees, 360.0f) + 360.0f, 360.0f);
+    return Detail::ColorRefFromNormalizedHsv(normalizedHue, saturation, value);
+}
+
+[[nodiscard]] inline double SrgbChannelToLinear(double channel) noexcept
+{
+    return channel <= 0.04045 ? channel / 12.92 : std::pow((channel + 0.055) / 1.055, 2.4);
+}
+
+[[nodiscard]] inline double RelativeLuminanceFromSrgb(double red, double green, double blue) noexcept
+{
+    return 0.2126 * SrgbChannelToLinear(red) + 0.7152 * SrgbChannelToLinear(green) + 0.0722 * SrgbChannelToLinear(blue);
+}
+
+[[nodiscard]] inline double RelativeLuminanceFromArgb(uint32_t argb) noexcept
+{
+    return RelativeLuminanceFromSrgb(static_cast<double>((argb >> 16u) & 0xFFu) / 255.0,
+                                     static_cast<double>((argb >> 8u) & 0xFFu) / 255.0,
+                                     static_cast<double>(argb & 0xFFu) / 255.0);
+}
+
+[[nodiscard]] inline double RelativeLuminanceFromColorRef(COLORREF color) noexcept
+{
+    return RelativeLuminanceFromSrgb(static_cast<double>(GetRValue(color)) / 255.0,
+                                     static_cast<double>(GetGValue(color)) / 255.0,
+                                     static_cast<double>(GetBValue(color)) / 255.0);
+}
+
+// Some product policies intentionally apply their threshold to encoded sRGB channels without linearizing.
+// Keep that math named separately from WCAG relative luminance.
+[[nodiscard]] inline double WeightedSrgbLuminanceWithoutLinearization(double red, double green, double blue) noexcept
+{
+    return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+}
+
+[[nodiscard]] inline double ContrastRatioFromRelativeLuminance(double first, double second) noexcept
+{
+    return (std::max(first, second) + 0.05) / (std::min(first, second) + 0.05);
+}
+} // namespace Common::Colors
+
+namespace Common::Crypto
+{
+[[nodiscard]] inline HRESULT GenerateRandomBytes(std::span<std::byte> bytes) noexcept
+{
+    if (bytes.empty())
+    {
+        return S_OK;
+    }
+    if (bytes.size() > static_cast<size_t>((std::numeric_limits<ULONG>::max)()))
+    {
+        return E_INVALIDARG;
+    }
+
+    const NTSTATUS status = BCryptGenRandom(
+        nullptr, reinterpret_cast<PUCHAR>(bytes.data()), static_cast<ULONG>(bytes.size()), BCRYPT_USE_SYSTEM_PREFERRED_RNG);
+    return BCRYPT_SUCCESS(status) ? S_OK : HRESULT_FROM_NT(status);
+}
+
+template<typename CharT>
+inline void AppendHexToken(std::basic_string<CharT>& value, std::span<const std::byte> bytes)
+{
+    constexpr std::basic_string_view<CharT> hex = []
+    {
+        if constexpr (std::same_as<CharT, char>)
+        {
+            return std::basic_string_view<CharT>("0123456789abcdef");
+        }
+        else
+        {
+            return std::basic_string_view<CharT>(L"0123456789abcdef");
+        }
+    }();
+
+    value.reserve(value.size() + bytes.size() * 2u);
+    for (const std::byte byte : bytes)
+    {
+        const unsigned int item = std::to_integer<unsigned int>(byte);
+        value.push_back(hex[(item >> 4u) & 0x0Fu]);
+        value.push_back(hex[item & 0x0Fu]);
+    }
+}
+} // namespace Common::Crypto
+
+namespace Common::Paths
+{
+// External programs must not be resolved through the process working directory or PATH.
+// Accept explicit drive, UNC, and Win32 extended paths; reject rooted, drive-relative,
+// device-namespace, relative, and bare executable names.
+[[nodiscard]] inline bool IsExplicitAbsoluteExecutablePath(std::wstring_view path) noexcept
+{
+    const auto isSeparator = [](const wchar_t ch) noexcept { return ch == L'\\' || ch == L'/'; };
+    const auto isDriveLetter = [](const wchar_t ch) noexcept
+    {
+        return (ch >= L'A' && ch <= L'Z') || (ch >= L'a' && ch <= L'z');
+    };
+
+    if (path.size() >= 3u && isDriveLetter(path[0]) && path[1] == L':' && isSeparator(path[2]))
+    {
+        return path.size() > 3u;
+    }
+
+    if (path.size() < 5u || ! isSeparator(path[0]) || ! isSeparator(path[1]))
+    {
+        return false;
+    }
+
+    // Win32 device paths (for example, \\.\PhysicalDrive0) are not executable paths.
+    if (path[2] == L'.' && isSeparator(path[3]))
+    {
+        return false;
+    }
+
+    size_t componentStart = 2u;
+    if (path[2] == L'?' && isSeparator(path[3]))
+    {
+        if (path.size() >= 7u && isDriveLetter(path[4]) && path[5] == L':' && isSeparator(path[6]))
+        {
+            return path.size() > 7u;
+        }
+
+        const auto equalsAsciiNoCase = [](const wchar_t lhs, const wchar_t rhs) noexcept
+        {
+            const wchar_t folded = (lhs >= L'a' && lhs <= L'z') ? static_cast<wchar_t>(lhs - (L'a' - L'A')) : lhs;
+            return folded == rhs;
+        };
+        if (path.size() <= 8u || ! equalsAsciiNoCase(path[4], L'U') || ! equalsAsciiNoCase(path[5], L'N') ||
+            ! equalsAsciiNoCase(path[6], L'C') || ! isSeparator(path[7]))
+        {
+            return false;
+        }
+        componentStart = 8u;
+    }
+
+    const size_t serverEnd = path.find_first_of(L"\\/", componentStart);
+    if (serverEnd == std::wstring_view::npos || serverEnd == componentStart)
+    {
+        return false;
+    }
+    const size_t shareStart = serverEnd + 1u;
+    const size_t shareEnd   = path.find_first_of(L"\\/", shareStart);
+    return shareEnd != std::wstring_view::npos && shareEnd > shareStart && shareEnd + 1u < path.size();
+}
+
+// Builds `<readable-prefix><marker><128-bit-hex><suffix>`, truncating only the readable prefix
+// when a provider imposes a leaf-length cap. The marker/token/suffix identity is always preserved.
+template<typename CharT>
+[[nodiscard]] inline HRESULT BuildUniqueSiblingName(std::basic_string_view<CharT> readablePrefix,
+                                                    std::basic_string_view<CharT> marker,
+                                                    std::basic_string_view<CharT> suffix,
+                                                    size_t maxLength,
+                                                    std::basic_string<CharT>& nameOut) noexcept
+{
+    nameOut.clear();
+    constexpr size_t kEntropyBytes = 16u;
+    constexpr size_t kHexChars     = kEntropyBytes * 2u;
+    if (marker.size() > maxLength || suffix.size() > maxLength - marker.size() || kHexChars > maxLength - marker.size() - suffix.size())
+    {
+        return HRESULT_FROM_WIN32(ERROR_FILENAME_EXCED_RANGE);
+    }
+
+    std::array<std::byte, kEntropyBytes> entropy{};
+    const HRESULT randomHr = Common::Crypto::GenerateRandomBytes(entropy);
+    if (FAILED(randomHr))
+    {
+        return randomHr;
+    }
+
+    const size_t prefixLimit = maxLength - marker.size() - kHexChars - suffix.size();
+    nameOut.reserve((std::min)(readablePrefix.size(), prefixLimit) + marker.size() + kHexChars + suffix.size());
+    nameOut.append(readablePrefix.substr(0u, prefixLimit));
+    nameOut.append(marker);
+    Common::Crypto::AppendHexToken(nameOut, entropy);
+    nameOut.append(suffix);
+    return S_OK;
+}
+} // namespace Common::Paths
+
+#if defined(_DEBUG)
+namespace Common::DebugSelfTest
+{
+struct Check final
+{
+    std::wstring_view component;
+
+    bool operator()(bool condition, const wchar_t* message, unsigned int& passed, unsigned int& failed) const noexcept
+    {
+        if (condition)
+        {
+            ++passed;
+            return true;
+        }
+
+        ++failed;
+        Debug::Error(L"{} debug selftest failed: {}", component, message);
+        return false;
+    }
+};
+} // namespace Common::DebugSelfTest
+#endif
 
 namespace OrdinalString
 {
@@ -234,6 +555,21 @@ inline bool LessNoCase(std::wstring_view a, std::wstring_view b) noexcept
     return EqualsFoldedInvariant(text.substr(0u, prefix.size()), prefix);
 }
 
+[[nodiscard]] inline bool StartsWithPreFoldedInvariant(std::wstring_view text, std::wstring_view foldedPrefix) noexcept
+{
+    if (foldedPrefix.empty())
+    {
+        return true;
+    }
+
+    if (text.size() < foldedPrefix.size())
+    {
+        return false;
+    }
+
+    return FoldCaseInvariant(text.substr(0u, foldedPrefix.size())) == foldedPrefix;
+}
+
 [[nodiscard]] inline bool FindContainsFoldedInvariant(std::wstring_view text, std::wstring_view query, size_t& outOffset) noexcept
 {
     outOffset = std::wstring_view::npos;
@@ -257,6 +593,56 @@ inline bool LessNoCase(std::wstring_view a, std::wstring_view b) noexcept
     return false;
 }
 } // namespace OrdinalString
+
+namespace EnvironmentVariables
+{
+[[nodiscard]] inline std::optional<std::wstring> Read(std::wstring_view name) noexcept
+{
+    if (name.empty())
+    {
+        return std::nullopt;
+    }
+
+    const std::wstring key(name);
+    for (unsigned int attempt = 0u; attempt < 4u; ++attempt)
+    {
+        ::SetLastError(ERROR_SUCCESS);
+        const DWORD required = ::GetEnvironmentVariableW(key.c_str(), nullptr, 0u);
+        if (required == 0u)
+        {
+            return ::GetLastError() == ERROR_ENVVAR_NOT_FOUND ? std::nullopt : std::optional<std::wstring>{std::wstring{}};
+        }
+
+        std::wstring value(static_cast<size_t>(required), L'\0');
+        ::SetLastError(ERROR_SUCCESS);
+        const DWORD written = ::GetEnvironmentVariableW(key.c_str(), value.data(), required);
+        if (written == 0u)
+        {
+            return ::GetLastError() == ERROR_ENVVAR_NOT_FOUND ? std::nullopt : std::optional<std::wstring>{std::wstring{}};
+        }
+        if (written < required)
+        {
+            value.resize(static_cast<size_t>(written));
+            return value;
+        }
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] inline bool IsTruthyFlagSet(const wchar_t* name) noexcept
+{
+    if (name == nullptr)
+    {
+        return false;
+    }
+    const std::optional<std::wstring> value = Read(name);
+    if (! value.has_value() || value->empty())
+    {
+        return false;
+    }
+    return value.value()[0] == L'1' || value.value()[0] == L'y' || value.value()[0] == L'Y' || value.value()[0] == L't' || value.value()[0] == L'T';
+}
+} // namespace EnvironmentVariables
 
 namespace StringUtils
 {
@@ -1441,9 +1827,12 @@ public:
     explicit Scope(std::wstring_view name) noexcept
         : _etwEnabled(IsEnabled()),
           _jsonlEnabled(HasJsonlOutput()),
-          _name(name),
           _start((_etwEnabled || _jsonlEnabled) ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{})
     {
+        if (_etwEnabled || _jsonlEnabled)
+        {
+            _name.assign(name);
+        }
     }
 
     Scope(const Scope&)            = delete;
@@ -1490,7 +1879,10 @@ public:
 
     void SetDetail(std::wstring_view detail) noexcept
     {
-        _detail = detail;
+        if (_etwEnabled || _jsonlEnabled)
+        {
+            _detail.assign(detail);
+        }
     }
 
     void SetValue0(uint64_t value) noexcept
@@ -1511,8 +1903,8 @@ public:
 private:
     bool _etwEnabled   = false;
     bool _jsonlEnabled = false;
-    std::wstring_view _name;
-    std::wstring_view _detail;
+    std::wstring _name;
+    std::wstring _detail;
     std::chrono::steady_clock::time_point _start;
     uint64_t _value0 = 0;
     uint64_t _value1 = 0;
@@ -1881,12 +2273,70 @@ template <typename T> [[nodiscard]] inline bool TrySubmitUniqueToThreadpool(std:
     return true;
 }
 
+template <typename T> [[nodiscard]] inline bool SubmitOwnedThreadpoolCallback(std::unique_ptr<T>& payload) noexcept
+{
+    if (! payload)
+    {
+        return true;
+    }
+
+    const BOOL queued = TrySubmitThreadpoolCallback(
+        [](PTP_CALLBACK_INSTANCE /*instance*/, void* context) noexcept
+        {
+            std::unique_ptr<T> owned(static_cast<T*>(context));
+            if (owned)
+            {
+                owned->Execute();
+            }
+        },
+        payload.get(),
+        nullptr);
+    if (queued == 0)
+    {
+        return false;
+    }
+
+    static_cast<void>(payload.release());
+    return true;
+}
+
+template <typename T> [[nodiscard]] inline bool SubmitOwnedThreadpoolCallbackWithInstance(std::unique_ptr<T>& payload) noexcept
+{
+    if (! payload)
+    {
+        return true;
+    }
+
+    const BOOL queued = TrySubmitThreadpoolCallback(
+        [](PTP_CALLBACK_INSTANCE instance, void* context) noexcept
+        {
+            std::unique_ptr<T> owned(static_cast<T*>(context));
+            if (owned)
+            {
+                owned->Execute(instance);
+            }
+        },
+        payload.get(),
+        nullptr);
+    if (queued == 0)
+    {
+        return false;
+    }
+
+    static_cast<void>(payload.release());
+    return true;
+}
+
 // ============================================================================
 // Module Lifetime Helpers
 // ============================================================================
 /// Returns an owning module handle for the module that contains `address`.
 /// This increments the module reference count so the module cannot be unloaded while the returned handle is alive.
 /// Returns an empty handle on failure.
+/// A threadpool callback must not merely destroy the last returned handle at the
+/// end of its callback body: that can unmap the callback's own code before the
+/// callback returns. Transfer that handle with
+/// `TransferModulePinToCallbackReturn(instance, handle)` at callback entry.
 [[nodiscard]] inline wil::unique_hmodule AcquireModuleReferenceFromAddress(const void* address) noexcept
 {
     if (! address)
@@ -1906,6 +2356,16 @@ template <typename T> [[nodiscard]] inline bool TrySubmitUniqueToThreadpool(std:
     return owned;
 }
 
+/// Transfers a pinned module reference to the Windows threadpool so it is
+/// released only after the callback has returned to system code.
+inline void TransferModulePinToCallbackReturn(PTP_CALLBACK_INSTANCE instance, wil::unique_hmodule& modulePin) noexcept
+{
+    if (instance && modulePin)
+    {
+        FreeLibraryWhenCallbackReturns(instance, modulePin.release());
+    }
+}
+
 // ============================================================================
 // PostMessage Payload RAII Helpers
 // ============================================================================
@@ -1916,6 +2376,8 @@ template <typename T> [[nodiscard]] inline bool TrySubmitUniqueToThreadpool(std:
 //   Sender:
 //     auto payload = std::make_unique<MyPayload>();
 //     // ... fill payload ...
+//     // Capture any payload fields needed by the other arguments before moving it;
+//     // function arguments may evaluate the move before a sibling dereference.
 //     if (!PostMessagePayload(hwnd, WM_MYMSG, 0, std::move(payload))) { /* handle error */ }
 //
 //   Receiver (WndProc):
@@ -2146,6 +2608,78 @@ template <typename T> [[nodiscard]] inline std::unique_ptr<T> TakeMessagePayload
 {
     detail::UnregisterPostedMessagePayload(reinterpret_cast<void*>(lParam));
     return std::unique_ptr<T>(reinterpret_cast<T*>(lParam));
+}
+
+template <typename T> struct ContiguousPostedPayloadDrainResult final
+{
+    ContiguousPostedPayloadDrainResult()                                                        = default;
+    ContiguousPostedPayloadDrainResult(const ContiguousPostedPayloadDrainResult&)               = delete;
+    ContiguousPostedPayloadDrainResult& operator=(const ContiguousPostedPayloadDrainResult&)    = delete;
+    ContiguousPostedPayloadDrainResult(ContiguousPostedPayloadDrainResult&&) noexcept            = default;
+    ContiguousPostedPayloadDrainResult& operator=(ContiguousPostedPayloadDrainResult&&) noexcept = default;
+
+    std::unique_ptr<T> payload;
+    uint64_t drainedPayloadCount = 0u;
+    bool stoppedAtQueuedMessage  = false;
+    MSG queuedMessage{};
+};
+
+/// Takes the payload from the message currently being dispatched and coalesces only immediately contiguous
+/// queued payload messages with the same HWND, message ID, and operation key in wParam. The unfiltered thread
+/// queue head is inspected before the matching message is removed, so unrelated input, completion, and other
+/// operation messages retain their ordering. `canDrain` is called before inspecting the next message and may
+/// enforce cancellation or caller-specific budgets. `reduce` owns the payload merge/replacement policy. Both
+/// callbacks must be noexcept.
+template <typename T, typename CanDrain, typename Reducer>
+[[nodiscard]] inline ContiguousPostedPayloadDrainResult<T> TakeAndCoalesceContiguousPostedPayloads(HWND hwnd,
+                                                                                                   UINT message,
+                                                                                                   WPARAM operationKey,
+                                                                                                   LPARAM currentLParam,
+                                                                                                   CanDrain&& canDrain,
+                                                                                                   Reducer&& reduce) noexcept
+{
+    ContiguousPostedPayloadDrainResult<T> result;
+    result.payload = TakeMessagePayload<T>(currentLParam);
+    if (! result.payload || ! hwnd)
+    {
+        return result;
+    }
+
+    auto&& canDrainRef = canDrain;
+    auto&& reduceRef   = reduce;
+    while (canDrainRef(*result.payload, result.drainedPayloadCount))
+    {
+        MSG queuedMessage{};
+        if (PeekMessageW(&queuedMessage, nullptr, 0, 0, PM_NOREMOVE) == 0)
+        {
+            break;
+        }
+        if (queuedMessage.hwnd != hwnd || queuedMessage.message != message || queuedMessage.wParam != operationKey)
+        {
+            result.stoppedAtQueuedMessage = true;
+            result.queuedMessage          = queuedMessage;
+            break;
+        }
+
+        if (PeekMessageW(&queuedMessage, hwnd, message, message, PM_REMOVE) == 0)
+        {
+            break;
+        }
+
+        std::unique_ptr<T> newerPayload = TakeMessagePayload<T>(queuedMessage.lParam);
+        if (! newerPayload)
+        {
+            continue;
+        }
+
+        reduceRef(result.payload, std::move(newerPayload));
+        ++result.drainedPayloadCount;
+        if (! result.payload)
+        {
+            break;
+        }
+    }
+    return result;
 }
 
 // Macro Helpers for debug output

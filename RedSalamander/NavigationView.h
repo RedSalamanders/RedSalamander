@@ -74,55 +74,55 @@ enum class NavigationViewDebugDropdownKind : uint8_t
 
 struct NavigationViewDebugSnapshot
 {
-    NavigationViewDebugFocusTarget focusTarget   = NavigationViewDebugFocusTarget::None;
-    NavigationViewDebugDropdownKind dropdownKind = NavigationViewDebugDropdownKind::None;
-    UINT dpi                                     = USER_DEFAULT_SCREEN_DPI;
-    bool editMode                                = false;
-    bool embeddedDestinationMode                 = false;
-    bool historyDropdownVisible                  = false;
-    uint64_t historyDropdownOpenCount            = 0;
-    bool editSuggestPopupVisible                 = false;
-    bool fullPathPopupVisible                    = false;
-    bool fullPathPopupEditMode                   = false;
-    bool pathEllipsisVisible                     = false;
-    bool showMenuSection                         = false;
-    bool showDiskInfoSection                     = false;
-    bool menuButtonHovered                       = false;
-    bool historyButtonHovered                    = false;
-    bool diskInfoHovered                         = false;
-    int hoveredSegmentIndex                      = -1;
-    int hoveredSeparatorIndex                    = -1;
-    bool menuIconBitmapLoaded                    = false;
-    size_t visibleChildWindowCount               = 0u;
-    size_t historyCount                          = 0u;
-    size_t historyDropdownItemCount              = 0u;
-    size_t editSuggestItemCount                  = 0u;
-    int historyDropdownSelectedIndex             = -1;
-    int editSuggestSelectedIndex                 = -1;
-    SIZE editSuggestPopupClientSize              = {};
-    SIZE fullPathPopupClientSize                 = {};
-    RECT menuRegionRect                          = {};
-    RECT pathRegionRect                          = {};
-    RECT historyRegionRect                       = {};
-    RECT diskInfoRegionRect                      = {};
-    RECT pathEllipsisRect                        = {};
-    RECT pathCurrentSegmentRect                  = {};
-    bool pathCurrentSegmentVisible               = false;
-    RECT pathLastSegmentRect                     = {};
-    bool pathLastSegmentVisible                  = false;
-    RECT pathAncestorSegmentRect                 = {};
-    bool pathAncestorSegmentVisible              = false;
-    RECT fullPathPopupAncestorSegmentRect        = {};
-    bool fullPathPopupAncestorSegmentVisible     = false;
-    HWND currentEditHostHwnd                     = nullptr;
-    HWND currentEditInputHwnd                    = nullptr;
-    bool currentEditUsesNativeTextInput          = false;
-    bool currentEditCaretScreenRectValid         = false;
-    RECT currentEditCaretScreenRect              = {};
-    bool currentEditValidationPopupVisible       = false;
-    HWND currentEditValidationPopupHwnd          = nullptr;
-    RECT currentEditValidationPopupScreenRect    = {};
-    bool currentEditValidationPopupRoundedRegion = false;
+    NavigationViewDebugFocusTarget focusTarget    = NavigationViewDebugFocusTarget::None;
+    NavigationViewDebugDropdownKind dropdownKind  = NavigationViewDebugDropdownKind::None;
+    UINT dpi                                      = USER_DEFAULT_SCREEN_DPI;
+    bool editMode                                 = false;
+    bool embeddedDestinationMode                  = false;
+    bool historyDropdownVisible                   = false;
+    uint64_t historyDropdownOpenCount             = 0;
+    bool editSuggestPopupVisible                  = false;
+    bool fullPathPopupVisible                     = false;
+    bool fullPathPopupEditMode                    = false;
+    bool pathEllipsisVisible                      = false;
+    bool showMenuSection                          = false;
+    bool showDiskInfoSection                      = false;
+    bool menuButtonHovered                        = false;
+    bool historyButtonHovered                     = false;
+    bool diskInfoHovered                          = false;
+    int hoveredSegmentIndex                       = -1;
+    int hoveredSeparatorIndex                     = -1;
+    bool menuIconBitmapLoaded                     = false;
+    size_t visibleChildWindowCount                = 0u;
+    size_t historyCount                           = 0u;
+    size_t historyDropdownItemCount               = 0u;
+    size_t editSuggestItemCount                   = 0u;
+    int historyDropdownSelectedIndex              = -1;
+    int editSuggestSelectedIndex                  = -1;
+    SIZE editSuggestPopupClientSize               = {};
+    SIZE fullPathPopupClientSize                  = {};
+    RECT menuRegionRect                           = {};
+    RECT pathRegionRect                           = {};
+    RECT historyRegionRect                        = {};
+    RECT diskInfoRegionRect                       = {};
+    RECT pathEllipsisRect                         = {};
+    RECT pathCurrentSegmentRect                   = {};
+    bool pathCurrentSegmentVisible                = false;
+    RECT pathLastSegmentRect                      = {};
+    bool pathLastSegmentVisible                   = false;
+    RECT pathAncestorSegmentRect                  = {};
+    bool pathAncestorSegmentVisible               = false;
+    RECT fullPathPopupAncestorSegmentRect         = {};
+    bool fullPathPopupAncestorSegmentVisible      = false;
+    HWND currentEditHostHwnd                      = nullptr;
+    HWND currentEditInputHwnd                     = nullptr;
+    bool currentEditUsesNativeTextInput           = false;
+    bool currentEditCaretScreenRectValid          = false;
+    RECT currentEditCaretScreenRect               = {};
+    bool currentEditValidationPopupVisible        = false;
+    HWND currentEditValidationPopupHwnd           = nullptr;
+    RECT currentEditValidationPopupScreenRect     = {};
+    bool currentEditValidationPopupRoundedRegion  = false;
     bool currentEditValidationPopupUsesFluentIcon = false;
     wchar_t currentEditValidationPopupIconGlyph   = L'\0';
     bool currentEditHasActiveComposition          = false;
@@ -332,7 +332,7 @@ private:
     LRESULT OnFullPathPopupMouseLeave(HWND hwnd);
     LRESULT OnFullPathPopupLButtonDown(HWND hwnd, POINT pt);
     LRESULT OnFullPathPopupLButtonDblClk(HWND hwnd, POINT pt);
-    LRESULT OnFullPathPopupActivate(WORD state);
+    LRESULT OnFullPathPopupActivate(WORD state, HWND activatingWindow);
     LRESULT OnFullPathPopupKeyDown(WPARAM key);
     LRESULT OnFullPathPopupSysKeyDown(HWND hwnd, WPARAM key, LPARAM lParam);
     LRESULT OnFullPathPopupSysChar(HWND hwnd, WPARAM key, LPARAM lParam);
@@ -380,6 +380,7 @@ private:
     void ShowHistoryDropdown(bool ignoreInitialLeftButtonUp = false, bool focusFirstNavigableItem = false);
     void ShowDiskInfoDropdown(bool ignoreInitialLeftButtonUp = false, bool focusFirstNavigableItem = false);
     void ShowSiblingsDropdown(size_t segmentIndex);
+    void RestoreFolderViewFocusAfterDropdown() noexcept;
     void RequestFullPathPopup(const D2D1_RECT_F& anchorBounds);
     void ShowFullPathPopup();
     void UpdateFullPathPopupWindow();
@@ -468,19 +469,22 @@ private:
 
     // State
     wil::unique_hwnd _hWnd;
-    HINSTANCE _hInstance       = nullptr;
-    UINT _dpi                  = USER_DEFAULT_SCREEN_DPI;
-    SIZE _clientSize           = {0, 0};
-    RenderMode _renderMode     = RenderMode::Breadcrumb;
-    bool _editMode             = false;
-    bool _trackingMouse        = false;
-    bool _inMenuLoop           = false;
-    bool _menuButtonPressed    = false; // Track if menu is open
-    bool _menuButtonHovered    = false; // Track if Section 1 is hovered
-    bool _historyButtonHovered = false; // Track if history button is hovered
-    bool _diskInfoHovered      = false; // Track if Section 3 is hovered
-    int _hoveredSegmentIndex   = -1;    // Track which segment is hovered (-1 = none)
-    int _hoveredSeparatorIndex = -1;    // Track which separator is hovered (-1 = none)
+    HINSTANCE _hInstance                 = nullptr;
+    UINT _dpi                            = USER_DEFAULT_SCREEN_DPI;
+    SIZE _clientSize                     = {0, 0};
+    RenderMode _renderMode               = RenderMode::Breadcrumb;
+    bool _editMode                       = false;
+    bool _redrawSuspended                = false;
+    uint64_t _redrawSuspendedUntilTickMs = 0;
+    bool _pathEditBlurSuppressActive     = false;
+    bool _trackingMouse                  = false;
+    bool _inMenuLoop                     = false;
+    bool _menuButtonPressed              = false; // Track if menu is open
+    bool _menuButtonHovered              = false; // Track if Section 1 is hovered
+    bool _historyButtonHovered           = false; // Track if history button is hovered
+    bool _diskInfoHovered                = false; // Track if Section 3 is hovered
+    int _hoveredSegmentIndex             = -1;    // Track which segment is hovered (-1 = none)
+    int _hoveredSeparatorIndex           = -1;    // Track which separator is hovered (-1 = none)
 
     struct EditSuggestItem
     {
@@ -779,7 +783,7 @@ private:
     std::vector<std::filesystem::path> _navDropdownPaths;
     int _navDropdownSelectedIndex = -1;
 
-    bool _paneFocused = false;
+    bool _paneFocused             = false;
     bool _embeddedDestinationMode = false;
 
     // Direct2D resources (Section 2)

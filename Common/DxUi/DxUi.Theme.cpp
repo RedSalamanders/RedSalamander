@@ -23,16 +23,7 @@ constexpr UINT kDxUiNoDataStringId    = 1305u;
     return clientAreaAnimation == FALSE;
 }
 
-[[nodiscard]] uint32_t StableHash32(std::wstring_view text) noexcept
-{
-    uint32_t hash = 2166136261u;
-    for (const wchar_t ch : text)
-    {
-        hash ^= static_cast<uint32_t>(ch);
-        hash *= 16777619u;
-    }
-    return hash;
-}
+using Common::Colors::StableVisualHash32Utf16V1;
 
 [[nodiscard]] D2D1_COLOR_F ColorFromHsv(float hueDegrees, float saturation, float value, float alpha = 1.0f) noexcept
 {
@@ -123,17 +114,14 @@ constexpr UINT kDxUiNoDataStringId    = 1305u;
 
 [[nodiscard]] double RelativeLuminance(const D2D1_COLOR_F& color) noexcept
 {
-    return (0.2126 * static_cast<double>(SrgbToLinear(ClampUnit(color.r)))) + (0.7152 * static_cast<double>(SrgbToLinear(ClampUnit(color.g)))) +
-           (0.0722 * static_cast<double>(SrgbToLinear(ClampUnit(color.b))));
+    return Common::Colors::RelativeLuminanceFromSrgb(ClampUnit(color.r), ClampUnit(color.g), ClampUnit(color.b));
 }
 
 [[nodiscard]] double ContrastRatio(const D2D1_COLOR_F& foreground, const D2D1_COLOR_F& background) noexcept
 {
     const double foregroundLuminance = RelativeLuminance(foreground);
     const double backgroundLuminance = RelativeLuminance(background);
-    const double lighter             = std::max(foregroundLuminance, backgroundLuminance);
-    const double darker              = std::min(foregroundLuminance, backgroundLuminance);
-    return (lighter + 0.05) / (darker + 0.05);
+    return Common::Colors::ContrastRatioFromRelativeLuminance(foregroundLuminance, backgroundLuminance);
 }
 
 [[nodiscard]] D2D1_COLOR_F ResolvePrimaryButtonTextColor(const ThemePalette& theme, const D2D1_COLOR_F& fill) noexcept
@@ -170,7 +158,7 @@ D2D1_COLOR_F CompositeOverBackground(const D2D1_COLOR_F& overlay, const D2D1_COL
                         alpha + (background.a * inverseAlpha));
 }
 
-D2D1_COLOR_F ColorFromArgb(uint32_t argb) noexcept
+D2D1::ColorF ColorFromArgb(uint32_t argb) noexcept
 {
     const float a = static_cast<float>((argb >> 24) & 0xFFu) / 255.0f;
     const float r = static_cast<float>((argb >> 16) & 0xFFu) / 255.0f;
@@ -213,13 +201,13 @@ std::wstring_view LoadDxUiString(UINT resourceId, std::wstring_view fallback) no
 
 D2D1_COLOR_F RainbowTint(std::wstring_view seed, bool dark) noexcept
 {
-    const uint32_t hash = StableHash32(seed);
+    const uint32_t hash = StableVisualHash32Utf16V1(seed);
     return ColorFromHsv(static_cast<float>(hash % 360u), dark ? 0.32f : 0.24f, dark ? 0.34f : 0.97f, 1.0f);
 }
 
 D2D1_COLOR_F RainbowMenuSelectionTint(std::wstring_view seed, bool dark) noexcept
 {
-    const uint32_t hash = StableHash32(seed);
+    const uint32_t hash = StableVisualHash32Utf16V1(seed);
     return ColorFromHsv(static_cast<float>(hash % 360u), 0.90f, dark ? 0.82f : 0.92f, 1.0f);
 }
 
@@ -898,15 +886,19 @@ ComboBoxVisualStyle ResolveComboBoxVisualStyle(
     return style;
 }
 
+void RefreshAccentVariants(ThemePalette& palette, bool darkBase) noexcept
+{
+    palette.accentHover   = DeriveAccentVariant(palette.accent, +8.0f);
+    palette.accentPressed = DeriveAccentVariant(palette.accent, darkBase ? +16.0f : -12.0f);
+}
+
 ThemePalette MakeDefaultThemePalette(bool dark) noexcept
 {
     ThemePalette palette{};
     palette.dark          = dark;
     palette.reducedMotion = SystemPrefersReducedMotion();
 
-    // Accent-derived fields (computed for both light and dark from the default accent)
-    palette.accentHover   = DeriveAccentVariant(palette.accent, +8.0f);
-    palette.accentPressed = DeriveAccentVariant(palette.accent, dark ? +16.0f : -12.0f);
+    RefreshAccentVariants(palette, dark);
 
     if (! dark)
     {
@@ -917,6 +909,7 @@ ThemePalette MakeDefaultThemePalette(bool dark) noexcept
         return palette;
     }
 
+    palette.accent                = D2D1::ColorF(0.36f, 0.62f, 0.98f, 1.0f);
     palette.windowBackground      = D2D1::ColorF(0.10f, 0.10f, 0.11f, 1.0f);
     palette.surfaceBackground     = D2D1::ColorF(0.13f, 0.13f, 0.14f, 1.0f);
     palette.cardBackground        = D2D1::ColorF(0.13f, 0.13f, 0.14f, 1.0f); // same as surfaceBackground
@@ -934,13 +927,17 @@ ThemePalette MakeDefaultThemePalette(bool dark) noexcept
     palette.disabledText          = D2D1::ColorF(0.48f, 0.48f, 0.50f, 1.0f);
     palette.selectionFill         = D2D1::ColorF(0.13f, 0.42f, 0.73f, 1.0f);
     palette.selectionInactiveFill = D2D1::ColorF(0.13f, 0.42f, 0.73f, 0.55f);
-    palette.hoverFill             = D2D1::ColorF(0.20f, 0.44f, 0.76f, 0.16f);
+    palette.focusStroke           = BlendColor(palette.selectionFill, palette.selectionText, 0.10f);
+    palette.hoverFill             = D2D1::ColorF(palette.focusStroke.r, palette.focusStroke.g, palette.focusStroke.b, 0.16f);
+    palette.pressedFill           = D2D1::ColorF(palette.focusStroke.r, palette.focusStroke.g, palette.focusStroke.b, 0.24f);
     palette.buttonFill            = D2D1::ColorF(0.16f, 0.16f, 0.18f, 1.0f);
     palette.buttonBorder          = D2D1::ColorF(0.28f, 0.28f, 0.32f, 1.0f);
     palette.buttonHotFill         = D2D1::ColorF(0.18f, 0.19f, 0.23f, 1.0f);
     palette.buttonPressedFill     = D2D1::ColorF(0.18f, 0.23f, 0.31f, 1.0f);
     palette.inputFill             = D2D1::ColorF(0.15f, 0.15f, 0.17f, 1.0f);
     palette.inputBorder           = D2D1::ColorF(0.32f, 0.32f, 0.36f, 1.0f);
+    palette.toggleKnobFill        = ChooseContrastingTextColor(BlendColor(palette.inputFill, palette.border, 0.18f));
+    palette.toggleKnobCheckedFill = palette.selectionText;
     palette.scrollbarTrack        = D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.05f);
     palette.scrollbarThumb        = D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.18f);
     palette.scrollbarThumbHot     = D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.28f);
@@ -954,6 +951,8 @@ ThemePalette MakeDefaultThemePalette(bool dark) noexcept
     palette.errorText             = D2D1::ColorF(1.0f, 0.78f, 0.78f, 1.0f);
     palette.focusStrokeOuter      = D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f); // white in dark
     palette.focusStrokeInner      = D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f); // black in dark
+    palette.smokeOverlay          = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.46f);
+    RefreshAccentVariants(palette, dark);
     return palette;
 }
 
@@ -1014,10 +1013,9 @@ ThemePalette MakeThemePaletteFromViewerTheme(const ViewerTheme& viewerTheme) noe
     palette.borderDefault     = BlendColor(palette.border, palette.text, darkBase ? 0.06f : 0.04f);
     palette.borderStrong      = BlendColor(palette.border, palette.text, darkBase ? 0.18f : 0.12f);
     palette.overlayBorder     = palette.borderDefault;
-    palette.accentHover       = DeriveAccentVariant(palette.accent, darkBase ? +8.0f : +8.0f);
-    palette.accentPressed     = DeriveAccentVariant(palette.accent, darkBase ? +16.0f : -12.0f);
-    palette.focusStrokeOuter  = darkBase ? D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f) : D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f);
-    palette.focusStrokeInner  = darkBase ? D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f) : D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f);
+    RefreshAccentVariants(palette, darkBase);
+    palette.focusStrokeOuter = darkBase ? D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f) : D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f);
+    palette.focusStrokeInner = darkBase ? D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f) : D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f);
 
     // High-contrast: derive focus strokes from system text/background
     if (palette.highContrast)
@@ -1029,8 +1027,7 @@ ThemePalette MakeThemePaletteFromViewerTheme(const ViewerTheme& viewerTheme) noe
     // Rainbow mode: derive accent variants from the (potentially animated) accent
     if (palette.rainbowMode)
     {
-        palette.accentHover   = DeriveAccentVariant(palette.accent, +8.0f);
-        palette.accentPressed = DeriveAccentVariant(palette.accent, darkBase ? +16.0f : -12.0f);
+        RefreshAccentVariants(palette, darkBase);
     }
 
     return palette;

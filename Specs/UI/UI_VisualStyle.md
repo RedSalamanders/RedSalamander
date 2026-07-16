@@ -77,10 +77,7 @@ NavigationView reflects the **focused pane** (not only whether NavigationView it
 - **Color (glyph icons)**: menu item glyph icons (Segoe Fluent Icons) are rendered using the same color as the menu label text (`MenuTheme.text` / `MenuTheme.selectionText` / `MenuTheme.disabledText`) so they remain legible in dark theme.
 - **Size (glyph icons)**: Segoe Fluent icon fonts default to `15 DIP` (see `FluentIcons::kDefaultSizeDip`) and scale with DPI.
 - App-owned operation-card buttons use shared DxUI button chrome. Menu-only affordances such as speed limit, destination selector, conflict **More...**, and completed-task **More...** render as DxUI drop-down buttons with a glyph chevron and no split divider; split-button chrome is reserved for controls with a separate primary action plus menu action. Collapse/expand controls render chevrons with the same icon-glyph path (Segoe Fluent Icons preferred; Unicode fallback) rather than custom line strokes, so the affordance matches popup menus and navigation glyphs.
-- **Owner-draw arrow gotcha (MUST)**: when using `MFT_OWNERDRAW`, Windows may still paint the default submenu arrow *after* `WM_DRAWITEM`. To ensure only the custom chevron is visible, the draw handler must clip out the arrow area after drawing it:
-  - Set an initial clip region to the item rect (so exclusions don’t leak).
-  - Compute an arrow rect at the right edge using `max(customArrowAreaWidth, GetSystemMetricsForDpi(SM_CXMENUCHECK, dpi))`.
-  - Call `ExcludeClipRect(hdc, arrowRect.left, arrowRect.top, arrowRect.right, arrowRect.bottom)` before returning from `WM_DRAWITEM`.
+- **Historical owner-draw arrow gotcha**: the legacy native-owner-draw menu path used `MFT_OWNERDRAW` / `WM_DRAWITEM`, where Windows could paint the default submenu arrow after the custom draw handler. Current app-owned menus are rendered through the DxUi menu path instead; new menu work must follow the DxUi submenu-chevron contract above rather than reintroducing `ExcludeClipRect`-based owner-draw arrow masking.
 
 ## Themed Win32 Controls (Dark Mode + Scrollbars)
 
@@ -157,13 +154,21 @@ See `Specs/UI/UI_CommandMenuKeyboard.md` for the behavioral definition of focuse
 
 ## AppTheme Color-Override Keys
 
-Themes may supply per-token color overrides that are layered onto the resolved `AppTheme` by `ApplyAppThemeOverrides` (`RedSalamander/Preferences.Themes.cpp`). Each override value is a packed ARGB `uint32_t`; the alpha byte is honored for tokens that accept transparency (Direct2D `ColorF` targets) and ignored for opaque `COLORREF` targets.
+Themes may supply per-token color overrides that are layered onto the resolved `AppTheme` by
+`ApplyAppThemeColorOverrides` (`RedSalamander/AppTheme.cpp`). Startup, settings hot reload, dialog resolution,
+and Preferences preview MUST all use `ResolveAppThemeSelection`: select the declared built-in base, resolve the
+custom definition once, apply the accent before base-palette construction, apply the full static override set,
+then attach compiled dynamic overrides. Invalid custom definitions fall back to the unmodified declared base and
+report resolution failure; high-contrast bases intentionally ignore custom color expressions. Watcher ownership,
+settings-editor dirtiness, and UI invalidation remain outside this pure resolver. Each override value is a packed
+ARGB `uint32_t`; the alpha byte is honored for tokens that accept transparency (Direct2D `ColorF` targets) and
+ignored for opaque `COLORREF` targets.
 
 - **Exact-key match only**: lookup (`FindColorOverride`) compares keys with an exact, case-sensitive string match. Keys are queried individually, so any override key that is not one of the recognized names below is **never read and silently dropped** (no warning is logged).
 - **Derived defaults**: if `folderView.itemBackgroundSelectedInactive` is omitted but `folderView.itemBackgroundSelected` is provided, the inactive selection background is derived from the selected color (scaled alpha). If `folderView.textSelectedInactive` is omitted (and not high contrast), the inactive selection text color is derived for contrast against the resolved inactive selection background.
 - **`fileOps.*` ordering**: the `fileOperations` graph/scrollbar tokens are first seeded from `navigationView`/`menu` colors, then any explicit `fileOps.*` override is applied on top.
 
-The keys recognized by `ApplyAppThemeOverrides` are:
+The keys recognized by `ApplyAppThemeColorOverrides` are:
 
 | Key | Target | Type |
 |-----|--------|------|

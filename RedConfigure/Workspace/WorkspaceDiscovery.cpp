@@ -1,10 +1,10 @@
 #include "WorkspaceDiscovery.h"
 
+#include "RedConfigureBinaryFile.h"
+
 #include <algorithm>
 #include <cstdint>
 #include <cwctype>
-#include <fstream>
-#include <iterator>
 #include <string_view>
 
 #include <objidl.h>
@@ -106,20 +106,6 @@ namespace fs = std::filesystem;
     return value.lexically_normal();
 }
 
-[[nodiscard]] HRESULT ReadBinaryFile(const fs::path& path, std::vector<uint8_t>& outBytes) noexcept
-{
-    outBytes.clear();
-
-    std::ifstream input(path, std::ios::binary);
-    if (! input)
-    {
-        return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
-    }
-
-    outBytes.assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
-    return input.bad() ? HRESULT_FROM_WIN32(ERROR_READ_FAULT) : S_OK;
-}
-
 [[nodiscard]] HRESULT CreateStreamForBytes(const std::vector<uint8_t>& bytes, wil::com_ptr<IStream>& outStream) noexcept
 {
     outStream.reset();
@@ -166,7 +152,7 @@ namespace fs = std::filesystem;
     outIncludes.clear();
 
     std::vector<uint8_t> bytes;
-    if (const HRESULT hr = ReadBinaryFile(projectPath, bytes); FAILED(hr))
+    if (const HRESULT hr = RedConfigure::ReadBinaryFile(projectPath, bytes); FAILED(hr))
     {
         return hr;
     }

@@ -13,6 +13,7 @@
 #include <span>
 #include <string_view>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 #include <sddl.h>
@@ -26,21 +27,21 @@ namespace SearchServiceBroker
 {
 namespace
 {
-constexpr uint32_t kMessageMagic        = 0x53535252u; // "RRSS"
-constexpr uint32_t kMaxFrameBytes       = 16u * 1024u * 1024u;
-constexpr DWORD kClientConnectTimeoutMs = 150u;
-constexpr HRESULT kProtocolErrorHr      = HRESULT_FROM_WIN32(RPC_S_PROTOCOL_ERROR);
-constexpr DWORD kClientIoPollMs                  = 50u;
-constexpr DWORD kClientFrameTimeoutMs            = 30'000u;
-constexpr DWORD kClientControlOperationTimeoutMs = 30'000u;
-constexpr DWORD kClientQueryOperationTimeoutMs   = 10u * 60u * 1'000u;
-constexpr size_t kMaxClientBufferedCandidates    = 65'536u;
+constexpr uint32_t kMessageMagic                    = 0x53535252u; // "RRSS"
+constexpr uint32_t kMaxFrameBytes                   = 16u * 1024u * 1024u;
+constexpr DWORD kClientConnectTimeoutMs             = 150u;
+constexpr HRESULT kProtocolErrorHr                  = HRESULT_FROM_WIN32(RPC_S_PROTOCOL_ERROR);
+constexpr DWORD kClientIoPollMs                     = 50u;
+constexpr DWORD kClientFrameTimeoutMs               = 30'000u;
+constexpr DWORD kClientControlOperationTimeoutMs    = 30'000u;
+constexpr DWORD kClientQueryOperationTimeoutMs      = 10u * 60u * 1'000u;
+constexpr size_t kMaxClientBufferedCandidates       = 65'536u;
 constexpr uint64_t kMaxClientBufferedCandidateBytes = 64ull * 1024ull * 1024ull;
-// A foreground/self-hosted service can spend longer than one pipe rebind quantum
-// between requests while it refreshes sqlite store state after disconnecting.
-constexpr DWORD kMissingPipeRetryWindowMs       = 250u;
+constexpr DWORD kDefaultMissingPipeRetryWindowMs = 250u;
+constexpr DWORD kMaxMissingPipeRetryWindowMs     = 30'000u;
 constexpr uint64_t kIdleMaintenanceGraceMs      = 1'000u;
 constexpr wchar_t kStartupWarmupDelayMsEnvVar[] = L"REDSALAMANDER_SEARCH_SERVICE_STARTUP_WARMUP_DELAY_MS";
+constexpr wchar_t kServerFrameTimeoutMsEnvVar[] = L"REDSALAMANDER_SEARCH_SERVICE_SERVER_FRAME_TIMEOUT_MS";
 
 struct StartupWarmupCancelContext final
 {
@@ -56,6 +57,12 @@ struct ClientIoContext final
     DWORD frameTimeoutMs                            = kClientFrameTimeoutMs;
 };
 
+struct ServerIoContext final
+{
+    HANDLE stopEvent     = nullptr;
+    DWORD frameTimeoutMs = kClientFrameTimeoutMs;
+};
+
 enum class MessageType : uint32_t
 {
     StatusRequest  = 1u,
@@ -67,7 +74,8 @@ enum class MessageType : uint32_t
     RebuildRequest = 7u,
     Ack            = 8u,
     Error          = 9u,
-    CompactRequest = 10u,
+    CompactRequest  = 10u,
+    ShutdownRequest = 11u,
 };
 
 struct FrameHeader final
@@ -222,6 +230,8 @@ struct QueryCompleteRuntimePayload final
 {
     uint32_t queryExecutionMode = static_cast<uint32_t>(LocalSearchIndexCore::QueryExecutionMode::Unknown);
     uint32_t fallbackReason     = static_cast<uint32_t>(LocalSearchIndexCore::FallbackReason::None);
+    uint32_t warningFlags       = FILESYSTEM_SEARCH_WARNING_NONE;
+    uint32_t reserved           = 0u;
 };
 
 struct RebuildRequestPayload final
@@ -276,6 +286,7 @@ enum QueryCompleteFlags : uint32_t
     QUERY_COMPLETE_FLAG_SQLITE_CUTOVER_BLOCKED        = 0x400u,
     QUERY_COMPLETE_FLAG_USED_NAME_PREFILTER           = 0x800u,
     QUERY_COMPLETE_FLAG_SQLITE_QUERY_READ_ONLY        = 0x1000u,
+    QUERY_COMPLETE_FLAG_HARDLINK_ALIAS_INCOMPLETE     = 0x2000u,
 };
 
 struct SessionContext final
@@ -291,7 +302,9 @@ struct SessionContext final
     struct ServerMaintenanceState* maintenanceState     = nullptr;
     struct ServerStartupWarmupState* startupWarmupState = nullptr;
     ServerOptions options;
+    ServerIoContext ioContext;
     uint32_t handledRequests = 0u;
+    bool shutdownRequested   = false;
 };
 
 struct ServerMaintenanceState final
@@ -336,28 +349,7 @@ struct ServerStartupWarmupSnapshot final
 
 [[nodiscard]] std::wstring ReadEnvironmentVariableTrimmed(std::wstring_view name) noexcept
 {
-    if (name.empty())
-    {
-        return {};
-    }
-
-    std::wstring key(name);
-    const DWORD required = ::GetEnvironmentVariableW(key.c_str(), nullptr, 0u);
-    if (required == 0u)
-    {
-        return {};
-    }
-
-    std::wstring value;
-    value.resize(required);
-    const DWORD written = ::GetEnvironmentVariableW(key.c_str(), value.data(), required);
-    if (written == 0u || written >= required)
-    {
-        return {};
-    }
-
-    value.resize(written);
-    return StringUtils::TrimWhitespaceCopy(value);
+    return StringUtils::TrimWhitespaceCopy(EnvironmentVariables::Read(name).value_or(std::wstring{}));
 }
 
 [[nodiscard]] std::vector<std::wstring> ParseConfiguredRootList(std::wstring_view text)
@@ -435,6 +427,24 @@ struct StartupDiscoveryRoots final
     return static_cast<uint32_t>(parsed);
 }
 
+[[nodiscard]] DWORD GetServerFrameTimeoutMs() noexcept
+{
+    const std::wstring configuredTimeout = ReadEnvironmentVariableTrimmed(kServerFrameTimeoutMsEnvVar);
+    if (configuredTimeout.empty())
+    {
+        return kClientFrameTimeoutMs;
+    }
+
+    wchar_t* end               = nullptr;
+    const unsigned long parsed = ::wcstoul(configuredTimeout.c_str(), &end, 10);
+    if (end == configuredTimeout.c_str() || (end != nullptr && *end != L'\0') || parsed == 0ul)
+    {
+        return kClientFrameTimeoutMs;
+    }
+
+    return static_cast<DWORD>((std::min<unsigned long>)(parsed, (std::numeric_limits<DWORD>::max)()));
+}
+
 [[nodiscard]] ServerStartupWarmupSnapshot CaptureStartupWarmupSnapshot(const ServerStartupWarmupState* state) noexcept
 {
     if (state == nullptr)
@@ -485,6 +495,7 @@ struct ServerQueryContext final
 {
     HANDLE pipe                                   = nullptr;
     uint32_t protocolVersion                      = kProtocolVersion;
+    const ServerIoContext* ioContext              = nullptr;
     uint32_t handledRequests                      = 0u;
     const ServerOptions* options                  = nullptr;
     const LocalSearchIndexCore::QueryStats* stats = nullptr;
@@ -498,19 +509,44 @@ struct ServerCandidateBatchState final
 {
     HANDLE pipe                                   = nullptr;
     uint32_t protocolVersion                      = kProtocolVersion;
+    const ServerIoContext* ioContext              = nullptr;
     uint32_t disconnectAfterBatches               = 0u;
     uint32_t batchesSent                          = 0u;
     uint32_t handledRequests                      = 0u;
     const ServerOptions* options                  = nullptr;
     size_t payloadBytes                           = sizeof(CandidateBatchHeader);
     bool sentIndexedProgress                      = false;
-    const LocalSearchIndexCore::QueryStats* stats = nullptr;
+    LocalSearchIndexCore::QueryStats* stats       = nullptr;
+    uint32_t warningFlags                         = FILESYSTEM_SEARCH_WARNING_NONE;
     uint32_t requestFlags                         = FILESYSTEM_SEARCH_NONE;
     uint32_t requestNameMode                      = FILESYSTEM_SEARCH_NAME_DISABLED;
     std::wstring rootPath;
     std::wstring namePattern;
+#if defined(RS_SEARCH_TEST_HOOKS)
+    ServerTestHook testHook           = ServerTestHook::None;
+    bool testHookConsumed             = false;
+#endif
+    std::unordered_map<std::wstring, bool> clientDirectoryAccessCache;
     std::vector<LocalSearchIndexCore::Candidate> bufferedCandidates;
 };
+
+[[nodiscard]] HRESULT AuthorizeCandidateForClient(ServerCandidateBatchState& state, const LocalSearchIndexCore::Candidate& candidate);
+
+[[nodiscard]] uint32_t QueryStatsWarningFlags(const LocalSearchIndexCore::QueryStats& stats) noexcept
+{
+    uint32_t warningFlags = stats.warningFlags;
+    if (stats.usedLiveScanFallback)
+    {
+        warningFlags |= FILESYSTEM_SEARCH_WARNING_DEGRADED_NO_INDEX;
+    }
+
+    return warningFlags;
+}
+
+[[nodiscard]] uint32_t QueryStateWarningFlags(const ServerCandidateBatchState& state) noexcept
+{
+    return (state.stats != nullptr ? QueryStatsWarningFlags(*state.stats) : FILESYSTEM_SEARCH_WARNING_NONE) | state.warningFlags;
+}
 
 struct ServerEventDetails final
 {
@@ -657,8 +693,7 @@ HRESULT DecodeQueryBatchPayload(std::span<const std::byte> payloadBytes, std::ve
 
 [[nodiscard]] uint64_t EstimateClientBufferedCandidateBytes(const LocalSearchIndexCore::Candidate& candidate) noexcept
 {
-    return static_cast<uint64_t>(sizeof(LocalSearchIndexCore::Candidate)) +
-           (static_cast<uint64_t>(candidate.fullPath.size()) * sizeof(wchar_t)) +
+    return static_cast<uint64_t>(sizeof(LocalSearchIndexCore::Candidate)) + (static_cast<uint64_t>(candidate.fullPath.size()) * sizeof(wchar_t)) +
            (static_cast<uint64_t>(candidate.displayName.size()) * sizeof(wchar_t));
 }
 
@@ -737,7 +772,10 @@ HRESULT DecodeQueryBatchPayload(std::span<const std::byte> payloadBytes, std::ve
                                                                        const LocalSearchIndexCore::PersistentStoreInfo& storeInfo,
                                                                        const ServerMaintenanceState* maintenanceState) noexcept
 {
-    if (repositoryStatus.storeState != LocalSearchIndexCore::StoreState::Unknown)
+    const LocalSearchIndexCore::FallbackReason persistentFallbackReason = ClassifyPersistentStoreFallbackReason(storeInfo);
+    const bool staleReadyRuntime = repositoryStatus.storeState == LocalSearchIndexCore::StoreState::Ready &&
+                                   persistentFallbackReason != LocalSearchIndexCore::FallbackReason::None;
+    if (repositoryStatus.storeState != LocalSearchIndexCore::StoreState::Unknown && ! staleReadyRuntime)
     {
         return repositoryStatus.storeState;
     }
@@ -747,10 +785,9 @@ HRESULT DecodeQueryBatchPayload(std::span<const std::byte> payloadBytes, std::ve
         return LocalSearchIndexCore::StoreState::Maintenance;
     }
 
-    const LocalSearchIndexCore::FallbackReason fallbackReason = ClassifyPersistentStoreFallbackReason(storeInfo);
-    if (fallbackReason != LocalSearchIndexCore::FallbackReason::None)
+    if (persistentFallbackReason != LocalSearchIndexCore::FallbackReason::None)
     {
-        return ResolveFallbackStoreState(fallbackReason);
+        return ResolveFallbackStoreState(persistentFallbackReason);
     }
 
     return storeInfo.inspectionSucceeded ? LocalSearchIndexCore::StoreState::Ready : LocalSearchIndexCore::StoreState::Unknown;
@@ -760,7 +797,8 @@ HRESULT DecodeQueryBatchPayload(std::span<const std::byte> payloadBytes, std::ve
                                                                      const LocalSearchIndexCore::PersistentStoreInfo& storeInfo,
                                                                      const ServerStartupWarmupSnapshot& warmupSnapshot) noexcept
 {
-    if (HasRepositoryRuntimeStatus(repositoryStatus))
+    const bool staleReadyRuntime = repositoryStatus.storeState == LocalSearchIndexCore::StoreState::Ready && ! storeInfo.readyForQueryCutover;
+    if (HasRepositoryRuntimeStatus(repositoryStatus) && ! staleReadyRuntime)
     {
         return repositoryStatus.syncPhase;
     }
@@ -786,53 +824,131 @@ HRESULT DecodeQueryBatchPayload(std::span<const std::byte> payloadBytes, std::ve
     return LocalSearchIndexCore::SyncPhase::Idle;
 }
 
-HRESULT ReadExact(HANDLE handle, void* buffer, uint32_t byteCount) noexcept
+[[nodiscard]] bool IsDeadlineExpired(ULONGLONG deadline, ULONGLONG now) noexcept;
+[[nodiscard]] DWORD RemainingToDeadlineMs(ULONGLONG deadline, ULONGLONG now) noexcept;
+
+HRESULT CancelServerIoAndReturn(HANDLE handle, OVERLAPPED& overlapped, HRESULT hr) noexcept
 {
-    uint8_t* destination = static_cast<uint8_t*>(buffer);
-    uint32_t totalRead   = 0u;
-    while (totalRead < byteCount)
+    static_cast<void>(::CancelIoEx(handle, &overlapped));
+    DWORD ignoredBytes = 0u;
+    static_cast<void>(::GetOverlappedResult(handle, &overlapped, &ignoredBytes, TRUE));
+    return hr;
+}
+
+HRESULT WaitForServerIo(HANDLE handle, OVERLAPPED& overlapped, const ServerIoContext* context, DWORD& outBytesTransferred) noexcept
+{
+    outBytesTransferred           = 0u;
+    const ULONGLONG frameStart    = ::GetTickCount64();
+    const DWORD frameTimeoutMs    = context != nullptr ? context->frameTimeoutMs : kClientFrameTimeoutMs;
+    const ULONGLONG frameDeadline = frameTimeoutMs == INFINITE ? (std::numeric_limits<ULONGLONG>::max)() : frameStart + frameTimeoutMs;
+
+    for (;;)
     {
-        DWORD chunkRead = 0u;
-        if (::ReadFile(handle, destination + totalRead, byteCount - totalRead, &chunkRead, nullptr) == 0)
+        const ULONGLONG now = ::GetTickCount64();
+        if (IsDeadlineExpired(frameDeadline, now))
+        {
+            return CancelServerIoAndReturn(handle, overlapped, HRESULT_FROM_WIN32(ERROR_SEM_TIMEOUT));
+        }
+
+        DWORD waitMs = (std::min)(kClientIoPollMs, RemainingToDeadlineMs(frameDeadline, now));
+        if (waitMs == 0u)
+        {
+            return CancelServerIoAndReturn(handle, overlapped, HRESULT_FROM_WIN32(ERROR_SEM_TIMEOUT));
+        }
+
+        HANDLE waits[2]        = {overlapped.hEvent, context != nullptr ? context->stopEvent : nullptr};
+        const DWORD waitCount  = (waits[1] != nullptr) ? 2u : 1u;
+        const DWORD waitResult = ::WaitForMultipleObjects(waitCount, waits, FALSE, waitMs);
+        if (waitResult == WAIT_TIMEOUT)
+        {
+            continue;
+        }
+        if (waitResult == WAIT_FAILED)
+        {
+            return CancelServerIoAndReturn(handle, overlapped, HRESULT_FROM_WIN32(::GetLastError()));
+        }
+        if (waitResult == WAIT_OBJECT_0 + 1u)
+        {
+            return CancelServerIoAndReturn(handle, overlapped, HRESULT_FROM_WIN32(ERROR_CANCELLED));
+        }
+        if (waitResult != WAIT_OBJECT_0)
+        {
+            return CancelServerIoAndReturn(handle, overlapped, E_FAIL);
+        }
+
+        if (::GetOverlappedResult(handle, &overlapped, &outBytesTransferred, FALSE) == 0)
         {
             return HRESULT_FROM_WIN32(::GetLastError());
         }
+        return S_OK;
+    }
+}
 
-        if (chunkRead == 0u)
+HRESULT ServerIoExact(HANDLE handle, void* buffer, uint32_t byteCount, bool write, const ServerIoContext* context) noexcept
+{
+    auto* bytes    = static_cast<std::byte*>(buffer);
+    uint32_t total = 0u;
+    wil::unique_event_nothrow ioEvent;
+    ioEvent.reset(::CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    if (! ioEvent)
+    {
+        const DWORD lastError = ::GetLastError();
+        return lastError != 0u ? HRESULT_FROM_WIN32(lastError) : E_OUTOFMEMORY;
+    }
+
+    while (total < byteCount)
+    {
+        if (context != nullptr && context->stopEvent != nullptr && ::WaitForSingleObject(context->stopEvent, 0u) == WAIT_OBJECT_0)
+        {
+            return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        }
+
+        static_cast<void>(::ResetEvent(ioEvent.get()));
+        OVERLAPPED overlapped{};
+        overlapped.hEvent = ioEvent.get();
+
+        DWORD transferred     = 0u;
+        const DWORD remaining = byteCount - total;
+        const BOOL started    = write ? ::WriteFile(handle, bytes + total, remaining, &transferred, &overlapped)
+                                      : ::ReadFile(handle, bytes + total, remaining, &transferred, &overlapped);
+        if (started == 0)
+        {
+            const DWORD error = ::GetLastError();
+            if (error != ERROR_IO_PENDING)
+            {
+                return HRESULT_FROM_WIN32(error);
+            }
+
+            HRESULT hr = WaitForServerIo(handle, overlapped, context, transferred);
+            if (FAILED(hr))
+            {
+                return hr;
+            }
+        }
+
+        if (transferred == 0u)
         {
             return HRESULT_FROM_WIN32(ERROR_BROKEN_PIPE);
         }
 
-        totalRead += chunkRead;
+        total += transferred;
     }
 
     return S_OK;
 }
 
-HRESULT WriteExact(HANDLE handle, const void* buffer, uint32_t byteCount) noexcept
+HRESULT ReadExact(HANDLE handle, void* buffer, uint32_t byteCount, const ServerIoContext* context) noexcept
 {
-    const uint8_t* source = static_cast<const uint8_t*>(buffer);
-    uint32_t totalWritten = 0u;
-    while (totalWritten < byteCount)
-    {
-        DWORD chunkWritten = 0u;
-        if (::WriteFile(handle, source + totalWritten, byteCount - totalWritten, &chunkWritten, nullptr) == 0)
-        {
-            return HRESULT_FROM_WIN32(::GetLastError());
-        }
-
-        if (chunkWritten == 0u)
-        {
-            return HRESULT_FROM_WIN32(ERROR_BROKEN_PIPE);
-        }
-
-        totalWritten += chunkWritten;
-    }
-
-    return S_OK;
+    return ServerIoExact(handle, buffer, byteCount, false, context);
 }
 
-HRESULT SendFrame(HANDLE handle, MessageType messageType, uint32_t protocolVersion, const std::vector<std::byte>& payload) noexcept
+HRESULT WriteExact(HANDLE handle, const void* buffer, uint32_t byteCount, const ServerIoContext* context) noexcept
+{
+    return ServerIoExact(handle, const_cast<void*>(buffer), byteCount, true, context);
+}
+
+HRESULT SendFrame(
+    HANDLE handle, MessageType messageType, uint32_t protocolVersion, const std::vector<std::byte>& payload, const ServerIoContext* context) noexcept
 {
     if (payload.size() > kMaxFrameBytes)
     {
@@ -844,7 +960,7 @@ HRESULT SendFrame(HANDLE handle, MessageType messageType, uint32_t protocolVersi
     header.messageType     = static_cast<uint32_t>(messageType);
     header.payloadBytes    = static_cast<uint32_t>(payload.size());
 
-    HRESULT hr = WriteExact(handle, &header, static_cast<uint32_t>(sizeof(header)));
+    HRESULT hr = WriteExact(handle, &header, static_cast<uint32_t>(sizeof(header)), context);
     if (FAILED(hr))
     {
         return hr;
@@ -852,17 +968,17 @@ HRESULT SendFrame(HANDLE handle, MessageType messageType, uint32_t protocolVersi
 
     if (! payload.empty())
     {
-        hr = WriteExact(handle, payload.data(), static_cast<uint32_t>(payload.size()));
+        hr = WriteExact(handle, payload.data(), static_cast<uint32_t>(payload.size()), context);
     }
     return hr;
 }
 
-HRESULT ReceiveFrame(HANDLE handle, FrameHeader& outHeader, std::vector<std::byte>& outPayload) noexcept
+HRESULT ReceiveFrame(HANDLE handle, FrameHeader& outHeader, std::vector<std::byte>& outPayload, const ServerIoContext* context) noexcept
 {
     outHeader = {};
     outPayload.clear();
 
-    HRESULT hr = ReadExact(handle, &outHeader, static_cast<uint32_t>(sizeof(outHeader)));
+    HRESULT hr = ReadExact(handle, &outHeader, static_cast<uint32_t>(sizeof(outHeader)), context);
     if (FAILED(hr))
     {
         return hr;
@@ -881,7 +997,7 @@ HRESULT ReceiveFrame(HANDLE handle, FrameHeader& outHeader, std::vector<std::byt
     outPayload.resize(outHeader.payloadBytes);
     if (outHeader.payloadBytes != 0u)
     {
-        hr = ReadExact(handle, outPayload.data(), outHeader.payloadBytes);
+        hr = ReadExact(handle, outPayload.data(), outHeader.payloadBytes, context);
     }
     return hr;
 }
@@ -931,10 +1047,9 @@ HRESULT CancelClientIoAndReturn(HANDLE handle, OVERLAPPED& overlapped, HRESULT h
 
 HRESULT WaitForClientIo(HANDLE handle, OVERLAPPED& overlapped, ClientIoContext* context, DWORD& outBytesTransferred) noexcept
 {
-    outBytesTransferred         = 0u;
-    const ULONGLONG frameStart  = ::GetTickCount64();
-    const ULONGLONG frameDeadline =
-        context != nullptr ? frameStart + context->frameTimeoutMs : frameStart + kClientFrameTimeoutMs;
+    outBytesTransferred           = 0u;
+    const ULONGLONG frameStart    = ::GetTickCount64();
+    const ULONGLONG frameDeadline = context != nullptr ? frameStart + context->frameTimeoutMs : frameStart + kClientFrameTimeoutMs;
 
     for (;;)
     {
@@ -985,8 +1100,8 @@ HRESULT WaitForClientIo(HANDLE handle, OVERLAPPED& overlapped, ClientIoContext* 
 
 HRESULT ClientIoExact(HANDLE handle, void* buffer, uint32_t byteCount, bool write, ClientIoContext* context) noexcept
 {
-    auto* bytes       = static_cast<std::byte*>(buffer);
-    uint32_t total    = 0u;
+    auto* bytes    = static_cast<std::byte*>(buffer);
+    uint32_t total = 0u;
     wil::unique_event_nothrow ioEvent;
     ioEvent.reset(::CreateEventW(nullptr, TRUE, FALSE, nullptr));
     if (! ioEvent)
@@ -1007,11 +1122,10 @@ HRESULT ClientIoExact(HANDLE handle, void* buffer, uint32_t byteCount, bool writ
         OVERLAPPED overlapped{};
         overlapped.hEvent = ioEvent.get();
 
-        DWORD transferred = 0u;
+        DWORD transferred     = 0u;
         const DWORD remaining = byteCount - total;
-        const BOOL started =
-            write ? ::WriteFile(handle, bytes + total, remaining, &transferred, &overlapped)
-                  : ::ReadFile(handle, bytes + total, remaining, &transferred, &overlapped);
+        const BOOL started    = write ? ::WriteFile(handle, bytes + total, remaining, &transferred, &overlapped)
+                                      : ::ReadFile(handle, bytes + total, remaining, &transferred, &overlapped);
         if (started == 0)
         {
             const DWORD error = ::GetLastError();
@@ -1048,7 +1162,8 @@ HRESULT ClientWriteExact(HANDLE handle, const void* buffer, uint32_t byteCount, 
     return ClientIoExact(handle, const_cast<void*>(buffer), byteCount, true, context);
 }
 
-HRESULT ClientSendFrame(HANDLE handle, MessageType messageType, uint32_t protocolVersion, const std::vector<std::byte>& payload, ClientIoContext* context) noexcept
+HRESULT ClientSendFrame(
+    HANDLE handle, MessageType messageType, uint32_t protocolVersion, const std::vector<std::byte>& payload, ClientIoContext* context) noexcept
 {
     if (payload.size() > kMaxFrameBytes)
     {
@@ -1194,6 +1309,11 @@ void SetQueuedMaintenanceState(ServerMaintenanceState& state, const bool queued)
         return true;
     }
 
+    if (! storeInfo.incrementalAutoVacuumEnabled)
+    {
+        return true;
+    }
+
     if (! storeInfo.autoCompactionEnabled || storeInfo.pageCount == 0u || storeInfo.freelistPageCount == 0u)
     {
         return false;
@@ -1202,6 +1322,57 @@ void SetQueuedMaintenanceState(ServerMaintenanceState& state, const bool queued)
     const uint64_t fragmentationPercent = (storeInfo.freelistPageCount * 100u) / storeInfo.pageCount;
     const uint64_t reclaimableBytes     = EstimateSqlitePageBytes(storeInfo) * storeInfo.freelistPageCount;
     return fragmentationPercent >= storeInfo.autoCompactionFragmentationPercent || reclaimableBytes >= storeInfo.autoCompactionMinBytes;
+}
+
+enum class RepositoryStoreOverlayResult : uint8_t
+{
+    Compatible,
+    Uninspectable,
+    GenerationMismatch,
+};
+
+[[nodiscard]] RepositoryStoreOverlayResult OverlayFresherRepositoryStoreInfo(LocalSearchIndexCore::PersistentStoreInfo& storeInfo,
+                                                                               LocalSearchIndexCore::Repository* repository) noexcept
+{
+    if (repository == nullptr || storeInfo.kind != LocalSearchIndexCore::PersistentStoreKind::Sqlite)
+    {
+        return RepositoryStoreOverlayResult::Compatible;
+    }
+    if (! storeInfo.inspectionSucceeded)
+    {
+        return RepositoryStoreOverlayResult::Uninspectable;
+    }
+
+    LocalSearchIndexCore::PersistentStoreInfo repositoryStoreInfo{};
+    bool hasRepositoryStoreInfo = repository->TryGetCachedPersistentStoreInfo(repositoryStoreInfo) && repositoryStoreInfo.inspectionSucceeded;
+    if (! hasRepositoryStoreInfo)
+    {
+        hasRepositoryStoreInfo = repository->TryBuildInMemoryPersistentStoreInfo(repositoryStoreInfo);
+    }
+    if (! hasRepositoryStoreInfo || repositoryStoreInfo.kind != storeInfo.kind ||
+        ! OrdinalString::EqualsNoCase(repositoryStoreInfo.primaryPath, storeInfo.primaryPath))
+    {
+        return RepositoryStoreOverlayResult::Compatible;
+    }
+
+    if (repositoryStoreInfo.storeGeneration != storeInfo.storeGeneration)
+    {
+        // The on-disk inspection is the coherent snapshot for this response. A generation mismatch can mean
+        // external rotation, so cached or in-memory runtime counts must not overwrite it.
+        return RepositoryStoreOverlayResult::GenerationMismatch;
+    }
+
+    if (repositoryStoreInfo.indexedVolumeCount <= storeInfo.indexedVolumeCount && repositoryStoreInfo.indexedEntryCount <= storeInfo.indexedEntryCount)
+    {
+        return RepositoryStoreOverlayResult::Compatible;
+    }
+
+    storeInfo.inspectionSucceeded     = true;
+    storeInfo.readyForQueryCutover    = repositoryStoreInfo.readyForQueryCutover;
+    storeInfo.indexedVolumeCount      = repositoryStoreInfo.indexedVolumeCount;
+    storeInfo.indexedEntryCount       = repositoryStoreInfo.indexedEntryCount;
+    storeInfo.legacyImportVolumeCount = repositoryStoreInfo.legacyImportVolumeCount;
+    return RepositoryStoreOverlayResult::Compatible;
 }
 
 void RefreshAutomaticMaintenanceQueue(const ServerOptions& options, ServerMaintenanceState& maintenanceState, uint32_t handledRequests) noexcept
@@ -1281,11 +1452,9 @@ HRESULT RunQueuedAutomaticMaintenance(const ServerOptions& options, ServerMainte
     };
     NotifyServerEvent(options, SEARCH_SERVICE_SERVER_EVENT_MAINTENANCE_RUNNING, S_OK, handledRequests, &startDetails);
 
-    const HRESULT maintenanceHr = [&]() noexcept
-    {
-        SqliteIndexStore::AutomaticMaintenanceResult result{};
-        return SqliteIndexStore::RunAutomaticMaintenance(storeInfo.primaryPath, LocalSearchIndexCore::GetDefaultSqliteMaintenancePolicy(), &result);
-    }();
+    SqliteIndexStore::AutomaticMaintenanceResult maintenanceResult{};
+    const HRESULT maintenanceHr =
+        SqliteIndexStore::RunAutomaticMaintenance(storeInfo.primaryPath, LocalSearchIndexCore::GetDefaultSqliteMaintenancePolicy(), &maintenanceResult);
 
     maintenanceState.running           = false;
     maintenanceState.queuedSinceTickMs = 0u;
@@ -1302,41 +1471,82 @@ HRESULT RunQueuedAutomaticMaintenance(const ServerOptions& options, ServerMainte
         return maintenanceHr;
     }
 
+    if (maintenanceResult.ranVacuum)
+    {
+        Debug::Info(L"SearchServiceBroker: automatic SQLite maintenance ran full VACUUM rewrite for '{}'.", storeInfo.primaryPath);
+    }
+
     RefreshAutomaticMaintenanceQueue(options, maintenanceState, handledRequests);
     return S_OK;
 }
 
 [[nodiscard]] std::wstring GetEnvironmentValue(std::wstring_view name) noexcept
 {
-    std::wstring key(name);
-    const DWORD required = ::GetEnvironmentVariableW(key.c_str(), nullptr, 0u);
-    if (required == 0u)
-    {
-        return {};
-    }
-
-    std::wstring value(static_cast<size_t>(required), L'\0');
-    const DWORD written = ::GetEnvironmentVariableW(key.c_str(), value.data(), required);
-    if (written == 0u)
-    {
-        return {};
-    }
-
-    if (! value.empty() && value.back() == L'\0')
-    {
-        value.pop_back();
-    }
-    return value;
+    return EnvironmentVariables::Read(name).value_or(std::wstring{});
 }
 
-HRESULT ConnectClientPipe(wil::unique_handle& outPipe) noexcept
+[[nodiscard]] DWORD GetClientMissingPipeRetryWindowMs() noexcept
 {
-    const std::wstring pipeName         = GetConfiguredPipeName();
+    const std::wstring value = GetEnvironmentValue(kClientMissingPipeRetryMsEnvVar);
+    if (value.empty())
+    {
+        return kDefaultMissingPipeRetryWindowMs;
+    }
+
+    uint64_t parsed = 0u;
+    for (const wchar_t ch : value)
+    {
+        if (ch < L'0' || ch > L'9')
+        {
+            return kDefaultMissingPipeRetryWindowMs;
+        }
+
+        parsed = (parsed * 10u) + static_cast<uint64_t>(ch - L'0');
+        if (parsed > kMaxMissingPipeRetryWindowMs)
+        {
+            return kMaxMissingPipeRetryWindowMs;
+        }
+    }
+
+    return static_cast<DWORD>(parsed);
+}
+
+[[nodiscard]] HRESULT WaitForClientConnectRetry(DWORD delayMs, ClientIoContext* context) noexcept
+{
+    const ULONGLONG deadline = ::GetTickCount64() + delayMs;
+    for (;;)
+    {
+        const HRESULT cancelHr = CheckClientIoCancelled(context);
+        if (FAILED(cancelHr))
+        {
+            return cancelHr;
+        }
+
+        const ULONGLONG now = ::GetTickCount64();
+        if (now >= deadline)
+        {
+            return S_OK;
+        }
+
+        ::Sleep(static_cast<DWORD>((std::min<ULONGLONG>)(deadline - now, 1u)));
+    }
+}
+
+HRESULT ConnectClientPipeForName(
+    std::wstring_view requestedPipeName, DWORD missingPipeRetryWindowMs, wil::unique_handle& outPipe, ClientIoContext* context = nullptr) noexcept
+{
+    const std::wstring pipeName         = BuildPipeName(requestedPipeName);
     const ULONGLONG deadline            = ::GetTickCount64() + 750u;
-    const ULONGLONG missingPipeDeadline = ::GetTickCount64() + kMissingPipeRetryWindowMs;
+    const ULONGLONG missingPipeDeadline = ::GetTickCount64() + missingPipeRetryWindowMs;
 
     for (;;)
     {
+        HRESULT hr = CheckClientIoCancelled(context);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
         if (::WaitNamedPipeW(pipeName.c_str(), kClientConnectTimeoutMs) == 0)
         {
             const DWORD waitError = ::GetLastError();
@@ -1347,7 +1557,11 @@ HRESULT ConnectClientPipe(wil::unique_handle& outPipe) noexcept
                     return HRESULT_FROM_WIN32(waitError);
                 }
 
-                ::Sleep(10u);
+                hr = WaitForClientConnectRetry(10u, context);
+                if (FAILED(hr))
+                {
+                    return hr;
+                }
                 continue;
             }
             if (waitError != ERROR_SEM_TIMEOUT && waitError != ERROR_FILE_NOT_FOUND && waitError != ERROR_PIPE_BUSY)
@@ -1356,8 +1570,8 @@ HRESULT ConnectClientPipe(wil::unique_handle& outPipe) noexcept
             }
         }
 
-        outPipe.reset(::CreateFileW(
-            pipeName.c_str(), GENERIC_READ | GENERIC_WRITE, 0u, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, nullptr));
+        outPipe.reset(
+            ::CreateFileW(pipeName.c_str(), GENERIC_READ | GENERIC_WRITE, 0u, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, nullptr));
         if (outPipe)
         {
             return S_OK;
@@ -1371,7 +1585,11 @@ HRESULT ConnectClientPipe(wil::unique_handle& outPipe) noexcept
                 return HRESULT_FROM_WIN32(error);
             }
 
-            ::Sleep(10u);
+            hr = WaitForClientConnectRetry(10u, context);
+            if (FAILED(hr))
+            {
+                return hr;
+            }
             continue;
         }
         if (error != ERROR_FILE_NOT_FOUND && error != ERROR_PIPE_BUSY && error != ERROR_SEM_TIMEOUT)
@@ -1384,11 +1602,15 @@ HRESULT ConnectClientPipe(wil::unique_handle& outPipe) noexcept
             return HRESULT_FROM_WIN32(error);
         }
 
-        ::Sleep(25u);
+        hr = WaitForClientConnectRetry(25u, context);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
     }
 }
 
-HRESULT SendProtocolError(HANDLE handle, uint32_t protocolVersion, HRESULT hr, std::wstring_view message) noexcept
+HRESULT SendProtocolError(HANDLE handle, uint32_t protocolVersion, HRESULT hr, std::wstring_view message, const ServerIoContext* context) noexcept
 {
     ErrorPayload payload{};
     payload.result       = hr;
@@ -1398,7 +1620,7 @@ HRESULT SendProtocolError(HANDLE handle, uint32_t protocolVersion, HRESULT hr, s
     buffer.reserve(sizeof(payload) + payload.messageBytes);
     AppendBytes(buffer, &payload, sizeof(payload));
     AppendUtf16(buffer, message);
-    return SendFrame(handle, MessageType::Error, protocolVersion, buffer);
+    return SendFrame(handle, MessageType::Error, protocolVersion, buffer, context);
 }
 
 HRESULT SendStatusResponse(HANDLE handle,
@@ -1406,18 +1628,37 @@ HRESULT SendStatusResponse(HANDLE handle,
                            const ServerOptions& options,
                            const ServerMaintenanceState* maintenanceState,
                            const ServerStartupWarmupState* startupWarmupState,
-                           LocalSearchIndexCore::Repository* repository) noexcept
+                           LocalSearchIndexCore::Repository* repository,
+                           const ServerIoContext* context) noexcept
 {
-    const std::wstring pipeName                               = BuildPipeName(options.pipeName);
-    const std::wstring storageRoot                            = options.storageRootDirectory;
-    const LocalSearchIndexCore::PersistentStoreInfo storeInfo = LocalSearchIndexCore::GetPersistentStoreInfo(BuildRepositoryOptions(options));
-    const ServerStartupWarmupSnapshot warmupSnapshot          = CaptureStartupWarmupSnapshot(startupWarmupState);
+    const std::wstring pipeName                         = BuildPipeName(options.pipeName);
+    const std::wstring storageRoot                      = options.storageRootDirectory;
+    LocalSearchIndexCore::PersistentStoreInfo storeInfo = LocalSearchIndexCore::GetPersistentStoreInfo(BuildRepositoryOptions(options));
+    const ServerStartupWarmupSnapshot warmupSnapshot    = CaptureStartupWarmupSnapshot(startupWarmupState);
     LocalSearchIndexCore::RepositoryStatus repositoryStatus{};
     std::vector<std::wstring> discoveredRoots;
     if (repository != nullptr)
     {
         repository->GetStatus(repositoryStatus);
         repository->CollectCachedRoots(discoveredRoots);
+        const RepositoryStoreOverlayResult overlayResult = OverlayFresherRepositoryStoreInfo(storeInfo, repository);
+        if (overlayResult != RepositoryStoreOverlayResult::Compatible)
+        {
+            // These fields are tied to the repository generation and must be re-derived from the coherent
+            // on-disk inspection plus the independent startup-warmup snapshot. The last request execution
+            // mode remains meaningful when this same configured store is merely uninspectable, but not after
+            // a detected external generation rotation.
+            repositoryStatus.storeState     = LocalSearchIndexCore::StoreState::Unknown;
+            repositoryStatus.syncPhase      = LocalSearchIndexCore::SyncPhase::Idle;
+            repositoryStatus.fallbackReason = LocalSearchIndexCore::FallbackReason::None;
+            repositoryStatus.completedRoots = 0u;
+            repositoryStatus.totalRoots     = 0u;
+            repositoryStatus.activeRoot.clear();
+            if (overlayResult == RepositoryStoreOverlayResult::GenerationMismatch)
+            {
+                repositoryStatus.queryExecutionMode = LocalSearchIndexCore::QueryExecutionMode::Unknown;
+            }
+        }
     }
     std::wstring discoveredRootsText;
     for (size_t index = 0; index < discoveredRoots.size(); ++index)
@@ -1552,10 +1793,10 @@ HRESULT SendStatusResponse(HANDLE handle,
     AppendUtf16(buffer, warmupSnapshot.lastFailureRoot);
     AppendBytes(buffer, &runtime, sizeof(runtime));
     AppendUtf16(buffer, runtimeActiveRoot);
-    return SendFrame(handle, MessageType::StatusResponse, protocolVersion, buffer);
+    return SendFrame(handle, MessageType::StatusResponse, protocolVersion, buffer, context);
 }
 
-HRESULT SendProgress(HANDLE handle, uint32_t protocolVersion, const QueryProgress& progress) noexcept
+HRESULT SendProgress(HANDLE handle, uint32_t protocolVersion, const QueryProgress& progress, const ServerIoContext* context) noexcept
 {
     ProgressPayload payload{};
     payload.phase              = static_cast<uint32_t>(progress.phase);
@@ -1582,14 +1823,15 @@ HRESULT SendProgress(HANDLE handle, uint32_t protocolVersion, const QueryProgres
     AppendUtf16(buffer, progress.currentPath);
     AppendBytes(buffer, &runtime, sizeof(runtime));
     AppendUtf16(buffer, progress.activeRoot);
-    return SendFrame(handle, MessageType::QueryProgress, protocolVersion, buffer);
+    return SendFrame(handle, MessageType::QueryProgress, protocolVersion, buffer, context);
 }
 
 HRESULT SendCandidates(HANDLE handle,
                        uint32_t protocolVersion,
                        std::span<const LocalSearchIndexCore::Candidate> candidates,
                        uint32_t disconnectAfterBatches,
-                       uint32_t& batchesSent) noexcept
+                       uint32_t& batchesSent,
+                       const ServerIoContext* context) noexcept
 {
     constexpr size_t kBatchItems = 256u;
 
@@ -1623,7 +1865,7 @@ HRESULT SendCandidates(HANDLE handle,
             AppendUtf16(buffer, candidate.displayName);
         }
 
-        HRESULT hr = SendFrame(handle, MessageType::QueryBatch, protocolVersion, buffer);
+        HRESULT hr = SendFrame(handle, MessageType::QueryBatch, protocolVersion, buffer, context);
         if (FAILED(hr))
         {
             return hr;
@@ -1665,7 +1907,7 @@ HRESULT STDMETHODCALLTYPE StreamServerQueryProgress(const LocalSearchIndexCore::
     payload.activeRoot         = progress->activeRoot;
     payload.currentPath        = progress->currentPath;
 
-    HRESULT hr = SendProgress(context.pipe, context.protocolVersion, payload);
+    HRESULT hr = SendProgress(context.pipe, context.protocolVersion, payload, context.ioContext);
     if (FAILED(hr))
     {
         return hr;
@@ -1726,7 +1968,7 @@ HRESULT FlushServerCandidates(ServerCandidateBatchState& state) noexcept
         progress.scannedFiles       = state.stats->fileCount;
         progress.candidateFiles     = state.stats->candidateCount;
 
-        const HRESULT progressHr = SendProgress(state.pipe, state.protocolVersion, progress);
+        const HRESULT progressHr = SendProgress(state.pipe, state.protocolVersion, progress, state.ioContext);
         if (FAILED(progressHr))
         {
             return progressHr;
@@ -1739,7 +1981,8 @@ HRESULT FlushServerCandidates(ServerCandidateBatchState& state) noexcept
                                       state.protocolVersion,
                                       std::span<const LocalSearchIndexCore::Candidate>(state.bufferedCandidates.data(), state.bufferedCandidates.size()),
                                       state.disconnectAfterBatches,
-                                      state.batchesSent);
+                                      state.batchesSent,
+                                      state.ioContext);
     if (FAILED(hr))
     {
         return hr;
@@ -1761,7 +2004,7 @@ HRESULT FlushServerCandidates(ServerCandidateBatchState& state) noexcept
             .estimatedMemoryBytes   = state.stats->estimatedMemoryBytes,
             .ensureReadyDurationMs  = state.stats->ensureReadyDurationMs,
             .executeQueryDurationMs = state.stats->executeQueryDurationMs,
-            .warningFlags           = state.stats->usedLiveScanFallback ? FILESYSTEM_SEARCH_WARNING_DEGRADED_NO_INDEX : FILESYSTEM_SEARCH_WARNING_NONE,
+            .warningFlags           = QueryStateWarningFlags(state),
             .storeState             = static_cast<uint32_t>(state.stats->usedLiveScanFallback ? ResolveFallbackStoreState(state.stats->fallbackReason)
                                                                                               : LocalSearchIndexCore::StoreState::Ready),
             .syncPhase =
@@ -1789,6 +2032,30 @@ HRESULT STDMETHODCALLTYPE StreamServerCandidate(LocalSearchIndexCore::Candidate*
     }
 
     auto& state = *static_cast<ServerCandidateBatchState*>(cookie);
+
+    HRESULT authorizationHr = S_OK;
+    try
+    {
+        authorizationHr = AuthorizeCandidateForClient(state, *candidate);
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::terminate();
+    }
+    catch (const std::exception&)
+    {
+        // Mandatory: service callback boundary. Return failure instead of unwinding through a noexcept callback.
+        return E_FAIL;
+    }
+    if (authorizationHr == S_FALSE)
+    {
+        return LocalSearchIndexCore::kSkipCandidateHr;
+    }
+    if (FAILED(authorizationHr))
+    {
+        state.warningFlags |= FILESYSTEM_SEARCH_WARNING_ACCESS_DENIED_SKIPPED;
+        return LocalSearchIndexCore::kSkipCandidateHr;
+    }
 
     const size_t candidatePayloadBytes =
         sizeof(CandidateEntryHeader) + (candidate->fullPath.size() * sizeof(wchar_t)) + (candidate->displayName.size() * sizeof(wchar_t));
@@ -1879,27 +2146,33 @@ uint32_t PackQueryStatsFlags(const LocalSearchIndexCore::QueryStats& stats) noex
     {
         flags |= QUERY_COMPLETE_FLAG_SQLITE_QUERY_READ_ONLY;
     }
+    if (stats.hardlinkAliasCoverageIncomplete)
+    {
+        flags |= QUERY_COMPLETE_FLAG_HARDLINK_ALIAS_INCOMPLETE;
+    }
     return flags;
 }
 
 void UnpackQueryStatsFlags(uint32_t flags, LocalSearchIndexCore::QueryStats& stats) noexcept
 {
-    stats.snapshotLoaded             = (flags & QUERY_COMPLETE_FLAG_SNAPSHOT_LOADED) != 0u;
-    stats.snapshotSaved              = (flags & QUERY_COMPLETE_FLAG_SNAPSHOT_SAVED) != 0u;
-    stats.journalAvailable           = (flags & QUERY_COMPLETE_FLAG_JOURNAL_AVAILABLE) != 0u;
-    stats.journalReplayApplied       = (flags & QUERY_COMPLETE_FLAG_JOURNAL_REPLAY_APPLIED) != 0u;
-    stats.rebuiltJournalIdMismatch   = (flags & QUERY_COMPLETE_FLAG_REBUILT_JOURNAL_ID_MISMATCH) != 0u;
-    stats.rebuiltJournalRangeInvalid = (flags & QUERY_COMPLETE_FLAG_REBUILT_JOURNAL_RANGE_INVALID) != 0u;
-    stats.rebuiltSnapshotCorruption  = (flags & QUERY_COMPLETE_FLAG_REBUILT_SNAPSHOT_CORRUPTION) != 0u;
-    stats.usedNtfsEnumeration        = (flags & QUERY_COMPLETE_FLAG_USED_NTFS_ENUMERATION) != 0u;
-    stats.usedTraversalSeed          = (flags & QUERY_COMPLETE_FLAG_USED_TRAVERSAL_SEED) != 0u;
-    stats.usedSqliteStore            = (flags & QUERY_COMPLETE_FLAG_USED_SQLITE_STORE) != 0u;
-    stats.sqliteCutoverBlocked       = (flags & QUERY_COMPLETE_FLAG_SQLITE_CUTOVER_BLOCKED) != 0u;
-    stats.usedNamePrefilter          = (flags & QUERY_COMPLETE_FLAG_USED_NAME_PREFILTER) != 0u;
-    stats.sqliteReadOnlyQuery        = (flags & QUERY_COMPLETE_FLAG_SQLITE_QUERY_READ_ONLY) != 0u;
+    stats.snapshotLoaded                  = (flags & QUERY_COMPLETE_FLAG_SNAPSHOT_LOADED) != 0u;
+    stats.snapshotSaved                   = (flags & QUERY_COMPLETE_FLAG_SNAPSHOT_SAVED) != 0u;
+    stats.journalAvailable                = (flags & QUERY_COMPLETE_FLAG_JOURNAL_AVAILABLE) != 0u;
+    stats.journalReplayApplied            = (flags & QUERY_COMPLETE_FLAG_JOURNAL_REPLAY_APPLIED) != 0u;
+    stats.rebuiltJournalIdMismatch        = (flags & QUERY_COMPLETE_FLAG_REBUILT_JOURNAL_ID_MISMATCH) != 0u;
+    stats.rebuiltJournalRangeInvalid      = (flags & QUERY_COMPLETE_FLAG_REBUILT_JOURNAL_RANGE_INVALID) != 0u;
+    stats.rebuiltSnapshotCorruption       = (flags & QUERY_COMPLETE_FLAG_REBUILT_SNAPSHOT_CORRUPTION) != 0u;
+    stats.usedNtfsEnumeration             = (flags & QUERY_COMPLETE_FLAG_USED_NTFS_ENUMERATION) != 0u;
+    stats.usedTraversalSeed               = (flags & QUERY_COMPLETE_FLAG_USED_TRAVERSAL_SEED) != 0u;
+    stats.usedSqliteStore                 = (flags & QUERY_COMPLETE_FLAG_USED_SQLITE_STORE) != 0u;
+    stats.sqliteCutoverBlocked            = (flags & QUERY_COMPLETE_FLAG_SQLITE_CUTOVER_BLOCKED) != 0u;
+    stats.usedNamePrefilter               = (flags & QUERY_COMPLETE_FLAG_USED_NAME_PREFILTER) != 0u;
+    stats.sqliteReadOnlyQuery             = (flags & QUERY_COMPLETE_FLAG_SQLITE_QUERY_READ_ONLY) != 0u;
+    stats.hardlinkAliasCoverageIncomplete = (flags & QUERY_COMPLETE_FLAG_HARDLINK_ALIAS_INCOMPLETE) != 0u;
 }
 
-HRESULT SendQueryComplete(HANDLE handle, uint32_t protocolVersion, HRESULT result, const LocalSearchIndexCore::QueryStats& stats) noexcept
+HRESULT SendQueryComplete(
+    HANDLE handle, uint32_t protocolVersion, HRESULT result, const LocalSearchIndexCore::QueryStats& stats, const ServerIoContext* context) noexcept
 {
     QueryCompletePayload payload{};
     payload.result                 = result;
@@ -1919,15 +2192,16 @@ HRESULT SendQueryComplete(HANDLE handle, uint32_t protocolVersion, HRESULT resul
     QueryCompleteRuntimePayload runtime{};
     runtime.queryExecutionMode = static_cast<uint32_t>(stats.queryExecutionMode);
     runtime.fallbackReason     = static_cast<uint32_t>(stats.fallbackReason);
+    runtime.warningFlags       = QueryStatsWarningFlags(stats);
 
     std::vector<std::byte> buffer;
     buffer.reserve(sizeof(payload) + sizeof(runtime));
     AppendBytes(buffer, &payload, sizeof(payload));
     AppendBytes(buffer, &runtime, sizeof(runtime));
-    return SendFrame(handle, MessageType::QueryComplete, protocolVersion, buffer);
+    return SendFrame(handle, MessageType::QueryComplete, protocolVersion, buffer, context);
 }
 
-HRESULT SendAck(HANDLE handle, uint32_t protocolVersion, HRESULT hr) noexcept
+HRESULT SendAck(HANDLE handle, uint32_t protocolVersion, HRESULT hr, const ServerIoContext* context) noexcept
 {
     AckPayload payload{};
     payload.result = hr;
@@ -1935,7 +2209,7 @@ HRESULT SendAck(HANDLE handle, uint32_t protocolVersion, HRESULT hr) noexcept
     std::vector<std::byte> buffer;
     buffer.reserve(sizeof(payload));
     AppendBytes(buffer, &payload, sizeof(payload));
-    return SendFrame(handle, MessageType::Ack, protocolVersion, buffer);
+    return SendFrame(handle, MessageType::Ack, protocolVersion, buffer, context);
 }
 
 HRESULT STDMETHODCALLTYPE ServerCancelCheck(void* cookie) noexcept
@@ -1982,6 +2256,437 @@ HRESULT STDMETHODCALLTYPE StartupWarmupCancelCheck(void* cookie) noexcept
     return S_OK;
 }
 
+[[nodiscard]] bool IsAsciiDriveLetter(wchar_t ch) noexcept
+{
+    return (ch >= L'A' && ch <= L'Z') || (ch >= L'a' && ch <= L'z');
+}
+
+[[nodiscard]] bool IsDriveRootedPath(std::wstring_view path) noexcept
+{
+    return path.size() >= 3u && IsAsciiDriveLetter(path[0]) && path[1] == L':' && (path[2] == L'\\' || path[2] == L'/');
+}
+
+[[nodiscard]] bool IsDriveRoot(std::wstring_view path) noexcept
+{
+    return path.size() == 3u && IsDriveRootedPath(path);
+}
+
+[[nodiscard]] bool IsPathSeparator(wchar_t ch) noexcept
+{
+    return ch == L'\\' || ch == L'/';
+}
+
+HRESULT ConnectClientPipe(wil::unique_handle& outPipe, ClientIoContext* context = nullptr) noexcept
+{
+    return ConnectClientPipeForName(GetConfiguredPipeName(), GetClientMissingPipeRetryWindowMs(), outPipe, context);
+}
+
+[[nodiscard]] bool IsMissingPathError(DWORD error) noexcept
+{
+    return error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND;
+}
+
+[[nodiscard]] std::wstring ParentPathForAuthorization(std::wstring_view path)
+{
+    if (path.empty() || IsDriveRoot(path))
+    {
+        return {};
+    }
+
+    const size_t separator = path.find_last_of(L"\\/");
+    if (separator == std::wstring_view::npos)
+    {
+        return {};
+    }
+
+    const size_t parentLength = separator == 2u && IsDriveRootedPath(path) ? 3u : separator;
+    return std::wstring(path.substr(0u, parentLength));
+}
+
+[[nodiscard]] std::wstring NormalizeResultPathForClientAuthorization(std::wstring_view path)
+{
+    std::wstring normalized(path);
+    std::replace(normalized.begin(), normalized.end(), L'/', L'\\');
+    while (normalized.size() > 3u && IsPathSeparator(normalized.back()) && ! IsDriveRoot(normalized))
+    {
+        normalized.pop_back();
+    }
+
+    return normalized;
+}
+
+[[nodiscard]] bool IsPathAtOrUnderRoot(std::wstring_view path, std::wstring_view root) noexcept
+{
+    if (OrdinalString::EqualsNoCase(path, root))
+    {
+        return true;
+    }
+
+    if (path.size() <= root.size() || ! OrdinalString::StartsWithNoCase(path, root))
+    {
+        return false;
+    }
+
+    return IsPathSeparator(root.back()) || IsPathSeparator(path[root.size()]);
+}
+
+[[nodiscard]] bool IsDurableClientDirectoryAuthorizationFailure(const DWORD lastError) noexcept
+{
+    switch (lastError)
+    {
+    case ERROR_ACCESS_DENIED:
+    case ERROR_FILE_NOT_FOUND:
+    case ERROR_PATH_NOT_FOUND:
+        return true;
+    default:
+        return false;
+    }
+}
+
+#if defined(RS_SEARCH_TEST_HOOKS)
+[[nodiscard]] HRESULT RunClientAuthorizationTestHook(ServerCandidateBatchState& state) noexcept
+{
+    if (state.testHookConsumed)
+    {
+        return S_OK;
+    }
+
+    switch (state.testHook)
+    {
+    case ServerTestHook::None:
+        return S_OK;
+    case ServerTestHook::FailClientAuthImpersonationOnce:
+        state.testHookConsumed = true;
+        return HRESULT_FROM_WIN32(ERROR_CANNOT_IMPERSONATE);
+    case ServerTestHook::RejectMarkedRoot:
+    case ServerTestHook::FailMarkedClientDirectoryOpenBadNetPath: return S_OK;
+    }
+
+    return E_INVALIDARG;
+}
+#endif
+
+[[nodiscard]] HRESULT CheckClientCanListDirectory(ServerCandidateBatchState& state, std::wstring_view directoryPath, bool& outAllowed)
+{
+    outAllowed = false;
+
+    const std::wstring cacheKey = OrdinalString::FoldCaseInvariant(directoryPath);
+    if (const auto cached = state.clientDirectoryAccessCache.find(cacheKey); cached != state.clientDirectoryAccessCache.end())
+    {
+        outAllowed = cached->second;
+        return S_OK;
+    }
+
+    const std::wstring path(directoryPath);
+#if defined(RS_SEARCH_TEST_HOOKS)
+    const HRESULT testHookHr = RunClientAuthorizationTestHook(state);
+    if (FAILED(testHookHr))
+    {
+        return testHookHr;
+    }
+
+    if (state.testHook == ServerTestHook::FailMarkedClientDirectoryOpenBadNetPath &&
+        path.find(L"transient-auth") != std::wstring::npos)
+    {
+        state.clientDirectoryAccessCache.emplace(cacheKey, false);
+        Debug::Perf::Emit(L"search.service.authorization.transient_parent_failures",
+                          L"shape=ERROR_BAD_NETPATH",
+                          0u,
+                          1u,
+                          0u,
+                          HRESULT_FROM_WIN32(ERROR_BAD_NETPATH));
+        ::SetLastError(ERROR_BAD_NETPATH);
+        const DWORD loggedError = Debug::ErrorWithLastError(L"SearchServiceBroker: transient client directory authorization open failed for '{}'", path);
+        return HRESULT_FROM_WIN32(loggedError != ERROR_SUCCESS ? loggedError : ERROR_BAD_NETPATH);
+    }
+#endif
+
+    if (::ImpersonateNamedPipeClient(state.pipe) == 0)
+    {
+        return HRESULT_FROM_WIN32(::GetLastError());
+    }
+
+    const auto revertToSelf = wil::scope_exit([]() noexcept { static_cast<void>(::RevertToSelf()); });
+
+    wil::unique_handle directoryHandle(::CreateFileW(path.c_str(),
+                                                     FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES,
+                                                     FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                                     nullptr,
+                                                      OPEN_EXISTING,
+                                                      FILE_FLAG_BACKUP_SEMANTICS,
+                                                      nullptr));
+    if (! directoryHandle)
+    {
+        const DWORD lastError = ::GetLastError();
+        if (IsDurableClientDirectoryAuthorizationFailure(lastError))
+        {
+            state.clientDirectoryAccessCache.emplace(cacheKey, false);
+            return S_OK;
+        }
+
+        state.clientDirectoryAccessCache.emplace(cacheKey, false);
+        Debug::Perf::Emit(L"search.service.authorization.transient_parent_failures", L"", 0u, 1u, 0u, HRESULT_FROM_WIN32(lastError));
+        ::SetLastError(lastError);
+        const DWORD loggedError = Debug::ErrorWithLastError(L"SearchServiceBroker: transient client directory authorization open failed for '{}'", path);
+        return HRESULT_FROM_WIN32(loggedError != ERROR_SUCCESS ? loggedError : ERROR_ACCESS_DENIED);
+    }
+
+    outAllowed = true;
+    state.clientDirectoryAccessCache.emplace(cacheKey, outAllowed);
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT AuthorizeCandidateForClient(ServerCandidateBatchState& state, const LocalSearchIndexCore::Candidate& candidate)
+{
+    const std::wstring_view rootPath = state.rootPath;
+    const std::wstring candidatePath = NormalizeResultPathForClientAuthorization(candidate.fullPath);
+    if (rootPath.empty() || candidatePath.empty() || ! IsPathAtOrUnderRoot(candidatePath, rootPath))
+    {
+        return S_FALSE;
+    }
+
+    if (OrdinalString::EqualsNoCase(candidatePath, rootPath))
+    {
+        return S_OK;
+    }
+
+    const size_t parentSeparator = candidatePath.find_last_of(L'\\');
+    if (parentSeparator == std::wstring::npos)
+    {
+        return S_FALSE;
+    }
+
+    const std::wstring parentPath = candidatePath.substr(0u, parentSeparator == 2u && IsDriveRootedPath(candidatePath) ? 3u : parentSeparator);
+    if (! IsPathAtOrUnderRoot(parentPath, rootPath))
+    {
+        return S_FALSE;
+    }
+    if (OrdinalString::EqualsNoCase(parentPath, rootPath))
+    {
+        return S_OK;
+    }
+
+    size_t segmentStart = rootPath.size();
+    if (segmentStart < parentPath.size() && IsPathSeparator(parentPath[segmentStart]))
+    {
+        ++segmentStart;
+    }
+
+    for (;;)
+    {
+        const size_t separator = parentPath.find(L'\\', segmentStart);
+        const std::wstring_view directory(parentPath.data(), separator == std::wstring::npos ? parentPath.size() : separator);
+        if (directory.size() > rootPath.size())
+        {
+            bool allowed           = false;
+            const HRESULT accessHr = CheckClientCanListDirectory(state, directory, allowed);
+            if (FAILED(accessHr))
+            {
+                return accessHr;
+            }
+            if (! allowed)
+            {
+                return S_FALSE;
+            }
+        }
+
+        if (separator == std::wstring::npos)
+        {
+            break;
+        }
+        segmentStart = separator + 1u;
+    }
+
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT OpenExistingClientPathForAuthorization(const std::wstring& path, DWORD attributes) noexcept
+{
+    const bool isDirectory    = (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0u;
+    const DWORD desiredAccess = FILE_READ_ATTRIBUTES | (isDirectory ? static_cast<DWORD>(FILE_LIST_DIRECTORY) : static_cast<DWORD>(FILE_READ_DATA));
+    const DWORD flags         = isDirectory ? FILE_FLAG_BACKUP_SEMANTICS : FILE_ATTRIBUTE_NORMAL;
+    wil::unique_handle pathHandle(::CreateFileW(path.c_str(),
+                                                desiredAccess,
+                                                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                                nullptr,
+                                                OPEN_EXISTING,
+                                                flags,
+                                                nullptr));
+    if (! pathHandle)
+    {
+        return HRESULT_FROM_WIN32(::GetLastError());
+    }
+
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT AuthorizeExistingClientPathAccess(const std::wstring& path) noexcept
+{
+    const DWORD attributes = ::GetFileAttributesW(path.c_str());
+    if (attributes == INVALID_FILE_ATTRIBUTES)
+    {
+        return HRESULT_FROM_WIN32(::GetLastError());
+    }
+
+    return OpenExistingClientPathForAuthorization(path, attributes);
+}
+
+[[nodiscard]] HRESULT NormalizeClientRequestedRoot(std::wstring_view rootPath, std::wstring& outRoot) noexcept
+{
+    outRoot.clear();
+    if (rootPath.empty())
+    {
+        return E_INVALIDARG;
+    }
+
+    std::wstring path(rootPath);
+    if (path.find(L'\0') != std::wstring::npos)
+    {
+        return E_INVALIDARG;
+    }
+
+    std::replace(path.begin(), path.end(), L'/', L'\\');
+    if (OrdinalString::StartsWithNoCase(path, L"\\\\?\\UNC\\") || OrdinalString::StartsWithNoCase(path, L"\\\\?\\GLOBALROOT\\") ||
+        OrdinalString::StartsWithNoCase(path, L"\\\\.\\") || OrdinalString::StartsWithNoCase(path, L"\\??\\"))
+    {
+        return HRESULT_FROM_WIN32(ERROR_BAD_PATHNAME);
+    }
+
+    if (OrdinalString::StartsWithNoCase(path, L"\\\\?\\"))
+    {
+        const std::wstring_view withoutPrefix(path.data() + 4u, path.size() - 4u);
+        if (! IsDriveRootedPath(withoutPrefix))
+        {
+            return HRESULT_FROM_WIN32(ERROR_BAD_PATHNAME);
+        }
+        path.assign(withoutPrefix);
+    }
+
+    if (path.rfind(L"\\\\", 0u) == 0 || ! IsDriveRootedPath(path))
+    {
+        return HRESULT_FROM_WIN32(ERROR_BAD_PATHNAME);
+    }
+
+    const DWORD required = ::GetFullPathNameW(path.c_str(), 0u, nullptr, nullptr);
+    if (required == 0u)
+    {
+        return HRESULT_FROM_WIN32(::GetLastError());
+    }
+
+    std::wstring absolute(static_cast<size_t>(required) + 1u, L'\0');
+    const DWORD written = ::GetFullPathNameW(path.c_str(), static_cast<DWORD>(absolute.size()), absolute.data(), nullptr);
+    if (written == 0u)
+    {
+        return HRESULT_FROM_WIN32(::GetLastError());
+    }
+    if (written >= absolute.size())
+    {
+        return HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER);
+    }
+
+    absolute.resize(written);
+    std::replace(absolute.begin(), absolute.end(), L'/', L'\\');
+    if (! IsDriveRootedPath(absolute))
+    {
+        return HRESULT_FROM_WIN32(ERROR_BAD_PATHNAME);
+    }
+
+    while (absolute.size() > 3u && (absolute.back() == L'\\' || absolute.back() == L'/') && ! IsDriveRoot(absolute))
+    {
+        absolute.pop_back();
+    }
+
+    outRoot = std::move(absolute);
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT AuthorizeClientRootAccess(HANDLE pipe, const std::wstring& normalizedRoot) noexcept
+{
+    if (pipe == nullptr || pipe == INVALID_HANDLE_VALUE || normalizedRoot.empty())
+    {
+        return E_INVALIDARG;
+    }
+
+    if (::ImpersonateNamedPipeClient(pipe) == 0)
+    {
+        return HRESULT_FROM_WIN32(::GetLastError());
+    }
+
+    const auto revertToSelf = wil::scope_exit([]() noexcept { static_cast<void>(::RevertToSelf()); });
+
+    return AuthorizeExistingClientPathAccess(normalizedRoot);
+}
+
+[[nodiscard]] HRESULT AuthorizeClientRootRebuildAccess(HANDLE pipe, const std::wstring& normalizedRoot) noexcept
+{
+    if (pipe == nullptr || pipe == INVALID_HANDLE_VALUE || normalizedRoot.empty())
+    {
+        return E_INVALIDARG;
+    }
+
+    if (::ImpersonateNamedPipeClient(pipe) == 0)
+    {
+        return HRESULT_FROM_WIN32(::GetLastError());
+    }
+
+    const auto revertToSelf = wil::scope_exit([]() noexcept { static_cast<void>(::RevertToSelf()); });
+
+    std::wstring authorizationPath = normalizedRoot;
+    DWORD lastMissingError         = ERROR_PATH_NOT_FOUND;
+    for (;;)
+    {
+        const DWORD attributes = ::GetFileAttributesW(authorizationPath.c_str());
+        if (attributes != INVALID_FILE_ATTRIBUTES)
+        {
+            return OpenExistingClientPathForAuthorization(authorizationPath, attributes);
+        }
+
+        const DWORD error = ::GetLastError();
+        if (! IsMissingPathError(error))
+        {
+            return HRESULT_FROM_WIN32(error);
+        }
+
+        lastMissingError = error;
+        std::wstring parentPath = ParentPathForAuthorization(authorizationPath);
+        if (parentPath.empty() || OrdinalString::EqualsNoCase(parentPath, authorizationPath))
+        {
+            return HRESULT_FROM_WIN32(lastMissingError);
+        }
+
+        authorizationPath = std::move(parentPath);
+    }
+}
+
+[[nodiscard]] HRESULT ValidateAndAuthorizeClientRoot(SessionContext& session, std::wstring_view rootPath, std::wstring& outRoot) noexcept
+{
+    HRESULT hr = NormalizeClientRequestedRoot(rootPath, outRoot);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+#if defined(RS_SEARCH_TEST_HOOKS)
+    if (session.options.testHook == ServerTestHook::RejectMarkedRoot && outRoot.find(L"service-reject-root") != std::wstring::npos)
+    {
+        return E_INVALIDARG;
+    }
+#endif
+
+    return AuthorizeClientRootAccess(session.pipe.get(), outRoot);
+}
+
+[[nodiscard]] HRESULT ValidateAndAuthorizeRebuildRoot(SessionContext& session, std::wstring_view rootPath, std::wstring& outRoot) noexcept
+{
+    HRESULT hr = NormalizeClientRequestedRoot(rootPath, outRoot);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    return AuthorizeClientRootRebuildAccess(session.pipe.get(), outRoot);
+}
+
 HRESULT HandleStatusRequest(SessionContext& session) noexcept
 {
     const ServerEventDetails details{
@@ -1989,28 +2694,42 @@ HRESULT HandleStatusRequest(SessionContext& session) noexcept
         .phase       = FILESYSTEM_SEARCH_PHASE_INITIALIZING,
     };
     NotifyServerEvent(session.options, SEARCH_SERVICE_SERVER_EVENT_REQUEST_RECEIVED, S_OK, session.handledRequests, &details);
-    return SendStatusResponse(
-        session.pipe.get(), session.options.protocolVersion, session.options, session.maintenanceState, session.startupWarmupState, session.repository);
+    return SendStatusResponse(session.pipe.get(),
+                              session.options.protocolVersion,
+                              session.options,
+                              session.maintenanceState,
+                              session.startupWarmupState,
+                              session.repository,
+                              &session.ioContext);
 }
 
 HRESULT HandleRebuildRequest(SessionContext& session, std::span<const std::byte> payloadBytes) noexcept
 {
     if (! session.options.allowRebuildRequests)
     {
-        return SendAck(session.pipe.get(), session.options.protocolVersion, E_ACCESSDENIED);
+        return SendAck(session.pipe.get(), session.options.protocolVersion, E_ACCESSDENIED, &session.ioContext);
     }
 
     RebuildRequestPayload payload{};
     if (! ReadPod(payloadBytes, payload))
     {
-        return SendProtocolError(session.pipe.get(), session.options.protocolVersion, kProtocolErrorHr, L"Invalid rebuild request.");
+        return SendProtocolError(session.pipe.get(), session.options.protocolVersion, kProtocolErrorHr, L"Invalid rebuild request.", &session.ioContext);
     }
 
     std::wstring rootPath;
     if (! ReadUtf16(payloadBytes, payload.rootPathBytes, rootPath))
     {
-        return SendProtocolError(session.pipe.get(), session.options.protocolVersion, kProtocolErrorHr, L"Invalid rebuild path.");
+        return SendProtocolError(session.pipe.get(), session.options.protocolVersion, kProtocolErrorHr, L"Invalid rebuild path.", &session.ioContext);
     }
+
+    std::wstring authorizedRoot;
+    HRESULT rootHr = ValidateAndAuthorizeRebuildRoot(session, rootPath, authorizedRoot);
+    if (FAILED(rootHr))
+    {
+        Debug::Warning(L"SearchServiceBroker: rebuild request rejected root='{}'. hr=0x{:08X}", rootPath, static_cast<unsigned long>(rootHr));
+        return SendProtocolError(session.pipe.get(), session.options.protocolVersion, rootHr, L"Rejected rebuild root.", &session.ioContext);
+    }
+    rootPath = std::move(authorizedRoot);
 
     const ServerEventDetails details{
         .requestType = SEARCH_SERVICE_SERVER_REQUEST_REBUILD,
@@ -2022,7 +2741,7 @@ HRESULT HandleRebuildRequest(SessionContext& session, std::span<const std::byte>
 
     const HRESULT hr = session.repository->InvalidateRoot(rootPath, true);
     Debug::Info(L"SearchServiceBroker: rebuild request root='{}' hr=0x{:08X}", rootPath, static_cast<unsigned long>(hr));
-    return SendAck(session.pipe.get(), session.options.protocolVersion, hr);
+    return SendAck(session.pipe.get(), session.options.protocolVersion, hr, &session.ioContext);
 }
 
 HRESULT HandleCompactRequest(SessionContext& session) noexcept
@@ -2030,7 +2749,7 @@ HRESULT HandleCompactRequest(SessionContext& session) noexcept
     if (session.options.persistentStoreKind != LocalSearchIndexCore::PersistentStoreKind::Sqlite)
     {
         Debug::Warning(L"SearchServiceBroker: compact request rejected because the service backend is not sqlite.");
-        return SendAck(session.pipe.get(), session.options.protocolVersion, HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED));
+        return SendAck(session.pipe.get(), session.options.protocolVersion, HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED), &session.ioContext);
     }
 
     const LocalSearchIndexCore::PersistentStoreInfo storeInfo = LocalSearchIndexCore::GetPersistentStoreInfo(BuildRepositoryOptions(session.options));
@@ -2091,7 +2810,28 @@ HRESULT HandleCompactRequest(SessionContext& session) noexcept
         Debug::Warning(L"SearchServiceBroker: compact request failed path='{}' hr=0x{:08X}", storeInfo.primaryPath, static_cast<unsigned long>(hr));
     }
 
-    return SendAck(session.pipe.get(), session.options.protocolVersion, hr);
+    return SendAck(session.pipe.get(), session.options.protocolVersion, hr, &session.ioContext);
+}
+
+HRESULT HandleShutdownRequest(SessionContext& session, std::span<const std::byte> payloadBytes) noexcept
+{
+    if (! payloadBytes.empty())
+    {
+        return SendProtocolError(session.pipe.get(), session.options.protocolVersion, kProtocolErrorHr, L"Invalid shutdown request.", &session.ioContext);
+    }
+
+    if (! session.options.allowShutdownRequests)
+    {
+        return SendAck(session.pipe.get(), session.options.protocolVersion, E_ACCESSDENIED, &session.ioContext);
+    }
+
+    const ServerEventDetails details{
+        .requestType = SEARCH_SERVICE_SERVER_REQUEST_SHUTDOWN,
+        .phase       = FILESYSTEM_SEARCH_PHASE_INITIALIZING,
+    };
+    NotifyServerEvent(session.options, SEARCH_SERVICE_SERVER_EVENT_REQUEST_RECEIVED, S_OK, session.handledRequests, &details);
+    session.shutdownRequested = true;
+    return SendAck(session.pipe.get(), session.options.protocolVersion, S_OK, &session.ioContext);
 }
 
 HRESULT HandleQueryRequest(SessionContext& session, std::span<const std::byte> payloadBytes) noexcept
@@ -2099,18 +2839,26 @@ HRESULT HandleQueryRequest(SessionContext& session, std::span<const std::byte> p
     QueryRequestPayload payload{};
     if (! ReadPod(payloadBytes, payload))
     {
-        return SendProtocolError(session.pipe.get(), session.options.protocolVersion, kProtocolErrorHr, L"Invalid query request.");
+        return SendProtocolError(session.pipe.get(), session.options.protocolVersion, kProtocolErrorHr, L"Invalid query request.", &session.ioContext);
     }
 
     std::wstring rootPath;
     std::wstring namePattern;
     if (! ReadUtf16(payloadBytes, payload.rootPathBytes, rootPath) || ! ReadUtf16(payloadBytes, payload.namePatternBytes, namePattern))
     {
-        return SendProtocolError(session.pipe.get(), session.options.protocolVersion, kProtocolErrorHr, L"Invalid query strings.");
+        return SendProtocolError(session.pipe.get(), session.options.protocolVersion, kProtocolErrorHr, L"Invalid query strings.", &session.ioContext);
+    }
+
+    std::wstring authorizedRoot;
+    HRESULT rootHr = ValidateAndAuthorizeClientRoot(session, rootPath, authorizedRoot);
+    if (FAILED(rootHr))
+    {
+        Debug::Warning(L"SearchServiceBroker: query request rejected root='{}'. hr=0x{:08X}", rootPath, static_cast<unsigned long>(rootHr));
+        return SendProtocolError(session.pipe.get(), session.options.protocolVersion, rootHr, L"Rejected query root.", &session.ioContext);
     }
 
     LocalSearchIndexCore::QueryPlan plan{};
-    plan.rootPath           = std::move(rootPath);
+    plan.rootPath           = std::move(authorizedRoot);
     plan.namePattern        = std::move(namePattern);
     plan.nameMode           = static_cast<FileSystemSearchNameMode>(payload.nameMode);
     plan.matchCaseName      = (payload.flags & FILESYSTEM_SEARCH_MATCH_CASE_NAME) != 0;
@@ -2143,6 +2891,7 @@ HRESULT HandleQueryRequest(SessionContext& session, std::span<const std::byte> p
     ServerQueryContext queryContext{
         .pipe            = session.pipe.get(),
         .protocolVersion = session.options.protocolVersion,
+        .ioContext       = &session.ioContext,
         .handledRequests = session.handledRequests,
         .options         = &session.options,
         .stats           = &stats,
@@ -2154,6 +2903,7 @@ HRESULT HandleQueryRequest(SessionContext& session, std::span<const std::byte> p
     ServerCandidateBatchState batchState{
         .pipe                   = session.pipe.get(),
         .protocolVersion        = session.options.protocolVersion,
+        .ioContext              = &session.ioContext,
         .disconnectAfterBatches = session.options.disconnectAfterBatches,
         .handledRequests        = session.handledRequests,
         .options                = &session.options,
@@ -2162,6 +2912,9 @@ HRESULT HandleQueryRequest(SessionContext& session, std::span<const std::byte> p
         .requestNameMode        = payload.nameMode,
         .rootPath               = plan.rootPath,
         .namePattern            = plan.namePattern,
+#if defined(RS_SEARCH_TEST_HOOKS)
+        .testHook = session.options.testHook,
+#endif
     };
     const auto buildCompletionDetails = [&]() noexcept
     {
@@ -2179,7 +2932,7 @@ HRESULT HandleQueryRequest(SessionContext& session, std::span<const std::byte> p
             .estimatedMemoryBytes   = stats.estimatedMemoryBytes,
             .ensureReadyDurationMs  = stats.ensureReadyDurationMs,
             .executeQueryDurationMs = stats.executeQueryDurationMs,
-            .warningFlags           = stats.usedLiveScanFallback ? FILESYSTEM_SEARCH_WARNING_DEGRADED_NO_INDEX : FILESYSTEM_SEARCH_WARNING_NONE,
+            .warningFlags           = QueryStatsWarningFlags(stats) | batchState.warningFlags,
             .storeState =
                 static_cast<uint32_t>(stats.usedLiveScanFallback ? ResolveFallbackStoreState(stats.fallbackReason) : LocalSearchIndexCore::StoreState::Ready),
             .syncPhase = static_cast<uint32_t>(stats.usedLiveScanFallback ? LocalSearchIndexCore::SyncPhase::Idle : LocalSearchIndexCore::SyncPhase::Watching),
@@ -2196,6 +2949,7 @@ HRESULT HandleQueryRequest(SessionContext& session, std::span<const std::byte> p
                            plan, &ServerCancelCheck, &queryContext, &StreamServerCandidate, &batchState, &stats, &StreamServerQueryProgress, &queryContext)
                      : session.repository->Enumerate(
                            plan, &ServerCancelCheck, &queryContext, &StreamServerCandidate, &batchState, &stats, &StreamServerQueryProgress, &queryContext);
+    stats.warningFlags |= batchState.warningFlags;
     if (FAILED(hr) && hr == HRESULT_FROM_WIN32(ERROR_BROKEN_PIPE))
     {
         return hr;
@@ -2225,7 +2979,7 @@ HRESULT HandleQueryRequest(SessionContext& session, std::span<const std::byte> p
                        stats.executeQueryDurationMs);
         const ServerEventDetails completeDetails = buildCompletionDetails();
         NotifyServerEvent(session.options, SEARCH_SERVICE_SERVER_EVENT_QUERY_COMPLETED, hr, session.handledRequests, &completeDetails);
-        return SendQueryComplete(session.pipe.get(), session.options.protocolVersion, hr, stats);
+        return SendQueryComplete(session.pipe.get(), session.options.protocolVersion, hr, stats, &session.ioContext);
     }
 
     Debug::Info(L"SearchServiceBroker: query root='{}' pattern='{}' mode={} recursive={} includeFiles={} includeDirs={} candidates={} "
@@ -2244,14 +2998,14 @@ HRESULT HandleQueryRequest(SessionContext& session, std::span<const std::byte> p
                 batchState.batchesSent);
     const ServerEventDetails completeDetails = buildCompletionDetails();
     NotifyServerEvent(session.options, SEARCH_SERVICE_SERVER_EVENT_QUERY_COMPLETED, S_OK, session.handledRequests, &completeDetails);
-    return SendQueryComplete(session.pipe.get(), session.options.protocolVersion, S_OK, stats);
+    return SendQueryComplete(session.pipe.get(), session.options.protocolVersion, S_OK, stats, &session.ioContext);
 }
 
 HRESULT HandleClient(SessionContext& session) noexcept
 {
     FrameHeader header{};
     std::vector<std::byte> payload;
-    HRESULT hr = ReceiveFrame(session.pipe.get(), header, payload);
+    HRESULT hr = ReceiveFrame(session.pipe.get(), header, payload, &session.ioContext);
     if (FAILED(hr))
     {
         return hr;
@@ -2259,7 +3013,7 @@ HRESULT HandleClient(SessionContext& session) noexcept
 
     if (header.protocolVersion != session.options.protocolVersion)
     {
-        return SendProtocolError(session.pipe.get(), session.options.protocolVersion, kProtocolErrorHr, L"Protocol version mismatch.");
+        return SendProtocolError(session.pipe.get(), session.options.protocolVersion, kProtocolErrorHr, L"Protocol version mismatch.", &session.ioContext);
     }
 
     std::span<const std::byte> payloadBytes(payload.data(), payload.size());
@@ -2269,13 +3023,14 @@ HRESULT HandleClient(SessionContext& session) noexcept
         case MessageType::QueryRequest: return HandleQueryRequest(session, payloadBytes);
         case MessageType::RebuildRequest: return HandleRebuildRequest(session, payloadBytes);
         case MessageType::CompactRequest: return HandleCompactRequest(session);
+        case MessageType::ShutdownRequest: return HandleShutdownRequest(session, payloadBytes);
         case MessageType::StatusResponse:
         case MessageType::QueryProgress:
         case MessageType::QueryBatch:
         case MessageType::QueryComplete:
         case MessageType::Ack:
         case MessageType::Error:
-        default: return SendProtocolError(session.pipe.get(), session.options.protocolVersion, kProtocolErrorHr, L"Unsupported request.");
+        default: return SendProtocolError(session.pipe.get(), session.options.protocolVersion, kProtocolErrorHr, L"Unsupported request.", &session.ioContext);
     }
 }
 
@@ -2381,6 +3136,14 @@ HRESULT WaitForClientConnection(HANDLE pipe, HANDLE stopEvent, DWORD timeoutMs) 
 
     return S_OK;
 }
+
+[[nodiscard]] bool IsRecoverableClientFailure(HRESULT hr) noexcept
+{
+    return hr == kProtocolErrorHr || hr == HRESULT_FROM_WIN32(ERROR_BROKEN_PIPE) || hr == HRESULT_FROM_WIN32(ERROR_NO_DATA) ||
+           hr == HRESULT_FROM_WIN32(ERROR_PIPE_NOT_CONNECTED) || hr == HRESULT_FROM_WIN32(ERROR_SEM_TIMEOUT) ||
+           hr == HRESULT_FROM_WIN32(ERROR_BUFFER_OVERFLOW) || hr == HRESULT_FROM_WIN32(ERROR_BAD_PATHNAME) || hr == E_INVALIDARG || hr == E_ACCESSDENIED ||
+           hr == HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+}
 } // namespace
 
 #ifdef ENABLE_TESTS
@@ -2428,15 +3191,15 @@ HRESULT GetStatus(ServiceStatus& outStatus) noexcept
             return hr;
         };
 
+        ClientIoContext ioContext{};
+        ioContext.operationDeadline = MakeDeadline(kClientControlOperationTimeoutMs);
+
         wil::unique_handle pipe;
-        HRESULT hr = ConnectClientPipe(pipe);
+        HRESULT hr = ConnectClientPipe(pipe, &ioContext);
         if (FAILED(hr))
         {
             return logFailure(hr);
         }
-
-        ClientIoContext ioContext{};
-        ioContext.operationDeadline = MakeDeadline(kClientControlOperationTimeoutMs);
 
         std::vector<std::byte> emptyPayload;
         stage = L"send status request";
@@ -2681,8 +3444,13 @@ HRESULT Query(const QueryRequest& request,
             return hr;
         };
 
+        ClientIoContext ioContext{};
+        ioContext.cancelCheck       = cancelCheck;
+        ioContext.cancelCookie      = cancelCookie;
+        ioContext.operationDeadline = MakeDeadline(kClientQueryOperationTimeoutMs);
+
         wil::unique_handle pipe;
-        HRESULT hr = ConnectClientPipe(pipe);
+        HRESULT hr = ConnectClientPipe(pipe, &ioContext);
         if (FAILED(hr))
         {
             return logFailure(hr);
@@ -2695,11 +3463,6 @@ HRESULT Query(const QueryRequest& request,
                     static_cast<unsigned long>(request.flags),
                     request.maxResults);
 #endif
-
-        ClientIoContext ioContext{};
-        ioContext.cancelCheck       = cancelCheck;
-        ioContext.cancelCookie      = cancelCookie;
-        ioContext.operationDeadline = MakeDeadline(kClientQueryOperationTimeoutMs);
 
         QueryRequestPayload payload{};
         payload.nameMode         = static_cast<uint32_t>(request.nameMode);
@@ -2729,8 +3492,8 @@ HRESULT Query(const QueryRequest& request,
 #if defined(_DEBUG) || defined(__SANITIZE_ADDRESS__)
         bool loggedFirstResponse = false;
 #endif
-        uint64_t consumedCandidates = 0u;
-        uint64_t bufferedCandidateBytes = 0u;
+        uint64_t consumedCandidates         = 0u;
+        uint64_t bufferedCandidateBytes     = 0u;
         const size_t bufferedCandidateLimit = ResolveClientBufferedCandidateLimit(request.maxResults);
         for (;;)
         {
@@ -2876,11 +3639,12 @@ HRESULT Query(const QueryRequest& request,
                     else
                     {
                         uint64_t batchBufferedBytes = 0u;
-                        if (! CanAppendClientBufferedCandidates(outCandidates.size(),
-                                                               bufferedCandidateBytes,
-                                                               std::span<const LocalSearchIndexCore::Candidate>(batchCandidates.data(), batchCandidates.size()),
-                                                               bufferedCandidateLimit,
-                                                               batchBufferedBytes))
+                        if (! CanAppendClientBufferedCandidates(
+                                outCandidates.size(),
+                                bufferedCandidateBytes,
+                                std::span<const LocalSearchIndexCore::Candidate>(batchCandidates.data(), batchCandidates.size()),
+                                bufferedCandidateLimit,
+                                batchBufferedBytes))
                         {
                             outCandidates.clear();
                             stage = L"candidate accumulation limit";
@@ -2931,6 +3695,7 @@ HRESULT Query(const QueryRequest& request,
                             outStats->queryExecutionMode   = static_cast<LocalSearchIndexCore::QueryExecutionMode>(runtime.queryExecutionMode);
                             outStats->fallbackReason       = static_cast<LocalSearchIndexCore::FallbackReason>(runtime.fallbackReason);
                             outStats->usedLiveScanFallback = outStats->queryExecutionMode == LocalSearchIndexCore::QueryExecutionMode::LiveScanFallback;
+                            outStats->warningFlags         = runtime.warningFlags;
                         }
                     }
 
@@ -2963,6 +3728,7 @@ HRESULT Query(const QueryRequest& request,
                 case MessageType::QueryRequest:
                 case MessageType::RebuildRequest:
                 case MessageType::CompactRequest:
+                case MessageType::ShutdownRequest:
                 case MessageType::Ack:
                 default: return logFailure(kProtocolErrorHr);
             }
@@ -3110,6 +3876,71 @@ HRESULT RequestCompact() noexcept
     }
 }
 
+HRESULT RequestShutdown(std::wstring_view pipeName, uint32_t timeoutMs) noexcept
+{
+    try
+    {
+        if (pipeName.empty() || timeoutMs == 0u)
+        {
+            return E_INVALIDARG;
+        }
+
+        wil::unique_handle pipe;
+        const DWORD connectRetryMs = (std::min)(static_cast<DWORD>(timeoutMs), kDefaultMissingPipeRetryWindowMs);
+        HRESULT hr = ConnectClientPipeForName(pipeName, connectRetryMs, pipe);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        ClientIoContext ioContext{};
+        ioContext.operationDeadline = MakeDeadline(timeoutMs);
+
+        hr = ClientSendFrame(pipe.get(), MessageType::ShutdownRequest, kProtocolVersion, {}, &ioContext);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        FrameHeader header{};
+        std::vector<std::byte> payloadBytes;
+        hr = ClientReceiveFrame(pipe.get(), header, payloadBytes, &ioContext);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        if (header.protocolVersion != kProtocolVersion)
+        {
+            return kProtocolErrorHr;
+        }
+
+        std::span<const std::byte> remaining(payloadBytes.data(), payloadBytes.size());
+        if (static_cast<MessageType>(header.messageType) == MessageType::Ack)
+        {
+            AckPayload ack{};
+            return ReadPod(remaining, ack) ? static_cast<HRESULT>(ack.result) : kProtocolErrorHr;
+        }
+
+        if (static_cast<MessageType>(header.messageType) == MessageType::Error)
+        {
+            ErrorPayload error{};
+            return ReadPod(remaining, error) ? static_cast<HRESULT>(error.result) : kProtocolErrorHr;
+        }
+
+        return kProtocolErrorHr;
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::terminate();
+    }
+    catch (const std::exception&)
+    {
+        Debug::Error(L"SearchServiceBroker: RequestShutdown failed with an unexpected std::exception.");
+        return E_FAIL;
+    }
+}
+
 HRESULT RunServer(const ServerOptions& options, HANDLE stopEvent, ServerRunResult* outResult) noexcept
 {
     try
@@ -3146,11 +3977,12 @@ HRESULT RunServer(const ServerOptions& options, HANDLE stopEvent, ServerRunResul
         }
         const LocalSearchIndexCore::PersistentStoreInfo storeInfo = LocalSearchIndexCore::GetPersistentStoreInfo(repositoryOptions);
 
-        Debug::Info(L"SearchServiceBroker: server start pipe='{}' storage='{}' protocol={} allowRebuild={} maxRequests={} disconnectAfterBatches={}",
+        Debug::Info(L"SearchServiceBroker: server start pipe='{}' storage='{}' protocol={} allowRebuild={} allowShutdown={} maxRequests={} disconnectAfterBatches={}",
                     effectiveOptions.pipeName,
                     effectiveOptions.storageRootDirectory,
                     effectiveOptions.protocolVersion,
                     effectiveOptions.allowRebuildRequests,
+                    effectiveOptions.allowShutdownRequests,
                     effectiveOptions.maxRequestsBeforeExit,
                     effectiveOptions.disconnectAfterBatches);
         Debug::Info(L"SearchServiceBroker: server store backend='{}' root='{}' primary='{}' checkpoint={} compaction={}",
@@ -3337,15 +4169,17 @@ HRESULT RunServer(const ServerOptions& options, HANDLE stopEvent, ServerRunResul
             NotifyServerEvent(effectiveOptions, SEARCH_SERVICE_SERVER_EVENT_CLIENT_CONNECTED, S_OK, result.handledRequests);
 
             SessionContext session{};
-            session.pipe               = std::move(pipe);
-            session.repository         = &repository;
-            session.maintenanceState   = &maintenanceState;
-            session.startupWarmupState = &startupWarmupState;
-            session.options            = effectiveOptions;
-            session.handledRequests    = result.handledRequests;
+            session.pipe                     = std::move(pipe);
+            session.repository               = &repository;
+            session.maintenanceState         = &maintenanceState;
+            session.startupWarmupState       = &startupWarmupState;
+            session.options                  = effectiveOptions;
+            session.ioContext.stopEvent      = stopEvent;
+            session.ioContext.frameTimeoutMs = GetServerFrameTimeoutMs();
+            session.handledRequests          = result.handledRequests;
 
             hr = HandleClient(session);
-            if (FAILED(hr) && hr != HRESULT_FROM_WIN32(ERROR_BROKEN_PIPE))
+            if (FAILED(hr) && ! IsRecoverableClientFailure(hr))
             {
                 NotifyServerEvent(effectiveOptions, SEARCH_SERVICE_SERVER_EVENT_ERROR, hr, result.handledRequests);
                 return hr;
@@ -3355,6 +4189,13 @@ HRESULT RunServer(const ServerOptions& options, HANDLE stopEvent, ServerRunResul
             NotifyServerEvent(effectiveOptions, SEARCH_SERVICE_SERVER_EVENT_REQUEST_HANDLED, hr, result.handledRequests);
             static_cast<void>(::FlushFileBuffers(session.pipe.get()));
             static_cast<void>(::DisconnectNamedPipe(session.pipe.get()));
+
+            if (session.shutdownRequested)
+            {
+                NotifyServerEvent(effectiveOptions, SEARCH_SERVICE_SERVER_EVENT_STOPPING, S_OK, result.handledRequests);
+                break;
+            }
+
             RefreshAutomaticMaintenanceQueue(effectiveOptions, maintenanceState, result.handledRequests);
 
             if (effectiveOptions.maxRequestsBeforeExit != 0u && result.handledRequests >= effectiveOptions.maxRequestsBeforeExit)

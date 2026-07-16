@@ -47,7 +47,9 @@ All user-facing UI text must be localizable. Static UI structure (menus, context
 
 ## RedConfigure authoring
 
-`RedConfigure.exe` may generate satellite `.rc` files for a selected resource owner and culture. Generated files must keep resource text UTF-16/resource-compiler safe, use deterministic ordering, and preserve positional `std::format` placeholders. RedConfigure must block export when a target translation introduces bare `{}`, unindexed specs such as `{:08X}`, printf-style placeholders, or a placeholder set that does not match the source string exactly.
+`RedConfigure.exe` may generate satellite `.rc` files for a selected resource owner and culture. Generated files must keep resource text UTF-16/resource-compiler safe, use deterministic ordering, and preserve positional `std::format` placeholders. RedConfigure must block export when a target translation introduces bare `{}`, unbalanced braces, named/non-positional fields, unindexed specs such as `{:08X}`, printf-style placeholders, or a placeholder set that does not match the source string exactly. Focused tests compile generated output with Windows SDK `rc.exe` when it is installed.
+
+Satellite entries absent from the English source are target-only drift. The source-keyed writer does not emit them, so RedConfigure must surface a warning before export. Generated files are staged in a sibling temporary file, atomically replaced, reopened, and reparsed before success is reported.
 
 Resource forms that RedConfigure can parse but cannot safely rewrite yet must remain visible as inventory and must not be written silently.
 
@@ -56,8 +58,10 @@ Resource forms that RedConfigure can parse but cannot safely rewrite yet must re
 - Each resource owner registers its embedded `HINSTANCE` with the localization manager before localized resources are requested.
 - `RedSalamander` and `RedSalamanderMonitor` register their resource owners during startup after settings load and before UI resource lookup.
 - Plugins register their resource owner immediately after the plugin DLL loads and unregister it before the module unloads.
+- Resource-owner registration is reference-counted per normalized `HINSTANCE`. Multi-plugin DLLs may therefore register once per loaded logical entry; unregistering a rejected, disabled, or unloaded sibling MUST keep satellite lookup active until the last registration for that module is released. Re-registering the same instance under a different owner name is rejected.
 - The persisted language setting selects either the Windows preferred UI language chain (`system`) or a concrete BCP-style culture tag such as `fr` or `fr-FR`.
 - Lookup tries the selected culture chain in satellite DLLs first, then falls back to the owner module's embedded English resource.
+- Satellite probing checks both the owner module directory's `Lang\` folder and the host executable directory's `Lang\` folder. The host-exe `Lang\` fallback is required for plugin satellite DLLs because normal builds deploy all language resource DLLs to `.build\<Platform>\<Configuration>\Lang\` rather than beside each plugin DLL.
 - Language-neutral lookup intentionally bypasses satellite DLLs through the embedded string helpers; this is not fallback behavior and must be visible at the call site.
 - Missing satellite DLLs, missing satellite resource IDs, and invalid or unavailable culture selections must not block startup or UI creation; embedded English is the fallback.
 - App/Common string helper calls route through the localization manager. Plugins that opt in with `REDSAL_USE_COMMON_LOCALIZATION` use the same string helper route.

@@ -282,7 +282,28 @@ FolderView::OverlaySeverity ToFolderOverlaySeverity(HostAlertSeverity severity) 
     return S_OK;
 }
 
-HWND ResolvePromptTargetWindow(const HostPromptRequest& request) noexcept
+[[nodiscard]] HRESULT EnsureHostUiThreadReady() noexcept
+{
+    HWND hostWindow = nullptr;
+    return EnsureHostUiThreadReady(hostWindow);
+}
+
+[[nodiscard]] std::optional<FolderWindow::Pane> ResolveHostPaneCookie(void* cookie) noexcept
+{
+    switch (reinterpret_cast<uintptr_t>(cookie))
+    {
+        case HOST_PANE_COOKIE_LEFT: return FolderWindow::Pane::Left;
+        case HOST_PANE_COOKIE_RIGHT: return FolderWindow::Pane::Right;
+        default: return std::nullopt;
+    }
+}
+
+[[nodiscard]] FolderWindow::Pane ResolvePaneScopeTarget(void* cookie) noexcept
+{
+    return ResolveHostPaneCookie(cookie).value_or(g_folderWindow.GetFocusedPane());
+}
+
+HWND ResolvePromptTargetWindow(const HostPromptRequest& request, void* cookie) noexcept
 {
     if (request.scope == HOST_ALERT_SCOPE_WINDOW && request.targetWindow && IsWindow(request.targetWindow))
     {
@@ -291,12 +312,12 @@ HWND ResolvePromptTargetWindow(const HostPromptRequest& request) noexcept
 
     const HWND hostWindow = GetInitializedHostWindow();
 
-    if (request.scope == HOST_ALERT_SCOPE_PANE_CONTENT)
+    if (request.scope == HOST_ALERT_SCOPE_PANE_CONTENT || request.scope == HOST_ALERT_SCOPE_PANE)
     {
         if (hostWindow && IsCurrentThreadWindowThread(hostWindow))
         {
-            const FolderWindow::Pane focusedPane = g_folderWindow.GetFocusedPane();
-            const HWND folderView                = g_folderWindow.GetFolderViewHwnd(focusedPane);
+            const FolderWindow::Pane pane = ResolvePaneScopeTarget(cookie);
+            const HWND folderView         = g_folderWindow.GetFolderViewHwnd(pane);
             if (folderView && IsWindow(folderView))
             {
                 return folderView;
@@ -615,7 +636,12 @@ public:
         }
 
         const HWND hostWindow = GetInitializedHostWindow();
-        if (hostWindow && ! IsCurrentThreadWindowThread(hostWindow))
+        if (! hostWindow)
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_WINDOW_HANDLE);
+        }
+
+        if (! IsCurrentThreadWindowThread(hostWindow))
         {
             auto data            = std::make_unique<PendingConnectionJson>();
             data->connectionName = connectionName;
@@ -655,7 +681,12 @@ public:
         }
 
         const HWND hostWindow = GetInitializedHostWindow();
-        if (hostWindow && ! IsCurrentThreadWindowThread(hostWindow))
+        if (! hostWindow)
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_WINDOW_HANDLE);
+        }
+
+        if (! IsCurrentThreadWindowThread(hostWindow))
         {
             auto data            = std::make_unique<PendingConnectionSecret>();
             data->connectionName = connectionName;
@@ -691,7 +722,12 @@ public:
         }
 
         const HWND hostWindow = GetInitializedHostWindow();
-        if (hostWindow && ! IsCurrentThreadWindowThread(hostWindow))
+        if (! hostWindow)
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_WINDOW_HANDLE);
+        }
+
+        if (! IsCurrentThreadWindowThread(hostWindow))
         {
             auto data            = std::make_unique<PendingSetConnectionSecret>();
             data->connectionName = connectionName;
@@ -714,7 +750,12 @@ public:
         }
 
         const HWND hostWindow = GetInitializedHostWindow();
-        if (hostWindow && ! IsCurrentThreadWindowThread(hostWindow))
+        if (! hostWindow)
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_WINDOW_HANDLE);
+        }
+
+        if (! IsCurrentThreadWindowThread(hostWindow))
         {
             auto data             = std::make_unique<PendingDeleteConnectionSecret>();
             data->connectionName  = connectionName;
@@ -784,7 +825,12 @@ public:
         }
 
         const HWND hostWindow = GetInitializedHostWindow();
-        if (hostWindow && ! IsCurrentThreadWindowThread(hostWindow))
+        if (! hostWindow)
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_WINDOW_HANDLE);
+        }
+
+        if (! IsCurrentThreadWindowThread(hostWindow))
         {
             auto data            = std::make_unique<PendingClearConnectionSecretCache>();
             data->connectionName = connectionName;
@@ -1224,26 +1270,7 @@ private:
 
     [[nodiscard]] static std::string Utf8FromUtf16(std::wstring_view text) noexcept
     {
-        if (text.empty())
-        {
-            return {};
-        }
-
-        const int required = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
-        if (required <= 0)
-        {
-            return {};
-        }
-
-        std::string result(static_cast<size_t>(required), '\0');
-        const int written =
-            WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), result.data(), required, nullptr, nullptr);
-        if (written != required)
-        {
-            return {};
-        }
-
-        return result;
+        return Common::Strings::Utf8FromUtf16StrictOrEmpty(text);
     }
 
     [[nodiscard]] static const Common::Settings::ConnectionProfile* FindConnectionProfile(std::wstring_view connectionName) noexcept
@@ -1350,51 +1377,6 @@ private:
         _sessionRefreshTokenByConnectionId.clear();
     }
 
-    [[nodiscard]] static std::optional<std::wstring> ExtraGetString(const Common::Settings::JsonValue& extra, std::string_view key) noexcept
-    {
-        const auto* objPtr = std::get_if<Common::Settings::JsonValue::ObjectPtr>(&extra.value);
-        if (! objPtr || ! *objPtr)
-        {
-            return std::nullopt;
-        }
-
-        for (const auto& [k, v] : (*objPtr)->members)
-        {
-            if (k != key)
-            {
-                continue;
-            }
-
-            const auto* str = std::get_if<std::string>(&v.value);
-            if (! str)
-            {
-                return std::nullopt;
-            }
-
-            if (str->empty())
-            {
-                return std::wstring{};
-            }
-
-            const int required = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, str->data(), static_cast<int>(str->size()), nullptr, 0);
-            if (required <= 0)
-            {
-                return std::nullopt;
-            }
-
-            std::wstring wide(static_cast<size_t>(required), L'\0');
-            const int written = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, str->data(), static_cast<int>(str->size()), wide.data(), required);
-            if (written != required)
-            {
-                return std::nullopt;
-            }
-
-            return wide;
-        }
-
-        return std::nullopt;
-    }
-
     HRESULT ShowConnectionManagerOnUiThread(const HostConnectionManagerRequest& request, HostConnectionManagerResult* result) noexcept
     {
         if (! result)
@@ -1450,10 +1432,10 @@ private:
         }
         *jsonUtf8 = nullptr;
 
-        HWND hostWindow = GetInitializedHostWindow();
-        if (hostWindow && ! IsCurrentThreadWindowThread(hostWindow))
+        const HRESULT hrHostReady = EnsureHostUiThreadReady();
+        if (FAILED(hrHostReady))
         {
-            return HRESULT_FROM_WIN32(ERROR_INVALID_THREAD_ID);
+            return hrHostReady;
         }
 
         const Common::Settings::ConnectionProfile* profile = FindConnectionProfile(connectionName);
@@ -1554,11 +1536,11 @@ private:
             }
         }
 
-        if (const auto keyPath = ExtraGetString(profile->extra, "sshPrivateKey"); keyPath.has_value() && ! keyPath->empty())
+        if (const auto keyPath = Common::Settings::GetWString(profile->extra, "sshPrivateKey"); keyPath.has_value() && ! keyPath->empty())
         {
             static_cast<void>(addWideString("sshPrivateKey", *keyPath));
         }
-        if (const auto knownHosts = ExtraGetString(profile->extra, "sshKnownHosts"); knownHosts.has_value() && ! knownHosts->empty())
+        if (const auto knownHosts = Common::Settings::GetWString(profile->extra, "sshKnownHosts"); knownHosts.has_value() && ! knownHosts->empty())
         {
             static_cast<void>(addWideString("sshKnownHosts", *knownHosts));
         }
@@ -1621,10 +1603,11 @@ private:
         }
         *secretOut = nullptr;
 
-        HWND hostWindow = GetInitializedHostWindow();
-        if (hostWindow && ! IsCurrentThreadWindowThread(hostWindow))
+        HWND hostWindow           = nullptr;
+        const HRESULT hrHostReady = EnsureHostUiThreadReady(hostWindow);
+        if (FAILED(hrHostReady))
         {
-            return HRESULT_FROM_WIN32(ERROR_INVALID_THREAD_ID);
+            return hrHostReady;
         }
 
         const Common::Settings::ConnectionProfile* profile = FindConnectionProfile(connectionName);
@@ -1649,8 +1632,12 @@ private:
         if (! profile->id.empty())
         {
             auto& map = *sessionMap;
-            if (const auto it = map.find(profile->id); it != map.end() && it->second.present)
+            if (const auto it = map.find(profile->id); it != map.end())
             {
+                if (! it->second.present)
+                {
+                    return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
+                }
                 const std::wstring_view cached = it->second.secret;
                 const size_t bytes             = (cached.size() + 1u) * sizeof(wchar_t);
                 wil::unique_cotaskmem_string mem(static_cast<wchar_t*>(CoTaskMemAlloc(bytes)));
@@ -1813,7 +1800,7 @@ private:
 
     HRESULT UpgradeFtpAnonymousToPasswordOnUiThread(const wchar_t* connectionName, HWND ownerWindow) noexcept;
 
-    HRESULT ShowAlertOnUiThread(const HostAlertRequest& request, void* /*cookie*/) noexcept
+    HRESULT ShowAlertOnUiThread(const HostAlertRequest& request, void* cookie) noexcept
     {
         const bool blocksInput = request.modality == HOST_ALERT_MODAL;
         const bool closable    = request.closable != FALSE;
@@ -1879,9 +1866,9 @@ private:
         }
 
         const FolderView::OverlaySeverity folderSeverity = ToFolderOverlaySeverity(request.severity);
-        const FolderWindow::Pane focused                 = g_folderWindow.GetFocusedPane();
+        const FolderWindow::Pane pane                    = ResolvePaneScopeTarget(cookie);
         g_folderWindow.ShowPaneAlertOverlay(
-            focused, FolderView::ErrorOverlayKind::Operation, folderSeverity, std::move(model.title), std::move(model.message), S_OK, closable, blocksInput);
+            pane, FolderView::ErrorOverlayKind::Operation, folderSeverity, std::move(model.title), std::move(model.message), S_OK, closable, blocksInput);
         return S_OK;
     }
 
@@ -1919,19 +1906,19 @@ private:
             return hrHostReady;
         }
 
-        const FolderWindow::Pane focused = g_folderWindow.GetFocusedPane();
-        g_folderWindow.DismissPaneAlertOverlay(focused);
+        const FolderWindow::Pane pane = ResolvePaneScopeTarget(cookie);
+        g_folderWindow.DismissPaneAlertOverlay(pane);
         return S_OK;
     }
 
-    HRESULT ShowPromptOnUiThread(const HostPromptRequest& request, void* /*cookie*/, HostPromptResult* result) noexcept
+    HRESULT ShowPromptOnUiThread(const HostPromptRequest& request, void* cookie, HostPromptResult* result) noexcept
     {
         if (! result)
         {
             return E_POINTER;
         }
 
-        HWND targetWindow = ResolvePromptTargetWindow(request);
+        HWND targetWindow = ResolvePromptTargetWindow(request, cookie);
         if (! targetWindow || ! IsWindow(targetWindow))
         {
             return HRESULT_FROM_WIN32(ERROR_INVALID_WINDOW_HANDLE);
@@ -2227,10 +2214,10 @@ HostServices::PromptForConnectionSecretOnUiThread(const wchar_t* connectionName,
 
 HRESULT HostServices::SetConnectionSecretOnUiThread(const wchar_t* connectionName, HostConnectionSecretKind kind, const wchar_t* secret, BOOL persist) noexcept
 {
-    const HWND hostWindow = GetInitializedHostWindow();
-    if (hostWindow && ! IsCurrentThreadWindowThread(hostWindow))
+    const HRESULT hrHostReady = EnsureHostUiThreadReady();
+    if (FAILED(hrHostReady))
     {
-        return HRESULT_FROM_WIN32(ERROR_INVALID_THREAD_ID);
+        return hrHostReady;
     }
 
     if (! secret)
@@ -2259,21 +2246,7 @@ HRESULT HostServices::SetConnectionSecretOnUiThread(const wchar_t* connectionNam
         sessionMap = &_sessionRefreshTokenByConnectionId;
     }
 
-    SessionSecretEntry& entry = (*sessionMap)[profile->id];
-    if (entry.present)
-    {
-        SecureClear(entry.secret);
-    }
-    entry.present = false;
-
     const std::wstring_view secretView(secret);
-    if (! secretView.empty())
-    {
-        entry.present = true;
-        entry.secret.assign(secretView);
-        RedSalamander::Connections::NoteSecretAccessAuthorized(profile->id);
-    }
-
     const RedSalamander::Connections::SecretKind secretKind = ToLocalSecretKind(kind);
     if (RedSalamander::Connections::IsQuickConnectConnectionId(profile->id))
     {
@@ -2285,43 +2258,90 @@ HRESULT HostServices::SetConnectionSecretOnUiThread(const wchar_t* connectionNam
         {
             RedSalamander::Connections::ClearQuickConnectSecret(secretKind);
         }
+
+        SessionSecretEntry& entry = (*sessionMap)[profile->id];
+        if (entry.present)
+        {
+            SecureClear(entry.secret);
+        }
+        entry.present = false;
+        if (secretView.empty())
+        {
+            RedSalamander::Connections::ClearSecretAccessAuthorization(profile->id);
+        }
+        else
+        {
+            entry.present = true;
+            entry.secret.assign(secretView);
+            RedSalamander::Connections::NoteSecretAccessAuthorized(profile->id);
+        }
         return S_OK;
     }
 
-    if (persist == FALSE)
+    SessionSecretEntry& entry = (*sessionMap)[profile->id];
+    if (entry.present)
     {
-        return S_OK;
+        SecureClear(entry.secret);
     }
-
-    const std::wstring targetName = RedSalamander::Connections::BuildCredentialTargetName(profile->id, secretKind);
-    if (targetName.empty())
-    {
-        return E_FAIL;
-    }
-
+    entry.present = false;
     if (secretView.empty())
     {
-        const HRESULT deleteHr = RedSalamander::Connections::DeleteGenericCredential(targetName);
-        if (deleteHr == HRESULT_FROM_WIN32(ERROR_NOT_FOUND))
-        {
-            return S_OK;
-        }
-        return deleteHr;
+        RedSalamander::Connections::ClearSecretAccessAuthorization(profile->id);
+    }
+    else
+    {
+        entry.present = true;
+        entry.secret.assign(secretView);
+        RedSalamander::Connections::NoteSecretAccessAuthorized(profile->id);
     }
 
-    return RedSalamander::Connections::SaveGenericCredential(targetName, profile->userName, secretView);
+    if (persist != FALSE)
+    {
+        const std::wstring targetName = RedSalamander::Connections::BuildCredentialTargetName(profile->id, secretKind);
+        if (targetName.empty())
+        {
+            Debug::Error(L"HostServices: failed to build the credential target for connection '{}'.", profile->id);
+            return E_FAIL;
+        }
+
+        if (secretView.empty())
+        {
+            const HRESULT deleteHr = RedSalamander::Connections::DeleteGenericCredential(targetName);
+            if (FAILED(deleteHr) && deleteHr != HRESULT_FROM_WIN32(ERROR_NOT_FOUND))
+            {
+                Debug::Error(L"HostServices: failed to delete the persisted credential for connection '{}' (hr=0x{:08X}).",
+                             profile->id,
+                             static_cast<unsigned long>(deleteHr));
+                return deleteHr;
+            }
+        }
+        else
+        {
+            const HRESULT saveHr = RedSalamander::Connections::SaveGenericCredential(targetName, profile->userName, secretView);
+            if (FAILED(saveHr))
+            {
+                Debug::Error(L"HostServices: failed to save the persisted credential for connection '{}' (hr=0x{:08X}).",
+                             profile->id,
+                             static_cast<unsigned long>(saveHr));
+                return saveHr;
+            }
+        }
+    }
+
+    return S_OK;
 }
 
 HRESULT HostServices::DeleteConnectionSecretOnUiThread(const wchar_t* connectionName, HostConnectionSecretKind kind, BOOL deletePersisted) noexcept
 {
-    const HRESULT clearHr = ClearCachedConnectionSecretOnUiThread(connectionName, kind);
-    if (FAILED(clearHr) && clearHr != HRESULT_FROM_WIN32(ERROR_NOT_FOUND))
+    const HRESULT hrHostReady = EnsureHostUiThreadReady();
+    if (FAILED(hrHostReady))
     {
-        return clearHr;
+        return hrHostReady;
     }
 
     if (deletePersisted == FALSE)
     {
+        const HRESULT clearHr = ClearCachedConnectionSecretOnUiThread(connectionName, kind);
         return clearHr == HRESULT_FROM_WIN32(ERROR_NOT_FOUND) ? S_OK : clearHr;
     }
 
@@ -2340,29 +2360,19 @@ HRESULT HostServices::DeleteConnectionSecretOnUiThread(const wchar_t* connection
     if (RedSalamander::Connections::IsQuickConnectConnectionId(profile->id))
     {
         RedSalamander::Connections::ClearQuickConnectSecret(secretKind);
-        return S_OK;
+        const HRESULT clearHr = ClearCachedConnectionSecretOnUiThread(connectionName, kind);
+        return clearHr == HRESULT_FROM_WIN32(ERROR_NOT_FOUND) ? S_OK : clearHr;
     }
 
-    const std::wstring targetName = RedSalamander::Connections::BuildCredentialTargetName(profile->id, secretKind);
-    if (targetName.empty())
-    {
-        return E_FAIL;
-    }
-
-    const HRESULT deleteHr = RedSalamander::Connections::DeleteGenericCredential(targetName);
-    if (deleteHr == HRESULT_FROM_WIN32(ERROR_NOT_FOUND))
-    {
-        return S_OK;
-    }
-    return deleteHr;
+    return SetConnectionSecretOnUiThread(connectionName, kind, L"", TRUE);
 }
 
 HRESULT HostServices::ClearCachedConnectionSecretOnUiThread(const wchar_t* connectionName, HostConnectionSecretKind kind) noexcept
 {
-    const HWND hostWindow = GetInitializedHostWindow();
-    if (hostWindow && ! IsCurrentThreadWindowThread(hostWindow))
+    const HRESULT hrHostReady = EnsureHostUiThreadReady();
+    if (FAILED(hrHostReady))
     {
-        return HRESULT_FROM_WIN32(ERROR_INVALID_THREAD_ID);
+        return hrHostReady;
     }
 
     const Common::Settings::ConnectionProfile* profile = FindConnectionProfile(connectionName);

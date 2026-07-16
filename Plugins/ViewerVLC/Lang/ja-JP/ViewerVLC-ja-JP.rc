@@ -32,4 +32,8 @@ BEGIN
     IDS_VIEWERVLC_SNAPSHOT_FAILED_FMT "スナップショットが失敗しました (コード {0})。"
     IDS_VIEWERVLC_LOADING_TITLE "VLC を開始します..."
     IDS_VIEWERVLC_LOADING_BODY "VLC エンジンをロードしています。自動的に再生が始まります。"
+    IDS_VIEWERVLC_DETAILS_CONFIGURATION_REJECTED "VLC オプション設定に安全でない値または不正な値が含まれています。"
+    IDS_VIEWERVLC_DETAILS_ASYNC_SUBMIT_FAILED "VLC ローダーをキューに登録できませんでした。もう一度ファイルを開いてください。"
+    IDS_VIEWERVLC_DETAILS_ASYNC_RESULT_DELIVERY_FAILED "VLC ローダーの結果を配信できませんでした。もう一度ファイルを開いてください。"
+    IDS_VIEWERVLC_DETAILS_LOAD_DLL_FAILED_FMT "'{0}' を読み込めませんでした (Win32: {1})。"
 END

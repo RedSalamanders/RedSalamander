@@ -341,7 +341,7 @@ The central router solves this by removing live cursor state from routing. The v
 ### Create
 
 - `Common/DxUi/DxUi.PointerInput.h`
-  - Defines `PointerInputSource`, `PointerInputKind`, `PointerInputEvent`, and helper builders.
+  - Defines `PointerInputKind`, `PointerInputEvent`, and the delivered-message builder.
 - `Common/DxUi/DxUi.PointerInput.cpp`
   - Converts delivered Win32 messages to routed pointer events without live cursor polling.
 - `Tools/Tests/VerifyNoProductionGetCursorPos.Tests.ps1`
@@ -625,20 +625,11 @@ Expected: build fails because `DxUi.PointerInput.h` is missing, or tests fail be
 
 - [x] **Step 2.3: Implement the event API**
 
-Create the API with this shape:
+Create the API with this shape (updated by the 2026-06-27 Bedrock simplification closeout; the source-modality enum, event source field, and unused `MSG` builder were removed after all production callers collapsed to delivered WindowProc-style messages):
 
 ```cpp
 namespace RedSalamander::DxUi
 {
-enum class PointerInputSource : uint8_t
-{
-    WindowProc,
-    ModalLoopMessage,
-    PopupWindowProc,
-    ForwardedChild,
-    DiagnosticOnly
-};
-
 enum class PointerInputKind : uint8_t
 {
     Move,
@@ -652,14 +643,8 @@ enum class PointerInputKind : uint8_t
     Unknown
 };
 
-struct InputGeneration
-{
-    uint64_t value = 0;
-};
-
 struct PointerInputEvent
 {
-    PointerInputSource source = PointerInputSource::WindowProc;
     PointerInputKind kind = PointerInputKind::Unknown;
     HWND targetHwnd = nullptr;
     HWND rootHwnd = nullptr;
@@ -670,7 +655,7 @@ struct PointerInputEvent
     DWORD messageTime = 0;
     POINT clientPointPx{};
     POINT screenPointPx{};
-    InputGeneration generation{};
+    int wheelDelta = 0;
     bool hasClientPoint = false;
     bool hasScreenPoint = false;
 };
@@ -680,13 +665,7 @@ struct PointerInputEvent
     HWND targetHwnd,
     UINT message,
     WPARAM wParam,
-    LPARAM lParam,
-    PointerInputSource source,
-    InputGeneration generation = {}) noexcept;
-[[nodiscard]] std::optional<PointerInputEvent> TryBuildPointerInputEventFromMsg(
-    const MSG& message,
-    PointerInputSource source,
-    InputGeneration generation = {}) noexcept;
+    LPARAM lParam) noexcept;
 }
 ```
 
@@ -752,7 +731,7 @@ Expected before migration: at least one new test fails because `RouteMenuInputRe
 In `Common/DxUi/DxUi.Menu.cpp`:
 
 - Build popup `MenuPointerEvent` from `PointerInputEvent`.
-- Build modal-loop non-popup pointer events from `TryBuildPointerInputEventFromMsg(...)`.
+- Build modal-loop non-popup pointer events directly from delivered message fields.
 - Keep popup/root hit testing based on the routed event's delivered screen point.
 - Preserve keyboard routing as `MenuKeyboardEvent`.
 - Preserve diagnostics by logging both delivered event data and optional diagnostic snapshots, but make diagnostic snapshots write-only.

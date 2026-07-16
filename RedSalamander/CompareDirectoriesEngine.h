@@ -125,6 +125,56 @@ struct CompareDirectoriesFolderDecision
     std::map<std::wstring, CompareDirectoriesItemDecision, WStringViewNoCaseLess> items;
 };
 
+enum class CompareSyncManifestStatus : uint8_t
+{
+    Ready,
+    Empty,
+    NotReady,
+    Failed,
+    Unsupported,
+};
+
+enum class CompareSyncManifestBlockerReason : uint8_t
+{
+    None,
+    MissingDecision,
+    ContentPending,
+    SubdirPending,
+    FailedDecision,
+    Unsupported,
+};
+
+enum class CompareSyncManifestItemKind : uint8_t
+{
+    File,
+    DirectoryShell,
+    WholeSubtree,
+};
+
+struct CompareSyncManifestItem
+{
+    CompareSyncManifestItemKind kind = CompareSyncManifestItemKind::File;
+    std::filesystem::path relativePath;
+    std::filesystem::path sourceAbsolutePath;
+    std::filesystem::path destinationAbsolutePath;
+    FileSystemFlags flags = FILESYSTEM_FLAG_NONE;
+};
+
+struct CompareSyncManifestBlocker
+{
+    CompareSyncManifestStatus status        = CompareSyncManifestStatus::Ready;
+    CompareSyncManifestBlockerReason reason = CompareSyncManifestBlockerReason::None;
+    std::filesystem::path relativePath;
+    HRESULT hr = S_OK;
+};
+
+struct CompareSyncManifest
+{
+    ComparePane sourcePane = ComparePane::Left;
+    uint64_t version       = 0;
+    std::vector<CompareSyncManifestItem> items;
+};
+
 struct CompareDirectoriesPerfStats
 {
     uint64_t version   = 0;
@@ -240,6 +290,12 @@ public:
     // Cache-only decision lookup. Never performs I/O or triggers traversal.
     [[nodiscard]] std::shared_ptr<const CompareDirectoriesFolderDecision> TryGetCachedDecision(const std::filesystem::path& relativeFolder) noexcept;
 
+    // Cache-only sync manifest builder. Never performs I/O or waits for workers.
+    [[nodiscard]] CompareSyncManifestStatus TryBuildSyncManifest(ComparePane sourcePane,
+                                                                 const std::vector<std::filesystem::path>& selectedRelativePaths,
+                                                                 CompareSyncManifest& out,
+                                                                 CompareSyncManifestBlocker& blocker) noexcept;
+
     // Pins the currently-visible folders (and their ancestor chains) in the decision cache so background
     // eviction does not evict UI-critical state.
     void SetPinnedFolders(const std::filesystem::path& leftRelativeFolder, const std::filesystem::path& rightRelativeFolder) noexcept;
@@ -262,6 +318,8 @@ public:
     // Selftest hook: allows exercising eviction logic without allocating hundreds of MB.
     // No production code should rely on this.
     void SetDecisionCacheBudgetBytesForSelfTest(uint64_t budgetBytes) noexcept;
+
+    [[nodiscard]] std::shared_ptr<const CompareDirectoriesFolderDecision> GetOrComputeDecision(const std::filesystem::path& relativeFolder);
 #endif
 
     [[nodiscard]] wil::com_ptr<IFileSystem> GetFileSystem(ComparePane pane) const noexcept;
@@ -271,8 +329,6 @@ public:
 
     [[nodiscard]] std::optional<std::filesystem::path> TryMakeRelative(ComparePane pane, const std::filesystem::path& absoluteFolder) const;
     [[nodiscard]] std::filesystem::path ResolveAbsolute(ComparePane pane, const std::filesystem::path& relativeFolder) const;
-
-    [[nodiscard]] std::shared_ptr<const CompareDirectoriesFolderDecision> GetOrComputeDecision(const std::filesystem::path& relativeFolder);
 
 private:
     enum class ScanPriority : uint8_t
@@ -359,8 +415,21 @@ private:
         bool areEqual              = false;
     };
 
+    struct PendingSubdirAggregateUpdate
+    {
+        uint64_t version  = 0;
+        HRESULT hr        = S_OK;
+        bool anyPending   = false;
+        bool anyDifferent = false;
+    };
+
+    struct SubdirPropagationResult
+    {
+        bool changed = false;
+        std::wstring retryChildKey;
+    };
+
     std::wstring MakeCacheKey(const std::filesystem::path& relativeFolder) const;
-    void InvalidateForRelativePathLocked(const std::filesystem::path& relativePath, bool includeSubtree) noexcept;
     void NotifyScanProgress(const std::filesystem::path& relativeFolder, std::wstring_view currentEntryName, bool force) noexcept;
     void NotifyContentProgress(
         uint32_t workerIndex, const std::filesystem::path& relativeFolder, std::wstring_view entryName, uint64_t totalBytes, uint64_t completedBytes) noexcept;
@@ -385,14 +454,18 @@ private:
         std::set<std::wstring, WStringViewNoCaseLess> scanHighQueuedKeys;
         std::map<std::wstring, InFlightScanStamp, WStringViewNoCaseLess> scanInFlightKeys;
         std::set<std::wstring, WStringViewNoCaseLess> pendingSubdirUpdates;
+        std::map<std::wstring, PendingSubdirAggregateUpdate, WStringViewNoCaseLess> pendingSubdirAggregateUpdates;
+        std::map<std::wstring, uint32_t, WStringViewNoCaseLess> pendingSubdirAggregateRetryAttempts;
         std::unordered_map<ContentCompareKey, InFlightContentStamp, ContentCompareKeyHash, ContentCompareKeyEq> contentCompareInFlight;
         std::deque<ContentCompareJob> contentCompareQueueHigh;
         std::deque<ContentCompareJob> contentCompareQueueLow;
         std::map<std::wstring, std::map<std::wstring, PendingContentCompareUpdate, WStringViewNoCaseLess>, WStringViewNoCaseLess> pendingContentCompareUpdates;
+        std::map<std::wstring, uint32_t, WStringViewNoCaseLess> pendingContentCompareRetryAttempts;
     };
 
+    void InvalidateForRelativePathLocked(const std::filesystem::path& relativePath, bool includeSubtree) noexcept;
     static void ScheduleResetCleanup(std::unique_ptr<ResetCleanup> cleanup) noexcept;
-    void ResetCompareStateLocked(ResetCleanup& outCleanup) noexcept;
+    void ResetCompareStateLocked(ResetCleanup& outCleanup, bool clearContentCompareCache = true) noexcept;
     void ClearContentCompareStateLocked() noexcept;
     void EvictContentCompareCacheForRelativePathLocked(const std::filesystem::path& relativePath, bool includeSubtree) noexcept;
     static uint64_t EstimateDecisionBytes(std::wstring_view folderKey, const CompareDirectoriesFolderDecision& decision) noexcept;
@@ -400,9 +473,11 @@ private:
     void TrackDecisionCacheInsertOrUpdateLocked(std::wstring_view folderKey, const std::shared_ptr<const CompareDirectoriesFolderDecision>& decision) noexcept;
     void TrackDecisionCacheEraseLocked(std::wstring_view folderKey) noexcept;
     void MaybeEvictDecisionCacheLocked() noexcept;
-    [[nodiscard]] bool PropagateChildAggregateToAncestorsLocked(std::wstring_view childKey,
-                                                                const Common::Settings::CompareDirectoriesSettings& settings,
-                                                                uint64_t currentVersion) noexcept;
+    [[nodiscard]] bool QueueContentUpdateFolderRetryLocked(std::wstring_view folderKey, uint64_t currentVersion) noexcept;
+    [[nodiscard]] bool QueueSubdirAggregateRetryLocked(std::wstring_view childKey, uint64_t currentVersion) noexcept;
+    [[nodiscard]] SubdirPropagationResult PropagateChildAggregateToAncestorsLocked(std::wstring_view childKey,
+                                                                                   const Common::Settings::CompareDirectoriesSettings& settings,
+                                                                                   uint64_t currentVersion) noexcept;
     [[nodiscard]] std::shared_ptr<CompareDirectoriesFolderDecision> ComputeDecisionForFolder(const std::filesystem::path& relativeFolder,
                                                                                              const Common::Settings::CompareDirectoriesSettings& settings,
                                                                                              const std::vector<std::wstring>& ignoreFilePatterns,
@@ -457,6 +532,8 @@ private:
     std::set<std::wstring, WStringViewNoCaseLess> _scanHighQueuedKeys;
     std::map<std::wstring, InFlightScanStamp, WStringViewNoCaseLess> _scanInFlightKeys;
     std::set<std::wstring, WStringViewNoCaseLess> _pendingSubdirUpdates;
+    std::map<std::wstring, PendingSubdirAggregateUpdate, WStringViewNoCaseLess> _pendingSubdirAggregateUpdates;
+    std::map<std::wstring, uint32_t, WStringViewNoCaseLess> _pendingSubdirAggregateRetryAttempts;
     std::condition_variable _scanCv;
     std::vector<std::jthread> _scanWorkers;
 
@@ -475,6 +552,7 @@ private:
     std::deque<ContentCompareJob> _contentCompareQueueHigh;
     std::deque<ContentCompareJob> _contentCompareQueueLow;
     std::map<std::wstring, std::map<std::wstring, PendingContentCompareUpdate, WStringViewNoCaseLess>, WStringViewNoCaseLess> _pendingContentCompareUpdates;
+    std::map<std::wstring, uint32_t, WStringViewNoCaseLess> _pendingContentCompareRetryAttempts;
     std::condition_variable _contentCompareCv;
     std::condition_variable _contentCompareQueueNotFullCv;
     std::vector<std::jthread> _contentCompareWorkers;

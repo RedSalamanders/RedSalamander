@@ -1,0 +1,4 @@
+interface:
+  display_name: "RedSalamander Crash Forensics"
+  short_description: "Debug RedSalamander crashes and hangs"
+  default_prompt: "Use $red-salamander-crash-forensics to triage this RedSalamander crash, dump, or selftest hang."

@@ -9,6 +9,7 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::SetConfiguration(const char* configurati
     _settings = {};
     _s3BucketRegionByName.clear();
     _s3ClientsByCtxKey.clear();
+    _writableDirectoryValidationTicks.clear();
     _s3TableBucketArnByName.clear();
 
     if (configurationJsonUtf8 == nullptr || configurationJsonUtf8[0] == '\0')

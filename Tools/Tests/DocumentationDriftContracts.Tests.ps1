@@ -83,3 +83,28 @@ Describe 'Settings schema vs code key-coverage contracts' {
         $schema | Should Match '"mask":\s*\{[^}]*"maximum":\s*63[^}]*"default":\s*63'
     }
 }
+
+Describe 'File Operations popup documentation drift contracts' {
+    It 'tracks the split popup cases and completed remediation under Done' {
+        $coverage = Get-RSText -Path 'Specs\Testing\Testing_TestCoverage.md'
+        $fileOperations = Get-RSText -Path 'Specs\FileSystem\FileSystem_FileOperations.md'
+        $uxPlan = Get-RSText -Path 'Specs\Plans\WIP\UI_FileOperationsPopupUxRefinementPlan_2026-07-07.md'
+        $splitCases = @(
+            'cmd_pane_fileops_popup_progress_contracts',
+            'cmd_pane_fileops_conflict_metadata_uses_single_provider_roundtrip',
+            'cmd_pane_fileops_conflict_prompt_metadata_and_actions',
+            'cmd_pane_fileops_popup_presentation_settings_and_taskbar',
+            'cmd_pane_fileops_completed_group_and_navigation'
+        )
+
+        foreach ($caseName in $splitCases) {
+            $coverage | Should Match ([Regex]::Escape($caseName))
+            $fileOperations | Should Match ([Regex]::Escape($caseName))
+        }
+        $coverage | Should Not Match 'cmd_pane_fileops_conflict_prompt_compacts_actions'
+        $fileOperations | Should Not Match 'cmd_pane_fileops_conflict_prompt_compacts_actions'
+        $uxPlan | Should Match '\[UI_FileOperationsPopupCodeReviewRemediation_2026-07-10\.md\]\(\.\./Done/UI_FileOperationsPopupCodeReviewRemediation_2026-07-10\.md\)'
+        $uxPlan | Should Match 'review-remediation evidence gate is complete'
+        $uxPlan | Should Not Match 'review-remediation evidence gate keep the plan in WIP'
+    }
+}

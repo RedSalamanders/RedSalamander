@@ -814,54 +814,12 @@ private:
 
 std::string Utf8FromUtf16(std::wstring_view text) noexcept
 {
-    if (text.empty())
-    {
-        return {};
-    }
-
-    const int required = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
-    if (required <= 0)
-    {
-        return {};
-    }
-
-    std::string result(static_cast<size_t>(required), '\0');
-    const int written =
-        WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), result.data(), required, nullptr, nullptr);
-    if (written != required)
-    {
-        return {};
-    }
-
-    return result;
+    return Common::Strings::Utf8FromUtf16StrictOrEmpty(text);
 }
 
 std::wstring Utf16FromUtf8(std::string_view text) noexcept
 {
-    if (text.empty())
-    {
-        return {};
-    }
-
-    if (text.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
-    {
-        return {};
-    }
-
-    const int required = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0);
-    if (required <= 0)
-    {
-        return {};
-    }
-
-    std::wstring result(static_cast<size_t>(required), L'\0');
-    const int written = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), result.data(), required);
-    if (written != required)
-    {
-        return {};
-    }
-
-    return result;
+    return Common::Strings::Utf16FromUtf8StrictOrEmpty(text);
 }
 
 template <typename T> constexpr T AlignUp(T value, size_t alignment) noexcept
@@ -2809,6 +2767,11 @@ HRESULT DummyFilesInformation::LocateEntry(unsigned long index, FileInfo** ppEnt
 
 FileSystemDummy::FileSystemDummy(IHost* host) noexcept
 {
+    {
+        std::scoped_lock lock(_mutex);
+        _liveInstanceCount.fetch_add(1u, std::memory_order_acq_rel);
+    }
+
     _metaData.id          = kPluginId;
     _metaData.shortId     = kPluginShortId;
     _metaData.name        = LocalizedPluginName();
@@ -2891,11 +2854,18 @@ FileSystemDummy::~FileSystemDummy()
         }
     }
 
-    // Iteratively free deeply-nested trees before the inline static _roots destructs at
-    // process exit (which would recurse through DummyNode::children and stack-overflow on
-    // trees created by the compare self-test, which makes 1024-level-deep directories).
-    std::scoped_lock lock(_mutex);
-    ClearRootsIteratively();
+    {
+        std::scoped_lock lock(_mutex);
+        if (_liveInstanceCount.fetch_sub(1u, std::memory_order_acq_rel) != 1u)
+        {
+            return;
+        }
+
+        // Iteratively free deeply-nested trees before the inline static _roots destructs at
+        // process exit (which would recurse through DummyNode::children and stack-overflow on
+        // trees created by the compare self-test, which makes 1024-level-deep directories).
+        ClearRootsIteratively();
+    }
 }
 
 HRESULT STDMETHODCALLTYPE FileSystemDummy::GetMetaData(const PluginMetaData** metaData) noexcept

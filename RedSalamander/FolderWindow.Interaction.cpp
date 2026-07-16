@@ -157,6 +157,23 @@ HWND FolderWindow::GetFolderViewHwnd(Pane pane) const noexcept
 
 bool FolderWindow::TryRestoreActivePaneFolderViewFocus() noexcept
 {
+    if (! _hWnd)
+    {
+        return false;
+    }
+    const HWND root = GetAncestor(_hWnd.get(), GA_ROOT);
+    if (! root)
+    {
+        return false;
+    }
+    if (const HWND activeWindow = GetActiveWindow(); activeWindow && activeWindow != root)
+    {
+        return false;
+    }
+    if (const HWND foregroundWindow = GetForegroundWindow(); foregroundWindow && foregroundWindow != root)
+    {
+        return false;
+    }
     if (GetFocusedFolderViewHwnd() != nullptr)
     {
         return false;
@@ -178,6 +195,20 @@ void FolderWindow::RequestRestoreFolderViewFocus(HWND folderView) noexcept
         pane = Pane::Right;
     }
     else
+    {
+        return;
+    }
+
+    const HWND root = _hWnd ? GetAncestor(_hWnd.get(), GA_ROOT) : nullptr;
+    if (! root)
+    {
+        return;
+    }
+    if (const HWND activeWindow = GetActiveWindow(); activeWindow && activeWindow != root)
+    {
+        return;
+    }
+    if (const HWND foregroundWindow = GetForegroundWindow(); foregroundWindow && foregroundWindow != root)
     {
         return;
     }

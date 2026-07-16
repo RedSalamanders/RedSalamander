@@ -48,12 +48,8 @@ constexpr size_t kWindowsMaxLeafNameLength = 255u;
 [[nodiscard]] bool HasWindowsInvalidLeafCharacter(std::wstring_view text) noexcept
 {
     constexpr std::wstring_view kInvalidLeafCharacters = L"<>:\"|?*";
-    return std::any_of(text.begin(),
-                       text.end(),
-                       [](const wchar_t ch) noexcept
-    {
-        return ch < L' ' || kInvalidLeafCharacters.find(ch) != std::wstring_view::npos;
-    });
+    return std::any_of(
+        text.begin(), text.end(), [](const wchar_t ch) noexcept { return ch < L' ' || kInvalidLeafCharacters.find(ch) != std::wstring_view::npos; });
 }
 
 [[nodiscard]] bool IsWordChar(wchar_t ch) noexcept
@@ -278,19 +274,14 @@ struct MacroExpansion final
     std::vector<Issue> issues;
 };
 
-[[nodiscard]] std::wstring ResolveMacro(std::wstring_view token,
-                                        const Target& target,
-                                        std::wstring_view originalName,
-                                        size_t rowIndex,
-                                        const Rules& rules,
-                                        bool& known,
-                                        bool& invalidFormat)
+[[nodiscard]] std::wstring ResolveMacro(
+    std::wstring_view token, const Target& target, std::wstring_view originalName, size_t rowIndex, const Rules& rules, bool& known, bool& invalidFormat)
 {
-    known = true;
+    known         = true;
     invalidFormat = false;
 
-    const size_t colon = token.find(L':');
-    const std::wstring nameLower = FoldCaseForCollisionKeys(colon == std::wstring_view::npos ? token : token.substr(0, colon));
+    const size_t colon             = token.find(L':');
+    const std::wstring nameLower   = FoldCaseForCollisionKeys(colon == std::wstring_view::npos ? token : token.substr(0, colon));
     const std::wstring_view format = colon == std::wstring_view::npos ? std::wstring_view{} : token.substr(colon + 1u);
 
     if (nameLower == L"NAME" || nameLower == L"FILENAME")
@@ -397,15 +388,10 @@ struct MacroExpansion final
                 break;
             }
 
-            bool known = false;
+            bool known         = false;
             bool invalidFormat = false;
-            const std::wstring replacement = ResolveMacro(std::wstring_view(normalized).substr(i + 1u, close - (i + 1u)),
-                                                          target,
-                                                          originalName,
-                                                          rowIndex,
-                                                          rules,
-                                                          known,
-                                                          invalidFormat);
+            const std::wstring replacement =
+                ResolveMacro(std::wstring_view(normalized).substr(i + 1u, close - (i + 1u)), target, originalName, rowIndex, rules, known, invalidFormat);
             if (! known)
             {
                 expansion.issues.push_back({IssueSeverity::Error, L"macro_unknown"});
@@ -436,7 +422,7 @@ struct MacroExpansion final
     std::wstring result;
     result.reserve(text.size());
 
-    size_t cursor = 0;
+    size_t cursor  = 0;
     size_t matches = 0;
     while (cursor < text.size())
     {
@@ -482,8 +468,7 @@ struct MacroExpansion final
 
     if (rules.regexEnabled && compiledRegex.has_value())
     {
-        const std::regex_constants::match_flag_type flags =
-            rules.replaceOnce ? std::regex_constants::format_first_only : std::regex_constants::match_default;
+        const std::regex_constants::match_flag_type flags = rules.replaceOnce ? std::regex_constants::format_first_only : std::regex_constants::match_default;
         try
         {
             replaced = std::regex_replace(stem, compiledRegex.value(), rules.replaceWith, flags);
@@ -662,7 +647,7 @@ void MarkDuplicateTargets(std::vector<PreviewRow>& rows, const FileSystemPathIde
             continue;
         }
 
-        const std::wstring parent = rows[i].sourcePath.parent_path().wstring();
+        const std::wstring parent                   = rows[i].sourcePath.parent_path().wstring();
         const std::optional<std::wstring> parentKey = TryMakePathKey(pathIdentity, parent);
         const std::optional<std::wstring> nameKey   = TryMakeComponentKey(pathIdentity, rows[i].newName);
         if (! parentKey.has_value() || ! nameKey.has_value())
@@ -724,6 +709,11 @@ void MarkDuplicateTargets(std::vector<PreviewRow>& rows, const FileSystemPathIde
         }
     }
 
+    if (Debug::Perf::IsCaptureEnabled())
+    {
+        Debug::Perf::EmitValue(L"batchrename.preview.duplicate_fallback_rows", canUseKeys ? 0u : static_cast<uint64_t>(rows.size()));
+    }
+
     for (size_t i = 0; i < duplicateRows.size(); ++i)
     {
         if (duplicateRows[i])
@@ -745,10 +735,7 @@ void AddIssue(PreviewRow& row, const IssueSeverity severity, std::wstring messag
 
 [[nodiscard]] bool HasIssueSeverity(const PreviewRow& row, const IssueSeverity severity) noexcept
 {
-    return std::ranges::any_of(row.issues, [severity](const Issue& issue) noexcept
-    {
-        return issue.severity == severity;
-    });
+    return std::ranges::any_of(row.issues, [severity](const Issue& issue) noexcept { return issue.severity == severity; });
 }
 
 [[nodiscard]] Stats RecomputeStats(const std::span<const PreviewRow> rows) noexcept
@@ -925,14 +912,14 @@ Plan BuildPlan(const std::vector<Target>& targets, const Rules& rules, const Fil
     {
         const Target& target = targets[i];
         PreviewRow row{};
-        row.rowId        = static_cast<uint64_t>(i + 1u);
-        row.sourcePath   = target.sourcePath;
-        row.originalName = target.sourcePath.filename().wstring();
-        row.isDirectory  = target.isDirectory;
+        row.rowId           = static_cast<uint64_t>(i + 1u);
+        row.sourcePath      = target.sourcePath;
+        row.originalName    = target.sourcePath.filename().wstring();
+        row.isDirectory     = target.isDirectory;
         row.metadataUnknown = target.metadataUnknown;
-        row.sizeBytes    = target.sizeBytes;
-        row.lastWriteTime = target.lastWriteTime;
-        row.createdTime   = target.createdTime;
+        row.sizeBytes       = target.sizeBytes;
+        row.lastWriteTime   = target.lastWriteTime;
+        row.createdTime     = target.createdTime;
 
         if (rules.mode == Mode::Manual)
         {

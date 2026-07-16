@@ -1,8 +1,10 @@
 #include "ThemeDefinitionIo.h"
+#include "Helpers.h"
 
 #include <algorithm>
 #include <array>
 #include <cstdlib>
+#include <format>
 #include <limits>
 #include <string>
 #include <vector>
@@ -64,84 +66,12 @@ constexpr std::array<std::wstring_view, 5> kBuiltinThemeIds = {{
 
 [[nodiscard]] std::wstring Utf16FromUtf8(std::string_view text) noexcept
 {
-    if (text.empty() || text.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
-    {
-        return {};
-    }
-
-    const int required = ::MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0);
-    if (required <= 0)
-    {
-        return {};
-    }
-
-    std::wstring result(static_cast<size_t>(required), L'\0');
-    const int written = ::MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), result.data(), required);
-    if (written != required)
-    {
-        return {};
-    }
-
-    return result;
+    return Common::Strings::Utf16FromUtf8StrictOrEmpty(text);
 }
 
 [[nodiscard]] std::string Utf8FromUtf16(std::wstring_view text) noexcept
 {
-    if (text.empty() || text.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
-    {
-        return {};
-    }
-
-    const int required = ::WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
-    if (required <= 0)
-    {
-        return {};
-    }
-
-    std::string result(static_cast<size_t>(required), '\0');
-    const int written =
-        ::WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), result.data(), required, nullptr, nullptr);
-    if (written != required)
-    {
-        return {};
-    }
-
-    return result;
-}
-
-[[nodiscard]] yyjson_val* GetObjectMember(yyjson_val* obj, const char* key) noexcept
-{
-    yyjson_val* value = yyjson_obj_get(obj, key);
-    return (value && yyjson_is_obj(value)) ? value : nullptr;
-}
-
-[[nodiscard]] HRESULT ReadRequiredString(yyjson_val* obj,
-                                         const char* key,
-                                         std::wstring& out,
-                                         Common::Settings::ThemeDefinitionIoError missingError,
-                                         Common::Settings::ThemeDefinitionIoError* outError,
-                                         std::wstring* outMessage) noexcept
-{
-    out.clear();
-    yyjson_val* value = yyjson_obj_get(obj, key);
-    if (! value || ! yyjson_is_str(value))
-    {
-        return InvalidData(missingError, outError, outMessage);
-    }
-
-    const char* text = yyjson_get_str(value);
-    if (! text)
-    {
-        return InvalidData(missingError, outError, outMessage);
-    }
-
-    out = Utf16FromUtf8(std::string_view(text, yyjson_get_len(value)));
-    if (out.empty())
-    {
-        return InvalidData(missingError, outError, outMessage);
-    }
-
-    return S_OK;
+    return Common::Strings::Utf8FromUtf16StrictOrEmpty(text);
 }
 
 [[nodiscard]] HRESULT AddStringMember(yyjson_mut_doc* doc, yyjson_mut_val* obj, const char* key, std::string_view value) noexcept
@@ -174,6 +104,11 @@ bool IsValidThemeColorKey(std::wstring_view key) noexcept
     }
 
     return true;
+}
+
+bool IsValidThemePaletteName(std::wstring_view name) noexcept
+{
+    return IsValidThemeColorKey(name) && name.find(L'.') == std::wstring_view::npos;
 }
 
 bool IsValidUserThemeId(std::wstring_view id) noexcept
@@ -214,7 +149,96 @@ bool IsBuiltinThemeId(std::wstring_view themeId) noexcept
     return std::find(kBuiltinThemeIds.begin(), kBuiltinThemeIds.end(), themeId) != kBuiltinThemeIds.end();
 }
 
-HRESULT ParseThemeDefinitionJson5(std::string_view jsonText, ThemeDefinition& outTheme, ThemeDefinitionIoError* outError, std::wstring* outMessage) noexcept
+namespace
+{
+[[nodiscard]] const JsonValue* FindJsonMember(const JsonObject& object, std::string_view key) noexcept
+{
+    const auto found = std::find_if(object.members.begin(), object.members.end(), [&](const auto& member) noexcept { return member.first == key; });
+    return found == object.members.end() ? nullptr : &found->second;
+}
+
+[[nodiscard]] bool ReadJsonString(const JsonObject& object, std::string_view key, std::wstring& out) noexcept
+{
+    const JsonValue* value = FindJsonMember(object, key);
+    if (! value)
+    {
+        return false;
+    }
+    const auto* text = std::get_if<std::string>(&value->value);
+    if (! text || text->empty())
+    {
+        return false;
+    }
+    out = Utf16FromUtf8(*text);
+    return ! out.empty();
+}
+
+[[nodiscard]] bool ReadJsonUInt32(const JsonObject& object, std::string_view key, uint32_t& out) noexcept
+{
+    const JsonValue* value = FindJsonMember(object, key);
+    if (! value)
+    {
+        return false;
+    }
+    if (const auto* unsignedValue = std::get_if<uint64_t>(&value->value); unsignedValue && *unsignedValue <= std::numeric_limits<uint32_t>::max())
+    {
+        out = static_cast<uint32_t>(*unsignedValue);
+        return true;
+    }
+    if (const auto* signedValue = std::get_if<int64_t>(&value->value); signedValue && *signedValue >= 0 &&
+                                                                       static_cast<uint64_t>(*signedValue) <= std::numeric_limits<uint32_t>::max())
+    {
+        out = static_cast<uint32_t>(*signedValue);
+        return true;
+    }
+    return false;
+}
+
+[[nodiscard]] HRESULT ParseSourceObject(const JsonObject& object,
+                                        bool palette,
+                                        ThemeDefinitionParseMode mode,
+                                        std::unordered_map<std::wstring, ThemeColorSource>& out,
+                                        ThemeDefinitionIoError* outError,
+                                        std::wstring* outMessage,
+                                        uint32_t& skipped) noexcept
+{
+    for (const auto& [keyUtf8, value] : object.members)
+    {
+        const std::wstring key = Utf16FromUtf8(keyUtf8);
+        const bool validKey = palette ? IsValidThemePaletteName(key) : IsValidThemeColorKey(key);
+        const bool duplicate = out.contains(key);
+        const auto* sourceText = std::get_if<std::string>(&value.value);
+        ThemeColorSource source;
+        std::wstring parseMessage;
+        const bool validSource = sourceText && SUCCEEDED(ParseThemeColorSource(Utf16FromUtf8(*sourceText), source, &parseMessage));
+        const bool paletteDynamic = palette && validSource && (IsPaintTimeThemeColorSource(source) || IsEventTimeThemeColorSource(source));
+        if (! validKey || duplicate || ! sourceText || ! validSource || paletteDynamic)
+        {
+            if (mode == ThemeDefinitionParseMode::StrictFile)
+            {
+                const ThemeDefinitionIoError error = ! validKey ? (palette ? ThemeDefinitionIoError::InvalidPaletteName
+                                                                           : ThemeDefinitionIoError::InvalidColorKey)
+                                                     : duplicate ? (palette ? ThemeDefinitionIoError::DuplicatePaletteName
+                                                                            : ThemeDefinitionIoError::DuplicateColorKey)
+                                                     : ! sourceText ? ThemeDefinitionIoError::ColorValueNotString
+                                                                   : ThemeDefinitionIoError::InvalidColorValue;
+                return InvalidData(error, outError, outMessage, std::move(parseMessage));
+            }
+            ++skipped;
+            continue;
+        }
+        out.emplace(key, std::move(source));
+    }
+    return S_OK;
+}
+} // namespace
+
+HRESULT ParseThemeDefinitionFromValue(const JsonValue& value,
+                                      ThemeDefinition& outTheme,
+                                      ThemeDefinitionParseMode mode,
+                                      ThemeDefinitionIoError* outError,
+                                      std::wstring* outMessage,
+                                      uint32_t* outSkippedColorEntries) noexcept
 {
     outTheme = {};
     if (outError)
@@ -225,121 +249,128 @@ HRESULT ParseThemeDefinitionJson5(std::string_view jsonText, ThemeDefinition& ou
     {
         outMessage->clear();
     }
-
-    if (jsonText.empty())
+    if (outSkippedColorEntries)
     {
-        return InvalidData(ThemeDefinitionIoError::EmptyInput, outError, outMessage);
+        *outSkippedColorEntries = 0u;
     }
 
-    std::string mutableJson(jsonText);
-    yyjson_read_err readError{};
-    wil::unique_any<yyjson_doc*, decltype(&yyjson_doc_free), yyjson_doc_free> doc(
-        yyjson_read_opts(mutableJson.data(), mutableJson.size(), YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM, nullptr, &readError));
-    if (! doc)
-    {
-        if (readError.code == YYJSON_READ_ERROR_MEMORY_ALLOCATION)
-        {
-            return OutOfMemory(outError, outMessage);
-        }
-
-        const std::wstring message = (readError.msg && readError.msg[0] != '\0') ? Utf16FromUtf8(readError.msg) : std::wstring{};
-        return InvalidData(ThemeDefinitionIoError::ParseFailed, outError, outMessage, message);
-    }
-
-    yyjson_val* root = yyjson_doc_get_root(doc.get());
-    if (! root || ! yyjson_is_obj(root))
+    const auto* objectPtr = std::get_if<JsonValue::ObjectPtr>(&value.value);
+    if (! objectPtr || ! *objectPtr)
     {
         return InvalidData(ThemeDefinitionIoError::RootNotObject, outError, outMessage);
     }
-
+    const JsonObject& object = **objectPtr;
     ThemeDefinition parsed;
-    if (const HRESULT hr = ReadRequiredString(root, "id", parsed.id, ThemeDefinitionIoError::MissingOrInvalidId, outError, outMessage); FAILED(hr))
+    if (! ReadJsonUInt32(object, "formatVersion", parsed.formatVersion))
     {
-        return hr;
+        return InvalidData(ThemeDefinitionIoError::MissingOrInvalidFormatVersion, outError, outMessage,
+                           L"Theme formatVersion must be the integer 2.");
+    }
+    if (parsed.formatVersion != 2u)
+    {
+        return InvalidData(ThemeDefinitionIoError::UnsupportedFormatVersion, outError, outMessage,
+                           std::format(L"Unsupported theme formatVersion {}. Only version 2 is accepted.", parsed.formatVersion));
+    }
+    if (! ReadJsonString(object, "id", parsed.id))
+    {
+        return InvalidData(ThemeDefinitionIoError::MissingOrInvalidId, outError, outMessage);
     }
     if (! IsValidUserThemeId(parsed.id))
     {
         return InvalidData(ThemeDefinitionIoError::InvalidId, outError, outMessage);
     }
-
-    if (const HRESULT hr = ReadRequiredString(root, "name", parsed.name, ThemeDefinitionIoError::MissingOrInvalidName, outError, outMessage); FAILED(hr))
-    {
-        return hr;
-    }
-    if (parsed.name.size() > 64u)
+    if (! ReadJsonString(object, "name", parsed.name))
     {
         return InvalidData(ThemeDefinitionIoError::MissingOrInvalidName, outError, outMessage);
     }
-
-    if (const HRESULT hr =
-            ReadRequiredString(root, "baseThemeId", parsed.baseThemeId, ThemeDefinitionIoError::MissingOrInvalidBaseThemeId, outError, outMessage);
-        FAILED(hr))
+    if (parsed.name.size() > 64u)
     {
-        return hr;
+        if (mode == ThemeDefinitionParseMode::StrictFile)
+        {
+            return InvalidData(ThemeDefinitionIoError::MissingOrInvalidName, outError, outMessage);
+        }
+        parsed.name.resize(64u);
     }
-    if (! IsBuiltinThemeId(parsed.baseThemeId))
+    if (! ReadJsonString(object, "baseThemeId", parsed.baseThemeId))
+    {
+        return InvalidData(ThemeDefinitionIoError::MissingOrInvalidBaseThemeId, outError, outMessage);
+    }
+    if (mode == ThemeDefinitionParseMode::StrictFile && ! IsBuiltinThemeId(parsed.baseThemeId))
     {
         return InvalidData(ThemeDefinitionIoError::InvalidBaseThemeId, outError, outMessage);
     }
 
-    yyjson_val* colors = GetObjectMember(root, "colors");
-    if (! colors)
+    uint32_t skipped = 0u;
+    if (const JsonValue* paletteValue = FindJsonMember(object, "palette"))
+    {
+        const auto* palettePtr = std::get_if<JsonValue::ObjectPtr>(&paletteValue->value);
+        if (! palettePtr || ! *palettePtr)
+        {
+            return InvalidData(ThemeDefinitionIoError::PaletteNotObject, outError, outMessage);
+        }
+        if ((*palettePtr)->members.size() > 128u)
+        {
+            return InvalidData(ThemeDefinitionIoError::TooManyPaletteEntries, outError, outMessage,
+                               L"A theme palette cannot contain more than 128 entries.");
+        }
+        if (const HRESULT hr = ParseSourceObject(**palettePtr, true, mode, parsed.palette, outError, outMessage, skipped); FAILED(hr))
+        {
+            return hr;
+        }
+    }
+
+    const JsonValue* colorsValue = FindJsonMember(object, "colors");
+    const auto* colorsPtr        = colorsValue ? std::get_if<JsonValue::ObjectPtr>(&colorsValue->value) : nullptr;
+    if (! colorsPtr || ! *colorsPtr)
     {
         return InvalidData(ThemeDefinitionIoError::ColorsMissingOrNotObject, outError, outMessage);
     }
-
-    yyjson_obj_iter iter = yyjson_obj_iter_with(colors);
-    yyjson_val* colorKey = nullptr;
-    while ((colorKey = yyjson_obj_iter_next(&iter)) != nullptr)
+    if ((*colorsPtr)->members.size() > 512u)
     {
-        if (! yyjson_is_str(colorKey))
-        {
-            return InvalidData(ThemeDefinitionIoError::InvalidColorKey, outError, outMessage);
-        }
-
-        const char* keyText = yyjson_get_str(colorKey);
-        if (! keyText)
-        {
-            return InvalidData(ThemeDefinitionIoError::InvalidColorKey, outError, outMessage);
-        }
-
-        const std::wstring key = Utf16FromUtf8(std::string_view(keyText, yyjson_get_len(colorKey)));
-        if (! IsValidThemeColorKey(key))
-        {
-            return InvalidData(ThemeDefinitionIoError::InvalidColorKey, outError, outMessage);
-        }
-
-        yyjson_val* colorValue = yyjson_obj_iter_get_val(colorKey);
-        if (! colorValue || ! yyjson_is_str(colorValue))
-        {
-            return InvalidData(ThemeDefinitionIoError::ColorValueNotString, outError, outMessage);
-        }
-
-        const char* valueText = yyjson_get_str(colorValue);
-        if (! valueText)
-        {
-            return InvalidData(ThemeDefinitionIoError::InvalidColorValue, outError, outMessage);
-        }
-
-        const std::wstring value = Utf16FromUtf8(std::string_view(valueText, yyjson_get_len(colorValue)));
-        uint32_t argb            = 0;
-        if (value.empty() || ! TryParseColor(value, argb))
-        {
-            return InvalidData(ThemeDefinitionIoError::InvalidColorValue, outError, outMessage);
-        }
-
-        parsed.colors[key] = argb;
+        return InvalidData(ThemeDefinitionIoError::TooManyColorEntries, outError, outMessage,
+                           L"A theme cannot contain more than 512 semantic color entries.");
     }
 
+    if (const HRESULT hr = ParseSourceObject(**colorsPtr, false, mode, parsed.colors, outError, outMessage, skipped); FAILED(hr))
+    {
+        return hr;
+    }
+
+    if (outSkippedColorEntries)
+    {
+        *outSkippedColorEntries = skipped;
+    }
+    if (skipped != 0u && outMessage)
+    {
+        *outMessage = std::format(L"Skipped {} invalid inline theme color entr{}.", skipped, skipped == 1u ? L"y" : L"ies");
+    }
     outTheme = std::move(parsed);
     return S_OK;
+}
+
+HRESULT ParseThemeDefinitionJson5(std::string_view jsonText, ThemeDefinition& outTheme, ThemeDefinitionIoError* outError, std::wstring* outMessage) noexcept
+{
+    if (jsonText.empty())
+    {
+        return InvalidData(ThemeDefinitionIoError::EmptyInput, outError, outMessage);
+    }
+    JsonValue value;
+    const HRESULT parseHr = ParseJsonValue(jsonText, value);
+    if (FAILED(parseHr))
+    {
+        return parseHr == E_OUTOFMEMORY ? OutOfMemory(outError, outMessage)
+                                       : InvalidData(ThemeDefinitionIoError::ParseFailed, outError, outMessage);
+    }
+    return ParseThemeDefinitionFromValue(value, outTheme, ThemeDefinitionParseMode::StrictFile, outError, outMessage);
 }
 
 HRESULT BuildThemeDefinitionJson5(const ThemeDefinition& theme, std::string& outJson) noexcept
 {
     outJson.clear();
 
-    if (! IsValidUserThemeId(theme.id) || theme.name.empty() || theme.name.size() > 64u || ! IsBuiltinThemeId(theme.baseThemeId))
+    if (theme.formatVersion != 2u || ! IsValidUserThemeId(theme.id) || theme.name.empty() || theme.name.size() > 64u ||
+        theme.palette.size() > 128u || theme.colors.size() > 512u ||
+        ! IsBuiltinThemeId(theme.baseThemeId))
     {
         return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
@@ -356,6 +387,11 @@ HRESULT BuildThemeDefinitionJson5(const ThemeDefinition& theme, std::string& out
         return E_OUTOFMEMORY;
     }
     yyjson_mut_doc_set_root(doc.get(), root);
+
+    if (! yyjson_mut_obj_add_uint(doc.get(), root, "formatVersion", theme.formatVersion))
+    {
+        return E_OUTOFMEMORY;
+    }
 
     const std::string idUtf8 = Utf8FromUtf16(theme.id);
     if (idUtf8.empty())
@@ -387,53 +423,59 @@ HRESULT BuildThemeDefinitionJson5(const ThemeDefinition& theme, std::string& out
         return hr;
     }
 
-    yyjson_mut_val* colors = yyjson_mut_obj(doc.get());
-    if (! colors || ! yyjson_mut_obj_add_val(doc.get(), root, "colors", colors))
+    const auto addSources = [&](const char* memberName,
+                                const std::unordered_map<std::wstring, ThemeColorSource>& sources,
+                                bool palette) noexcept -> HRESULT
     {
-        return E_OUTOFMEMORY;
-    }
-
-    std::vector<std::wstring_view> keys;
-    keys.reserve(theme.colors.size());
-    for (const auto& [key, _] : theme.colors)
-    {
-        if (! IsValidThemeColorKey(key))
-        {
-            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
-        }
-
-        keys.emplace_back(key);
-    }
-
-    std::sort(keys.begin(), keys.end());
-
-    for (const std::wstring_view key : keys)
-    {
-        const auto it = theme.colors.find(std::wstring(key));
-        if (it == theme.colors.end())
-        {
-            continue;
-        }
-
-        const std::string keyUtf8 = Utf8FromUtf16(key);
-        if (keyUtf8.empty())
-        {
-            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
-        }
-
-        const std::wstring colorText = FormatColor(it->second);
-        const std::string valueUtf8  = Utf8FromUtf16(colorText);
-        if (valueUtf8.empty())
-        {
-            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
-        }
-
-        yyjson_mut_val* keyNode   = yyjson_mut_strncpy(doc.get(), keyUtf8.data(), keyUtf8.size());
-        yyjson_mut_val* valueNode = yyjson_mut_strncpy(doc.get(), valueUtf8.data(), valueUtf8.size());
-        if (! keyNode || ! valueNode || ! yyjson_mut_obj_add(colors, keyNode, valueNode))
+        yyjson_mut_val* object = yyjson_mut_obj(doc.get());
+        if (! object || ! yyjson_mut_obj_add_val(doc.get(), root, memberName, object))
         {
             return E_OUTOFMEMORY;
         }
+        std::vector<std::wstring_view> keys;
+        keys.reserve(sources.size());
+        for (const auto& [key, _] : sources)
+        {
+            if ((palette && ! IsValidThemePaletteName(key)) || (! palette && ! IsValidThemeColorKey(key)))
+            {
+                return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+            }
+            keys.emplace_back(key);
+        }
+        std::sort(keys.begin(), keys.end());
+        for (const std::wstring_view key : keys)
+        {
+            const auto it = sources.find(std::wstring(key));
+            if (it == sources.end())
+            {
+                continue;
+            }
+            const std::string keyUtf8 = Utf8FromUtf16(key);
+            const std::string valueUtf8 = Utf8FromUtf16(FormatThemeColorSource(it->second));
+            if (keyUtf8.empty() || valueUtf8.empty())
+            {
+                return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+            }
+            yyjson_mut_val* keyNode = yyjson_mut_strncpy(doc.get(), keyUtf8.data(), keyUtf8.size());
+            yyjson_mut_val* valueNode = yyjson_mut_strncpy(doc.get(), valueUtf8.data(), valueUtf8.size());
+            if (! keyNode || ! valueNode || ! yyjson_mut_obj_add(object, keyNode, valueNode))
+            {
+                return E_OUTOFMEMORY;
+            }
+        }
+        return S_OK;
+    };
+
+    if (! theme.palette.empty())
+    {
+        if (const HRESULT hr = addSources("palette", theme.palette, true); FAILED(hr))
+        {
+            return hr;
+        }
+    }
+    if (const HRESULT hr = addSources("colors", theme.colors, false); FAILED(hr))
+    {
+        return hr;
     }
 
     size_t jsonLength = 0;
@@ -446,6 +488,51 @@ HRESULT BuildThemeDefinitionJson5(const ThemeDefinition& theme, std::string& out
     }
 
     outJson.assign(jsonText.get(), jsonLength);
+    if (const size_t paletteOffset = outJson.find("  \"palette\": {"); paletteOffset != std::string::npos)
+    {
+        outJson.insert(paletteOffset, "  // Named palette\n");
+    }
+
+    const size_t colorsOffset = outJson.find("  \"colors\": {");
+    if (colorsOffset != std::string::npos)
+    {
+        const size_t colorsBody = outJson.find('\n', colorsOffset);
+        if (colorsBody != std::string::npos)
+        {
+            std::string grouped;
+            grouped.reserve(outJson.size() + (theme.colors.size() * 12u));
+            grouped.append(outJson.substr(0u, colorsBody + 1u));
+            std::string previousGroup;
+            size_t lineStart = colorsBody + 1u;
+            while (lineStart < outJson.size())
+            {
+                size_t lineEnd = outJson.find('\n', lineStart);
+                if (lineEnd == std::string::npos) lineEnd = outJson.size();
+                const std::string_view line(outJson.data() + lineStart, lineEnd - lineStart);
+                if (line.starts_with("    \"") && ! line.starts_with("    //"))
+                {
+                    const size_t keyEnd = line.find('"', 5u);
+                    if (keyEnd != std::string_view::npos)
+                    {
+                        const std::string_view key = line.substr(5u, keyEnd - 5u);
+                        const size_t dot = key.find('.');
+                        const std::string group(key.substr(0u, dot));
+                        if (group != previousGroup)
+                        {
+                            grouped.append("    // ");
+                            grouped.append(group);
+                            grouped.push_back('\n');
+                            previousGroup = group;
+                        }
+                    }
+                }
+                grouped.append(line);
+                if (lineEnd < outJson.size()) grouped.push_back('\n');
+                lineStart = lineEnd + 1u;
+            }
+            outJson = std::move(grouped);
+        }
+    }
     return S_OK;
 }
 } // namespace Common::Settings

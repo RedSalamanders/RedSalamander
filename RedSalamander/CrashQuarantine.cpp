@@ -62,7 +62,47 @@ void DisablePluginIdInSettings(std::wstring_view pluginId, Common::Settings::Set
         settings.plugins.currentFileSystemPluginId.clear();
     }
 }
+
+// Pure decision core: filter active ids to non-empty ids not already disabled. No I/O, no UI.
+[[nodiscard]] std::vector<std::wstring> ComputePluginsToDisable(bool markerExists,
+                                                                const std::vector<std::wstring>& activeFileSystemPluginIds,
+                                                                const Common::Settings::Settings& settings) noexcept
+{
+    std::vector<std::wstring> toDisable;
+    if (! markerExists)
+    {
+        return toDisable;
+    }
+
+    toDisable.reserve(activeFileSystemPluginIds.size());
+    for (const std::wstring& id : activeFileSystemPluginIds)
+    {
+        if (id.empty())
+        {
+            continue;
+        }
+        if (! IsDisabledPluginId(id, settings))
+        {
+            toDisable.push_back(id);
+        }
+    }
+    return toDisable;
+}
 } // namespace
+
+#ifdef ENABLE_TESTS
+std::vector<std::wstring> SelectPluginsToDisable(bool markerExists,
+                                                 const std::vector<std::wstring>& activeFileSystemPluginIds,
+                                                 const Common::Settings::Settings& settings) noexcept
+{
+    return ComputePluginsToDisable(markerExists, activeFileSystemPluginIds, settings);
+}
+
+void DisablePluginIdInSettingsForTest(std::wstring_view pluginId, Common::Settings::Settings& settings) noexcept
+{
+    DisablePluginIdInSettings(pluginId, settings);
+}
+#endif
 
 void OfferPluginDisableIfPreviousCrashDetected(Common::Settings::Settings& settings) noexcept
 {
@@ -84,25 +124,7 @@ void OfferPluginDisableIfPreviousCrashDetected(Common::Settings::Settings& setti
         return;
     }
 
-    std::vector<std::wstring_view> candidateIds;
-    candidateIds.reserve(stateOpt->activeFileSystemPluginIds.size());
-    for (const std::wstring& id : stateOpt->activeFileSystemPluginIds)
-    {
-        if (! id.empty())
-        {
-            candidateIds.push_back(id);
-        }
-    }
-
-    std::vector<std::wstring_view> toDisable;
-    toDisable.reserve(candidateIds.size());
-    for (const std::wstring_view id : candidateIds)
-    {
-        if (! IsDisabledPluginId(id, settings))
-        {
-            toDisable.push_back(id);
-        }
-    }
+    const std::vector<std::wstring> toDisable = ComputePluginsToDisable(true, stateOpt->activeFileSystemPluginIds, settings);
     if (toDisable.empty())
     {
         return;

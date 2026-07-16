@@ -6,8 +6,10 @@
 #include <filesystem>
 #include <memory>
 #include <optional>
+#include <shobjidl.h>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace FileOperationsPopupInternal
@@ -18,8 +20,15 @@ struct PopupHitTest
     {
         None,
         FooterCancelAll,
+        FooterPauseResumeAll,
+        FooterAutoDismiss,
         FooterQueueMode,
+        FooterDensity,
+        FooterToggleDetails,
+        CompletedGroupToggle,
+        CompletedGroupClear,
         TaskToggleCollapse,
+        TaskStartNow,
         TaskPause,
         TaskCancel,
         TaskSkip,
@@ -61,6 +70,17 @@ struct PopupMenuAnchor
 {
     POINT screenPoint{};
     RedSalamander::DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
+};
+
+enum class PopupStatusVisualTone : uint8_t
+{
+    None,
+    Neutral,
+    Accent,
+    Muted,
+    Warning,
+    Error,
+    Ok,
 };
 
 struct TaskSnapshot
@@ -122,11 +142,23 @@ struct TaskSnapshot
 
     struct ConflictPromptSnapshot
     {
+        struct ItemMetadata
+        {
+            bool available           = false;
+            bool isDirectory         = false;
+            bool sizeKnown           = false;
+            uint64_t sizeBytes       = 0;
+            __int64 lastWriteTime    = 0;
+            unsigned long attributes = 0;
+        };
+
         bool active    = false;
         uint8_t bucket = 0;
         HRESULT status = S_OK;
         std::wstring sourcePath;
         std::wstring destinationPath;
+        ItemMetadata sourceMetadata;
+        ItemMetadata destinationMetadata;
         std::array<uint8_t, kMaxConflictActions> actions{};
         size_t actionCount     = 0;
         bool applyToAllChecked = false;
@@ -161,9 +193,9 @@ struct TaskSnapshot
     bool queuePaused      = false;
 
     // Pre-calculation state
-    bool preCalcInProgress              = false;
-    bool preCalcSkipped                 = false;
-    bool preCalcCompleted               = false;
+    bool preCalcInProgress = false;
+    bool preCalcSkipped    = false;
+    bool preCalcCompleted  = false;
     // 5F early admission: latched true once a transfer progress callback fired while pre-calc was
     // still running (bytes moved before the recursive scan finished).
     bool earlyAdmissionTransferObserved = false;
@@ -175,6 +207,9 @@ struct TaskSnapshot
     unsigned long plannedItems = 0;
     std::filesystem::path destinationFolder;
     std::optional<FolderWindow::Pane> destinationPane;
+    std::wstring destinationPluginId;
+    std::wstring destinationPluginShortId;
+    std::wstring destinationInstanceContext;
 };
 
 #ifdef ENABLE_TESTS
@@ -198,21 +233,93 @@ struct PopupLayoutDebugSnapshot
     uint64_t taskId = 0;
     bool found      = false;
 
-    size_t visibleButtonCount          = 0u;
-    size_t footerVisibleButtonCount    = 0u;
-    bool hasVisibleButtonOverlap       = false;
-    bool conflictApplyToAllVisible     = false;
-    bool conflictMoreVisible           = false;
-    bool completedDiagnosticsMoreVisible = false;
+    size_t visibleButtonCount                      = 0u;
+    size_t footerVisibleButtonCount                = 0u;
+    bool hasVisibleButtonOverlap                   = false;
+    bool taskHasVisibleButtonOverlap               = false;
+    bool conflictApplyToAllVisible                 = false;
+    bool conflictMoreVisible                       = false;
+    bool completedDiagnosticsMoreVisible           = false;
     bool completedDiagnosticsMoreButtonRectVisible = false;
-    bool completedShowLogVisible       = false;
-    bool completedExportIssuesVisible  = false;
-    bool completedDismissVisible       = false;
-    bool taskToggleCollapseVisible     = false;
-    bool taskPauseVisible              = false;
-    bool taskCancelVisible             = false;
-    bool taskSkipVisible               = false;
-    bool taskSpeedLimitVisible         = false;
+    bool completedShowLogVisible                   = false;
+    bool completedExportIssuesVisible              = false;
+    bool completedFailedItemsActionVisible         = false;
+    bool completedOpenDestinationActionVisible     = false;
+    bool completedRevealDestinationActionVisible   = false;
+    bool completedDismissVisible                   = false;
+    bool taskToggleCollapseVisible                 = false;
+    bool taskStartNowVisible                       = false;
+    bool taskPauseVisible                          = false;
+    bool taskCancelVisible                         = false;
+    bool taskSkipVisible                           = false;
+    bool taskSpeedLimitVisible                     = false;
+    bool footerPauseResumeAllVisible               = false;
+    bool footerPauseResumeAllPauses                = false;
+    bool footerQueueModeSegmentedVisible           = false;
+    bool footerQueueModeIsParallel                 = false;
+    bool footerQueueHitTargetActive                = false;
+    bool footerParallelHitTargetActive             = false;
+    bool footerAutoDismissVisible                  = false;
+    bool footerAutoDismissLabelVisible             = false;
+    bool footerAutoDismissEnabled                  = false;
+    bool footerDensityToggleVisible                = false;
+    bool footerDensityHitTargetActive              = false;
+    bool popupCompactDensity                       = false;
+    bool footerAggregateProgressVisible            = false;
+    bool footerAggregateProgressDeterminate        = false;
+    bool footerOnly                                = false;
+    bool footerDetailsToggleVisible                = false;
+    bool footerDetailsToggleRightAligned           = false;
+    bool highContrastEnabled                       = false;
+    bool reducedMotionEnabled                      = false;
+    bool autoResizeAnimationEnabled                = false;
+    bool footerQueueModeAnimationEnabled           = false;
+    bool graphStatusAnimationEnabled               = false;
+    bool conflictStackedPathRows                   = false;
+    bool conflictSourceMetadataVisible             = false;
+    bool conflictDestinationMetadataVisible        = false;
+    bool conflictMetadataSizeCompareVisible        = false;
+    bool conflictMetadataDateCompareVisible        = false;
+    bool taskDuplicateUnderGraphItemBarVisible     = false;
+    bool taskStatusStripeVisible                   = false;
+    bool taskStatusChipVisible                     = false;
+    bool taskStatusGlyphSignalVisible              = false;
+    bool taskStatusTextSignalVisible               = false;
+    bool taskStatusColorBlindSafeEncoding          = false;
+    bool taskCollapsed                             = false;
+    bool taskCompactRow                            = false;
+    bool taskAutoCollapsedOnCompletion             = false;
+    bool taskCompactProgressVisible                = false;
+    bool taskHiddenByCompletedGroup                = false;
+    bool completedGroupVisible                     = false;
+    bool completedGroupExpanded                    = false;
+    bool completedGroupToggleVisible               = false;
+    bool completedGroupClearVisible                = false;
+    bool completedGroupAnimationEnabled            = false;
+    uint32_t completedGroupCount                   = 0u;
+    uint32_t completedGroupVisibleTaskCount        = 0u;
+    uint32_t taskStatusVisualTone                  = 0u;
+    uint32_t taskStatusVisualColorRef              = 0u;
+    uint32_t taskUnderGraphProgressBarCount        = 0u;
+    uint64_t footerAggregateCompletedBytes         = 0;
+    uint64_t footerAggregateTotalBytes             = 0;
+    uint64_t footerAggregateCompletedItems         = 0;
+    uint64_t footerAggregateTotalItems             = 0;
+    double footerAggregateBytesPerSecond           = 0.0;
+    bool footerAggregateEtaVisible                 = false;
+    uint64_t footerAggregateEtaSeconds             = 0;
+    uint32_t taskbarProgressState                  = 0u;
+    uint64_t taskbarProgressCompleted              = 0;
+    uint64_t taskbarProgressTotal                  = 0;
+    uint64_t taskbarUpdateCount                    = 0;
+    bool taskbarButtonReady                        = false;
+    bool taskbarListAvailable                      = false;
+    bool taskbarListRetryPending                   = false;
+    uint32_t taskbarListAttemptCount               = 0u;
+    uint64_t taskbarListRetryDelayMs               = 0;
+    D2D1_RECT_F footerQueueSegmentRect{};
+    D2D1_RECT_F footerParallelSegmentRect{};
+    D2D1_RECT_F footerSummaryRect{};
     D2D1_RECT_F completedDiagnosticsMoreButtonRect{};
     size_t conflictPrimaryActionCount  = 0u;
     size_t conflictOverflowActionCount = 0u;
@@ -224,6 +331,7 @@ struct PopupLayoutDebugSnapshot
     uint32_t globalRunningCount             = 0u;
     uint32_t globalWaitingCount             = 0u;
     uint32_t globalNeedAttentionCount       = 0u;
+    uint32_t completedAutoCollapsedCount    = 0u;
     bool globalSummaryVisible               = false;
     std::wstring globalSummaryText;
 
@@ -236,6 +344,8 @@ struct PopupLayoutDebugSnapshot
     uint32_t graphDebugAccumulateCalls = 0u;
     uint32_t graphDebugLastPending     = 0u;
     uint32_t graphDebugMaxStreams      = 0u;
+    bool graphCurrentBandwidthLineVisible = false;
+    double graphCurrentBandwidthBytesPerSecond = 0.0;
 };
 
 struct GraphHueWeightDebugSnapshot
@@ -272,17 +382,17 @@ struct RateSnapshot
     ULONGLONG progressStateChangeTick  = 0;
     std::array<InFlightStreamSnapshot, TaskSnapshot::kMaxInFlightFiles> inFlightFiles{};
     size_t inFlightFileCount = 0;
-    bool started                       = false;
-    bool paused                        = false;
-    bool waitingForOthers              = false;
-    bool waitingInQueue                = false;
-    bool queuePaused                   = false;
-    bool finished                      = false;
+    bool started             = false;
+    bool paused              = false;
+    bool waitingForOthers    = false;
+    bool waitingInQueue      = false;
+    bool queuePaused         = false;
+    bool finished            = false;
 };
 
 struct RateHistory
 {
-    static constexpr size_t kMaxSamples = 180u; // ~18s @ 100ms
+    static constexpr size_t kMaxSamples             = 180u; // ~18s @ 100ms
     static constexpr size_t kMaxHueWeightsPerSample = TaskSnapshot::kMaxInFlightFiles;
 
     struct HueWeight
@@ -330,9 +440,9 @@ struct RateHistory
     uint32_t hueAssignmentCounter = 0;
 
     // Diagnostics for the fairness selftest (cheap counters, always maintained).
-    uint32_t debugAccumulateCalls   = 0;
-    uint32_t debugLastPendingCount  = 0;
-    uint32_t debugMaxStreamsSeen    = 0;
+    uint32_t debugAccumulateCalls  = 0;
+    uint32_t debugLastPendingCount = 0;
+    uint32_t debugMaxStreamsSeen   = 0;
 
     double smoothedBytesPerSec  = 0.0;
     double smoothedItemsPerSec  = 0.0;
@@ -351,6 +461,10 @@ public:
 
     static LRESULT CALLBACK WndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
     LRESULT WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
+    void SetExpandedPlacementForRestore(const RECT& rect) noexcept
+    {
+        _footerOnlyRestoreWindowRect = rect;
+    }
 
 private:
     enum class CaptionStatus : uint8_t
@@ -362,9 +476,13 @@ private:
     };
 
     void ApplyScrollBarTheme(HWND hwnd) const noexcept;
+    void RefreshLocalizedFooterText();
+    [[nodiscard]] bool IsReducedMotionEnabled() const noexcept;
 
     bool IsTaskCollapsed(uint64_t taskId) const noexcept;
-    void ToggleTaskCollapsed(uint64_t taskId) noexcept;
+    bool IsTaskCollapsedForDisplay(uint64_t taskId, bool compactDensity) const noexcept;
+    void ToggleTaskCollapsed(uint64_t taskId, bool compactDensity) noexcept;
+    void AutoCollapseCompletedTasks(const std::vector<TaskSnapshot>& snapshot) noexcept;
     void CleanupCollapsedTasks(const std::vector<TaskSnapshot>& snapshot) noexcept;
 
     void DiscardDeviceResources() noexcept;
@@ -379,15 +497,17 @@ private:
     std::vector<RateSnapshot> BuildRateSnapshot() const;
     void UpdateRates() noexcept;
 
-    void LayoutChrome(float width, float height) noexcept;
+    void LayoutChrome(float width, float height, bool showPauseResumeAll) noexcept;
     void UpdateScrollBar(HWND hwnd, float viewH, float contentH) noexcept;
-    void AutoResizeWindow(HWND hwnd, float desiredContentHeight, size_t taskCount) noexcept;
+    void AutoResizeWindow(HWND hwnd, float desiredContentHeight, size_t taskCount, bool footerOnly, bool reducedMotion) noexcept;
 
     void DrawDxUiButtonChrome(const PopupButton& button,
                               IDWriteTextFormat* format,
                               std::wstring_view text,
                               RedSalamander::DxUi::ButtonVariant variant) noexcept;
     void DrawButton(const PopupButton& button, IDWriteTextFormat* format, std::wstring_view text) noexcept;
+    void DrawFooterQueueModeControl(const PopupButton& button, bool queueMode, bool reducedMotion) noexcept;
+    void DrawFooterAutoDismissControl(const PopupButton& button, bool enabled) noexcept;
     bool DrawCenteredChevronGlyph(const D2D1_RECT_F& rc, wchar_t fluentGlyph, wchar_t fallbackGlyph) noexcept;
     void DrawMenuButton(const PopupButton& button, IDWriteTextFormat* format, std::wstring_view text) noexcept;
     void DrawCheckboxBox(const D2D1_RECT_F& rect, bool checked) noexcept;
@@ -399,11 +519,16 @@ private:
                             bool showAnimation,
                             bool rainbowMode,
                             bool perStreamBands,
-                            ULONGLONG tick) noexcept;
+                            ULONGLONG tick,
+                            bool reducedMotion) noexcept;
     void Render(HWND hwnd) noexcept;
     void UpdateLastPopupRect(HWND hwnd) noexcept;
     void UpdateCaptionStatus(HWND hwnd, const std::vector<TaskSnapshot>& snapshot) noexcept;
     void PaintCaptionStatusGlyph(HWND hwnd) noexcept;
+    bool EnsureTaskbarList() noexcept;
+    void UpdateTaskbarProgress(HWND hwnd) noexcept;
+    void ApplyTaskbarProgress(HWND hwnd, uint32_t state, uint64_t completed, uint64_t total) noexcept;
+    void ClearTaskbarProgress(HWND hwnd) noexcept;
 
     PopupHitTest HitTest(float x, float y) const noexcept;
     std::optional<PopupMenuAnchor> ResolveButtonMenuAnchor(HWND hwnd,
@@ -471,7 +596,14 @@ private:
     bool _scrollBarVisible            = false;
 
     D2D1_RECT_F _footerCancelAllRect{};
+    D2D1_RECT_F _footerPauseResumeAllRect{};
+    D2D1_RECT_F _footerAutoDismissRect{};
     D2D1_RECT_F _footerQueueModeRect{};
+    D2D1_RECT_F _footerQueueSegmentRect{};
+    D2D1_RECT_F _footerParallelSegmentRect{};
+    D2D1_RECT_F _footerDensityRect{};
+    D2D1_RECT_F _footerDetailsToggleRect{};
+    D2D1_RECT_F _footerAggregateProgressRect{};
     D2D1_RECT_F _footerSummaryRect{};
     D2D1_RECT_F _listViewportRect{};
 
@@ -481,6 +613,28 @@ private:
 
     std::unordered_map<uint64_t, RateHistory> _rates;
     std::unordered_map<uint64_t, bool> _collapsedTasks;
+    std::unordered_set<uint64_t> _compactExpandedTasks;
+    bool _completedGroupExpanded = true;
+    bool _reducedMotion          = false;
+    std::wstring _footerNewTasksText;
+    std::wstring _footerQueueText;
+    std::wstring _footerParallelText;
+    std::wstring _footerAutoDismissOnText;
+    std::wstring _footerAutoDismissOffText;
+    bool _footerAutoDismissLabelVisible = false;
+
+    std::optional<RECT> _footerOnlyRestoreWindowRect;
+    bool _footerOnlyRestorePending = false;
+    bool _autoResizePending        = false;
+    bool _autoResizeAnimating      = false;
+    RECT _autoResizePendingTargetRect{};
+    RECT _autoResizeAnimationStartRect{};
+    RECT _autoResizeAnimationTargetRect{};
+    ULONGLONG _autoResizePendingDueTick      = 0;
+    ULONGLONG _autoResizeAnimationStartTick  = 0;
+    bool _footerQueueModeAnimationInitialized = false;
+    float _footerQueueModeAnimationPosition   = 0.0f;
+    ULONGLONG _footerQueueModeAnimationLastTick = 0;
 
     wil::com_ptr<ID2D1Factory> _d2dFactory;
     wil::com_ptr<IDWriteFactory> _dwriteFactory;
@@ -521,8 +675,13 @@ private:
     wil::com_ptr<ID2D1SolidColorBrush> _buttonBgBrush;
     wil::com_ptr<ID2D1SolidColorBrush> _buttonChromeBrush;
     wil::com_ptr<ID2D1SolidColorBrush> _captionGlyphBrush;
+    wil::com_ptr<ITaskbarList3> _taskbarList;
     D2D1::ColorF _graphFillBaseColor = D2D1::ColorF(D2D1::ColorF::Black);
     UINT _captionGlyphDpi            = 0;
+    ULONGLONG _taskbarListRetryAfterTick = 0;
+    uint32_t _taskbarListAttemptCount    = 0u;
+    bool _taskbarButtonReady          = false;
+    uint64_t _taskbarUpdateCount      = 0;
 
     int _mouseWheelRemainder = 0;
 };
@@ -552,12 +711,23 @@ struct FileOperationsSpeedLimitPromptDebugSnapshot
 [[nodiscard]] bool DebugGetFileOperationsPopupTaskSnapshot(HWND popup, uint64_t taskId, FileOperationsPopupInternal::TaskSnapshot& out) noexcept;
 [[nodiscard]] bool DebugGetFileOperationsPopupCaptionGlyphSnapshot(HWND popup, FileOperationsPopupInternal::CaptionGlyphDebugSnapshot& out) noexcept;
 [[nodiscard]] bool DebugGetFileOperationsPopupLayoutSnapshot(HWND popup, FileOperationsPopupInternal::PopupLayoutDebugSnapshot& out) noexcept;
+[[nodiscard]] bool DebugBuildFileOperationsPopupGlobalSummarySnapshot(const std::vector<FileOperationsPopupInternal::TaskSnapshot>& tasks,
+                                                                      FileOperationsPopupInternal::PopupLayoutDebugSnapshot& out,
+                                                                      double displayedBytesPerSecOverride = -1.0,
+                                                                      double aggregateEtaSecondsOverride = -1.0) noexcept;
+void DebugFailNextFileOperationsTaskbarListAttempts(unsigned int attempts) noexcept;
 [[nodiscard]] bool DebugBuildFileOperationsGraphFairColorWeightSnapshot(FileOperationsPopupInternal::GraphHueWeightDebugSnapshot& out) noexcept;
 [[nodiscard]] bool DebugBuildFileOperationsGraphFairnessHistorySnapshot(FileOperationsPopupInternal::PopupLayoutDebugSnapshot& out) noexcept;
 [[nodiscard]] float DebugComputeFileOperationsTaskCompleteFraction(const FileOperationsPopupInternal::TaskSnapshot& task) noexcept;
+void DebugPublishFileOperationsPlannedItemTotalAfterPreCalculation(FileOperationsPopupInternal::TaskSnapshot& task) noexcept;
+[[nodiscard]] bool DebugFileOperationsTaskHasKnownCompactProgress(const FileOperationsPopupInternal::TaskSnapshot& task) noexcept;
+[[nodiscard]] std::wstring DebugFormatFileOperationsConflictTimestamp(__int64 fileTime) noexcept;
 [[nodiscard]] double DebugSmoothRateForDisplay(double previousRate, double sampleRate, ULONGLONG elapsedMs) noexcept;
 [[nodiscard]] double DebugDecayRateForCallbackSilence(double smoothedRate, ULONGLONG silenceMs) noexcept;
 [[nodiscard]] double DebugSmoothEtaSecondsForDisplay(double previousEtaSeconds, double sampleEtaSeconds, ULONGLONG elapsedMs) noexcept;
+[[nodiscard]] float DebugEaseFileOperationsGraphLatestPointYForDisplay(float previousY, float targetY, ULONGLONG elapsedMs) noexcept;
+[[nodiscard]] float DebugEaseFileOperationsAutoResizeFraction(ULONGLONG elapsedMs, ULONGLONG durationMs) noexcept;
+[[nodiscard]] D2D1_RECT_F DebugComputeFileOperationsIndeterminateBarFill(const D2D1_RECT_F& bar, ULONGLONG tick, bool reducedMotion) noexcept;
 [[nodiscard]] HWND GetFileOperationsSpeedLimitPromptHandle() noexcept;
 [[nodiscard]] bool DebugGetFileOperationsSpeedLimitPromptSnapshot(FileOperationsSpeedLimitPromptDebugSnapshot& out) noexcept;
 [[nodiscard]] bool DebugSetFileOperationsSpeedLimitPromptText(std::wstring_view text) noexcept;

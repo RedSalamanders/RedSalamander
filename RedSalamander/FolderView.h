@@ -278,7 +278,10 @@ public:
     [[nodiscard]] bool DebugIsItemSelectedByDisplayName(std::wstring_view displayName) const noexcept;
     [[nodiscard]] size_t DebugGetSelectedItemCount() const noexcept;
     [[nodiscard]] bool DebugWarmRenderingForSelfTest() noexcept;
+    [[nodiscard]] bool DebugSetHoveredItemByDisplayName(std::wstring_view displayName) noexcept;
+    void DebugResetDrawItemTransientBrushCreateCount() noexcept;
     [[nodiscard]] bool DebugIsEmptyFolderStateActive() const noexcept;
+    [[nodiscard]] std::wstring_view DebugGetEmptyStateMessage() const noexcept;
     [[nodiscard]] std::wstring_view DebugGetEmptyFolderFunMessage() const noexcept;
 
     struct DebugColumnLayoutEntry
@@ -388,6 +391,13 @@ public:
         ForceSyntheticSuccess,
         ForceShellFailureAllowWic,
         ForceSyntheticWideSuccess,
+        ForceProviderAllowedProbe,
+    };
+
+    enum class DebugRenderFailurePoint : uint8_t
+    {
+        EndDraw,
+        Present,
     };
 
     struct AlertOverlayDebugSnapshot
@@ -412,6 +422,9 @@ public:
         bool lastRenderWasFullClient      = false;
         uint64_t dpiChangeCount           = 0;
         uint64_t fullClientRenderCount    = 0;
+        uint64_t deviceLossRecoveryCount  = 0;
+        uint64_t deviceLossDiscardedResourcesCount = 0;
+        uint64_t drawItemTransientBrushCreateCount = 0;
         RECT lastRenderInvalidRectPx      = {};
     };
 
@@ -426,6 +439,10 @@ public:
         uint64_t pendingCount               = 0;
         uint64_t cacheHitCount              = 0;
         uint64_t shellSuccessCount          = 0;
+        uint64_t shellCacheHitCount         = 0;
+        uint64_t shellCacheMissCount        = 0;
+        uint64_t shellProviderAllowedCount  = 0;
+        uint64_t shellProviderTimeoutCount  = 0;
         uint64_t wicSuccessCount            = 0;
         uint64_t wicFactoryCreateCount      = 0;
         uint64_t decodeFailureCount         = 0;
@@ -453,8 +470,13 @@ public:
     void DebugReportRenderingFailureForSelfTest(HRESULT hr) const;
     void DebugAgeRenderingFailureForSelfTest(uint64_t ageMs) const noexcept;
     void DebugClearRenderingFailureForSelfTest() const;
+    void DebugForceNextRenderFailure(DebugRenderFailurePoint point, HRESULT hr) noexcept;
     [[nodiscard]] ThumbnailDebugSnapshot DebugGetThumbnailSnapshot() const noexcept;
     void DebugSetThumbnailProviderMode(DebugThumbnailProviderMode mode) noexcept;
+    [[nodiscard]] bool DebugSeedThumbnailPendingAndPostThumbnailBitmapMessagesForTest(uint64_t pendingCount,
+                                                                                      uint64_t staleBatchMessageCount,
+                                                                                      uint64_t staleGenerationMessageCount,
+                                                                                      uint64_t unaccountedCurrentMessageCount);
 #endif
 
     void SetDisplayMode(DisplayMode mode);
@@ -771,7 +793,32 @@ private:
         PixelBuffer pixels;
         HRESULT hr            = S_OK;
         bool usedFallback     = false;
+        bool countsPending    = true;
         SourceKind sourceKind = SourceKind::Fallback;
+    };
+
+    struct PasteShortcutResult
+    {
+        wil::com_ptr<IFileSystem> fileSystem;
+        uint64_t requestId = 0;
+        uint64_t generation = 0;
+        std::filesystem::path targetFolder;
+        std::vector<std::filesystem::path> createdLinks;
+        HRESULT firstFailure = S_OK;
+        std::filesystem::path failedSource;
+        uint64_t elapsedUs = 0;
+    };
+
+    struct PasteShortcutRequest
+    {
+        wil::com_ptr<IFileSystem> fileSystem;
+        uint64_t requestId = 0;
+        std::vector<std::filesystem::path> sources;
+        std::filesystem::path targetFolder;
+        uint64_t generation = 0;
+#ifdef ENABLE_TESTS
+        bool failFirstCompletionPostForSelfTest = false;
+#endif
     };
 
     struct FolderItem
@@ -794,11 +841,11 @@ private:
         D2D1_RECT_F bounds{};
         wil::com_ptr<ID2D1Bitmap1> icon;
         wil::com_ptr<ID2D1Bitmap1> thumbnail;
-        bool thumbnailFallbackResolved = false;
+        bool thumbnailFallbackResolved     = false;
         uint32_t thumbnailFallbackTargetPx = 0;
-        int iconIndex = -1; // System image list icon index from SHGetFileInfo
-        int column    = 0;
-        int row       = 0;
+        int iconIndex                      = -1; // System image list icon index from SHGetFileInfo
+        int column                         = 0;
+        int row                            = 0;
         wil::com_ptr<IDWriteTextLayout> labelLayout;
         DWRITE_TEXT_METRICS labelMetrics{};
         std::wstring detailsText;
@@ -846,6 +893,7 @@ private:
     SIZE _clientSize{0, 0};
     std::optional<std::filesystem::path> _currentFolder;
     std::optional<std::filesystem::path> _displayedFolder;
+    uint64_t _folderPathGeneration = 0;
     std::wstring _emptyStateMessage;
 
     enum class EmptyStateMessageKind : uint8_t
@@ -908,10 +956,17 @@ private:
     const PluginMetaData* _fileSystemMetadata{};
     std::wstring _fileSystemPluginId;
     std::wstring _fileSystemInstanceContext;
+    bool _localShellBackedFileSystem = false;
     DirectoryInfoCache::Pin _directoryCachePin;
 
     std::wstring _focusMemoryRootKey;
     std::unordered_map<std::wstring, std::wstring> _focusMemory;
+
+    bool _pasteShortcutInFlight = false;
+    uint64_t _nextPasteShortcutRequestId = 1u;
+    uint64_t _activePasteShortcutRequestId = 0u;
+    std::chrono::steady_clock::time_point _pasteShortcutStartedAt{};
+    std::deque<PasteShortcutRequest> _pendingPasteShortcutRequests;
 
     std::vector<FolderItem> _items;
     wil::com_ptr<IFilesInformation> _itemsArenaBuffer; // Keeps arena alive for zero-copy string_views
@@ -927,15 +982,18 @@ private:
     std::vector<size_t> _columnPrefixSums; // Prefix sums for O(1) hit testing: _columnPrefixSums[c] = sum of _columnCounts[0..c-1]
     float _scrollOffset     = 0.0f;
     float _horizontalOffset = 0.0f;
-    struct PendingInputToPaintMetric final
+    struct PendingToPaintMetric final
     {
         std::chrono::steady_clock::time_point startedAt{};
         std::wstring metricName;
         std::wstring detail;
+        uint64_t generation = 0u;
         uint64_t value0 = 0u;
         uint64_t value1 = 0u;
+        bool resultReady = true;
     };
-    std::optional<PendingInputToPaintMetric> _pendingInputToPaintMetric;
+    std::optional<PendingToPaintMetric> _pendingInputToPaintMetric;
+    std::optional<PendingToPaintMetric> _pendingRefreshToPaintMetric;
     float _contentHeight = 0.0f;
     float _contentWidth  = 0.0f;
 
@@ -954,11 +1012,11 @@ private:
     static constexpr UINT kIdleLayoutIntervalMs             = 16; // ~60fps idle processing
     static constexpr size_t kIdleLayoutBatchSize            = 20; // Items per idle batch
     DragContext _drag{};
-    bool _swapChainResizePending = false;
-    UINT _pendingSwapChainWidth  = 0;
-    UINT _pendingSwapChainHeight = 0;
+    bool _swapChainResizePending     = false;
+    UINT _pendingSwapChainWidth      = 0;
+    UINT _pendingSwapChainHeight     = 0;
     bool _forceFullRenderOnNextPaint = false;
-    bool _deferredInitPosted     = false;
+    bool _deferredInitPosted         = false;
 
     // Rendering resources
     AppTheme _appTheme;
@@ -1020,6 +1078,8 @@ private:
     wil::com_ptr<ID2D1SolidColorBrush> _metadataTextBrush;
     wil::com_ptr<ID2D1SolidColorBrush> _metadataTextUnfocusedBrush;
     wil::com_ptr<ID2D1SolidColorBrush> _selectionBrush;
+    wil::com_ptr<ID2D1SolidColorBrush> _hoverBrush;
+    wil::com_ptr<ID2D1SolidColorBrush> _selectedItemTextBrush;
     wil::com_ptr<ID2D1SolidColorBrush> _focusedBackgroundBrush;
     wil::com_ptr<ID2D1SolidColorBrush> _focusBrush;
     wil::com_ptr<ID2D1SolidColorBrush> _incrementalSearchHighlightBrush;
@@ -1247,6 +1307,14 @@ private:
     void ReleaseSwapChain();
     void DiscardDeviceResources();
     void CreatePlaceholderIcon();
+    enum class SolidBrushLifetime : uint8_t
+    {
+        Cached,
+        Transient,
+    };
+    [[nodiscard]] HRESULT CreateFolderViewSolidColorBrush(const D2D1_COLOR_F& color,
+                                                          wil::com_ptr<ID2D1SolidColorBrush>& brush,
+                                                          SolidBrushLifetime lifetime) noexcept;
     void RecreateThemeBrushes();
     void DrawErrorOverlay();
     void ClearErrorOverlay(ErrorOverlayKind kind) const;
@@ -1367,13 +1435,17 @@ private:
     void QueueMissingVisibleThumbnails();
     void QueueThumbnailLoading();
     void CancelThumbnailLoading() noexcept;
-    void ProcessThumbnailLoadQueue();
+    void ProcessThumbnailLoadQueue(std::stop_token stopToken = {});
     [[nodiscard]] HRESULT EnsureThumbnailWicFactory(wil::com_ptr<IWICImagingFactory>& thumbnailWicFactory, IWICImagingFactory** outFactory) noexcept;
 
     void OnIconLoaded(size_t itemIndex);
     void OnBatchIconUpdate();
     void OnDirectoryCacheDirty();
     void OnDirectoryImpact(std::unique_ptr<DirectoryInfoCache::DirectoryImpact> impact);
+    [[nodiscard]] bool StartPasteShortcutWork(PasteShortcutRequest request);
+    void RecoverStalePasteShortcutWork();
+    void StartNextPasteShortcutRequest();
+    void OnPasteShortcutComplete(PasteShortcutResult result);
     void RequestRefreshFromCache();
     D2D1_RECT_F OffsetRect(const D2D1_RECT_F& rect, float dx, float dy) const;
     static RECT ToPixelRect(const D2D1_RECT_F& rect, float dpi);
@@ -1383,6 +1455,12 @@ private:
                                                          float horizontalBefore,
                                                          size_t focusedBefore) noexcept;
     void EmitPendingInputToPaintMetricAfterPresent() noexcept;
+    void RecordPendingRefreshToPaintStart(uint64_t generation, uint64_t debounceDelayMs) noexcept;
+    void UpdatePendingRefreshToPaintResult(uint64_t generation, uint64_t itemCount) noexcept;
+    void CancelPendingRefreshToPaint(uint64_t generation) noexcept;
+    void ClearPendingPaintMetricsOnFailedFrame() noexcept;
+    [[nodiscard]] uint64_t PendingRefreshDebounceDelayMs(uint64_t generation) const noexcept;
+    void EmitPendingRefreshToPaintMetricAfterPresent() noexcept;
 
     std::optional<size_t> HitTest(POINT clientPt) const;
     POINT ScreenToClientPoint(POINT screenPt) const;
@@ -1410,7 +1488,14 @@ private:
     uint64_t _pendingEnumerationGeneration = 0;
     std::atomic<uint64_t> _enumerationGeneration{0};
     ULONGLONG _lastDirectoryCacheRefreshTick = 0;
+    uint64_t _pendingRefreshDebounceDelayMs   = 0u;
 #ifdef ENABLE_TESTS
+    struct DebugRenderFailure final
+    {
+        DebugRenderFailurePoint point = DebugRenderFailurePoint::EndDraw;
+        HRESULT hr                    = S_OK;
+    };
+
     uint64_t _debugForceRefreshCount                  = 0;
     uint64_t _debugWarmRenderingCallCount             = 0;
     uint64_t _debugDeferredInitCallCount              = 0;
@@ -1421,8 +1506,14 @@ private:
     uint64_t _debugIncrementalSearchEffectUpdateCount = 0;
     uint64_t _debugDpiChangeCount                      = 0;
     uint64_t _debugFullClientRenderCount               = 0;
+    uint64_t _debugDeviceLossRecoveryCount             = 0;
+    uint64_t _debugDeviceLossDiscardedResourcesCount   = 0;
+    std::atomic<uint64_t> _debugDrawItemTransientBrushCreateCount{0};
+    bool _debugDrawItemActive = false;
+    std::optional<DebugRenderFailure> _debugNextRenderFailure;
     RECT _debugLastRenderInvalidRectPx                 = {};
     bool _debugLastRenderWasFullClient                 = false;
+    [[nodiscard]] std::optional<HRESULT> DebugConsumeNextRenderFailure(DebugRenderFailurePoint point) noexcept;
 #endif
 
     struct PendingExternalCommand final
@@ -1439,8 +1530,16 @@ private:
         std::wstring fromDisplayName;
         std::wstring toDisplayName;
         bool fromWasSelected = false;
+        std::chrono::steady_clock::time_point expiresAt{};
     };
     std::vector<PendingRefreshSelectionRename> _pendingRefreshSelectionRenames;
+
+    struct RecentlyMissingRefreshSelection final
+    {
+        std::wstring displayName;
+        std::chrono::steady_clock::time_point expiresAt{};
+    };
+    std::vector<RecentlyMissingRefreshSelection> _recentlyMissingRefreshSelections;
 
     // Icon loading queue (grouped by icon index) - deque for O(1) front removal.
     // Each request is "convert this icon once, then apply to N items".
@@ -1466,11 +1565,15 @@ private:
         std::filesystem::path fullPath;
         uint32_t targetPx       = 0;
         bool hasVisibleItem     = false;
+        bool allowFileExtraction = false;
         unsigned int retryCount = 0;
         std::chrono::steady_clock::time_point enqueuedAt{};
     };
     std::deque<ThumbnailLoadRequest> _thumbnailLoadQueue;
     std::atomic<bool> _thumbnailLoadingActive{false};
+    [[nodiscard]] HRESULT ExtractProviderAllowedThumbnailWithDeadline(const ThumbnailLoadRequest& request,
+                                                                       std::stop_token stopToken,
+                                                                       ThumbnailBitmapRequest& bitmapRequest) noexcept;
 
     // Icon loading performance telemetry
     struct IconLoadStats
@@ -1511,6 +1614,10 @@ private:
         std::atomic<uint64_t> pendingBitmapCreates{0};
         std::atomic<uint64_t> cacheHits{0};
         std::atomic<uint64_t> shellSuccess{0};
+        std::atomic<uint64_t> shellCacheHit{0};
+        std::atomic<uint64_t> shellCacheMiss{0};
+        std::atomic<uint64_t> shellProviderAllowed{0};
+        std::atomic<uint64_t> shellProviderTimeout{0};
         std::atomic<uint64_t> wicSuccess{0};
         std::atomic<uint64_t> wicFactoryCreate{0};
         std::atomic<uint64_t> decodeFailures{0};

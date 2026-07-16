@@ -1,5 +1,7 @@
 #include "FileSystemCurl.Internal.h"
 #include "FileSystemCurlResources.h"
+#include "HandleIo.h"
+#include "YyjsonHelpers.h"
 
 using namespace FileSystemCurlInternal;
 
@@ -95,139 +97,33 @@ namespace FileSystemCurlInternal
 
 [[nodiscard]] std::wstring Utf16FromUtf8(std::string_view text) noexcept
 {
-    if (text.empty() || text.size() > static_cast<size_t>((std::numeric_limits<int>::max)()))
-    {
-        return {};
-    }
-
-    const int required = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0);
-    if (required <= 0)
-    {
-        return {};
-    }
-
-    std::wstring result(static_cast<size_t>(required), L'\0');
-    const int written = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), result.data(), required);
-    if (written != required)
-    {
-        return {};
-    }
-
-    return result;
+    return Common::Strings::Utf16FromUtf8StrictOrEmpty(text);
 }
 
 [[nodiscard]] std::string Utf8FromUtf16(std::wstring_view text) noexcept
 {
-    if (text.empty() || text.size() > static_cast<size_t>((std::numeric_limits<int>::max)()))
-    {
-        return {};
-    }
-
-    const int required = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
-    if (required <= 0)
-    {
-        return {};
-    }
-
-    std::string result(static_cast<size_t>(required), '\0');
-    const int written =
-        WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), result.data(), required, nullptr, nullptr);
-    if (written != required)
-    {
-        return {};
-    }
-
-    return result;
+    return Common::Strings::Utf8FromUtf16StrictOrEmpty(text);
 }
 
 [[nodiscard]] std::optional<std::wstring> TryGetJsonString(yyjson_val* obj, const char* key) noexcept
 {
-    if (! obj || ! key)
-    {
-        return std::nullopt;
-    }
-
-    yyjson_val* val = yyjson_obj_get(obj, key);
-    if (! val || ! yyjson_is_str(val))
-    {
-        return std::nullopt;
-    }
-
-    const char* s = yyjson_get_str(val);
-    if (! s)
-    {
-        return std::nullopt;
-    }
-
-    const size_t len        = yyjson_get_len(val);
-    const std::wstring wide = Utf16FromUtf8(std::string_view(s, len));
-    if (wide.empty() && len != 0u)
-    {
-        return std::nullopt;
-    }
-
-    return wide;
+    const Common::Json::MemberResult<std::wstring> value =
+        Common::Json::GetUtf16StringMemberStrict(obj, key, Common::Json::MemberRequirement::Optional);
+    return value.HasValue() ? std::optional<std::wstring>{value.value} : std::nullopt;
 }
 
 [[nodiscard]] std::optional<uint64_t> TryGetJsonUInt(yyjson_val* obj, const char* key) noexcept
 {
-    if (! obj || ! key)
-    {
-        return std::nullopt;
-    }
-
-    yyjson_val* val = yyjson_obj_get(obj, key);
-    if (! val)
-    {
-        return std::nullopt;
-    }
-
-    if (yyjson_is_uint(val))
-    {
-        return yyjson_get_uint(val);
-    }
-
-    if (yyjson_is_sint(val))
-    {
-        const int64_t s = yyjson_get_sint(val);
-        if (s >= 0)
-        {
-            return static_cast<uint64_t>(s);
-        }
-    }
-
-    return std::nullopt;
+    const Common::Json::MemberResult<uint64_t> value =
+        Common::Json::GetUInt64Member(obj, key, Common::Json::MemberRequirement::Optional);
+    return value.HasValue() ? std::optional<uint64_t>{value.value} : std::nullopt;
 }
 
 [[nodiscard]] std::optional<bool> TryGetJsonBool(yyjson_val* obj, const char* key) noexcept
 {
-    if (! obj || ! key)
-    {
-        return std::nullopt;
-    }
-
-    yyjson_val* val = yyjson_obj_get(obj, key);
-    if (! val)
-    {
-        return std::nullopt;
-    }
-
-    if (yyjson_is_bool(val))
-    {
-        return yyjson_get_bool(val) != 0;
-    }
-
-    if (yyjson_is_sint(val))
-    {
-        return yyjson_get_sint(val) != 0;
-    }
-
-    if (yyjson_is_uint(val))
-    {
-        return yyjson_get_uint(val) != 0;
-    }
-
-    return std::nullopt;
+    const Common::Json::MemberResult<bool> value = Common::Json::GetBoolMember(
+        obj, key, Common::Json::MemberRequirement::Optional, Common::Json::BooleanIntegerPolicy::AllowZeroAndNonzero);
+    return value.HasValue() ? std::optional<bool>{value.value} : std::nullopt;
 }
 } // namespace FileSystemCurlInternal
 
@@ -268,101 +164,31 @@ ULONG STDMETHODCALLTYPE FilesInformationCurl::Release() noexcept
 
 HRESULT STDMETHODCALLTYPE FilesInformationCurl::GetBuffer(FileInfo** ppFileInfo) noexcept
 {
-    if (ppFileInfo == nullptr)
-    {
-        return E_POINTER;
-    }
-
-    *ppFileInfo = nullptr;
-
-    if (_usedBytes == 0 || _buffer.empty())
-    {
-        return S_OK;
-    }
-
-    *ppFileInfo = reinterpret_cast<FileInfo*>(_buffer.data());
-    return S_OK;
+    return _packedBuffer.GetBuffer(ppFileInfo);
 }
 
 HRESULT STDMETHODCALLTYPE FilesInformationCurl::GetBufferSize(unsigned long* pSize) noexcept
 {
-    if (pSize == nullptr)
-    {
-        return E_POINTER;
-    }
-
-    *pSize = _usedBytes;
-    return S_OK;
+    return _packedBuffer.GetBufferSize(pSize);
 }
 
 HRESULT STDMETHODCALLTYPE FilesInformationCurl::GetAllocatedSize(unsigned long* pSize) noexcept
 {
-    if (pSize == nullptr)
-    {
-        return E_POINTER;
-    }
-
-    if (_buffer.size() > static_cast<size_t>((std::numeric_limits<unsigned long>::max)()))
-    {
-        return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
-    }
-
-    *pSize = static_cast<unsigned long>(_buffer.size());
-    return S_OK;
+    return _packedBuffer.GetAllocatedSize(pSize);
 }
 
 HRESULT STDMETHODCALLTYPE FilesInformationCurl::GetCount(unsigned long* pCount) noexcept
 {
-    if (pCount == nullptr)
-    {
-        return E_POINTER;
-    }
-
-    *pCount = _count;
-    return S_OK;
+    return _packedBuffer.GetCount(pCount);
 }
 
 HRESULT STDMETHODCALLTYPE FilesInformationCurl::Get(unsigned long index, FileInfo** ppEntry) noexcept
 {
-    if (ppEntry == nullptr)
-    {
-        return E_POINTER;
-    }
-
-    *ppEntry = nullptr;
-
-    if (index >= _count)
-    {
-        return HRESULT_FROM_WIN32(ERROR_NO_MORE_FILES);
-    }
-
-    return LocateEntry(index, ppEntry);
-}
-
-size_t FilesInformationCurl::AlignUp(size_t value, size_t alignment) noexcept
-{
-    const size_t mask = alignment - 1u;
-    return (value + mask) & ~mask;
-}
-
-size_t FilesInformationCurl::ComputeEntrySizeBytes(std::wstring_view name) noexcept
-{
-    const size_t baseSize = offsetof(FileInfo, FileName);
-    const size_t nameSize = name.size() * sizeof(wchar_t);
-    return AlignUp(baseSize + nameSize + sizeof(wchar_t), sizeof(unsigned long));
+    return _packedBuffer.Get(index, ppEntry);
 }
 
 HRESULT FilesInformationCurl::BuildFromEntries(std::vector<Entry> entries) noexcept
 {
-    _buffer.clear();
-    _count     = 0;
-    _usedBytes = 0;
-
-    if (entries.empty())
-    {
-        return S_OK;
-    }
-
     std::sort(entries.begin(),
               entries.end(),
               [](const Entry& a, const Entry& b)
@@ -383,101 +209,18 @@ HRESULT FilesInformationCurl::BuildFromEntries(std::vector<Entry> entries) noexc
         return a.sizeBytes < b.sizeBytes;
     });
 
-    size_t totalBytes = 0;
-    for (const auto& entry : entries)
+    return _packedBuffer.Build(entries,
+                               [](const Entry& source, FileInfo& entry) noexcept
     {
-        totalBytes += ComputeEntrySizeBytes(entry.name);
-        if (totalBytes > static_cast<size_t>((std::numeric_limits<unsigned long>::max)()))
-        {
-            return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
-        }
-    }
-
-    _buffer.resize(totalBytes, std::byte{0});
-
-    std::byte* base     = _buffer.data();
-    size_t offset       = 0;
-    FileInfo* previous  = nullptr;
-    size_t previousSize = 0;
-
-    for (const auto& source : entries)
-    {
-        const size_t entrySize = ComputeEntrySizeBytes(source.name);
-        if (offset + entrySize > _buffer.size())
-        {
-            return E_FAIL;
-        }
-
-        auto* entry = reinterpret_cast<FileInfo*>(base + offset);
-        std::memset(entry, 0, entrySize);
-
-        const size_t nameBytes = source.name.size() * sizeof(wchar_t);
-        if (nameBytes > static_cast<size_t>((std::numeric_limits<unsigned long>::max)()))
-        {
-            return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
-        }
-
-        entry->FileAttributes = source.attributes;
-        entry->FileIndex      = source.fileIndex;
-        entry->EndOfFile      = static_cast<__int64>(source.sizeBytes);
-        entry->AllocationSize = static_cast<__int64>(source.sizeBytes);
-
-        entry->CreationTime   = source.creationTime;
-        entry->LastAccessTime = source.lastAccessTime;
-        entry->LastWriteTime  = source.lastWriteTime;
-        entry->ChangeTime     = source.changeTime;
-
-        entry->FileNameSize = static_cast<unsigned long>(nameBytes);
-        if (! source.name.empty())
-        {
-            std::memcpy(entry->FileName, source.name.data(), nameBytes);
-        }
-        entry->FileName[source.name.size()] = L'\0';
-
-        if (previous)
-        {
-            previous->NextEntryOffset = static_cast<unsigned long>(previousSize);
-        }
-
-        previous     = entry;
-        previousSize = entrySize;
-
-        offset += entrySize;
-        ++_count;
-    }
-
-    _usedBytes = static_cast<unsigned long>(_buffer.size());
-    return S_OK;
-}
-
-HRESULT FilesInformationCurl::LocateEntry(unsigned long index, FileInfo** ppEntry) const noexcept
-{
-    const std::byte* base      = _buffer.data();
-    size_t offset              = 0;
-    unsigned long currentIndex = 0;
-
-    while (offset < _usedBytes && offset + sizeof(FileInfo) <= _buffer.size())
-    {
-        auto* entry = reinterpret_cast<const FileInfo*>(base + offset);
-        if (currentIndex == index)
-        {
-            *ppEntry = const_cast<FileInfo*>(entry);
-            return S_OK;
-        }
-
-        const size_t advance = (entry->NextEntryOffset != 0)
-                                   ? static_cast<size_t>(entry->NextEntryOffset)
-                                   : ComputeEntrySizeBytes(std::wstring_view(entry->FileName, static_cast<size_t>(entry->FileNameSize) / sizeof(wchar_t)));
-        if (advance == 0)
-        {
-            break;
-        }
-
-        offset += advance;
-        ++currentIndex;
-    }
-
-    return HRESULT_FROM_WIN32(ERROR_NO_MORE_FILES);
+        entry.FileAttributes = source.attributes;
+        entry.FileIndex      = source.fileIndex;
+        entry.EndOfFile      = static_cast<__int64>(source.sizeBytes);
+        entry.AllocationSize = static_cast<__int64>(source.sizeBytes);
+        entry.CreationTime   = source.creationTime;
+        entry.LastAccessTime = source.lastAccessTime;
+        entry.LastWriteTime  = source.lastWriteTime;
+        entry.ChangeTime     = source.changeTime;
+    });
 }
 
 namespace FileSystemCurlInternal
@@ -1226,7 +969,7 @@ namespace FileSystemCurlInternal
             return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
         }
 
-        auto freeDoc = wil::scope_exit([&] { yyjson_doc_free(doc); });
+        Common::Json::UniqueDocument docOwner{doc};
 
         yyjson_val* root = yyjson_doc_get_root(doc);
         if (! root || ! yyjson_is_obj(root))
@@ -1455,7 +1198,7 @@ namespace FileSystemCurlInternal
                     yyjson_doc* refreshedDoc = yyjson_read(refreshedJson.get(), strlen(refreshedJson.get()), YYJSON_READ_ALLOW_BOM);
                     if (refreshedDoc)
                     {
-                        auto freeRefreshed = wil::scope_exit([&] { yyjson_doc_free(refreshedDoc); });
+                        Common::Json::UniqueDocument refreshedOwner{refreshedDoc};
 
                         yyjson_val* refreshedRoot = yyjson_doc_get_root(refreshedDoc);
                         if (refreshedRoot && yyjson_is_obj(refreshedRoot))
@@ -2594,18 +2337,7 @@ namespace FileSystemCurlInternal
 
 [[nodiscard]] HRESULT ResetFilePointerToStart(HANDLE file) noexcept
 {
-    if (! file || file == INVALID_HANDLE_VALUE)
-    {
-        return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
-    }
-
-    LARGE_INTEGER zero{};
-    if (SetFilePointerEx(file, zero, nullptr, FILE_BEGIN) == 0)
-    {
-        return HRESULT_FROM_WIN32(GetLastError());
-    }
-
-    return S_OK;
+    return Common::HandleIo::Rewind(file);
 }
 
 [[nodiscard]] HRESULT ResetFileForRewrite(HANDLE file) noexcept
@@ -2626,26 +2358,7 @@ namespace FileSystemCurlInternal
 
 [[nodiscard]] HRESULT GetFileSizeBytes(HANDLE file, uint64_t& out) noexcept
 {
-    out = 0;
-
-    if (! file || file == INVALID_HANDLE_VALUE)
-    {
-        return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
-    }
-
-    LARGE_INTEGER size{};
-    if (GetFileSizeEx(file, &size) == 0)
-    {
-        return HRESULT_FROM_WIN32(GetLastError());
-    }
-
-    if (size.QuadPart < 0)
-    {
-        return HRESULT_FROM_WIN32(ERROR_BAD_LENGTH);
-    }
-
-    out = static_cast<uint64_t>(size.QuadPart);
-    return S_OK;
+    return Common::HandleIo::GetFileSizeBounded(file, (std::numeric_limits<uint64_t>::max)(), out);
 }
 
 [[nodiscard]] wil::unique_hfile CreateTemporaryDeleteOnCloseFile() noexcept
@@ -2875,6 +2588,87 @@ namespace
 }
 
 } // namespace
+
+[[nodiscard]] HRESULT CurlProbeRemoteFileSize(const ConnectionInfo& conn, std::wstring_view pluginPath, uint64_t& sizeOut, bool& sizeKnownOut) noexcept
+{
+    sizeOut      = 0;
+    sizeKnownOut = false;
+
+    // Targeted existence/size probe (FTP SIZE, SFTP stat) so callers do not have to LIST the whole parent
+    // directory just to stat one file. IMAP has no equivalent, so report unsupported and let the caller
+    // fall back to the listing-based stat. On success the file exists; sizeKnownOut indicates whether the
+    // server actually reported a byte count (some FTP dialects answer existence but not SIZE).
+    if (conn.protocol == Protocol::Imap)
+    {
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+
+    HRESULT hr = EnsureCurlInitialized();
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    auto curl = GetCurlEasyPool().Borrow(conn.limiterKey);
+    if (! curl)
+    {
+        return E_OUTOFMEMORY;
+    }
+
+    const std::string url = BuildUrl(conn, pluginPath, false, true);
+    if (url.empty())
+    {
+        return E_INVALIDARG;
+    }
+
+    constexpr unsigned int kMaxAttempts = 3u;
+    char errorBuffer[CURL_ERROR_SIZE]{};
+    CURLcode code = CURLE_FAILED_INIT;
+
+    for (unsigned int attempt = 0; attempt < kMaxAttempts; ++attempt)
+    {
+        if (attempt > 0)
+        {
+            curl_easy_reset(curl.get());
+        }
+
+        curl_easy_setopt(curl.get(), CURLOPT_URL, url.c_str());
+        curl_easy_setopt(curl.get(), CURLOPT_NOBODY, 1L); // FTP: issues SIZE (no RETR); SFTP: stat. No data body transferred.
+        curl_easy_setopt(curl.get(), CURLOPT_FAILONERROR, 1L);
+
+        errorBuffer[0] = '\0';
+        curl_easy_setopt(curl.get(), CURLOPT_ERRORBUFFER, errorBuffer);
+
+        ApplyCommonCurlOptions(curl.get(), conn, nullptr, false);
+
+        code = curl_easy_perform(curl.get());
+        if (code == CURLE_OK)
+        {
+            break;
+        }
+
+        if (attempt + 1u >= kMaxAttempts || ! IsCurlTransientTransferError(code))
+        {
+            break;
+        }
+
+        Sleep(CurlRetryDelayMs(attempt + 1u));
+    }
+
+    if (code != CURLE_OK)
+    {
+        return HResultFromCurl(code);
+    }
+
+    curl_off_t contentLength = -1;
+    if (curl_easy_getinfo(curl.get(), CURLINFO_CONTENT_LENGTH_DOWNLOAD_T, &contentLength) == CURLE_OK && contentLength >= 0)
+    {
+        sizeOut      = ClampCurlOffToUInt64(contentLength);
+        sizeKnownOut = true;
+    }
+
+    return S_OK;
+}
 
 [[nodiscard]] HRESULT CurlPerformList(const ConnectionInfo& conn, std::wstring_view pluginPath, std::string& outListing) noexcept
 {
@@ -3971,7 +3765,7 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::SetConfiguration(const char* configura
         return S_OK;
     }
 
-    auto freeDoc = wil::scope_exit([&] { yyjson_doc_free(doc); });
+    Common::Json::UniqueDocument docOwner{doc};
 
     yyjson_val* root = yyjson_doc_get_root(doc);
     if (! root || ! yyjson_is_obj(root))
@@ -4407,7 +4201,9 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::GetTransferHints([[maybe_unused]] cons
     hints->latencyClass = (_protocol == FileSystemCurlProtocol::Imap) ? FILESYSTEM_TRANSFER_LATENCY_WAN : FILESYSTEM_TRANSFER_LATENCY_CLOUD;
     hints->flags =
         FILESYSTEM_TRANSFER_HINT_PREFERS_LARGE_BUFFERS | FILESYSTEM_TRANSFER_HINT_PREFERS_SEQUENTIAL_IO | FILESYSTEM_TRANSFER_HINT_HIGH_METADATA_COST;
-    hints->preferredBufferBytes      = 8u * 1024u * 1024u;
+    // CurlStreamingReader owns a 1 MiB ring and now fills it to the requested read size (or EOF).
+    // Advertise the amount one Read can actually return instead of forcing an 8 MiB host buffer.
+    hints->preferredBufferBytes      = 1u * 1024u * 1024u;
     hints->preferredProgressPeriodMs = 200u;
     return S_OK;
 }

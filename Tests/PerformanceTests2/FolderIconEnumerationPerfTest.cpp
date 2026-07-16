@@ -201,9 +201,10 @@ public:
 #pragma warning(disable : 5246) // CppUnitTest TEST_CLASS_* macros expand to framework-owned registration initializers.
     TEST_CLASS_INITIALIZE(ClassInitialize)
     {
-        const auto base = std::filesystem::temp_directory_path();
-        s_root          = base / (L"RedSalamander_FolderIconEnumerationPerf_" + std::to_wstring(GetTickCount64()));
-        std::filesystem::create_directories(s_root);
+        std::error_code ec;
+        s_root = PerformanceTests2::AcquirePerformanceTestSandbox(L"folder_icon_enumeration_perf", ec);
+        Assert::IsFalse(static_cast<bool>(ec), L"Failed to create PerformanceTests2 icon-enumeration TestSandbox root.");
+        Assert::IsFalse(s_root.empty(), L"PerformanceTests2 icon-enumeration TestSandbox root is empty.");
         BuildLargeFolderDataSet(s_root, s_items);
     }
 

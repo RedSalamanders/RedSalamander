@@ -1,4 +1,5 @@
 #include "FileSystemCurl.ImapHelpers.h"
+#include "Helpers.h"
 
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -333,7 +334,7 @@ namespace
 
 [[nodiscard]] std::wstring Utf16FromUtf8(std::string_view text) noexcept
 {
-    return Utf16FromCodePage(text, CP_UTF8, MB_ERR_INVALID_CHARS);
+    return Common::Strings::Utf16FromUtf8StrictOrEmpty(text);
 }
 
 [[nodiscard]] std::wstring Utf16FromHeaderLiteral(std::string_view text) noexcept

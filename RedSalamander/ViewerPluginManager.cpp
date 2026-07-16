@@ -19,11 +19,9 @@
 
 namespace
 {
-using CreateFactoryFunc                = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const wchar_t* pluginId, void**);
-using EnumeratePluginsFunc             = HRESULT(__stdcall*)(REFIID, const PluginMetaData** metaData, unsigned int* count);
-using GetConfigurationSchemaExportFunc = HRESULT(__stdcall*)(REFIID, const wchar_t* pluginId, const char** schemaJsonUtf8);
-using PluginShutdownExportFunc         = void(__stdcall*)();
-using PluginRetainModuleUntilProcessExitExportFunc = BOOL(__stdcall*)();
+using CreateFactoryFunc                            = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const wchar_t* pluginId, void**);
+using EnumeratePluginsFunc                         = HRESULT(__stdcall*)(REFIID, const PluginMetaData** metaData, unsigned int* count);
+using GetConfigurationSchemaExportFunc             = HRESULT(__stdcall*)(REFIID, const wchar_t* pluginId, const char** schemaJsonUtf8);
 
 bool IsDllPath(const std::filesystem::path& path) noexcept
 {
@@ -195,7 +193,9 @@ void ViewerPluginManager::Shutdown(Common::Settings::Settings& /*settings*/) noe
     }
 
     UnloadAll(ModuleUnloadMode::ProcessShutdown);
+    SweepDeferredUnloadEntries(ModuleUnloadMode::ProcessShutdown);
     _plugins.clear();
+    _deferredUnloadEntries.clear();
     _exeDir.clear();
     _initialized = false;
 }
@@ -218,6 +218,11 @@ HRESULT ViewerPluginManager::CreateViewerInstance(std::wstring_view pluginId, Co
     if (! entry)
     {
         return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
+    }
+
+    if (entry->unloadDeferred || IsPluginPathDeferred(entry->path))
+    {
+        return HRESULT_FROM_WIN32(ERROR_BUSY);
     }
 
     if (entry->disabled || ! entry->loadable || ! entry->module || ! entry->createFactory)
@@ -312,6 +317,15 @@ HRESULT ViewerPluginManager::AddCustomPluginPath(const std::filesystem::path& pa
     if (! IsDllPath(path))
     {
         return E_INVALIDARG;
+    }
+
+    if (IsPluginPathDeferred(path))
+    {
+        SweepDeferredUnloadEntries(ModuleUnloadMode::FreeLibrary);
+        if (IsPluginPathDeferred(path))
+        {
+            return HRESULT_FROM_WIN32(ERROR_BUSY);
+        }
     }
 
     const HRESULT refreshHr = Refresh(settings);
@@ -617,6 +631,7 @@ const ViewerPluginManager::PluginEntry* ViewerPluginManager::FindPluginById(std:
 
 HRESULT ViewerPluginManager::Discover(Common::Settings::Settings& settings) noexcept
 {
+    SweepDeferredUnloadEntries(ModuleUnloadMode::FreeLibrary);
     UnloadAll(ModuleUnloadMode::FreeLibrary);
     _plugins.clear();
 
@@ -675,18 +690,17 @@ HRESULT ViewerPluginManager::Discover(Common::Settings::Settings& settings) noex
     std::error_code ec;
     if (! optionalDir.empty() && std::filesystem::exists(optionalDir, ec))
     {
-        for (const auto& item : std::filesystem::directory_iterator(optionalDir, ec))
+        std::filesystem::directory_iterator item(optionalDir, ec);
+        const std::filesystem::directory_iterator end;
+        while (! ec && item != end)
         {
-            if (ec)
-            {
-                break;
-            }
-
-            const std::filesystem::path p = item.path();
+            const std::filesystem::path p = item->path();
             if (IsDllPath(p))
             {
                 tryAddCandidate(PluginOrigin::Optional, p);
             }
+
+            item.increment(ec);
         }
     }
 
@@ -697,6 +711,19 @@ HRESULT ViewerPluginManager::Discover(Common::Settings::Settings& settings) noex
 
     std::unordered_set<std::wstring> seenIds;
     std::unordered_set<std::wstring> seenShortIds;
+
+    for (const PluginEntry& deferredEntry : _deferredUnloadEntries)
+    {
+        AddDeferredPlaceholder(deferredEntry);
+        if (! deferredEntry.id.empty())
+        {
+            seenIds.insert(ToLowerInvariant(deferredEntry.id));
+        }
+        if (! deferredEntry.shortId.empty())
+        {
+            seenShortIds.insert(ToLowerInvariant(deferredEntry.shortId));
+        }
+    }
 
     const auto addLoadedEntry = [&](PluginEntry&& entry)
     {
@@ -732,7 +759,11 @@ HRESULT ViewerPluginManager::Discover(Common::Settings::Settings& settings) noex
         if (conflict)
         {
             entry.loadable = false;
-            Unload(entry, ModuleUnloadMode::FreeLibrary);
+            if (! Unload(entry, ModuleUnloadMode::FreeLibrary))
+            {
+                _deferredUnloadEntries.push_back(std::move(entry));
+                AddDeferredPlaceholder(_deferredUnloadEntries.back());
+            }
             return;
         }
 
@@ -741,7 +772,12 @@ HRESULT ViewerPluginManager::Discover(Common::Settings::Settings& settings) noex
 
         if (entry.disabled)
         {
-            Unload(entry, ModuleUnloadMode::FreeLibrary);
+            if (! Unload(entry, ModuleUnloadMode::FreeLibrary))
+            {
+                _deferredUnloadEntries.push_back(std::move(entry));
+                AddDeferredPlaceholder(_deferredUnloadEntries.back());
+                return;
+            }
         }
 
         _plugins.push_back(std::move(entry));
@@ -776,6 +812,11 @@ HRESULT ViewerPluginManager::Discover(Common::Settings::Settings& settings) noex
             continue;
         }
 
+        if (IsPluginPathDeferred(candidate.path))
+        {
+            continue;
+        }
+
         bool handledAsMulti = false;
         bool isViewer       = true;
 
@@ -795,17 +836,34 @@ HRESULT ViewerPluginManager::Discover(Common::Settings::Settings& settings) noex
                 {
                     isViewer = false;
                 }
-                else if (SUCCEEDED(enumHr) && metaData != nullptr && count > 0)
+                else if (SUCCEEDED(enumHr))
                 {
                     handledAsMulti = true;
-                    for (unsigned int i = 0; i < count; ++i)
+                    if (! IsValidEnumeratedPluginRange(metaData, count))
                     {
-                        PluginEntry entry;
-                        entry.origin          = candidate.origin;
-                        entry.path            = candidate.path;
-                        entry.factoryPluginId = SafeCoalesce(metaData[i].id);
-                        tryLoadAndAddEntry(std::move(entry));
+                        Debug::Warning(L"Viewer plugin '{}' reported an invalid metadata range (pointer={}, count={}); the module was rejected.",
+                                       candidate.path.wstring(),
+                                       metaData != nullptr,
+                                       count);
                     }
+                    else
+                    {
+                        for (unsigned int i = 0; i < count; ++i)
+                        {
+                            PluginEntry entry;
+                            entry.origin          = candidate.origin;
+                            entry.path            = candidate.path;
+                            entry.factoryPluginId = SafeCoalesce(metaData[i].id);
+                            tryLoadAndAddEntry(std::move(entry));
+                        }
+                    }
+                }
+                else
+                {
+                    handledAsMulti = true;
+                    Debug::Warning(L"Viewer plugin '{}' enumeration failed (hr=0x{:08X}); the module was rejected.",
+                                   candidate.path.wstring(),
+                                   static_cast<unsigned long>(enumHr));
                 }
             }
         }
@@ -862,6 +920,17 @@ HRESULT ViewerPluginManager::EnsureLoaded(PluginEntry& entry) noexcept
     if (entry.module && entry.createFactory && entry.loadable)
     {
         return S_OK;
+    }
+
+    if (entry.unloadDeferred || IsPluginPathDeferred(entry.path))
+    {
+        SweepDeferredUnloadEntries(ModuleUnloadMode::FreeLibrary);
+        if (IsPluginPathDeferred(entry.path))
+        {
+            entry.loadError = PluginModuleLifecycle::kDeferredUnloadError;
+            return HRESULT_FROM_WIN32(ERROR_BUSY);
+        }
+        entry.unloadDeferred = false;
     }
 
     entry.loadable = false;
@@ -937,57 +1006,72 @@ HRESULT ViewerPluginManager::EnsureLoaded(PluginEntry& entry) noexcept
         {
             return E_NOINTERFACE;
         }
-        if (SUCCEEDED(enumHr) && metaData != nullptr && count > 0)
+        if (FAILED(enumHr))
         {
-            const PluginMetaData* selectedMeta = nullptr;
-            if (! entry.factoryPluginId.empty())
+            entry.loadError = std::format(L"RedSalamanderEnumeratePlugins failed (hr=0x{:08X}).", static_cast<unsigned long>(enumHr));
+            return enumHr;
+        }
+        if (! IsValidEnumeratedPluginRange(metaData, count))
+        {
+            entry.loadError = std::format(L"RedSalamanderEnumeratePlugins returned an invalid metadata range (pointer={}, count={}).",
+                                          metaData != nullptr,
+                                          count);
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+
+        const PluginMetaData* selectedMeta = nullptr;
+        if (! entry.factoryPluginId.empty())
+        {
+            for (unsigned int i = 0; i < count; ++i)
             {
-                for (unsigned int i = 0; i < count; ++i)
+                if (EqualsNoCase(SafeCoalesce(metaData[i].id), entry.factoryPluginId))
                 {
-                    if (EqualsNoCase(SafeCoalesce(metaData[i].id), entry.factoryPluginId))
-                    {
-                        selectedMeta = &metaData[i];
-                        break;
-                    }
+                    selectedMeta = &metaData[i];
+                    break;
                 }
-            }
-            else if (count == 1)
-            {
-                selectedMeta = &metaData[0];
-            }
-
-            if (selectedMeta)
-            {
-                applyMetaData(*selectedMeta);
-
-                if (! entry.factoryPluginId.empty() && ! entry.id.empty() && ! EqualsNoCase(entry.factoryPluginId, entry.id))
-                {
-                    entry.loadError = std::format(L"Plugin id mismatch: requested '{}' but enumerate reported '{}'.", entry.factoryPluginId, entry.id);
-                    return E_FAIL;
-                }
-
-                if (entry.id.empty())
-                {
-                    entry.loadError = L"Plugin id is missing.";
-                    return E_INVALIDARG;
-                }
-
-                if (! IsValidShortId(entry.shortId))
-                {
-                    entry.loadError = std::format(L"Invalid or missing short id '{}'.", entry.shortId);
-                    return E_INVALIDARG;
-                }
-
-                entry.module = std::move(module);
-#pragma warning(push)
-#pragma warning(disable : 4191) // C4191: 'reinterpret_cast': unsafe conversion between function pointer and 'FARPROC'
-                entry.createFactory = reinterpret_cast<FARPROC>(createFactory);
-#pragma warning(pop)
-                entry.loadable              = true;
-                keepResourceOwnerRegistered = true;
-                return S_OK;
             }
         }
+        else if (count == 1)
+        {
+            selectedMeta = &metaData[0];
+        }
+
+        if (! selectedMeta)
+        {
+            entry.loadError = entry.factoryPluginId.empty()
+                                  ? L"A multi-plugin module requires a logical plugin id."
+                                  : std::format(L"Enumerated plugin id '{}' was not found.", entry.factoryPluginId);
+            return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
+        }
+
+        applyMetaData(*selectedMeta);
+
+        if (! entry.factoryPluginId.empty() && ! entry.id.empty() && ! EqualsNoCase(entry.factoryPluginId, entry.id))
+        {
+            entry.loadError = std::format(L"Plugin id mismatch: requested '{}' but enumerate reported '{}'.", entry.factoryPluginId, entry.id);
+            return E_FAIL;
+        }
+
+        if (entry.id.empty())
+        {
+            entry.loadError = L"Plugin id is missing.";
+            return E_INVALIDARG;
+        }
+
+        if (! IsValidShortId(entry.shortId))
+        {
+            entry.loadError = std::format(L"Invalid or missing short id '{}'.", entry.shortId);
+            return E_INVALIDARG;
+        }
+
+        entry.module = std::move(module);
+#pragma warning(push)
+#pragma warning(disable : 4191) // C4191: 'reinterpret_cast': unsafe conversion between function pointer and 'FARPROC'
+        entry.createFactory = reinterpret_cast<FARPROC>(createFactory);
+#pragma warning(pop)
+        entry.loadable              = true;
+        keepResourceOwnerRegistered = true;
+        return S_OK;
     }
 
     FactoryOptions options{};
@@ -1056,80 +1140,64 @@ HRESULT ViewerPluginManager::EnsureLoaded(PluginEntry& entry) noexcept
 
 void ViewerPluginManager::UnloadAll(ModuleUnloadMode mode) noexcept
 {
-    for (auto it = _plugins.rbegin(); it != _plugins.rend(); ++it)
-    {
-        PluginEntry& entry = *it;
+    PluginModuleLifecycle::UnloadAll(
+        _plugins,
+        _deferredUnloadEntries,
+        mode,
+        [this](PluginEntry& entry, ModuleUnloadMode unloadMode) noexcept
+        {
 #ifdef ENABLE_TESTS
-        SelfTest::AppendSelfTestTrace(std::format(L"ViewerPluginManager::UnloadAll: unload begin id='{}' path='{}'",
-                                                  entry.id,
-                                                  entry.path.wstring()));
+            const std::wstring traceId   = entry.id;
+            const std::wstring tracePath = entry.path.wstring();
+            SelfTest::AppendSelfTestTrace(std::format(L"ViewerPluginManager::UnloadAll: unload begin id='{}' path='{}'", traceId, tracePath));
 #endif
-        Unload(entry, mode);
+            const bool unloaded = Unload(entry, unloadMode);
 #ifdef ENABLE_TESTS
-        SelfTest::AppendSelfTestTrace(std::format(L"ViewerPluginManager::UnloadAll: unload complete id='{}'", entry.id));
+            SelfTest::AppendSelfTestTrace(std::format(L"ViewerPluginManager::UnloadAll: unload complete id='{}'", traceId));
 #endif
-    }
+            return unloaded;
+        });
 }
 
-void ViewerPluginManager::Unload(PluginEntry& entry, ModuleUnloadMode mode) noexcept
+bool ViewerPluginManager::Unload(PluginEntry& entry, ModuleUnloadMode mode) noexcept
 {
-    if (entry.module)
+    if (! entry.module)
     {
-#ifdef ENABLE_TESTS
-        SelfTest::AppendSelfTestTrace(std::format(L"ViewerPluginManager::Unload: plugin shutdown begin id='{}'", entry.id));
-#endif
-#pragma warning(push)
-#pragma warning(disable : 4191) // C4191: 'reinterpret_cast': unsafe conversion between function pointer and 'FARPROC'
-        if (const auto pluginShutdown = reinterpret_cast<PluginShutdownExportFunc>(GetProcAddress(entry.module.get(), "RedSalamanderPluginShutdown"));
-            pluginShutdown != nullptr)
-        {
-            pluginShutdown();
-        }
-#pragma warning(pop)
-#ifdef ENABLE_TESTS
-        SelfTest::AppendSelfTestTrace(std::format(L"ViewerPluginManager::Unload: plugin shutdown complete id='{}'", entry.id));
-#endif
-#ifdef ENABLE_TESTS
-        SelfTest::AppendSelfTestTrace(std::format(L"ViewerPluginManager::Unload: unregister resources begin id='{}'", entry.id));
-#endif
-        Localization::UnregisterResourceOwner(entry.module.get());
-#ifdef ENABLE_TESTS
-        SelfTest::AppendSelfTestTrace(std::format(L"ViewerPluginManager::Unload: unregister resources complete id='{}'", entry.id));
-#endif
-    }
-#ifdef ENABLE_TESTS
-    SelfTest::AppendSelfTestTrace(std::format(L"ViewerPluginManager::Unload: module reset begin id='{}'", entry.id));
-#endif
-    bool retainModuleUntilProcessExit = false;
-    // The retain vote is a process-shutdown escape hatch only. Runtime refresh
-    // reaches this path after viewer instances/callbacks have been quieted and
-    // must still release the old module so rediscovery can load a fresh DLL image.
-    if (mode == ModuleUnloadMode::ProcessShutdown && entry.module)
-    {
-#pragma warning(push)
-#pragma warning(disable : 4191) // C4191: 'reinterpret_cast': unsafe conversion between function pointer and 'FARPROC'
-        if (const auto retainModule = reinterpret_cast<PluginRetainModuleUntilProcessExitExportFunc>(
-                GetProcAddress(entry.module.get(), "RedSalamanderPluginRetainModuleUntilProcessExit"));
-            retainModule != nullptr)
-        {
-            retainModuleUntilProcessExit = retainModule() != FALSE;
-        }
-#pragma warning(pop)
+        entry.unloadDeferred = false;
+        entry.createFactory  = nullptr;
+        return true;
     }
 
-    if (retainModuleUntilProcessExit && entry.module)
-    {
-        // At process shutdown, graphics-backed viewer DLLs can enter driver teardown
-        // from FreeLibrary while driver worker threads are still alive. Run the
-        // plugin quiet point above, then let OS process exit detach the module.
-        static_cast<void>(entry.module.release());
-    }
-    else
-    {
-        entry.module.reset();
-    }
 #ifdef ENABLE_TESTS
-    SelfTest::AppendSelfTestTrace(std::format(L"ViewerPluginManager::Unload: module reset complete id='{}'", entry.id));
+    SelfTest::AppendSelfTestTrace(std::format(L"ViewerPluginManager::Unload: plugin shutdown begin id='{}'", entry.id));
 #endif
-    entry.createFactory = nullptr;
+    const bool unloaded = PluginModuleLifecycle::UnloadModule(entry.module, mode, entry.path, L"Viewer plugin");
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(std::format(L"ViewerPluginManager::Unload: plugin shutdown complete id='{}'", entry.id));
+#endif
+    if (! unloaded)
+    {
+        PluginModuleLifecycle::MarkDeferred(entry);
+        entry.createFactory  = nullptr;
+        return false;
+    }
+    entry.unloadDeferred = false;
+    entry.createFactory  = nullptr;
+    return true;
+}
+
+void ViewerPluginManager::SweepDeferredUnloadEntries(ModuleUnloadMode mode) noexcept
+{
+    PluginModuleLifecycle::SweepDeferred(
+        _deferredUnloadEntries, mode, [this](PluginEntry& entry, ModuleUnloadMode unloadMode) noexcept { return Unload(entry, unloadMode); });
+}
+
+bool ViewerPluginManager::IsPluginPathDeferred(const std::filesystem::path& path) const noexcept
+{
+    return PluginModuleLifecycle::IsPathDeferred(_deferredUnloadEntries, path);
+}
+
+void ViewerPluginManager::AddDeferredPlaceholder(const PluginEntry& entry) noexcept
+{
+    _plugins.push_back(PluginModuleLifecycle::MakeDeferredPlaceholder(entry));
 }

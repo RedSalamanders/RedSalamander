@@ -46,13 +46,10 @@ This document is both a UX spec and an implementation plan (phased) to refactor 
   - Framed legacy edits/comboboxes use sibling `STATIC` “input frames” (rounded fill + neutral border); migrated controls use the shared `DxUi` field/combobox path.
 - Earlier migration passes used retired `ThemedControls` edit-centering and custom-combobox helpers. Those references are historical only; the active contract is `DxUi` for migrated controls and `ThemedInputFrames`/`PrefsInput` for remaining legacy Win32 inputs.
   - Focus cue: a thin accent underline is drawn when the input has focus (mouse or keyboard); focus rectangles are reserved for keyboard navigation on toggles.
-- **Schema-Driven UI Generation** (NEW): Main settings now support automatic UI generation from `SettingsStore.schema.json`:
-  - Settings annotated with `x-ui-pane`, `x-ui-control`, `x-ui-order`, and `x-ui-section` attributes automatically generate UI controls.
-  - Hybrid approach: complex panes (Keyboard, Themes, Viewers, Panes) marked as `x-ui-control: "custom"` preserve handcrafted UX.
-  - Simple panes (General, Advanced) use hybrid: existing handcrafted controls + auto-generated controls from schema.
-  - Implementation: `SettingsSchemaParser.h/.cpp` parses schema recursively, `PrefsUi::CreateSchemaControl()` generates controls based on `controlType`.
-  - Supported control types: `toggle` (boolean), `edit` (string), `number` (integer), `combo` (enum), `custom` (handcrafted).
-  - Adding new simple settings to schema with x-ui-* attributes automatically adds them to the appropriate pane without C++ changes.
+- **Schema display metadata**: Main settings keep `title` / `description` and selected `x-ui-*` annotations in `SettingsStore.schema.json` so preferences pages and tests can share metadata.
+  - The live Preferences UI is handcrafted/DxUi-based; settings are not auto-added to panes just by adding schema annotations.
+  - `SettingsSchemaParser.h/.cpp` remains as a parser/test utility for inspecting schema metadata.
+  - Adding a new user-facing setting still requires an explicit Preferences UI change and a matching schema update.
 
 ## Current Bugs / Follow-ups (WIP)
 
@@ -280,9 +277,9 @@ The aggregated schema file written next to settings (`<AppId>.settings.schema.js
 - Main application settings that are not user-editable (e.g. `windows` placement) must still be fully specified with clear constraints and documentation.
 - Avoid schema fields with unclear meaning; when an option set is known, prefer explicit `enum` + description over a loosely typed `string`/`integer`.
 
-### UI Annotations for Schema-Driven UI Generation (IMPLEMENTED)
+### UI Annotations for Schema Metadata (Historical)
 
-Schema-driven UI generation is now implemented using custom `x-ui-*` annotations. Settings annotated with these attributes automatically generate UI controls in the appropriate pane:
+Custom `x-ui-*` annotations are retained as schema metadata and test inputs. They do **not** automatically generate live Preferences controls in the current UI:
 
 **Implemented Annotations**:
 - `x-ui-pane`: Target pane name (`"General"`, `"Panes"`, `"Viewers"`, `"Keyboard"`, `"Themes"`, `"Plugins"`, `"Compare Directories"`, `"Hot Paths"`, `"Advanced"`) *(note: Hot Paths is currently a custom pane)*
@@ -304,15 +301,14 @@ Schema-driven UI generation is now implemented using custom `x-ui-*` annotations
 }
 ```
 
-**Hybrid Approach**:
-- Simple settings (toggles, text inputs, numbers) → Auto-generated from schema
-- Complex UX (keyboard shortcuts with conflict detection, theme creation workflow, viewer mapping) → Mark as `x-ui-control: "custom"` to preserve handcrafted quality
-- Transitioning panes → Existing handcrafted controls + new schema-driven controls appended
+**Current Approach**:
+- Preferences pages are explicit DxUi/Win32 implementations.
+- Complex UX (keyboard shortcuts with conflict detection, theme creation workflow, viewer mapping) remains handcrafted.
+- Schema metadata must be kept in sync with handcrafted controls so audit/test tooling can verify display text and constraints.
 
 **Implementation Files**:
-- Schema parser: `RedSalamander/SettingsSchemaParser.h/.cpp`
-- UI helpers: `RedSalamander/Preferences.Internal.cpp` (`PrefsUi::CreateSchemaControl`, `CreateSchemaToggle`, `CreateSchemaEdit`, `CreateSchemaNumber`)
-- Integration: `RedSalamander/Preferences.Dialog.cpp` (loads schema), `RedSalamander/Preferences.General.cpp` (demo)
+- Schema parser/test utility: `RedSalamander/SettingsSchemaParser.h/.cpp`
+- Live Preferences pages: `RedSalamander/Preferences.*.cpp`
 
 These annotations are additive and do not break JSON Schema validation.
 

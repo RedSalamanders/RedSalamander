@@ -23,6 +23,10 @@
     <RSProjectDirFromRepoLower>$([System.String]::Copy('$(RSProjectDirFromRepo)').Replace('/','\').ToLowerInvariant())</RSProjectDirFromRepoLower>
     <RSProjectIsOutsideRepo>$([System.String]::Copy('$(RSProjectDirFromRepoLower)').StartsWith('..\\'))</RSProjectIsOutsideRepo>
     <RSProjectIsBuildTree>$([System.String]::Copy('$(RSProjectDirFromRepoLower)').StartsWith('.build\\'))</RSProjectIsBuildTree>
+    <RSIsTestProject Condition="$([System.String]::Copy('$(RSProjectDirFromRepoLower)').StartsWith('tests\'))">true</RSIsTestProject>
+    <RSIsTestProject Condition="'$(RSIsTestProject)'==''">false</RSIsTestProject>
+    <RSUsesSharedTestSupport Condition="'$(RSIsTestProject)'=='true' or '$(MSBuildProjectName)'=='RedSalamander'">true</RSUsesSharedTestSupport>
+    <RSUsesSharedTestSupport Condition="'$(RSUsesSharedTestSupport)'==''">false</RSUsesSharedTestSupport>
     <RSIsFirstPartyProject Condition="'$(RSProjectDirFromRepoLower)'!='' and '$(RSProjectIsOutsideRepo)'!='True' and '$(RSProjectIsBuildTree)'!='True'">true</RSIsFirstPartyProject>
     <RSIsFirstPartyProject Condition="'$(RSIsFirstPartyProject)'==''">false</RSIsFirstPartyProject>
 
@@ -94,6 +98,12 @@
       <SDLCheck>true</SDLCheck>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
+    </ClCompile>
+  </ItemDefinitionGroup>
+
+  <ItemDefinitionGroup Condition="'$(RSIsFirstPartyProject)'=='true' and '$(RSUsesSharedTestSupport)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(SolutionDir)Tests;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
   </ItemDefinitionGroup>
 

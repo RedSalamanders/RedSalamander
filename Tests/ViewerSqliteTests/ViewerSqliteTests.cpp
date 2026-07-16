@@ -16,6 +16,7 @@
 #include <thread>
 #include <vector>
 
+#include <Windows.h>
 #include <UIAutomation.h>
 
 #pragma warning(push)
@@ -29,12 +30,16 @@
 #include <sqlite3.h>
 #pragma warning(pop)
 
+#define REDSAL_DEFINE_TRACE_PROVIDER
+#include "Helpers.h"
+
 #include "PlugInterfaces/Factory.h"
 #include "PlugInterfaces/FileSystem.h"
 #include "PlugInterfaces/Informations.h"
 #include "PlugInterfaces/Viewer.h"
 #include "ViewerSqlite.Engine.h"
 #include "WindowMessages.h"
+#include "TestSupport/TestSupport.h"
 
 namespace
 {
@@ -44,7 +49,8 @@ using namespace std::chrono_literals;
 constexpr wchar_t kViewerSqliteWindowClassName[] = L"RedSalamander.ViewerSqlite";
 
 using RedSalamanderCreateFn = HRESULT(__stdcall*)(REFIID riid, const FactoryOptions* factoryOptions, IHost* host, const wchar_t* pluginId, void** result);
-constexpr wchar_t kViewerSqlitePluginId[] = L"builtin/viewer-sqlite";
+constexpr wchar_t kViewerSqlitePluginId[]            = L"builtin/viewer-sqlite";
+constexpr std::wstring_view kViewerSqliteHarnessSegment{L"viewer-sqlite"};
 constexpr char kReadOnlyFileSystemCapabilitiesJson[] = R"json(
 {
   "version": 1,
@@ -72,24 +78,60 @@ constexpr char kReadOnlyFileSystemCapabilitiesJson[] = R"json(
 struct TempDatabase final
 {
     std::filesystem::path path;
+    std::filesystem::path sandboxRoot;
 
     TempDatabase()                                   = default;
     TempDatabase(const TempDatabase&)                = delete;
     TempDatabase& operator=(const TempDatabase&)     = delete;
-    TempDatabase(TempDatabase&&) noexcept            = default;
-    TempDatabase& operator=(TempDatabase&&) noexcept = default;
+    TempDatabase(TempDatabase&& other) noexcept : path(std::move(other.path)), sandboxRoot(std::move(other.sandboxRoot))
+    {
+        other.path.clear();
+        other.sandboxRoot.clear();
+    }
+
+    TempDatabase& operator=(TempDatabase&& other) noexcept
+    {
+        if (this != &other)
+        {
+            Reset();
+            path        = std::move(other.path);
+            sandboxRoot = std::move(other.sandboxRoot);
+            other.path.clear();
+            other.sandboxRoot.clear();
+        }
+        return *this;
+    }
 
     ~TempDatabase() noexcept
     {
-        if (path.empty())
-        {
-            return;
-        }
+        Reset();
+    }
 
+    void Reset() noexcept
+    {
         std::error_code ec;
-        std::filesystem::remove(path, ec);
+        if (! path.empty())
+        {
+            std::filesystem::remove(path, ec);
+            path.clear();
+        }
+        ec.clear();
+        if (! sandboxRoot.empty())
+        {
+            std::filesystem::remove_all(sandboxRoot, ec);
+            sandboxRoot.clear();
+        }
     }
 };
+
+[[nodiscard]] std::filesystem::path AcquireViewerSqliteTestSandbox(std::wstring_view caseName, std::error_code& ec) noexcept
+{
+    return RedSalamander::TestSupport::AcquireTestDirectory({.harnessSegment      = kViewerSqliteHarnessSegment,
+                                                             .leafSegment         = caseName,
+                                                             .fallbackRunIdPrefix = L"viewer-sqlite",
+                                                             .cleanExisting       = false},
+                                                            ec);
+}
 
 struct ViewerClosedCounter final : IViewerCallback
 {
@@ -150,16 +192,6 @@ struct ViewerClosedCounter final : IViewerCallback
     errorText                      = Utf16FromUtf8(message);
     sqlite3_free(err);
     return false;
-}
-
-void PumpPendingMessages() noexcept
-{
-    MSG msg{};
-    while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE) != 0)
-    {
-        TranslateMessage(&msg);
-        DispatchMessageW(&msg);
-    }
 }
 
 [[nodiscard]] constexpr uint32_t Argb(uint8_t r, uint8_t g, uint8_t b) noexcept
@@ -246,19 +278,10 @@ void PumpPendingMessages() noexcept
 
 template <typename Predicate> [[nodiscard]] bool PumpUntil(Predicate&& predicate, std::chrono::milliseconds timeout) noexcept
 {
-    const auto deadline = std::chrono::steady_clock::now() + timeout;
-    while (std::chrono::steady_clock::now() < deadline)
-    {
-        PumpPendingMessages();
-        if (predicate())
-        {
-            return true;
-        }
-        std::this_thread::sleep_for(20ms);
-    }
-
-    PumpPendingMessages();
-    return predicate();
+    return RedSalamander::TestSupport::PumpMessagesUntil(
+               std::forward<Predicate>(predicate),
+               {.timeout = timeout, .operationName = L"ViewerSqlite test condition"})
+        .conditionMet;
 }
 
 [[nodiscard]] size_t CountVisibleChildWindows(HWND hwnd) noexcept
@@ -376,37 +399,17 @@ template <typename Predicate>
                                          std::chrono::milliseconds timeout,
                                          WndMsg::ViewerSqliteDebugSnapshot* outSnapshot = nullptr) noexcept
 {
-    WndMsg::ViewerSqliteDebugSnapshot snapshot{};
-    WndMsg::ViewerSqliteDebugSnapshot lastSnapshot{};
-    bool sawSnapshot = false;
-    const bool ready = PumpUntil(
-        [&]() noexcept
+    std::wstring timeoutDiagnostic;
+    const bool ready = RedSalamander::TestSupport::WaitForSnapshot<WndMsg::ViewerSqliteDebugSnapshot>(
+        [hwnd](WndMsg::ViewerSqliteDebugSnapshot& snapshot) noexcept { return TryGetViewerSqliteDebugSnapshot(hwnd, snapshot); },
+        std::forward<Predicate>(predicate),
+        {.timeout = timeout, .operationName = L"ViewerSqlite debug snapshot"},
+        outSnapshot,
+        &timeoutDiagnostic);
+    if (! ready)
     {
-        if (! TryGetViewerSqliteDebugSnapshot(hwnd, snapshot))
-        {
-            return false;
-        }
-
-        lastSnapshot = snapshot;
-        sawSnapshot  = true;
-        if (! predicate(snapshot))
-        {
-            return false;
-        }
-
-        if (outSnapshot)
-        {
-            *outSnapshot = snapshot;
-        }
-        return true;
-    },
-        timeout);
-
-    if (! ready && outSnapshot && sawSnapshot)
-    {
-        *outSnapshot = lastSnapshot;
+        std::wcerr << timeoutDiagnostic << L'\n';
     }
-
     return ready;
 }
 #endif
@@ -657,10 +660,132 @@ struct UiaViewerSubtreeStats
 }
 #endif
 
-class BuiltinFileSystemStub final : public IFileSystem, public IInformations
+enum class FileReaderFault : uint8_t
+{
+    None,
+    AdvertiseTooLarge,
+    SeekReturnsWrongPosition,
+    ReadReturnsTooManyBytes,
+};
+
+class Win32FileReaderStub final : public IFileReader
 {
 public:
-    BuiltinFileSystemStub()                                        = default;
+    Win32FileReaderStub()                                      = default;
+    Win32FileReaderStub(const Win32FileReaderStub&)            = delete;
+    Win32FileReaderStub(Win32FileReaderStub&&)                 = delete;
+    Win32FileReaderStub& operator=(const Win32FileReaderStub&) = delete;
+    Win32FileReaderStub& operator=(Win32FileReaderStub&&)      = delete;
+
+    void Attach(wil::unique_handle file, const FileReaderFault fault) noexcept
+    {
+        _file  = std::move(file);
+        _fault = fault;
+        _refCount.store(1u, std::memory_order_release);
+    }
+
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** result) noexcept override
+    {
+        if (result == nullptr)
+        {
+            return E_POINTER;
+        }
+        *result = nullptr;
+        if (riid != __uuidof(IUnknown) && riid != __uuidof(IFileReader))
+        {
+            return E_NOINTERFACE;
+        }
+        *result = static_cast<IFileReader*>(this);
+        AddRef();
+        return S_OK;
+    }
+
+    ULONG STDMETHODCALLTYPE AddRef() noexcept override
+    {
+        return static_cast<ULONG>(_refCount.fetch_add(1u, std::memory_order_relaxed) + 1u);
+    }
+
+    ULONG STDMETHODCALLTYPE Release() noexcept override
+    {
+        const ULONG remaining = static_cast<ULONG>(_refCount.fetch_sub(1u, std::memory_order_acq_rel) - 1u);
+        if (remaining == 0u)
+        {
+            _file.reset();
+        }
+        return remaining;
+    }
+
+    HRESULT STDMETHODCALLTYPE GetSize(uint64_t* sizeBytes) noexcept override
+    {
+        if (sizeBytes == nullptr)
+        {
+            return E_POINTER;
+        }
+        if (_fault == FileReaderFault::AdvertiseTooLarge)
+        {
+            *sizeBytes = ViewerSqliteEngine::kMaxSnapshotBytes + 1u;
+            return S_OK;
+        }
+
+        LARGE_INTEGER size{};
+        if (GetFileSizeEx(_file.get(), &size) == 0 || size.QuadPart < 0)
+        {
+            return HRESULT_FROM_WIN32(GetLastError());
+        }
+        *sizeBytes = static_cast<uint64_t>(size.QuadPart);
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE Seek(const __int64 offset, const unsigned long origin, uint64_t* newPosition) noexcept override
+    {
+        if (newPosition == nullptr || (origin != FILE_BEGIN && origin != FILE_CURRENT && origin != FILE_END))
+        {
+            return E_INVALIDARG;
+        }
+        LARGE_INTEGER distance{};
+        distance.QuadPart = offset;
+        LARGE_INTEGER position{};
+        if (SetFilePointerEx(_file.get(), distance, &position, origin) == 0 || position.QuadPart < 0)
+        {
+            return HRESULT_FROM_WIN32(GetLastError());
+        }
+        *newPosition = _fault == FileReaderFault::SeekReturnsWrongPosition ? 1u : static_cast<uint64_t>(position.QuadPart);
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE Read(void* buffer, const unsigned long bytesToRead, unsigned long* bytesRead) noexcept override
+    {
+        if (bytesRead == nullptr || (buffer == nullptr && bytesToRead != 0u))
+        {
+            return E_INVALIDARG;
+        }
+        *bytesRead = 0u;
+        const HRESULT hr = ReadFile(_file.get(), buffer, bytesToRead, bytesRead, nullptr) != FALSE ? S_OK : HRESULT_FROM_WIN32(GetLastError());
+        if (SUCCEEDED(hr) && _fault == FileReaderFault::ReadReturnsTooManyBytes)
+        {
+            *bytesRead = bytesToRead + 1u;
+        }
+        return hr;
+    }
+
+private:
+    std::atomic_ulong _refCount{0u};
+    wil::unique_handle _file;
+    FileReaderFault _fault = FileReaderFault::None;
+};
+
+class BuiltinFileSystemStub final : public IFileSystem, public IInformations, public IFileSystemIO
+{
+public:
+    explicit BuiltinFileSystemStub(std::filesystem::path backingPath = {},
+                                   const bool reportBuiltin = true,
+                                   const FileReaderFault readerFault = FileReaderFault::None)
+        : _backingPath(std::move(backingPath)),
+          _metaId(reportBuiltin ? L"builtin/file-system" : L"test/virtual-file-system"),
+          _readerFault(readerFault)
+    {
+        _metaData.id = _metaId.c_str();
+    }
     BuiltinFileSystemStub(const BuiltinFileSystemStub&)            = delete;
     BuiltinFileSystemStub(BuiltinFileSystemStub&&)                 = delete;
     BuiltinFileSystemStub& operator=(const BuiltinFileSystemStub&) = delete;
@@ -681,6 +806,10 @@ public:
         else if (riid == __uuidof(IInformations))
         {
             *ppvObject = static_cast<IInformations*>(this);
+        }
+        else if (riid == __uuidof(IFileSystemIO))
+        {
+            *ppvObject = static_cast<IFileSystemIO*>(this);
         }
         else
         {
@@ -717,7 +846,7 @@ public:
             return E_POINTER;
         }
 
-        *metaData = &kMetaData;
+        *metaData = &_metaData;
         return S_OK;
     }
 
@@ -886,8 +1015,80 @@ public:
         return S_OK;
     }
 
+    HRESULT STDMETHODCALLTYPE GetAttributes(const wchar_t* path, unsigned long* fileAttributes) noexcept override
+    {
+        if (path == nullptr || fileAttributes == nullptr)
+        {
+            return E_INVALIDARG;
+        }
+        const std::filesystem::path resolved = _backingPath.empty() ? std::filesystem::path(path) : _backingPath;
+        const DWORD attributes = GetFileAttributesW(resolved.c_str());
+        if (attributes == INVALID_FILE_ATTRIBUTES)
+        {
+            return HRESULT_FROM_WIN32(GetLastError());
+        }
+        *fileAttributes = attributes;
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE CreateFileReader(const wchar_t* path, IFileReader** reader) noexcept override
+    {
+        if (path == nullptr || reader == nullptr)
+        {
+            return E_INVALIDARG;
+        }
+        *reader = nullptr;
+        const std::filesystem::path resolved = _backingPath.empty() ? std::filesystem::path(path) : _backingPath;
+        wil::unique_handle file(CreateFileW(resolved.c_str(),
+                                           GENERIC_READ,
+                                           FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                           nullptr,
+                                           OPEN_EXISTING,
+                                           FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN,
+                                           nullptr));
+        if (! file)
+        {
+            return HRESULT_FROM_WIN32(GetLastError());
+        }
+        _reader.Attach(std::move(file), _readerFault);
+        *reader = &_reader;
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE CreateFileWriter(const wchar_t*, FileSystemFlags, IFileWriter** writer) noexcept override
+    {
+        if (writer != nullptr)
+        {
+            *writer = nullptr;
+        }
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+
+    HRESULT STDMETHODCALLTYPE GetFileBasicInformation(const wchar_t*, FileSystemBasicInformation*) noexcept override
+    {
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+
+    HRESULT STDMETHODCALLTYPE SetFileBasicInformation(const wchar_t*, const FileSystemBasicInformation*) noexcept override
+    {
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+
+    HRESULT STDMETHODCALLTYPE GetItemProperties(const wchar_t*, const char** jsonUtf8) noexcept override
+    {
+        if (jsonUtf8 != nullptr)
+        {
+            *jsonUtf8 = nullptr;
+        }
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+
 private:
-    inline static const PluginMetaData kMetaData{
+    std::filesystem::path _backingPath;
+    std::wstring _metaId;
+    Win32FileReaderStub _reader;
+    FileReaderFault _readerFault = FileReaderFault::None;
+    PluginMetaData _metaData{
         L"builtin/file-system",
         L"file",
         L"File System",
@@ -903,8 +1104,16 @@ private:
 {
     TempDatabase tempDb;
 
+    std::error_code ec;
+    tempDb.sandboxRoot = AcquireViewerSqliteTestSandbox(L"database", ec);
+    if (ec || tempDb.sandboxRoot.empty())
+    {
+        errorText = L"Failed to create the ViewerSqlite TestSandbox database root.";
+        return {};
+    }
+
     const auto uniquePart = std::format(L"viewer-sqlite-tests-{}-{}.sqlite", GetCurrentProcessId(), GetTickCount64());
-    tempDb.path           = std::filesystem::temp_directory_path() / uniquePart;
+    tempDb.path           = tempDb.sandboxRoot / uniquePart;
 
     sqlite3* raw     = nullptr;
     const int openRc = sqlite3_open16(tempDb.path.c_str(), &raw);
@@ -916,7 +1125,14 @@ private:
     }
 
     const std::vector<const char*> statements = {"CREATE TABLE bigdata (id INTEGER PRIMARY KEY, name TEXT NOT NULL, payload TEXT);",
-                                                 "CREATE VIEW bigdata_view AS SELECT id, name FROM bigdata;"};
+                                                 "CREATE VIEW bigdata_view AS SELECT id, name FROM bigdata;",
+                                                 "CREATE TABLE \"control\nname\" (\"header\nname\" TEXT);",
+                                                 "INSERT INTO \"control\nname\" VALUES ('safe');",
+                                                 "CREATE TABLE \"zz_bidi"
+                                                 "\xD8\x9C"
+                                                 "\xE2\x80\x8E"
+                                                 "\xE2\x81\xAF"
+                                                 "name\" (value TEXT);"};
 
     for (const char* statement : statements)
     {
@@ -924,6 +1140,21 @@ private:
         {
             return {};
         }
+    }
+
+    const std::string oversizedHeader(4096u, 'h');
+    const std::string oversizedHeaderSql = std::format("CREATE TABLE oversized_header (\"{}\" TEXT);", oversizedHeader);
+    if (! Exec(db.get(), oversizedHeaderSql.c_str(), errorText) || ! Exec(db.get(), "INSERT INTO oversized_header VALUES ('safe');", errorText))
+    {
+        return {};
+    }
+
+    const std::string longExactTableName(600u, 't');
+    const std::string longExactTableSql = std::format("CREATE TABLE \"{}\" (value TEXT);", longExactTableName);
+    const std::string longExactTableInsertSql = std::format("INSERT INTO \"{}\" VALUES ('safe');", longExactTableName);
+    if (! Exec(db.get(), longExactTableSql.c_str(), errorText) || ! Exec(db.get(), longExactTableInsertSql.c_str(), errorText))
+    {
+        return {};
     }
 
     if (! Exec(db.get(), "BEGIN TRANSACTION;", errorText))
@@ -941,6 +1172,11 @@ private:
     }
 
     if (! Exec(db.get(), "COMMIT;", errorText))
+    {
+        return {};
+    }
+
+    if (! Exec(db.get(), "UPDATE bigdata SET payload = printf('%.*c', 1000000, 120) WHERE id = 1;", errorText))
     {
         return {};
     }
@@ -1043,6 +1279,275 @@ bool Check(bool condition, std::wstring_view message, bool& success)
 
     const auto rejectedBatch = source.ValidateReadOnlyQuery(L"SELECT 1; SELECT 2;");
     Check(FAILED(rejectedBatch.hr) && ! rejectedBatch.accepted, L"multiple statements are rejected", success);
+
+    return success;
+}
+
+[[nodiscard]] bool TestSnapshotConnectionBoundsCancellationAndSanitization(const ViewerSqliteEngine::DatabaseSource& source)
+{
+    bool success = true;
+
+    std::vector<ViewerSqliteEngine::TableInfo> tables;
+    std::wstring errorText;
+    Check(SUCCEEDED(source.ListTables(tables, errorText)), L"bounded table enumeration succeeds", success);
+    const auto controlTable = std::find_if(tables.begin(), tables.end(), [](const ViewerSqliteEngine::TableInfo& table) noexcept
+    { return table.name == L"control\nname"; });
+    Check(controlTable != tables.end(), L"table enumeration preserves the exact control-bearing SQLite identifier internally", success);
+    Check(controlTable != tables.end() && controlTable->displayName.find(L'\n') == std::wstring::npos,
+          L"table display text removes control characters",
+          success);
+
+    const std::wstring bidiTableName = L"zz_bidi\u061C\u200E\u206Fname";
+    const auto bidiTable = std::find_if(tables.begin(), tables.end(), [&](const ViewerSqliteEngine::TableInfo& table) noexcept
+    { return table.name == bidiTableName; });
+    Check(bidiTable != tables.end(), L"table enumeration preserves the exact bidi-control identifier internally", success);
+    Check(bidiTable != tables.end() && bidiTable->displayName.find(L'\u061C') == std::wstring::npos &&
+              bidiTable->displayName.find(L'\u200E') == std::wstring::npos && bidiTable->displayName.find(L'\u206F') == std::wstring::npos,
+          L"table display text removes Arabic-letter-mark, direction-mark, and isolate controls",
+          success);
+
+    const std::wstring longExactTableName(600u, L't');
+    const auto longExactTable = std::find_if(tables.begin(), tables.end(), [&](const ViewerSqliteEngine::TableInfo& table) noexcept
+    { return table.name == longExactTableName; });
+    Check(longExactTable != tables.end() && longExactTable->name.size() == longExactTableName.size() &&
+              longExactTable->displayName.size() <= 515u,
+          L"a long valid identifier keeps its exact query identity while only display text is bounded",
+          success);
+    const auto longExactPage = source.LoadTablePage(longExactTableName, 1u, 0u);
+    Check(SUCCEEDED(longExactPage.hr) && ! longExactPage.page.rows.empty(),
+          L"the long exact table identifier remains queryable after display truncation",
+          success);
+
+    const auto controlPage = source.LoadTablePage(L"control\nname", 10u, 0u);
+    Check(SUCCEEDED(controlPage.hr), L"control-bearing table identifier remains queryable through exact internal identity", success);
+    Check(! controlPage.page.columns.empty() && controlPage.page.columns.front().name.find(L'\n') == std::wstring::npos,
+          L"column header display text removes control characters",
+          success);
+
+    const auto boundedCellPage = source.LoadTablePage(L"bigdata", 1u, 0u);
+    Check(SUCCEEDED(boundedCellPage.hr), L"page containing an oversized TEXT value loads", success);
+    Check(! boundedCellPage.page.rows.empty() && boundedCellPage.page.rows.front().size() >= 3u &&
+              boundedCellPage.page.rows.front()[2].size() <= 4100u,
+          L"oversized TEXT materialization remains bounded near the 4K display cap",
+          success);
+
+    const auto oversizedHeaderPage = source.LoadTablePage(L"oversized_header", 1u, 0u);
+    Check(SUCCEEDED(oversizedHeaderPage.hr) && ! oversizedHeaderPage.page.columns.empty() &&
+              oversizedHeaderPage.page.columns.front().name.size() <= 515u,
+          L"oversized column headers are converted and truncated without proportional application allocation",
+          success);
+
+    const auto invalidSort = source.LoadTablePage(L"bigdata", 10u, 0u, 99u, ViewerSqliteEngine::TableSortDirection::Ascending);
+    Check(FAILED(invalidSort.hr), L"out-of-range sort ordinals are rejected before SQL construction", success);
+
+    const auto invalidOffset = source.LoadTablePage(L"bigdata",
+                                                    10u,
+                                                    static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) + 1u);
+    Check(invalidOffset.hr == E_INVALIDARG, L"row offsets above SQLite's signed 64-bit range are rejected", success);
+
+    std::atomic_uint64_t cancellationGeneration{2u};
+    const ViewerSqliteEngine::QueryCancellation cancelled{&cancellationGeneration, 1u};
+    const auto cancelledPage = source.LoadTablePage(L"bigdata", 10u, 0u, ViewerSqliteEngine::kNoSortColumn,
+                                                    ViewerSqliteEngine::TableSortDirection::None, cancelled);
+    Check(cancelledPage.hr == HRESULT_FROM_WIN32(ERROR_CANCELLED), L"stale page generations cancel before proportional work", success);
+
+    ViewerSqliteEngine::QueryWorkBudget tinyBudget{};
+    tinyBudget.maxVmSteps   = 1000u;
+    tinyBudget.maxElapsedMs = 2000u;
+    const auto boundedWork = source.ExecuteReadOnlyQuery(
+        L"WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x + 1 FROM n WHERE x < 10000000) SELECT sum(x) FROM n;", 1u, {}, tinyBudget);
+    Check(boundedWork.hr == HRESULT_FROM_WIN32(ERROR_TIMEOUT), L"SQLite VM work is interrupted at the deterministic operation budget", success);
+
+    std::atomic_bool startConcurrent{false};
+    HRESULT firstHr  = E_FAIL;
+    HRESULT secondHr = E_FAIL;
+    std::jthread first([&]() noexcept
+    {
+        while (! startConcurrent.load(std::memory_order_acquire))
+        {
+            std::this_thread::yield();
+        }
+        firstHr = source.LoadTablePage(L"bigdata", 25u, 0u).hr;
+    });
+    std::jthread second([&]() noexcept
+    {
+        while (! startConcurrent.load(std::memory_order_acquire))
+        {
+            std::this_thread::yield();
+        }
+        secondHr = source.LoadTablePage(L"bigdata", 25u, 25u).hr;
+    });
+    startConcurrent.store(true, std::memory_order_release);
+    first.join();
+    second.join();
+    Check(SUCCEEDED(firstHr) && SUCCEEDED(secondHr), L"concurrent callers complete through the serialized cached connection", success);
+
+    const ViewerSqliteEngine::SourceDebugSnapshot debug = source.GetDebugSnapshot();
+    Check(debug.cachedConnectionOpenCount == 1u, L"all pages and queries reuse exactly one read-only SQLite connection", success);
+    Check(debug.maxConcurrentConnectionUse == 1u, L"the NOMUTEX SQLite connection is never used concurrently", success);
+    Check(debug.cancelledOperationCount >= 1u && debug.workLimitFailureCount >= 1u,
+          L"cancellation and bounded-work diagnostics record rejected operations",
+          success);
+    return success;
+}
+
+[[nodiscard]] bool TestLocalWalSnapshotVirtualLimitsAndStaleScavenging(const std::filesystem::path& databasePath)
+{
+    bool success = true;
+    std::wstring errorText;
+
+    sqlite3* rawWriter = nullptr;
+    const int writerOpenRc = sqlite3_open16(databasePath.c_str(), &rawWriter);
+    unique_sqlite3 writer(rawWriter, sqlite3_close_v2);
+    Check(writerOpenRc == SQLITE_OK && writer != nullptr, L"WAL snapshot test opens the live writer", success);
+    if (writerOpenRc != SQLITE_OK || ! writer)
+    {
+        return false;
+    }
+
+    Check(Exec(writer.get(), "PRAGMA journal_mode=WAL;", errorText), L"WAL snapshot test enables WAL mode", success);
+    Check(Exec(writer.get(), "PRAGMA wal_autocheckpoint=0;", errorText), L"WAL snapshot test disables automatic checkpoints", success);
+    Check(Exec(writer.get(), "INSERT INTO bigdata (id, name, payload) VALUES (751, 'wal-before', 'before');", errorText),
+          L"WAL snapshot test commits a row before opening the viewer snapshot",
+          success);
+
+    auto liveGuard = ViewerSqliteEngine::DatabaseSource::OpenFromPath(databasePath, L"live-guard.sqlite");
+    Check(SUCCEEDED(liveGuard.hr) && liveGuard.source != nullptr,
+          L"a live private snapshot is available while stale-artifact scavenging runs",
+          success);
+    const std::filesystem::path liveGuardPath = liveGuard.source ? liveGuard.source->GetLocalPath() : std::filesystem::path{};
+
+    const std::filesystem::path tempDirectory = liveGuardPath.parent_path();
+    Check(! tempDirectory.empty(), L"the resolved ViewerSqlite snapshot directory is available", success);
+    std::filesystem::path staleSnapshotPath;
+    if (! tempDirectory.empty())
+    {
+        staleSnapshotPath = tempDirectory / std::format(L"RedSalamander-ViewerSqlite-stale-{}-{}.sqlite", GetCurrentProcessId(), GetTickCount64());
+        wil::unique_handle staleSnapshot(CreateFileW(staleSnapshotPath.c_str(),
+                                                     GENERIC_WRITE,
+                                                     FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                                     nullptr,
+                                                     CREATE_ALWAYS,
+                                                     FILE_ATTRIBUTE_TEMPORARY,
+                                                     nullptr));
+        Check(static_cast<bool>(staleSnapshot), L"the test creates a closed stale ViewerSqlite snapshot artifact", success);
+        staleSnapshot.reset();
+    }
+
+    auto opened = ViewerSqliteEngine::DatabaseSource::OpenFromPath(databasePath, L"wal.sqlite");
+    Check(SUCCEEDED(opened.hr) && opened.source != nullptr, L"local SQLite backup opens a consistent snapshot while WAL is live", success);
+    if (! staleSnapshotPath.empty())
+    {
+        Check(! std::filesystem::exists(staleSnapshotPath),
+              L"opening a snapshot scavenges a closed exact-prefix artifact from the resolved temp directory",
+              success);
+    }
+    if (! liveGuardPath.empty())
+    {
+        Check(std::filesystem::exists(liveGuardPath),
+              L"scavenging cannot delete a live snapshot whose lifetime handle denies FILE_SHARE_DELETE",
+              success);
+    }
+    if (FAILED(opened.hr) || ! opened.source)
+    {
+        static_cast<void>(DeleteFileW(staleSnapshotPath.c_str()));
+        return false;
+    }
+
+    const std::filesystem::path snapshotPath = opened.source->GetLocalPath();
+    Check(snapshotPath != databasePath && std::filesystem::exists(snapshotPath),
+          L"local open owns a private stale-scavenged snapshot instead of exposing the live path",
+          success);
+    Check(opened.source->GetDebugSnapshot().snapshotKind == ViewerSqliteEngine::SnapshotKind::LocalSqliteBackup,
+          L"local open records the SQLite backup snapshot kind",
+          success);
+
+    const auto beforeMutation = opened.source->ExecuteReadOnlyQuery(L"SELECT max(id) FROM bigdata;", 1u);
+    Check(SUCCEEDED(beforeMutation.hr) && ! beforeMutation.page.rows.empty() && beforeMutation.page.rows.front()[0] == L"751",
+          L"the backup includes the committed WAL row present at open",
+          success);
+
+    Check(Exec(writer.get(), "INSERT INTO bigdata (id, name, payload) VALUES (752, 'wal-after', 'after');", errorText),
+          L"the live database accepts a concurrent post-snapshot commit",
+          success);
+    const auto afterMutation = opened.source->ExecuteReadOnlyQuery(L"SELECT max(id) FROM bigdata;", 1u);
+    Check(SUCCEEDED(afterMutation.hr) && ! afterMutation.page.rows.empty() && afterMutation.page.rows.front()[0] == L"751",
+          L"the private snapshot remains immutable after later WAL commits",
+          success);
+
+    const auto tinyCap = ViewerSqliteEngine::DatabaseSource::OpenFromPath(databasePath, L"tiny.sqlite", {}, 4096u);
+    Check(tinyCap.hr == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE),
+          L"local snapshot preflight rejects a database above a deterministic tiny byte cap",
+          success);
+
+    const std::string overlongTableName(16385u, 'z');
+    const std::string createOverlongTable = std::format("CREATE TABLE \"{}\" (value INTEGER);", overlongTableName);
+    const std::string dropOverlongTable   = std::format("DROP TABLE \"{}\";", overlongTableName);
+    Check(Exec(writer.get(), createOverlongTable.c_str(), errorText), L"the fixture creates an identifier above the exact-identity cap", success);
+    const auto overlongIdentifierOpen = ViewerSqliteEngine::DatabaseSource::OpenFromPath(databasePath, L"overlong.sqlite");
+    Check(overlongIdentifierOpen.hr == HRESULT_FROM_WIN32(ERROR_BUFFER_OVERFLOW),
+          L"snapshot opening rejects an identifier that cannot be retained exactly",
+          success);
+    Check(Exec(writer.get(), dropOverlongTable.c_str(), errorText), L"the fixture removes the overlong identifier", success);
+
+    BuiltinFileSystemStub virtualWalFileSystem(databasePath, false);
+    const auto virtualWal = ViewerSqliteEngine::OpenFromViewerContext(&virtualWalFileSystem, L"virtual.sqlite", false);
+    Check(virtualWal.hr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED),
+          L"virtual byte-copy refuses a WAL-mode main file without an atomic sidecar snapshot",
+          success);
+
+    opened.source.reset();
+    Check(! std::filesystem::exists(snapshotPath), L"closing the source deterministically removes its private temporary snapshot", success);
+
+    liveGuard.source.reset();
+    if (! liveGuardPath.empty())
+    {
+        Check(! std::filesystem::exists(liveGuardPath), L"closing the live guard deterministically removes its private snapshot", success);
+    }
+
+    Check(Exec(writer.get(), "DELETE FROM bigdata WHERE id >= 751;", errorText), L"WAL snapshot fixture removes concurrent rows", success);
+    Check(Exec(writer.get(), "PRAGMA wal_checkpoint(TRUNCATE);", errorText), L"WAL snapshot fixture checkpoints cleanup changes", success);
+    Check(Exec(writer.get(), "PRAGMA journal_mode=DELETE;", errorText), L"WAL snapshot fixture returns to single-file rollback mode", success);
+    writer.reset();
+
+    BuiltinFileSystemStub virtualRollbackFileSystem(databasePath, false);
+    auto virtualRollback = ViewerSqliteEngine::OpenFromViewerContext(&virtualRollbackFileSystem, L"virtual.sqlite", false);
+    Check(SUCCEEDED(virtualRollback.hr) && virtualRollback.source != nullptr,
+          L"virtual single-file rollback database opens through a bounded private byte snapshot",
+          success);
+    if (virtualRollback.source)
+    {
+        const std::filesystem::path virtualSnapshotPath = virtualRollback.source->GetLocalPath();
+        Check(virtualRollback.source->GetDebugSnapshot().snapshotKind == ViewerSqliteEngine::SnapshotKind::VirtualByteCopy,
+              L"virtual open records the byte-copy snapshot limitation",
+              success);
+        virtualRollback.source.reset();
+        Check(! std::filesystem::exists(virtualSnapshotPath), L"virtual snapshot cleanup removes its temporary file", success);
+    }
+
+    BuiltinFileSystemStub virtualTooLarge(databasePath, false, FileReaderFault::AdvertiseTooLarge);
+    const auto tooLarge = ViewerSqliteEngine::OpenFromViewerContext(&virtualTooLarge, L"virtual.sqlite", false);
+    Check(tooLarge.hr == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE),
+          L"virtual snapshots reject an advertised size above the byte ceiling before allocating a copy buffer",
+          success);
+
+    BuiltinFileSystemStub virtualWrongSeek(databasePath, false, FileReaderFault::SeekReturnsWrongPosition);
+    const auto wrongSeek = ViewerSqliteEngine::OpenFromViewerContext(&virtualWrongSeek, L"virtual.sqlite", false);
+    Check(wrongSeek.hr == HRESULT_FROM_WIN32(ERROR_SEEK), L"virtual snapshots require the reader rewind to report position zero", success);
+
+    BuiltinFileSystemStub virtualOverRead(databasePath, false, FileReaderFault::ReadReturnsTooManyBytes);
+    const auto overRead = ViewerSqliteEngine::OpenFromViewerContext(&virtualOverRead, L"virtual.sqlite", false);
+    Check(overRead.hr == HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
+          L"virtual snapshots reject a provider that reports more bytes than the requested chunk",
+          success);
+
+    std::atomic_uint64_t cancelledGeneration{2u};
+    BuiltinFileSystemStub virtualCancelled(databasePath, false);
+    const auto cancelledCopy = ViewerSqliteEngine::OpenFromViewerContext(
+        &virtualCancelled, L"virtual.sqlite", false, ViewerSqliteEngine::QueryCancellation{&cancelledGeneration, 1u});
+    Check(cancelledCopy.hr == HRESULT_FROM_WIN32(ERROR_CANCELLED),
+          L"virtual snapshot copying honors generation cancellation before proportional I/O",
+          success);
 
     return success;
 }
@@ -2674,7 +3179,7 @@ int wmain(int argc, wchar_t** argv)
         return 1;
     }
 
-    const auto opened = ViewerSqliteEngine::DatabaseSource::OpenFromPath(tempDb.path, L"test.sqlite", false);
+    const auto opened = ViewerSqliteEngine::DatabaseSource::OpenFromPath(tempDb.path, L"test.sqlite");
     if (FAILED(opened.hr) || ! opened.source)
     {
         std::wcerr << std::format(L"Failed to open test database: {}\n", opened.errorText);
@@ -2716,6 +3221,16 @@ int wmain(int argc, wchar_t** argv)
     {
         success = runNamedSourceTest(L"TestReadOnlyQueries", TestReadOnlyQueries) && success;
     }
+    if (shouldRun(L"TestSnapshotConnectionBoundsCancellationAndSanitization"))
+    {
+        success = runNamedSourceTest(L"TestSnapshotConnectionBoundsCancellationAndSanitization",
+                                     TestSnapshotConnectionBoundsCancellationAndSanitization) &&
+                  success;
+    }
+    if (shouldRun(L"TestLocalWalSnapshotVirtualLimitsAndStaleScavenging"))
+    {
+        success = runNamedViewerTest(L"TestLocalWalSnapshotVirtualLimitsAndStaleScavenging", TestLocalWalSnapshotVirtualLimitsAndStaleScavenging) && success;
+    }
     if (shouldRun(L"TestViewerWindowUsesDxUiHostWithNoVisibleChildControls"))
     {
         success =
@@ -2754,12 +3269,7 @@ int wmain(int argc, wchar_t** argv)
 
     std::wcout << (success ? L"ViewerSqliteTests passed.\n" : L"ViewerSqliteTests failed.\n") << std::flush;
 
-    if (! tempDb.path.empty())
-    {
-        std::error_code ec;
-        std::filesystem::remove(tempDb.path, ec);
-        tempDb.path.clear();
-    }
+    tempDb.Reset();
 
     return success ? 0 : 1;
 }

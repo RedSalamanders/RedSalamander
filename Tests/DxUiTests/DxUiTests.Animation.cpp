@@ -75,7 +75,7 @@ public:
             return;
         }
 
-        _path = FindRepoRootForDxUiTests() / L"Specs" / L"TestRuns" / L"local_scratch" / L"dxui_animation_scheduler_testlocal_20260519.jsonl";
+        _path = GetDxUiTestArtifactPath(L"dxui_animation_scheduler_testlocal.jsonl");
         std::error_code ec;
         std::filesystem::remove(_path, ec);
         Debug::Perf::ConfigureJsonlOutput(_path, L"DxUiTests", L"Debug");

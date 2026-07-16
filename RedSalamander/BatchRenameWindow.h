@@ -62,31 +62,31 @@ enum class BatchRenameDebugPreviewCopyKind
 
 struct BatchRenameDebugSnapshot
 {
-    bool usesDxUiHost              = false;
-    bool rootNavigationVisible     = false;
+    bool usesDxUiHost                     = false;
+    bool rootNavigationVisible            = false;
     bool rootNavigationUsesNavigationView = false;
-    bool ruleControlsVisible       = false;
-    bool ruleHelperButtonsVisible  = false;
-    bool rulesModeSelected         = false;
-    bool manualModeSelected        = false;
-    bool manualControlsVisible     = false;
-    bool renameButtonEnabled       = false;
-    bool hideUnchangedRows         = false;
-    bool previewRebuildPending     = false;
-    bool hasExecutionReport        = false;
-    size_t visibleChildWindowCount = 0u;
-    size_t previewRowCount         = 0u;
-    size_t previewIconCellCount    = 0u;
-    size_t changedRowCount         = 0u;
-    size_t errorRowCount           = 0u;
-    size_t warningRowCount         = 0u;
-    size_t lastExecutionTotalRows  = 0u;
-    size_t lastExecutionCompletedRows = 0u;
-    size_t lastExecutionSkippedRows   = 0u;
-    size_t lastExecutionFailedRows    = 0u;
-    size_t lastExecutionUndoRowCount  = 0u;
-    HRESULT lastExecutionFirstFailure = S_OK;
-    bool lastExecutionCanceled        = false;
+    bool ruleControlsVisible              = false;
+    bool ruleHelperButtonsVisible         = false;
+    bool rulesModeSelected                = false;
+    bool manualModeSelected               = false;
+    bool manualControlsVisible            = false;
+    bool renameButtonEnabled              = false;
+    bool hideUnchangedRows                = false;
+    bool previewRebuildPending            = false;
+    bool hasExecutionReport               = false;
+    size_t visibleChildWindowCount        = 0u;
+    size_t previewRowCount                = 0u;
+    size_t previewIconCellCount           = 0u;
+    size_t changedRowCount                = 0u;
+    size_t errorRowCount                  = 0u;
+    size_t warningRowCount                = 0u;
+    size_t lastExecutionTotalRows         = 0u;
+    size_t lastExecutionCompletedRows     = 0u;
+    size_t lastExecutionSkippedRows       = 0u;
+    size_t lastExecutionFailedRows        = 0u;
+    size_t lastExecutionUndoRowCount      = 0u;
+    HRESULT lastExecutionFirstFailure     = S_OK;
+    bool lastExecutionCanceled            = false;
     std::wstring lastExecutionFirstFailureText;
     std::vector<std::wstring> previewColumnIds;
     std::vector<std::wstring> originalNames;
@@ -110,11 +110,11 @@ struct BatchRenameDebugSnapshot
     bool includeSubdirectories = false;
     bool includeFiles          = true;
     bool includeFolders        = false;
-    bool regexEnabled      = false;
-    bool caseSensitive     = false;
-    bool wholeWords        = false;
-    bool replaceOnce       = false;
-    bool excludeExtension  = false;
+    bool regexEnabled          = false;
+    bool caseSensitive         = false;
+    bool wholeWords            = false;
+    bool replaceOnce           = false;
+    bool excludeExtension      = false;
     std::wstring fileNameCaseText;
     std::wstring extensionCaseText;
 };
@@ -164,12 +164,11 @@ void DebugClearBatchRenameWindowDestinationProbeFailurePath() noexcept;
                                                           bool includeFiles,
                                                           bool includeFolders,
                                                           BatchRenameDebugCollectionResult& out);
-[[nodiscard]] bool DebugRefreshBatchRenameTargetsAfterExecutionForTests(
-    const FileSystemPathIdentity& pathIdentity,
-    std::vector<BatchRename::Target>& targets,
-    std::span<const std::filesystem::path> successfulSourcePaths,
-    std::span<const std::filesystem::path> successfulTargetPaths,
-    const std::filesystem::path& root,
-    size_t& refreshedRows,
-    uint64_t& identityComparisons) noexcept;
+[[nodiscard]] bool DebugRefreshBatchRenameTargetsAfterExecutionForTests(const FileSystemPathIdentity& pathIdentity,
+                                                                        std::vector<BatchRename::Target>& targets,
+                                                                        std::span<const std::filesystem::path> successfulSourcePaths,
+                                                                        std::span<const std::filesystem::path> successfulTargetPaths,
+                                                                        const std::filesystem::path& root,
+                                                                        size_t& refreshedRows,
+                                                                        uint64_t& identityComparisons) noexcept;
 #endif

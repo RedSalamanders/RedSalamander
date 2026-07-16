@@ -484,7 +484,7 @@ void TestAttachedGridPaintHandlesDegenerateScrollbarTracks()
 #endif
 }
 
-void TestGridHidesBottomClippedTrailingRow()
+void TestGridIncludesBottomClippedTrailingRow()
 {
     using namespace RedSalamander::DxUi;
 
@@ -495,10 +495,12 @@ void TestGridHidesBottomClippedTrailingRow()
     MultiRowGridModel model(10u);
     grid.SetModel(&model);
 
-    Require(grid.GetVisibleRowCount() == 4u, "grid hides a bottom-clipped trailing row instead of counting it as visible");
+    Require(grid.GetVisibleRowCount() == 5u, "grid counts a bottom-clipped trailing row as visible");
     Require(grid.GetVisibleRowAt(3u).has_value() && grid.GetVisibleRowAt(3u).value() == 3u, "grid keeps the last fully visible row addressable");
-    Require(! grid.GetVisibleRowAt(4u).has_value(), "grid does not expose a partially clipped trailing row as visible");
-    Require(! grid.GetVisibleRowRect(4u).has_value(), "grid does not report geometry for a bottom-clipped trailing row");
+    Require(grid.GetVisibleRowAt(4u).has_value() && grid.GetVisibleRowAt(4u).value() == 4u, "grid exposes a partially clipped trailing row as visible");
+    const std::optional<D2D1_RECT_F> clippedRowRect = grid.GetVisibleRowRect(4u);
+    Require(clippedRowRect.has_value(), "grid reports geometry for a bottom-clipped trailing row");
+    Require(clippedRowRect->bottom > clippedRowRect->top, "grid bottom-clipped trailing row geometry has area");
 }
 
 class LargeIconBadgeGridModel final : public RedSalamander::DxUi::IDxGridModel
@@ -560,6 +562,83 @@ private:
     float _columnWidthDip = 96.0f;
 };
 
+class CellDataStorageProbeGridModel final : public RedSalamander::DxUi::IDxGridModel
+{
+public:
+    CellDataStorageProbeGridModel(size_t rowCount, size_t columnCount, float columnWidthDip)
+        : _rowCount(rowCount),
+          _columnCount(columnCount),
+          _columnWidthDip(columnWidthDip),
+          _payload(512u, L'x')
+    {
+    }
+
+    [[nodiscard]] size_t GetRowCount() const noexcept override
+    {
+        return _rowCount;
+    }
+
+    [[nodiscard]] size_t GetColumnCount() const noexcept override
+    {
+        return _columnCount;
+    }
+
+    [[nodiscard]] RedSalamander::DxUi::GridColumnDesc GetColumn(size_t columnIndex) const override
+    {
+        RedSalamander::DxUi::GridColumnDesc column;
+        column.id       = L"probe-" + std::to_wstring(columnIndex);
+        column.title    = L"Probe " + std::to_wstring(columnIndex);
+        column.widthDip = _columnWidthDip;
+        return column;
+    }
+
+    void GetCellData(size_t /*rowIndex*/, size_t /*columnIndex*/, RedSalamander::DxUi::GridCellData& outCell) const override
+    {
+        ++_cellDataReadCount;
+        if (outCell.text.capacity() < _payload.size())
+        {
+            ++_freshTextStorageCount;
+        }
+
+        outCell.kind = RedSalamander::DxUi::GridCellKind::Text;
+        outCell.text = _payload;
+    }
+
+    [[nodiscard]] std::optional<size_t> FindRowByStableId(uint64_t rowId) const noexcept override
+    {
+        if (rowId >= _rowCount)
+        {
+            return std::nullopt;
+        }
+
+        return static_cast<size_t>(rowId);
+    }
+
+    void ResetProbe() const noexcept
+    {
+        _cellDataReadCount     = 0u;
+        _freshTextStorageCount = 0u;
+    }
+
+    [[nodiscard]] uint64_t CellDataReadCount() const noexcept
+    {
+        return _cellDataReadCount;
+    }
+
+    [[nodiscard]] uint64_t FreshTextStorageCount() const noexcept
+    {
+        return _freshTextStorageCount;
+    }
+
+private:
+    size_t _rowCount      = 0u;
+    size_t _columnCount   = 0u;
+    float _columnWidthDip = 96.0f;
+    std::wstring _payload;
+    mutable uint64_t _cellDataReadCount     = 0u;
+    mutable uint64_t _freshTextStorageCount = 0u;
+};
+
 void TestAttachedLargeGridVisibleWorkStaysBoundedAfterScroll()
 {
     using namespace RedSalamander::DxUi;
@@ -584,9 +663,9 @@ void TestAttachedLargeGridVisibleWorkStaysBoundedAfterScroll()
     }
 
     const GridVisibleWorkMetrics metrics = grid->GetVisibleWorkMetrics();
-    Require(metrics.visibleRowCount == 4u, "attached large grid keeps visible row count bounded after scrolling");
+    Require(metrics.visibleRowCount == 5u, "attached large grid keeps visible row count bounded after scrolling");
     Require(metrics.visibleColumnCount == 4u, "attached large grid keeps visible column count bounded after scrolling");
-    Require(metrics.visibleCellCount == 16u, "attached large grid keeps visible cell work bounded after scrolling");
+    Require(metrics.visibleCellCount == 20u, "attached large grid keeps visible cell work bounded after scrolling");
     Require(metrics.hasVerticalScrollbar, "attached large grid still reports a vertical scrollbar after scrolling");
     Require(metrics.hasHorizontalScrollbar, "attached large grid still reports a horizontal scrollbar after scrolling");
 
@@ -599,6 +678,43 @@ void TestAttachedLargeGridVisibleWorkStaysBoundedAfterScroll()
 #ifdef _DEBUG
     Require(window.Host().DebugGetRenderCount() > initialRenderCount, "attached large grid repaints after scrolling");
     Require(window.Host().DebugGetResizeFailureCount() == 0u, "attached large grid scrolling and repainting does not cause DX host resize failures");
+#endif
+}
+
+void TestAttachedLargeGridPaintReusesCellDataStringStorage()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    auto root  = std::make_unique<Grid>();
+    auto* grid = root.get();
+    grid->SetBounds(D2D1::RectF(0.0f, 0.0f, 320.0f, 160.0f));
+    grid->SetRowHeightDip(24.0f);
+
+    CellDataStorageProbeGridModel model(1'000'000u, 64u, 96.0f);
+    grid->SetModel(&model);
+    window.Host().SetRoot(std::move(root));
+
+    ShowWindow(window.Hwnd(), SW_SHOWNOACTIVATE);
+    window.PumpMessages();
+
+#ifdef _DEBUG
+    const uint64_t initialRenderCount = window.Host().DebugGetRenderCount();
+#endif
+    model.ResetProbe();
+    RedrawWindow(window.Hwnd(), nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_UPDATENOW);
+    window.PumpMessages();
+
+    const uint64_t cellDataReads = model.CellDataReadCount();
+    const uint64_t freshStorage  = model.FreshTextStorageCount();
+    Require(cellDataReads > 1u, "attached large grid paint storage probe reads multiple visible cells");
+    Require(freshStorage > 0u, "attached large grid paint storage probe observes initial text storage growth");
+    Require(freshStorage < cellDataReads, "attached large grid paint reuses GridCellData text storage across visible cells");
+
+#ifdef _DEBUG
+    const uint64_t renderCountDelta = window.Host().DebugGetRenderCount() - initialRenderCount;
+    Require(renderCountDelta > 0u, "attached large grid paint storage probe repaints");
+    Require(freshStorage <= renderCountDelta, "attached large grid paint grows cell-data text storage at most once per repaint");
 #endif
 }
 
@@ -626,9 +742,9 @@ void TestAttachedLargeIconBadgeGridVisibleWorkStaysBoundedAfterScroll()
     }
 
     const GridVisibleWorkMetrics metrics = grid->GetVisibleWorkMetrics();
-    Require(metrics.visibleRowCount == 4u, "attached large icon/badge grid keeps visible row count bounded after scrolling");
+    Require(metrics.visibleRowCount == 5u, "attached large icon/badge grid keeps visible row count bounded after scrolling");
     Require(metrics.visibleColumnCount == 4u, "attached large icon/badge grid keeps visible column count bounded after scrolling");
-    Require(metrics.visibleCellCount == 16u, "attached large icon/badge grid keeps visible cell work bounded after scrolling");
+    Require(metrics.visibleCellCount == 20u, "attached large icon/badge grid keeps visible cell work bounded after scrolling");
     Require(metrics.visibleIconCellCount == metrics.visibleCellCount, "attached large icon/badge grid reports bounded visible icon work");
     Require(metrics.visibleBadgeCellCount == metrics.visibleCellCount, "attached large icon/badge grid reports bounded visible badge work");
     Require(metrics.hasVerticalScrollbar, "attached large icon/badge grid still reports a vertical scrollbar after scrolling");
@@ -721,9 +837,9 @@ void TestAttachedLargeGridLongRunScrollingStaysBoundedWithoutResizeChurn()
         }
 
         const GridVisibleWorkMetrics metrics = grid->GetVisibleWorkMetrics();
-        Require(metrics.visibleRowCount == 4u, "attached large grid long-run scrolling keeps visible row count bounded");
+        Require(metrics.visibleRowCount == 5u, "attached large grid long-run scrolling keeps visible row count bounded");
         Require(metrics.visibleColumnCount == 4u, "attached large grid long-run scrolling keeps visible column count bounded");
-        Require(metrics.visibleCellCount == 16u, "attached large grid long-run scrolling keeps visible cell work bounded");
+        Require(metrics.visibleCellCount == 20u, "attached large grid long-run scrolling keeps visible cell work bounded");
         Require(metrics.hasVerticalScrollbar, "attached large grid long-run scrolling keeps the vertical scrollbar active");
         Require(metrics.hasHorizontalScrollbar, "attached large grid long-run scrolling keeps the horizontal scrollbar active");
 
@@ -821,9 +937,9 @@ void TestAttachedLargeCheckboxGridVisibleWorkStaysBoundedAfterScroll()
     }
 
     const GridVisibleWorkMetrics metrics = grid->GetVisibleWorkMetrics();
-    Require(metrics.visibleRowCount == 4u, "attached large checkbox grid keeps visible row count bounded after scrolling");
+    Require(metrics.visibleRowCount == 5u, "attached large checkbox grid keeps visible row count bounded after scrolling");
     Require(metrics.visibleColumnCount == 2u, "attached large checkbox grid keeps visible column count bounded after scrolling");
-    Require(metrics.visibleCellCount == 8u, "attached large checkbox grid keeps visible cell work bounded after scrolling");
+    Require(metrics.visibleCellCount == 10u, "attached large checkbox grid keeps visible cell work bounded after scrolling");
     Require(metrics.hasVerticalScrollbar, "attached large checkbox grid still reports a vertical scrollbar after scrolling");
 
 #ifdef _DEBUG
@@ -937,9 +1053,9 @@ void TestAttachedLargeCheckboxGridLongRunScrollingStaysBoundedWithoutResizeChurn
         }
 
         const GridVisibleWorkMetrics metrics = grid->GetVisibleWorkMetrics();
-        Require(metrics.visibleRowCount == 4u, "attached large checkbox grid long-run scrolling keeps visible row count bounded");
+        Require(metrics.visibleRowCount == 5u, "attached large checkbox grid long-run scrolling keeps visible row count bounded");
         Require(metrics.visibleColumnCount == 2u, "attached large checkbox grid long-run scrolling keeps visible column count bounded");
-        Require(metrics.visibleCellCount == 8u, "attached large checkbox grid long-run scrolling keeps visible cell work bounded");
+        Require(metrics.visibleCellCount == 10u, "attached large checkbox grid long-run scrolling keeps visible cell work bounded");
         Require(metrics.hasVerticalScrollbar, "attached large checkbox grid long-run scrolling keeps the vertical scrollbar active");
 
         RedrawWindow(window.Hwnd(), nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_UPDATENOW);
@@ -1240,8 +1356,9 @@ void RunRenderingTests()
     runTest("TestDxUiAdvancedControlsVisualBaseline", TestDxUiAdvancedControlsVisualBaseline);
     runTest("TestAttachedComboBoxPopupHoverDoesNotRepaintWhenHoveredItemStaysTheSame", TestAttachedComboBoxPopupHoverDoesNotRepaintWhenHoveredItemStaysTheSame);
     runTest("TestAttachedGridPaintHandlesDegenerateScrollbarTracks", TestAttachedGridPaintHandlesDegenerateScrollbarTracks);
-    runTest("TestGridHidesBottomClippedTrailingRow", TestGridHidesBottomClippedTrailingRow);
+    runTest("TestGridIncludesBottomClippedTrailingRow", TestGridIncludesBottomClippedTrailingRow);
     runTest("TestAttachedLargeGridVisibleWorkStaysBoundedAfterScroll", TestAttachedLargeGridVisibleWorkStaysBoundedAfterScroll);
+    runTest("TestAttachedLargeGridPaintReusesCellDataStringStorage", TestAttachedLargeGridPaintReusesCellDataStringStorage);
     runTest("TestAttachedLargeIconBadgeGridVisibleWorkStaysBoundedAfterScroll", TestAttachedLargeIconBadgeGridVisibleWorkStaysBoundedAfterScroll);
     runTest("TestAttachedGridBottomScrollKeepsFirstVisibleRowFlushWithHeader", TestAttachedGridBottomScrollKeepsFirstVisibleRowFlushWithHeader);
     runTest("TestAttachedLargeGridLongRunScrollingStaysBoundedWithoutResizeChurn", TestAttachedLargeGridLongRunScrollingStaysBoundedWithoutResizeChurn);

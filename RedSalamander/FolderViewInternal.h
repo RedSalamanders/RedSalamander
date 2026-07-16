@@ -55,6 +55,7 @@
 
 #include "DxUi/DxUi.h"
 #include "DxUiThemePalette.h"
+#include "FileMetadataFormatting.h"
 #include "FolderView.h"
 #include "FolderViewEmptyStateLayout.h"
 #include "FolderViewVisualState.h"
@@ -322,61 +323,6 @@ HRESULT HrFromErrorCode(const std::error_code& ec)
     return HRESULT_FROM_WIN32(ERROR_GEN_FAILURE);
 }
 
-std::wstring FormatLocalTime(int64_t fileTime)
-{
-    if (fileTime <= 0)
-    {
-        return {};
-    }
-
-    ULARGE_INTEGER uli{};
-    uli.QuadPart = static_cast<ULONGLONG>(fileTime);
-
-    FILETIME ft{};
-    ft.dwLowDateTime  = uli.LowPart;
-    ft.dwHighDateTime = uli.HighPart;
-
-    FILETIME local{};
-    SYSTEMTIME st{};
-    if (! FileTimeToLocalFileTime(&ft, &local) || ! FileTimeToSystemTime(&local, &st))
-    {
-        return {};
-    }
-
-    return std::format(L"{:04d}-{:02d}-{:02d} {:02d}:{:02d}", st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute);
-}
-
-std::wstring FormatFileAttributes(DWORD attrs)
-{
-    std::wstring result;
-    result.reserve(10);
-
-    auto add = [&](DWORD flag, wchar_t ch)
-    {
-        if ((attrs & flag) != 0)
-        {
-            result.push_back(ch);
-        }
-    };
-
-    add(FILE_ATTRIBUTE_READONLY, L'R');
-    add(FILE_ATTRIBUTE_HIDDEN, L'H');
-    add(FILE_ATTRIBUTE_SYSTEM, L'S');
-    add(FILE_ATTRIBUTE_ARCHIVE, L'A');
-    add(FILE_ATTRIBUTE_COMPRESSED, L'C');
-    add(FILE_ATTRIBUTE_ENCRYPTED, L'E');
-    add(FILE_ATTRIBUTE_TEMPORARY, L'T');
-    add(FILE_ATTRIBUTE_OFFLINE, L'O');
-    add(FILE_ATTRIBUTE_REPARSE_POINT, L'P');
-
-    if (result.empty())
-    {
-        result = L"-";
-    }
-
-    return result;
-}
-
 std::wstring FileTypeLabel(std::wstring_view extension, bool isDirectory)
 {
     if (isDirectory)
@@ -418,12 +364,12 @@ std::wstring PadLeftToWidth(std::wstring_view text, size_t width)
 
 std::wstring BuildDetailsText(bool isDirectory, uint64_t sizeBytes, int64_t lastWriteTime, DWORD fileAttributes, size_t sizeSlotChars)
 {
-    const std::wstring timeText  = FormatLocalTime(lastWriteTime);
-    const std::wstring attrsText = FormatFileAttributes(fileAttributes);
+    const auto fields = Common::FileMetadata::FormatDisplayFields(
+        {.lastWriteTime100nsSince1601 = lastWriteTime, .fileAttributes = fileAttributes}, Common::FileMetadata::DisplayProfile::CompactDetails);
 
     if (isDirectory)
     {
-        return std::format(L"{} • {}", timeText, attrsText);
+        return std::format(L"{} • {}", fields.localTime, fields.attributes);
     }
 
     std::wstring sizeField;
@@ -437,7 +383,7 @@ std::wstring BuildDetailsText(bool isDirectory, uint64_t sizeBytes, int64_t last
         sizeField = FormatBytesCompact(sizeBytes);
     }
 
-    return std::format(L"{} • {} • {}", timeText, sizeField, attrsText);
+    return std::format(L"{} • {} • {}", fields.localTime, sizeField, fields.attributes);
 }
 
 [[nodiscard]] HWND NormalizeOwnerWindow(HWND owner) noexcept
@@ -861,7 +807,7 @@ private:
     void Cancel() noexcept
     {
         _result = {};
-        _done = true;
+        _done   = true;
         if (_hWnd && IsWindow(_hWnd.get()) != FALSE)
         {
             _hWnd.reset();
@@ -1101,6 +1047,147 @@ std::filesystem::path GenerateShortcutPath(const std::filesystem::path& folder, 
     }
     std::wstring candidate = std::format(L"{} - Shortcut{}.lnk", stem, suffix);
     return folder / candidate;
+}
+
+std::wstring BuildShellPersistSavePath(const std::filesystem::path& path)
+{
+    std::wstring normalized = path.wstring();
+    std::ranges::replace(normalized, L'/', L'\\');
+
+    if (normalized.size() < MAX_PATH || normalized.rfind(L"\\\\?\\", 0) == 0 || normalized.rfind(L"\\\\.\\", 0) == 0)
+    {
+        return normalized;
+    }
+
+    DWORD required = GetFullPathNameW(normalized.c_str(), 0, nullptr, nullptr);
+    if (required != 0)
+    {
+        std::wstring absolute(static_cast<size_t>(required) + 1u, L'\0');
+        const DWORD written = GetFullPathNameW(normalized.c_str(), static_cast<DWORD>(absolute.size()), absolute.data(), nullptr);
+        if (written != 0)
+        {
+            absolute.resize(static_cast<size_t>(written));
+            normalized = std::move(absolute);
+        }
+    }
+
+    if (normalized.rfind(L"\\\\?\\", 0) == 0 || normalized.rfind(L"\\\\.\\", 0) == 0)
+    {
+        return normalized;
+    }
+    if (normalized.rfind(L"\\\\", 0) == 0)
+    {
+        return L"\\\\?\\UNC\\" + normalized.substr(2);
+    }
+    return L"\\\\?\\" + normalized;
+}
+
+HRESULT QueryShellShortcutExactPathExists(const std::filesystem::path& linkPath, bool& exists)
+{
+    exists = false;
+
+    const std::wstring linkPathText = BuildShellPersistSavePath(linkPath);
+    const DWORD attributes          = GetFileAttributesW(linkPathText.c_str());
+    if (attributes != INVALID_FILE_ATTRIBUTES)
+    {
+        exists = true;
+        return S_OK;
+    }
+
+    const DWORD error = GetLastError();
+    if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND)
+    {
+        return S_OK;
+    }
+
+    return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_ACCESS_DENIED);
+}
+
+HRESULT VerifyShellShortcutExactPath(const std::filesystem::path& linkPath) noexcept
+{
+    bool exists = false;
+    const HRESULT hr = QueryShellShortcutExactPathExists(linkPath, exists);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    if (exists)
+    {
+        return S_OK;
+    }
+
+    Debug::Warning(L"Shell shortcut save reported success but did not create the requested path '{}'.", linkPath.wstring());
+    return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
+}
+
+HRESULT CreateShellPersistTempPath(std::filesystem::path& tempPath) noexcept
+{
+    tempPath.clear();
+
+    std::array<wchar_t, MAX_PATH> tempDirectory{};
+    const DWORD tempDirectoryLength = GetTempPathW(static_cast<DWORD>(tempDirectory.size()), tempDirectory.data());
+    if (tempDirectoryLength == 0 || tempDirectoryLength >= tempDirectory.size())
+    {
+        const DWORD error = GetLastError();
+        return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_FILENAME_EXCED_RANGE);
+    }
+
+    std::array<wchar_t, MAX_PATH> tempFile{};
+    if (GetTempFileNameW(tempDirectory.data(), L"rsl", 0, tempFile.data()) == 0)
+    {
+        return HRESULT_FROM_WIN32(GetLastError());
+    }
+
+    tempPath = tempFile.data();
+    // Keep the GetTempFileName reservation in place until IPersistFile::Save overwrites it.
+    // Deleting it here creates a name-stealing race between reservation and save.
+    return S_OK;
+}
+
+HRESULT SaveShellShortcutExactPath(IPersistFile* persist, const std::filesystem::path& linkPath) noexcept
+{
+    if (! persist)
+    {
+        return E_POINTER;
+    }
+
+    std::filesystem::path tempPath;
+    HRESULT hr = CreateShellPersistTempPath(tempPath);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    auto cleanupTemp = wil::scope_exit([&]() noexcept
+    {
+        if (! tempPath.empty())
+        {
+            static_cast<void>(DeleteFileW(tempPath.c_str()));
+        }
+    });
+
+    hr = persist->Save(tempPath.c_str(), TRUE);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    hr = VerifyShellShortcutExactPath(tempPath);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    const std::wstring tempSavePath = BuildShellPersistSavePath(tempPath);
+    const std::wstring linkSavePath = BuildShellPersistSavePath(linkPath);
+    if (MoveFileExW(tempSavePath.c_str(), linkSavePath.c_str(), MOVEFILE_COPY_ALLOWED | MOVEFILE_WRITE_THROUGH) == 0)
+    {
+        return HRESULT_FROM_WIN32(GetLastError());
+    }
+
+    static_cast<void>(cleanupTemp.release());
+    return VerifyShellShortcutExactPath(linkPath);
 }
 
 void ConfigureLabelLayout(IDWriteTextLayout* layout, IDWriteInlineObject* ellipsisSign, bool enableEllipsisTrimming = true)

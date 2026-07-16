@@ -15,6 +15,7 @@
 #include "Helpers.h"
 #include "UiMetrics.h"
 #include "WindowMessages.h"
+#include "WindowSizing.h"
 #include "resource.h"
 
 namespace
@@ -68,38 +69,7 @@ struct PromptDebugHostRect
 
 [[nodiscard]] std::wstring TrimWhitespace(std::wstring_view text) noexcept
 {
-    size_t start = 0u;
-    while (start < text.size() && std::iswspace(static_cast<wint_t>(text[start])) != 0)
-    {
-        ++start;
-    }
-
-    size_t end = text.size();
-    while (end > start && std::iswspace(static_cast<wint_t>(text[end - 1u])) != 0)
-    {
-        --end;
-    }
-
-    return std::wstring(text.substr(start, end - start));
-}
-
-void CenterWindowOnOwner(HWND window, HWND owner) noexcept
-{
-    if (! window || IsWindow(window) == FALSE || ! owner || IsWindow(owner) == FALSE)
-    {
-        return;
-    }
-
-    RECT ownerRect{};
-    RECT windowRect{};
-    if (GetWindowRect(owner, &ownerRect) == FALSE || GetWindowRect(window, &windowRect) == FALSE)
-    {
-        return;
-    }
-
-    const int x = ownerRect.left + (((ownerRect.right - ownerRect.left) - (windowRect.right - windowRect.left)) / 2);
-    const int y = ownerRect.top + (((ownerRect.bottom - ownerRect.top) - (windowRect.bottom - windowRect.top)) / 2);
-    SetWindowPos(window, nullptr, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+    return StringUtils::TrimWhitespaceCopy(text);
 }
 
 [[maybe_unused]] [[nodiscard]] size_t CountVisibleChildWindows(HWND hwnd) noexcept
@@ -149,7 +119,7 @@ void CenterWindowOnOwner(HWND window, HWND owner) noexcept
     return counter.count;
 }
 
-[[nodiscard]] ThemePalette MakeDxPalette(const AppTheme& theme) noexcept
+[[nodiscard]] ThemePalette MakeCredentialPromptDxPalette(const AppTheme& theme) noexcept
 {
     const auto mix = [](const D2D1_COLOR_F& a, const D2D1_COLOR_F& b, float t) noexcept
     {
@@ -157,10 +127,11 @@ void CenterWindowOnOwner(HWND window, HWND owner) noexcept
         return D2D1::ColorF(a.r + ((b.r - a.r) * clamped), a.g + ((b.g - a.g) * clamped), a.b + ((b.b - a.b) * clamped), a.a + ((b.a - a.a) * clamped));
     };
 
-    ThemePalette palette          = RedSalamander::DxUi::MakeDefaultThemePalette(theme.dark);
-    palette.dark                  = theme.dark;
-    palette.highContrast          = theme.highContrast;
-    palette.accent                = theme.accent;
+    ThemePalette palette = RedSalamander::DxUi::MakeDefaultThemePalette(theme.dark);
+    palette.dark         = theme.dark;
+    palette.highContrast = theme.highContrast;
+    palette.accent       = theme.accent;
+    RedSalamander::DxUi::RefreshAccentVariants(palette, theme.dark);
     palette.windowBackground      = ColorFromCOLORREF(theme.windowBackground);
     palette.surfaceBackground     = ColorFromCOLORREF(UiMetrics::GetControlSurfaceColor(theme));
     palette.headerBackground      = ColorFromCOLORREF(theme.menu.background);
@@ -229,6 +200,7 @@ private:
     void CloseDeferred() noexcept;
     void Confirm() noexcept;
     void Cancel() noexcept;
+    void ClearControlPointers() noexcept;
     [[nodiscard]] LRESULT WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
 #ifdef ENABLE_TESTS
     [[nodiscard]] LRESULT OnDebugMessage(WPARAM command, LPARAM payload) noexcept;
@@ -319,7 +291,26 @@ ConnectionCredentialPromptWindow::ConnectionCredentialPromptWindow(HWND ownerWin
 
 ConnectionCredentialPromptWindow::~ConnectionCredentialPromptWindow() noexcept
 {
+    if (_hWnd)
+    {
+        _hWnd.reset();
+    }
+    ClearControlPointers();
     SecureWipe::SecureClear(_acceptedSecret);
+}
+
+void ConnectionCredentialPromptWindow::ClearControlPointers() noexcept
+{
+    _root               = nullptr;
+    _messageLabel       = nullptr;
+    _userLabel          = nullptr;
+    _userField          = nullptr;
+    _secretLabel        = nullptr;
+    _secretField        = nullptr;
+    _toggleSecretButton = nullptr;
+    _validationLabel    = nullptr;
+    _okButton           = nullptr;
+    _cancelButton       = nullptr;
 }
 
 HRESULT ConnectionCredentialPromptWindow::ShowModal(std::wstring& userNameOut, std::wstring& secretOut) noexcept
@@ -382,7 +373,7 @@ HRESULT ConnectionCredentialPromptWindow::ShowModal(std::wstring& userNameOut, s
         _hWnd.reset(hwnd);
     }
 
-    CenterWindowOnOwner(_hWnd.get(), _ownerWindow);
+    static_cast<void>(Common::WindowSizing::CenterExistingWindowOnOwner(_hWnd.get(), _ownerWindow));
     ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
     UpdateWindow(_hWnd.get());
     SetForegroundWindow(_hWnd.get());
@@ -394,12 +385,14 @@ HRESULT ConnectionCredentialPromptWindow::ShowModal(std::wstring& userNameOut, s
         if (getMessageResult == -1)
         {
             const DWORD lastError = Debug::ErrorWithLastError(L"ConnectionCredentialPrompt: GetMessageW failed.");
+            _hWnd.reset();
             return HRESULT_FROM_WIN32(lastError);
         }
         if (getMessageResult == 0)
         {
             _done   = true;
             _result = S_FALSE;
+            _hWnd.reset();
             PostQuitMessage(static_cast<int>(msg.wParam));
             break;
         }
@@ -491,7 +484,7 @@ void ConnectionCredentialPromptWindow::BuildUi() noexcept
 
 void ConnectionCredentialPromptWindow::ApplyTheme() noexcept
 {
-    _palette = MakeDxPalette(_theme);
+    _palette = MakeCredentialPromptDxPalette(_theme);
     _dxHost.SetTheme(_palette);
     if (_validationLabel)
     {
@@ -794,6 +787,7 @@ LRESULT ConnectionCredentialPromptWindow::WindowProc(HWND hwnd, UINT message, WP
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
         _dxHost.ReleaseMouseCapture();
         _dxHost.Detach();
+        ClearControlPointers();
         if (_hWnd.get() == hwnd)
         {
             static_cast<void>(_hWnd.release());

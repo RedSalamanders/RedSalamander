@@ -29,6 +29,19 @@ std::wstring GetPathDirectory(std::wstring_view path);
 PathInfo MakePathInfo(const std::wstring& path);
 PathInfo MakePathInfo(const wchar_t* path);
 
+struct StagedPromotionOptions
+{
+    bool allowReplaceReadOnly        = false;
+    bool preserveReplacementReadOnly = false;
+    bool replacementIsReparsePoint   = false;
+    bool stripTemporaryAttributes    = false;
+    bool ignoreReplaceMergeErrors    = true;
+};
+
+[[nodiscard]] HRESULT PromoteStagedTempIntoFinalPath(const std::wstring& tempPath,
+                                                     const std::wstring& finalPath,
+                                                     const StagedPromotionOptions& options) noexcept;
+
 // Module anchor for AcquireModuleReferenceFromAddress — keeps the DLL loaded
 // while background worker threads or threadpool callbacks are active.
 extern const int kFileSystemModuleAnchor;
@@ -38,6 +51,10 @@ extern const int kFileSystemModuleAnchor;
 void ShutdownSharedFileOpsJobScheduler() noexcept;
 
 #if defined(_DEBUG)
+void RunDebugPathNormalizationSelfTest(unsigned int& passed, unsigned int& failed) noexcept;
+void RunDebugReparseCopyErrorMappingSelfTest(unsigned int& passed, unsigned int& failed) noexcept;
+void RunDebugDirectorySizeErrorPolicySelfTest(unsigned int& passed, unsigned int& failed) noexcept;
 void RunDebugSharedFileOpsSchedulerShutdownSelfTest(unsigned int& passed, unsigned int& failed) noexcept;
+void RunDebugSearchServiceFallbackCandidateSelfTest(unsigned int& passed, unsigned int& failed) noexcept;
 #endif
 } // namespace FileSystemInternal

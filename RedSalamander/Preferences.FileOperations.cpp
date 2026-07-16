@@ -6,14 +6,13 @@
 
 #include <algorithm>
 #include <array>
-#include <format>
-#include <limits>
 #include <string>
 #include <string_view>
 #include <vector>
 
 #include "DxUi/DxUi.h"
 #include "Helpers.h"
+#include "ThroughputParsing.h"
 #include "UiMetrics.h"
 #include "resource.h"
 
@@ -32,9 +31,7 @@ using RedSalamander::DxUi::Panel;
 using RedSalamander::DxUi::TextField;
 using RedSalamander::DxUi::Toggle;
 
-constexpr uint64_t kKiB                      = 1024ull;
 constexpr uint64_t kMiB                      = 1024ull * 1024ull;
-constexpr uint64_t kGiB                      = 1024ull * 1024ull * 1024ull;
 constexpr size_t kBandwidthCustomPresetIndex = 7u;
 
 struct BandwidthPreset
@@ -101,16 +98,16 @@ struct FileOperationsDxPage
 
     void Detach() noexcept
     {
-        preCalcHeader   = nullptr;
-        preCalcEnabled  = {};
-        preCalcWorkers  = {};
-        bandwidthHeader = nullptr;
-        bandwidthPreset = {};
-        customBandwidth = {};
-        advancedHeader  = nullptr;
+        preCalcHeader      = nullptr;
+        preCalcEnabled     = {};
+        preCalcWorkers     = {};
+        bandwidthHeader    = nullptr;
+        bandwidthPreset    = {};
+        customBandwidth    = {};
+        advancedHeader     = nullptr;
         autoDismissSuccess = {};
-        bridgeBuffer    = {};
-        pluginHint      = {};
+        bridgeBuffer       = {};
+        pluginHint         = {};
     }
 };
 
@@ -127,138 +124,6 @@ struct FileOperationsDxPage
     }
 
     return text;
-}
-
-[[nodiscard]] bool EqualsIgnoreAsciiCase(std::wstring_view left, std::wstring_view right) noexcept
-{
-    if (left.size() != right.size())
-    {
-        return false;
-    }
-
-    for (size_t i = 0; i < left.size(); ++i)
-    {
-        const wchar_t lhs       = left[i];
-        const wchar_t rhs       = right[i];
-        const wchar_t lhsFolded = (lhs >= L'A' && lhs <= L'Z') ? static_cast<wchar_t>(lhs + (L'a' - L'A')) : lhs;
-        const wchar_t rhsFolded = (rhs >= L'A' && rhs <= L'Z') ? static_cast<wchar_t>(rhs + (L'a' - L'A')) : rhs;
-        if (lhsFolded != rhsFolded)
-        {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-[[nodiscard]] bool TryParseThroughputText(std::wstring_view text, uint64_t& outBytesPerSecond) noexcept
-{
-    constexpr uint64_t kTiB = 1024ull * 1024ull * 1024ull * 1024ull;
-    constexpr uint64_t kPiB = 1024ull * 1024ull * 1024ull * 1024ull * 1024ull;
-
-    outBytesPerSecond = 0;
-    text              = TrimAscii(text);
-    if (text.empty())
-    {
-        return true;
-    }
-
-    bool sawDigit          = false;
-    bool sawDecimal        = false;
-    double number          = 0.0;
-    double fractionalScale = 0.1;
-    size_t index           = 0;
-    for (; index < text.size(); ++index)
-    {
-        const wchar_t ch = text[index];
-        if (ch >= L'0' && ch <= L'9')
-        {
-            sawDigit                 = true;
-            const unsigned int digit = static_cast<unsigned int>(ch - L'0');
-            if (! sawDecimal)
-            {
-                number = (number * 10.0) + static_cast<double>(digit);
-            }
-            else
-            {
-                number += static_cast<double>(digit) * fractionalScale;
-                fractionalScale *= 0.1;
-            }
-            continue;
-        }
-
-        if ((ch == L'.' || ch == L',') && ! sawDecimal)
-        {
-            sawDecimal = true;
-            continue;
-        }
-
-        break;
-    }
-
-    if (! sawDigit)
-    {
-        return false;
-    }
-
-    std::wstring_view unit = TrimAscii(text.substr(index));
-    if (unit.size() >= 2)
-    {
-        const wchar_t penultimate = unit[unit.size() - 2];
-        const wchar_t last        = unit.back();
-        if (penultimate == L'/' && (last == L's' || last == L'S'))
-        {
-            unit.remove_suffix(2);
-            unit = TrimAscii(unit);
-        }
-    }
-
-    uint64_t multiplier = 0;
-    if (unit.empty() || EqualsIgnoreAsciiCase(unit, L"kb") || EqualsIgnoreAsciiCase(unit, L"k") || EqualsIgnoreAsciiCase(unit, L"kib"))
-    {
-        multiplier = kKiB;
-    }
-    else if (EqualsIgnoreAsciiCase(unit, L"b"))
-    {
-        multiplier = 1;
-    }
-    else if (EqualsIgnoreAsciiCase(unit, L"mb") || EqualsIgnoreAsciiCase(unit, L"m") || EqualsIgnoreAsciiCase(unit, L"mib"))
-    {
-        multiplier = kMiB;
-    }
-    else if (EqualsIgnoreAsciiCase(unit, L"gb") || EqualsIgnoreAsciiCase(unit, L"g") || EqualsIgnoreAsciiCase(unit, L"gib"))
-    {
-        multiplier = kGiB;
-    }
-    else if (EqualsIgnoreAsciiCase(unit, L"tb") || EqualsIgnoreAsciiCase(unit, L"t") || EqualsIgnoreAsciiCase(unit, L"tib"))
-    {
-        multiplier = kTiB;
-    }
-    else if (EqualsIgnoreAsciiCase(unit, L"pb") || EqualsIgnoreAsciiCase(unit, L"p") || EqualsIgnoreAsciiCase(unit, L"pib"))
-    {
-        multiplier = kPiB;
-    }
-    else
-    {
-        return false;
-    }
-
-    const double result = number * static_cast<double>(multiplier);
-    if (result <= 0.0)
-    {
-        outBytesPerSecond = 0;
-        return true;
-    }
-
-    constexpr double maxValue = static_cast<double>(std::numeric_limits<uint64_t>::max());
-    if (result >= maxValue)
-    {
-        outBytesPerSecond = std::numeric_limits<uint64_t>::max();
-        return true;
-    }
-
-    outBytesPerSecond = static_cast<uint64_t>(result + 0.5);
-    return true;
 }
 
 [[nodiscard]] bool TryParseUnsignedDecimal(std::wstring_view text, uint32_t minimum, uint32_t maximum, uint32_t& outValue) noexcept
@@ -304,31 +169,6 @@ struct FileOperationsDxPage
     }
 
     return kBandwidthCustomPresetIndex;
-}
-
-[[nodiscard]] std::wstring FormatThroughputText(const uint64_t bytesPerSecond) noexcept
-{
-    if (bytesPerSecond == 0)
-    {
-        return {};
-    }
-
-    if ((bytesPerSecond % kGiB) == 0)
-    {
-        return std::format(L"{} GiB/s", bytesPerSecond / kGiB);
-    }
-
-    if ((bytesPerSecond % kMiB) == 0)
-    {
-        return std::format(L"{} MiB/s", bytesPerSecond / kMiB);
-    }
-
-    if ((bytesPerSecond % kKiB) == 0)
-    {
-        return std::format(L"{} KiB/s", bytesPerSecond / kKiB);
-    }
-
-    return std::format(L"{} B/s", bytesPerSecond);
 }
 
 } // namespace
@@ -572,7 +412,8 @@ bool FileOperationsPane::EnsureDxHosts(HWND parent, PreferencesDialogState& stat
         }
 
         uint64_t parsedValue = 0;
-        if (! TryParseThroughputText(text, parsedValue))
+        if (! Common::Parsing::TryParseBinaryThroughputText(
+                text, Common::Parsing::ThroughputBoundaryWhitespacePolicy::ControlCharactersThroughSpace, parsedValue))
         {
             return;
         }
@@ -611,7 +452,8 @@ bool FileOperationsPane::EnsureDxHosts(HWND parent, PreferencesDialogState& stat
     dxState->page.autoDismissSuccess.description->SetMultiline(true);
     dxState->page.autoDismissSuccess.toggle = root->AddChild<Toggle>();
     dxState->page.autoDismissSuccess.title->SetMnemonicTarget(dxState->page.autoDismissSuccess.toggle);
-    dxState->page.autoDismissSuccess.toggle->SetStateLabels(LoadStringResource(nullptr, IDS_PREFS_COMMON_OFF), LoadStringResource(nullptr, IDS_PREFS_COMMON_ON));
+    dxState->page.autoDismissSuccess.toggle->SetStateLabels(LoadStringResource(nullptr, IDS_PREFS_COMMON_OFF),
+                                                            LoadStringResource(nullptr, IDS_PREFS_COMMON_ON));
     dxState->page.autoDismissSuccess.toggle->SetOnToggled([this, host = parent](bool checked) noexcept
     {
         if (! host || IsWindow(host) == FALSE)
@@ -722,7 +564,7 @@ void FileOperationsPane::ApplyDxTheme(const PreferencesDialogState& state) noexc
         return;
     }
 
-    _pageHostDx->SetTheme(PrefsUi::MakeDxPalette(state.theme));
+    _pageHostDx->SetTheme(MakeAppThemeDxPalette(state.theme));
 }
 
 void FileOperationsPane::SyncDxControlsFromState(const PreferencesDialogState& state) noexcept
@@ -764,7 +606,7 @@ void FileOperationsPane::SyncDxControlsFromState(const PreferencesDialogState& s
     page.customBandwidth.title->SetText(LoadStringResource(nullptr, IDS_PREFS_FILEOPS_BANDWIDTH_CUSTOM_TITLE));
     page.customBandwidth.description->SetText(LoadStringResource(nullptr, IDS_PREFS_FILEOPS_BANDWIDTH_CUSTOM_DESC));
     _syncingDxCustomBandwidthEdit = true;
-    page.customBandwidth.edit->SetText(FormatThroughputText(fileOperations.defaultBandwidthLimitBytesPerSecond));
+    page.customBandwidth.edit->SetText(Common::Parsing::FormatBinaryThroughputText(fileOperations.defaultBandwidthLimitBytesPerSecond));
     page.customBandwidth.edit->SetEnabled(_showCustomBandwidth);
     _syncingDxCustomBandwidthEdit = false;
 

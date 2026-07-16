@@ -53,10 +53,13 @@ extern "C"
 
 **Host behavior:**
 - If `RedSalamanderEnumeratePlugins` is present, the host calls it during discovery and registers one plugin entry per returned `PluginMetaData` record.
+- Because the returned array is borrowed and has no independently verifiable physical length, the host MUST reject a null metadata pointer or a reported count outside `1..kMaxEnumeratedPluginsPerModule` before reserving or indexing the array. Once the enumeration export is present, any failed or invalid enumeration rejects that module for the requested interface; the host MUST NOT reinterpret it as a legacy single-plugin factory.
 - When instantiating a plugin entry originating from enumeration, the host calls `RedSalamanderCreate` with `pluginId == metaData[i].id`.
 - If `RedSalamanderEnumeratePlugins` is missing, the host treats the DLL as a single-plugin factory and may call `RedSalamanderCreate` with `pluginId == nullptr`.
+- Optional-plugin directory discovery runs inside `noexcept` manager entry points and therefore MUST use the non-throwing `directory_iterator::increment(error_code)` form; a directory that becomes unavailable ends that discovery pass without terminating the process.
 
 **Plugin behavior:**
+- A successful enumeration MUST return a non-null metadata pointer and between `1` and `kMaxEnumeratedPluginsPerModule` metadata entries.
 - `RedSalamanderEnumeratePlugins` MUST return stable metadata pointers for the lifetime of the loaded DLL.
 - Because `PluginMetaData` stores raw `const wchar_t*` fields, a multi-plugin DLL MUST only point those fields at backing storage whose lifetime already matches the DLL lifetime. Do not populate `PluginMetaData.name` / `description` / other string fields from temporary or lambda-local `std::wstring` objects.
 - `RedSalamanderCreate` MUST return `HRESULT_FROM_WIN32(ERROR_NOT_FOUND)` (or `E_INVALIDARG`) for unknown `pluginId` values.
@@ -82,7 +85,14 @@ The optional module-level quiet-point exports from `Common/PlugInterfaces/Factor
 
 `FileSystemPluginManager` MUST unload existing plugin entries through its centralized quiet-point helper before rediscovery clears the plugin list. During process shutdown, the same helper honors `RedSalamanderPluginRetainModuleUntilProcessExit()` after normal COM instance release and `RedSalamanderPluginShutdown()`.
 
-Runtime settings refresh MUST release pane-owned file-system references first: close live viewers, clear FolderView/NavigationView file-system references and navigation callbacks, then rediscover file-system plugins, rediscover viewer plugins, and reload pane file-system instances.
+Runtime settings refresh MUST release pane-owned file-system references first: close live viewers, clear FolderView/NavigationView file-system references and navigation callbacks, then rediscover file-system plugins, rediscover viewer plugins, and reload pane file-system instances. The effective quiet-point sequence is: stop host producers, clear registration callbacks such as `INavigationMenu::SetCallback(nullptr, nullptr)`, cancel/drain watches or provider-owned async work, release COM instances, invoke optional module shutdown, unregister resources, then release the module unless process-shutdown retention is explicitly requested.
+
+A file-system threadpool callback that carries an owning module pin from
+`AcquireModuleReferenceFromAddress(...)` MUST call
+`TransferModulePinToCallbackReturn(instance, modulePin)` at callback entry. The helper transfers ownership to
+the Windows threadpool return boundary; destroying the last `wil::unique_hmodule` in plugin callback code can
+unmap that code before it returns. COM-apartment setup remains explicit per worker family and is not implied by
+the module-pin helper.
 
 Disabling a file-system plugin marks it unavailable for new selection and may switch the active plugin, but it MUST NOT `FreeLibrary` a loaded file-system DLL immediately because folders, navigation views, compare/search, or file-operation code may still hold external `IFileSystem` references. A later rediscovery or process shutdown performs centralized unload once the manager is closing plugin entries.
 
@@ -394,7 +404,7 @@ interface __declspec(uuid("a7c7d693-5ba9-4f4d-8e90-0a2d9d7e49e4"))
 // - The cookie is provided by the host at registration time and must be passed back verbatim by the plugin.
 interface __declspec(novtable) INavigationMenuCallback
 {
-    virtual HRESULT STDMETHODCALLTYPE RequestNavigate(
+    virtual HRESULT STDMETHODCALLTYPE NavigationMenuRequestNavigate(
         const wchar_t* path,
         void* cookie
     ) noexcept = 0;
@@ -406,10 +416,14 @@ interface __declspec(novtable) INavigationMenuCallback
 - The host calls `SetCallback(nullptr, nullptr)` when switching/unloading the active file system.
 - `SetCallback(nullptr, nullptr)` is the synchronous drain point for this registration-style callback: after it returns, the plugin must not invoke the previous callback again.
 - Any queued or background work that could still try to navigate must either complete before `SetCallback(nullptr, nullptr)` returns or self-drop as stale before invoking the callback.
-- Plugins can call `RequestNavigate(path, cookie)` (typically from `ExecuteMenuCommand`) to request navigation.
+- Plugins can call `NavigationMenuRequestNavigate(path, cookie)` (typically from `ExecuteMenuCommand`) to request navigation.
 - `path` is a **plugin path** for the active file system (no `<shortId>:` prefix).
 - The plugin MUST pass back the `cookie` it received in `SetCallback` unchanged.
 - The plugin MUST NOT call the callback after the host clears it via `SetCallback(nullptr, nullptr)`.
+- Implementations with queued callback delivery SHOULD use `RegistrationCallbackState<T>` for the common
+  generation/snapshot/in-flight/drain envelope. Callback invocation remains outside the state lock, and a
+  successful `TryEnter(...)` MUST be paired with `FinishInvoke()` on every return path. Provider-specific task
+  accounting, cancellation, and navigation policy remain outside this helper.
 
 **NavigationView behavior:**
 - Order is preserved exactly as provided by the plugin.
@@ -731,6 +745,15 @@ interface __declspec(uuid("2c7c32b3-8a0f-4e25-8d3a-6a5f1d0a1e2c"))
 };
 ```
 
+### Stream and Provider Data-Integrity Contracts
+
+- `IFileReader::GetSize()` returning `S_OK` is a size commitment. Readers that know the logical file length MUST fail reads that cannot supply bytes up to that committed length; premature EOF must surface as `HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY)`, `HRESULT_FROM_WIN32(ERROR_HANDLE_EOF)`, or a more specific failed HRESULT, never as a successful short transfer.
+- Providers that read object-store or HTTP-like ranged bodies MUST validate the expected byte count against both protocol metadata (for example `Content-Length` when present) and the body bytes delivered. Negative lengths, overlong bodies, and short bodies are provider data errors and MUST fail the read.
+- An object-store reader MAY recover from a metadata/HEAD access denial when ranged GET remains authorized. In that case it MUST leave size unknown until a successful range response, parse and validate the response `Content-Range` total and requested start/end, capture the response revision (`versionId` or ETag), and make `GetSize()` and reads fail if those proofs are absent or inconsistent. The S3 provider follows this path only for access denial; missing-object and other HEAD failures remain fatal.
+- Staged remote writers/uploads MUST treat `Commit()` as successful only after the staged object/file has been durably completed and the provider can prove the committed size matches the source size when the source size is known. Failed or mismatched staged uploads should clean up the staged object and return `HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY)`.
+- Archive providers MUST normalize archive entry keys to relative provider paths before indexing. Absolute/UNC/device-style keys, drive-qualified keys, empty path components, `.`/`..` components, NUL components, and stream/ADS-like colon components remain invalid archive data. Duplicate normalized keys and file/directory hierarchy collisions MUST resolve deterministically without exposing two objects at one path. FileSystem7z keeps the first indexed entry, warns and drops later duplicates, and drops a descendant when a first-indexed ancestor is a file; unaffected root entries remain browsable instead of rejecting the entire archive.
+- Providers whose current paths are not stable item identities (`pathTextStableIdentity = false`) MUST keep same-provider destructive or overwrite-capable mutations fail-closed unless the operation API carries and revalidates stable provider IDs.
+
 ### 4a. IFileWriter Interface (optional)
 
 **UUID:** `{b6f0a9e1-8c8b-4b72-9f3e-2f2b4b8b9c41}`
@@ -884,8 +907,11 @@ Current built-in provider declarations:
 | Curl SFTP/SCP (`builtin/file-system-sftp`, `builtin/file-system-scp`) | `true` | `ordinalCaseSensitive` | preferred `"/"`, accepts `"/"` | `supported` | POSIX-like remote paths are treated as exact UTF-16 component identities after protocol decoding. |
 | Curl FTP (`builtin/file-system-ftp`) | `true` | `ordinalCaseSensitive` (conservative default; the proven relation when the connection can determine it) | preferred `"/"`, accepts `"/"` | `supported` | FTP path text uniquely identifies items (no duplicate display names), so `pathTextStableIdentity` is `true`. Server case behavior varies, but the plugin MUST declare a concrete relation — never `unknown`. The conservative `ordinalCaseSensitive` default is data-safe (worst case: a spurious `ERROR_ALREADY_EXISTS` on a case-insensitive server, never an overwrite); the plugin SHOULD upgrade to the proven instance relation when it can (e.g. from server type/`FEAT`). |
 | Curl IMAP (`builtin/file-system-imap`) | `true` | `ordinalCaseSensitive` | preferred `"/"`, accepts `"/"` | `notApplicable` | Same-provider rename/move is unsupported. |
+| MTP/PTP (`builtin/file-system-mtp`) | `true` after the plugin encodes device/object identity suffixes | `ordinalCaseSensitive` | preferred `"/"`, accepts `"/"` plus `mtp:/`, `mtp://`, and slash-rooted input | `supported` only where the device accepts rename | WPD object display names may be duplicated; plugin paths MUST encode `devpuid:`/`devid:` device keys and `puid:`/`oid:` object suffixes before exposing stable path text. Ambiguous unsuffixed mutation fails closed. |
 | S3 (`builtin/file-system-s3`) | `true` | `ordinalCaseSensitive` | preferred `"/"`, accepts `"/"` | `supported` | Object keys are exact byte/text identities after the plugin's UTF-16 path decoding. |
 | S3 Table (`builtin/file-system-s3table`) | `true` | `ordinalCaseSensitive` | preferred `"/"`, accepts `"/"` | `notApplicable` | Same-provider mutation is unsupported. |
+
+Providers advertising `caseOnlyRename: "supported"` MUST execute a requested case-only leaf rename rather than collapse it as a self/no-op. Curl FTP/SFTP/SCP use their advertised case-sensitive path identity for self-rename detection. Microsoft Drive treats a same-item-id request with different leaf casing as a Graph name PATCH; only an exact textual source/destination match is a no-op.
 
 ### 4e. Transfer Hints (`IFileSystem::GetTransferHints`)
 
@@ -1052,6 +1078,7 @@ Computes the total size of a directory tree, optionally recursively.
 
 **Return Value:**
 - `S_OK`: Computation completed successfully.
+- `HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY)` (also stored in `result->status`): Computation completed with best-effort totals after one or more non-root descendants were skipped.
 - `HRESULT_FROM_WIN32(ERROR_CANCELLED)`: Operation was cancelled via callback.
 - `HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND)`: Path does not exist.
 - `HRESULT_FROM_WIN32(ERROR_DIRECTORY)`: Path is not a directory.
@@ -1062,6 +1089,8 @@ Computes the total size of a directory tree, optionally recursively.
 - Plugins SHOULD report progress every 100 entries OR every 200ms, whichever comes first.
 - Progress callback includes current totals and the path currently being scanned.
 - Plugins MUST check `DirectorySizeShouldCancel` after each progress report.
+- When `callback` is non-null, plugins MUST report progress before cancellation checks so cancel/failure paths expose the latest known totals and current path.
+- On successful completion, plugins MUST emit one final progress callback with `currentPath == nullptr` and final totals before returning.
 
 **Callback Interface:**
 - `IFileSystemDirectorySizeCallback` is NOT a COM interface (no `IUnknown` inheritance).
@@ -1070,7 +1099,7 @@ Computes the total size of a directory tree, optionally recursively.
 
 **Implementation Notes:**
 - Plugins SHOULD skip reparse points (symlinks, junctions) to avoid infinite loops.
-- Plugins SHOULD continue on access errors for individual subdirectories (report first error in `result->status`).
+- Plugins SHOULD continue siblings after access-denied, path-vanished, sharing/lock, transient network, or device-not-ready errors for individual descendants and report `HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY)` both as the call result and in `result->status`, while preserving totals for entries that were successfully observed. Missing or denied root paths and structural/global failures remain hard failures.
 - The `directoryCount` field excludes the root directory itself.
 
 **Host usage:**
@@ -1150,6 +1179,15 @@ interface __declspec(uuid("0d9ef549-4e54-4086-8a5c-f9d3e6120211"))
 **Plugin Implementation Guidance (Internal Writer Path):**
 - The plugin implementation should use a private/internal “begin write” + “commit” path to build the buffer during `ReadDirectoryInfo()`, rather than mutating state in `GetBuffer()`.
 - This writer API is **not** part of the public COM interface and must not be called by the host.
+- Buffered provider facades for 7z, Curl, Google Drive, Microsoft Drive, MTP, and S3 use
+  `Common::Plugins::PackedFileInfoBuffer` for checked aggregate/name sizing, `alignof(FileInfo)` entry layout,
+  zero/single/multi-entry construction, common query behavior, and bounded `NextEntryOffset` traversal.
+  Providers sort and populate metadata before/through that owner; those policies are not shared.
+- Local `FilesInformation` remains a resumable streaming/native-enumeration buffer, and FileSystemDummy retains
+  its prebuilt fixture-buffer model. They are intentionally not adapters over `PackedFileInfoBuffer`.
+- Packed builders MUST reject arithmetic overflow before allocation or offset conversion. Indexed traversal MUST
+  reject odd UTF-16 byte counts, short/unaligned offsets, and offsets beyond the committed buffer with
+  `HRESULT_FROM_WIN32(ERROR_INVALID_DATA)`.
 
 **Usage Pattern (Primary Method - NextEntryOffset Traversal):**
 
@@ -1288,6 +1326,10 @@ typedef struct FileSystemOptions
     // 0 = unlimited (use all available bandwidth).
     // Callbacks receive an in/out FileSystemOptions* so the caller can tweak it on progress updates.
     uint64_t bandwidthLimitBytesPerSecond;
+
+    // 0 = plugin default. Non-zero clamps copy/move fan-out for the whole call, including recursive
+    // work a plugin schedules internally under one top-level host item.
+    uint32_t copyMoveMaxConcurrency;
 } FileSystemOptions;
 
 typedef struct FileSystemRenamePair
@@ -1322,14 +1364,16 @@ typedef struct FileSystemArena
 - For this in-repo ABI sweep, `sizeBytes != sizeof(StructName)` is treated as a contract violation and implementations SHOULD fail the call with `E_INVALIDARG`.
 - For `[out]` structs (e.g. `FileSystemDirectorySizeResult* result`), the caller MUST initialize `result->sizeBytes` before calling into the plugin.
 - `FileSystemOptions::bandwidthLimitBytesPerSecond` applies to data-transfer operations (copy/move) and MAY be ignored for rename/delete.
+- `FileSystemOptions::copyMoveMaxConcurrency` applies to copy/move operations and clamps provider-side fan-out, including recursive internal work for a single top-level host item. `0` means plugin/default concurrency.
 - The callback receives an in/out `FileSystemOptions* options` parameter; callers MAY adjust it and plugins SHOULD use the updated values for subsequent work.
 - Callback `options` may be `nullptr`; callers must check before writing to it.
-- Default options: `options == nullptr` (unlimited bandwidth). If `options` is provided, `bandwidthLimitBytesPerSecond == 0` is treated as unlimited.
+- Default options: `options == nullptr` (unlimited bandwidth and default concurrency). If `options` is provided, `bandwidthLimitBytesPerSecond == 0` is treated as unlimited and `copyMoveMaxConcurrency == 0` is treated as plugin/default concurrency.
 - If `FILESYSTEM_FLAG_CONTINUE_ON_ERROR` is not set, plugins SHOULD stop at the first failure.
 - If any item fails and the operation continues, plugins SHOULD return `HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY)`.
 - If `FILESYSTEM_FLAG_RECURSIVE` is not set and a directory requires recursion, plugins SHOULD return `HRESULT_FROM_WIN32(ERROR_DIR_NOT_EMPTY)`.
 - Recursive Move implementations MUST NOT treat children skipped by parser validation as successfully moved. If enumeration drops a malformed child record (for example an empty remote display name), the source parent MUST be considered incomplete, the operation MUST preserve that source parent, and the provider SHOULD report `HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY)`.
 - Provider-side Move implementations that upload or copy data before deleting a source MUST prove the destination object/file is complete before source deletion. For staged remote uploads, the staged object SHOULD be re-statted before promotion and its size MUST match the source size; otherwise the staged object should be cleaned up and the source preserved with `HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY)`.
+- Provider-side delete-after-copy logic MUST use the strongest cheap proof available for that backend before deleting the source: known-size equality at minimum, provider IDs/version tokens when exposed, and object metadata such as ETag/checksum where the provider contract makes those values meaningful. If the provider cannot prove the copied item maps to the planned source/destination identity, the source MUST be preserved.
 
 **Arena Pattern (Required):**
 - All pointer fields in `FileSystemRenamePair`, plus all string pointer parameters passed via `IFileSystemCallback`, MUST reference memory inside a `FileSystemArena`.
@@ -1718,6 +1762,10 @@ Plugins must implement the `IFileSystem` interface and provide concrete implemen
 - **Custom**: absolute plugin paths from user settings (`plugins.customPluginPaths[]`); plugins are referenced in place (no copying)
 - Plugins must expose **both** a unique long ID (`builtin/...` or `user/...`) and a unique short ID (navigation scheme). Conflicts are logged and the plugin is skipped/unloaded.
 - Discovery is a startup health gate: if the manager finishes with zero **loadable** file-system plugins, it MUST log an error and return `HRESULT_FROM_WIN32(ERROR_NOT_FOUND)` instead of silently succeeding with an empty plugin set.
+- Host callers that need a plugin entry by long ID MUST use the manager's case-insensitive
+  `FindPluginById(std::wstring_view) const` lookup rather than scanning `GetPlugins()`. It is a UI-thread API; the
+  returned pointer is a non-owning lease valid only until the next manager mutation (refresh, enable/disable,
+  add, or remove) and MUST NOT be retained across such a mutation.
 - DLLs missing the `RedSalamanderCreate` export are not shown in the plugin list.
 - The **Plugins** top-level menu sits between **File** and **View** and contains a `Manage Plugins...` entry plus a pane-specific dynamic list.
 - The Plugin Manager dialog lists plugins grouped as Embedded / Optional / Custom, with columns **Plugin** and **Short Id**, and action buttons stacked vertically (`Add...`, `Remove...`, `Configure...`, `Test`, `Test All`, `About`, `Close`).
@@ -1870,7 +1918,22 @@ The `Plugins/FileSystemDummy/` project provides a deterministic in-memory file s
 | SFTP | `builtin/file-system-sftp` / `sftp` | Copy, move, delete, rename, read, write, create directory | Synthetic `IFileSystemDirectoryWatch` | Successful RedSalamander/plugin-initiated mutations affecting watched folders | None | `Phase16_RemoteWatchContractExposure` plus gated remote phases |
 | SCP | `builtin/file-system-scp` / `scp` | Copy, move, delete, rename, read, write, create directory | Synthetic `IFileSystemDirectoryWatch` | Successful RedSalamander/plugin-initiated mutations affecting watched folders | None | `Phase16_RemoteWatchContractExposure` plus gated remote phases |
 | IMAP | `builtin/file-system-imap` / `imap` | Copy, move, delete, rename, read, write, create directory | Synthetic `IFileSystemDirectoryWatch` | Successful RedSalamander/plugin-initiated mutations affecting watched folders | None | `Phase16_RemoteWatchContractExposure` plus gated remote phases |
+| MTP/PTP portable devices | `builtin/file-system-mtp` / `mtp` | Device-dependent read/write via staged whole-object transfer; no random writes | No direct watch interface in v1 | Manual refresh/poll; hot-plug invalidates device/session state | WPD device/session identity; no local backing dependency | `mtp.*` deterministic fake-backend coverage plus gated scratch-folder live smoke |
 | S3 | `builtin/file-system-s3` / `s3` | Copy, move, delete, rename, read, write, create directory | Synthetic `IFileSystemDirectoryWatch` | Successful RedSalamander/plugin-initiated mutations affecting watched folders | None | `Phase16_RemoteWatchContractExposure`; live sandbox phase remains configuration-gated |
+
+### MTP/PTP portable-device file system
+
+`builtin/file-system-mtp` exposes Windows Portable Devices (MTP/PTP phones, cameras, and media players) through the same `IFileSystem` contract as other virtual providers. The detailed behavior is specified in `Specs/FileSystem/FileSystem_Mtp.md`.
+
+Required host/plugin contract points:
+- The short ID is `mtp`; the embedded protocol identity token `IDS_FILESYSTEMMTP_FSNAME` is intentionally language-neutral.
+- Accepted path forms include `mtp:/`, `mtp://`, slash-rooted paths, and connection-manager paths; the plugin normalizes them to one slash-rooted provider path.
+- Device roots must include stable `devpuid:` keys when available, or session-scoped `devid:` keys when no persistent device identity exists.
+- Duplicate object display names must be disambiguated with stable `puid:` suffixes when available, or session-scoped `oid:` suffixes; ambiguous unsuffixed mutation must fail closed.
+- MTP declares `ordinalCaseSensitive` identity. The plugin may present localized display names, but collision, overwrite, cache, and mutation decisions use the encoded provider path text.
+- v1 omits `IFileSystemDirectoryWatch`; device hot-plug and backend events invalidate state, and visible panes rely on refresh/poll.
+- Public writes are whole-object staged transfers. Random write is unsupported. Overwrite safety and byte verification are governed by the MTP spec, not by local-file assumptions.
+- Runtime refresh must honor the common `RedSalamanderPluginCanUnloadNow()` deferral contract before unregistering resources or calling `FreeLibrary`.
 
 ## Error Handling
 

@@ -25,6 +25,7 @@ inline constexpr UINT kNetworkConnectivityChanged      = WM_APP + 0x305;
 inline constexpr UINT kFolderViewDeferredInit          = WM_APP + 0x307;
 inline constexpr UINT kFolderViewDirectoryImpact       = WM_APP + 0x308;
 inline constexpr UINT kFolderViewCreateThumbnailBitmap = WM_APP + 0x309;
+inline constexpr UINT kFolderViewPasteShortcutComplete = WM_APP + 0x30A;
 
 inline constexpr UINT kEditSuggestResults = WM_APP + 0x350;
 
@@ -70,6 +71,7 @@ inline constexpr UINT kConnectionManagerConnect           = WM_APP + 0x50C;
 inline constexpr UINT kHostExecuteInPane                  = WM_APP + 0x50D;
 inline constexpr UINT kHostSetConnectionSecret            = WM_APP + 0x50E;
 inline constexpr UINT kHostDeleteConnectionSecret         = WM_APP + 0x50F;
+inline constexpr UINT kConnectionManagerMtpPickerComplete = WM_APP + 0x51C;
 inline constexpr UINT kSettingsFileChanged                = WM_APP + 0x511;
 inline constexpr UINT kSettingsReloadedFromDisk           = WM_APP + 0x512;
 inline constexpr UINT kHostOpenViewer                     = WM_APP + 0x513;
@@ -88,11 +90,13 @@ inline constexpr UINT kConnectionManagerDialogDebug         = WM_APP + 0x51B;
 inline constexpr UINT kAppStartupInputReady = WM_APP + 0x510;
 
 // Compare Directories
-inline constexpr UINT kCompareDirectoriesDeferredStart   = WM_APP + 0x520;
-inline constexpr UINT kCompareDirectoriesScanProgress    = WM_APP + 0x521;
-inline constexpr UINT kCompareDirectoriesExecuteCommand  = WM_APP + 0x522;
-inline constexpr UINT kCompareDirectoriesDecisionUpdated = WM_APP + 0x523;
-inline constexpr UINT kCompareDirectoriesContentProgress = WM_APP + 0x524;
+inline constexpr UINT kCompareDirectoriesDeferredStart      = WM_APP + 0x520;
+inline constexpr UINT kCompareDirectoriesScanProgress       = WM_APP + 0x521;
+inline constexpr UINT kCompareDirectoriesExecuteCommand     = WM_APP + 0x522;
+inline constexpr UINT kCompareDirectoriesDecisionUpdated    = WM_APP + 0x523;
+inline constexpr UINT kCompareDirectoriesContentProgress    = WM_APP + 0x524;
+inline constexpr UINT kCompareDirectoriesLeaveScopePrompt   = WM_APP + 0x52E;
+inline constexpr UINT kCompareDirectoriesDecisionRefreshNow = WM_APP + 0x52F;
 
 // Change Case (background)
 inline constexpr UINT kChangeCaseTaskUpdate = WM_APP + 0x525;
@@ -118,6 +122,7 @@ inline constexpr UINT kPreferencesApplyPageHostScroll       = WM_APP + 0x538;
 inline constexpr UINT kPluginConfigurationDialogApplyTheme  = WM_APP + 0x536;
 inline constexpr UINT kConnectionCredentialPromptApplyTheme = WM_APP + 0x537;
 inline constexpr UINT kDxUiContextMenuRootHoverChanged      = WM_APP + 0x539;
+inline constexpr UINT kPreferencesRestoreCategoryTreeFocus  = WM_APP + 0x53A;
 
 // Item Properties
 inline constexpr UINT kItemPropertiesLoadComplete               = WM_APP + 0x540;
@@ -138,6 +143,9 @@ inline constexpr UINT kSplashScreenRecenter = WM_APP + 0x6F1;
 
 // Plugin viewers (async work completion / progress)
 inline constexpr UINT kViewerTextAsyncOpenComplete     = WM_APP + 0x600;
+inline constexpr UINT kViewerTextAsyncOpenFailure      = WM_APP + 0x629;
+inline constexpr UINT kViewerTextAsyncStreamComplete   = WM_APP + 0x630;
+inline constexpr UINT kViewerTextAsyncStreamFailure    = WM_APP + 0x631;
 inline constexpr UINT kViewerPeAsyncParseComplete      = WM_APP + 0x601;
 inline constexpr UINT kViewerWebAsyncLoadComplete      = WM_APP + 0x602;
 inline constexpr UINT kViewerImgRawAsyncOpenComplete   = WM_APP + 0x603;
@@ -262,6 +270,36 @@ struct ViewerTextDebugSnapshot
     bool diffHasPlaceholderRows                      = false;
     bool diffReferencedFilesResolved                 = false;
     bool fileComboUsesDiffSections                   = false;
+    bool isLoading                                   = false;
+    uint64_t asyncOpenTerminalCount                  = 0u;
+    HRESULT asyncOpenLastTerminalHr                  = E_PENDING;
+    bool textStreamActive                            = false;
+    uint64_t textStreamStartOffset                   = 0u;
+    uint64_t textStreamEndOffset                     = 0u;
+    uint64_t textFileSize                            = 0u;
+    bool textStreamLoadPending                       = false;
+    uint64_t textStreamAcceptedCount                 = 0u;
+    uint64_t textStreamRejectedCount                 = 0u;
+    uint64_t textStreamStaleCount                    = 0u;
+    uint64_t textStreamTerminalCount                 = 0u;
+    HRESULT textStreamLastTerminalHr                 = E_PENDING;
+    uint64_t textStreamLastElapsedUs                 = 0u;
+    uint64_t textStreamLastUiApplyUs                 = 0u;
+    uint64_t textVisualLineCount                     = 0u;
+    bool textVisualLineCountExact                    = true;
+    size_t textMaterializedVisualLineCount           = 0u;
+    size_t textSparseLogicalSummaryCount             = 0u;
+    bool textSparseWrapActive                        = false;
+    size_t textLayoutCacheEntryCount                 = 0u;
+    size_t textLayoutCacheBytes                      = 0u;
+    size_t textLayoutCacheMaxEntries                 = 0u;
+    size_t textLayoutCacheMaxBytes                   = 0u;
+    uint64_t textLayoutCacheEvictions                = 0u;
+    uint64_t textLayoutCacheHits                     = 0u;
+    uint64_t textLayoutCacheMisses                   = 0u;
+    size_t textCaretIndex                            = 0u;
+    size_t textSelectionAnchor                       = 0u;
+    size_t textSelectionActive                       = 0u;
     uint64_t diffParseCount                          = 0u;
     uint64_t renderCount                             = 0u;
     size_t legacyVisibleGdiTextSurfaceCount          = 0u;
@@ -322,10 +360,140 @@ struct ViewerTextDebugSnapshot
     wchar_t textPreview[kViewerTextDebugDocumentPreviewChars]{};
 };
 
+enum class ViewerTextDebugSaveFault : uint8_t
+{
+    None,
+    SourceOpen,
+    SourceRead,
+    Encode,
+    Write,
+    Flush,
+    Commit,
+};
+
+enum class ViewerTextDebugAsyncOpenFault : uint8_t
+{
+    None,
+    FileSystemIo,
+    OpenReader,
+    GetSize,
+    InitialSeek,
+    InitialRead,
+    DataSeek,
+    DataRead,
+    Decode,
+    PayloadPost,
+    Submit,
+};
+
+enum class ViewerTextDebugGeometryOperation : uint8_t
+{
+    SetCacheBudget,
+    SetAsyncStreamFault,
+    ProbeLayout,
+    ProbeWrappedCoverage,
+};
+
+enum class ViewerTextDebugAsyncStreamFault : uint8_t
+{
+    None,
+    Allocation,
+    Submit,
+    Worker,
+    PayloadPost,
+};
+
+struct ViewerTextDebugGeometryRequest
+{
+    ViewerTextDebugGeometryOperation operation          = ViewerTextDebugGeometryOperation::ProbeLayout;
+    ViewerTextDebugAsyncStreamFault asyncStreamFault    = ViewerTextDebugAsyncStreamFault::None;
+    size_t cacheMaxEntries                              = 0u;
+    size_t cacheMaxBytes                                = 0u;
+    size_t segmentStart                                 = 0u;
+    size_t segmentEnd                                   = 0u;
+    size_t textPosition                                 = 0u;
+    size_t rangeStart                                   = 0u;
+    size_t rangeEnd                                     = 0u;
+    size_t logicalLine                                  = 0u;
+    float widthDip                                      = 0.0f;
+    float hitX                                          = 0.0f;
+    size_t normalizedTextPosition = 0u;
+    size_t previousTextPosition   = 0u;
+    size_t nextTextPosition       = 0u;
+    size_t hitTextPosition        = 0u;
+    float caretX                  = 0.0f;
+    float rangeLeft               = 0.0f;
+    float rangeRight              = 0.0f;
+    size_t wrappedSegmentCount    = 0u;
+    size_t wrappedCoveredStart    = 0u;
+    size_t wrappedCoveredEnd      = 0u;
+    size_t wrappedSecondSegmentStart = 0u;
+    size_t wrappedSecondSegmentEnd   = 0u;
+    float wrappedWidthDip         = 0.0f;
+    float wrappedLineHeightDip    = 0.0f;
+    bool wrappedHasGapOrOverlap   = false;
+    bool wrappedAllSegmentsFit    = false;
+    HRESULT result                = E_UNEXPECTED;
+};
+
+struct ViewerTextDebugSaveRequest
+{
+    const wchar_t* destinationPath = nullptr;
+    UINT encodingSelection         = 0u;
+    ViewerTextDebugSaveFault fault = ViewerTextDebugSaveFault::None;
+    bool simulateLoading           = false;
+    HRESULT result                 = E_UNEXPECTED;
+};
+
+inline constexpr size_t kViewerTextDebugHexLineChars = 32u;
+
+struct ViewerTextDebugHexLineRequest
+{
+    uint64_t offset = 0u;
+    size_t validBytes = 0u;
+    wchar_t text[kViewerTextDebugHexLineChars]{};
+    size_t sourceLengths[16]{};
+    size_t columnStarts[16]{};
+    size_t columnLengths[16]{};
+};
+
+struct ViewerTextDebugHexCopyRequest
+{
+    uint64_t anchorOffset = 0u;
+    uint64_t activeOffset = 0u;
+    bool dispatched       = false;
+};
+
 inline constexpr UINT kViewerTextDebugGetSnapshot          = WM_APP + 0x60E;
 inline constexpr UINT kViewerTextDebugSelectDiffSection    = WM_APP + 0x60F;
 inline constexpr UINT kViewerTextDebugSelectDiffHunk       = WM_APP + 0x610;
 inline constexpr UINT kViewerTextDebugClickTextLogicalLine = WM_APP + 0x611;
+inline constexpr UINT kViewerTextDebugSaveAs               = WM_APP + 0x625;
+inline constexpr UINT kViewerTextDebugReloadWithOpenFault  = WM_APP + 0x62A;
+inline constexpr UINT kViewerTextDebugFormatUtf8HexLine    = WM_APP + 0x62E;
+inline constexpr UINT kViewerTextDebugCopyHexSelection     = WM_APP + 0x62F;
+inline constexpr UINT kViewerTextDebugSetLayoutCacheBudget = WM_APP + 0x632;
+
+struct ViewerPeDebugSnapshot
+{
+    bool isLoading          = false;
+    uint64_t requestId      = 0u;
+    uint64_t windowIdentity = 0u;
+    HRESULT parseHr         = E_PENDING;
+    size_t bodyLength       = 0u;
+    wchar_t bodyPreview[128]{};
+};
+
+inline constexpr UINT kViewerPeDebugGetSnapshot = WM_APP + 0x62B;
+
+enum class ViewerPeDebugAsyncFault : unsigned int
+{
+    None = 0u,
+    ResultAllocation,
+    PayloadPost,
+};
+
+inline constexpr UINT kViewerPeDebugReloadWithAsyncFault = WM_APP + 0x634;
 
 struct ViewerNativeMenuModelDebugSnapshot
 {
@@ -334,8 +502,56 @@ struct ViewerNativeMenuModelDebugSnapshot
 };
 
 inline constexpr UINT kViewerDebugGetNativeMenuModelSnapshot = WM_APP + 0x612;
+
+struct ViewerImgRawDecodeDebugSnapshot
+{
+    bool hasImage              = false;
+    bool displayingThumbnail   = false;
+    uint16_t baseOrientation   = 1u;
+    uint16_t viewOrientation   = 1u;
+    uint32_t sourceWidth       = 0u;
+    uint32_t sourceHeight      = 0u;
+    uint32_t orientedWidth     = 0u;
+    uint32_t orientedHeight    = 0u;
+};
+
+inline constexpr UINT kViewerImgRawDebugGetDecodeSnapshot = WM_APP + 0x624;
+
+struct ViewerImgRawResourceDebugSnapshot
+{
+    uint64_t speculativeBytes        = 0u;
+    uint64_t speculativeBytesPeak    = 0u;
+    uint64_t speculativeBytesLimit   = 0u;
+    uint64_t budgetAcceptedCount     = 0u;
+    uint64_t budgetRejectedCount     = 0u;
+    uint64_t currentRequestId        = 0u;
+    uint64_t finalSuccessCount       = 0u;
+    uint64_t finalFailureCount       = 0u;
+    uint64_t previewSuccessCount     = 0u;
+    uint64_t lastPreviewApplyOrdinal = 0u;
+    uint64_t lastFinalApplyOrdinal   = 0u;
+    uint64_t replacedMainDecodeCount = 0u;
+    size_t cachedImageCount          = 0u;
+    size_t inflightDecodeCount       = 0u;
+    size_t activeMainDecodeCount     = 0u;
+    size_t pendingMainDecodeCount    = 0u;
+    bool terminalFallbackPending     = false;
+    bool loading                     = false;
+};
+
+struct ViewerImgRawDebugExportRequest
+{
+    const wchar_t* destinationPath = nullptr;
+    bool queued                    = false;
+};
+
+inline constexpr UINT kViewerImgRawDebugGetResourceSnapshot = WM_APP + 0x626;
+inline constexpr UINT kViewerImgRawDebugClearImageCache     = WM_APP + 0x627;
+inline constexpr UINT kViewerImgRawDebugExportToPath        = WM_APP + 0x628;
 #endif
-inline constexpr UINT kViewerVlcAsyncOpenComplete = WM_APP + 0x613;
+inline constexpr UINT kViewerVlcAsyncOpenComplete  = WM_APP + 0x613;
+inline constexpr UINT kViewerVlcAsyncCloseComplete = WM_APP + 0x62C;
+inline constexpr UINT kViewerVlcAsyncFallbackReady = WM_APP + 0x633;
 #ifdef ENABLE_TESTS
 struct ViewerVlcDebugSnapshot
 {
@@ -345,6 +561,9 @@ struct ViewerVlcDebugSnapshot
     bool hasVideoChild                   = false;
     bool videoChildIsChildWindow         = false;
     bool videoChildParentIsViewer        = false;
+    bool vlcModuleLoaded                 = false;
+    bool vlcInstanceLoaded               = false;
+    bool vlcPlayerCreated                = false;
     bool hasVolumeMuteButton             = false;
     bool hasVolumeSlider                 = false;
     bool muted                           = false;
@@ -367,6 +586,21 @@ struct ViewerVlcDebugSnapshot
     LONG loadingSpinnerActiveDotRadiusPx = 0;
     uint32_t loadingSpinnerFirstDotArgb  = 0;
     uint32_t loadingSpinnerSecondDotArgb = 0;
+    uint64_t windowIdentity              = 0;
+    uint64_t loadRequestId               = 0;
+    uint64_t pendingLoadWorkCount        = 0;
+    uint64_t loadQueueAccepted           = 0;
+    uint64_t loadQueueRejected           = 0;
+    uint64_t staleLoadResults            = 0;
+    uint64_t cleanupCompletions           = 0;
+    uint64_t deferredCleanupCount         = 0;
+    uint64_t cleanupDeferrals             = 0;
+    uint64_t cleanupSubmitFailures        = 0;
+    uint64_t cleanupAllocationFailures    = 0;
+    uint64_t asyncResultPostFailures      = 0;
+    uint64_t loadPostFallbacks            = 0;
+    uint64_t cleanupPostFallbacks         = 0;
+    bool closePending                     = false;
 };
 
 struct ViewerVlcDebugPlaybackState
@@ -387,6 +621,17 @@ struct ViewerVlcDebugWheel
 struct ViewerVlcDebugStopDelay
 {
     uint32_t delayMs = 0;
+    HANDLE releaseGate = nullptr;
+};
+
+struct ViewerVlcDebugAsyncControl
+{
+    uint32_t loadDelayMs = 0;
+    bool failNextLoadSubmit = false;
+    bool failNextLoadCompletionPost = false;
+    bool failNextCloseCompletionPost = false;
+    bool failNextCleanupSubmit = false;
+    bool failNextCleanupAllocation = false;
 };
 
 inline constexpr UINT kViewerVlcDebugGetSnapshot         = WM_APP + 0x614;
@@ -396,26 +641,27 @@ inline constexpr UINT kViewerVlcDebugWheel               = WM_APP + 0x617;
 inline constexpr UINT kViewerVlcDebugToggleMute          = WM_APP + 0x618;
 inline constexpr UINT kViewerVlcDebugWheelVideoChild     = WM_APP + 0x619;
 inline constexpr UINT kViewerVlcDebugSetStopDelay        = WM_APP + 0x61A;
+inline constexpr UINT kViewerVlcDebugSetAsyncControl     = WM_APP + 0x62D;
 
 struct ViewerSpaceTooltipDebugSnapshot
 {
-    uint32_t tooltipNodeId     = 0;
-    size_t tooltipTextLength   = 0u;
-    float tooltipAnchorXDip    = 0.0f;
-    float tooltipAnchorYDip    = 0.0f;
-    float tooltipMaxWidthDip   = 0.0f;
-    float tooltipMaxHeightDip  = 0.0f;
-    uint64_t tooltipPaintCount = 0u;
-    bool hasRenderTarget = false;
-    bool hasTooltipFormat = false;
-    uint32_t hoverNodeId = 0;
-    bool hasLastMouseMoveClientPoint = false;
-    LONG lastMouseMoveClientX = 0;
-    LONG lastMouseMoveClientY = 0;
+    uint32_t tooltipNodeId             = 0;
+    size_t tooltipTextLength           = 0u;
+    float tooltipAnchorXDip            = 0.0f;
+    float tooltipAnchorYDip            = 0.0f;
+    float tooltipMaxWidthDip           = 0.0f;
+    float tooltipMaxHeightDip          = 0.0f;
+    uint64_t tooltipPaintCount         = 0u;
+    bool hasRenderTarget               = false;
+    bool hasTooltipFormat              = false;
+    uint32_t hoverNodeId               = 0;
+    bool hasLastMouseMoveClientPoint   = false;
+    LONG lastMouseMoveClientX          = 0;
+    LONG lastMouseMoveClientY          = 0;
     bool hasLastContextMenuScreenPoint = false;
-    LONG lastContextMenuScreenX = 0;
-    LONG lastContextMenuScreenY = 0;
-    uint32_t lastContextMenuHitNodeId = 0;
+    LONG lastContextMenuScreenX        = 0;
+    LONG lastContextMenuScreenY        = 0;
+    uint32_t lastContextMenuHitNodeId  = 0;
 };
 
 enum class ViewerSpacePerfRendererMode : uint8_t
@@ -478,18 +724,45 @@ struct ViewerSpacePerfDebugSnapshot
     uint64_t layoutGeneration                = 0u;
     uint32_t hitGridCellCount                = 0u;
     uint32_t hitGridMaxCandidatesPerCell     = 0u;
+    uint64_t aggregateBytes                  = 0u;
+    uint64_t aggregateFolders                = 0u;
+    uint64_t aggregateFiles                  = 0u;
+    uint64_t scannedFolders                  = 0u;
+    uint64_t scannedFiles                    = 0u;
+    uint64_t childReferenceCount             = 0u;
+    uint64_t childArenaSlots                 = 0u;
+    uint64_t childArenaFreeSlots             = 0u;
+    uint64_t modelAcceptedEntries            = 0u;
+    uint64_t modelRejectedEntries            = 0u;
+    uint64_t modelCappedDirectories          = 0u;
+    uint64_t modelCappedFiles                = 0u;
+    uint64_t modelRetainedNameBytes          = 0u;
+    uint64_t modelRetainedChildReferences    = 0u;
+    uint64_t modelTraversedDirectories       = 0u;
+    uint64_t modelRetainedDirectoryLimit     = 0u;
+    uint64_t modelRetainedFileLimit          = 0u;
+    uint64_t modelChildReferenceLimit        = 0u;
+    uint64_t modelChildArenaSlotLimit        = 0u;
+    uint32_t modelValidationError            = 0u;
+    uint64_t postUpdateInnerGenerationRejects = 0u;
+};
+
+struct ViewerSpacePostUpdatePauseDebugControl
+{
+    HANDLE enteredEvent = nullptr;
+    HANDLE releaseEvent = nullptr;
 };
 
 struct ViewerSpaceHitTestDebugSnapshot
 {
-    uint32_t sampleCount                 = 0u;
-    uint32_t mismatchCount               = 0u;
-    uint32_t gridHitCount                = 0u;
-    uint32_t linearHitCount              = 0u;
-    uint32_t maxGridCandidatesChecked    = 0u;
-    uint32_t maxLinearCandidatesChecked  = 0u;
-    uint32_t lastMismatchGridNodeId      = 0u;
-    uint32_t lastMismatchLinearNodeId    = 0u;
+    uint32_t sampleCount                = 0u;
+    uint32_t mismatchCount              = 0u;
+    uint32_t gridHitCount               = 0u;
+    uint32_t linearHitCount             = 0u;
+    uint32_t maxGridCandidatesChecked   = 0u;
+    uint32_t maxLinearCandidatesChecked = 0u;
+    uint32_t lastMismatchGridNodeId     = 0u;
+    uint32_t lastMismatchLinearNodeId   = 0u;
 };
 
 enum class ViewerSpaceRendererFaultDebugMode : uint8_t
@@ -504,6 +777,7 @@ inline constexpr UINT kViewerSpaceDebugGetPerfSnapshot    = WM_APP + 0x61D;
 inline constexpr UINT kViewerSpaceDebugForcePerfSample    = WM_APP + 0x61E;
 inline constexpr UINT kViewerSpaceDebugCompareHitTesting  = WM_APP + 0x61F;
 inline constexpr UINT kViewerSpaceDebugForceRendererFault = WM_APP + 0x623;
+inline constexpr UINT kViewerSpaceDebugPauseNextPostUpdate = WM_APP + 0x635;
 #endif
 
 // RedSalamanderMonitor / ColorTextView

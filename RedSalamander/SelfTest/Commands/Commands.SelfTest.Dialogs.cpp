@@ -107,6 +107,44 @@ template <typename WorkerFunc> void RunCreateDirectoryPromptModalCycle(HWND main
     worker.join();
 }
 
+[[nodiscard]] bool WaitForCreateDirectoryPromptSelectedTextSnapshot(
+    HWND prompt,
+    const std::filesystem::path& expectedCreateInPath,
+    std::wstring_view expectedText,
+    std::chrono::milliseconds timeout,
+    FolderViewCreateDirectoryPromptDebugSnapshot& outSnapshot) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! prompt || IsWindow(prompt) == FALSE)
+    {
+        return false;
+    }
+
+    const std::wstring expectedPath = expectedCreateInPath.wstring();
+    const auto deadline             = std::chrono::steady_clock::now() + timeout;
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        PumpPendingMessages();
+        outSnapshot = {};
+        if (DebugGetFolderViewCreateDirectoryPromptSnapshot(outSnapshot) && outSnapshot.usesDxUiHost &&
+            outSnapshot.visibleChildWindowCount <= 1u && outSnapshot.createInPath == expectedPath && outSnapshot.text == expectedText &&
+            outSnapshot.nameFieldFocused && outSnapshot.selectionStart == 0u && outSnapshot.selectionEnd == expectedText.size() &&
+            outSnapshot.validationText.empty())
+        {
+            return true;
+        }
+
+        std::this_thread::sleep_for(10ms);
+    }
+
+    outSnapshot = {};
+    return DebugGetFolderViewCreateDirectoryPromptSnapshot(outSnapshot) && outSnapshot.usesDxUiHost &&
+           outSnapshot.visibleChildWindowCount <= 1u && outSnapshot.createInPath == expectedPath && outSnapshot.text == expectedText &&
+           outSnapshot.nameFieldFocused && outSnapshot.selectionStart == 0u && outSnapshot.selectionEnd == expectedText.size() &&
+           outSnapshot.validationText.empty();
+}
+
 template <typename WorkerFunc> void RunEditNewPromptModalCycle(HWND mainWindow, WorkerFunc&& workerFunc) noexcept
 {
     std::jthread worker([&](std::stop_token) noexcept
@@ -339,6 +377,12 @@ template <typename WorkerFunc> void RunSelectionMaskPromptModalCycle(HWND mainWi
     FocusFolderViewPane(FolderWindow::Pane::Left);
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(commandId, 0), 0);
     worker.join();
+    if (const HWND prompt = GetFolderViewPaneFilterPromptHandle(); prompt && IsWindow(prompt) != FALSE)
+    {
+        PostMessageW(prompt, WM_CLOSE, 0, 0);
+        static_cast<void>(WaitForWindowClosed(prompt, SelfTest::Scale(std::chrono::milliseconds{3000})));
+    }
+    PumpPendingMessages();
 }
 
 template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindow, const UINT commandId, WorkerFunc&& workerFunc) noexcept
@@ -398,7 +442,8 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
         {
             HWND about                     = nullptr;
             bool sawDialog                 = false;
-            bool independentTopLevel       = false;
+            bool ownedByMainWindow         = false;
+            bool ownerDisabled             = false;
             size_t visibleChildWindowCount = 0u;
             bool exposesUiaProvider        = false;
             std::optional<UiaDescendantPatternStats> uiaPatternStats;
@@ -417,7 +462,8 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
                 return;
             }
 
-            probe.independentTopLevel     = ! IsOwnedBy(about, mainWindow);
+            probe.ownedByMainWindow       = IsOwnedBy(about, mainWindow);
+            probe.ownerDisabled           = IsWindowEnabled(mainWindow) == FALSE;
             probe.visibleChildWindowCount = CountVisibleChildWindows(about);
             probe.exposesUiaProvider      = WindowExposesUiaProvider(about);
             probe.uiaPatternStats         = CollectVisibleUiaDescendantPatternStats(about);
@@ -434,7 +480,8 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
             return false;
         }
 
-        state.Require(probe.independentTopLevel, L"About dialog should be an independent top-level window.");
+        state.Require(probe.ownedByMainWindow, L"About dialog should be owned by the main window.");
+        state.Require(probe.ownerDisabled, L"About dialog should disable the main window while modal.");
         state.Require(probe.visibleChildWindowCount == 0u, L"About dialog should not expose visible child-control fallback.");
         state.Require(probe.exposesUiaProvider, L"About dialog should answer WM_GETOBJECT with a UI Automation provider.");
 
@@ -504,7 +551,8 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
         {
             HWND about                     = nullptr;
             bool sawDialog                 = false;
-            bool independentTopLevel       = false;
+            bool ownedByMainWindow         = false;
+            bool ownerDisabled             = false;
             size_t visibleChildWindowCount = 0u;
             bool exposesUiaProvider        = false;
             std::optional<UiaDescendantPatternStats> uiaPatternStats;
@@ -523,7 +571,8 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
                 return;
             }
 
-            probe.independentTopLevel     = ! IsOwnedBy(about, mainWindow);
+            probe.ownedByMainWindow       = IsOwnedBy(about, mainWindow);
+            probe.ownerDisabled           = IsWindowEnabled(mainWindow) == FALSE;
             probe.visibleChildWindowCount = CountVisibleChildWindows(about);
             probe.exposesUiaProvider      = WindowExposesUiaProvider(about);
             probe.uiaPatternStats         = CollectVisibleUiaDescendantPatternStats(about);
@@ -533,7 +582,8 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
         });
 
         state.Require(probe.sawDialog, std::format(L"About dialog did not open for {}.", context));
-        state.Require(probe.independentTopLevel, std::format(L"About dialog should remain an independent top-level window during {}.", context));
+        state.Require(probe.ownedByMainWindow, std::format(L"About dialog should be owned by the main window during {}.", context));
+        state.Require(probe.ownerDisabled, std::format(L"About dialog should disable the main window while modal during {}.", context));
         state.Require(probe.visibleChildWindowCount == 0u, std::format(L"About dialog should not expose visible child-control fallback during {}.", context));
         state.Require(probe.exposesUiaProvider, std::format(L"About dialog should answer WM_GETOBJECT during {}.", context));
         state.Require(probe.uiaPatternStats.has_value(), std::format(L"Failed to collect live UI Automation stats for About dialog during {}.", context));
@@ -725,7 +775,8 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
         {
             HWND about                     = nullptr;
             bool sawDialog                 = false;
-            bool independentTopLevel       = false;
+            bool ownedByMainWindow         = false;
+            bool ownerDisabled             = false;
             size_t visibleChildWindowCount = 0u;
             bool exposesUiaProvider        = false;
             std::optional<UiaDescendantPatternStats> uiaPatternStats;
@@ -744,12 +795,37 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
                 return;
             }
 
-            cycleResult.independentTopLevel     = ! IsOwnedBy(about, mainWindow);
+            cycleResult.ownedByMainWindow       = IsOwnedBy(about, mainWindow);
+            cycleResult.ownerDisabled           = IsWindowEnabled(mainWindow) == FALSE;
             cycleResult.visibleChildWindowCount = CountVisibleChildWindows(about);
             cycleResult.exposesUiaProvider      = WindowExposesUiaProvider(about);
-            cycleResult.uiaPatternStats         = CollectVisibleUiaDescendantPatternStats(about);
-            cycleResult.aboutTextState          = CollectVisibleDescendantNamedElementState(about, UIA_TextControlTypeId);
-            cycleResult.buttonState             = CollectVisibleDescendantNamedElementState(about, UIA_ButtonControlTypeId);
+            const auto collectReadableSurface = [&]() noexcept
+            {
+                cycleResult.uiaPatternStats = CollectVisibleUiaDescendantPatternStats(about);
+                cycleResult.aboutTextState  = CollectVisibleDescendantNamedElementState(about, UIA_TextControlTypeId);
+                cycleResult.buttonState     = CollectVisibleDescendantNamedElementState(about, UIA_ButtonControlTypeId);
+            };
+            const auto readableSurfaceSettled = [&]() noexcept
+            {
+                return cycleResult.uiaPatternStats.has_value() && cycleResult.uiaPatternStats->visibleElementCount > 0u &&
+                       cycleResult.uiaPatternStats->buttonControlCount > 0u && cycleResult.uiaPatternStats->invokePatternCount > 0u &&
+                       cycleResult.aboutTextState.has_value() && cycleResult.buttonState.has_value();
+            };
+            const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
+            while (std::chrono::steady_clock::now() < deadline)
+            {
+                collectReadableSurface();
+                if (readableSurfaceSettled())
+                {
+                    break;
+                }
+
+                std::this_thread::sleep_for(20ms);
+            }
+            if (! readableSurfaceSettled())
+            {
+                collectReadableSurface();
+            }
             PostMessageW(about, WM_CLOSE, 0, 0);
             cycleResult.closed = WaitForWindowClosed(about, SelfTest::Scale(3000ms));
         });
@@ -760,7 +836,8 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
             return false;
         }
 
-        state.Require(cycleResult.independentTopLevel, std::format(L"About dialog should be an independent top-level window during cycle {}.", cycle));
+        state.Require(cycleResult.ownedByMainWindow, std::format(L"About dialog should be owned by the main window during cycle {}.", cycle));
+        state.Require(cycleResult.ownerDisabled, std::format(L"About dialog should disable the main window while modal during cycle {}.", cycle));
         state.Require(cycleResult.visibleChildWindowCount == 0u,
                       std::format(L"About dialog should not expose visible child-control fallback during cycle {}.", cycle));
         state.Require(cycleResult.exposesUiaProvider, std::format(L"About dialog should answer WM_GETOBJECT during cycle {}.", cycle));
@@ -865,8 +942,7 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
 
             promptResult.sawOverlay.store(true, std::memory_order_release);
 
-            state.Require(IsOwnedBy(overlay, mainWindow),
-                          std::format(L"Alert overlay prompt should be owned by the main window root for {}.", operationName));
+            state.Require(IsOwnedBy(overlay, mainWindow), std::format(L"Alert overlay prompt should be owned by the main window root for {}.", operationName));
             state.Require(CountVisibleChildWindows(overlay) == 0u,
                           std::format(L"Alert overlay prompt should not expose visible child fallback for {}.", operationName));
             state.Require(WindowExposesUiaProvider(overlay), std::format(L"Alert overlay prompt should answer WM_GETOBJECT for {}.", operationName));
@@ -1033,8 +1109,7 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
                 return;
             }
 
-            state.Require(IsOwnedBy(overlay, mainWindow),
-                          std::format(L"Alert overlay prompt should be owned by the main window root for {}.", operationName));
+            state.Require(IsOwnedBy(overlay, mainWindow), std::format(L"Alert overlay prompt should be owned by the main window root for {}.", operationName));
             state.Require(CountVisibleChildWindows(overlay) == 0u,
                           std::format(L"Alert overlay prompt should not expose visible child fallback for {}.", operationName));
             state.Require(WindowExposesUiaProvider(overlay), std::format(L"Alert overlay prompt should answer WM_GETOBJECT for {}.", operationName));
@@ -1260,18 +1335,17 @@ struct FatalErrorReadableSurfaceProbe final
 [[nodiscard]] FatalErrorReadableSurfaceProbe CollectFatalErrorReadableSurfaceProbe(HWND dialog) noexcept
 {
     FatalErrorReadableSurfaceProbe probe{};
-    probe.uiaPatternStats    = CollectVisibleUiaDescendantPatternStats(dialog);
-    probe.readableTextState  = CollectVisibleDescendantReadableTextState(dialog, UIA_EditControlTypeId);
-    probe.buttonState        = CollectVisibleDescendantNamedElementState(dialog, UIA_ButtonControlTypeId);
+    probe.uiaPatternStats   = CollectVisibleUiaDescendantPatternStats(dialog);
+    probe.readableTextState = CollectVisibleDescendantReadableTextState(dialog, UIA_EditControlTypeId);
+    probe.buttonState       = CollectVisibleDescendantNamedElementState(dialog, UIA_ButtonControlTypeId);
     return probe;
 }
 
 [[nodiscard]] bool FatalErrorReadableSurfaceProbeSettled(const FatalErrorReadableSurfaceProbe& probe) noexcept
 {
     return probe.uiaPatternStats.has_value() && probe.uiaPatternStats->visibleElementCount > 0u && probe.uiaPatternStats->buttonControlCount > 0u &&
-           probe.uiaPatternStats->invokePatternCount > 0u &&
-           (probe.uiaPatternStats->valuePatternCount > 0u || probe.uiaPatternStats->textPatternCount > 0u) && probe.readableTextState.has_value() &&
-           probe.buttonState.has_value();
+           probe.uiaPatternStats->invokePatternCount > 0u && (probe.uiaPatternStats->valuePatternCount > 0u || probe.uiaPatternStats->textPatternCount > 0u) &&
+           probe.readableTextState.has_value() && probe.buttonState.has_value();
 }
 
 [[nodiscard]] FatalErrorReadableSurfaceProbe WaitForFatalErrorReadableSurfaceProbe(HWND dialog) noexcept
@@ -1279,7 +1353,7 @@ struct FatalErrorReadableSurfaceProbe final
     using namespace std::chrono_literals;
 
     FatalErrorReadableSurfaceProbe probe{};
-    const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
+    const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
     while (std::chrono::steady_clock::now() < deadline)
     {
         probe = CollectFatalErrorReadableSurfaceProbe(dialog);
@@ -1288,6 +1362,7 @@ struct FatalErrorReadableSurfaceProbe final
             return probe;
         }
 
+        PumpPendingMessages();
         std::this_thread::sleep_for(20ms);
     }
 
@@ -1389,13 +1464,15 @@ struct FatalErrorReadableSurfaceProbe final
                       std::format(L"Failed to collect UI Automation readable text state for the fatal-error message surface during {}.", label));
         if (probe.surfaceProbe.readableTextState.has_value())
         {
-            state.Require(UiaReadableTextIsReadOnlyOrUnknown(probe.surfaceProbe.readableTextState.value()), L"Fatal-error message surface should remain read-only.");
+            state.Require(UiaReadableTextIsReadOnlyOrUnknown(probe.surfaceProbe.readableTextState.value()),
+                          L"Fatal-error message surface should remain read-only.");
             state.Require(UiaReadableTextContains(probe.surfaceProbe.readableTextState.value(), L"Sample fatal error text for DXUI validation."),
                           std::format(L"Fatal-error dialog readable text should expose the message text during {}; saw '{}'.",
                                       label,
                                       probe.surfaceProbe.readableTextState->value));
         }
-        state.Require(probe.surfaceProbe.buttonState.has_value(), std::format(L"Fatal-error dialog should expose a visible DX footer button during {}.", label));
+        state.Require(probe.surfaceProbe.buttonState.has_value(),
+                      std::format(L"Fatal-error dialog should expose a visible DX footer button during {}.", label));
         if (probe.surfaceProbe.buttonState.has_value())
         {
             state.Require(! probe.surfaceProbe.buttonState->name.empty(),
@@ -1493,17 +1570,15 @@ struct FatalErrorReadableSurfaceProbe final
                           std::format(L"Fatal-error dialog should expose readable text-pattern support during {}.", context));
         }
 
-        state.Require(probe.surfaceProbe.readableTextState.has_value(),
-                      std::format(L"Failed to collect fatal-error readable text state during {}.", context));
+        state.Require(probe.surfaceProbe.readableTextState.has_value(), std::format(L"Failed to collect fatal-error readable text state during {}.", context));
         if (probe.surfaceProbe.readableTextState.has_value())
         {
             state.Require(UiaReadableTextIsReadOnlyOrUnknown(probe.surfaceProbe.readableTextState.value()),
                           std::format(L"Fatal-error message surface should remain read-only during {}.", context));
-            state.Require(
-                UiaReadableTextContains(probe.surfaceProbe.readableTextState.value(), message),
-                std::format(L"Fatal-error dialog readable text should expose the live message text during {}; saw '{}'.",
-                            context,
-                            probe.surfaceProbe.readableTextState->value));
+            state.Require(UiaReadableTextContains(probe.surfaceProbe.readableTextState.value(), message),
+                          std::format(L"Fatal-error dialog readable text should expose the live message text during {}; saw '{}'.",
+                                      context,
+                                      probe.surfaceProbe.readableTextState->value));
         }
         state.Require(probe.invokedButton, std::format(L"Failed to invoke the visible DX footer button on fatal-error dialog during {}.", context));
         state.Require(probe.closed, std::format(L"Fatal-error dialog did not close after live UIA InvokePattern interaction during {}.", context));
@@ -3021,7 +3096,20 @@ struct FatalErrorReadableSurfaceProbe final
             }
         }
 
-        return DebugGetFolderViewChangeCasePromptSnapshot(editedSnapshot);
+        const auto snapshotDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
+        while (std::chrono::steady_clock::now() < snapshotDeadline)
+        {
+            PumpPendingMessages();
+            if (DebugGetFolderViewChangeCasePromptSnapshot(editedSnapshot) &&
+                editedSnapshot.includeSubdirsChecked == (expectedState == ToggleState_On))
+            {
+                return true;
+            }
+            std::this_thread::sleep_for(20ms);
+        }
+
+        return DebugGetFolderViewChangeCasePromptSnapshot(editedSnapshot) &&
+               editedSnapshot.includeSubdirsChecked == (expectedState == ToggleState_On);
     };
 
     constexpr size_t kUpperStyleIndex          = 1u;
@@ -3883,6 +3971,11 @@ void AutomatePaneFilterDialog(HWND mainWindow, PaneFilterDialogAutomationState& 
         return false;
     }
 
+    if (! PrepareMainWindowForIsolatedUiCase(mainWindow, state, L"pane-filter DxUi surface validation"))
+    {
+        return false;
+    }
+
     const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
     state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
     if (suiteRoot.empty())
@@ -3895,6 +3988,13 @@ void AutomatePaneFilterDialog(HWND mainWindow, PaneFilterDialogAutomationState& 
     std::filesystem::remove_all(root, ec);
     state.Require(SelfTest::EnsureDirectory(root), L"Failed to create pane-filter prompt test root.");
     state.Require(SelfTest::WriteTextFile(root / L"a.txt", "a"), L"Failed to create pane-filter prompt test file.");
+
+    const std::optional<Common::Settings::SelectionMasksSettings> selectionMasksBefore = g_settings.selectionMasks;
+    const auto restoreSelectionMasks = wil::scope_exit([&]() noexcept { g_settings.selectionMasks = selectionMasksBefore; });
+    Common::Settings::SelectionMasksSettings selectionMasks =
+        g_settings.selectionMasks.value_or(Common::Settings::SelectionMasksSettings{});
+    selectionMasks.filterHistory = {L"*.txt", L"*.log"};
+    g_settings.selectionMasks    = std::move(selectionMasks);
 
     const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
     const auto restorePath                                = wil::scope_exit([&]
@@ -4201,29 +4301,44 @@ void AutomatePaneFilterDialog(HWND mainWindow, PaneFilterDialogAutomationState& 
         };
 
         PaneFilterLiveCycleResult cycle{};
+        Trace(std::format(L"pane_filter_prompt_live_dx: cycle '{}' start", failureContext));
         RunPaneFilterPromptModalCycle(mainWindow,
                                       IDM_LEFT_FILTER,
                                       [&](const HWND prompt) noexcept
         {
             cycle.prompt = prompt;
             cycle.opened = prompt != nullptr && IsWindow(prompt) != FALSE;
+            Trace(std::format(L"pane_filter_prompt_live_dx: cycle '{}' prompt=0x{:X} opened={}",
+                              failureContext,
+                              reinterpret_cast<uintptr_t>(prompt),
+                              cycle.opened ? L"yes" : L"no"));
             if (! cycle.opened)
             {
                 return;
             }
 
-            cycle.ownedByMainWindow  = IsOwnedBy(prompt, mainWindow);
+            Trace(std::format(L"pane_filter_prompt_live_dx: cycle '{}' owner-check", failureContext));
+            cycle.ownedByMainWindow = IsOwnedBy(prompt, mainWindow);
+            Trace(std::format(L"pane_filter_prompt_live_dx: cycle '{}' uia-provider", failureContext));
             cycle.exposesUiaProvider = WindowExposesUiaProvider(prompt);
-            cycle.capturedSnapshot   = DebugGetFolderViewPaneFilterPromptSnapshot(cycle.snapshot);
-            cycle.setText            = DebugSetFolderViewPaneFilterPromptText(expectedMask);
-            cycle.enabledToggle      = DebugSetFolderViewPaneFilterPromptEnabled(true);
+            Trace(std::format(L"pane_filter_prompt_live_dx: cycle '{}' snapshot", failureContext));
+            cycle.capturedSnapshot = DebugGetFolderViewPaneFilterPromptSnapshot(cycle.snapshot);
+            Trace(std::format(L"pane_filter_prompt_live_dx: cycle '{}' set-text", failureContext));
+            cycle.setText = DebugSetFolderViewPaneFilterPromptText(expectedMask);
+            Trace(std::format(L"pane_filter_prompt_live_dx: cycle '{}' enable-toggle", failureContext));
+            cycle.enabledToggle = DebugSetFolderViewPaneFilterPromptEnabled(true);
+            Trace(std::format(L"pane_filter_prompt_live_dx: cycle '{}' edited-snapshot", failureContext));
             cycle.recapturedSnapshot = DebugGetFolderViewPaneFilterPromptSnapshot(cycle.editedSnapshot);
-            cycle.actionIssued       = accept ? DebugConfirmFolderViewPaneFilterPrompt() : DebugCancelFolderViewPaneFilterPrompt();
+            Trace(std::format(L"pane_filter_prompt_live_dx: cycle '{}' action", failureContext));
+            cycle.actionIssued = accept ? DebugConfirmFolderViewPaneFilterPrompt() : DebugCancelFolderViewPaneFilterPrompt();
             if (cycle.actionIssued)
             {
+                Trace(std::format(L"pane_filter_prompt_live_dx: cycle '{}' wait-closed", failureContext));
                 cycle.closed = WaitForWindowClosed(prompt, SelfTest::Scale(3000ms));
             }
+            Trace(std::format(L"pane_filter_prompt_live_dx: cycle '{}' worker-done", failureContext));
         });
+        Trace(std::format(L"pane_filter_prompt_live_dx: cycle '{}' joined", failureContext));
 
         state.Require(cycle.opened, std::format(L"Pane Filter prompt did not open for {}.", failureContext));
         state.Require(cycle.ownedByMainWindow, std::format(L"Pane Filter prompt should be owned by the main window during {}.", failureContext));
@@ -6062,15 +6177,16 @@ void AutomateChangeCasePrompt(
         return false;
     }
 
-    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
-    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
-    if (suiteRoot.empty())
+    const SelfTest::TestSandbox sandbox =
+        SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::Commands, L"pane_rename_long_selection");
+    state.Require(sandbox.IsValid(), L"Pane-rename long-selection TestSandbox root unavailable.");
+    if (! sandbox.IsValid())
     {
         return false;
     }
 
     const std::wstring longName      = L"stepfather-s-day-b93327ff-9c23-45e5-a777-eab3c75f474d-1080.txt";
-    const std::filesystem::path root = suiteRoot / L"work" / (L"pane_rename_long_selection_" + NewGuidText());
+    const std::filesystem::path root = sandbox.root;
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
     state.Require(SelfTest::EnsureDirectory(root), L"Failed to create pane-rename long-selection test directory.");
@@ -6539,7 +6655,7 @@ void AutomateChangeCasePrompt(
 
             cycleResult.ownedByMainWindow = IsOwnedBy(prompt, mainWindow);
             cycleResult.capturedSnapshot  = DebugGetFolderViewRenamePromptSnapshot(cycleResult.snapshot);
-            cycleResult.uiaPatternStats   = CollectVisibleUiaDescendantPatternStats(prompt);
+            cycleResult.uiaPatternStats   = WaitForVisiblePromptButtonStats(prompt, SelfTest::Scale(3000ms));
             cycleResult.valueState        = CollectVisibleDescendantValuePatternState(prompt, UIA_EditControlTypeId);
             cycleResult.buttonState       = CollectVisibleDescendantNamedElementState(prompt, UIA_ButtonControlTypeId);
             cycleResult.setText           = DebugSetFolderViewRenamePromptText(requestedName);
@@ -6914,6 +7030,27 @@ void AutomateChangeCasePrompt(
         L"taken.txt",
     }};
 
+    const auto formatNameList = [](const std::vector<std::wstring>& names) noexcept -> std::wstring
+    {
+        if (names.empty())
+        {
+            return L"<none>";
+        }
+
+        std::wstring result;
+        for (const std::wstring& name : names)
+        {
+            if (! result.empty())
+            {
+                result.append(L", ");
+            }
+            result.push_back(L'\'');
+            result.append(name);
+            result.push_back(L'\'');
+        }
+        return result;
+    };
+
     RunEditNewPromptModalCycle(mainWindow,
                                [&](const HWND prompt) noexcept
     {
@@ -6933,7 +7070,28 @@ void AutomateChangeCasePrompt(
             }
 
             FolderViewEditNewPromptDebugSnapshot snapshot{};
-            if (! DebugGetFolderViewEditNewPromptSnapshot(snapshot) || snapshot.validationText.empty())
+            bool captured = false;
+            const auto validationDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(1000ms);
+            while (std::chrono::steady_clock::now() < validationDeadline)
+            {
+                if (IsWindow(prompt) == FALSE)
+                {
+                    break;
+                }
+
+                FolderViewEditNewPromptDebugSnapshot candidate{};
+                if (DebugGetFolderViewEditNewPromptSnapshot(candidate))
+                {
+                    snapshot = std::move(candidate);
+                    captured = true;
+                    if (! snapshot.validationText.empty())
+                    {
+                        break;
+                    }
+                }
+                std::this_thread::sleep_for(10ms);
+            }
+            if (! captured || snapshot.validationText.empty())
             {
                 probe.missingValidationForNames.push_back(nameText);
             }
@@ -6952,9 +7110,14 @@ void AutomateChangeCasePrompt(
     });
 
     state.Require(probe.sawPrompt, L"Edit New validation prompt did not open.");
-    state.Require(probe.missingValidationForNames.empty(), L"Edit New should show a validation message for every invalid file name.");
-    state.Require(probe.closedForNames.empty(), L"Edit New should keep the dialog open after invalid file names.");
-    state.Require(probe.unfocusedForNames.empty(), L"Edit New should refocus the file-name field after invalid file names.");
+    state.Require(probe.missingValidationForNames.empty(),
+                  std::format(L"Edit New should show a validation message for every invalid file name; missing for: {}.",
+                              formatNameList(probe.missingValidationForNames)));
+    state.Require(probe.closedForNames.empty(),
+                  std::format(L"Edit New should keep the dialog open after invalid file names; closed for: {}.", formatNameList(probe.closedForNames)));
+    state.Require(probe.unfocusedForNames.empty(),
+                  std::format(L"Edit New should refocus the file-name field after invalid file names; unfocused for: {}.",
+                              formatNameList(probe.unfocusedForNames)));
     state.Require(probe.cancelled, L"Failed to cancel Edit New validation prompt.");
 
     ec.clear();
@@ -8424,38 +8587,6 @@ void AutomateChangeCasePrompt(
         return false;
     }
 
-    const auto captureSettledSnapshot = [&](std::wstring_view context, FolderViewCreateDirectoryPromptDebugSnapshot& snapshot, const HWND prompt) noexcept
-    {
-        state.Require(prompt != nullptr && IsWindow(prompt) != FALSE, std::format(L"Create-directory prompt did not open for {}.", context));
-        if (! prompt || IsWindow(prompt) == FALSE)
-        {
-            return false;
-        }
-
-        const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
-        while (std::chrono::steady_clock::now() < deadline)
-        {
-            snapshot = {};
-            if (DebugGetFolderViewCreateDirectoryPromptSnapshot(snapshot) && snapshot.usesDxUiHost && snapshot.visibleChildWindowCount <= 1u &&
-                snapshot.createInPath == root.wstring() && ! snapshot.text.empty())
-            {
-                return true;
-            }
-
-            PumpPendingMessages();
-            std::this_thread::sleep_for(10ms);
-        }
-
-        state.Require(false,
-                      std::format(L"Create-directory prompt did not settle for {}; usesDxUiHost={}, visibleChildren={}, createInPath='{}', text='{}'.",
-                                  context,
-                                  snapshot.usesDxUiHost ? L"yes" : L"no",
-                                  snapshot.visibleChildWindowCount,
-                                  snapshot.createInPath,
-                                  snapshot.text));
-        return false;
-    };
-
     const auto requireSuggestedSelection =
         [&](const FolderViewCreateDirectoryPromptDebugSnapshot& snapshot, std::wstring_view expectedText, std::wstring_view context) noexcept
     {
@@ -8492,7 +8623,8 @@ void AutomateChangeCasePrompt(
             return;
         }
 
-        confirmCycle.capturedSnapshot = captureSettledSnapshot(L"the initial unique-default confirm pass", confirmCycle.snapshot, prompt);
+        confirmCycle.capturedSnapshot = WaitForCreateDirectoryPromptSelectedTextSnapshot(
+            prompt, root, suggestedOne, SelfTest::Scale(3000ms), confirmCycle.snapshot);
         if (! confirmCycle.capturedSnapshot)
         {
             return;
@@ -8540,7 +8672,8 @@ void AutomateChangeCasePrompt(
             return;
         }
 
-        reopenCycle.capturedSnapshot = captureSettledSnapshot(L"the reopened unique-default cancel pass", reopenCycle.snapshot, prompt);
+        reopenCycle.capturedSnapshot = WaitForCreateDirectoryPromptSelectedTextSnapshot(
+            prompt, root, suggestedTwo, SelfTest::Scale(3000ms), reopenCycle.snapshot);
         if (! reopenCycle.capturedSnapshot)
         {
             return;
@@ -8753,6 +8886,7 @@ void AutomateChangeCasePrompt(
         FolderViewCreateDirectoryPromptDebugSnapshot snapshot{};
         std::optional<UiaDescendantPatternStats> uiaPatternStats;
         std::optional<UiaValuePatternState> valueState;
+        bool valueStateMatchesSnapshot = false;
         std::optional<UiaNamedElementState> buttonState;
         bool setText         = false;
         bool actionTriggered = false;
@@ -8780,9 +8914,15 @@ void AutomateChangeCasePrompt(
             }
 
             cycleResult.ownedByMainWindow = IsOwnedBy(prompt, mainWindow);
-            cycleResult.capturedSnapshot  = DebugGetFolderViewCreateDirectoryPromptSnapshot(cycleResult.snapshot);
-            cycleResult.uiaPatternStats   = CollectVisibleUiaDescendantPatternStats(prompt);
-            cycleResult.valueState        = CollectVisibleDescendantValuePatternState(prompt, UIA_EditControlTypeId);
+            cycleResult.capturedSnapshot  = WaitForCreateDirectoryPromptSelectedTextSnapshot(
+                prompt, root, LoadStringResource(nullptr, IDS_NEW_FOLDER_DEFAULT_NAME), SelfTest::Scale(3000ms), cycleResult.snapshot);
+            cycleResult.uiaPatternStats   = WaitForVisiblePromptButtonStats(prompt, SelfTest::Scale(3000ms));
+            cycleResult.valueStateMatchesSnapshot = WaitForVisibleDescendantValuePatternState(
+                prompt,
+                UIA_EditControlTypeId,
+                [&](const UiaValuePatternState& state) noexcept { return state.value == cycleResult.snapshot.text; },
+                cycleResult.valueState,
+                std::format(L"Create-directory prompt cycle {} initial ValuePattern read", cycle));
             cycleResult.buttonState       = CollectVisibleDescendantNamedElementState(prompt, UIA_ButtonControlTypeId);
             cycleResult.setText           = DebugSetFolderViewCreateDirectoryPromptText(requestedName);
             cycleResult.actionTriggered   = accept ? DebugConfirmFolderViewCreateDirectoryPrompt() : DebugCancelFolderViewCreateDirectoryPrompt();
@@ -8829,8 +8969,8 @@ void AutomateChangeCasePrompt(
         if (cycleResult.valueState.has_value())
         {
             state.Require(! cycleResult.valueState->isReadOnly, std::format(L"Create-directory prompt field should remain editable during cycle {}.", cycle));
-            state.Require(cycleResult.valueState->value == cycleResult.snapshot.text,
-                          std::format(L"Create-directory prompt ValuePattern should start with '{}' during cycle {}.", cycleResult.snapshot.text, cycle));
+            state.Require(cycleResult.valueStateMatchesSnapshot,
+                          std::format(L"Create-directory prompt ValuePattern should settle to '{}' during cycle {}.", cycleResult.snapshot.text, cycle));
             state.Require(! cycleResult.valueState->name.empty(),
                           std::format(L"Create-directory prompt field should expose a stable accessible name during cycle {}.", cycle));
         }
@@ -8942,10 +9082,21 @@ void AutomateChangeCasePrompt(
 
     const auto closeWindow = []() noexcept
     {
-        if (const HWND properties = GetItemPropertiesWindowHandle(); properties && IsWindow(properties) != FALSE)
+        for (;;)
         {
+            const HWND properties = GetItemPropertiesWindowHandle();
+            if (! properties || IsWindow(properties) == FALSE)
+            {
+                break;
+            }
+
             PostMessageW(properties, WM_CLOSE, 0, 0);
-            static_cast<void>(WaitForWindowClosed(properties, SelfTest::Scale(3000ms)));
+            if (! WaitForWindowClosed(properties, SelfTest::Scale(3000ms)))
+            {
+                break;
+            }
+
+            PumpPendingMessages();
         }
     };
     const auto cleanupWindow = wil::scope_exit([&]() noexcept { closeWindow(); });
@@ -9242,10 +9393,21 @@ void AutomateChangeCasePrompt(
 
     const auto closeWindow = []() noexcept
     {
-        if (const HWND properties = GetItemPropertiesWindowHandle(); properties && IsWindow(properties) != FALSE)
+        for (;;)
         {
+            const HWND properties = GetItemPropertiesWindowHandle();
+            if (! properties || IsWindow(properties) == FALSE)
+            {
+                break;
+            }
+
             PostMessageW(properties, WM_CLOSE, 0, 0);
-            static_cast<void>(WaitForWindowClosed(properties, SelfTest::Scale(3000ms)));
+            if (! WaitForWindowClosed(properties, SelfTest::Scale(3000ms)))
+            {
+                break;
+            }
+
+            PumpPendingMessages();
         }
     };
     const auto cleanupWindow = wil::scope_exit([&]() noexcept { closeWindow(); });
@@ -9837,14 +9999,15 @@ void AutomateChangeCasePrompt(
         return false;
     }
 
-    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
-    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
-    if (suiteRoot.empty())
+    const SelfTest::TestSandbox sandbox =
+        SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::Commands, L"item_properties_scroll");
+    state.Require(sandbox.IsValid(), L"Item-properties scroll TestSandbox root unavailable.");
+    if (! sandbox.IsValid())
     {
         return false;
     }
 
-    const std::filesystem::path root     = suiteRoot / L"w" / (L"ips_" + NewGuidText()) / L"alpha" / L"beta" / L"gamma";
+    const std::filesystem::path root     = sandbox.root / L"alpha" / L"beta" / L"gamma";
     const std::filesystem::path filePath = root / L"item_props_scroll_payload_long_name_segments_and_extra_wrap_pressure.txt";
 
     std::error_code ec;
@@ -10038,7 +10201,10 @@ void AutomateChangeCasePrompt(
                               narrowHeightPx));
     PumpPendingMessages();
     std::this_thread::sleep_for(50ms);
-    state.Require(DebugGetItemPropertiesWindowSnapshot(snapshot), L"Failed to capture Item Properties snapshot after narrow-width scrolling validation.");
+    state.Require(waitForSnapshot([](const ItemPropertiesWindowDebugSnapshot& value) noexcept
+    { return value.bodyVisibleLineCount > 0u && value.bodyTotalLineCount > 0u; },
+                                  snapshot),
+                  L"Failed to capture Item Properties snapshot after narrow-width scrolling validation.");
     state.Require(snapshot.bodyVisibleLineCount > 0u && snapshot.bodyTotalLineCount > 0u,
                   std::format(L"Item Properties window did not expose a readable DX read-only surface after narrow-width validation; current={}x{}, "
                               L"requested={}x{}, applied={}x{}, "
@@ -10113,7 +10279,9 @@ void AutomateChangeCasePrompt(
             continue;
         }
 
-        state.Require(DebugGetItemPropertiesWindowSnapshot(snapshot),
+        state.Require(waitForSnapshot([](const ItemPropertiesWindowDebugSnapshot& value) noexcept
+        { return value.bodyVisibleLineCount > 0u && value.bodyTotalLineCount > 0u; },
+                                      snapshot),
                       std::format(L"Failed to capture Item Properties snapshot after saturated scroll chunk {}.", chunk));
         const size_t maxFirstVisibleLine =
             snapshot.bodyTotalLineCount > snapshot.bodyVisibleLineCount ? snapshot.bodyTotalLineCount - snapshot.bodyVisibleLineCount : 0u;
@@ -10166,6 +10334,11 @@ void AutomateChangeCasePrompt(
     if (! mainWindow || IsWindow(mainWindow) == FALSE)
     {
         state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+
+    if (! PrepareMainWindowForIsolatedUiCase(mainWindow, state, L"Item Properties long-run open/close validation"))
+    {
         return false;
     }
 
@@ -10518,6 +10691,69 @@ void AutomateChangeCasePrompt(
     return state.failure.empty();
 }
 
+[[nodiscard]] void* HostPaneCookieForSelfTest(FolderWindow::Pane pane) noexcept
+{
+    const uintptr_t value = pane == FolderWindow::Pane::Left ? HOST_PANE_COOKIE_LEFT : HOST_PANE_COOKIE_RIGHT;
+    return reinterpret_cast<void*>(value);
+}
+
+[[nodiscard]] bool TestHostPaneAlertCookieRoutesNonFocusedPane(HWND mainWindow, CaseState& state) noexcept
+{
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+
+    const auto dismissPaneAlerts = []() noexcept
+    {
+        g_folderWindow.DismissPaneAlertOverlay(FolderWindow::Pane::Left);
+        g_folderWindow.DismissPaneAlertOverlay(FolderWindow::Pane::Right);
+    };
+    dismissPaneAlerts();
+    const auto cleanup = wil::scope_exit([&] { dismissPaneAlerts(); });
+
+    g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
+
+    HostAlertRequest rightRequest{};
+    rightRequest.version   = 1;
+    rightRequest.sizeBytes = sizeof(rightRequest);
+    rightRequest.scope     = HOST_ALERT_SCOPE_PANE_CONTENT;
+    rightRequest.modality  = HOST_ALERT_MODELESS;
+    rightRequest.severity  = HOST_ALERT_WARNING;
+    rightRequest.title     = L"Pane cookie";
+    rightRequest.message   = L"Right pane cookie alert";
+    rightRequest.closable  = TRUE;
+    const HRESULT rightHr  = HostShowAlert(rightRequest, HostPaneCookieForSelfTest(FolderWindow::Pane::Right));
+    state.Require(SUCCEEDED(rightHr), std::format(L"Right pane HostShowAlert failed: 0x{:08X}.", static_cast<unsigned long>(rightHr)));
+
+    FolderView::AlertOverlayDebugSnapshot leftAlert{};
+    FolderView::AlertOverlayDebugSnapshot rightAlert{};
+    state.Require(g_folderWindow.DebugGetPaneAlertSnapshot(FolderWindow::Pane::Left, leftAlert), L"Left pane alert snapshot should be available.");
+    state.Require(g_folderWindow.DebugGetPaneAlertSnapshot(FolderWindow::Pane::Right, rightAlert), L"Right pane alert snapshot should be available.");
+    state.Require(! leftAlert.visible, L"Right-pane host alert cookie should not paint the focused left pane.");
+    state.Require(rightAlert.visible && rightAlert.message == L"Right pane cookie alert", L"Right-pane host alert cookie should paint the right pane.");
+
+    HostAlertRequest leftRequest = rightRequest;
+    leftRequest.title            = L"Pane cookie left";
+    leftRequest.message          = L"Left pane alert should stay";
+    const HRESULT leftHr         = HostShowAlert(leftRequest, HostPaneCookieForSelfTest(FolderWindow::Pane::Left));
+    state.Require(SUCCEEDED(leftHr), std::format(L"Left pane HostShowAlert failed: 0x{:08X}.", static_cast<unsigned long>(leftHr)));
+
+    const HRESULT clearRightHr = HostClearAlert(HOST_ALERT_SCOPE_PANE_CONTENT, HostPaneCookieForSelfTest(FolderWindow::Pane::Right));
+    state.Require(SUCCEEDED(clearRightHr), std::format(L"Right pane HostClearAlert failed: 0x{:08X}.", static_cast<unsigned long>(clearRightHr)));
+
+    leftAlert  = {};
+    rightAlert = {};
+    state.Require(g_folderWindow.DebugGetPaneAlertSnapshot(FolderWindow::Pane::Left, leftAlert), L"Left pane alert snapshot should be available after clear.");
+    state.Require(g_folderWindow.DebugGetPaneAlertSnapshot(FolderWindow::Pane::Right, rightAlert), L"Right pane alert snapshot should be available after clear.");
+    state.Require(leftAlert.visible && leftAlert.message == L"Left pane alert should stay",
+                  L"Clearing the right host alert cookie should not dismiss the left pane alert.");
+    state.Require(! rightAlert.visible, L"Clearing the right host alert cookie should dismiss only the right pane alert.");
+
+    return state.failure.empty();
+}
+
 } // namespace (tests)
 
 void RunDialogsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestOptions& options, SelfTest::SelfTestSuiteResult& suite) noexcept
@@ -10542,6 +10778,9 @@ void RunDialogsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestOp
     });
     SelfTest::RunCase(options, suite, L"cmd_app_prompt_long_run_open_close_stays_stable", [=](CaseState& state) noexcept {
         return TestAppPromptLongRunOpenCloseStaysStable(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"host_pane_alert_cookie_routes_non_focused_pane", [=](CaseState& state) noexcept {
+        return TestHostPaneAlertCookieRoutesNonFocusedPane(mainWindow, state);
     });
     SelfTest::RunCase(options, suite, L"cmd_app_fatal_error_uses_dxui_surface", [=](CaseState& state) noexcept {
         return TestFatalErrorDialogUsesDxUiSurface(mainWindow, state);

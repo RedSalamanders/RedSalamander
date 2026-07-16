@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -61,9 +62,43 @@ public:
 
 private:
     enum class HudPart : uint8_t;
+
+    struct ViewerVlcConfig
+    {
+        std::filesystem::path vlcInstallPath;
+        bool autoDetectVlc                  = true;
+        bool quiet                          = true;
+        uint32_t fileCachingMs              = 300;
+        uint32_t networkCachingMs           = 1000;
+        uint32_t defaultPlaybackRatePercent = 100;
+        std::string avcodecHw               = "any";
+        std::string videoOutput;
+        std::string audioOutput;
+        std::string audioVisualization = "visual";
+        std::string extraArgs;
+        uint32_t lastVolumePercent = 100;
+        bool muted                 = false;
+    };
+
+    enum class AsyncFallbackKind : uint8_t
+    {
+        Load,
+        Cleanup,
+    };
+
+    struct AsyncFallbackCompletion
+    {
+        AsyncFallbackKind kind = AsyncFallbackKind::Load;
+        uint64_t requestId      = 0;
+        uint64_t windowIdentity = 0;
+        HRESULT hr              = E_FAIL;
+    };
+
     struct VlcLoadSpec;
     struct VlcAsyncLoadWork;
     struct VlcAsyncLoadResult;
+    struct VlcAsyncCloseWork;
+    struct VlcAsyncCloseResult;
 
     static ATOM RegisterWndClass(HINSTANCE instance) noexcept;
     static constexpr wchar_t kClassName[] = L"RedSalamander.ViewerVLC";
@@ -129,12 +164,26 @@ private:
     void OnHudMouseWheel(HWND hwnd, WPARAM wheelParam) noexcept;
     void OnHudKillFocus(HWND hwnd) noexcept;
 
-    [[nodiscard]] bool BuildVlcLoadSpec(VlcLoadSpec& spec, std::wstring& outError) const noexcept;
+    [[nodiscard]] static bool BuildVlcLoadSpec(const ViewerVlcConfig& config, VlcLoadSpec& spec, std::wstring& outError) noexcept;
     [[nodiscard]] static std::unique_ptr<VlcState> LoadVlcState(const VlcLoadSpec& spec, std::wstring& outError) noexcept;
     bool StartPlayback(const std::filesystem::path& path) noexcept;
     bool StartPlaybackWithLoadedVlc(const std::filesystem::path& path) noexcept;
-    void BeginAsyncVlcLoad(const std::filesystem::path& path, VlcLoadSpec&& spec) noexcept;
+    void BeginAsyncVlcLoad(const std::filesystem::path& path) noexcept;
     void OnAsyncVlcLoadComplete(std::unique_ptr<VlcAsyncLoadResult> result) noexcept;
+    void BeginDeferredClose() noexcept;
+    [[nodiscard]] bool TryQueueDeferredCloseCleanup() noexcept;
+    [[nodiscard]] bool TryQueueVlcStateCleanup(std::unique_ptr<VlcState>& state) noexcept;
+    [[nodiscard]] bool EnsureVlcCleanupDispatcher() noexcept;
+    static void CALLBACK VlcCleanupDispatcherCallback(PTP_CALLBACK_INSTANCE instance, void* context, PTP_WORK work) noexcept;
+    void ScheduleVlcCleanupDispatcher() noexcept;
+    [[nodiscard]] bool ScheduleDeferredVlcStateCleanup() noexcept;
+    void DeferVlcStateCleanup(std::unique_ptr<VlcState> state) noexcept;
+    void DeferSyntheticVlcCleanup() noexcept;
+    void EnsureVlcCleanupProgress() noexcept;
+    void OnAsyncVlcCloseComplete(std::unique_ptr<VlcAsyncCloseResult> result) noexcept;
+    void RecordAsyncFallbackCompletion(AsyncFallbackCompletion completion) noexcept;
+    void DrainAsyncFallbackCompletions() noexcept;
+    void CompleteCloseAfterCleanup() noexcept;
     void StopPlayback() noexcept;
     void RetireCurrentPlayerAsync(bool updateUi) noexcept;
     void RetireVlcStateAsync(std::unique_ptr<VlcState> state, bool updateUi) noexcept;
@@ -192,23 +241,6 @@ private:
     [[nodiscard]] std::wstring GetOverlayLinkUrl() const;
     [[nodiscard]] HRESULT RebuildConfigurationJson() noexcept;
     [[nodiscard]] bool ConfigurationDiffersFromDefaults() const noexcept;
-
-    struct ViewerVlcConfig
-    {
-        std::filesystem::path vlcInstallPath;
-        bool autoDetectVlc                  = true;
-        bool quiet                          = true;
-        uint32_t fileCachingMs              = 300;
-        uint32_t networkCachingMs           = 1000;
-        uint32_t defaultPlaybackRatePercent = 100;
-        std::string avcodecHw               = "any";
-        std::string videoOutput;
-        std::string audioOutput;
-        std::string audioVisualization = "visual";
-        std::string extraArgs;
-        uint32_t lastVolumePercent = 100;
-        bool muted                 = false;
-    };
 
     std::atomic_ulong _refCount{1};
 
@@ -309,13 +341,57 @@ private:
     bool _loadingUiVisible        = false;
     ULONGLONG _loadingStartedTick = 0;
     uint64_t _asyncOpenGeneration = 0;
+    uint64_t _windowIdentity      = 0;
+    uint64_t _closeRequestId      = 0;
+    bool _closePending            = false;
+    bool _closeNotificationSent   = false;
+    bool _destroyingAfterCleanup  = false;
+    uint64_t _pendingLoadWorkCount = 0;
+    uint64_t _pendingCloseCleanupCount = 0;
+    uint64_t _loadQueueAccepted   = 0;
+    uint64_t _loadQueueRejected   = 0;
+    uint64_t _staleLoadResults    = 0;
+    uint64_t _cleanupCompletions  = 0;
+    std::atomic_uint64_t _cleanupDeferrals{0u};
+    uint64_t _cleanupSubmitFailures = 0;
+    uint64_t _cleanupAllocationFailures = 0;
+    uint64_t _loadPostFallbacks   = 0;
+    uint64_t _cleanupPostFallbacks = 0;
+    std::mutex _asyncFallbackMutex;
+    uint64_t _asyncFallbackLoadCount = 0;
+    uint64_t _asyncFallbackCleanupCount = 0;
+    AsyncFallbackCompletion _asyncFallbackNewestLoad;
+    AsyncFallbackCompletion _asyncFallbackNewestCleanup;
 
     std::unique_ptr<VlcState> _vlc;
+    wil::unique_hmodule _cleanupDispatcherModulePin;
+    wil::unique_threadpool_work_nowait _cleanupDispatcherWork;
+    std::mutex _cleanupDispatcherMutex;
+    std::unique_ptr<VlcState> _deferredCleanupHead;
+    std::atomic_uint64_t _deferredCleanupCount{0u};
+    uint64_t _syntheticCleanupCount = 0u;
+    uint64_t _syntheticCleanupRequestId = 0u;
+    uint64_t _syntheticCleanupWindowIdentity = 0u;
+#ifdef ENABLE_TESTS
+    uint32_t _syntheticCleanupDelayMs = 0u;
+    std::shared_ptr<wil::unique_handle> _syntheticCleanupReleaseGate;
+#endif
+    bool _cleanupDispatcherScheduled = false;
+    std::atomic_bool _syntheticCleanupPending{false};
+    std::atomic<HWND> _cleanupNotifyWindow{nullptr};
+    std::atomic_uint64_t _cleanupNotifyIdentity{0u};
 
     std::filesystem::path _currentPath;
 
 #ifdef ENABLE_TESTS
     wil::unique_hwnd _debugWheelVideoChild;
     uint32_t _debugStopDelayMs = 0;
+    std::shared_ptr<wil::unique_handle> _debugStopReleaseGate;
+    uint32_t _debugLoadDelayMs = 0;
+    bool _debugFailNextLoadSubmit = false;
+    bool _debugFailNextLoadCompletionPost = false;
+    bool _debugFailNextCloseCompletionPost = false;
+    bool _debugFailNextCleanupSubmit = false;
+    bool _debugFailNextCleanupAllocation = false;
 #endif
 };

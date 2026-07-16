@@ -22,8 +22,49 @@ Describe 'Viewer chrome keyboard contracts' {
             $source | Should Match 'ViewerFileComboHost\.h'
             $source | Should Match 'DispatchFileComboHostWndProc'
             $source | Should Match 'ConfigureFileComboKeyboard'
+            $source | Should Match 'ViewerFileComboHost::MessageMayOpenWindowComboPopup'
+            $source | Should Match 'ViewerFileComboHost::ComputeStandaloneComboPopupHeightPx'
+            $source | Should Not Match '(?m)^\s*\[\[nodiscard\]\]\s+bool\s+MessageMayOpenWindowComboPopup\s*\('
             $source | Should Not Match 'WM_KEYUP\s*&&\s*\(wp\s*==\s*VK_ESCAPE\s*\|\|\s*wp\s*==\s*VK_TAB\)'
             $source | Should Not Match 'PostMessageW\(root,\s*WM_CLOSE'
+        }
+    }
+
+    It 'routes viewer Unicode text copies through the shared ownership helper' {
+        $clipboardSources = @(
+            'Plugins\ViewerWeb\ViewerWeb.cpp',
+            'Plugins\ViewerText\ViewerText.Text.cpp',
+            'Plugins\ViewerText\ViewerText.Hex.cpp'
+        )
+
+        foreach ($relativePath in $clipboardSources) {
+            $sourcePath = Join-Path $repoRoot $relativePath
+            $source = Get-Content -Path $sourcePath -Raw
+
+            $source | Should Match 'UnicodeClipboard\.h'
+            $source | Should Match 'Common::Clipboard::TrySetUnicodeText'
+            $source | Should Not Match '(?m)^\s*bool\s+CopyUnicodeTextToClipboard\s*\('
+            $source | Should Not Match 'SetClipboardData\(CF_UNICODETEXT'
+        }
+    }
+
+    It 'routes first-party viewer title bars through the shared DWM attribute policy' {
+        $titleBarSources = @(
+            'Plugins\ViewerPE\ViewerPE.cpp',
+            'Plugins\ViewerWeb\ViewerWeb.cpp',
+            'Plugins\ViewerImgRaw\ViewerImgRaw.cpp',
+            'Plugins\ViewerText\ViewerText.cpp',
+            'Plugins\ViewerVLC\ViewerVLC.cpp',
+            'Plugins\ViewerSqlite\ViewerSqlite.cpp'
+        )
+
+        foreach ($relativePath in $titleBarSources) {
+            $sourcePath = Join-Path $repoRoot $relativePath
+            $source = Get-Content -Path $sourcePath -Raw
+
+            $source | Should Match 'ViewerTitleBarTheme\.h'
+            $source | Should Match 'ViewerChrome::ApplyTitleBarTheme'
+            $source | Should Not Match 'kDwmwa(Caption|Border|Text)Color'
         }
     }
 

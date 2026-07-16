@@ -12,8 +12,10 @@
 #include "CommandRegistry.h"
 #include "DxUi/DxUi.Typography.h"
 #include "Helpers.h"
+#include "HwndRenderTargetResources.h"
 #include "ShortcutManager.h"
 #include "WindowMessages.h"
+#include "WindowSizing.h"
 #include "resource.h"
 
 namespace
@@ -29,24 +31,17 @@ constexpr int kKeyFontHeightDip                     = 7;
 constexpr int kTextFontHeightDip                    = 11;
 constexpr int kModifiersGapDip                      = 6;
 constexpr wchar_t kFunctionBarRenderResourcesProp[] = L"RedSalamander.FunctionBar.RenderResources";
+using Common::WindowSizing::PixelToDip;
 
-struct FunctionBarRenderResources final
+struct FunctionBarRenderResources final : Common::Rendering::HwndRenderTargetResources
 {
     UINT dpi = USER_DEFAULT_SCREEN_DPI;
-    wil::com_ptr<ID2D1Factory> d2dFactory;
     wil::com_ptr<IDWriteFactory> dwriteFactory;
     wil::com_ptr<IDWriteInlineObject> ellipsisSign;
-    wil::com_ptr<ID2D1HwndRenderTarget> target;
     wil::com_ptr<IDWriteTextFormat> keyFormat;
     wil::com_ptr<IDWriteTextFormat> labelFormat;
     wil::com_ptr<IDWriteTextFormat> modifierFormat;
-    wil::com_ptr<ID2D1SolidColorBrush> solidBrush;
 };
-
-[[nodiscard]] float PixelToDip(float value, float dpi) noexcept
-{
-    return (value * static_cast<float>(USER_DEFAULT_SCREEN_DPI)) / std::max(1.0f, dpi);
-}
 
 [[nodiscard]] D2D1_RECT_F RectF(const RECT& rc, float dpi) noexcept
 {
@@ -74,8 +69,7 @@ struct FunctionBarRenderResources final
 
 void ResetFunctionBarTarget(FunctionBarRenderResources& resources) noexcept
 {
-    resources.solidBrush.reset();
-    resources.target.reset();
+    resources.ResetTarget();
 }
 
 void ResetFunctionBarTypography(FunctionBarRenderResources& resources) noexcept
@@ -134,14 +128,9 @@ void DestroyFunctionBarRenderResources(HWND hwnd) noexcept
 
 [[nodiscard]] bool EnsureFunctionBarFactories(FunctionBarRenderResources& resources) noexcept
 {
-    if (! resources.d2dFactory)
+    if (! resources.EnsureD2dFactory())
     {
-        const HRESULT hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, resources.d2dFactory.addressof());
-        if (FAILED(hr))
-        {
-            resources.d2dFactory.reset();
-            return false;
-        }
+        return false;
     }
 
     if (! resources.dwriteFactory)
@@ -260,53 +249,7 @@ void ApplyFunctionBarTextTrimming(IDWriteTextFormat* format, IDWriteInlineObject
 
 [[nodiscard]] bool EnsureFunctionBarTarget(HWND hwnd, FunctionBarRenderResources& resources) noexcept
 {
-    if (! EnsureFunctionBarFactories(resources))
-    {
-        return false;
-    }
-
-    RECT client{};
-    if (! hwnd || ! GetClientRect(hwnd, &client))
-    {
-        return false;
-    }
-
-    const UINT width  = static_cast<UINT>(std::max(0L, client.right - client.left));
-    const UINT height = static_cast<UINT>(std::max(0L, client.bottom - client.top));
-    if (width == 0u || height == 0u)
-    {
-        return false;
-    }
-
-    if (! resources.target)
-    {
-        const D2D1_RENDER_TARGET_PROPERTIES props          = D2D1::RenderTargetProperties();
-        const D2D1_HWND_RENDER_TARGET_PROPERTIES hwndProps = D2D1::HwndRenderTargetProperties(hwnd, D2D1::SizeU(width, height));
-
-        wil::com_ptr<ID2D1HwndRenderTarget> target;
-        const HRESULT hr = resources.d2dFactory->CreateHwndRenderTarget(props, hwndProps, target.addressof());
-        if (FAILED(hr) || ! target)
-        {
-            resources.target.reset();
-            return false;
-        }
-
-        target->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_CLEARTYPE);
-        target->SetDpi(static_cast<float>(resources.dpi), static_cast<float>(resources.dpi));
-        resources.target = std::move(target);
-    }
-
-    if (! resources.solidBrush)
-    {
-        const HRESULT brushHr = resources.target->CreateSolidColorBrush(D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f), resources.solidBrush.addressof());
-        if (FAILED(brushHr))
-        {
-            resources.solidBrush.reset();
-            return false;
-        }
-    }
-
-    return resources.target && resources.solidBrush;
+    return resources.EnsureTarget(hwnd, resources.dpi);
 }
 
 void DrawFunctionBarRect(FunctionBarRenderResources& resources, const RECT& rc, COLORREF color) noexcept
@@ -368,20 +311,7 @@ void DrawFunctionBarText(FunctionBarRenderResources& resources, std::wstring_vie
                                DWRITE_MEASURING_MODE_NATURAL);
 }
 
-[[nodiscard]] COLORREF BlendColor(COLORREF base, COLORREF overlay, int overlayWeight, int denom) noexcept
-{
-    if (denom <= 0)
-    {
-        return base;
-    }
-    overlayWeight        = std::clamp(overlayWeight, 0, denom);
-    const int baseWeight = denom - overlayWeight;
-
-    const int r = (static_cast<int>(GetRValue(base)) * baseWeight + static_cast<int>(GetRValue(overlay)) * overlayWeight) / denom;
-    const int g = (static_cast<int>(GetGValue(base)) * baseWeight + static_cast<int>(GetGValue(overlay)) * overlayWeight) / denom;
-    const int b = (static_cast<int>(GetBValue(base)) * baseWeight + static_cast<int>(GetBValue(overlay)) * overlayWeight) / denom;
-    return RGB(static_cast<BYTE>(r), static_cast<BYTE>(g), static_cast<BYTE>(b));
-}
+using Common::Colors::BlendColorRefWeightedTruncate;
 
 [[nodiscard]] std::wstring BuildModifierText(uint32_t modifiers) noexcept
 {
@@ -893,7 +823,8 @@ void FunctionBar::PaintToHdc(HDC hdc) noexcept
         }
         else if (hovered)
         {
-            const COLORREF hoverColor = _theme.highContrast ? _theme.menu.selectionBg : BlendColor(_theme.menu.background, _theme.menu.selectionBg, 1, 3);
+            const COLORREF hoverColor =
+                _theme.highContrast ? _theme.menu.selectionBg : BlendColorRefWeightedTruncate(_theme.menu.background, _theme.menu.selectionBg, 1, 3);
             DrawFunctionBarRect(*resources, zone, hoverColor);
         }
 
@@ -1027,7 +958,7 @@ void FunctionBar::RecomputeModifierText()
 
 int FunctionBar::PxFromDip(int dip) const noexcept
 {
-    return MulDiv(dip, static_cast<int>(_dpi), USER_DEFAULT_SCREEN_DPI);
+    return Common::WindowSizing::DipToPixelRounded(_dpi, dip);
 }
 
 #ifdef ENABLE_TESTS

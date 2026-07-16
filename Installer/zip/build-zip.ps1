@@ -96,6 +96,16 @@ try {
         Get-ChildItem $PluginsDest -Recurse -Include "*.pdb","*.lib","*.exp","*.ilk","*.iobj","*.ipdb" | Remove-Item -Force
     }
 
+    # Copy localization satellite DLLs that live beside the Plugins folder.
+    $LangSource = Join-Path $BuildOutputDir "Lang"
+    if (Test-Path $LangSource) {
+        $LangDest = Join-Path $TempDir "Lang"
+        Copy-Item $LangSource -Destination $LangDest -Recurse -Force
+
+        # Remove build artifacts from Lang
+        Get-ChildItem $LangDest -Recurse -Include "*.pdb","*.lib","*.exp","*.ilk","*.iobj","*.ipdb" | Remove-Item -Force
+    }
+
     # Copy Themes folder
     $ThemesSource = Join-Path $BuildOutputDir "Themes"
     if (Test-Path $ThemesSource) {

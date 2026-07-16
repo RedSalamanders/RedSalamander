@@ -321,6 +321,8 @@ BEGIN
     IDS_VIEWERTEXT_CAPTION_ERROR "ビューアー"
     IDS_VIEWERTEXT_ERR_OPEN_FAILED "ファイルを開けませんでした。"
     IDS_VIEWERTEXT_ERR_SAVE_FAILED "ファイルの保存に失敗しました。"
+    IDS_VIEWERTEXT_ERR_SAVE_LOADING "ファイルの読み込みが完了してから保存してください。"
+    IDS_VIEWERTEXT_ERR_SAVE_STREAM_CONVERT "このファイルは一部しか読み込まれていません。変換せずに保存するには、［元のエンコードを保持］を選択してください。"
 
     IDS_VIEWERTEXT_DIALOG_OPEN_TITLE "ファイルを開く"
     IDS_VIEWERTEXT_DIALOG_SAVE_TITLE "ファイルに名前を付けて保存"
@@ -371,4 +373,5 @@ IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_ADDED_FILE "[左側のファイルがありま
 IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_DELETED_FILE "[右側のファイルがありません: パッチによりこのファイルが削除されます]"
 IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_TOO_LARGE "[変更されていない行は非表示になっています: 参照ファイルが大きすぎて展開できません]"
 IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_BINARY "[変更されていない行は非表示: 参照ファイルはバイナリです]"
+IDS_VIEWERTEXT_MSG_HEX_COPY_TRUNCATED "選択範囲が大きすぎます。先頭の 256 KiB のみをコピーしました。"
 END
