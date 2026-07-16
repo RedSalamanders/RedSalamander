@@ -152,6 +152,75 @@ bool TestSatelliteOverridesEmbeddedString() noexcept
     return success;
 }
 
+bool TestPluginOwnerSatelliteLoadsFromHostLangDirectory() noexcept
+{
+    bool success = true;
+
+    HINSTANCE pluginLikeInstance = GetModuleHandleW(L"kernel32.dll");
+    Check(pluginLikeInstance != nullptr, L"plugin-like module handle resolves for shared Lang lookup", success);
+    if (! pluginLikeInstance)
+    {
+        return false;
+    }
+
+    const HRESULT registerHr = Localization::RegisterResourceOwner(L"LocalizationTests", pluginLikeInstance);
+    Check(SUCCEEDED(registerHr), L"plugin-like resource owner registration succeeds for shared Lang lookup", success);
+
+    Localization::LanguagePreference preference;
+    preference.kind    = Localization::LanguagePreferenceKind::Culture;
+    preference.culture = L"fr-FR";
+    const HRESULT applyHr = Localization::ApplyLanguagePreference(preference);
+    Check(SUCCEEDED(applyHr), L"fr-FR language preference applies for shared Lang lookup", success);
+
+    const std::wstring present = LoadStringResource(pluginLikeInstance, IDS_LOCALIZATION_TEST_PRESENT);
+    Check(present == L"Chaine de test francaise", L"plugin-like owner loads satellite from host Lang directory", success);
+
+    const std::wstring embeddedPresent = LoadEmbeddedStringResource(pluginLikeInstance, IDS_LOCALIZATION_TEST_PRESENT);
+    Check(embeddedPresent.empty(), L"plugin-like embedded module does not own the test string resource", success);
+
+    Localization::LanguagePreference systemPreference;
+    static_cast<void>(Localization::ApplyLanguagePreference(systemPreference));
+    Localization::UnregisterResourceOwner(pluginLikeInstance);
+    return success;
+}
+
+bool TestNestedResourceOwnerRegistrationKeepsSatelliteUntilLastRelease() noexcept
+{
+    bool success       = true;
+    HINSTANCE instance = GetModuleHandleW(nullptr);
+    Check(instance != nullptr, L"test module handle resolves for nested owner registration", success);
+
+    const HRESULT firstRegisterHr = Localization::RegisterResourceOwner(L"LocalizationTests", instance);
+    const HRESULT conflictingRegisterHr = Localization::RegisterResourceOwner(L"ConflictingLocalizationOwner", instance);
+    const HRESULT secondRegisterHr = Localization::RegisterResourceOwner(L"LocalizationTests", instance);
+    Check(SUCCEEDED(firstRegisterHr) && SUCCEEDED(secondRegisterHr), L"nested resource owner registrations succeed", success);
+    Check(conflictingRegisterHr == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS),
+          L"the same resource-owner instance cannot be registered under a conflicting name",
+          success);
+
+    Localization::LanguagePreference preference;
+    preference.kind    = Localization::LanguagePreferenceKind::Culture;
+    preference.culture = L"fr-FR";
+    Check(SUCCEEDED(Localization::ApplyLanguagePreference(preference)), L"nested owner language preference applies", success);
+    Check(LoadStringResource(instance, IDS_LOCALIZATION_TEST_PRESENT) == L"Chaine de test francaise",
+          L"nested owner resolves its satellite",
+          success);
+
+    Localization::UnregisterResourceOwner(instance);
+    Check(LoadStringResource(instance, IDS_LOCALIZATION_TEST_PRESENT) == L"Chaine de test francaise",
+          L"first unregister keeps the shared module resource owner registered",
+          success);
+
+    Localization::UnregisterResourceOwner(instance);
+    Check(LoadStringResource(instance, IDS_LOCALIZATION_TEST_PRESENT) == L"Embedded English test string",
+          L"last unregister removes the shared module resource owner",
+          success);
+
+    Localization::LanguagePreference systemPreference;
+    static_cast<void>(Localization::ApplyLanguagePreference(systemPreference));
+    return success;
+}
+
 bool TestInvalidCultureFallsBackToEmbedded() noexcept
 {
     bool success = true;
@@ -379,6 +448,10 @@ int wmain()
     success = TestEmbeddedFallbackWithoutSatellite() && success;
     std::wcout << L"[ RUN      ] TestSatelliteOverridesEmbeddedString\n";
     success = TestSatelliteOverridesEmbeddedString() && success;
+    std::wcout << L"[ RUN      ] TestPluginOwnerSatelliteLoadsFromHostLangDirectory\n";
+    success = TestPluginOwnerSatelliteLoadsFromHostLangDirectory() && success;
+    std::wcout << L"[ RUN      ] TestNestedResourceOwnerRegistrationKeepsSatelliteUntilLastRelease\n";
+    success = TestNestedResourceOwnerRegistrationKeepsSatelliteUntilLastRelease() && success;
     std::wcout << L"[ RUN      ] TestInvalidCultureFallsBackToEmbedded\n";
     success = TestInvalidCultureFallsBackToEmbedded() && success;
     std::wcout << L"[ RUN      ] TestUiLanguageSettings\n";

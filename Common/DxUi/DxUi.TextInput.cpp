@@ -12,38 +12,10 @@ namespace RedSalamander::DxUi
 {
 namespace
 {
-constexpr UINT kModifierAlt               = 0x0100u;
 constexpr float kMultilineLayoutHeightDip = 32768.0f;
 constexpr uint64_t kCaretBlinkPeriodMs    = 530u;
 
 [[nodiscard]] std::wstring NormalizeMultilineLineEndings(std::wstring_view text, bool multiline);
-
-[[nodiscard]] bool ModifiersContainCtrl(UINT modifiers) noexcept
-{
-    return (modifiers & MK_CONTROL) != 0u;
-}
-
-[[nodiscard]] bool ModifiersContainShift(UINT modifiers) noexcept
-{
-    return (modifiers & MK_SHIFT) != 0u;
-}
-
-[[nodiscard]] bool ModifiersContainAlt(UINT modifiers) noexcept
-{
-    return (modifiers & kModifierAlt) != 0u;
-}
-
-[[nodiscard]] size_t CountTextElements(std::wstring_view text) noexcept
-{
-    size_t count = 0u;
-    for (size_t index = 0u; index < text.size();)
-    {
-        const size_t next = StepToNextTextElement(text, index);
-        index             = next > index ? next : index + 1u;
-        ++count;
-    }
-    return count;
-}
 
 struct ConcealedMaskBucket final
 {
@@ -934,6 +906,36 @@ TextField::TextField(std::wstring text) : _text(std::move(text))
     SetFocusable(true);
 }
 
+TextField::~TextField() noexcept
+{
+    SecureClearStorage();
+}
+
+void TextField::SecureClearStorage() noexcept
+{
+    SecureWipe::SecureClear(_text);
+    for (EditHistoryState& state : _undoHistory)
+    {
+        SecureWipe::SecureClear(state.text);
+    }
+    for (EditHistoryState& state : _redoHistory)
+    {
+        SecureWipe::SecureClear(state.text);
+    }
+    SecureWipe::SecureClear(_cachedLayoutText);
+    ClearSingleLineTextLayoutCache(_singleLineLayoutCache, true);
+    _undoHistory.clear();
+    _redoHistory.clear();
+}
+
+void TextField::RefreshAccessibilitySnapshot() const noexcept
+{
+    if (WindowHost* const host = GetHost())
+    {
+        RefreshWindowHostAccessibilitySnapshot(host->GetHwnd(), host);
+    }
+}
+
 void TextField::SetText(std::wstring text)
 {
     _text       = std::move(text);
@@ -949,12 +951,15 @@ void TextField::SetText(std::wstring text)
     _dragSelecting                = false;
     _undoHistory.clear();
     _redoHistory.clear();
+    BreakDirectEditMerge();
     RegenerateConcealedMaskEpoch();
+    InvalidateSingleLineLayoutCache();
     InvalidateMultilineLayoutCache();
     if (auto* host = GetHost(); host && host->GetFocusControl() == this)
     {
         host->SyncTextInput(this);
     }
+    RefreshAccessibilitySnapshot();
     RequestInvalidate();
 }
 
@@ -970,6 +975,7 @@ size_t TextField::GetCaretIndex() const noexcept
 
 void TextField::SetSelectionRange(const size_t selectionStart, const size_t selectionEnd) noexcept
 {
+    BreakDirectEditMerge();
     const size_t clampedStart = std::min(selectionStart, _text.size());
     const size_t clampedEnd   = std::min(selectionEnd, _text.size());
     _preferredMultilineXOffsetDip.reset();
@@ -991,6 +997,7 @@ void TextField::SetSelectionRange(const size_t selectionStart, const size_t sele
     {
         host->SyncTextInput(this);
     }
+    RefreshAccessibilitySnapshot();
     RequestInvalidate();
 }
 
@@ -1011,6 +1018,7 @@ void TextField::ReplaceSelectionAndNotify(std::wstring_view replacement)
     ResetSingleLineSelectionClickSequence(_selectionClickSequence);
     _caretBlinkAnchorTickMs = 0u;
     _caretVisible           = true;
+    InvalidateSingleLineLayoutCache();
     InvalidateMultilineLayoutCache();
     NotifyChanged();
     RequestInvalidate();
@@ -1031,10 +1039,12 @@ void TextField::SetMasked(bool masked) noexcept
 
     _masked = masked;
     RegenerateConcealedMaskEpoch();
+    InvalidateSingleLineLayoutCache();
     if (WindowHost* const host = GetHost(); host && HasFocus())
     {
         host->SyncTextInput(this);
     }
+    RefreshAccessibilitySnapshot();
     RequestInvalidate();
 }
 
@@ -1068,6 +1078,8 @@ void TextField::SetPasswordRevealMode(PasswordRevealMode mode) noexcept
         SetPasswordRevealState(PasswordRevealState::Hidden);
     }
 
+    InvalidateSingleLineLayoutCache();
+    RefreshAccessibilitySnapshot();
     RequestInvalidate();
 }
 
@@ -1094,6 +1106,8 @@ void TextField::SetPasswordRevealState(PasswordRevealState state) noexcept
 
     const auto startedAt = std::chrono::steady_clock::now();
     _passwordRevealState = state;
+    InvalidateSingleLineLayoutCache();
+    RefreshAccessibilitySnapshot();
     RequestInvalidate();
     if (Debug::Perf::IsCaptureEnabled())
     {
@@ -1116,6 +1130,7 @@ void TextField::SetPasswordMaskLengthPolicy(PasswordMaskLengthPolicy policy) noe
 
     _maskLengthPolicy = policy;
     RegenerateConcealedMaskEpoch();
+    InvalidateSingleLineLayoutCache();
     RequestInvalidate();
 }
 
@@ -1134,13 +1149,14 @@ size_t TextField::GetSecretVisibleDotCount() const noexcept
         return result;
     }
 
-    exactCount = CountTextElements(_text);
     if (_maskLengthPolicy == PasswordMaskLengthPolicy::Exact)
     {
+        exactCount = CountTextElements(_text);
         result = exactCount;
     }
     else
     {
+        exactCount = _text.size();
         result = GetConcealedMaskVisibleDotCount(exactCount);
     }
 
@@ -1209,6 +1225,8 @@ void TextField::SetMultiline(bool multiline) noexcept
     _preferredMultilineXOffsetDip.reset();
     _multilineFirstVisibleLine    = 0u;
     _multilineWheelDeltaRemainder = 0.0f;
+    InvalidateSingleLineLayoutCache();
+    InvalidateMultilineLayoutCache();
 }
 
 bool TextField::IsMultiline() const noexcept
@@ -1247,6 +1265,7 @@ void TextField::SetHorizontalTextPadding(float leftDip, float rightDip) noexcept
     _hasExplicitHorizontalTextPadding = true;
     _textPaddingLeftDip               = clampedLeftDip;
     _textPaddingRightDip              = clampedRightDip;
+    InvalidateSingleLineLayoutCache();
     InvalidateMultilineLayoutCache();
     if (auto* host = GetHost(); host && host->GetFocusControl() == this)
     {
@@ -1267,6 +1286,7 @@ void TextField::SetVerticalTextPadding(float topDip, float bottomDip) noexcept
     _hasExplicitVerticalTextPadding = true;
     _textPaddingTopDip              = clampedTopDip;
     _textPaddingBottomDip           = clampedBottomDip;
+    InvalidateSingleLineLayoutCache();
     InvalidateMultilineLayoutCache();
     if (auto* host = GetHost(); host && host->GetFocusControl() == this)
     {
@@ -1402,6 +1422,7 @@ bool TextField::DebugGetCaretRect(const WindowHost& host, size_t controlTextInde
 
 void TextField::OnBoundsChanged() noexcept
 {
+    InvalidateSingleLineLayoutCache();
     InvalidateMultilineLayoutCache();
     if (! _multiline)
     {
@@ -1467,6 +1488,7 @@ void TextField::Paint(WindowHost& host) const
     const std::wstring displayText                  = GetDisplayText();
     const bool usePlaceholder                       = _text.empty() && ! _placeholder.empty();
     const DWRITE_READING_DIRECTION readingDirection = ResolveReadingDirection(GetFlowDirection());
+    wil::com_ptr<IDWriteTextLayout> paintSingleLineLayout;
     if (_multiline)
     {
         const auto multilineLayout =
@@ -1483,16 +1505,22 @@ void TextField::Paint(WindowHost& host) const
     else
     {
         EnsureCaretVisible(&host, std::max(1.0f, textRect.right - textRect.left));
-        DrawSingleLineSelection(host,
-                                displayText,
-                                textRect,
-                                FontRole::Body,
-                                style.text,
-                                style.selectionFill,
-                                style.selectionText,
-                                _horizontalScrollDip,
-                                GetSelectionRange(),
-                                readingDirection);
+        paintSingleLineLayout = GetOrCreateSingleLineLayout(&host,
+                                                            displayText,
+                                                            std::max(1.0f, textRect.right - textRect.left + _horizontalScrollDip),
+                                                            std::max(1.0f, textRect.bottom - textRect.top),
+                                                            readingDirection);
+        DrawSingleLineSelectionWithLayout(host,
+                                          displayText,
+                                          textRect,
+                                          FontRole::Body,
+                                          style.text,
+                                          style.selectionFill,
+                                          style.selectionText,
+                                          _horizontalScrollDip,
+                                          GetSelectionRange(),
+                                          readingDirection,
+                                          paintSingleLineLayout.get());
     }
 
     if (! usePlaceholder)
@@ -1514,14 +1542,15 @@ void TextField::Paint(WindowHost& host) const
         }
         else
         {
-            EnsureCaretVisible(&host, std::max(1.0f, textRect.right - textRect.left));
-            const float caretOffset = MeasureCaretOffsetDip(&host,
-                                                            displayText,
-                                                            FontRole::Body,
-                                                            _caretIndex,
-                                                            std::max(1.0f, textRect.bottom - textRect.top),
-                                                            readingDirection,
-                                                            std::max(1.0f, textRect.right - textRect.left + _horizontalScrollDip));
+            if (! paintSingleLineLayout)
+            {
+                paintSingleLineLayout = GetOrCreateSingleLineLayout(&host,
+                                                                    displayText,
+                                                                    std::max(1.0f, textRect.right - textRect.left + _horizontalScrollDip),
+                                                                    std::max(1.0f, textRect.bottom - textRect.top),
+                                                                    readingDirection);
+            }
+            const float caretOffset = MeasureCaretOffsetDip(paintSingleLineLayout.get(), displayText, _caretIndex);
             const float caretMaxX   = std::max(textRect.left, textRect.right - 1.0f);
             const float caretX      = std::clamp(textRect.left + caretOffset - _horizontalScrollDip, textRect.left, caretMaxX);
             caretRect               = D2D1::RectF(caretX, textRect.top + 2.0f, caretX + 1.0f, textRect.bottom - 2.0f);
@@ -1611,6 +1640,7 @@ void TextField::OnFocusChanged(WindowHost& host, bool focused)
     else
     {
         RemaskPasswordReveal();
+        BreakDirectEditMerge();
         _caretBlinkAnchorTickMs = 0u;
         _caretVisible           = true;
         _dragSelecting          = false;
@@ -1719,6 +1749,7 @@ bool TextField::OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightBut
         }
         else
         {
+            BreakDirectEditMerge();
             _selectionAnchorIndex = hitIndex;
             _caretIndex           = hitIndex;
         }
@@ -1738,6 +1769,7 @@ bool TextField::OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightBut
         }
         else
         {
+            BreakDirectEditMerge();
             _selectionAnchorIndex = hitIndex;
             _caretIndex           = hitIndex;
         }
@@ -2200,6 +2232,7 @@ bool TextField::OnKeyDown(WindowHost& host, UINT virtualKey, UINT modifiers)
         }
         if (! extendSelection && HasSelection())
         {
+            BreakDirectEditMerge();
             _caretIndex = GetSelectionRange().value().first;
             _selectionAnchorIndex.reset();
             refreshCaret();
@@ -2224,6 +2257,7 @@ bool TextField::OnKeyDown(WindowHost& host, UINT virtualKey, UINT modifiers)
         }
         if (! extendSelection && HasSelection())
         {
+            BreakDirectEditMerge();
             _caretIndex = GetSelectionRange().value().second;
             _selectionAnchorIndex.reset();
             refreshCaret();
@@ -2252,6 +2286,7 @@ bool TextField::OnKeyDown(WindowHost& host, UINT virtualKey, UINT modifiers)
         const bool extendSelection = ModifiersContainShift(modifiers);
         const size_t nextCaretIndex =
             MoveMultilineCaretVertically(&host, _text, FontRole::Body, GetTextRect(), _caretIndex, false, _preferredMultilineXOffsetDip);
+        BreakDirectEditMerge();
         SetSingleLineCaretIndex(_caretIndex, _selectionAnchorIndex, nextCaretIndex, extendSelection);
         refreshCaret();
         return true;
@@ -2261,6 +2296,7 @@ bool TextField::OnKeyDown(WindowHost& host, UINT virtualKey, UINT modifiers)
         const bool extendSelection = ModifiersContainShift(modifiers);
         const size_t nextCaretIndex =
             MoveMultilineCaretVertically(&host, _text, FontRole::Body, GetTextRect(), _caretIndex, true, _preferredMultilineXOffsetDip);
+        BreakDirectEditMerge();
         SetSingleLineCaretIndex(_caretIndex, _selectionAnchorIndex, nextCaretIndex, extendSelection);
         refreshCaret();
         return true;
@@ -2272,6 +2308,7 @@ bool TextField::OnKeyDown(WindowHost& host, UINT virtualKey, UINT modifiers)
         const MultilineViewportMetrics viewportMetrics = ComputeMultilineViewportMetrics(&host, _text, FontRole::Body, pageTextRect);
         const size_t nextCaretIndex                    = MoveMultilineCaretByPage(
             &host, _text, FontRole::Body, pageTextRect, _caretIndex, false, _preferredMultilineXOffsetDip, viewportMetrics.visibleLineCount);
+        BreakDirectEditMerge();
         SetSingleLineCaretIndex(_caretIndex, _selectionAnchorIndex, nextCaretIndex, extendSelection);
         refreshCaret();
         return true;
@@ -2283,6 +2320,7 @@ bool TextField::OnKeyDown(WindowHost& host, UINT virtualKey, UINT modifiers)
         const MultilineViewportMetrics viewportMetrics = ComputeMultilineViewportMetrics(&host, _text, FontRole::Body, pageTextRect);
         const size_t nextCaretIndex                    = MoveMultilineCaretByPage(
             &host, _text, FontRole::Body, pageTextRect, _caretIndex, true, _preferredMultilineXOffsetDip, viewportMetrics.visibleLineCount);
+        BreakDirectEditMerge();
         SetSingleLineCaretIndex(_caretIndex, _selectionAnchorIndex, nextCaretIndex, extendSelection);
         refreshCaret();
         return true;
@@ -2336,7 +2374,7 @@ bool TextField::OnKeyDown(WindowHost& host, UINT virtualKey, UINT modifiers)
     {
         if (HasSelection() || (_caretIndex > 0 && ! _text.empty()))
         {
-            RecordUndoStateForDirectEdit();
+            RecordUndoStateForDirectEdit(HasSelection() ? DirectEditMergeKind::None : DirectEditMergeKind::BackspaceRun);
             _preferredMultilineXOffsetDip.reset();
         }
         if (DeleteSelection())
@@ -2360,7 +2398,7 @@ bool TextField::OnKeyDown(WindowHost& host, UINT virtualKey, UINT modifiers)
     {
         if (HasSelection() || _caretIndex < _text.size())
         {
-            RecordUndoStateForDirectEdit();
+            RecordUndoStateForDirectEdit(HasSelection() ? DirectEditMergeKind::None : DirectEditMergeKind::DeleteRun);
             _preferredMultilineXOffsetDip.reset();
         }
         if (DeleteSelection())
@@ -2419,7 +2457,7 @@ bool TextField::OnChar(WindowHost& host, wchar_t ch, UINT /*modifiers*/)
         {
             return true;
         }
-        RecordUndoStateForDirectEdit();
+        RecordUndoStateForDirectEdit(DirectEditMergeKind::InsertRun);
         _preferredMultilineXOffsetDip.reset();
         static_cast<void>(DeleteSelection());
         _text.insert(_caretIndex, 1u, L'\n');
@@ -2428,7 +2466,12 @@ bool TextField::OnChar(WindowHost& host, wchar_t ch, UINT /*modifiers*/)
     }
     else if (std::iswcntrl(static_cast<wint_t>(ch)) == 0 && (_multiline || ch != L'\t'))
     {
-        RecordUndoStateForDirectEdit();
+        const bool completesPendingSurrogatePair =
+            IsUtf16TrailSurrogate(ch) && ! GetSelectionRange().has_value() && _caretIndex > 0u && IsUtf16LeadSurrogate(_text[_caretIndex - 1u]);
+        if (! completesPendingSurrogatePair)
+        {
+            RecordUndoStateForDirectEdit(DirectEditMergeKind::InsertRun);
+        }
         _preferredMultilineXOffsetDip.reset();
         static_cast<void>(DeleteSelection());
         _text.insert(_caretIndex, 1u, ch);
@@ -2536,13 +2579,12 @@ std::optional<D2D1_RECT_F> TextField::GetTextInputCaretRect(const WindowHost& ho
     const bool perfEnabled                          = Debug::Perf::IsCaptureEnabled();
     const auto startedAt                            = perfEnabled ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
     const DWRITE_READING_DIRECTION readingDirection = ResolveReadingDirection(GetFlowDirection());
-    const float caretOffset                         = MeasureCaretOffsetDip(&host,
-                                                                            displayText,
-                                                                            FontRole::Body,
-                                                                            clampedCaretIndex,
-                                                                            std::max(1.0f, textRect.bottom - textRect.top),
-                                                                            readingDirection,
-                                                                            std::max(1.0f, textRect.right - textRect.left + _horizontalScrollDip));
+    const wil::com_ptr<IDWriteTextLayout> layout    = GetOrCreateSingleLineLayout(&host,
+                                                                                  displayText,
+                                                                                  std::max(1.0f, textRect.right - textRect.left + _horizontalScrollDip),
+                                                                                  std::max(1.0f, textRect.bottom - textRect.top),
+                                                                                  readingDirection);
+    const float caretOffset                         = MeasureCaretOffsetDip(layout.get(), displayText, clampedCaretIndex);
     const float caretMaxX                           = std::max(textRect.left, textRect.right - 1.0f);
     const float caretX                              = std::clamp(textRect.left + caretOffset - _horizontalScrollDip, textRect.left, caretMaxX);
     const D2D1_RECT_F result                        = D2D1::RectF(caretX, textRect.top + 2.0f, caretX + 1.0f, textRect.bottom - 2.0f);
@@ -2582,10 +2624,8 @@ std::optional<std::vector<D2D1_RECT_F>> TextField::GetTextInputRangeRects(const 
     {
         const DWRITE_READING_DIRECTION readingDirection = ResolveReadingDirection(GetFlowDirection());
         const float heightDip                           = std::max(1.0f, textRect.bottom - textRect.top);
-        const float measuredTextWidthDip                = MeasureSingleLineTextWidthDip(&host, displayText, FontRole::Body, heightDip, readingDirection);
-        const float layoutWidthDip                      = std::max({1.0f, textRect.right - textRect.left + _horizontalScrollDip, measuredTextWidthDip + 32.0f});
         const wil::com_ptr<IDWriteTextLayout> layout =
-            CreateSingleLineTextLayout(&host, displayText, FontRole::Body, layoutWidthDip, heightDip, readingDirection);
+            GetOrCreateSingleLineLayout(&host, displayText, std::max(1.0f, textRect.right - textRect.left + _horizontalScrollDip), heightDip, readingDirection);
         if (! layout)
         {
             return std::nullopt;
@@ -2737,9 +2777,12 @@ bool TextField::ImportTextInputState(WindowHost& host, const TextInputState& sta
     const size_t previousFirstVisibleLine = _multilineFirstVisibleLine;
     _undoHistory.clear();
     _redoHistory.clear();
+    BreakDirectEditMerge();
     ResetSingleLineSelectionClickSequence(_selectionClickSequence);
     _text       = state.text;
     _caretIndex = std::min(state.caretIndex, _text.size());
+    InvalidateSingleLineLayoutCache();
+    InvalidateMultilineLayoutCache();
     if (state.selectionAnchorIndex)
     {
         _selectionAnchorIndex = std::min(state.selectionAnchorIndex.value(), _text.size());
@@ -2829,6 +2872,7 @@ void TextField::RestoreEditHistoryState(const EditHistoryState& state) noexcept
     _multilineWheelDeltaRemainder = 0.0f;
     _dragSelecting                = false;
     _horizontalScrollDip          = 0.0f;
+    InvalidateSingleLineLayoutCache();
     InvalidateMultilineLayoutCache();
 }
 
@@ -2905,14 +2949,25 @@ size_t TextField::GetConcealedMaskVisibleDotCount(size_t exactCount) const noexc
     return _concealedMaskVisibleDotCount;
 }
 
-void TextField::RecordUndoStateForDirectEdit()
+void TextField::BreakDirectEditMerge() noexcept
+{
+    _directEditMergeKind = DirectEditMergeKind::None;
+}
+
+void TextField::RecordUndoStateForDirectEdit(DirectEditMergeKind mergeKind)
 {
     BeginEditTransactionMetric(L"direct-edit");
-    _undoHistory.push_back(CaptureEditHistoryState());
-    if (_undoHistory.size() > kMaxEditHistoryEntries)
+    const bool mergeable = mergeKind != DirectEditMergeKind::None;
+    const bool coalesced = mergeable && _directEditMergeKind == mergeKind && ! _undoHistory.empty() && ! HasSelection();
+    if (! coalesced)
     {
-        _undoHistory.erase(_undoHistory.begin());
+        _undoHistory.push_back(CaptureEditHistoryState());
+        if (_undoHistory.size() > kMaxEditHistoryEntries)
+        {
+            _undoHistory.erase(_undoHistory.begin());
+        }
     }
+    _directEditMergeKind = mergeable ? mergeKind : DirectEditMergeKind::None;
     _redoHistory.clear();
 }
 
@@ -2924,6 +2979,7 @@ bool TextField::TryUndoDirectEdit() noexcept
     }
 
     BeginEditTransactionMetric(L"undo");
+    BreakDirectEditMerge();
     _redoHistory.push_back(CaptureEditHistoryState());
     if (_redoHistory.size() > kMaxEditHistoryEntries)
     {
@@ -2944,6 +3000,7 @@ bool TextField::TryRedoDirectEdit() noexcept
     }
 
     BeginEditTransactionMetric(L"redo");
+    BreakDirectEditMerge();
     _undoHistory.push_back(CaptureEditHistoryState());
     if (_undoHistory.size() > kMaxEditHistoryEntries)
     {
@@ -2967,6 +3024,7 @@ void TextField::RemaskPasswordReveal() noexcept
 void TextField::SetCaretIndex(size_t caretIndex, bool extendSelection) noexcept
 {
     _preferredMultilineXOffsetDip.reset();
+    BreakDirectEditMerge();
     SetSingleLineCaretIndex(_caretIndex, _selectionAnchorIndex, std::min(caretIndex, _text.size()), extendSelection);
 }
 
@@ -2987,11 +3045,13 @@ bool TextField::DeleteSelection() noexcept
 
 void TextField::SelectAllText() noexcept
 {
+    BreakDirectEditMerge();
     SelectAllSingleLineText(_text.size(), _caretIndex, _selectionAnchorIndex);
 }
 
 void TextField::SelectWordAt(size_t hitIndex) noexcept
 {
+    BreakDirectEditMerge();
     SelectSingleLineWordAt(_text, hitIndex, _caretIndex, _selectionAnchorIndex);
 }
 
@@ -3063,6 +3123,22 @@ wil::com_ptr<IDWriteTextLayout> TextField::GetOrCreateMultilineLayout(const Wind
     return _cachedMultilineLayout;
 }
 
+wil::com_ptr<IDWriteTextLayout> TextField::GetOrCreateSingleLineLayout(
+    const WindowHost* host, std::wstring_view text, float minimumWidthDip, float heightDip, DWRITE_READING_DIRECTION readingDirection) const noexcept
+{
+    if (_multiline)
+    {
+        return GetOrCreateSingleLineTextLayout(host, nullptr, text, FontRole::Body, minimumWidthDip, heightDip, readingDirection);
+    }
+
+    return GetOrCreateSingleLineTextLayout(host, &_singleLineLayoutCache, text, FontRole::Body, minimumWidthDip, heightDip, readingDirection, true);
+}
+
+void TextField::InvalidateSingleLineLayoutCache() const noexcept
+{
+    ClearSingleLineTextLayoutCache(_singleLineLayoutCache, true);
+}
+
 void TextField::InvalidateMultilineLayoutCache() const noexcept
 {
     _multilineLayoutDirty = true;
@@ -3078,15 +3154,14 @@ void TextField::EnsureCaretVisible(const WindowHost* host, float availableWidthD
         return;
     }
 
-    const std::wstring displayText = GetDisplayText();
-    const float caretOffset        = MeasureCaretOffsetDip(host,
-                                                           displayText,
-                                                           FontRole::Body,
-                                                           _caretIndex,
-                                                           std::max(1.0f, GetTextRect().bottom - GetTextRect().top),
-                                                           ResolveReadingDirection(GetFlowDirection()),
-                                                           std::max(1.0f, availableWidthDip + _horizontalScrollDip));
-    const float padding            = 6.0f;
+    const std::wstring displayText               = GetDisplayText();
+    const wil::com_ptr<IDWriteTextLayout> layout = GetOrCreateSingleLineLayout(host,
+                                                                               displayText,
+                                                                               std::max(1.0f, availableWidthDip + _horizontalScrollDip),
+                                                                               std::max(1.0f, GetTextRect().bottom - GetTextRect().top),
+                                                                               ResolveReadingDirection(GetFlowDirection()));
+    const float caretOffset                      = MeasureCaretOffsetDip(layout.get(), displayText, _caretIndex);
+    const float padding                          = 6.0f;
     if (caretOffset < _horizontalScrollDip + padding)
     {
         _horizontalScrollDip = std::max(0.0f, caretOffset - padding);
@@ -3138,9 +3213,16 @@ void TextField::EnsureMultilineCaretVisible(const WindowHost* host) noexcept
     _multilineFirstVisibleLine = (std::min)(firstVisibleLine, maxFirstVisibleLine);
 }
 
+void TextField::OnFlowDirectionChanged() noexcept
+{
+    InvalidateSingleLineLayoutCache();
+    Control::OnFlowDirectionChanged();
+}
+
 void TextField::OnHostDpiChanged(WindowHost& host) noexcept
 {
     Control::OnHostDpiChanged(host);
+    InvalidateSingleLineLayoutCache();
     InvalidateMultilineLayoutCache();
     if (SupportsTextInput() && host.GetFocusControl() == this)
     {
@@ -3150,6 +3232,7 @@ void TextField::OnHostDpiChanged(WindowHost& host) noexcept
 
 void TextField::OnDensityChanged() noexcept
 {
+    InvalidateSingleLineLayoutCache();
     InvalidateMultilineLayoutCache();
     Control::OnDensityChanged();
 }
@@ -3163,6 +3246,8 @@ void TextField::ResetCaretBlink(WindowHost& host) noexcept
 
 void TextField::NotifyChanged()
 {
+    InvalidateSingleLineLayoutCache();
+    InvalidateMultilineLayoutCache();
     if (_onTextChanged)
     {
         _onTextChanged(_text);

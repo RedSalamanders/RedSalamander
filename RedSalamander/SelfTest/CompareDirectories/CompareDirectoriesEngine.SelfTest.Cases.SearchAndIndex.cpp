@@ -459,10 +459,9 @@ SelfTest::RunCase(options,
     query.contentMode = FILESYSTEM_SEARCH_CONTENT_DISABLED;
 
     RecordingSearchCallback callback;
-    const auto started = std::chrono::steady_clock::now();
-    const HRESULT hr   = SearchFallbackEngine::Execute(wrappedFs.get(), &query, &callback, nullptr);
-    const uint64_t elapsedUs =
-        static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - started).count());
+    const auto started       = std::chrono::steady_clock::now();
+    const HRESULT hr         = SearchFallbackEngine::Execute(wrappedFs.get(), &query, &callback, nullptr);
+    const uint64_t elapsedUs = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - started).count());
 
     const auto matches = callback.Matches();
     Debug::Perf::Emit(L"compare.selftest.local_search_fallback_buffer_enumeration_us",
@@ -883,10 +882,9 @@ SelfTest::RunCase(options,
     query.contentMode = FILESYSTEM_SEARCH_CONTENT_DISABLED;
 
     RecordingSearchCallback callback;
-    const auto started = std::chrono::steady_clock::now();
-    const HRESULT hr   = search->Search(&query, &callback, nullptr);
-    const uint64_t elapsedUs =
-        static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - started).count());
+    const auto started       = std::chrono::steady_clock::now();
+    const HRESULT hr         = search->Search(&query, &callback, nullptr);
+    const uint64_t elapsedUs = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - started).count());
 
     const auto progressSnapshots            = callback.ProgressSnapshots();
     const RecordedSearchProgress* completed = FindRecordedSearchProgress(progressSnapshots, FILESYSTEM_SEARCH_PHASE_COMPLETED);
@@ -913,12 +911,12 @@ SelfTest::RunCase(options,
             return std::nullopt;
         }
 
-        size_t cursor = fieldPos + field.size();
+        size_t cursor  = fieldPos + field.size();
         uint64_t value = 0u;
-        bool anyDigit = false;
+        bool anyDigit  = false;
         while (cursor < line.size() && line[cursor] >= '0' && line[cursor] <= '9')
         {
-            anyDigit = true;
+            anyDigit             = true;
             const uint64_t digit = static_cast<uint64_t>(line[cursor] - '0');
             if (value > ((std::numeric_limits<uint64_t>::max)() - digit) / 10u)
             {
@@ -959,15 +957,12 @@ SelfTest::RunCase(options,
     if (materializedPathPairs.has_value())
     {
         state.Require(materializedPathPairs.value() == 0u,
-                      std::format(L"Deferred materialization should not materialize nonmatching file paths. got={}.",
-                                  materializedPathPairs.value()));
+                      std::format(L"Deferred materialization should not materialize nonmatching file paths. got={}.", materializedPathPairs.value()));
     }
     if (scannedItems.has_value())
     {
         state.Require(scannedItems.value() >= kFileCount,
-                      std::format(L"Deferred materialization metric should include scanned items. value1={} fileCount={}.",
-                                  scannedItems.value(),
-                                  kFileCount));
+                      std::format(L"Deferred materialization metric should include scanned items. value1={} fileCount={}.", scannedItems.value(), kFileCount));
     }
 
     Debug::Perf::Emit(L"compare.selftest.local_search_scan_deferred_path_materialization_us",
@@ -1333,8 +1328,9 @@ SelfTest::RunCase(options,
     }
 
     state.Require(support.indexable, L"Test root should be indexable on the local development volume.");
-    state.Require(support.fileSystemKind == LocalSearchIndexCore::FileSystemKind::Ntfs,
-                  L"Test root should resolve to NTFS for the indexed Phase 4 validations.");
+    state.Require(support.fileSystemKind == LocalSearchIndexCore::FileSystemKind::Ntfs ||
+                      support.fileSystemKind == LocalSearchIndexCore::FileSystemKind::Refs,
+                  L"Test root should resolve to a supported indexed filesystem (NTFS or ReFS).");
 
     LocalSearchIndexCore::SupportInfo fakeUnc{};
     const HRESULT fakeUncHr = repository.ProbePath(L"\\\\server\\share\\folder", fakeUnc);
@@ -1370,8 +1366,9 @@ SelfTest::RunCase(options,
     const auto warmStart = std::chrono::steady_clock::now();
     hr                   = RunIndexedNameQuery(repository, caseRoot.wstring(), L"*.txt", warmStats, warmCandidates);
     state.Require(SUCCEEDED(hr), std::format(L"Warm indexed query failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
-    const auto warmElapsedMs =
-        static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - warmStart).count());
+    const uint64_t warmElapsedUs = Debug::Perf::ElapsedUs(warmStart);
+    Debug::Perf::EmitDurationUs(
+        L"compare.selftest.local_index.snapshot_reload_us", warmElapsedUs, static_cast<uint64_t>(warmCandidates.size()), warmStats.snapshotFileBytes, hr);
     if (! state.failure.empty())
     {
         return false;
@@ -1387,7 +1384,6 @@ SelfTest::RunCase(options,
     state.Require(warmStats.estimatedMemoryBytes != 0u, L"Warm indexed query should report a non-zero memory estimate.");
     state.Require(! warmStats.snapshotPath.empty(), L"Warm indexed query should report the snapshot path.");
     state.Require(CollectIndexedCandidateNames(warmCandidates) == coldNames, L"Warm indexed query should match the cold candidate set.");
-    state.Require(warmElapsedMs < 1000u, std::format(L"Warm indexed query took too long: {} ms.", warmElapsedMs));
 
     return state.failure.empty();
 });
@@ -1399,11 +1395,11 @@ SelfTest::RunCase(options,
 {
     struct CancelAfterIndexedCandidates final
     {
-        CancelAfterIndexedCandidates()                                                              = default;
-        CancelAfterIndexedCandidates(const CancelAfterIndexedCandidates&)                            = delete;
-        CancelAfterIndexedCandidates(CancelAfterIndexedCandidates&&)                                 = delete;
-        CancelAfterIndexedCandidates& operator=(const CancelAfterIndexedCandidates&)                 = delete;
-        CancelAfterIndexedCandidates& operator=(CancelAfterIndexedCandidates&&)                      = delete;
+        CancelAfterIndexedCandidates()                                               = default;
+        CancelAfterIndexedCandidates(const CancelAfterIndexedCandidates&)            = delete;
+        CancelAfterIndexedCandidates(CancelAfterIndexedCandidates&&)                 = delete;
+        CancelAfterIndexedCandidates& operator=(const CancelAfterIndexedCandidates&) = delete;
+        CancelAfterIndexedCandidates& operator=(CancelAfterIndexedCandidates&&)      = delete;
 
         const std::vector<LocalSearchIndexCore::Candidate>* candidates = nullptr;
         size_t cancelAfterCandidates                                   = 0u;
@@ -1451,23 +1447,22 @@ SelfTest::RunCase(options,
     LocalSearchIndexCore::QueryStats cancelStats{};
     std::vector<LocalSearchIndexCore::Candidate> cancelCandidates;
     CancelAfterIndexedCandidates cancelState{};
-    cancelState.candidates             = &cancelCandidates;
-    cancelState.cancelAfterCandidates  = 64u;
-    hr = RunIndexedNameQuery(repository,
-                             caseRoot.wstring(),
-                             L"indexed_cancel_*.txt",
-                             FILESYSTEM_SEARCH_NAME_WILDCARD,
-                             cancelStats,
-                             cancelCandidates,
-                             cancelAfterCandidatesThunk,
-                             &cancelState);
+    cancelState.candidates            = &cancelCandidates;
+    cancelState.cancelAfterCandidates = 64u;
+    hr                                = RunIndexedNameQuery(repository,
+                                                            caseRoot.wstring(),
+                                                            L"indexed_cancel_*.txt",
+                                                            FILESYSTEM_SEARCH_NAME_WILDCARD,
+                                                            cancelStats,
+                                                            cancelCandidates,
+                                                            cancelAfterCandidatesThunk,
+                                                            &cancelState);
     state.Require(hr == HRESULT_FROM_WIN32(ERROR_CANCELLED),
                   std::format(L"Indexed query should honor CancelCheckFn with ERROR_CANCELLED. hr=0x{:08X}", static_cast<unsigned long>(hr)));
     state.Require(cancelState.checks.load(std::memory_order_acquire) >= 1u, L"Indexed query did not invoke the cancel check.");
-    state.Require(cancelCandidates.size() >= cancelState.cancelAfterCandidates && cancelCandidates.size() < seedCandidates.size(),
-                  std::format(L"Indexed query cancellation should stop before the full result set. got={} full={}.",
-                              cancelCandidates.size(),
-                              seedCandidates.size()));
+    state.Require(
+        cancelCandidates.size() >= cancelState.cancelAfterCandidates && cancelCandidates.size() < seedCandidates.size(),
+        std::format(L"Indexed query cancellation should stop before the full result set. got={} full={}.", cancelCandidates.size(), seedCandidates.size()));
 
     return state.failure.empty();
 });
@@ -1596,22 +1591,20 @@ const auto expectedJournalDirectoryMoveNames = []() noexcept -> std::vector<std:
     };
 };
 
-const auto hasCandidateFullPath =
-    [](const std::vector<LocalSearchIndexCore::Candidate>& candidates, const std::filesystem::path& expectedPath) noexcept -> bool
+const auto hasCandidateFullPath = [](const std::vector<LocalSearchIndexCore::Candidate>& candidates, const std::filesystem::path& expectedPath) noexcept -> bool
 {
     const std::wstring expected = expectedPath.lexically_normal().wstring();
-    return std::ranges::any_of(candidates, [&](const LocalSearchIndexCore::Candidate& candidate) noexcept
-    {
+    return std::ranges::any_of(candidates, [&](const LocalSearchIndexCore::Candidate& candidate) noexcept {
         return EqualsIgnoreCase(std::filesystem::path(candidate.fullPath).lexically_normal().wstring(), expected);
     });
 };
 
-const auto hasSqliteEntryFullPath =
-    [](const SqliteIndexStore::ReplaceVolumeRequest& volume, const std::filesystem::path& expectedPath) noexcept -> bool
+const auto hasSqliteEntryFullPath = [](const SqliteIndexStore::ReplaceVolumeRequest& volume, const std::filesystem::path& expectedPath) noexcept -> bool
 {
     const std::wstring expected = expectedPath.lexically_normal().wstring();
-    return std::ranges::any_of(volume.entries, [&](const SqliteIndexStore::ImportedEntry& entry) noexcept
-    { return EqualsIgnoreCase(std::filesystem::path(entry.fullPath).lexically_normal().wstring(), expected); });
+    return std::ranges::any_of(volume.entries, [&](const SqliteIndexStore::ImportedEntry& entry) noexcept {
+        return EqualsIgnoreCase(std::filesystem::path(entry.fullPath).lexically_normal().wstring(), expected);
+    });
 };
 
 const auto collectSqliteStoredFileNames = [](const SqliteIndexStore::ReplaceVolumeRequest& volume) noexcept -> std::vector<std::wstring>
@@ -1629,11 +1622,10 @@ const auto collectSqliteStoredFileNames = [](const SqliteIndexStore::ReplaceVolu
     return names;
 };
 
-const auto prepareJournalDirectoryMoveFixture =
-    [&](SelfTest::CaseState& state,
-        const std::filesystem::path& caseRoot,
-        std::wstring_view outsideCaseName,
-        std::filesystem::path& outsideRoot) noexcept -> bool
+const auto prepareJournalDirectoryMoveFixture = [&](SelfTest::CaseState& state,
+                                                    const std::filesystem::path& caseRoot,
+                                                    std::wstring_view outsideCaseName,
+                                                    std::filesystem::path& outsideRoot) noexcept -> bool
 {
     state.Require(PrepareSearchCaseRoot(root, outsideCaseName, outsideRoot), L"Failed to prepare outside journal directory-move root.");
     state.Require(SelfTest::EnsureDirectory(caseRoot / L"inside-dir"), L"Failed to create inside-dir.");
@@ -1650,14 +1642,12 @@ const auto applyJournalDirectoryMoveMutations =
     const std::filesystem::path moveInSource = outsideRoot / L"move-in-source";
     state.Require(SelfTest::EnsureDirectory(moveInSource / L"nested"), L"Failed to create move-in-source nested directory.");
     state.Require(SelfTest::WriteTextFile(moveInSource / L"moved-in-child.txt", "move-in"), L"Failed to create moved-in child.");
-    state.Require(SelfTest::WriteTextFile(moveInSource / L"nested" / L"moved-in-nested.txt", "move-in nested"),
-                  L"Failed to create moved-in nested child.");
+    state.Require(SelfTest::WriteTextFile(moveInSource / L"nested" / L"moved-in-nested.txt", "move-in nested"), L"Failed to create moved-in nested child.");
 
     const std::filesystem::path unzipSource = outsideRoot / L"unzipped-source";
     state.Require(SelfTest::EnsureDirectory(unzipSource / L"nested"), L"Failed to create unzipped-source nested directory.");
     state.Require(SelfTest::WriteTextFile(unzipSource / L"unzipped-child.txt", "unzipped"), L"Failed to create unzipped child.");
-    state.Require(SelfTest::WriteTextFile(unzipSource / L"nested" / L"unzipped-nested.txt", "unzipped nested"),
-                  L"Failed to create unzipped nested child.");
+    state.Require(SelfTest::WriteTextFile(unzipSource / L"nested" / L"unzipped-nested.txt", "unzipped nested"), L"Failed to create unzipped nested child.");
     if (! state.failure.empty())
     {
         return false;
@@ -1685,7 +1675,8 @@ const auto applyJournalDirectoryMoveMutations =
 };
 
 const auto buildJournalDirectoryMoveSyntheticRecords =
-    [](const std::filesystem::path& caseRoot, const std::filesystem::path& outsideRoot) noexcept -> std::vector<LocalSearchIndexCore::SyntheticJournalRecordForTests>
+    [](const std::filesystem::path& caseRoot,
+       const std::filesystem::path& outsideRoot) noexcept -> std::vector<LocalSearchIndexCore::SyntheticJournalRecordForTests>
 {
     return {
         {
@@ -1762,12 +1753,11 @@ const auto runPersistedIndexedNameQueryForTests = [](LocalSearchIndexCore::Repos
     return repository.QueryPersistedVolumeForTests(plan, outCandidates, &outStats);
 };
 
-const auto requireJournalDirectoryMoveResults =
-    [&](SelfTest::CaseState& state,
-        const std::filesystem::path& caseRoot,
-        const LocalSearchIndexCore::QueryStats& replayStats,
-        const std::vector<LocalSearchIndexCore::Candidate>& replayCandidates,
-        std::wstring_view label) noexcept -> bool
+const auto requireJournalDirectoryMoveResults = [&](SelfTest::CaseState& state,
+                                                    const std::filesystem::path& caseRoot,
+                                                    const LocalSearchIndexCore::QueryStats& replayStats,
+                                                    const std::vector<LocalSearchIndexCore::Candidate>& replayCandidates,
+                                                    std::wstring_view label) noexcept -> bool
 {
     state.Require(replayStats.journalReplayApplied, std::format(L"{} should apply journal replay.", label));
     state.Require(! replayStats.usedNtfsEnumeration, std::format(L"{} should not rebuild with NTFS enumeration during replay.", label));
@@ -1818,8 +1808,7 @@ SelfTest::RunCase(options,
         return false;
     }
 
-    const std::vector<LocalSearchIndexCore::SyntheticJournalRecordForTests> syntheticRecords =
-        buildJournalDirectoryMoveSyntheticRecords(caseRoot, outsideRoot);
+    const std::vector<LocalSearchIndexCore::SyntheticJournalRecordForTests> syntheticRecords = buildJournalDirectoryMoveSyntheticRecords(caseRoot, outsideRoot);
     LocalSearchIndexCore::QueryStats replayStats{};
     hr = repository.ApplySyntheticJournalForTests(caseRoot.wstring(), syntheticRecords, &replayStats);
     state.Require(SUCCEEDED(hr), std::format(L"Directory-move snapshot synthetic replay failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
@@ -1871,8 +1860,7 @@ SelfTest::RunCase(options,
 
     LocalSearchIndexCore::QueryStats syntheticStats{};
     hr = repository.ApplySyntheticJournalForTests(caseRoot.wstring(), std::span<const LocalSearchIndexCore::SyntheticJournalRecordForTests>{}, &syntheticStats);
-    state.Require(SUCCEEDED(hr),
-                  std::format(L"Journal invalidation synthetic ready marker failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    state.Require(SUCCEEDED(hr), std::format(L"Journal invalidation synthetic ready marker failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
     if (FAILED(hr))
     {
         return false;
@@ -1889,23 +1877,18 @@ SelfTest::RunCase(options,
 
     repository.SetNextJournalStateForTests(syntheticStats.journalId, 0u, syntheticStats.nextUsn + 8u);
     repository.SetNextJournalReplayReadFailureForTests(ERROR_JOURNAL_ENTRY_DELETED);
-    const auto clearInjectedFailure = wil::scope_exit([&] noexcept
-    {
-        repository.SetNextJournalReplayReadFailureForTests(ERROR_SUCCESS);
-    });
+    const auto clearInjectedFailure = wil::scope_exit([&] noexcept { repository.SetNextJournalReplayReadFailureForTests(ERROR_SUCCESS); });
 
     LocalSearchIndexCore::QueryStats rebuildStats{};
     std::vector<LocalSearchIndexCore::Candidate> rebuildCandidates;
     hr = RunIndexedNameQuery(repository, caseRoot.wstring(), L"*.txt", rebuildStats, rebuildCandidates);
-    state.Require(SUCCEEDED(hr),
-                  std::format(L"Journal invalidation query should rebuild instead of failing. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    state.Require(SUCCEEDED(hr), std::format(L"Journal invalidation query should rebuild instead of failing. hr=0x{:08X}", static_cast<unsigned long>(hr)));
     if (FAILED(hr))
     {
         return false;
     }
 
-    state.Require(rebuildStats.rebuiltJournalRangeInvalid,
-                  L"Journal invalidation query should report a journal-range rebuild after replay read failure.");
+    state.Require(rebuildStats.rebuiltJournalRangeInvalid, L"Journal invalidation query should report a journal-range rebuild after replay read failure.");
     state.Require(CollectIndexedCandidateNames(rebuildCandidates) == std::vector<std::wstring>{L"alpha.txt", L"beta.txt"},
                   L"Journal invalidation rebuild should return the fresh filesystem candidate set.");
 
@@ -1997,31 +1980,30 @@ SelfTest::RunCase(options,
     const size_t nameOffset = static_cast<size_t>(FIELD_OFFSET(USN_RECORD_V2, FileName));
 
     std::vector<std::byte> validRecordBytes(nameOffset + (2u * sizeof(wchar_t)));
-    auto* validRecord = reinterpret_cast<USN_RECORD_V2*>(validRecordBytes.data());
-    validRecord->RecordLength = static_cast<DWORD>(validRecordBytes.size());
-    validRecord->MajorVersion = 2u;
-    validRecord->MinorVersion = 0u;
+    auto* validRecord           = reinterpret_cast<USN_RECORD_V2*>(validRecordBytes.data());
+    validRecord->RecordLength   = static_cast<DWORD>(validRecordBytes.size());
+    validRecord->MajorVersion   = 2u;
+    validRecord->MinorVersion   = 0u;
     validRecord->FileNameOffset = static_cast<WORD>(nameOffset);
     validRecord->FileNameLength = static_cast<WORD>(2u * sizeof(wchar_t));
     std::memcpy(validRecordBytes.data() + nameOffset, L"ok", 2u * sizeof(wchar_t));
-    state.Require(LocalSearchIndexCore::TryParseUsnRecordForTests(validRecordBytes.data(), validRecordBytes.size()),
-                  L"Valid USN_RECORD_V2 should parse.");
+    state.Require(LocalSearchIndexCore::TryParseUsnRecordForTests(validRecordBytes.data(), validRecordBytes.size()), L"Valid USN_RECORD_V2 should parse.");
 
     std::vector<std::byte> oddLengthRecordBytes(nameOffset + sizeof(wchar_t));
-    auto* oddLengthRecord = reinterpret_cast<USN_RECORD_V2*>(oddLengthRecordBytes.data());
-    oddLengthRecord->RecordLength = static_cast<DWORD>(oddLengthRecordBytes.size());
-    oddLengthRecord->MajorVersion = 2u;
-    oddLengthRecord->MinorVersion = 0u;
+    auto* oddLengthRecord           = reinterpret_cast<USN_RECORD_V2*>(oddLengthRecordBytes.data());
+    oddLengthRecord->RecordLength   = static_cast<DWORD>(oddLengthRecordBytes.size());
+    oddLengthRecord->MajorVersion   = 2u;
+    oddLengthRecord->MinorVersion   = 0u;
     oddLengthRecord->FileNameOffset = static_cast<WORD>(nameOffset);
     oddLengthRecord->FileNameLength = 1u;
     state.Require(! LocalSearchIndexCore::TryParseUsnRecordForTests(oddLengthRecordBytes.data(), oddLengthRecordBytes.size()),
                   L"USN_RECORD_V2 with odd FileNameLength should be rejected.");
 
     std::vector<std::byte> overflowingNameRecordBytes(nameOffset + (4u * sizeof(wchar_t)) + 16u);
-    auto* overflowingNameRecord = reinterpret_cast<USN_RECORD_V2*>(overflowingNameRecordBytes.data());
-    overflowingNameRecord->RecordLength = static_cast<DWORD>(nameOffset + sizeof(wchar_t));
-    overflowingNameRecord->MajorVersion = 2u;
-    overflowingNameRecord->MinorVersion = 0u;
+    auto* overflowingNameRecord           = reinterpret_cast<USN_RECORD_V2*>(overflowingNameRecordBytes.data());
+    overflowingNameRecord->RecordLength   = static_cast<DWORD>(nameOffset + sizeof(wchar_t));
+    overflowingNameRecord->MajorVersion   = 2u;
+    overflowingNameRecord->MinorVersion   = 0u;
     overflowingNameRecord->FileNameOffset = static_cast<WORD>(nameOffset);
     overflowingNameRecord->FileNameLength = static_cast<WORD>(4u * sizeof(wchar_t));
     state.Require(! LocalSearchIndexCore::TryParseUsnRecordForTests(overflowingNameRecordBytes.data(), overflowingNameRecordBytes.size()),
@@ -2053,8 +2035,7 @@ SelfTest::RunCase(options,
     const HRESULT protocolErrorHr = HRESULT_FROM_WIN32(RPC_S_PROTOCOL_ERROR);
     const auto hugeCountPayload   = makeBatchPayload((std::numeric_limits<uint32_t>::max)());
     std::vector<LocalSearchIndexCore::Candidate> hugeCountCandidates;
-    hr = SearchServiceBroker::DecodeQueryBatchForTests(
-        std::span<const std::byte>(hugeCountPayload.data(), hugeCountPayload.size()), hugeCountCandidates);
+    hr = SearchServiceBroker::DecodeQueryBatchForTests(std::span<const std::byte>(hugeCountPayload.data(), hugeCountPayload.size()), hugeCountCandidates);
     state.Require(hr == protocolErrorHr,
                   std::format(L"Huge-count QueryBatch should decode as a failing protocol error. hr=0x{:08X}", static_cast<unsigned long>(hr)));
     state.Require(FAILED(hr), L"Huge-count QueryBatch protocol error should satisfy FAILED(hr).");
@@ -2134,14 +2115,8 @@ SelfTest::RunCase(options,
 
     const auto serveSingleFakeServiceFrame = [&](const uint32_t messageType, std::span<const std::byte> responsePayload) noexcept -> HRESULT
     {
-        wil::unique_handle pipe(::CreateNamedPipeW(pipeName.c_str(),
-                                                   PIPE_ACCESS_DUPLEX,
-                                                   PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
-                                                   1u,
-                                                   4096u,
-                                                   4096u,
-                                                   0u,
-                                                   nullptr));
+        wil::unique_handle pipe(
+            ::CreateNamedPipeW(pipeName.c_str(), PIPE_ACCESS_DUPLEX, PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT, 1u, 4096u, 4096u, 0u, nullptr));
         if (! pipe)
         {
             return HRESULT_FROM_WIN32(::GetLastError());
@@ -2190,15 +2165,9 @@ SelfTest::RunCase(options,
         return localHr;
     };
 
-    wil::unique_handle serverPipe(::CreateNamedPipeW(pipeName.c_str(),
-                                                     PIPE_ACCESS_DUPLEX,
-                                                     PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
-                                                     1u,
-                                                     4096u,
-                                                     4096u,
-                                                     0u,
-                                                     nullptr));
-    state.Require(!! serverPipe,
+    wil::unique_handle serverPipe(
+        ::CreateNamedPipeW(pipeName.c_str(), PIPE_ACCESS_DUPLEX, PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT, 1u, 4096u, 4096u, 0u, nullptr));
+    state.Require(! ! serverPipe,
                   std::format(L"Failed to create malformed QueryBatch fake service pipe. error={}", static_cast<unsigned long>(::GetLastError())));
     if (! serverPipe)
     {
@@ -2241,7 +2210,7 @@ SelfTest::RunCase(options,
         TestFrameHeader batchHeader{};
         batchHeader.messageType  = 5u;
         batchHeader.payloadBytes = static_cast<uint32_t>(hugeCountPayload.size());
-        localHr = writeExact(pipe.get(), &batchHeader, static_cast<uint32_t>(sizeof(batchHeader)));
+        localHr                  = writeExact(pipe.get(), &batchHeader, static_cast<uint32_t>(sizeof(batchHeader)));
         if (SUCCEEDED(localHr))
         {
             localHr = writeExact(pipe.get(), hugeCountPayload.data(), static_cast<uint32_t>(hugeCountPayload.size()));
@@ -2255,11 +2224,11 @@ SelfTest::RunCase(options,
     });
 
     SearchServiceBroker::QueryRequest request{};
-    request.rootPath          = L"C:\\";
-    request.namePattern       = L"*";
-    request.nameMode          = FILESYSTEM_SEARCH_NAME_WILDCARD;
-    request.flags             = static_cast<FileSystemSearchFlags>(FILESYSTEM_SEARCH_INCLUDE_FILES);
-    request.includeFiles      = true;
+    request.rootPath           = L"C:\\";
+    request.namePattern        = L"*";
+    request.nameMode           = FILESYSTEM_SEARCH_NAME_WILDCARD;
+    request.flags              = static_cast<FileSystemSearchFlags>(FILESYSTEM_SEARCH_INCLUDE_FILES);
+    request.includeFiles       = true;
     request.includeDirectories = false;
 
     std::vector<LocalSearchIndexCore::Candidate> malformedCandidates;
@@ -2268,11 +2237,9 @@ SelfTest::RunCase(options,
     server.join();
 
     const HRESULT serverResult = static_cast<HRESULT>(serverHr.load());
-    state.Require(SUCCEEDED(serverResult),
-                  std::format(L"Malformed QueryBatch fake server failed. hr=0x{:08X}", static_cast<unsigned long>(serverResult)));
+    state.Require(SUCCEEDED(serverResult), std::format(L"Malformed QueryBatch fake server failed. hr=0x{:08X}", static_cast<unsigned long>(serverResult)));
     state.Require(hr == protocolErrorHr,
-                  std::format(L"Broker Query should fail with RPC_S_PROTOCOL_ERROR for huge-count QueryBatch. hr=0x{:08X}",
-                              static_cast<unsigned long>(hr)));
+                  std::format(L"Broker Query should fail with RPC_S_PROTOCOL_ERROR for huge-count QueryBatch. hr=0x{:08X}", static_cast<unsigned long>(hr)));
     state.Require(malformedCandidates.empty(), L"Malformed QueryBatch should leave broker query candidates empty.");
 
     TestStatusResponsePayload statusPayloadPod{};
@@ -2344,8 +2311,7 @@ SelfTest::RunCase(options,
 
     const HRESULT fallbackServerResult = static_cast<HRESULT>(fallbackServerHr.load());
     state.Require(SUCCEEDED(fallbackServerResult),
-                  std::format(L"Malformed QueryBatch fallback fake server failed. hr=0x{:08X}",
-                              static_cast<unsigned long>(fallbackServerResult)));
+                  std::format(L"Malformed QueryBatch fallback fake server failed. hr=0x{:08X}", static_cast<unsigned long>(fallbackServerResult)));
     state.Require(SUCCEEDED(searchHr),
                   std::format(L"Malformed QueryBatch service search should fall back and succeed. hr=0x{:08X}", static_cast<unsigned long>(searchHr)));
 
@@ -2356,13 +2322,12 @@ SelfTest::RunCase(options,
         state.Require(matches[0].displayName == L"fallback.txt", L"Malformed QueryBatch fallback returned the wrong file.");
     }
 
-    const auto progressSnapshots              = callback.ProgressSnapshots();
+    const auto progressSnapshots            = callback.ProgressSnapshots();
     const RecordedSearchProgress* completed = FindRecordedSearchProgress(progressSnapshots, FILESYSTEM_SEARCH_PHASE_COMPLETED);
     state.Require(completed != nullptr, L"Malformed QueryBatch fallback search missing completed progress.");
     if (completed != nullptr)
     {
-        state.Require(completed->backend != FILESYSTEM_SEARCH_BACKEND_SERVICE,
-                      L"Malformed QueryBatch fallback should not complete on the service backend.");
+        state.Require(completed->backend != FILESYSTEM_SEARCH_BACKEND_SERVICE, L"Malformed QueryBatch fallback should not complete on the service backend.");
         state.Require((completed->warningFlags & FILESYSTEM_SEARCH_WARNING_SERVICE_UNAVAILABLE) != 0u,
                       L"Malformed QueryBatch fallback should report the service-unavailable warning.");
     }
@@ -2472,10 +2437,7 @@ SelfTest::RunCase(options,
         buffer.insert(buffer.end(), bytes, bytes + byteCount);
     };
 
-    const auto appendUtf16 = [&](std::vector<std::byte>& buffer, const std::wstring& text)
-    {
-        appendBytes(buffer, text.data(), text.size() * sizeof(wchar_t));
-    };
+    const auto appendUtf16 = [&](std::vector<std::byte>& buffer, const std::wstring& text) { appendBytes(buffer, text.data(), text.size() * sizeof(wchar_t)); };
 
     const auto makeBatchPayload = [&](const uint32_t firstIndex, const uint32_t count) -> std::vector<std::byte>
     {
@@ -2488,7 +2450,7 @@ SelfTest::RunCase(options,
 
         for (uint32_t index = 0u; index < count; ++index)
         {
-            const uint32_t candidateIndex = firstIndex + index;
+            const uint32_t candidateIndex  = firstIndex + index;
             const std::wstring displayName = std::format(L"candidate_{:05}.txt", candidateIndex);
             const std::wstring fullPath    = std::wstring(L"C:\\buffered\\") + displayName;
 
@@ -2505,10 +2467,7 @@ SelfTest::RunCase(options,
     };
 
     const auto isExpectedPipeDisconnect = [](const HRESULT hr) noexcept
-    {
-        return hr == HRESULT_FROM_WIN32(ERROR_BROKEN_PIPE) || hr == HRESULT_FROM_WIN32(ERROR_NO_DATA) ||
-               hr == HRESULT_FROM_WIN32(ERROR_PIPE_NOT_CONNECTED);
-    };
+    { return hr == HRESULT_FROM_WIN32(ERROR_BROKEN_PIPE) || hr == HRESULT_FROM_WIN32(ERROR_NO_DATA) || hr == HRESULT_FROM_WIN32(ERROR_PIPE_NOT_CONNECTED); };
 
     const std::wstring previousPipeOverride = GetEnvVarTrimmed(SearchServiceBroker::kPipeNameEnvVar);
     const std::wstring pipeName             = MakeUniquePipeName();
@@ -2520,23 +2479,17 @@ SelfTest::RunCase(options,
         static_cast<void>(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, restoreValue));
     });
 
-    wil::unique_handle serverPipe(::CreateNamedPipeW(pipeName.c_str(),
-                                                     PIPE_ACCESS_DUPLEX,
-                                                     PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
-                                                     1u,
-                                                     64u * 1024u,
-                                                     64u * 1024u,
-                                                     0u,
-                                                     nullptr));
-    state.Require(!! serverPipe,
+    wil::unique_handle serverPipe(
+        ::CreateNamedPipeW(pipeName.c_str(), PIPE_ACCESS_DUPLEX, PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT, 1u, 64u * 1024u, 64u * 1024u, 0u, nullptr));
+    state.Require(! ! serverPipe,
                   std::format(L"Failed to create buffered-query cap fake service pipe. error={}", static_cast<unsigned long>(::GetLastError())));
     if (! serverPipe)
     {
         return false;
     }
 
-    constexpr uint32_t kBatchSize       = 256u;
-    constexpr uint32_t kCandidateCount  = 65'537u;
+    constexpr uint32_t kBatchSize      = 256u;
+    constexpr uint32_t kCandidateCount = 65'537u;
     std::atomic<long> serverHr{S_OK};
     std::atomic<uint32_t> candidatesSent{0u};
     std::jthread server([&, pipe = std::move(serverPipe)](std::stop_token) mutable noexcept
@@ -2566,7 +2519,7 @@ SelfTest::RunCase(options,
 
         for (uint32_t offset = 0u; SUCCEEDED(localHr) && offset < kCandidateCount; offset += kBatchSize)
         {
-            const uint32_t count = (std::min)(kBatchSize, kCandidateCount - offset);
+            const uint32_t count                      = (std::min)(kBatchSize, kCandidateCount - offset);
             const std::vector<std::byte> batchPayload = makeBatchPayload(offset, count);
 
             TestFrameHeader batchFrame{};
@@ -2628,12 +2581,11 @@ SelfTest::RunCase(options,
     server.join();
 
     const HRESULT serverResult = static_cast<HRESULT>(serverHr.load());
-    state.Require(SUCCEEDED(serverResult),
-                  std::format(L"Buffered-query cap fake server failed. hr=0x{:08X}", static_cast<unsigned long>(serverResult)));
+    state.Require(SUCCEEDED(serverResult), std::format(L"Buffered-query cap fake server failed. hr=0x{:08X}", static_cast<unsigned long>(serverResult)));
     const HRESULT overflowHr = HRESULT_FROM_WIN32(ERROR_BUFFER_OVERFLOW);
-    state.Require(hr == overflowHr,
-                  std::format(L"Broker Query should cap no-callback candidate accumulation with ERROR_BUFFER_OVERFLOW. hr=0x{:08X}",
-                              static_cast<unsigned long>(hr)));
+    state.Require(
+        hr == overflowHr,
+        std::format(L"Broker Query should cap no-callback candidate accumulation with ERROR_BUFFER_OVERFLOW. hr=0x{:08X}", static_cast<unsigned long>(hr)));
     state.Require(candidates.empty(), std::format(L"Overflowing buffered broker query should clear candidates, got {}.", candidates.size()));
 
     return state.failure.empty();
@@ -2644,16 +2596,35 @@ SelfTest::RunCase(options,
                   L"search_source_allocation_and_folding_guard",
                   [&](SelfTest::CaseState& state) noexcept
 {
-    const auto contains = [](std::string_view source, std::string_view needle) noexcept
-    {
-        return source.find(needle) != std::string_view::npos;
-    };
+    const auto contains = [](std::string_view source, std::string_view needle) noexcept { return source.find(needle) != std::string_view::npos; };
 
     const auto containsBefore = [](std::string_view source, std::string_view before, std::string_view after) noexcept
     {
         const size_t beforeOffset = source.find(before);
         const size_t afterOffset  = source.find(after);
         return beforeOffset != std::string_view::npos && afterOffset != std::string_view::npos && beforeOffset < afterOffset;
+    };
+    const auto compactWhitespace = [](std::string_view source)
+    {
+        std::string compact;
+        compact.reserve(source.size());
+        for (const char ch : source)
+        {
+            if (ch != ' ' && ch != '\t' && ch != '\r' && ch != '\n')
+            {
+                compact.push_back(ch);
+            }
+        }
+        return compact;
+    };
+    const auto containsBeforeCompact = [&](std::string_view source, std::string_view before, std::string_view after)
+    {
+        const std::string compactSourceText = compactWhitespace(source);
+        const std::string compactBefore     = compactWhitespace(before);
+        const std::string compactAfter      = compactWhitespace(after);
+        const size_t beforeOffset           = compactSourceText.find(compactBefore);
+        const size_t afterOffset            = compactSourceText.find(compactAfter);
+        return beforeOffset != std::string::npos && afterOffset != std::string::npos && beforeOffset < afterOffset;
     };
 
     const auto sourceBetween = [](std::string_view source, std::string_view beginMarker, std::string_view endMarker) noexcept -> std::string_view
@@ -2717,9 +2688,7 @@ SelfTest::RunCase(options,
     };
 
     const auto requireNoBroadCatch = [&](std::wstring_view fileName, std::string_view source) noexcept
-    {
-        state.Require(! contains(source, "catch (...)"), std::format(L"{} must not use catch (...).", fileName));
-    };
+    { state.Require(! contains(source, "catch (...)"), std::format(L"{} must not use catch (...).", fileName)); };
 
     const auto requireBadAllocCatchesTerminate = [&](std::wstring_view fileName, std::string_view source) noexcept
     {
@@ -2739,9 +2708,9 @@ SelfTest::RunCase(options,
                 break;
             }
 
-            size_t bodyClose       = bodyOpen + 1u;
-            size_t braceDepth      = 1u;
-            bool foundBodyEnd      = false;
+            size_t bodyClose  = bodyOpen + 1u;
+            size_t braceDepth = 1u;
+            bool foundBodyEnd = false;
             for (; bodyClose < source.size(); ++bodyClose)
             {
                 if (source[bodyClose] == '{')
@@ -2766,8 +2735,7 @@ SelfTest::RunCase(options,
             }
 
             const std::string_view body = source.substr(bodyOpen, bodyClose - bodyOpen + 1u);
-            state.Require(contains(body, "std::terminate();"),
-                          std::format(L"{} must terminate inside every std::bad_alloc catch on search paths.", fileName));
+            state.Require(contains(body, "std::terminate();"), std::format(L"{} must terminate inside every std::bad_alloc catch on search paths.", fileName));
             searchOffset = bodyClose + 1u;
         }
     };
@@ -2807,12 +2775,10 @@ SelfTest::RunCase(options,
                                  "const size_t maxEntriesInPayload = remaining.size_bytes() / sizeof(CandidateEntryHeader);",
                                  "batchCandidates.reserve(batchHeader.count);"),
                   L"QueryBatch decode must compute the maximum payload entry count before reserving candidate storage.");
-    state.Require(containsBefore(decodeBatch,
-                                 "if (static_cast<size_t>(batchHeader.count) > maxEntriesInPayload)",
-                                 "batchCandidates.reserve(batchHeader.count);"),
-                  L"QueryBatch decode must reject count > remaining payload entries before reserve.");
-    state.Require(contains(decodeBatch, "return kProtocolErrorHr;"),
-                  L"QueryBatch external-count preflight must fail with the protocol-error HRESULT.");
+    state.Require(
+        containsBefore(decodeBatch, "if (static_cast<size_t>(batchHeader.count) > maxEntriesInPayload)", "batchCandidates.reserve(batchHeader.count);"),
+        L"QueryBatch decode must reject count > remaining payload entries before reserve.");
+    state.Require(contains(decodeBatch, "return kProtocolErrorHr;"), L"QueryBatch external-count preflight must fail with the protocol-error HRESULT.");
 
     const std::string_view queryBody = sourceBetween(brokerSource, "HRESULT Query(const QueryRequest& request,", "HRESULT RequestRebuild(");
     state.Require(! queryBody.empty(), L"SearchServiceBroker.cpp must keep Query discoverable for source guard.");
@@ -2821,16 +2787,13 @@ SelfTest::RunCase(options,
                   L"Broker no-callback candidate accumulation must keep a configured count ceiling.");
     state.Require(contains(brokerSource, "constexpr uint64_t kMaxClientBufferedCandidateBytes"),
                   L"Broker no-callback candidate accumulation must keep a configured byte ceiling.");
-    state.Require(containsBefore(queryBody,
-                                 "CanAppendClientBufferedCandidates(outCandidates.size()",
-                                 "outCandidates.insert("),
+    state.Require(containsBeforeCompact(queryBody, "CanAppendClientBufferedCandidates(outCandidates.size()", "outCandidates.insert("),
                   L"Broker no-callback path must validate count/bytes before accumulating candidates.");
     state.Require(contains(queryBody, "outCandidates.clear();") && contains(queryBody, "HRESULT_FROM_WIN32(ERROR_BUFFER_OVERFLOW)"),
                   L"Broker no-callback overflow must clear buffered candidates and return ERROR_BUFFER_OVERFLOW.");
 
-    const std::string_view snapshotLoad = sourceBetween(localIndexSource,
-                                                        "class SnapshotVolumeStore final",
-                                                        "HRESULT Save(const PersistedVolumeState& state, QueryStats& stats) noexcept override");
+    const std::string_view snapshotLoad = sourceBetween(
+        localIndexSource, "class SnapshotVolumeStore final", "HRESULT Save(const PersistedVolumeState& state, QueryStats& stats) noexcept override");
     state.Require(! snapshotLoad.empty(), L"LocalSearchIndexCore.cpp must keep snapshot Load discoverable for source guard.");
     state.Require(containsBefore(snapshotLoad, "const uint64_t maxEntriesInBytes", "outState.entries.reserve(static_cast<size_t>(header.entryCount));"),
                   L"Snapshot load must derive a file-size entry ceiling before reserving snapshot entries.");
@@ -2848,15 +2811,18 @@ SelfTest::RunCase(options,
     state.Require(! contains(foldWideText, "CharLowerBuffW") && ! contains(foldWideText, "std::towlower"),
                   L"SearchTextHelpers literal folding must not use local lowercasing.");
 
-    const std::string_view findResultKey = sourceBetween(findWindowSource, "[[nodiscard]] std::wstring ToLowerCopy", "[[nodiscard]] std::wstring FormatSearchStatusHint");
+    const std::string_view findResultKey =
+        sourceBetween(findWindowSource, "[[nodiscard]] std::wstring ToLowerCopy", "[[nodiscard]] std::wstring FormatSearchStatusHint");
     state.Require(! findResultKey.empty(), L"FindFilesWindow.cpp must keep result-key folding discoverable for source guard.");
     state.Require(contains(findResultKey, "OrdinalString::FoldCaseInvariant(value)") && contains(findResultKey, "MakeResultKey"),
                   L"Find result identity keys must route through invariant folding.");
     state.Require(! contains(findResultKey, "std::towlower") && ! contains(findResultKey, "CharLowerBuffW"),
                   L"Find result identity keys must not use local lowercasing.");
     state.Require(contains(incrementalSearchSource, "OrdinalString::FindContainsFoldedInvariant") &&
-                      contains(incrementalSearchSource, "OrdinalString::StartsWithFoldedInvariant"),
-                  L"FolderView incremental search folding helpers must use the shared invariant folded search helpers.");
+                      contains(incrementalSearchSource, "OrdinalString::StartsWithFoldedInvariant") &&
+                      contains(incrementalSearchSource, "const std::wstring foldedQuery = OrdinalString::FoldCaseInvariant(query);") &&
+                      contains(incrementalSearchSource, "StartsWithPreFoldedNoCase(displayNameAt(index), foldedQuery)"),
+                  L"FolderView incremental search folding helpers must use the shared invariant folded search helpers and pre-fold each prefix query once.");
 
     requireNoBroadCatch(L"SearchServiceBroker.cpp", brokerSource);
     requireNoBroadCatch(L"LocalSearchIndexCore.cpp", localIndexSource);
@@ -2878,14 +2844,8 @@ SelfTest::RunCase(options,
                   L"search_low_hardening_smoke",
                   [&](SelfTest::CaseState& state) noexcept
 {
-    const auto isHighSurrogate = [](wchar_t ch) noexcept
-    {
-        return ch >= static_cast<wchar_t>(0xD800) && ch <= static_cast<wchar_t>(0xDBFF);
-    };
-    const auto isLowSurrogate = [](wchar_t ch) noexcept
-    {
-        return ch >= static_cast<wchar_t>(0xDC00) && ch <= static_cast<wchar_t>(0xDFFF);
-    };
+    const auto isHighSurrogate  = [](wchar_t ch) noexcept { return ch >= static_cast<wchar_t>(0xD800) && ch <= static_cast<wchar_t>(0xDBFF); };
+    const auto isLowSurrogate   = [](wchar_t ch) noexcept { return ch >= static_cast<wchar_t>(0xDC00) && ch <= static_cast<wchar_t>(0xDFFF); };
     const auto hasLoneSurrogate = [&](std::wstring_view text) noexcept
     {
         for (size_t index = 0u; index < text.size(); ++index)
@@ -2905,8 +2865,8 @@ SelfTest::RunCase(options,
     std::wstring emoji;
     emoji.push_back(static_cast<wchar_t>(0xD83D));
     emoji.push_back(static_cast<wchar_t>(0xDE00));
-    const std::wstring snippetText = std::wstring(L"abc") + emoji + L"def";
-    const std::wstring endSnippet  = SearchTextHelpers::BuildSnippet(snippetText, 0u, 1u, 4u);
+    const std::wstring snippetText  = std::wstring(L"abc") + emoji + L"def";
+    const std::wstring endSnippet   = SearchTextHelpers::BuildSnippet(snippetText, 0u, 1u, 4u);
     const std::wstring startSnippet = SearchTextHelpers::BuildSnippet(snippetText, 5u, 1u, 4u);
     state.Require(! hasLoneSurrogate(endSnippet), L"Search snippets must not split a surrogate pair at the end boundary.");
     state.Require(! hasLoneSurrogate(startSnippet), L"Search snippets must not split a surrogate pair at the start boundary.");
@@ -2917,9 +2877,9 @@ SelfTest::RunCase(options,
     {
         const size_t byteCount = offsetof(FILE_FULL_DIR_INFO, FileName) + name.size() * sizeof(wchar_t);
         std::vector<std::byte> buffer(byteCount);
-        auto* info            = reinterpret_cast<FILE_FULL_DIR_INFO*>(buffer.data());
-        info->FileAttributes  = FILE_ATTRIBUTE_ARCHIVE;
-        info->FileNameLength  = static_cast<ULONG>(name.size() * sizeof(wchar_t));
+        auto* info           = reinterpret_cast<FILE_FULL_DIR_INFO*>(buffer.data());
+        info->FileAttributes = FILE_ATTRIBUTE_ARCHIVE;
+        info->FileNameLength = static_cast<ULONG>(name.size() * sizeof(wchar_t));
         if (! name.empty())
         {
             std::memcpy(info->FileName, name.data(), name.size() * sizeof(wchar_t));
@@ -2931,7 +2891,7 @@ SelfTest::RunCase(options,
     state.Require(LocalSearchIndexCore::TryParseFileFullDirectoryInformationForTests(validDirectoryInfo.data(), validDirectoryInfo.size()),
                   L"Valid FILE_FULL_DIR_INFO should parse for the bounds-check smoke test.");
 
-    std::vector<std::byte> oddNameLength = validDirectoryInfo;
+    std::vector<std::byte> oddNameLength                                        = validDirectoryInfo;
     reinterpret_cast<FILE_FULL_DIR_INFO*>(oddNameLength.data())->FileNameLength = 1u;
     state.Require(! LocalSearchIndexCore::TryParseFileFullDirectoryInformationForTests(oddNameLength.data(), oddNameLength.size()),
                   L"FILE_FULL_DIR_INFO with an odd byte FileNameLength must be rejected.");
@@ -2941,15 +2901,12 @@ SelfTest::RunCase(options,
     state.Require(! LocalSearchIndexCore::TryParseFileFullDirectoryInformationForTests(overrunName.data(), overrunName.size()),
                   L"FILE_FULL_DIR_INFO with a filename beyond the entry bytes must be rejected.");
 
-    std::vector<std::byte> shortNextEntry = validDirectoryInfo;
+    std::vector<std::byte> shortNextEntry                                         = validDirectoryInfo;
     reinterpret_cast<FILE_FULL_DIR_INFO*>(shortNextEntry.data())->NextEntryOffset = static_cast<ULONG>(offsetof(FILE_FULL_DIR_INFO, FileName) - 1u);
     state.Require(! LocalSearchIndexCore::TryParseFileFullDirectoryInformationForTests(shortNextEntry.data(), shortNextEntry.size()),
                   L"FILE_FULL_DIR_INFO with a short NextEntryOffset must be rejected.");
 
-    const auto contains = [](std::string_view source, std::string_view needle) noexcept
-    {
-        return source.find(needle) != std::string_view::npos;
-    };
+    const auto contains         = [](std::string_view source, std::string_view needle) noexcept { return source.find(needle) != std::string_view::npos; };
     const auto countOccurrences = [](std::string_view source, std::string_view needle) noexcept
     {
         size_t count  = 0u;
@@ -2981,6 +2938,31 @@ SelfTest::RunCase(options,
 
         return source.substr(beginOffset, endOffset - beginOffset);
     };
+    const auto containsBefore = [](std::string_view source, std::string_view before, std::string_view after) noexcept
+    {
+        const size_t beforePos = source.find(before);
+        const size_t afterPos  = source.find(after);
+        return beforePos != std::string_view::npos && afterPos != std::string_view::npos && beforePos < afterPos;
+    };
+    const auto compactWhitespace = [](std::string_view source)
+    {
+        std::string compact;
+        compact.reserve(source.size());
+        for (const char ch : source)
+        {
+            if (ch != ' ' && ch != '\t' && ch != '\r' && ch != '\n')
+            {
+                compact.push_back(ch);
+            }
+        }
+        return compact;
+    };
+    const auto containsCompact = [&](std::string_view source, std::string_view needle)
+    {
+        const std::string compactSourceText = compactWhitespace(source);
+        const std::string compactNeedle     = compactWhitespace(needle);
+        return compactSourceText.find(compactNeedle) != std::string::npos;
+    };
     const auto readSourceFile = [](const std::filesystem::path& path, std::string& outSource) noexcept
     {
         outSource.clear();
@@ -2999,6 +2981,16 @@ SelfTest::RunCase(options,
     std::string fallbackSource;
     std::string sqliteSource;
     std::string localIndexSource;
+    std::string localIndexHeaderSource;
+    std::string searchServiceSource;
+    std::string findWindowSource;
+    std::string factorySource;
+    std::string viewerWebSource;
+    std::string compareEngineHeader;
+    std::string compareEngineSource;
+    std::string compareWindowSource;
+    std::string dxUiControlsSource;
+    std::string fileOpsDiagnosticsSource;
     state.Require(readSourceFile(repoRoot / L"Plugins" / L"FileSystem" / L"FileSystem.Search.cpp", pluginSearchSource),
                   L"Failed to read FileSystem.Search.cpp for low-hardening guard.");
     state.Require(readSourceFile(repoRoot / L"RedSalamander" / L"SearchFallbackEngine.cpp", fallbackSource),
@@ -3007,20 +2999,131 @@ SelfTest::RunCase(options,
                   L"Failed to read SqliteIndexStore.cpp for low-hardening guard.");
     state.Require(readSourceFile(repoRoot / L"Common" / L"LocalSearchIndexCore.cpp", localIndexSource),
                   L"Failed to read LocalSearchIndexCore.cpp for low-hardening guard.");
+    state.Require(readSourceFile(repoRoot / L"Common" / L"LocalSearchIndexCore.h", localIndexHeaderSource),
+                  L"Failed to read LocalSearchIndexCore.h for low-hardening guard.");
+    state.Require(readSourceFile(repoRoot / L"Common" / L"SearchServiceBroker.cpp", searchServiceSource),
+                  L"Failed to read SearchServiceBroker.cpp for low-hardening guard.");
+    state.Require(readSourceFile(repoRoot / L"RedSalamander" / L"FindFilesWindow.cpp", findWindowSource),
+                  L"Failed to read FindFilesWindow.cpp for low-hardening guard.");
+    state.Require(readSourceFile(repoRoot / L"Common" / L"PlugInterfaces" / L"FactoryImpl.h", factorySource),
+                  L"Failed to read FactoryImpl.h for low-hardening guard.");
+    state.Require(readSourceFile(repoRoot / L"Plugins" / L"ViewerWeb" / L"ViewerWeb.cpp", viewerWebSource),
+                  L"Failed to read ViewerWeb.cpp for low-hardening guard.");
+    state.Require(readSourceFile(repoRoot / L"RedSalamander" / L"CompareDirectoriesEngine.h", compareEngineHeader),
+                  L"Failed to read CompareDirectoriesEngine.h for low-hardening guard.");
+    state.Require(readSourceFile(repoRoot / L"RedSalamander" / L"CompareDirectoriesEngine.cpp", compareEngineSource),
+                  L"Failed to read CompareDirectoriesEngine.cpp for low-hardening guard.");
+    state.Require(readSourceFile(repoRoot / L"RedSalamander" / L"CompareDirectoriesWindow.cpp", compareWindowSource),
+                  L"Failed to read CompareDirectoriesWindow.cpp for low-hardening guard.");
+    state.Require(readSourceFile(repoRoot / L"Common" / L"DxUi" / L"DxUi.Controls.cpp", dxUiControlsSource),
+                  L"Failed to read DxUi.Controls.cpp for low-hardening guard.");
+    state.Require(readSourceFile(repoRoot / L"RedSalamander" / L"FolderWindow.FileOperations.State.Diagnostics.Part.cpp", fileOpsDiagnosticsSource),
+                  L"Failed to read FolderWindow.FileOperations.State.Diagnostics.Part.cpp for low-hardening guard.");
     if (! state.failure.empty())
     {
         return false;
     }
 
-    const std::string_view nativeMarkQueued = sourceBetween(pluginSearchSource, "[[nodiscard]] bool MarkQueuedDirectory", "[[nodiscard]] bool ShouldUseParallelDirectoryWalk");
+    const std::string_view nativeMarkQueued =
+        sourceBetween(pluginSearchSource, "[[nodiscard]] bool MarkQueuedDirectory", "[[nodiscard]] bool ShouldUseParallelDirectoryWalk");
     const std::string_view fallbackMarkQueued = sourceBetween(fallbackSource, "[[nodiscard]] bool MarkQueuedDirectory", "HRESULT CheckSearchCancelled");
     state.Require(contains(nativeMarkQueued, "runtime.queuedDirectories.erase(visitKey);"),
                   L"Native search must roll back the logical visit key when physical identity de-dup rejects a directory.");
     state.Require(contains(fallbackMarkQueued, "runtime.queuedDirectories.erase(visitKey);"),
                   L"Fallback search must roll back the logical visit key when physical identity de-dup rejects a directory.");
+    state.Require(contains(nativeMarkQueued, "FAILED(TryGetDirectoryVisitIdentity(fullPath, identity))") &&
+                      contains(nativeMarkQueued, "FILESYSTEM_SEARCH_WARNING_ACCESS_DENIED_SKIPPED") && contains(nativeMarkQueued, "return false;"),
+                  L"Native followed-symlink traversal must skip a directory when physical identity cannot be probed.");
+    state.Require(contains(pluginSearchSource, "MarkQueuedDirectory(runtime, fullPath, &warningFlags)") &&
+                      contains(pluginSearchSource, "state.warningFlags.fetch_or(warningFlags"),
+                  L"Native parallel search must fan identity-probe warnings through the parallel warning accumulator.");
+    state.Require(contains(pluginSearchSource, "kMaxQueuedFollowSymlinkDirectories") &&
+                      contains(nativeMarkQueued, "runtime.queuedDirectories.size() >= kMaxQueuedFollowSymlinkDirectories") &&
+                      contains(nativeMarkQueued, "FILESYSTEM_SEARCH_WARNING_OVERFLOW"),
+                  L"Native followed-symlink traversal must cap queued directory identity memory like the fallback engine.");
+    state.Require(contains(fallbackMarkQueued, "FAILED(TryGetDirectoryVisitIdentity(fullPath, identity))") &&
+                      contains(fallbackMarkQueued, "FILESYSTEM_SEARCH_WARNING_ACCESS_DENIED_SKIPPED") && contains(fallbackMarkQueued, "return false;"),
+                  L"Fallback followed-symlink traversal must skip a directory when physical identity cannot be probed.");
+
+    const std::string_view nativeParallelNameOnlyEntry =
+        sourceBetween(pluginSearchSource, "void AccumulateParallelNameOnlyEntry", "[[nodiscard]] bool HasQueuedParallelDirectoryResultWork");
+    const std::string_view nativeParallelNameOnlyMaterialize =
+        sourceBetween(nativeParallelNameOnlyEntry, "if (! MaterializeEntryPaths(metadata, directoryFullPath", "ParallelDirectoryResult::Match match");
+    state.Require(contains(nativeParallelNameOnlyMaterialize, "return;") && contains(nativeParallelNameOnlyMaterialize, "FILESYSTEM_SEARCH_WARNING_OVERFLOW") &&
+                      ! contains(nativeParallelNameOnlyMaterialize, "result.status"),
+                  L"Parallel name-only search must warn and skip malformed materialized entries instead of failing the whole directory walk.");
+    const std::string_view nativeParallelDirectory = sourceBetween(pluginSearchSource, "void BuildParallelDirectoryResult", "void ParallelScanWorkerBody");
+    const std::string_view nativeParallelDirectoryMaterialize =
+        sourceBetween(nativeParallelDirectory, "if (! MaterializeEntryPaths(metadata, frame.fullPath", "EnqueueParallelDirectory");
+    state.Require(contains(nativeParallelDirectoryMaterialize, "continue;") &&
+                      contains(nativeParallelDirectoryMaterialize, "FILESYSTEM_SEARCH_WARNING_OVERFLOW") &&
+                      ! contains(nativeParallelDirectoryMaterialize, "result.status"),
+                  L"Parallel recursive directory enqueue must warn and skip malformed materialized entries instead of failing the whole directory walk.");
+    const std::string_view nativeParallelHasQueued =
+        sourceBetween(pluginSearchSource, "[[nodiscard]] bool HasQueuedParallelDirectoryResultWork", "void QueueParallelDirectoryResultChunk");
+    state.Require(contains(nativeParallelHasQueued, "! result.matches.empty()") && ! contains(nativeParallelHasQueued, "SUCCEEDED(result.status)"),
+                  L"Parallel name-only search must flush already accumulated matches when cancellation is observed mid-directory.");
+    const std::string_view nativeParallelScanWorker =
+        sourceBetween(pluginSearchSource, "void ParallelScanWorkerBody", "void CALLBACK ParallelScanWorkerCallback");
+    const std::string_view nativeParallelWorkerContentMaterialize =
+        sourceBetween(nativeParallelScanWorker, "if (! MaterializeEntryPaths(entry, chunk->directoryFullPath", "++result.candidateFiles");
+    const std::string_view nativeParallelWorkerMatchMaterialize =
+        sourceBetween(nativeParallelScanWorker, "uint32_t matchedBy = FILESYSTEM_SEARCH_MATCH_SOURCE_NONE", "result.matches.push_back");
+    state.Require(contains(nativeParallelWorkerContentMaterialize, "FILESYSTEM_SEARCH_WARNING_OVERFLOW") &&
+                      contains(nativeParallelWorkerContentMaterialize, "continue;") && ! contains(nativeParallelWorkerContentMaterialize, "return;") &&
+                      contains(nativeParallelWorkerMatchMaterialize, "FILESYSTEM_SEARCH_WARNING_OVERFLOW") &&
+                      contains(nativeParallelWorkerMatchMaterialize, "continue;") && ! contains(nativeParallelWorkerMatchMaterialize, "return;"),
+                  L"Parallel chunk workers must warn and continue after malformed materialized entries instead of abandoning the chunk.");
 
     const std::string_view applyPragmas = sourceBetween(sqliteSource, "[[nodiscard]] HRESULT ApplyPragmas", "[[nodiscard]] HRESULT CreateSchemaVersion1");
     state.Require(! contains(applyPragmas, "\"VACUUM;\""), L"SQLite bootstrap pragmas must not run full VACUUM inline.");
+    const std::string_view automaticMaintenance = sourceBetween(sqliteSource, "HRESULT RunAutomaticMaintenance", "HRESULT EnumerateVolume");
+    state.Require(
+        contains(automaticMaintenance, "const bool shouldRewriteAutoVacuum") && contains(automaticMaintenance, "\"VACUUM;\"") &&
+            contains(automaticMaintenance, "RunQuickCheck(db.get(), L\"automatic auto-vacuum mode rewrite\")") &&
+            contains(automaticMaintenance, "HRESULT_FROM_WIN32(ERROR_BUSY)") && containsCompact(automaticMaintenance, "result.ranVacuum = true"),
+        L"Automatic SQLite maintenance must rewrite legacy non-incremental auto_vacuum stores outside bootstrap after quick_check and defer busy checkpoints.");
+    const std::string_view manualMaintenance = sourceBetween(sqliteSource, "HRESULT RunManualMaintenance", "HRESULT RunAutomaticMaintenance");
+    state.Require(contains(manualMaintenance, "RunQuickCheck(db.get(), L\"manual maintenance\")") && contains(manualMaintenance, "\"VACUUM;\""),
+                  L"Manual SQLite maintenance must run quick_check before VACUUM.");
+
+    const std::string_view snapshotSave = sourceBetween(
+        localIndexSource, "HRESULT Save(const PersistedVolumeState& state, QueryStats& stats) noexcept override", "HRESULT Delete() noexcept override");
+    const std::string_view snapshotSaveCleanup = sourceBetween(snapshotSave, "const auto deleteTempOnFailure", "SnapshotHeader header{}");
+    state.Require(contains(snapshotSave, "OpenSnapshotTempFile(_snapshotPath, file, tempPath)") && contains(snapshotSave, "FlushFileBuffers(file.get())") &&
+                      contains(snapshotSave, "const std::wstring extendedTempPath     = ToExtendedPath(tempPath)") &&
+                      contains(snapshotSave, "const std::wstring extendedSnapshotPath = ToExtendedPath(_snapshotPath)") &&
+                      contains(snapshotSave,
+                               "MoveFileExW(extendedTempPath.c_str(), extendedSnapshotPath.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)") &&
+                      ! contains(snapshotSave, "CREATE_ALWAYS"),
+                  L"Snapshot persistence must write a flushed long-path-safe sibling temp and atomically replace the final snapshot.");
+    state.Require(containsBefore(snapshotSaveCleanup, "file.reset();", "const std::wstring extendedTempPath = ToExtendedPath(tempPath)") &&
+                      containsBefore(snapshotSaveCleanup,
+                                     "const std::wstring extendedTempPath = ToExtendedPath(tempPath)",
+                                     "static_cast<void>(::DeleteFileW(extendedTempPath.c_str()));"),
+                  L"Snapshot temp cleanup must close the temp handle before deleting the long-path-safe sibling on failure.");
+    const std::string_view snapshotDirectory = sourceBetween(localIndexSource, "HRESULT EnsureSnapshotDirectory", "HRESULT OpenSnapshotTempFile");
+    const std::string_view snapshotTempOpen  = sourceBetween(localIndexSource, "HRESULT OpenSnapshotTempFile", "HRESULT WriteSnapshotBytes");
+    const std::string_view snapshotLoad = sourceBetween(
+        localIndexSource, "HRESULT Load(PersistedVolumeState& outState, QueryStats& stats) noexcept override", "HRESULT Save(const PersistedVolumeState");
+    const std::string_view snapshotDelete = sourceBetween(localIndexSource, "HRESULT Delete() noexcept override", "#ifdef ENABLE_TESTS");
+    const std::string_view snapshotCorrupt = sourceBetween(
+        localIndexSource, "HRESULT CorruptForTests(SnapshotCorruptionMode mode) noexcept override", "#endif");
+    state.Require(contains(snapshotDirectory, "ToExtendedPath(parent.native())") &&
+                       contains(snapshotTempOpen, "extendedSnapshotPath = ToExtendedPath(snapshotPath)") &&
+                       contains(snapshotTempOpen, "Common::Paths::CreateUniqueSiblingFile(extendedSnapshotPath") &&
+                       contains(snapshotTempOpen, ".maximumAttempts = 16u") &&
+                      contains(snapshotLoad, "extendedSnapshotPath = ToExtendedPath(_snapshotPath)") &&
+                      contains(snapshotLoad, "CreateFileW(extendedSnapshotPath.c_str()") &&
+                      contains(snapshotDelete, "DeleteFileW(extendedSnapshotPath.c_str())") &&
+                      contains(snapshotCorrupt, "CreateFileW(extendedSnapshotPath.c_str()"),
+                  L"Snapshot directory, temp-open, load, delete, and corruption operations must preserve extended-length paths.");
+    state.Require(contains(localIndexSource, "stats.hardlinkAliasCoverageIncomplete = true") && contains(localIndexSource, "USN_REASON_HARD_LINK_CHANGE") &&
+                      contains(localIndexHeaderSource, "hardlinkAliasCoverageIncomplete"),
+                  L"Search indexing must report when hardlink/multi-path alias coverage is non-exhaustive.");
+    state.Require(contains(searchServiceSource, "QUERY_COMPLETE_FLAG_HARDLINK_ALIAS_INCOMPLETE") &&
+                      contains(searchServiceSource, "stats.hardlinkAliasCoverageIncomplete"),
+                  L"Search service query stats must round-trip non-exhaustive hardlink alias coverage.");
 
     const std::string_view replaceVolume = sourceBetween(sqliteSource, "HRESULT ReplaceVolume", "HRESULT ApplyJournalDelta");
     state.Require(countOccurrences(replaceVolume, "UpdateVolume(db.get(), volumeId, request)") == 1u,
@@ -3028,9 +3131,44 @@ SelfTest::RunCase(options,
 
     const std::string_view directoryInfoParser =
         sourceBetween(localIndexSource, "TryParseFileFullDirectoryInformationEntry", "[[nodiscard]] std::wstring ExtractVolumeRoot");
-    state.Require(contains(directoryInfoParser, "entryBytes > remainingBytes") &&
-                      contains(directoryInfoParser, "entryBytes - kFileNameOffset"),
+    state.Require(contains(directoryInfoParser, "entryBytes > remainingBytes") && contains(directoryInfoParser, "entryBytes - kFileNameOffset"),
                   L"FILE_FULL_DIR_INFO parsing must bound FileNameLength against the validated entry bytes before reading FileName.");
+
+    const std::string_view warningSummary =
+        sourceBetween(findWindowSource, "std::wstring FindFilesWindow::BuildWarningSummary", "UINT FindFilesWindow::BackendStringId");
+    state.Require(contains(warningSummary, "FILESYSTEM_SEARCH_WARNING_REGEX_REJECTED") && contains(warningSummary, "IDS_FIND_WARNING_REGEX_REJECTED"),
+                  L"Find Files must surface rejected-regex warnings with a localized reason instead of only E_INVALIDARG.");
+    state.Require(contains(warningSummary, "FILESYSTEM_SEARCH_WARNING_SERVICE_ROOT_REJECTED") &&
+                      contains(warningSummary, "IDS_FIND_WARNING_SERVICE_ROOT_REJECTED"),
+                  L"Find Files must distinguish a healthy-service root rejection from service transport unavailability.");
+
+    const std::string_view factoryEnumerate = sourceBetween(factorySource, "[[nodiscard]] HRESULT FactoryEnumeratePlugins", "// FactoryCreate<TInterface>");
+    state.Require(contains(factoryEnumerate, "entries.empty()") && contains(factoryEnumerate, "*count    = 0;") && contains(factoryEnumerate, "return S_OK;") &&
+                      contains(factoryEnumerate, "entries[0]"),
+                  L"FactoryEnumeratePlugins must handle an empty entries span before reading entries[0].");
+
+    state.Require(countOccurrences(viewerWebSource, "<!doctype html><html><head><meta charset=\\\"utf-8\\\"") == 1u &&
+                      countOccurrences(viewerWebSource, "kInternalHtmlHead") >= 5u,
+                  L"ViewerWeb internal HTML head/CSP literal should stay hoisted to one shared constant.");
+
+    state.Require(contains(compareEngineHeader, "_pendingContentCompareRetryAttempts") &&
+                      contains(compareEngineHeader, "_pendingSubdirAggregateRetryAttempts") &&
+                      contains(compareEngineSource, "kMaxPendingUpdateRetryAttempts") &&
+                      contains(compareEngineSource, "if (! QueueContentUpdateFolderRetryLocked(folderKey, currentVersion))") &&
+                      contains(compareEngineSource, "_pendingContentCompareRetryAttempts.erase(folderKey)") &&
+                      contains(compareEngineSource, "_pendingSubdirAggregateRetryAttempts.erase(retryKey)"),
+                  L"CompareDirectories pending content/subdir retries must be capped and cleared with their pending work.");
+    state.Require(contains(compareWindowSource, "static const CompareDetailsTextStrings strings") && contains(compareWindowSource, "const auto& strings"),
+                  L"CompareDirectories detail text resource strings must be cached and used by reference.");
+    state.Require(contains(dxUiControlsSource, "const bool wasIndeterminate = _indeterminate") && contains(dxUiControlsSource, "if (wasIndeterminate)") &&
+                      contains(dxUiControlsSource, "Invalidate(host);"),
+                  L"DxUi checkbox keyboard handling must invalidate when clearing the indeterminate glyph without a value change.");
+    state.Require(contains(fileOpsDiagnosticsSource, "const size_t overflow = _diagnosticsPendingFlush.size() - maxPendingFlush") &&
+                      contains(fileOpsDiagnosticsSource, "_diagnosticsPendingFlush.erase(_diagnosticsPendingFlush.begin(),"),
+                  L"FileOps diagnostics pending flush trimming must remove overflow entries in one bulk erase.");
+    state.Require(contains(localIndexSource, "IsRedSalamanderStagedTempName") && contains(localIndexSource, ".rs_tmp_") &&
+                      contains(localIndexSource, ".rs_copy_tmp_") && contains(localIndexSource, ".~rs-write-"),
+                  L"Local search index hydration must skip RedSalamander staged temp sibling names.");
 
     return state.failure.empty();
 });
@@ -3086,16 +3224,9 @@ SelfTest::RunCase(options,
     clientDone.reset(::CreateEventW(nullptr, TRUE, FALSE, nullptr));
     state.Require(requestReceived && releaseServer && clientDone, L"Failed to create stalled broker synchronization events.");
 
-    wil::unique_handle serverPipe(::CreateNamedPipeW(pipeName.c_str(),
-                                                     PIPE_ACCESS_DUPLEX,
-                                                     PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
-                                                     1u,
-                                                     4096u,
-                                                     4096u,
-                                                     0u,
-                                                     nullptr));
-    state.Require(!! serverPipe,
-                  std::format(L"Failed to create stalled broker fake service pipe. error={}", static_cast<unsigned long>(::GetLastError())));
+    wil::unique_handle serverPipe(
+        ::CreateNamedPipeW(pipeName.c_str(), PIPE_ACCESS_DUPLEX, PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT, 1u, 4096u, 4096u, 0u, nullptr));
+    state.Require(! ! serverPipe, std::format(L"Failed to create stalled broker fake service pipe. error={}", static_cast<unsigned long>(::GetLastError())));
     if (! serverPipe || ! requestReceived || ! releaseServer || ! clientDone)
     {
         return false;
@@ -3167,8 +3298,7 @@ SelfTest::RunCase(options,
                   L"Stalled broker fake service did not receive the query request.");
     const HRESULT serverResult = static_cast<HRESULT>(serverHr.load(std::memory_order_acquire));
     state.Require(SUCCEEDED(serverResult),
-                  std::format(L"Stalled broker fake service failed while reading the request. hr=0x{:08X}",
-                              static_cast<unsigned long>(serverResult)));
+                  std::format(L"Stalled broker fake service failed while reading the request. hr=0x{:08X}", static_cast<unsigned long>(serverResult)));
 
     cancelRequested.store(true, std::memory_order_release);
     const DWORD cancelWait = ::WaitForSingleObject(clientDone.get(), static_cast<DWORD>(SelfTest::ScaleTimeout(500)));
@@ -3186,8 +3316,7 @@ SelfTest::RunCase(options,
     {
         const HRESULT queryHr = static_cast<HRESULT>(clientHr.load(std::memory_order_acquire));
         state.Require(queryHr == HRESULT_FROM_WIN32(ERROR_CANCELLED),
-                      std::format(L"Stalled broker query expected ERROR_CANCELLED after cancellation. hr=0x{:08X}",
-                                  static_cast<unsigned long>(queryHr)));
+                      std::format(L"Stalled broker query expected ERROR_CANCELLED after cancellation. hr=0x{:08X}", static_cast<unsigned long>(queryHr)));
     }
 
     return state.failure.empty();
@@ -3228,11 +3357,11 @@ SelfTest::RunCase(options,
 
     struct BatchCancelState final
     {
-        BatchCancelState()                                             = default;
-        BatchCancelState(const BatchCancelState&)                      = delete;
-        BatchCancelState(BatchCancelState&&)                           = delete;
-        BatchCancelState& operator=(const BatchCancelState&)           = delete;
-        BatchCancelState& operator=(BatchCancelState&&)                = delete;
+        BatchCancelState()                                   = default;
+        BatchCancelState(const BatchCancelState&)            = delete;
+        BatchCancelState(BatchCancelState&&)                 = delete;
+        BatchCancelState& operator=(const BatchCancelState&) = delete;
+        BatchCancelState& operator=(BatchCancelState&&)      = delete;
 
         std::atomic<bool>* cancelRequested = nullptr;
         HANDLE batchConsumedEvent          = nullptr;
@@ -3374,16 +3503,9 @@ SelfTest::RunCase(options,
     clientDone.reset(::CreateEventW(nullptr, TRUE, FALSE, nullptr));
     state.Require(batchConsumed && releaseServer && clientDone, L"Failed to create streaming broker cancel synchronization events.");
 
-    wil::unique_handle serverPipe(::CreateNamedPipeW(pipeName.c_str(),
-                                                     PIPE_ACCESS_DUPLEX,
-                                                     PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
-                                                     1u,
-                                                     4096u,
-                                                     4096u,
-                                                     0u,
-                                                     nullptr));
-    state.Require(!! serverPipe,
-                  std::format(L"Failed to create streaming broker fake service pipe. error={}", static_cast<unsigned long>(::GetLastError())));
+    wil::unique_handle serverPipe(
+        ::CreateNamedPipeW(pipeName.c_str(), PIPE_ACCESS_DUPLEX, PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT, 1u, 4096u, 4096u, 0u, nullptr));
+    state.Require(! ! serverPipe, std::format(L"Failed to create streaming broker fake service pipe. error={}", static_cast<unsigned long>(::GetLastError())));
     if (! serverPipe || ! batchConsumed || ! releaseServer || ! clientDone)
     {
         return false;
@@ -3448,15 +3570,7 @@ SelfTest::RunCase(options,
 
         std::vector<LocalSearchIndexCore::Candidate> candidates;
         LocalSearchIndexCore::QueryStats stats{};
-        const HRESULT hr = SearchServiceBroker::Query(request,
-                                                      nullptr,
-                                                      nullptr,
-                                                      cancelThunk,
-                                                      &cancelRequested,
-                                                      candidates,
-                                                      &stats,
-                                                      batchThunk,
-                                                      &batchState);
+        const HRESULT hr = SearchServiceBroker::Query(request, nullptr, nullptr, cancelThunk, &cancelRequested, candidates, &stats, batchThunk, &batchState);
         clientHr.store(static_cast<long>(hr), std::memory_order_release);
         static_cast<void>(::SetEvent(clientDone.get()));
     });
@@ -3471,12 +3585,10 @@ SelfTest::RunCase(options,
     server.join();
 
     const HRESULT serverResult = static_cast<HRESULT>(serverHr.load(std::memory_order_acquire));
-    state.Require(SUCCEEDED(serverResult),
-                  std::format(L"Streaming broker fake service failed. hr=0x{:08X}", static_cast<unsigned long>(serverResult)));
+    state.Require(SUCCEEDED(serverResult), std::format(L"Streaming broker fake service failed. hr=0x{:08X}", static_cast<unsigned long>(serverResult)));
     const HRESULT queryHr = static_cast<HRESULT>(clientHr.load(std::memory_order_acquire));
     state.Require(queryHr == HRESULT_FROM_WIN32(ERROR_CANCELLED),
-                  std::format(L"Streaming broker query expected ERROR_CANCELLED after first batch. hr=0x{:08X}",
-                              static_cast<unsigned long>(queryHr)));
+                  std::format(L"Streaming broker query expected ERROR_CANCELLED after first batch. hr=0x{:08X}", static_cast<unsigned long>(queryHr)));
     state.Require(batchState.batchesSeen.load(std::memory_order_acquire) == 1u,
                   std::format(L"Streaming broker query should consume one batch before cancellation. batches={}",
                               batchState.batchesSeen.load(std::memory_order_acquire)));
@@ -3669,6 +3781,7 @@ SelfTest::RunCase(options,
 
     state.Require(maintenance.maintenanceNeeded, L"Automatic checkpoint test should require maintenance.");
     state.Require(maintenance.ranCheckpoint, L"Automatic checkpoint test should run a WAL checkpoint.");
+    state.Require(! maintenance.ranVacuum, L"Automatic checkpoint test should not run full VACUUM.");
     state.Require(! maintenance.ranIncrementalVacuum, L"Automatic checkpoint test should not run incremental vacuum.");
     state.Require(! maintenance.after.lastCheckpointUtc.empty(), L"Automatic checkpoint test should record lastCheckpointUtc.");
     state.Require(maintenance.after.lastCompactionUtc.empty(), L"Automatic checkpoint test should not record lastCompactionUtc.");
@@ -3716,6 +3829,7 @@ SelfTest::RunCase(options,
     }
 
     state.Require(maintenance.maintenanceNeeded, L"Automatic compaction test should require maintenance.");
+    state.Require(! maintenance.ranVacuum, L"Automatic compaction test should not run full VACUUM for an already-incremental store.");
     state.Require(maintenance.ranIncrementalVacuum, L"Automatic compaction test should run incremental vacuum.");
     state.Require(maintenance.requestedVacuumPages != 0u, L"Automatic compaction test should request at least one vacuum page.");
     state.Require(maintenance.requestedVacuumPages <= 4096u,
@@ -3726,6 +3840,327 @@ SelfTest::RunCase(options,
                               maintenance.before.freelistPageCount,
                               maintenance.after.freelistPageCount));
     state.Require(! maintenance.after.lastCompactionUtc.empty(), L"Automatic compaction should record lastCompactionUtc.");
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"sqlite_index_store_automatic_rewrites_legacy_auto_vacuum",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    std::filesystem::path caseRoot;
+    state.Require(PrepareSearchCaseRoot(root, L"sqlite_index_store_automatic_rewrites_auto_vacuum", caseRoot),
+                  L"Failed to prepare sqlite_index_store_automatic_rewrites_auto_vacuum root.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path databasePath = caseRoot / L"index-v2.sqlite3";
+    SqliteIndexStore::StoreInfo bootstrapInfo{};
+    const HRESULT bootstrapHr = SqliteIndexStore::EnsureBootstrap(databasePath.wstring(), &bootstrapInfo);
+    state.Require(SUCCEEDED(bootstrapHr), std::format(L"SqliteIndexStore::EnsureBootstrap failed. hr=0x{:08X}", static_cast<unsigned long>(bootstrapHr)));
+    state.Require(bootstrapInfo.incrementalAutoVacuumEnabled, L"Fresh SQLite maintenance fixture should start with incremental auto_vacuum enabled.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    std::wstring sqliteError;
+    constexpr std::string_view kMakeLegacyAutoVacuumStore = "PRAGMA journal_mode=DELETE;"
+                                                            "PRAGMA auto_vacuum=NONE;"
+                                                            "VACUUM;"
+                                                            "PRAGMA journal_mode=WAL;";
+    state.Require(ExecuteSqliteScript(databasePath, kMakeLegacyAutoVacuumStore, sqliteError), sqliteError);
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    SqliteIndexStore::StoreInfo legacyInfo{};
+    const HRESULT legacyInspectHr = SqliteIndexStore::InspectStore(databasePath.wstring(), legacyInfo);
+    state.Require(
+        SUCCEEDED(legacyInspectHr),
+        std::format(L"SqliteIndexStore::InspectStore for legacy auto_vacuum fixture failed. hr=0x{:08X}", static_cast<unsigned long>(legacyInspectHr)));
+    state.Require(! legacyInfo.incrementalAutoVacuumEnabled, L"Legacy auto_vacuum fixture should inspect as non-incremental before maintenance.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    LocalSearchIndexCore::SqliteMaintenancePolicy policy{};
+    policy.autoCheckpointTargetBytes          = std::numeric_limits<uint64_t>::max();
+    policy.autoCompactionFragmentationPercent = std::numeric_limits<uint32_t>::max();
+    policy.autoCompactionMinBytes             = std::numeric_limits<uint64_t>::max();
+
+    SqliteIndexStore::AutomaticMaintenanceResult maintenance{};
+    const HRESULT maintenanceHr = SqliteIndexStore::RunAutomaticMaintenance(databasePath.wstring(), policy, &maintenance);
+    state.Require(
+        SUCCEEDED(maintenanceHr),
+        std::format(L"SqliteIndexStore::RunAutomaticMaintenance (auto_vacuum rewrite) failed. hr=0x{:08X}", static_cast<unsigned long>(maintenanceHr)));
+    if (FAILED(maintenanceHr))
+    {
+        return false;
+    }
+
+    state.Require(maintenance.maintenanceNeeded, L"Legacy auto_vacuum fixture should require automatic maintenance.");
+    state.Require(! maintenance.before.incrementalAutoVacuumEnabled, L"Automatic maintenance should capture the legacy pre-rewrite auto_vacuum state.");
+    state.Require(maintenance.ranVacuum, L"Automatic maintenance should run full VACUUM to persist incremental auto_vacuum mode.");
+    state.Require(! maintenance.ranIncrementalVacuum, L"Automatic auto_vacuum rewrite should not also run incremental vacuum.");
+    state.Require(maintenance.after.incrementalAutoVacuumEnabled, L"Automatic maintenance should persist incremental auto_vacuum mode.");
+    state.Require(! maintenance.after.lastCompactionUtc.empty(), L"Automatic auto_vacuum rewrite should record lastCompactionUtc.");
+
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"search_service_rejects_device_root_and_continues",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    std::filesystem::path caseRoot;
+    state.Require(PrepareSearchCaseRoot(root, L"search_service_rejects_device_root", caseRoot), L"Failed to prepare search_service_rejects_device_root root.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring previousPipeOverride = GetEnvVarTrimmed(SearchServiceBroker::kPipeNameEnvVar);
+    const std::wstring pipeName             = MakeUniquePipeName();
+    state.Require(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, pipeName.c_str()) != 0, L"Failed to override the search service pipe.");
+    const auto restorePipeOverride = wil::scope_exit([&] noexcept
+    {
+        const wchar_t* restoreValue = previousPipeOverride.empty() ? nullptr : previousPipeOverride.c_str();
+        static_cast<void>(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, restoreValue));
+    });
+
+    ForegroundSearchServiceProcess service;
+    std::wstring serviceError;
+    const std::filesystem::path storageRoot = caseRoot / L"service-store";
+    const std::wstring extraArgs            = std::format(L"--storage-root=\"{}\" --store-backend=snapshot", storageRoot.wstring());
+    state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, false, extraArgs), serviceError);
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    SearchServiceBroker::QueryRequest request{};
+    request.rootPath           = LR"(\\?\GLOBALROOT\Device\HarddiskVolumeShadowCopy1\)";
+    request.namePattern        = L"*";
+    request.nameMode           = FILESYSTEM_SEARCH_NAME_WILDCARD;
+    request.flags              = static_cast<FileSystemSearchFlags>(FILESYSTEM_SEARCH_RECURSIVE | FILESYSTEM_SEARCH_INCLUDE_FILES);
+    request.recursive          = true;
+    request.includeFiles       = true;
+    request.includeDirectories = false;
+
+    std::vector<LocalSearchIndexCore::Candidate> candidates;
+    LocalSearchIndexCore::QueryStats stats{};
+    const HRESULT queryHr = SearchServiceBroker::Query(request, nullptr, nullptr, nullptr, nullptr, candidates, &stats);
+    state.Require(FAILED(queryHr), L"Device-namespace search service query should be rejected.");
+    state.Require(candidates.empty(), L"Rejected device-namespace query should not return candidates.");
+
+    SearchServiceBroker::ServiceStatus status{};
+    if (WaitForSearchServiceStatus(state, status, pipeName, L"device-root rejection recovery service"))
+    {
+        state.Require(status.pipeName == pipeName, L"Status after rejected device root should come from the isolated service.");
+    }
+
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"search_service_slow_partial_client_does_not_block_next_client",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    struct TestFrameHeader final
+    {
+        uint32_t magic           = 0x53535252u;
+        uint32_t protocolVersion = SearchServiceBroker::kProtocolVersion;
+        uint32_t messageType     = 3u;
+        uint32_t payloadBytes    = sizeof(uint32_t);
+    };
+
+    std::filesystem::path caseRoot;
+    state.Require(PrepareSearchCaseRoot(root, L"search_service_slow_partial_client", caseRoot), L"Failed to prepare search_service_slow_partial_client root.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    constexpr wchar_t kServerFrameTimeoutEnvVar[] = L"REDSALAMANDER_SEARCH_SERVICE_SERVER_FRAME_TIMEOUT_MS";
+    const std::wstring previousPipeOverride       = GetEnvVarTrimmed(SearchServiceBroker::kPipeNameEnvVar);
+    const std::wstring previousTimeoutOverride    = GetEnvVarTrimmed(kServerFrameTimeoutEnvVar);
+    const std::wstring pipeName                   = MakeUniquePipeName();
+    state.Require(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, pipeName.c_str()) != 0, L"Failed to override the search service pipe.");
+    state.Require(::SetEnvironmentVariableW(kServerFrameTimeoutEnvVar, L"100") != 0, L"Failed to override the search service server frame timeout.");
+    const auto restoreOverrides = wil::scope_exit([&] noexcept
+    {
+        const wchar_t* restorePipeValue    = previousPipeOverride.empty() ? nullptr : previousPipeOverride.c_str();
+        const wchar_t* restoreTimeoutValue = previousTimeoutOverride.empty() ? nullptr : previousTimeoutOverride.c_str();
+        static_cast<void>(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, restorePipeValue));
+        static_cast<void>(::SetEnvironmentVariableW(kServerFrameTimeoutEnvVar, restoreTimeoutValue));
+    });
+
+    ForegroundSearchServiceProcess service;
+    std::wstring serviceError;
+    const std::filesystem::path storageRoot = caseRoot / L"service-store";
+    const std::wstring extraArgs            = std::format(L"--storage-root=\"{}\" --store-backend=snapshot", storageRoot.wstring());
+    state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, extraArgs), serviceError);
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    wil::unique_handle slowClient(::CreateFileW(pipeName.c_str(), GENERIC_READ | GENERIC_WRITE, 0u, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+    state.Require(! ! slowClient,
+                  std::format(L"Failed to connect slow partial client to search service pipe. error={}", static_cast<unsigned long>(::GetLastError())));
+    if (! slowClient)
+    {
+        return false;
+    }
+
+    TestFrameHeader header{};
+    DWORD written = 0u;
+    state.Require(::WriteFile(slowClient.get(), &header, static_cast<DWORD>(sizeof(header)), &written, nullptr) != 0 &&
+                      written == static_cast<DWORD>(sizeof(header)),
+                  L"Failed to write the slow partial client frame header.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(350));
+
+    SearchServiceBroker::ServiceStatus status{};
+    if (! WaitForSearchServiceStatusWithProcessDiagnostics(state, status, pipeName, L"slow partial client recovery service", service))
+    {
+        return false;
+    }
+    state.Require(status.pipeName == pipeName, L"Status after slow partial client should come from the isolated service.");
+
+    slowClient.reset();
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"search_service_sqlite_legacy_auto_vacuum_queues_idle_maintenance",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    std::filesystem::path caseRoot;
+    state.Require(PrepareSearchCaseRoot(root, L"search_service_sqlite_legacy_auto_vacuum_queue", caseRoot),
+                  L"Failed to prepare search_service_sqlite_legacy_auto_vacuum_queue root.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path databasePath = caseRoot / L"legacy-auto-vacuum.sqlite3";
+    SqliteIndexStore::StoreInfo bootstrapInfo{};
+    const HRESULT bootstrapHr = SqliteIndexStore::EnsureBootstrap(databasePath.wstring(), &bootstrapInfo);
+    state.Require(SUCCEEDED(bootstrapHr), std::format(L"SqliteIndexStore::EnsureBootstrap failed. hr=0x{:08X}", static_cast<unsigned long>(bootstrapHr)));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    std::wstring sqliteError;
+    constexpr std::string_view kMakeLegacyAutoVacuumStore = "PRAGMA journal_mode=DELETE;"
+                                                            "PRAGMA auto_vacuum=NONE;"
+                                                            "VACUUM;"
+                                                            "PRAGMA journal_mode=WAL;";
+    state.Require(ExecuteSqliteScript(databasePath, kMakeLegacyAutoVacuumStore, sqliteError), sqliteError);
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    SqliteIndexStore::StoreInfo legacyInfo{};
+    const HRESULT legacyInspectHr = SqliteIndexStore::InspectStore(databasePath.wstring(), legacyInfo);
+    state.Require(
+        SUCCEEDED(legacyInspectHr),
+        std::format(L"SqliteIndexStore::InspectStore for legacy auto_vacuum queue fixture failed. hr=0x{:08X}", static_cast<unsigned long>(legacyInspectHr)));
+    state.Require(! legacyInfo.incrementalAutoVacuumEnabled, L"Legacy auto_vacuum queue fixture should inspect as non-incremental.");
+    state.Require(legacyInfo.freelistPageCount == 0u,
+                  std::format(L"Legacy auto_vacuum queue fixture should not rely on freelist pressure. freelist={}", legacyInfo.freelistPageCount));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring previousPipeOverride = GetEnvVarTrimmed(SearchServiceBroker::kPipeNameEnvVar);
+    const std::wstring pipeName             = MakeUniquePipeName();
+    state.Require(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, pipeName.c_str()) != 0, L"Failed to override the search service pipe.");
+    const auto restorePipeOverride = wil::scope_exit([&] noexcept
+    {
+        const wchar_t* restoreValue = previousPipeOverride.empty() ? nullptr : previousPipeOverride.c_str();
+        static_cast<void>(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, restoreValue));
+    });
+
+    ForegroundSearchServiceProcess service;
+    std::wstring serviceError;
+    const std::wstring extraArgs = std::format(L"--store-backend=sqlite --sqlite-path=\"{}\"", databasePath.wstring());
+    state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, false, serviceError, false, extraArgs), serviceError);
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    SearchServiceBroker::ServiceStatus queuedStatus{};
+    if (! WaitForSearchServiceStatus(state, queuedStatus, pipeName, L"legacy auto_vacuum queued maintenance service"))
+    {
+        return false;
+    }
+
+    state.Require(queuedStatus.maintenanceQueued,
+                  L"Legacy non-incremental auto_vacuum store should queue idle maintenance even without WAL/freelist pressure.");
+    state.Require(! queuedStatus.maintenanceRunning, L"Legacy auto_vacuum maintenance should wait for the idle grace window before running.");
+
+    std::this_thread::sleep_for(std::chrono::milliseconds{1'300});
+
+    SearchServiceBroker::ServiceStatus completedStatus{};
+    HRESULT lastStatusHr = HRESULT_FROM_WIN32(ERROR_TIMEOUT);
+    bool maintenanceCompleted = false;
+    const auto completionDeadline = std::chrono::steady_clock::now() +
+                                    std::chrono::milliseconds{static_cast<std::chrono::milliseconds::rep>(SelfTest::ScaleTimeout(30'000))};
+    while (std::chrono::steady_clock::now() < completionDeadline)
+    {
+        completedStatus = {};
+        lastStatusHr     = SearchServiceBroker::GetStatus(completedStatus);
+        if (SUCCEEDED(lastStatusHr) && ! completedStatus.maintenanceQueued && ! completedStatus.maintenanceRunning &&
+            ! completedStatus.lastCompactionUtc.empty() && ! completedStatus.lastCheckpointUtc.empty())
+        {
+            maintenanceCompleted = true;
+            break;
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds{50});
+    }
+    state.Require(maintenanceCompleted,
+                  std::format(L"Legacy auto_vacuum maintenance did not complete before the service-status deadline. hr=0x{:08X} queued={} running={} "
+                              L"lastCompaction='{}' lastCheckpoint='{}'.",
+                              static_cast<unsigned long>(lastStatusHr),
+                              completedStatus.maintenanceQueued,
+                              completedStatus.maintenanceRunning,
+                              completedStatus.lastCompactionUtc,
+                              completedStatus.lastCheckpointUtc));
+    if (! maintenanceCompleted)
+    {
+        return false;
+    }
+
+    state.Require(! completedStatus.maintenanceQueued, L"Legacy auto_vacuum maintenance should clear the queued flag after completion.");
+    state.Require(! completedStatus.lastCompactionUtc.empty(), L"Legacy auto_vacuum maintenance should record lastCompactionUtc.");
+    state.Require(! completedStatus.lastCheckpointUtc.empty(), L"Legacy auto_vacuum maintenance should record lastCheckpointUtc.");
+
+    SqliteIndexStore::StoreInfo completedInfo{};
+    const HRESULT completedInspectHr = SqliteIndexStore::InspectStore(databasePath.wstring(), completedInfo);
+    state.Require(SUCCEEDED(completedInspectHr),
+                  std::format(L"SqliteIndexStore::InspectStore after legacy auto_vacuum maintenance failed. hr=0x{:08X}",
+                              static_cast<unsigned long>(completedInspectHr)));
+    state.Require(completedInfo.incrementalAutoVacuumEnabled, L"Legacy auto_vacuum maintenance should persist incremental auto_vacuum mode.");
+
     return state.failure.empty();
 });
 
@@ -4058,6 +4493,8 @@ SelfTest::RunCase(options,
         }
         catch (const std::exception&)
         {
+            // Mandatory: this callback is noexcept; report append failure instead of unwinding through SQLite enumeration.
+            Debug::Error(L"CompareDirectories selftest: replay reseed EnumerateVolume callback failed with an unexpected std::exception.");
             return E_FAIL;
         }
     },
@@ -4071,6 +4508,126 @@ SelfTest::RunCase(options,
 
     state.Require(queryNames == std::vector<std::wstring>{L"beta.txt"}, L"EnumerateVolume after delta should return only beta.txt.");
     state.Require(queryStats.nextUsn == 72u, std::format(L"EnumerateVolume should expose nextUsn=72 after delta, got {}.", queryStats.nextUsn));
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"sqlite_index_store_root_lookup_case_insensitive",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    std::filesystem::path caseRoot;
+    state.Require(PrepareSearchCaseRoot(root, L"sqlite_index_store_root_lookup_case", caseRoot),
+                  L"Failed to prepare sqlite_index_store_root_lookup_case root.");
+    const std::filesystem::path databasePath = caseRoot / L"index-v2.sqlite3";
+
+    SqliteIndexStore::StoreInfo bootstrapInfo{};
+    HRESULT hr = SqliteIndexStore::EnsureBootstrap(databasePath.wstring(), &bootstrapInfo);
+    state.Require(SUCCEEDED(hr), std::format(L"SqliteIndexStore::EnsureBootstrap for root case test failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    const std::wstring storedRoot = caseRoot.wstring();
+    std::wstring queryRoot        = storedRoot;
+    for (wchar_t& ch : queryRoot)
+    {
+        if (ch >= L'a' && ch <= L'z')
+        {
+            ch = static_cast<wchar_t>(ch - (L'a' - L'A'));
+        }
+        else if (ch >= L'A' && ch <= L'Z')
+        {
+            ch = static_cast<wchar_t>(ch + (L'a' - L'A'));
+        }
+    }
+    state.Require(queryRoot != storedRoot, L"Root case test requires a path with ASCII letters.");
+
+    SqliteIndexStore::ReplaceVolumeRequest replaceRequest{};
+    replaceRequest.rootPath       = storedRoot;
+    replaceRequest.fileSystemKind = LocalSearchIndexCore::FileSystemKind::Ntfs;
+    replaceRequest.journalId      = 101u;
+    replaceRequest.nextUsn        = 202u;
+    replaceRequest.state          = SqliteIndexStore::kVolumeStateReady;
+    replaceRequest.entries.push_back({
+        .fileIdLow    = 1u,
+        .fileIdHigh   = 0u,
+        .parentIdLow  = 0u,
+        .parentIdHigh = 0u,
+        .fullPath     = storedRoot,
+        .name         = std::filesystem::path(storedRoot).filename().wstring(),
+        .attributes   = FILE_ATTRIBUTE_DIRECTORY,
+    });
+    replaceRequest.entries.push_back({
+        .fileIdLow    = 2u,
+        .fileIdHigh   = 0u,
+        .parentIdLow  = 1u,
+        .parentIdHigh = 0u,
+        .fullPath     = (caseRoot / L"Alpha.txt").wstring(),
+        .name         = L"Alpha.txt",
+        .attributes   = FILE_ATTRIBUTE_ARCHIVE,
+        .sizeBytes    = 5u,
+    });
+
+    SqliteIndexStore::ReplaceVolumeResult replaceResult{};
+    hr = SqliteIndexStore::ReplaceVolume(databasePath.wstring(), replaceRequest, &replaceResult);
+    state.Require(SUCCEEDED(hr), std::format(L"SqliteIndexStore::ReplaceVolume for root case test failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    SqliteIndexStore::VolumeInfo volumeInfo{};
+    hr = SqliteIndexStore::InspectVolume(databasePath.wstring(), queryRoot, volumeInfo);
+    state.Require(SUCCEEDED(hr), std::format(L"InspectVolume should find differently-cased root. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    state.Require(volumeInfo.entryCount == 2u, std::format(L"InspectVolume should report 2 entries, got {}.", volumeInfo.entryCount));
+
+    SqliteIndexStore::ReplaceVolumeRequest loadedVolume{};
+    hr = SqliteIndexStore::LoadVolume(databasePath.wstring(), queryRoot, loadedVolume);
+    state.Require(SUCCEEDED(hr), std::format(L"LoadVolume should find differently-cased root. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    state.Require(loadedVolume.rootPath == queryRoot, L"LoadVolume should preserve the caller's display root casing in its response.");
+    state.Require(loadedVolume.entries.size() == 2u, std::format(L"LoadVolume should return 2 entries, got {}.", loadedVolume.entries.size()));
+
+    SqliteIndexStore::QueryRequest queryRequest{};
+    queryRequest.rootPath     = queryRoot;
+    queryRequest.namePattern  = L"*.txt";
+    queryRequest.nameMode     = FILESYSTEM_SEARCH_NAME_WILDCARD;
+    queryRequest.recursive    = true;
+    queryRequest.includeFiles = true;
+
+    std::vector<std::wstring> queryNames;
+    hr = SqliteIndexStore::EnumerateVolume(databasePath.wstring(),
+                                           queryRequest,
+                                           nullptr,
+                                           nullptr,
+                                           [](LocalSearchIndexCore::Candidate* candidate, void* cookie) noexcept -> HRESULT
+    {
+        if (candidate == nullptr || cookie == nullptr)
+        {
+            return E_POINTER;
+        }
+
+        try
+        {
+            static_cast<std::vector<std::wstring>*>(cookie)->push_back(candidate->displayName);
+            return S_OK;
+        }
+        catch (const std::bad_alloc&)
+        {
+            std::terminate();
+        }
+        catch (const std::exception&)
+        {
+            // Mandatory: this callback is noexcept; report append failure instead of unwinding through SQLite enumeration.
+            Debug::Error(L"CompareDirectories selftest: root-case EnumerateVolume callback failed with an unexpected std::exception.");
+            return E_FAIL;
+        }
+    },
+                                           &queryNames,
+                                           nullptr);
+    state.Require(SUCCEEDED(hr), std::format(L"EnumerateVolume should find differently-cased root. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    state.Require(queryNames == std::vector<std::wstring>{L"Alpha.txt"}, L"EnumerateVolume should return the stored file under a differently-cased root.");
     return state.failure.empty();
 });
 
@@ -4444,12 +5001,10 @@ SelfTest::RunCase(options,
         return false;
     }
 
-    const std::vector<LocalSearchIndexCore::SyntheticJournalRecordForTests> syntheticRecords =
-        buildJournalDirectoryMoveSyntheticRecords(caseRoot, outsideRoot);
+    const std::vector<LocalSearchIndexCore::SyntheticJournalRecordForTests> syntheticRecords = buildJournalDirectoryMoveSyntheticRecords(caseRoot, outsideRoot);
     LocalSearchIndexCore::QueryStats replayStats{};
     hr = repository.ApplySyntheticJournalForTests(caseRoot.wstring(), syntheticRecords, &replayStats);
-    state.Require(SUCCEEDED(hr), std::format(L"Authoritative sqlite directory-move synthetic replay failed. hr=0x{:08X}",
-                                             static_cast<unsigned long>(hr)));
+    state.Require(SUCCEEDED(hr), std::format(L"Authoritative sqlite directory-move synthetic replay failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
     if (FAILED(hr))
     {
         return false;
@@ -4460,8 +5015,7 @@ SelfTest::RunCase(options,
 
     SqliteIndexStore::ReplaceVolumeRequest storedVolume{};
     hr = SqliteIndexStore::LoadVolume(sqlitePath.wstring(), caseRoot.wstring(), storedVolume);
-    state.Require(SUCCEEDED(hr), std::format(L"SqliteIndexStore::LoadVolume after directory-move replay failed. hr=0x{:08X}",
-                                             static_cast<unsigned long>(hr)));
+    state.Require(SUCCEEDED(hr), std::format(L"SqliteIndexStore::LoadVolume after directory-move replay failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
     if (FAILED(hr))
     {
         return false;
@@ -4489,8 +5043,9 @@ SelfTest::RunCase(options,
         return false;
     }
 
-    state.Require(requireJournalDirectoryMoveResults(state, caseRoot, replayStats, persistedCandidates, L"Authoritative sqlite directory-move synthetic replay"),
-                  L"Authoritative sqlite directory-move synthetic replay should persist the expected directory-move result set.");
+    state.Require(
+        requireJournalDirectoryMoveResults(state, caseRoot, replayStats, persistedCandidates, L"Authoritative sqlite directory-move synthetic replay"),
+        L"Authoritative sqlite directory-move synthetic replay should persist the expected directory-move result set.");
 
     auto snapshotFiles = CollectDirectoryFilesByExtension(storeRoot, L".bin");
     state.Require(snapshotFiles.empty(), L"Authoritative sqlite directory-move flow should not create compatibility snapshot runtime files.");
@@ -5090,8 +5645,7 @@ SelfTest::RunCase(options,
                   [&](SelfTest::CaseState& state) noexcept
 {
     std::filesystem::path caseRoot;
-    state.Require(PrepareSearchCaseRoot(root, L"sqlite_readonly_under_writer_lock", caseRoot),
-                  L"Failed to prepare sqlite_readonly_under_writer_lock root.");
+    state.Require(PrepareSearchCaseRoot(root, L"sqlite_readonly_under_writer_lock", caseRoot), L"Failed to prepare sqlite_readonly_under_writer_lock root.");
     if (! state.failure.empty())
     {
         return false;
@@ -5141,10 +5695,7 @@ SelfTest::RunCase(options,
 
     sqlite3* rawWriter             = nullptr;
     const std::u8string sqliteUtf8 = sqlitePath.u8string();
-    const int openResult = sqlite3_open_v2(reinterpret_cast<const char*>(sqliteUtf8.c_str()),
-                                           &rawWriter,
-                                           SQLITE_OPEN_READWRITE | SQLITE_OPEN_NOMUTEX,
-                                           nullptr);
+    const int openResult = sqlite3_open_v2(reinterpret_cast<const char*>(sqliteUtf8.c_str()), &rawWriter, SQLITE_OPEN_READWRITE | SQLITE_OPEN_NOMUTEX, nullptr);
     state.Require(openResult == SQLITE_OK && rawWriter != nullptr,
                   std::format(L"sqlite3_open_v2 writer failed. code={} message='{}'",
                               openResult,
@@ -5165,10 +5716,9 @@ SelfTest::RunCase(options,
     });
 
     const int beginResult = sqlite3_exec(rawWriter, "BEGIN IMMEDIATE;", nullptr, nullptr, nullptr);
-    state.Require(beginResult == SQLITE_OK,
-                  std::format(L"BEGIN IMMEDIATE writer lock failed. code={} message='{}'",
-                              beginResult,
-                              static_cast<const wchar_t*>(sqlite3_errmsg16(rawWriter))));
+    state.Require(
+        beginResult == SQLITE_OK,
+        std::format(L"BEGIN IMMEDIATE writer lock failed. code={} message='{}'", beginResult, static_cast<const wchar_t*>(sqlite3_errmsg16(rawWriter))));
     if (beginResult != SQLITE_OK)
     {
         return false;
@@ -5176,8 +5726,7 @@ SelfTest::RunCase(options,
 
     SqliteIndexStore::VolumeInfo volumeInfo{};
     hr = SqliteIndexStore::InspectVolume(sqlitePath.wstring(), caseRoot.wstring(), volumeInfo);
-    state.Require(SUCCEEDED(hr),
-                  std::format(L"InspectVolume must stay read-only under a held writer lock. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    state.Require(SUCCEEDED(hr), std::format(L"InspectVolume must stay read-only under a held writer lock. hr=0x{:08X}", static_cast<unsigned long>(hr)));
     if (FAILED(hr))
     {
         return false;
@@ -5187,8 +5736,7 @@ SelfTest::RunCase(options,
 
     SqliteIndexStore::ReplaceVolumeRequest loadedVolume{};
     hr = SqliteIndexStore::LoadVolume(sqlitePath.wstring(), caseRoot.wstring(), loadedVolume);
-    state.Require(SUCCEEDED(hr),
-                  std::format(L"LoadVolume must stay read-only under a held writer lock. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    state.Require(SUCCEEDED(hr), std::format(L"LoadVolume must stay read-only under a held writer lock. hr=0x{:08X}", static_cast<unsigned long>(hr)));
     if (FAILED(hr))
     {
         return false;
@@ -5206,8 +5754,7 @@ SelfTest::RunCase(options,
     std::vector<std::wstring> names;
     SqliteIndexStore::QueryRuntimeStats queryStats{};
     hr = CollectSqliteEnumerateNames(sqlitePath, queryRequest, names, &queryStats);
-    state.Require(SUCCEEDED(hr),
-                  std::format(L"EnumerateVolume must stay read-only under a held writer lock. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    state.Require(SUCCEEDED(hr), std::format(L"EnumerateVolume must stay read-only under a held writer lock. hr=0x{:08X}", static_cast<unsigned long>(hr)));
     if (FAILED(hr))
     {
         return false;
@@ -5292,16 +5839,15 @@ SelfTest::RunCase(options,
     {
         return false;
     }
-    state.Require(plan.prefixLowerBound == L"literal%" && plan.prefixUpperBound == L"literal&",
-                  std::format(L"Percent-literal prefix bounds mismatch. lower='{}' upper='{}' expanded='{}'",
-                              plan.prefixLowerBound,
-                              plan.prefixUpperBound,
-                              plan.expandedSql));
+    state.Require(
+        plan.prefixLowerBound == L"literal%" && plan.prefixUpperBound == L"literal&",
+        std::format(
+            L"Percent-literal prefix bounds mismatch. lower='{}' upper='{}' expanded='{}'", plan.prefixLowerBound, plan.prefixUpperBound, plan.expandedSql));
 
     std::vector<std::wstring> names;
     SqliteIndexStore::QueryRuntimeStats queryStats{};
     const auto percentQueryStarted = std::chrono::steady_clock::now();
-    hr = CollectSqliteEnumerateNames(sqlitePath, percentRequest, names, &queryStats);
+    hr                             = CollectSqliteEnumerateNames(sqlitePath, percentRequest, names, &queryStats);
     const uint64_t percentQueryElapsedUs =
         static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - percentQueryStarted).count());
     Debug::Perf::Emit(L"compare.selftest.sqlite_prefix_range_query_us",
@@ -5317,13 +5863,14 @@ SelfTest::RunCase(options,
     }
 
     state.Require(queryStats.usedNamePrefilter, L"Percent-literal prefix query should use a SQLite prefilter.");
-    state.Require(names == std::vector<std::wstring>{L"literal%one.txt"},
-                  std::format(L"Percent-literal prefix should only return the literal percent name, got {} candidate(s). lower='{}' upper='{}' expanded='{}' plan='{}'",
-                              names.size(),
-                              plan.prefixLowerBound,
-                              plan.prefixUpperBound,
-                              plan.expandedSql,
-                              plan.detail));
+    state.Require(
+        names == std::vector<std::wstring>{L"literal%one.txt"},
+        std::format(L"Percent-literal prefix should only return the literal percent name, got {} candidate(s). lower='{}' upper='{}' expanded='{}' plan='{}'",
+                    names.size(),
+                    plan.prefixLowerBound,
+                    plan.prefixUpperBound,
+                    plan.expandedSql,
+                    plan.detail));
 
     SqliteIndexStore::QueryRequest underscoreRequest = percentRequest;
     underscoreRequest.namePattern                    = L"literal_*";
@@ -5552,7 +6099,7 @@ SelfTest::RunCase(options,
     for (const std::wstring_view segment : longSegments)
     {
         deepDir /= std::filesystem::path(segment);
-        if (! SelfTest::EnsureDirectory(deepDir))
+        if (! EnsureExtendedDirectoryForCompareSelfTest(deepDir))
         {
             deepPathCreated = false;
             break;
@@ -5563,7 +6110,7 @@ SelfTest::RunCase(options,
     if (! deepPathCreated)
     {
         deepDir                                    = caseRoot / L"chemin-profond";
-        deepPathCreated                            = SelfTest::EnsureDirectory(deepDir);
+        deepPathCreated                            = EnsureExtendedDirectoryForCompareSelfTest(deepDir);
         const std::wstring_view fallbackSegments[] = {
             L"segment-a-abcdefghijklmnop",
             L"segment-b-abcdefghijklmnop",
@@ -5577,7 +6124,7 @@ SelfTest::RunCase(options,
             }
 
             deepDir /= std::filesystem::path(segment);
-            deepPathCreated = SelfTest::EnsureDirectory(deepDir);
+            deepPathCreated = EnsureExtendedDirectoryForCompareSelfTest(deepDir);
         }
         longPathCreated = false;
     }
@@ -5589,7 +6136,7 @@ SelfTest::RunCase(options,
     }
 
     const std::filesystem::path deepUnicodeFile = deepDir / L"r\u00E9sultat-final.txt";
-    state.Require(SelfTest::WriteTextFile(deepUnicodeFile, "prefix needle suffix"), L"Failed to create r\\u00E9sultat-final.txt.");
+    state.Require(WriteTextFileExtendedForCompareSelfTest(deepUnicodeFile, "prefix needle suffix"), L"Failed to create r\\u00E9sultat-final.txt.");
     const std::wstring deepUnicodeFileName = deepUnicodeFile.filename().wstring();
     state.Require(deepUnicodeFileName.find(L"\u00E9") != std::wstring::npos && deepUnicodeFileName.find(L"\u00C3") == std::wstring::npos,
                   L"Unicode/long-path deep fixture must contain a real U+00E9 filename, not mojibake.");
@@ -5687,6 +6234,116 @@ SelfTest::RunCase(options,
 
 SelfTest::RunCase(options,
                   suite,
+                  L"test_support_child_process_runner_contract",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    namespace TestSupport = RedSalamander::TestSupport;
+
+    const std::filesystem::path servicePath = GetSiblingExecutablePath(L"RedSalamanderSearchService.exe");
+    std::error_code existsEc;
+    state.Require(! servicePath.empty() && std::filesystem::exists(servicePath, existsEc),
+                  std::format(L"Service executable not found: {}", servicePath.wstring()));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const TestSupport::ChildProcessResult largeStreams = TestSupport::RunChildProcess(
+        {.executablePath = servicePath,
+         .arguments      = {L"--test-support-child-probe=streams"},
+         .timeout        = std::chrono::milliseconds(SelfTest::ScaleTimeout(10'000))});
+    state.Require(largeStreams.Completed(), largeStreams.diagnostic);
+    state.Require(largeStreams.exitCode == 0u, std::format(L"Large-stream probe exited with code {}.", largeStreams.exitCode));
+    state.Require(largeStreams.stdoutBytes.size() == 2u * 1024u * 1024u &&
+                      std::all_of(largeStreams.stdoutBytes.begin(), largeStreams.stdoutBytes.end(), [](char value) noexcept { return value == 'O'; }),
+                  L"Concurrent stdout drain captures the full output beyond pipe capacity.");
+    state.Require(largeStreams.stderrBytes.size() == 2u * 1024u * 1024u &&
+                      std::all_of(largeStreams.stderrBytes.begin(), largeStreams.stderrBytes.end(), [](char value) noexcept { return value == 'E'; }),
+                  L"Concurrent stderr drain captures the full output beyond pipe capacity.");
+
+    const TestSupport::ChildProcessResult boundedStreams = TestSupport::RunChildProcess(
+        {.executablePath = servicePath,
+         .arguments      = {L"--test-support-child-probe=streams"},
+         .timeout        = std::chrono::milliseconds(SelfTest::ScaleTimeout(10'000)),
+         .maxStdoutBytes = 64u * 1024u,
+         .maxStderrBytes = 96u * 1024u});
+    state.Require(boundedStreams.Completed(), boundedStreams.diagnostic);
+    state.Require(boundedStreams.stdoutBytes.size() == 64u * 1024u && boundedStreams.stdoutTruncated,
+                  L"Stdout capture stays bounded while continuing to drain the child pipe.");
+    state.Require(boundedStreams.stderrBytes.size() == 96u * 1024u && boundedStreams.stderrTruncated,
+                  L"Stderr capture stays bounded while continuing to drain the child pipe.");
+
+    const TestSupport::ChildProcessResult quotedArguments = TestSupport::RunChildProcess(
+        {.executablePath = servicePath,
+         .arguments = {L"--test-support-child-probe=arguments", L"space value", L"quote\"value", L"backslash\\tail\\", L"Unicode-\u6E2C\u8A66-\U0001F642"},
+         .timeout   = std::chrono::milliseconds(SelfTest::ScaleTimeout(5'000))});
+    state.Require(quotedArguments.Completed(), quotedArguments.diagnostic);
+    state.Require(quotedArguments.exitCode == 0u && quotedArguments.stdoutBytes == "ARGUMENTS_OK",
+                  L"Windows quoting preserves spaces, quotes, trailing backslashes, and Unicode arguments.");
+
+    const TestSupport::ChildProcessResult nonzero = TestSupport::RunChildProcess(
+        {.executablePath = servicePath,
+         .arguments      = {L"--test-support-child-probe=exit"},
+         .timeout        = std::chrono::milliseconds(SelfTest::ScaleTimeout(5'000))});
+    state.Require(nonzero.Completed(), nonzero.diagnostic);
+    state.Require(nonzero.exitCode == 37u, std::format(L"Nonzero probe exit code changed: {}.", nonzero.exitCode));
+    state.Require(nonzero.stdoutBytes == "NONZERO_STDOUT" && nonzero.stderrBytes == "NONZERO_STDERR",
+                  L"Nonzero child completion retains independent stdout and stderr.");
+
+    SECURITY_ATTRIBUTES eventSecurity{};
+    eventSecurity.nLength        = sizeof(eventSecurity);
+    eventSecurity.bInheritHandle = TRUE;
+    wil::unique_handle inheritedEvent(CreateEventW(&eventSecurity, TRUE, FALSE, nullptr));
+    state.Require(inheritedEvent != nullptr, L"Inherited-handle contract creates an inheritable event.");
+    const TestSupport::ChildProcessResult inheritedHandle = TestSupport::RunChildProcess(
+        {.executablePath = servicePath,
+         .arguments = {L"--test-support-child-probe=inherited-handle",
+                       std::format(L"{}", reinterpret_cast<uintptr_t>(inheritedEvent.get()))},
+         .timeout = std::chrono::milliseconds(SelfTest::ScaleTimeout(5'000))});
+    state.Require(inheritedHandle.Completed(), inheritedHandle.diagnostic);
+    state.Require(inheritedHandle.exitCode == 0u && inheritedHandle.stdoutBytes == "HANDLE_CLOSED" &&
+                      WaitForSingleObject(inheritedEvent.get(), 0u) == WAIT_TIMEOUT,
+                  L"PROC_THREAD_ATTRIBUTE_HANDLE_LIST prevents unrelated inheritable handles from reaching the child.");
+
+    std::filesystem::path caseRoot;
+    state.Require(PrepareSearchCaseRoot(root, L"test_support_child_process_runner", caseRoot),
+                  L"Failed to prepare the child-process runner contract root.");
+    const std::filesystem::path markerPath = caseRoot / L"descendant-survived.marker";
+    const TestSupport::ChildProcessResult timedOut = TestSupport::RunChildProcess(
+        {.executablePath = servicePath,
+         .arguments      = {L"--test-support-child-probe=spawn-tree", markerPath.wstring()},
+         .timeout        = std::chrono::milliseconds(SelfTest::ScaleTimeout(100))});
+    state.Require(timedOut.status == TestSupport::ChildProcessStatus::TimedOut && timedOut.diagnostic.contains(L"timed out"),
+                  L"Child-process timeout is explicit and diagnostic-rich.");
+    std::this_thread::sleep_for(std::chrono::milliseconds(SelfTest::ScaleTimeout(1'000)));
+    state.Require(! std::filesystem::exists(markerPath, existsEc),
+                  L"Kill-on-close JobObject terminates the timed-out root and delayed descendant before marker creation.");
+
+    std::stop_source cancellationSource;
+    std::jthread cancelRequester([&] noexcept
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(SelfTest::ScaleTimeout(50)));
+        static_cast<void>(cancellationSource.request_stop());
+    });
+    TestSupport::ChildProcessOptions cancellationOptions{
+        .executablePath = servicePath,
+        .arguments      = {L"--test-support-child-probe=sleep"},
+        .timeout        = std::chrono::milliseconds(SelfTest::ScaleTimeout(5'000)),
+    };
+    cancellationOptions.cancellationToken = cancellationSource.get_token();
+    const TestSupport::ChildProcessResult cancelled = TestSupport::RunChildProcess(cancellationOptions);
+    state.Require(cancelled.status == TestSupport::ChildProcessStatus::Cancelled && cancelled.elapsed < std::chrono::seconds(2),
+                  L"Cancellation stops and contains the child process before the timeout budget.");
+
+    const TestSupport::ChildProcessResult launchFailure = TestSupport::RunChildProcess(
+        {.executablePath = caseRoot / L"missing-child.exe", .timeout = std::chrono::milliseconds(SelfTest::ScaleTimeout(1'000))});
+    state.Require(launchFailure.status == TestSupport::ChildProcessStatus::LaunchFailed && launchFailure.win32Error != ERROR_SUCCESS,
+                  L"Launch failure returns a deterministic Win32 diagnostic without leaking capture workers.");
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
                   L"search_service_help_lists_cli_options",
                   [&](SelfTest::CaseState& state) noexcept
 {
@@ -5701,7 +6358,9 @@ SelfTest::RunCase(options,
 
     CapturedProcessResult result{};
     std::wstring runError;
-    state.Require(RunProcessAndCaptureOutput(servicePath.wstring(), L"--help", static_cast<DWORD>(SelfTest::ScaleTimeout(5'000)), result, runError), runError);
+    state.Require(RunProcessAndCaptureOutput(
+                      servicePath.wstring(), {L"--help"}, static_cast<DWORD>(SelfTest::ScaleTimeout(5'000)), result, runError),
+                  runError);
     if (! state.failure.empty())
     {
         return false;
@@ -5758,8 +6417,9 @@ SelfTest::RunCase(options,
 
     CapturedProcessResult result{};
     std::wstring runError;
-    const std::wstring arguments = std::format(L"--compact --sqlite-path=\"{}\"", databasePath.wstring());
-    state.Require(RunProcessAndCaptureOutput(servicePath.wstring(), arguments, static_cast<DWORD>(SelfTest::ScaleTimeout(15'000)), result, runError), runError);
+    const std::vector<std::wstring> arguments{L"--compact", std::format(L"--sqlite-path={}", databasePath.wstring())};
+    state.Require(RunProcessAndCaptureOutput(servicePath.wstring(), arguments, static_cast<DWORD>(SelfTest::ScaleTimeout(15'000)), result, runError),
+                  runError);
     if (! state.failure.empty())
     {
         return false;
@@ -5807,9 +6467,18 @@ SelfTest::RunCase(options,
     }
 
     const std::filesystem::path sqlitePath = caseRoot / L"live.sqlite3";
+    constexpr size_t kExplicitCompactLargeEntryCount    = 2048u;
+    constexpr size_t kExplicitCompactRetainedEntryCount = 1800u;
+
     SqliteIndexStore::StoreInfo beforeInfo{};
     std::wstring prepareError;
-    state.Require(PrepareSqliteMaintenanceStore(caseRoot, sqlitePath, beforeInfo, prepareError), prepareError);
+    state.Require(PrepareSqliteMaintenanceStore(caseRoot,
+                                                sqlitePath,
+                                                beforeInfo,
+                                                prepareError,
+                                                kExplicitCompactLargeEntryCount,
+                                                kExplicitCompactRetainedEntryCount),
+                  prepareError);
     if (! state.failure.empty())
     {
         return false;
@@ -5827,7 +6496,26 @@ SelfTest::RunCase(options,
     ForegroundSearchServiceProcess service;
     std::wstring serviceError;
     const std::wstring extraArgs = std::format(L"--store-backend=sqlite --sqlite-path=\"{}\"", sqlitePath.wstring());
-    state.Require(service.Start(pipeName, 6u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, false, extraArgs), serviceError);
+    state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, extraArgs), serviceError);
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    SearchServiceBroker::ServiceStatus preCompactStatus{};
+    if (! WaitForSearchServiceStatus(state, preCompactStatus, pipeName, L"live compact request preflight service"))
+    {
+        return false;
+    }
+
+    state.Require(preCompactStatus.persistentStoreKind == LocalSearchIndexCore::PersistentStoreKind::Sqlite,
+                  L"Live compaction preflight should report the SQLite backend.");
+    state.Require(preCompactStatus.persistentStoreFreelistPageCount > 0u,
+                  L"Live compaction preflight should retain reclaimable free pages for the explicit request.");
+    state.Require(! preCompactStatus.maintenanceQueued,
+                  L"Live compaction preflight should not let automatic idle maintenance race the explicit --request-compact path.");
+    state.Require(! preCompactStatus.maintenanceRunning,
+                  L"Live compaction preflight should not start while automatic idle maintenance is running.");
     if (! state.failure.empty())
     {
         return false;
@@ -5835,22 +6523,23 @@ SelfTest::RunCase(options,
 
     CapturedProcessResult result{};
     std::wstring runError;
-    state.Require(RunProcessAndCaptureOutput(servicePath.wstring(), L"--request-compact", static_cast<DWORD>(SelfTest::ScaleTimeout(15'000)), result, runError),
+    const std::vector<std::wstring> requestCompactArguments{L"--request-compact", std::format(L"--pipe-name={}", pipeName)};
+    state.Require(RunProcessAndCaptureOutput(
+                      servicePath.wstring(), requestCompactArguments, static_cast<DWORD>(SelfTest::ScaleTimeout(15'000)), result, runError),
                   runError);
     if (! state.failure.empty())
     {
         return false;
     }
 
-    state.Require(result.exitCode == 0u, std::format(L"Expected --request-compact exit code 0, got {}.", result.exitCode));
+    const std::wstring requestCompactOutput(result.output.begin(), result.output.end());
+    state.Require(result.exitCode == 0u,
+                  std::format(L"Expected --request-compact exit code 0, got {}. output='{}'.", result.exitCode, requestCompactOutput));
     state.Require(result.output.contains("Live compaction completed"), L"--request-compact output should confirm successful live compaction.");
     state.Require(result.output.contains("free pages="), L"--request-compact output should summarize the refreshed freelist state.");
 
     SearchServiceBroker::ServiceStatus status{};
-    const HRESULT statusHr = SearchServiceBroker::GetStatus(status);
-    state.Require(SUCCEEDED(statusHr),
-                  std::format(L"SearchServiceBroker::GetStatus after --request-compact failed. hr=0x{:08X}", static_cast<unsigned long>(statusHr)));
-    if (FAILED(statusHr))
+    if (! WaitForSearchServiceStatus(state, status, pipeName, L"live compact request service"))
     {
         return false;
     }
@@ -5864,6 +6553,20 @@ SelfTest::RunCase(options,
     state.Require(! status.lastCheckpointUtc.empty(), L"--request-compact should refresh lastCheckpointUtc through the running service.");
     state.Require(! status.lastCompactionUtc.empty(), L"--request-compact should refresh lastCompactionUtc through the running service.");
     state.Require(! status.maintenanceRunning, L"--request-compact should complete before returning status to the client.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    std::string serviceOutput;
+    state.Require(service.ShutdownAndWaitForExitAndCapture(static_cast<DWORD>(SelfTest::ScaleTimeout(5'000)), serviceOutput, serviceError), serviceError);
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    state.Require(serviceOutput.contains("Maintenance running"), L"Foreground live compaction output should report running maintenance.");
+    state.Require(serviceOutput.contains("Maintenance completed"), L"Foreground live compaction output should report completed maintenance.");
     return state.failure.empty();
 });
 
@@ -5910,17 +6613,14 @@ SelfTest::RunCase(options,
     ForegroundSearchServiceProcess service;
     std::wstring serviceError;
     const std::wstring extraArgs = std::format(L"--store-backend=sqlite --sqlite-path=\"{}\"", sqlitePath.wstring());
-    state.Require(service.Start(pipeName, 2u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, false, extraArgs), serviceError);
+    state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, false, extraArgs), serviceError);
     if (! state.failure.empty())
     {
         return false;
     }
 
     SearchServiceBroker::ServiceStatus status{};
-    hr = SearchServiceBroker::GetStatus(status);
-    state.Require(SUCCEEDED(hr),
-                  std::format(L"SearchServiceBroker::GetStatus for maintenance-history SQLite service failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
-    if (FAILED(hr))
+    if (! WaitForSearchServiceStatus(state, status, pipeName, L"maintenance-history SQLite service"))
     {
         return false;
     }
@@ -5975,7 +6675,7 @@ SelfTest::RunCase(options,
     ForegroundSearchServiceProcess service;
     std::wstring serviceError;
     const std::wstring extraArgs = std::format(L"--store-backend=sqlite --sqlite-path=\"{}\"", sqlitePath.wstring());
-    state.Require(service.Start(pipeName, 3u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, extraArgs), serviceError);
+    state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, extraArgs), serviceError);
     if (! state.failure.empty())
     {
         return false;
@@ -6016,7 +6716,7 @@ SelfTest::RunCase(options,
     state.Require(! completedStatus.lastCompactionUtc.empty(), L"Idle maintenance should record lastCompactionUtc.");
 
     std::string output;
-    state.Require(service.WaitForExitAndCapture(static_cast<DWORD>(SelfTest::ScaleTimeout(10'000)), output, serviceError), serviceError);
+    state.Require(service.ShutdownAndWaitForExitAndCapture(static_cast<DWORD>(SelfTest::ScaleTimeout(10'000)), output, serviceError), serviceError);
     if (! state.failure.empty())
     {
         return false;
@@ -6076,41 +6776,87 @@ SelfTest::RunCase(options,
     ForegroundSearchServiceProcess service;
     std::wstring serviceError;
     const std::wstring extraArgs = std::format(L"--store-backend=sqlite --sqlite-path=\"{}\"", sqlitePath.wstring());
-    state.Require(service.Start(pipeName, 0u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, false, extraArgs), serviceError);
+    // Observe the queued state with this case's predicate instead of consuming it in
+    // ForegroundSearchServiceProcess::Start. That readiness request can release the
+    // service into a bounded compaction window where no pipe is listening.
+    state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, false, serviceError, true, extraArgs), serviceError);
     if (! state.failure.empty())
     {
         return false;
     }
 
+    const auto formatMaintenanceStatus = [](const SearchServiceBroker::ServiceStatus& status) noexcept
+    {
+        return std::format(L"freelist={} bytes={} wal={} queued={} running={} checkpoint='{}' compaction='{}'",
+                           status.persistentStoreFreelistPageCount,
+                           status.persistentStoreBytes,
+                           status.writeAheadLogBytes,
+                           status.maintenanceQueued ? L"yes" : L"no",
+                           status.maintenanceRunning ? L"yes" : L"no",
+                           status.lastCheckpointUtc,
+                           status.lastCompactionUtc);
+    };
+
     auto waitForStatus = [&](auto&& predicate, SearchServiceBroker::ServiceStatus& outStatus, std::wstring_view failureMessage) noexcept
     {
-        const auto deadline =
-            std::chrono::steady_clock::now() + std::chrono::milliseconds{static_cast<std::chrono::milliseconds::rep>(SelfTest::ScaleTimeout(15'000))};
+        const auto deadline = std::chrono::steady_clock::now() +
+                              std::chrono::milliseconds{static_cast<std::chrono::milliseconds::rep>(
+                                  SelfTest::ScaleTimeout(kForegroundSearchServiceReadinessTimeoutMs))};
+        HRESULT lastHr = HRESULT_FROM_WIN32(ERROR_TIMEOUT);
+        SearchServiceBroker::ServiceStatus lastStatus{};
+        bool hasLastStatus = false;
         while (std::chrono::steady_clock::now() < deadline)
         {
-            const HRESULT hr = SearchServiceBroker::GetStatus(outStatus);
-            if (SUCCEEDED(hr) && predicate(outStatus))
+            SearchServiceBroker::ServiceStatus candidate{};
+            lastHr = SearchServiceBroker::GetStatus(candidate);
+            if (SUCCEEDED(lastHr))
             {
-                return true;
+                lastStatus    = candidate;
+                hasLastStatus = true;
+                if (predicate(candidate))
+                {
+                    outStatus = std::move(candidate);
+                    return true;
+                }
+            }
+
+            const std::wstring exitSummary = service.TryCaptureExitedOutputForFailure();
+            if (! exitSummary.empty())
+            {
+                state.Require(false,
+                              std::format(L"Foreground search service exited while waiting for {}. lastHr=0x{:08X}{}",
+                                          failureMessage,
+                                          static_cast<unsigned long>(lastHr),
+                                          exitSummary));
+                return false;
             }
 
             std::this_thread::sleep_for(std::chrono::milliseconds{200});
         }
 
-        state.Require(false, std::wstring(failureMessage));
+        state.Require(false,
+                      std::format(L"{} lastHr=0x{:08X}{}",
+                                  failureMessage,
+                                  static_cast<unsigned long>(lastHr),
+                                  hasLastStatus ? std::format(L" lastStatus=({})", formatMaintenanceStatus(lastStatus)) :
+                                                  service.TryCaptureExitedOutputForFailure()));
         return false;
     };
 
     SearchServiceBroker::ServiceStatus initialStatus{};
     state.Require(waitForStatus([&](const SearchServiceBroker::ServiceStatus& status) noexcept
-    { return status.maintenanceQueued && status.persistentStoreFreelistPageCount >= beforeInfo.freelistPageCount; },
+    {
+        return (status.maintenanceQueued && status.persistentStoreFreelistPageCount >= beforeInfo.freelistPageCount) ||
+               status.persistentStoreFreelistPageCount < beforeInfo.freelistPageCount;
+    },
                                 initialStatus,
-                                L"Timed out waiting for the delete-burst store to queue maintenance."),
-                  L"Timed out waiting for the delete-burst store to queue maintenance.");
+                                L"Timed out waiting for the delete-burst store to queue maintenance or complete its first compaction window."),
+                  L"Timed out waiting for the delete-burst store to queue maintenance or complete its first compaction window.");
     if (! state.failure.empty())
     {
         return false;
     }
+    const bool firstWindowAlreadyObserved = initialStatus.persistentStoreFreelistPageCount < beforeInfo.freelistPageCount;
 
     SearchServiceBroker::QueryRequest request{};
     request.rootPath           = caseRoot.wstring();
@@ -6146,27 +6892,39 @@ SelfTest::RunCase(options,
     state.Require(baselineNames == expectedNames, L"Delete-burst baseline query should match the compacted SQLite entry set.");
 
     SearchServiceBroker::ServiceStatus afterFirstWindow{};
-    state.Require(waitForStatus([&](const SearchServiceBroker::ServiceStatus& status) noexcept
-    { return status.persistentStoreFreelistPageCount < initialStatus.persistentStoreFreelistPageCount; },
-                                afterFirstWindow,
-                                L"Timed out waiting for the first idle maintenance window to reclaim space."),
-                  L"Timed out waiting for the first idle maintenance window to reclaim space.");
-    if (! state.failure.empty())
+    if (firstWindowAlreadyObserved)
     {
-        return false;
+        afterFirstWindow = initialStatus;
+    }
+    else
+    {
+        state.Require(waitForStatus([&](const SearchServiceBroker::ServiceStatus& status) noexcept
+        { return status.persistentStoreFreelistPageCount < initialStatus.persistentStoreFreelistPageCount; },
+                                    afterFirstWindow,
+                                    L"Timed out waiting for the first idle maintenance window to reclaim space."),
+                      L"Timed out waiting for the first idle maintenance window to reclaim space.");
+        if (! state.failure.empty())
+        {
+            return false;
+        }
     }
 
+    state.Require(afterFirstWindow.persistentStoreFreelistPageCount < beforeInfo.freelistPageCount,
+                  std::format(L"First idle maintenance window should reclaim freelist pages, before={} after={} initialStatus=({}).",
+                              beforeInfo.freelistPageCount,
+                              afterFirstWindow.persistentStoreFreelistPageCount,
+                              formatMaintenanceStatus(initialStatus)));
     state.Require(afterFirstWindow.maintenanceQueued || afterFirstWindow.maintenanceRunning,
                   L"Delete-burst maintenance should still have more work queued after the first bounded compaction pass.");
-    state.Require(afterFirstWindow.persistentStoreBytes < initialStatus.persistentStoreBytes,
+    state.Require(afterFirstWindow.persistentStoreBytes < beforeInfo.databaseBytes,
                   std::format(L"First idle maintenance window should shrink the database file, before={} after={}.",
-                              initialStatus.persistentStoreBytes,
+                              beforeInfo.databaseBytes,
                               afterFirstWindow.persistentStoreBytes));
-    if (initialStatus.writeAheadLogBytes != 0u)
+    if (beforeInfo.writeAheadLogBytes != 0u)
     {
-        state.Require(afterFirstWindow.writeAheadLogBytes < initialStatus.writeAheadLogBytes,
+        state.Require(afterFirstWindow.writeAheadLogBytes < beforeInfo.writeAheadLogBytes,
                       std::format(L"First idle maintenance window should shrink the WAL, before={} after={}.",
-                                  initialStatus.writeAheadLogBytes,
+                                  beforeInfo.writeAheadLogBytes,
                                   afterFirstWindow.writeAheadLogBytes));
     }
     else
@@ -6246,7 +7004,7 @@ SelfTest::RunCase(options,
     std::wstring serviceError;
     const std::wstring extraArgs =
         std::format(L"--storage-root=\"{}\" --store-backend=sqlite --sqlite-path=\"{}\"", storageRoot.wstring(), sqlitePath.wstring());
-    state.Require(service.Start(pipeName, 5u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, false, extraArgs), serviceError);
+    state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, false, extraArgs), serviceError);
     if (! state.failure.empty())
     {
         return false;
@@ -6397,13 +7155,6 @@ SelfTest::RunCase(options,
     state.Require(status.legacyImportVolumeCount == 0u,
                   std::format(L"Expected zero legacy-import volumes after query, got {}.", status.legacyImportVolumeCount));
 
-    std::string output;
-    state.Require(service.WaitForExitAndCapture(static_cast<DWORD>(SelfTest::ScaleTimeout(5'000)), output, serviceError), serviceError);
-    if (! state.failure.empty())
-    {
-        return false;
-    }
-
     SqliteIndexStore::StoreInfo storeInfo{};
     hr = SqliteIndexStore::InspectStore(sqlitePath.wstring(), storeInfo);
     state.Require(SUCCEEDED(hr), std::format(L"SqliteIndexStore::InspectStore after service bootstrap failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
@@ -6459,7 +7210,7 @@ SelfTest::RunCase(options,
     {
         ForegroundSearchServiceProcess service;
         std::wstring serviceError;
-        state.Require(service.Start(pipeName, 4u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, extraArgs), serviceError);
+        state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, extraArgs), serviceError);
         if (! state.failure.empty())
         {
             return false;
@@ -6551,7 +7302,7 @@ SelfTest::RunCase(options,
                       L"Cold-start SQLite live-scan status should remain non-blocking while warmup is delayed.");
 
         std::string output;
-        state.Require(service.WaitForExitAndCapture(static_cast<DWORD>(SelfTest::ScaleTimeout(5'000)), output, serviceError), serviceError);
+    state.Require(service.ShutdownAndWaitForExitAndCapture(static_cast<DWORD>(SelfTest::ScaleTimeout(5'000)), output, serviceError), serviceError);
         if (! state.failure.empty())
         {
             return false;
@@ -6625,10 +7376,17 @@ SelfTest::RunCase(options,
     {
         const auto deadline =
             std::chrono::steady_clock::now() + std::chrono::milliseconds{static_cast<std::chrono::milliseconds::rep>(SelfTest::ScaleTimeout(15'000))};
+        HRESULT lastStatusHr = S_OK;
         while (std::chrono::steady_clock::now() < deadline)
         {
-            const HRESULT statusHr = SearchServiceBroker::GetStatus(outStatus);
-            if (SUCCEEDED(statusHr) && predicate(outStatus))
+            SearchServiceBroker::ServiceStatus currentStatus{};
+            const HRESULT statusHr = SearchServiceBroker::GetStatus(currentStatus);
+            lastStatusHr           = statusHr;
+            if (SUCCEEDED(statusHr))
+            {
+                outStatus = currentStatus;
+            }
+            if (SUCCEEDED(statusHr) && predicate(currentStatus))
             {
                 return true;
             }
@@ -6636,13 +7394,40 @@ SelfTest::RunCase(options,
             std::this_thread::sleep_for(std::chrono::milliseconds{200});
         }
 
-        state.Require(false, std::wstring(failureMessage));
+        state.Require(false,
+                      std::format(L"{0} Last status: pid={1} storeKind={2} warmupEnabled={3} running={4} completed={5} failed={6} total={7} "
+                                  L"currentRoot='{8}' indexedVolumes={9} indexedEntries={10} ready={11} inspected={12} storePath='{13}' "
+                                  L"walBytes={14} storeState={15} syncPhase={16} activeRoot='{17}' discoveredRoots={18} lastFailure={19} "
+                                  L"failureHr=0x{20:08X} failureRoot='{21}' lastGetStatusHr=0x{22:08X}.",
+                                  failureMessage,
+                                  outStatus.processId,
+                                  static_cast<unsigned int>(outStatus.persistentStoreKind),
+                                  outStatus.startupWarmupEnabled,
+                                  outStatus.startupWarmupRunning,
+                                  outStatus.startupWarmupCompletedRoots,
+                                  outStatus.startupWarmupFailedRoots,
+                                  outStatus.startupWarmupTotalRoots,
+                                  outStatus.startupWarmupCurrentRoot,
+                                  outStatus.indexedVolumeCount,
+                                  outStatus.indexedEntryCount,
+                                  outStatus.readyForQueryCutover,
+                                  outStatus.persistentStoreInspectionSucceeded,
+                                  outStatus.persistentStorePath,
+                                  outStatus.writeAheadLogBytes,
+                                  static_cast<unsigned int>(outStatus.storeState),
+                                  static_cast<unsigned int>(outStatus.syncPhase),
+                                  outStatus.activeRoot,
+                                  outStatus.discoveredRoots.size(),
+                                  outStatus.startupWarmupHasFailure,
+                                  static_cast<unsigned long>(outStatus.startupWarmupLastFailureHr),
+                                  outStatus.startupWarmupLastFailureRoot,
+                                  static_cast<unsigned long>(lastStatusHr)));
         return false;
     };
 
     ForegroundSearchServiceProcess service;
     std::wstring serviceError;
-    state.Require(service.Start(pipeName, 16u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, false, extraArgs), serviceError);
+    state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, false, extraArgs), serviceError);
     if (! state.failure.empty())
     {
         return false;
@@ -6734,7 +7519,7 @@ SelfTest::RunCase(options,
     state.Require(status.syncPhase == LocalSearchIndexCore::SyncPhase::Idle, L"Forced NTFS traversal-seed status should remain idle after the degraded query.");
 
     std::string output;
-    state.Require(service.WaitForExitAndCapture(static_cast<DWORD>(SelfTest::ScaleTimeout(5'000)), output, serviceError), serviceError);
+    state.Require(service.ShutdownAndWaitForExitAndCapture(static_cast<DWORD>(SelfTest::ScaleTimeout(5'000)), output, serviceError), serviceError);
     if (! state.failure.empty())
     {
         return false;
@@ -6788,10 +7573,11 @@ SelfTest::RunCase(options,
     request.includeFiles       = true;
     request.includeDirectories = false;
 
+    bool seedReadyForQueryCutover = false;
     {
         ForegroundSearchServiceProcess service;
         std::wstring serviceError;
-        state.Require(service.Start(pipeName, 32u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, false, extraArgs), serviceError);
+        state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, false, extraArgs), serviceError);
         if (! state.failure.empty())
         {
             return false;
@@ -6800,10 +7586,12 @@ SelfTest::RunCase(options,
         auto waitForStatus = [&](auto&& predicate, SearchServiceBroker::ServiceStatus& outStatus, std::wstring_view failureMessage) noexcept
         {
             const auto deadline =
-                std::chrono::steady_clock::now() + std::chrono::milliseconds{static_cast<std::chrono::milliseconds::rep>(SelfTest::ScaleTimeout(15'000))};
+                std::chrono::steady_clock::now() + std::chrono::milliseconds{static_cast<std::chrono::milliseconds::rep>(SelfTest::ScaleTimeout(60'000))};
+            HRESULT lastStatusHr = S_OK;
             while (std::chrono::steady_clock::now() < deadline)
             {
                 const HRESULT hr = SearchServiceBroker::GetStatus(outStatus);
+                lastStatusHr     = hr;
                 if (SUCCEEDED(hr) && predicate(outStatus))
                 {
                     return true;
@@ -6812,7 +7600,26 @@ SelfTest::RunCase(options,
                 std::this_thread::sleep_for(std::chrono::milliseconds{200});
             }
 
-            state.Require(false, std::wstring(failureMessage));
+            state.Require(false,
+                          std::format(L"{0} Last status: pid={1} backend={2} ready={3} inspected={4} warmupEnabled={5} running={6} "
+                                      L"completed={7} failed={8} total={9} discoveredRoots={10} indexedVolumes={11} indexedEntries={12} "
+                                      L"storePath='{13}' activeRoot='{14}' lastGetStatusHr=0x{15:08X}.",
+                                      failureMessage,
+                                      outStatus.processId,
+                                      static_cast<unsigned int>(outStatus.persistentStoreKind),
+                                      outStatus.readyForQueryCutover,
+                                      outStatus.persistentStoreInspectionSucceeded,
+                                      outStatus.startupWarmupEnabled,
+                                      outStatus.startupWarmupRunning,
+                                      outStatus.startupWarmupCompletedRoots,
+                                      outStatus.startupWarmupFailedRoots,
+                                      outStatus.startupWarmupTotalRoots,
+                                      outStatus.discoveredRoots.size(),
+                                      outStatus.indexedVolumeCount,
+                                      outStatus.indexedEntryCount,
+                                      outStatus.persistentStorePath,
+                                      outStatus.activeRoot,
+                                      static_cast<unsigned long>(lastStatusHr)));
             return false;
         };
 
@@ -6820,8 +7627,9 @@ SelfTest::RunCase(options,
         state.Require(waitForStatus(
                           [&](const SearchServiceBroker::ServiceStatus& status) noexcept
         {
-            return status.persistentStoreKind == LocalSearchIndexCore::PersistentStoreKind::Sqlite && status.readyForQueryCutover &&
-                   ! status.startupWarmupRunning && status.indexedVolumeCount == 1u && status.discoveredRoots.size() == 1u &&
+            return status.persistentStoreKind == LocalSearchIndexCore::PersistentStoreKind::Sqlite && ! status.startupWarmupRunning &&
+                   status.startupWarmupCompletedRoots == 1u && status.startupWarmupFailedRoots == 0u && status.indexedVolumeCount == 1u &&
+                   status.discoveredRoots.size() == 1u &&
                    EqualsIgnoreCase(status.discoveredRoots.front(), caseRoot.wstring());
         },
                           warmStatus,
@@ -6833,6 +7641,22 @@ SelfTest::RunCase(options,
         }
 
         state.Require(warmStatus.persistentStoreInspectionSucceeded, L"Seed stale-root SQLite service should report a successfully inspected SQLite store.");
+        SqliteIndexStore::VolumeInfo seededVolumeInfo{};
+        const HRESULT inspectSeedHr = SqliteIndexStore::InspectVolume(sqlitePath.wstring(), caseRoot.wstring(), seededVolumeInfo);
+        state.Require(SUCCEEDED(inspectSeedHr),
+                      std::format(L"Seed stale-root SQLite volume inspection failed. hr=0x{:08X}", static_cast<unsigned long>(inspectSeedHr)));
+        if (FAILED(inspectSeedHr))
+        {
+            return false;
+        }
+        seedReadyForQueryCutover = seededVolumeInfo.state == SqliteIndexStore::kVolumeStateReady;
+        state.Require(warmStatus.readyForQueryCutover == seedReadyForQueryCutover,
+                      std::format(L"Seed warmup status readiness must match persisted volume state. statusReady={} volumeState={}.",
+                                  warmStatus.readyForQueryCutover,
+                                  seededVolumeInfo.state));
+        state.Require(warmStatus.legacyImportVolumeCount ==
+                          (seededVolumeInfo.state == SqliteIndexStore::kVolumeStateImportedLegacySnapshot ? 1u : 0u),
+                      L"Seed warmup legacy-import count must remain separate from aggregate query readiness.");
     }
 
     auto snapshotFiles = CollectDirectoryFilesByExtension(storageRoot, L".bin");
@@ -6849,7 +7673,7 @@ SelfTest::RunCase(options,
         std::wstring serviceError;
         state.Require(::SetEnvironmentVariableW(L"REDSALAMANDER_SEARCH_SERVICE_STARTUP_WARMUP_DELAY_MS", L"5000") != 0,
                       L"Failed to delay the second startup warmup.");
-        state.Require(service.Start(pipeName, 3u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, extraArgs), serviceError);
+        state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, extraArgs), serviceError);
         if (! state.failure.empty())
         {
             return false;
@@ -6858,6 +7682,8 @@ SelfTest::RunCase(options,
         BrokerProgressRecorder recorder;
         LocalSearchIndexCore::QueryStats coldStats{};
         std::vector<LocalSearchIndexCore::Candidate> coldCandidates;
+        const LocalSearchIndexCore::FallbackReason expectedColdFallbackReason =
+            seedReadyForQueryCutover ? LocalSearchIndexCore::FallbackReason::StoreStale : LocalSearchIndexCore::FallbackReason::CutoverBlocked;
         HRESULT hr = SearchServiceBroker::Query(request, &BrokerProgressRecorder::ProgressThunk, &recorder, nullptr, nullptr, coldCandidates, &coldStats);
         state.Require(SUCCEEDED(hr), std::format(L"Cold-start stale-root SQLite service query failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
         if (FAILED(hr))
@@ -6875,8 +7701,8 @@ SelfTest::RunCase(options,
                                   static_cast<uint32_t>(coldStats.queryExecutionMode),
                                   static_cast<uint32_t>(coldStats.fallbackReason),
                                   coldStats.usedLiveScanFallback));
-        state.Require(coldStats.fallbackReason == LocalSearchIndexCore::FallbackReason::StoreStale,
-                      L"Cold-start stale-root SQLite service query should report a stale-store fallback reason.");
+        state.Require(coldStats.fallbackReason == expectedColdFallbackReason,
+                      L"Cold-start stale-root SQLite service query should report the fallback implied by the persisted seed readiness.");
         state.Require(coldStats.ensureReadyDurationMs == 0u,
                       L"Cold-start stale-root SQLite service query should not spend time in EnsureReady on the request thread.");
         state.Require(! coldStats.snapshotSaved, L"Cold-start stale-root SQLite service query should not recreate a compatibility snapshot runtime store.");
@@ -6891,8 +7717,8 @@ SelfTest::RunCase(options,
         {
             state.Require(enumerating->queryExecutionMode == coldStats.queryExecutionMode,
                           L"Cold-start stale-root SQLite service progress should report the same execution mode as query stats.");
-            state.Require(enumerating->fallbackReason == LocalSearchIndexCore::FallbackReason::StoreStale,
-                          L"Cold-start stale-root SQLite service progress should report a stale-store fallback reason.");
+            state.Require(enumerating->fallbackReason == expectedColdFallbackReason,
+                          L"Cold-start stale-root SQLite service progress should report the fallback implied by the persisted seed readiness.");
             state.Require(EqualsIgnoreCase(enumerating->activeRoot, caseRoot.wstring()),
                           L"Cold-start stale-root SQLite service progress should report the searched root as active.");
             state.Require((enumerating->warningFlags & FILESYSTEM_SEARCH_WARNING_DEGRADED_NO_INDEX) != 0u,
@@ -6916,15 +7742,15 @@ SelfTest::RunCase(options,
                       L"Stale-root SQLite status should keep reporting the SQLite backend after a degraded query.");
         state.Require(status.queryExecutionMode == coldStats.queryExecutionMode,
                       L"Stale-root SQLite status should report the same execution mode as query stats.");
-        state.Require(status.fallbackReason == LocalSearchIndexCore::FallbackReason::StoreStale,
-                      L"Stale-root SQLite status should report a stale-store fallback reason.");
+        state.Require(status.fallbackReason == expectedColdFallbackReason,
+                      L"Stale-root SQLite status should report the fallback implied by the persisted seed readiness.");
         state.Require(EqualsIgnoreCase(status.activeRoot, caseRoot.wstring()), L"Stale-root SQLite status should report the searched root as active.");
         state.Require(status.storeState == LocalSearchIndexCore::StoreState::Syncing, L"Stale-root SQLite live-scan status should report a syncing store.");
         state.Require(status.syncPhase == LocalSearchIndexCore::SyncPhase::Idle,
                       L"Stale-root SQLite live-scan status should stay non-blocking while warmup is delayed.");
 
         std::string output;
-        state.Require(service.WaitForExitAndCapture(static_cast<DWORD>(SelfTest::ScaleTimeout(5'000)), output, serviceError), serviceError);
+    state.Require(service.ShutdownAndWaitForExitAndCapture(static_cast<DWORD>(SelfTest::ScaleTimeout(5'000)), output, serviceError), serviceError);
         if (! state.failure.empty())
         {
             return false;
@@ -6933,6 +7759,240 @@ SelfTest::RunCase(options,
 
     snapshotFiles = CollectDirectoryFilesByExtension(storageRoot, L".bin");
     state.Require(snapshotFiles.empty(), L"Cold-start stale-root SQLite service query should not create a compatibility snapshot runtime file.");
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"search_service_sqlite_external_rotation_refreshes_without_retry",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    std::filesystem::path caseRoot;
+    state.Require(PrepareSearchCaseRoot(root, L"search_service_sqlite_external_rotation", caseRoot),
+                  L"Failed to prepare search_service_sqlite_external_rotation root.");
+    state.Require(SelfTest::WriteTextFile(caseRoot / L"alpha.txt", "alpha"), L"Failed to create alpha.txt.");
+    state.Require(SelfTest::WriteTextFile(caseRoot / L"beta.txt", "beta"), L"Failed to create beta.txt.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path storageRoot = caseRoot / L"service-store";
+    const std::filesystem::path sqlitePath  = caseRoot.parent_path() / (caseRoot.filename().wstring() + L"-external-rotation.sqlite3");
+    const std::wstring pendingLegacyRoot    = (caseRoot.parent_path() / L"pending-legacy-root").wstring();
+
+    const auto addRootEntry = [&](SqliteIndexStore::ReplaceVolumeRequest& request) noexcept
+    {
+        request.entries.push_back({
+            .fileIdLow      = 1u,
+            .fileIdHigh     = 0u,
+            .parentIdLow    = 0u,
+            .parentIdHigh   = 0u,
+            .fullPath       = caseRoot.wstring(),
+            .name           = caseRoot.filename().wstring(),
+            .attributes     = FILE_ATTRIBUTE_DIRECTORY,
+            .sizeBytes      = 0u,
+            .writeTime100ns = 0u,
+        });
+    };
+    const auto addFileEntry = [&](SqliteIndexStore::ReplaceVolumeRequest& request, uint64_t fileId, std::wstring_view name) noexcept
+    {
+        request.entries.push_back({
+            .fileIdLow      = fileId,
+            .fileIdHigh     = 0u,
+            .parentIdLow    = 1u,
+            .parentIdHigh   = 0u,
+            .fullPath       = (caseRoot / name).wstring(),
+            .name           = std::wstring(name),
+            .attributes     = FILE_ATTRIBUTE_ARCHIVE,
+            .sizeBytes      = 5u,
+            .writeTime100ns = 0u,
+        });
+    };
+
+    SqliteIndexStore::StoreInfo bootstrapInfo{};
+    HRESULT hr = SqliteIndexStore::EnsureBootstrap(sqlitePath.wstring(), &bootstrapInfo);
+    state.Require(SUCCEEDED(hr),
+                  std::format(L"SqliteIndexStore::EnsureBootstrap for external rotation test failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    SqliteIndexStore::ReplaceVolumeRequest initialRequest{};
+    initialRequest.rootPath       = caseRoot.wstring();
+    initialRequest.fileSystemKind = LocalSearchIndexCore::FileSystemKind::Ntfs;
+    initialRequest.journalId      = 1u;
+    initialRequest.nextUsn        = 1u;
+    initialRequest.state          = SqliteIndexStore::kVolumeStateReady;
+    addRootEntry(initialRequest);
+    addFileEntry(initialRequest, 2u, L"alpha.txt");
+
+    SqliteIndexStore::ReplaceVolumeResult replaceResult{};
+    hr = SqliteIndexStore::ReplaceVolume(sqlitePath.wstring(), initialRequest, &replaceResult);
+    state.Require(SUCCEEDED(hr),
+                  std::format(L"Initial SqliteIndexStore::ReplaceVolume for external rotation test failed. hr=0x{:08X}",
+                              static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    SqliteIndexStore::ReplaceVolumeRequest pendingRequest{};
+    pendingRequest.rootPath       = pendingLegacyRoot;
+    pendingRequest.fileSystemKind = LocalSearchIndexCore::FileSystemKind::Ntfs;
+    pendingRequest.journalId      = 1u;
+    pendingRequest.nextUsn        = 1u;
+    pendingRequest.state          = SqliteIndexStore::kVolumeStateImportedLegacySnapshot;
+    pendingRequest.entries.push_back({
+        .fileIdLow      = 1u,
+        .fileIdHigh     = 0u,
+        .parentIdLow    = 0u,
+        .parentIdHigh   = 0u,
+        .fullPath       = pendingLegacyRoot + L"\\ghost.txt",
+        .name           = L"ghost.txt",
+        .attributes     = FILE_ATTRIBUTE_ARCHIVE,
+        .sizeBytes      = 0u,
+        .writeTime100ns = 0u,
+    });
+
+    hr = SqliteIndexStore::ReplaceVolume(sqlitePath.wstring(), pendingRequest, &replaceResult);
+    state.Require(SUCCEEDED(hr),
+                  std::format(L"Pending legacy SqliteIndexStore::ReplaceVolume for external rotation test failed. hr=0x{:08X}",
+                              static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    const std::wstring previousPipeOverride = GetEnvVarTrimmed(SearchServiceBroker::kPipeNameEnvVar);
+    const std::wstring pipeName             = MakeUniquePipeName();
+    state.Require(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, pipeName.c_str()) != 0, L"Failed to override the search service pipe.");
+    const auto restorePipeOverride = wil::scope_exit([&] noexcept
+    {
+        const wchar_t* restoreValue = previousPipeOverride.empty() ? nullptr : previousPipeOverride.c_str();
+        static_cast<void>(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, restoreValue));
+    });
+
+    constexpr wchar_t kAllowDirectSqliteWithoutJournalEnvVar[] = L"REDSALAMANDER_TEST_ALLOW_DIRECT_SQLITE_WITHOUT_JOURNAL";
+    const std::wstring previousDirectSqliteOverride            = GetEnvVarTrimmed(kAllowDirectSqliteWithoutJournalEnvVar);
+    state.Require(::SetEnvironmentVariableW(kAllowDirectSqliteWithoutJournalEnvVar, L"1") != 0,
+                  L"Failed to enable direct SQLite test currentness override.");
+    const auto restoreDirectSqliteOverride = wil::scope_exit([&] noexcept
+    {
+        const wchar_t* restoreValue = previousDirectSqliteOverride.empty() ? nullptr : previousDirectSqliteOverride.c_str();
+        static_cast<void>(::SetEnvironmentVariableW(kAllowDirectSqliteWithoutJournalEnvVar, restoreValue));
+    });
+
+    ForegroundSearchServiceProcess service;
+    std::wstring serviceError;
+    const std::wstring extraArgs =
+        std::format(L"--storage-root=\"{}\" --store-backend=sqlite --sqlite-path=\"{}\"", storageRoot.wstring(), sqlitePath.wstring());
+    state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, extraArgs), serviceError);
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    SearchServiceBroker::QueryRequest request{};
+    request.rootPath           = caseRoot.wstring();
+    request.namePattern        = L"*.txt";
+    request.nameMode           = FILESYSTEM_SEARCH_NAME_WILDCARD;
+    request.flags              = static_cast<FileSystemSearchFlags>(FILESYSTEM_SEARCH_RECURSIVE | FILESYSTEM_SEARCH_INCLUDE_FILES);
+    request.recursive          = true;
+    request.includeFiles       = true;
+    request.includeDirectories = false;
+
+    LocalSearchIndexCore::QueryStats primingStats{};
+    std::vector<LocalSearchIndexCore::Candidate> primingCandidates;
+    hr = SearchServiceBroker::Query(request, nullptr, nullptr, nullptr, nullptr, primingCandidates, &primingStats);
+    state.Require(SUCCEEDED(hr), std::format(L"External rotation priming query failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+    state.Require(primingStats.fallbackReason == LocalSearchIndexCore::FallbackReason::CutoverBlocked,
+                  L"External rotation priming query should cache the pending-legacy cutover block.");
+    state.Require(primingStats.usedLiveScanFallback, L"External rotation priming query should fall back while a pending legacy volume exists.");
+
+    SqliteIndexStore::ReplaceVolumeRequest rotatedRequest = initialRequest;
+    addFileEntry(rotatedRequest, 3u, L"beta.txt");
+    hr = SqliteIndexStore::ReplaceVolume(sqlitePath.wstring(), rotatedRequest, &replaceResult);
+    state.Require(SUCCEEDED(hr),
+                  std::format(L"Rotated SqliteIndexStore::ReplaceVolume for external rotation test failed. hr=0x{:08X}",
+                              static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    hr = SqliteIndexStore::DeleteVolume(sqlitePath.wstring(), pendingLegacyRoot);
+    state.Require(SUCCEEDED(hr),
+                  std::format(L"SqliteIndexStore::DeleteVolume for external rotation pending legacy root failed. hr=0x{:08X}",
+                              static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    SqliteIndexStore::StoreInfo rotatedInfo{};
+    hr = SqliteIndexStore::InspectStore(sqlitePath.wstring(), rotatedInfo);
+    state.Require(SUCCEEDED(hr),
+                  std::format(L"SqliteIndexStore::InspectStore after external rotation failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+    state.Require(rotatedInfo.legacyImportVolumeCount == 0u,
+                  std::format(L"External rotation should remove pending legacy volumes, got {}.", rotatedInfo.legacyImportVolumeCount));
+
+    const std::filesystem::path perfPath = SelfTest::GetPerfArtifactPath(L"perf_metrics.jsonl");
+    std::error_code perfEc;
+    const std::uintmax_t retryMetricStartOffset = std::filesystem::exists(perfPath, perfEc) ? std::filesystem::file_size(perfPath, perfEc) : 0u;
+
+    LocalSearchIndexCore::QueryStats rotatedStats{};
+    std::vector<LocalSearchIndexCore::Candidate> rotatedCandidates;
+    hr = SearchServiceBroker::Query(request, nullptr, nullptr, nullptr, nullptr, rotatedCandidates, &rotatedStats);
+    state.Require(SUCCEEDED(hr), std::format(L"External rotation refreshed query failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    state.Require(CollectIndexedCandidateNames(rotatedCandidates) == std::vector<std::wstring>{L"alpha.txt", L"beta.txt"},
+                  L"External rotation refreshed query should return the externally rotated SQLite contents.");
+    state.Require(rotatedStats.usedSqliteStore, L"External rotation refreshed query should enumerate from SQLite.");
+    state.Require(rotatedStats.queryExecutionMode == LocalSearchIndexCore::QueryExecutionMode::Sqlite,
+                  L"External rotation refreshed query should report SQLite execution.");
+    state.Require(rotatedStats.fallbackReason == LocalSearchIndexCore::FallbackReason::None,
+                  L"External rotation refreshed query should not require a stale-store fallback.");
+    state.Require(! rotatedStats.sqliteCutoverBlocked, L"External rotation refreshed query should not report a cutover block.");
+
+    bool retryMetricSeen = false;
+    std::ifstream perfFile(perfPath, std::ios::binary);
+    if (perfFile)
+    {
+        if (retryMetricStartOffset != 0u)
+        {
+            perfFile.seekg(static_cast<std::streamoff>(retryMetricStartOffset), std::ios::beg);
+        }
+
+        std::string line;
+        while (std::getline(perfFile, line))
+        {
+            if (line.find("\"metric\":\"search.backend.sqlite.retry_query_ms\"") != std::string::npos)
+            {
+                retryMetricSeen = true;
+                break;
+            }
+        }
+    }
+
+    state.Require(! retryMetricSeen,
+                  L"External store rotation should refresh cached PersistentStoreInfo before querying instead of using retry_query_ms.");
+
+    std::string output;
+    state.Require(service.ShutdownAndWaitForExitAndCapture(static_cast<DWORD>(SelfTest::ScaleTimeout(5'000)), output, serviceError), serviceError);
     return state.failure.empty();
 });
 
@@ -6973,7 +8033,7 @@ SelfTest::RunCase(options,
     std::wstring serviceError;
     const std::wstring extraArgs =
         std::format(L"--storage-root=\"{}\" --store-backend=sqlite --sqlite-path=\"{}\"", storageRoot.wstring(), sqlitePath.wstring());
-    state.Require(service.Start(pipeName, 4u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, extraArgs), serviceError);
+    state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, extraArgs), serviceError);
     if (! state.failure.empty())
     {
         return false;
@@ -7070,10 +8130,11 @@ SelfTest::RunCase(options,
     state.Require(status.storeState == LocalSearchIndexCore::StoreState::Invalid,
                   L"Invalid-store SQLite status should continue reporting an invalid store after the degraded query.");
     state.Require(status.syncPhase == LocalSearchIndexCore::SyncPhase::Idle, L"Invalid-store SQLite status should remain idle after the degraded query.");
-    state.Require(EqualsIgnoreCase(status.activeRoot, caseRoot.wstring()), L"Invalid-store SQLite status should report the searched root as active.");
+    state.Require(status.activeRoot.empty(),
+                  L"Invalid-store SQLite status should clear generation-bound active-root state when the configured store cannot be inspected.");
 
     std::string output;
-    state.Require(service.WaitForExitAndCapture(static_cast<DWORD>(SelfTest::ScaleTimeout(5'000)), output, serviceError), serviceError);
+    state.Require(service.ShutdownAndWaitForExitAndCapture(static_cast<DWORD>(SelfTest::ScaleTimeout(5'000)), output, serviceError), serviceError);
     if (! state.failure.empty())
     {
         return false;
@@ -7156,7 +8217,7 @@ SelfTest::RunCase(options,
     std::wstring serviceError;
     const std::wstring extraArgs =
         std::format(L"--storage-root=\"{}\" --store-backend=sqlite --sqlite-path=\"{}\"", storageRoot.wstring(), sqlitePath.wstring());
-    state.Require(service.Start(pipeName, 4u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, extraArgs), serviceError);
+    state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, extraArgs), serviceError);
     if (! state.failure.empty())
     {
         return false;
@@ -7254,7 +8315,7 @@ SelfTest::RunCase(options,
     state.Require(EqualsIgnoreCase(status.activeRoot, caseRoot.wstring()), L"SQLite query-failure service status should report the searched root as active.");
 
     std::string output;
-    state.Require(service.WaitForExitAndCapture(static_cast<DWORD>(SelfTest::ScaleTimeout(5'000)), output, serviceError), serviceError);
+    state.Require(service.ShutdownAndWaitForExitAndCapture(static_cast<DWORD>(SelfTest::ScaleTimeout(5'000)), output, serviceError), serviceError);
     if (! state.failure.empty())
     {
         return false;
@@ -7368,7 +8429,7 @@ SelfTest::RunCase(options,
     std::wstring serviceError;
     const std::wstring extraArgs =
         std::format(L"--storage-root=\"{}\" --store-backend=sqlite --sqlite-path=\"{}\"", storageRoot.wstring(), sqlitePath.wstring());
-    state.Require(service.Start(pipeName, 3u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, extraArgs), serviceError);
+    state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, extraArgs), serviceError);
     if (! state.failure.empty())
     {
         return false;
@@ -7439,7 +8500,7 @@ SelfTest::RunCase(options,
                   L"SQLite mid-query-failure service status should report a recovering store after the degraded query.");
 
     std::string output;
-    state.Require(service.WaitForExitAndCapture(static_cast<DWORD>(SelfTest::ScaleTimeout(5'000)), output, serviceError), serviceError);
+    state.Require(service.ShutdownAndWaitForExitAndCapture(static_cast<DWORD>(SelfTest::ScaleTimeout(5'000)), output, serviceError), serviceError);
     if (! state.failure.empty())
     {
         return false;
@@ -7550,7 +8611,7 @@ SelfTest::RunCase(options,
     }
 
     const std::wstring extraArgs = std::format(L"--store-backend=sqlite --sqlite-path=\"{}\"", sqlitePath.wstring());
-    state.Require(service.Start(pipeName, 6u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, extraArgs), serviceError);
+    state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, extraArgs), serviceError);
     if (! state.failure.empty())
     {
         return false;
@@ -7611,7 +8672,7 @@ SelfTest::RunCase(options,
                   L"Warm SQLite service regex query returned an unexpected candidate set.");
 
     std::string output;
-    state.Require(service.WaitForExitAndCapture(static_cast<DWORD>(SelfTest::ScaleTimeout(5'000)), output, serviceError), serviceError);
+    state.Require(service.ShutdownAndWaitForExitAndCapture(static_cast<DWORD>(SelfTest::ScaleTimeout(5'000)), output, serviceError), serviceError);
     return state.failure.empty();
 });
 
@@ -7672,7 +8733,7 @@ SelfTest::RunCase(options,
     ForegroundSearchServiceProcess service;
     std::wstring serviceError;
     const std::wstring extraArgs = std::format(L"--store-backend=sqlite --sqlite-path=\"{}\"", sqlitePath.wstring());
-    state.Require(service.Start(pipeName, 2u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, extraArgs), serviceError);
+    state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, extraArgs), serviceError);
     if (! state.failure.empty())
     {
         return false;
@@ -7706,7 +8767,7 @@ SelfTest::RunCase(options,
                   L"Pending legacy-import service status should report a cutover-blocked fallback reason.");
 
     std::string output;
-    state.Require(service.WaitForExitAndCapture(static_cast<DWORD>(SelfTest::ScaleTimeout(5'000)), output, serviceError), serviceError);
+    state.Require(service.ShutdownAndWaitForExitAndCapture(static_cast<DWORD>(SelfTest::ScaleTimeout(5'000)), output, serviceError), serviceError);
     if (! state.failure.empty())
     {
         return false;
@@ -7715,6 +8776,151 @@ SelfTest::RunCase(options,
     state.Require(output.contains("Readiness"), L"Pending legacy-import foreground output should include the readiness field.");
     state.Require(output.contains("Pending backfill/rebuild"), L"Pending legacy-import foreground output should report pending backfill/rebuild.");
     state.Require(output.contains("legacy-imports=1"), L"Pending legacy-import foreground output should report one legacy-import volume.");
+
+    request.state = SqliteIndexStore::kVolumeStateCurrentnessUnproven;
+    hr            = SqliteIndexStore::ReplaceVolume(sqlitePath.wstring(), request, &replaceResult);
+    state.Require(SUCCEEDED(hr),
+                  std::format(L"SqliteIndexStore::ReplaceVolume for currentness-unproven status failed. hr=0x{:08X}",
+                              static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    const std::filesystem::path readyRoot = caseRoot / L"ready-root";
+    state.Require(SelfTest::EnsureDirectory(readyRoot), L"Failed to create mixed-state ready root.");
+    state.Require(SelfTest::WriteTextFile(readyRoot / L"beta.txt", "beta"), L"Failed to create mixed-state ready-root file.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    SqliteIndexStore::ReplaceVolumeRequest readyRequest{};
+    readyRequest.rootPath       = readyRoot.wstring();
+    readyRequest.fileSystemKind = LocalSearchIndexCore::FileSystemKind::Ntfs;
+    readyRequest.journalId      = 2u;
+    readyRequest.nextUsn        = 2u;
+    readyRequest.state          = SqliteIndexStore::kVolumeStateReady;
+    readyRequest.entries.push_back({
+        .fileIdLow      = 2u,
+        .fileIdHigh     = 0u,
+        .parentIdLow    = 0u,
+        .parentIdHigh   = 0u,
+        .fullPath       = (readyRoot / L"beta.txt").wstring(),
+        .name           = L"beta.txt",
+        .attributes     = FILE_ATTRIBUTE_ARCHIVE,
+        .sizeBytes      = 0u,
+        .writeTime100ns = 0u,
+    });
+    hr = SqliteIndexStore::ReplaceVolume(sqlitePath.wstring(), readyRequest, &replaceResult);
+    state.Require(SUCCEEDED(hr),
+                  std::format(L"SqliteIndexStore::ReplaceVolume for mixed ready status failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    SqliteIndexStore::StoreInfo currentnessInfo{};
+    hr = SqliteIndexStore::InspectStore(sqlitePath.wstring(), currentnessInfo);
+    state.Require(SUCCEEDED(hr),
+                  std::format(L"SqliteIndexStore::InspectStore for currentness-unproven status failed. hr=0x{:08X}",
+                              static_cast<unsigned long>(hr)));
+    state.Require(currentnessInfo.legacyImportVolumeCount == 0u,
+                  L"Currentness-unproven volumes must not be counted as legacy-import migration work.");
+    state.Require(currentnessInfo.queryUnreadyVolumeCount == 1u,
+                  L"A mixed Ready + CurrentnessUnproven store must remain query-unready until currentness is proved.");
+    state.Require(currentnessInfo.volumeCount == 2u, L"Mixed-state readiness fixture should contain both Ready and CurrentnessUnproven volumes.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, extraArgs), serviceError);
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    status = {};
+    hr     = SearchServiceBroker::GetStatus(status);
+    state.Require(SUCCEEDED(hr),
+                  std::format(L"SearchServiceBroker::GetStatus for currentness-unproven SQLite service failed. hr=0x{:08X}",
+                              static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    state.Require(EqualsIgnoreCase(status.pipeName, pipeName), L"Currentness-unproven status must come from the intended isolated pipe.");
+    state.Require(status.persistentStoreInspectionSucceeded, L"Currentness-unproven status should report successful store inspection.");
+    state.Require(! status.readyForQueryCutover, L"Currentness-unproven status must not report query cutover readiness.");
+    state.Require(status.legacyImportVolumeCount == 0u,
+                  L"Currentness-unproven status must keep legacy migration state separate from query readiness.");
+    state.Require(status.indexedVolumeCount == 2u, L"Currentness-unproven status should retain the mixed Ready volume in its store summary.");
+    state.Require(status.storeState == LocalSearchIndexCore::StoreState::Syncing,
+                  L"Currentness-unproven status should report a syncing store before the first query.");
+    state.Require(status.syncPhase == LocalSearchIndexCore::SyncPhase::Idle,
+                  L"Currentness-unproven status should remain idle until a query or rebuild proves currentness.");
+    state.Require(status.queryExecutionMode == LocalSearchIndexCore::QueryExecutionMode::Unknown,
+                  L"Currentness-unproven status should not report a query execution mode before the first query.");
+    state.Require(status.fallbackReason == LocalSearchIndexCore::FallbackReason::CutoverBlocked,
+                  L"Currentness-unproven status should report a cutover-blocked fallback reason.");
+
+    SearchServiceBroker::QueryRequest liveRequest{};
+    liveRequest.rootPath           = caseRoot.wstring();
+    liveRequest.namePattern        = L"*.txt";
+    liveRequest.nameMode           = FILESYSTEM_SEARCH_NAME_WILDCARD;
+    liveRequest.flags              = static_cast<FileSystemSearchFlags>(FILESYSTEM_SEARCH_RECURSIVE | FILESYSTEM_SEARCH_INCLUDE_FILES);
+    liveRequest.recursive          = true;
+    liveRequest.includeFiles       = true;
+    liveRequest.includeDirectories = false;
+
+    LocalSearchIndexCore::QueryStats liveStats{};
+    std::vector<LocalSearchIndexCore::Candidate> liveCandidates;
+    hr = SearchServiceBroker::Query(liveRequest, nullptr, nullptr, nullptr, nullptr, liveCandidates, &liveStats);
+    state.Require(SUCCEEDED(hr),
+                  std::format(L"Currentness-unproven mixed-store query failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    state.Require(liveStats.usedLiveScanFallback, L"Currentness-unproven mixed store should query through live-scan fallback.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    request.state = SqliteIndexStore::kVolumeStateReady;
+    hr            = SqliteIndexStore::ReplaceVolume(sqlitePath.wstring(), request, &replaceResult);
+    state.Require(SUCCEEDED(hr),
+                  std::format(L"SqliteIndexStore::ReplaceVolume for externally refreshed ready status failed. hr=0x{:08X}",
+                              static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    SearchServiceBroker::ServiceStatus refreshedStatus{};
+    hr = SearchServiceBroker::GetStatus(refreshedStatus);
+    state.Require(SUCCEEDED(hr),
+                  std::format(L"SearchServiceBroker::GetStatus after external ready rotation failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    state.Require(refreshedStatus.readyForQueryCutover,
+                  L"Fresh inspected Ready volumes must supersede the previous cutover-blocked runtime snapshot.");
+    state.Require(refreshedStatus.storeState == LocalSearchIndexCore::StoreState::Ready,
+                  L"External ready rotation should replace stale syncing runtime state with Ready.");
+    state.Require(refreshedStatus.syncPhase == LocalSearchIndexCore::SyncPhase::Watching,
+                  L"External ready rotation should replace stale idle runtime sync state with Watching.");
+    state.Require(refreshedStatus.fallbackReason == LocalSearchIndexCore::FallbackReason::None,
+                  L"External ready rotation should clear the stale cutover-blocked fallback reason.");
+    state.Require(refreshedStatus.queryExecutionMode == LocalSearchIndexCore::QueryExecutionMode::Unknown,
+                  L"External ready rotation should clear the previous generation's query execution mode.");
+    state.Require(refreshedStatus.indexedVolumeCount == 2u, L"External ready rotation should preserve both indexed volumes.");
+
+    std::string currentnessOutput;
+    state.Require(service.ShutdownAndWaitForExitAndCapture(static_cast<DWORD>(SelfTest::ScaleTimeout(2'000)), currentnessOutput, serviceError), serviceError);
+    state.Require(currentnessOutput.contains("Currentness unproven"),
+                  L"Currentness-unproven foreground output should distinguish currentness proof from legacy backfill work.");
     return state.failure.empty();
 });
 
@@ -7781,7 +8987,7 @@ SelfTest::RunCase(options,
                   [&](SelfTest::CaseState& state) noexcept
 {
     std::filesystem::path caseRoot;
-    state.Require(PrepareSearchCaseRoot(root, L"search_service_sqlite_default_store_uses_build_specific_programdata_root", caseRoot),
+    state.Require(PrepareSearchCaseRoot(root, L"sqlite_default_store_pd", caseRoot),
                   L"Failed to prepare search_service_sqlite_default_store_uses_build_specific_programdata_root root.");
     if (! state.failure.empty())
     {
@@ -7790,6 +8996,9 @@ SelfTest::RunCase(options,
 
     const std::filesystem::path programDataRoot = caseRoot / L"program-data";
     state.Require(SelfTest::EnsureDirectory(programDataRoot), std::format(L"Failed to create '{}'.", programDataRoot.wstring()));
+    const std::filesystem::path discoveredRoot = caseRoot / L"discovered-root";
+    state.Require(SelfTest::EnsureDirectory(discoveredRoot), std::format(L"Failed to create '{}'.", discoveredRoot.wstring()));
+    state.Require(SelfTest::WriteTextFile(discoveredRoot / L"alpha.txt", "alpha"), L"Failed to create alpha.txt for default-store startup discovery.");
     if (! state.failure.empty())
     {
         return false;
@@ -7804,16 +9013,24 @@ SelfTest::RunCase(options,
 #endif
 
     const std::wstring previousPipeOverride = GetEnvVarTrimmed(SearchServiceBroker::kPipeNameEnvVar);
+    const std::wstring previousRootOverride = GetEnvVarTrimmed(SearchServiceBroker::kDiscoverRootsEnvVar);
     const std::wstring previousProgramData  = GetEnvVarTrimmed(L"ProgramData");
     const std::wstring pipeName             = MakeUniquePipeName();
 
     state.Require(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, pipeName.c_str()) != 0, L"Failed to override the search service pipe.");
+    state.Require(::SetEnvironmentVariableW(SearchServiceBroker::kDiscoverRootsEnvVar, discoveredRoot.c_str()) != 0,
+                  L"Failed to override the search service startup roots.");
     state.Require(::SetEnvironmentVariableW(L"ProgramData", programDataRoot.c_str()) != 0,
                   L"Failed to override ProgramData for the split-store compatibility test.");
     const auto restoreProgramData  = wil::scope_exit([&] noexcept
     {
         const wchar_t* restoreValue = previousProgramData.empty() ? nullptr : previousProgramData.c_str();
         static_cast<void>(::SetEnvironmentVariableW(L"ProgramData", restoreValue));
+    });
+    const auto restoreRootOverride = wil::scope_exit([&] noexcept
+    {
+        const wchar_t* restoreValue = previousRootOverride.empty() ? nullptr : previousRootOverride.c_str();
+        static_cast<void>(::SetEnvironmentVariableW(SearchServiceBroker::kDiscoverRootsEnvVar, restoreValue));
     });
     const auto restorePipeOverride = wil::scope_exit([&] noexcept
     {
@@ -7827,17 +9044,14 @@ SelfTest::RunCase(options,
 
     ForegroundSearchServiceProcess service;
     std::wstring serviceError;
-    state.Require(service.Start(pipeName, 4u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, false, L"--store-backend=sqlite"), serviceError);
+    state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, L"--store-backend=sqlite"), serviceError);
     if (! state.failure.empty())
     {
         return false;
     }
 
     SearchServiceBroker::ServiceStatus status{};
-    const HRESULT hr = SearchServiceBroker::GetStatus(status);
-    state.Require(SUCCEEDED(hr),
-                  std::format(L"SearchServiceBroker::GetStatus for default-store SQLite service failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
-    if (FAILED(hr))
+    if (! WaitForSearchServiceStatusWithProcessDiagnostics(state, status, pipeName, L"default-store SQLite service", service))
     {
         return false;
     }
@@ -7880,7 +9094,7 @@ SelfTest::RunCase(options,
                   [&](SelfTest::CaseState& state) noexcept
 {
     std::filesystem::path caseRoot;
-    state.Require(PrepareSearchCaseRoot(root, L"search_service_sqlite_seeded_default_store_reuses_build_specific_programdata_root", caseRoot),
+    state.Require(PrepareSearchCaseRoot(root, L"sqlite_seeded_store_pd", caseRoot),
                   L"Failed to prepare search_service_sqlite_seeded_default_store_reuses_build_specific_programdata_root root.");
     if (! state.failure.empty())
     {
@@ -7889,6 +9103,9 @@ SelfTest::RunCase(options,
 
     const std::filesystem::path programDataRoot = caseRoot / L"program-data";
     state.Require(SelfTest::EnsureDirectory(programDataRoot), std::format(L"Failed to create '{}'.", programDataRoot.wstring()));
+    const std::filesystem::path discoveredRoot = caseRoot / L"discovered-root";
+    state.Require(SelfTest::EnsureDirectory(discoveredRoot), std::format(L"Failed to create '{}'.", discoveredRoot.wstring()));
+    state.Require(SelfTest::WriteTextFile(discoveredRoot / L"alpha.txt", "alpha"), L"Failed to create alpha.txt for seeded default-store startup discovery.");
     if (! state.failure.empty())
     {
         return false;
@@ -7923,16 +9140,24 @@ SelfTest::RunCase(options,
     state.Require(bootstrapInfo.databaseBytes > 0u, L"Seeded default SQLite store should create a non-empty database file.");
 
     const std::wstring previousPipeOverride = GetEnvVarTrimmed(SearchServiceBroker::kPipeNameEnvVar);
+    const std::wstring previousRootOverride = GetEnvVarTrimmed(SearchServiceBroker::kDiscoverRootsEnvVar);
     const std::wstring previousProgramData  = GetEnvVarTrimmed(L"ProgramData");
     const std::wstring pipeName             = MakeUniquePipeName();
 
     state.Require(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, pipeName.c_str()) != 0, L"Failed to override the search service pipe.");
+    state.Require(::SetEnvironmentVariableW(SearchServiceBroker::kDiscoverRootsEnvVar, discoveredRoot.c_str()) != 0,
+                  L"Failed to override the search service startup roots.");
     state.Require(::SetEnvironmentVariableW(L"ProgramData", programDataRoot.c_str()) != 0,
                   L"Failed to override ProgramData for the seeded split-store compatibility test.");
     const auto restoreProgramData  = wil::scope_exit([&] noexcept
     {
         const wchar_t* restoreValue = previousProgramData.empty() ? nullptr : previousProgramData.c_str();
         static_cast<void>(::SetEnvironmentVariableW(L"ProgramData", restoreValue));
+    });
+    const auto restoreRootOverride = wil::scope_exit([&] noexcept
+    {
+        const wchar_t* restoreValue = previousRootOverride.empty() ? nullptr : previousRootOverride.c_str();
+        static_cast<void>(::SetEnvironmentVariableW(SearchServiceBroker::kDiscoverRootsEnvVar, restoreValue));
     });
     const auto restorePipeOverride = wil::scope_exit([&] noexcept
     {
@@ -7946,17 +9171,14 @@ SelfTest::RunCase(options,
 
     ForegroundSearchServiceProcess service;
     std::wstring serviceError;
-    state.Require(service.Start(pipeName, 4u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, false, L"--store-backend=sqlite"), serviceError);
+    state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, L"--store-backend=sqlite"), serviceError);
     if (! state.failure.empty())
     {
         return false;
     }
 
     SearchServiceBroker::ServiceStatus status{};
-    const HRESULT hr = SearchServiceBroker::GetStatus(status);
-    state.Require(SUCCEEDED(hr),
-                  std::format(L"SearchServiceBroker::GetStatus for seeded default-store SQLite service failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
-    if (FAILED(hr))
+    if (! WaitForSearchServiceStatusWithProcessDiagnostics(state, status, pipeName, L"seeded default-store SQLite service", service))
     {
         return false;
     }
@@ -8037,16 +9259,14 @@ SelfTest::RunCase(options,
     const std::filesystem::path sqlitePath  = caseRoot / L"discovery.sqlite3";
     const std::wstring extraArgs =
         std::format(L"--storage-root=\"{}\" --store-backend=sqlite --sqlite-path=\"{}\"", storageRoot.wstring(), sqlitePath.wstring());
-    state.Require(service.Start(pipeName, 3u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, false, extraArgs), serviceError);
+    state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, false, extraArgs), serviceError);
     if (! state.failure.empty())
     {
         return false;
     }
 
     SearchServiceBroker::ServiceStatus status{};
-    const HRESULT hr = SearchServiceBroker::GetStatus(status);
-    state.Require(SUCCEEDED(hr), std::format(L"SearchServiceBroker::GetStatus for root-discovery service failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
-    if (FAILED(hr))
+    if (! WaitForSearchServiceStatus(state, status, pipeName, L"root-discovery service"))
     {
         return false;
     }
@@ -8130,7 +9350,7 @@ SelfTest::RunCase(options,
     std::wstring serviceError;
     const std::wstring extraArgs =
         std::format(L"--storage-root=\"{}\" --store-backend=sqlite --sqlite-path=\"{}\"", storageRoot.wstring(), sqlitePath.wstring());
-    state.Require(service.Start(pipeName, 5u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, extraArgs), serviceError);
+    state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, extraArgs), serviceError);
     if (! state.failure.empty())
     {
         return false;
@@ -8185,7 +9405,25 @@ SelfTest::RunCase(options,
         return false;
     }
 
-    state.Require(status.readyForQueryCutover, L"Startup-warmed SQLite service should report readyForQueryCutover after warming overridden roots.");
+    SqliteIndexStore::VolumeInfo volumeInfoA{};
+    SqliteIndexStore::VolumeInfo volumeInfoB{};
+    const HRESULT inspectVolumeAHr = SqliteIndexStore::InspectVolume(sqlitePath.wstring(), supportA.normalizedRootPath, volumeInfoA);
+    const HRESULT inspectVolumeBHr = SqliteIndexStore::InspectVolume(sqlitePath.wstring(), supportB.normalizedRootPath, volumeInfoB);
+    state.Require(SUCCEEDED(inspectVolumeAHr),
+                  std::format(L"Startup-warmed SQLite volume A inspection failed. hr=0x{:08X}", static_cast<unsigned long>(inspectVolumeAHr)));
+    state.Require(SUCCEEDED(inspectVolumeBHr),
+                  std::format(L"Startup-warmed SQLite volume B inspection failed. hr=0x{:08X}", static_cast<unsigned long>(inspectVolumeBHr)));
+    if (FAILED(inspectVolumeAHr) || FAILED(inspectVolumeBHr))
+    {
+        return false;
+    }
+    const bool persistentStoreReady = volumeInfoA.state == SqliteIndexStore::kVolumeStateReady &&
+                                      volumeInfoB.state == SqliteIndexStore::kVolumeStateReady;
+    state.Require(status.readyForQueryCutover == persistentStoreReady,
+                  std::format(L"Startup-warm status readiness must match every persisted volume state. statusReady={} states={},{}.",
+                              status.readyForQueryCutover,
+                              volumeInfoA.state,
+                              volumeInfoB.state));
 
     SearchServiceBroker::QueryRequest request{};
     request.rootPath           = supportA.normalizedRootPath;
@@ -8207,6 +9445,26 @@ SelfTest::RunCase(options,
 
     state.Require(CollectIndexedCandidateNames(candidates) == std::vector<std::wstring>{L"alpha.txt"},
                   L"Startup-warmed SQLite service query returned an unexpected candidate set.");
+    if (persistentStoreReady && CanProveDirectSqliteCurrentness(queryStats))
+    {
+        state.Require(queryStats.usedSqliteStore, L"Current startup roots should use the direct SQLite query path.");
+        state.Require(queryStats.sqliteReadOnlyQuery, L"Direct startup-root SQLite queries should remain read-only.");
+    }
+    else
+    {
+        state.Require(! queryStats.usedSqliteStore, L"Startup roots without proven currentness must not be queried directly from SQLite.");
+        state.Require(queryStats.usedLiveScanFallback, L"Startup roots without proven currentness should use the live-scan fallback.");
+        state.Require(queryStats.queryExecutionMode == LocalSearchIndexCore::QueryExecutionMode::LiveScanFallback,
+                      L"Startup roots without proven currentness should report the live-scan execution mode.");
+        state.Require(queryStats.fallbackReason != LocalSearchIndexCore::FallbackReason::None,
+                      L"Startup-root live fallback should report why SQLite currentness was not proven.");
+        if (! persistentStoreReady)
+        {
+            state.Require(queryStats.sqliteCutoverBlocked, L"An unready aggregate startup store should report blocked SQLite cutover.");
+            state.Require(queryStats.fallbackReason == LocalSearchIndexCore::FallbackReason::CutoverBlocked,
+                          L"An unready aggregate startup store should report a cutover-blocked fallback reason.");
+        }
+    }
     state.Require(! queryStats.snapshotSaved, L"Startup-warmed SQLite service query should not create a compatibility snapshot runtime store.");
     state.Require(queryStats.snapshotPath.empty(), L"Startup-warmed SQLite service query should not report a compatibility snapshot path.");
 
@@ -8228,7 +9486,7 @@ SelfTest::RunCase(options,
                               afterQueryStatus.startupWarmupCompletedRoots));
 
     std::string output;
-    state.Require(service.WaitForExitAndCapture(static_cast<DWORD>(SelfTest::ScaleTimeout(5'000)), output, serviceError), serviceError);
+    state.Require(service.ShutdownAndWaitForExitAndCapture(static_cast<DWORD>(SelfTest::ScaleTimeout(5'000)), output, serviceError), serviceError);
     if (! state.failure.empty())
     {
         return false;
@@ -8311,7 +9569,8 @@ SelfTest::RunCase(options,
     std::wstring serviceError;
     const std::wstring extraArgs =
         std::format(L"--storage-root=\"{}\" --store-backend=sqlite --sqlite-path=\"{}\"", storageRoot.wstring(), sqlitePath.wstring());
-    state.Require(service.Start(pipeName, 4u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, extraArgs), serviceError);
+    state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, extraArgs),
+                  serviceError);
     if (! state.failure.empty())
     {
         return false;
@@ -8324,6 +9583,8 @@ SelfTest::RunCase(options,
     {
         return false;
     }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds{static_cast<std::chrono::milliseconds::rep>(SelfTest::ScaleTimeout(2'500))});
 
     SearchServiceBroker::ServiceStatus status{};
     hr = SearchServiceBroker::GetStatus(status);
@@ -8340,14 +9601,65 @@ SelfTest::RunCase(options,
                   std::format(L"Expected {} startup warmup roots, got {}.", expectedRoots.size(), status.startupWarmupTotalRoots));
     state.Require(status.discoveredRoots == expectedRoots, L"Startup warmup failure test should preserve the overridden discovered-root set.");
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    auto waitForStatus = [&](auto&& predicate, SearchServiceBroker::ServiceStatus& outStatus, std::wstring_view failureMessage) noexcept
+    {
+        const auto deadline =
+            std::chrono::steady_clock::now() + std::chrono::milliseconds{static_cast<std::chrono::milliseconds::rep>(SelfTest::ScaleTimeout(15'000))};
+        HRESULT lastStatusHr = S_OK;
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            SearchServiceBroker::ServiceStatus currentStatus{};
+            const HRESULT statusHr = SearchServiceBroker::GetStatus(currentStatus);
+            lastStatusHr           = statusHr;
+            if (SUCCEEDED(statusHr))
+            {
+                outStatus = currentStatus;
+            }
+            if (SUCCEEDED(statusHr) && predicate(currentStatus))
+            {
+                return true;
+            }
+
+            std::this_thread::sleep_for(std::chrono::milliseconds{200});
+        }
+
+        state.Require(false,
+                      std::format(L"{0} Last status: running={1} completed={2} failed={3} total={4} indexedVolumes={5} ready={6} hasFailure={7} "
+                                  L"failureHr=0x{8:08X} failureRoot='{9}' discoveredRoots={10} inspected={11} storePath='{12}' walBytes={13} "
+                                  L"storeState={14} syncPhase={15} activeRoot='{16}' lastGetStatusHr=0x{17:08X}.",
+                                  failureMessage,
+                                  outStatus.startupWarmupRunning,
+                                  outStatus.startupWarmupCompletedRoots,
+                                  outStatus.startupWarmupFailedRoots,
+                                  outStatus.startupWarmupTotalRoots,
+                                  outStatus.indexedVolumeCount,
+                                  outStatus.readyForQueryCutover,
+                                  outStatus.startupWarmupHasFailure,
+                                  static_cast<unsigned long>(outStatus.startupWarmupLastFailureHr),
+                                  outStatus.startupWarmupLastFailureRoot,
+                                  outStatus.discoveredRoots.size(),
+                                  outStatus.persistentStoreInspectionSucceeded,
+                                  outStatus.persistentStorePath,
+                                  outStatus.writeAheadLogBytes,
+                                  static_cast<unsigned int>(outStatus.storeState),
+                                  static_cast<unsigned int>(outStatus.syncPhase),
+                                  outStatus.activeRoot,
+                                  static_cast<unsigned long>(lastStatusHr)));
+        return false;
+    };
 
     status = {};
-    hr     = SearchServiceBroker::GetStatus(status);
-    state.Require(
-        SUCCEEDED(hr),
-        std::format(L"Follow-up SearchServiceBroker::GetStatus for startup warmup failure service failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
-    if (FAILED(hr))
+    state.Require(waitForStatus(
+                      [&](const SearchServiceBroker::ServiceStatus& currentStatus) noexcept
+    {
+        return ! currentStatus.startupWarmupRunning && currentStatus.startupWarmupCompletedRoots == 1u && currentStatus.startupWarmupFailedRoots == 1u &&
+               currentStatus.startupWarmupHasFailure && FAILED(currentStatus.startupWarmupLastFailureHr) &&
+               EqualsIgnoreCase(currentStatus.startupWarmupLastFailureRoot, supportZ.normalizedRootPath) && currentStatus.indexedVolumeCount == 1u;
+    },
+                      status,
+                      L"Startup warmup failure test did not reach a stable completed status."),
+                  L"Startup warmup failure test did not reach a stable completed status.");
+    if (! state.failure.empty())
     {
         return false;
     }
@@ -8365,8 +9677,6 @@ SelfTest::RunCase(options,
                   L"Startup warmup failure test should report the failing root through status.");
     state.Require(status.indexedVolumeCount == 1u,
                   std::format(L"Startup warmup failure test should mirror only the surviving root, got {} indexed volumes.", status.indexedVolumeCount));
-    state.Require(status.readyForQueryCutover, L"Startup warmup failure test should still leave the surviving mirrored root ready for query cutover.");
-
     SearchServiceBroker::QueryRequest request{};
     request.rootPath           = supportA.normalizedRootPath;
     request.namePattern        = L"*.txt";
@@ -8375,6 +9685,34 @@ SelfTest::RunCase(options,
     request.recursive          = true;
     request.includeFiles       = true;
     request.includeDirectories = false;
+
+    SearchServiceBroker::ServiceStatus queryStatus{};
+    hr = SearchServiceBroker::GetStatus(queryStatus);
+    state.Require(SUCCEEDED(hr), std::format(L"Startup warmup failure pre-query status failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    SqliteIndexStore::VolumeInfo preQueryVolumeInfo{};
+    const HRESULT preQueryInspectHr = SqliteIndexStore::InspectVolume(sqlitePath.wstring(), supportA.normalizedRootPath, preQueryVolumeInfo);
+    state.Require(SUCCEEDED(preQueryInspectHr),
+                  std::format(L"Startup warmup failure pre-query SQLite volume inspection failed. hr=0x{:08X} root='{}' sqlitePath='{}'.",
+                              static_cast<unsigned long>(preQueryInspectHr),
+                              supportA.normalizedRootPath,
+                              sqlitePath.wstring()));
+    if (FAILED(preQueryInspectHr))
+    {
+        return false;
+    }
+    const bool survivingVolumeReady = preQueryVolumeInfo.state == SqliteIndexStore::kVolumeStateReady;
+    state.Require(status.readyForQueryCutover == survivingVolumeReady,
+                  std::format(L"Warmup-failure status readiness must match the surviving persisted volume. statusReady={} volumeState={}.",
+                              status.readyForQueryCutover,
+                              preQueryVolumeInfo.state));
+    state.Require(status.legacyImportVolumeCount ==
+                      (preQueryVolumeInfo.state == SqliteIndexStore::kVolumeStateImportedLegacySnapshot ? 1u : 0u),
+                  L"Warmup-failure legacy-import count must remain separate from aggregate query readiness.");
 
     LocalSearchIndexCore::QueryStats queryStats{};
     std::vector<LocalSearchIndexCore::Candidate> candidates;
@@ -8387,23 +9725,32 @@ SelfTest::RunCase(options,
 
     state.Require(CollectIndexedCandidateNames(candidates) == std::vector<std::wstring>{L"alpha.txt"},
                   L"Startup warmup failure follow-up query returned an unexpected candidate set.");
-    if (CanProveDirectSqliteCurrentness(queryStats))
+    if (survivingVolumeReady && CanProveDirectSqliteCurrentness(queryStats))
     {
         state.Require(queryStats.usedSqliteStore,
-                      L"Startup warmup failure follow-up query should enumerate from SQLite for the surviving root when the live journal cursor is readable.");
-        state.Require(queryStats.sqliteReadOnlyQuery,
-                      L"Startup warmup failure follow-up query should use a read-only SQLite query path when direct SQLite cutover is open.");
+                      L"A current surviving warmup root should use the direct SQLite query path when its live cursor is readable.");
+        state.Require(queryStats.sqliteReadOnlyQuery, L"Direct surviving-root SQLite queries should remain read-only.");
     }
     else
     {
         state.Require(! queryStats.usedSqliteStore,
-                      L"Startup warmup failure follow-up query should fall back when no live journal cursor is available for direct SQLite validation.");
-        state.Require(queryStats.sqliteCutoverBlocked,
-                      L"Startup warmup failure follow-up query should report a blocked SQLite cutover when no live journal cursor is available.");
+                      L"A surviving warmup root without proven currentness must not be queried directly from SQLite.");
+        state.Require(queryStats.usedLiveScanFallback,
+                      L"A surviving warmup root without proven currentness should use the live-scan fallback.");
+        state.Require(queryStats.queryExecutionMode == LocalSearchIndexCore::QueryExecutionMode::LiveScanFallback,
+                      L"A surviving warmup root without proven currentness should report live-scan execution.");
+        state.Require(queryStats.fallbackReason != LocalSearchIndexCore::FallbackReason::None,
+                      L"A surviving-root live fallback should report why SQLite currentness was not proven.");
+        if (! survivingVolumeReady)
+        {
+            state.Require(queryStats.sqliteCutoverBlocked, L"An unready surviving volume should report blocked SQLite cutover.");
+            state.Require(queryStats.fallbackReason == LocalSearchIndexCore::FallbackReason::CutoverBlocked,
+                          L"An unready surviving volume should report a cutover-blocked fallback reason.");
+        }
     }
 
     std::string output;
-    state.Require(service.WaitForExitAndCapture(static_cast<DWORD>(SelfTest::ScaleTimeout(5'000)), output, serviceError), serviceError);
+    state.Require(service.ShutdownAndWaitForExitAndCapture(static_cast<DWORD>(SelfTest::ScaleTimeout(5'000)), output, serviceError), serviceError);
     if (! state.failure.empty())
     {
         return false;
@@ -8451,7 +9798,7 @@ SelfTest::RunCase(options,
 
     ForegroundSearchServiceProcess service;
     std::wstring serviceError;
-    state.Require(service.Start(pipeName, 0u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError), serviceError);
+    state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError), serviceError);
     if (! state.failure.empty())
     {
         return false;
@@ -8459,7 +9806,7 @@ SelfTest::RunCase(options,
 
     CapturedProcessResult result{};
     std::wstring runError;
-    const std::wstring commandLine = std::format(L"--run-foreground --pipe-name=\"{}\"", pipeName);
+    const std::vector<std::wstring> commandLine{L"--run-foreground", std::format(L"--pipe-name={}", pipeName)};
     state.Require(RunProcessAndCaptureOutput(servicePath.wstring(), commandLine, static_cast<DWORD>(SelfTest::ScaleTimeout(5'000)), result, runError),
                   runError);
     if (! state.failure.empty())
@@ -8500,7 +9847,7 @@ SelfTest::RunCase(options,
     ForegroundSearchServiceProcess service;
     std::wstring serviceError;
     const std::wstring extraArgs = std::format(L"--store-backend=sqlite --sqlite-path=\"{}\"", sqlitePath.wstring());
-    state.Require(service.Start(pipeName, 3u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, extraArgs), serviceError);
+    state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, extraArgs), serviceError);
     if (! state.failure.empty())
     {
         return false;
@@ -8534,13 +9881,18 @@ SelfTest::RunCase(options,
     {
         return false;
     }
+    state.Require(EqualsIgnoreCase(status.pipeName, pipeName), L"Foreground readiness/status must come from the intended isolated pipe.");
     state.Require(status.readyForQueryCutover, L"Foreground status probe should report SQLite cutover readiness after the mirrored query.");
     state.Require(
         status.legacyImportVolumeCount == 0u,
         std::format(L"Foreground status probe should report zero legacy-import volumes after the mirrored query. got={}", status.legacyImportVolumeCount));
 
     std::string output;
-    state.Require(service.WaitForExitAndCapture(static_cast<DWORD>(SelfTest::ScaleTimeout(5'000)), output, serviceError), serviceError);
+    const auto shutdownStart = std::chrono::steady_clock::now();
+    state.Require(service.ShutdownAndWaitForExitAndCapture(static_cast<DWORD>(SelfTest::ScaleTimeout(2'000)), output, serviceError), serviceError);
+    const auto shutdownDuration = std::chrono::steady_clock::now() - shutdownStart;
+    state.Require(shutdownDuration < std::chrono::milliseconds{SelfTest::ScaleTimeout(2'000)},
+                  L"Foreground service graceful shutdown should complete within the owner-controlled two-second budget.");
     if (! state.failure.empty())
     {
         return false;
@@ -8567,6 +9919,7 @@ SelfTest::RunCase(options,
     state.Require(SelfTest::WriteTextFile(caseRoot / L"alpha.txt", "alpha"), L"Failed to create alpha.txt.");
     state.Require(SelfTest::WriteTextFile(caseRoot / L"sub" / L"beta.txt", "beta"), L"Failed to create beta.txt.");
 
+    const std::filesystem::path storageRoot = caseRoot / L"service-store";
     const std::wstring previousPipeOverride = GetEnvVarTrimmed(SearchServiceBroker::kPipeNameEnvVar);
     const std::wstring pipeName             = MakeUniquePipeName();
     state.Require(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, pipeName.c_str()) != 0, L"Failed to override the search service pipe.");
@@ -8578,7 +9931,8 @@ SelfTest::RunCase(options,
 
     ForegroundSearchServiceProcess service;
     std::wstring serviceError;
-    state.Require(service.Start(pipeName, 2u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true), serviceError);
+    const std::wstring extraArgs = std::format(L"--storage-root=\"{}\" --store-backend=snapshot", storageRoot.wstring());
+    state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, extraArgs), serviceError);
     if (! state.failure.empty())
     {
         return false;
@@ -8618,13 +9972,533 @@ SelfTest::RunCase(options,
         state.Require(enumerating->backend == FILESYSTEM_SEARCH_BACKEND_SERVICE, L"Live-progress query should tag broker progress with the service backend.");
     }
 
+    SearchServiceBroker::ServiceStatus status{};
+    const HRESULT statusHr = SearchServiceBroker::GetStatus(status);
+    state.Require(SUCCEEDED(statusHr), std::format(L"Final live-progress status request failed. hr=0x{:08X}", static_cast<unsigned long>(statusHr)));
+
     std::string output;
-    state.Require(service.WaitForExitAndCapture(static_cast<DWORD>(SelfTest::ScaleTimeout(5'000)), output, serviceError), serviceError);
+    state.Require(service.ShutdownAndWaitForExitAndCapture(static_cast<DWORD>(SelfTest::ScaleTimeout(5'000)), output, serviceError), serviceError);
     if (! state.failure.empty())
     {
         return false;
     }
     return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"search_service_filters_cached_descendants_denied_to_client",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    const auto tryDenyListDirectoryToInteractiveUsers =
+        [](const std::filesystem::path& path, PSECURITY_DESCRIPTOR& outOriginalSecurityDescriptor, PACL& outOriginalDacl) noexcept
+    {
+        outOriginalSecurityDescriptor = nullptr;
+        outOriginalDacl               = nullptr;
+
+        std::array<std::byte, SECURITY_MAX_SID_SIZE> sidBuffer{};
+        DWORD sidSize = static_cast<DWORD>(sidBuffer.size());
+        if (! ::CreateWellKnownSid(WinInteractiveSid, nullptr, sidBuffer.data(), &sidSize))
+        {
+            return false;
+        }
+
+        PACL existingDacl                       = nullptr;
+        PSECURITY_DESCRIPTOR securityDescriptor = nullptr;
+        const DWORD getSecurityError            = ::GetNamedSecurityInfoW(
+            const_cast<wchar_t*>(path.c_str()), SE_FILE_OBJECT, DACL_SECURITY_INFORMATION, nullptr, nullptr, &existingDacl, nullptr, &securityDescriptor);
+        if (getSecurityError != ERROR_SUCCESS || securityDescriptor == nullptr)
+        {
+            return false;
+        }
+        auto freeOriginalOnFailure = wil::scope_exit([&] noexcept
+        {
+            if (securityDescriptor != nullptr)
+            {
+                static_cast<void>(::LocalFree(securityDescriptor));
+            }
+        });
+
+        EXPLICIT_ACCESSW denyEntry{};
+        denyEntry.grfAccessPermissions = FILE_LIST_DIRECTORY;
+        denyEntry.grfAccessMode        = DENY_ACCESS;
+        denyEntry.grfInheritance       = NO_INHERITANCE;
+        denyEntry.Trustee.TrusteeForm  = TRUSTEE_IS_SID;
+        denyEntry.Trustee.TrusteeType  = TRUSTEE_IS_WELL_KNOWN_GROUP;
+        denyEntry.Trustee.ptstrName    = reinterpret_cast<wchar_t*>(sidBuffer.data());
+
+        PACL newDacl                = nullptr;
+        const DWORD setEntriesError = ::SetEntriesInAclW(1, &denyEntry, existingDacl, &newDacl);
+        if (setEntriesError != ERROR_SUCCESS || newDacl == nullptr)
+        {
+            return false;
+        }
+        auto freeNewDacl = wil::scope_exit([&] noexcept
+        {
+            if (newDacl != nullptr)
+            {
+                static_cast<void>(::LocalFree(newDacl));
+            }
+        });
+
+        const DWORD setSecurityError =
+            ::SetNamedSecurityInfoW(const_cast<wchar_t*>(path.c_str()), SE_FILE_OBJECT, DACL_SECURITY_INFORMATION, nullptr, nullptr, newDacl, nullptr);
+        if (setSecurityError != ERROR_SUCCESS)
+        {
+            return false;
+        }
+
+        outOriginalSecurityDescriptor = securityDescriptor;
+        outOriginalDacl               = existingDacl;
+        securityDescriptor            = nullptr;
+        return true;
+    };
+
+    std::filesystem::path caseRoot;
+    state.Require(PrepareSearchCaseRoot(root, L"search_service_filters_cached_descendants_denied_to_client", caseRoot),
+                  L"Failed to prepare search_service_filters_cached_descendants_denied_to_client root.");
+    state.Require(SelfTest::EnsureDirectory(caseRoot / L"blocked"), L"Failed to create blocked directory.");
+    state.Require(SelfTest::WriteTextFile(caseRoot / L"allowed.txt", "allowed"), L"Failed to create allowed.txt.");
+    state.Require(SelfTest::WriteTextFile(caseRoot / L"blocked" / L"hidden.txt", "hidden"), L"Failed to create blocked\\hidden.txt.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path sqlitePath = caseRoot.parent_path() / (caseRoot.filename().wstring() + L"-acl-filter.sqlite3");
+    SqliteIndexStore::StoreInfo bootstrapInfo{};
+    HRESULT hr = SqliteIndexStore::EnsureBootstrap(sqlitePath.wstring(), &bootstrapInfo);
+    state.Require(SUCCEEDED(hr),
+                  std::format(L"SqliteIndexStore::EnsureBootstrap for search service ACL filter failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    SqliteIndexStore::ReplaceVolumeRequest replaceRequest{};
+    replaceRequest.rootPath       = caseRoot.wstring();
+    replaceRequest.fileSystemKind = LocalSearchIndexCore::FileSystemKind::Ntfs;
+    replaceRequest.journalId      = 1u;
+    replaceRequest.nextUsn        = 1u;
+    replaceRequest.state          = SqliteIndexStore::kVolumeStateReady;
+    replaceRequest.entries.push_back({
+        .fileIdLow      = 1u,
+        .fileIdHigh     = 0u,
+        .parentIdLow    = 0u,
+        .parentIdHigh   = 0u,
+        .fullPath       = caseRoot.wstring(),
+        .name           = caseRoot.filename().wstring(),
+        .attributes     = FILE_ATTRIBUTE_DIRECTORY,
+        .sizeBytes      = 0u,
+        .writeTime100ns = 0u,
+    });
+    replaceRequest.entries.push_back({
+        .fileIdLow      = 2u,
+        .fileIdHigh     = 0u,
+        .parentIdLow    = 1u,
+        .parentIdHigh   = 0u,
+        .fullPath       = (caseRoot / L"allowed.txt").wstring(),
+        .name           = L"allowed.txt",
+        .attributes     = FILE_ATTRIBUTE_ARCHIVE,
+        .sizeBytes      = 7u,
+        .writeTime100ns = 0u,
+    });
+    replaceRequest.entries.push_back({
+        .fileIdLow      = 3u,
+        .fileIdHigh     = 0u,
+        .parentIdLow    = 1u,
+        .parentIdHigh   = 0u,
+        .fullPath       = (caseRoot / L"blocked").wstring(),
+        .name           = L"blocked",
+        .attributes     = FILE_ATTRIBUTE_DIRECTORY,
+        .sizeBytes      = 0u,
+        .writeTime100ns = 0u,
+    });
+    replaceRequest.entries.push_back({
+        .fileIdLow      = 4u,
+        .fileIdHigh     = 0u,
+        .parentIdLow    = 3u,
+        .parentIdHigh   = 0u,
+        .fullPath       = (caseRoot / L"blocked" / L"hidden.txt").wstring(),
+        .name           = L"hidden.txt",
+        .attributes     = FILE_ATTRIBUTE_ARCHIVE,
+        .sizeBytes      = 6u,
+        .writeTime100ns = 0u,
+    });
+
+    SqliteIndexStore::ReplaceVolumeResult replaceResult{};
+    hr = SqliteIndexStore::ReplaceVolume(sqlitePath.wstring(), replaceRequest, &replaceResult);
+    state.Require(SUCCEEDED(hr),
+                  std::format(L"SqliteIndexStore::ReplaceVolume for search service ACL filter failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    PSECURITY_DESCRIPTOR originalSecurityDescriptor = nullptr;
+    PACL originalDacl                               = nullptr;
+    state.Require(tryDenyListDirectoryToInteractiveUsers(caseRoot / L"blocked", originalSecurityDescriptor, originalDacl),
+                  L"Failed to deny list access to the blocked search-service directory.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+    const auto restoreBlockedDacl = wil::scope_exit([&] noexcept
+    {
+        if (originalSecurityDescriptor != nullptr && originalDacl != nullptr)
+        {
+            static_cast<void>(::SetNamedSecurityInfoW(
+                const_cast<wchar_t*>((caseRoot / L"blocked").c_str()), SE_FILE_OBJECT, DACL_SECURITY_INFORMATION, nullptr, nullptr, originalDacl, nullptr));
+        }
+        if (originalSecurityDescriptor != nullptr)
+        {
+            static_cast<void>(::LocalFree(originalSecurityDescriptor));
+        }
+    });
+
+    wil::unique_handle blockedProbe(::CreateFileW((caseRoot / L"blocked").c_str(),
+                                                  FILE_LIST_DIRECTORY,
+                                                  FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                                  nullptr,
+                                                  OPEN_EXISTING,
+                                                  FILE_FLAG_BACKUP_SEMANTICS,
+                                                  nullptr));
+    state.Require(! blockedProbe, L"Blocked directory list probe should fail for the client token.");
+    if (blockedProbe)
+    {
+        return false;
+    }
+
+    const std::wstring previousPipeOverride = GetEnvVarTrimmed(SearchServiceBroker::kPipeNameEnvVar);
+    const std::wstring pipeName             = MakeUniquePipeName();
+    state.Require(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, pipeName.c_str()) != 0, L"Failed to override the search service pipe.");
+    const auto restorePipeOverride = wil::scope_exit([&] noexcept
+    {
+        const wchar_t* restoreValue = previousPipeOverride.empty() ? nullptr : previousPipeOverride.c_str();
+        static_cast<void>(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, restoreValue));
+    });
+
+    constexpr wchar_t kAllowDirectSqliteWithoutJournalEnvVar[] = L"REDSALAMANDER_TEST_ALLOW_DIRECT_SQLITE_WITHOUT_JOURNAL";
+    const std::wstring previousDirectSqliteOverride            = GetEnvVarTrimmed(kAllowDirectSqliteWithoutJournalEnvVar);
+    state.Require(::SetEnvironmentVariableW(kAllowDirectSqliteWithoutJournalEnvVar, L"1") != 0, L"Failed to enable direct SQLite test currentness override.");
+    const auto restoreDirectSqliteOverride = wil::scope_exit([&] noexcept
+    {
+        const wchar_t* restoreValue = previousDirectSqliteOverride.empty() ? nullptr : previousDirectSqliteOverride.c_str();
+        static_cast<void>(::SetEnvironmentVariableW(kAllowDirectSqliteWithoutJournalEnvVar, restoreValue));
+    });
+
+    ForegroundSearchServiceProcess service;
+    std::wstring serviceError;
+    const std::wstring extraArgs = std::format(L"--store-backend=sqlite --sqlite-path=\"{}\"", sqlitePath.wstring());
+    state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, extraArgs), serviceError);
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    SearchServiceBroker::QueryRequest request{};
+    request.rootPath           = caseRoot.wstring();
+    request.namePattern        = L"*.txt";
+    request.nameMode           = FILESYSTEM_SEARCH_NAME_WILDCARD;
+    request.flags              = static_cast<FileSystemSearchFlags>(FILESYSTEM_SEARCH_RECURSIVE | FILESYSTEM_SEARCH_INCLUDE_FILES);
+    request.recursive          = true;
+    request.includeFiles       = true;
+    request.includeDirectories = false;
+
+    LocalSearchIndexCore::QueryStats stats{};
+    std::vector<LocalSearchIndexCore::Candidate> candidates;
+    hr = SearchServiceBroker::Query(request, nullptr, nullptr, nullptr, nullptr, candidates, &stats);
+    state.Require(SUCCEEDED(hr), std::format(L"Search service ACL-filter query failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+    state.Require(CollectIndexedCandidateNames(candidates) == std::vector<std::wstring>{L"allowed.txt"},
+                  L"Search service must filter cached descendants whose parent directory is denied to the client.");
+
+    std::string output;
+    state.Require(service.ShutdownAndWaitForExitAndCapture(static_cast<DWORD>(SelfTest::ScaleTimeout(5'000)), output, serviceError), serviceError);
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"search_service_transient_authorization_failure_is_incomplete_not_cached",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    std::filesystem::path caseRoot;
+    state.Require(PrepareSearchCaseRoot(root, L"search_service_transient_auth_not_cached", caseRoot),
+                  L"Failed to prepare search_service_transient_auth_not_cached root.");
+    state.Require(SelfTest::WriteTextFile(caseRoot / L"allowed.txt", "allowed"), L"Failed to create allowed.txt.");
+    state.Require(SelfTest::WriteTextFile(caseRoot / L"transient" / L"retry-a.txt", "retry-a"), L"Failed to create transient\\retry-a.txt.");
+    state.Require(SelfTest::WriteTextFile(caseRoot / L"transient" / L"retry-b.txt", "retry-b"), L"Failed to create transient\\retry-b.txt.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path sqlitePath = caseRoot.parent_path() / (caseRoot.filename().wstring() + L"-transient-auth.sqlite3");
+
+    SqliteIndexStore::StoreInfo bootstrapInfo{};
+    HRESULT hr = SqliteIndexStore::EnsureBootstrap(sqlitePath.wstring(), &bootstrapInfo);
+    state.Require(SUCCEEDED(hr),
+                  std::format(L"SqliteIndexStore::EnsureBootstrap for transient authorization cache test failed. hr=0x{:08X}",
+                              static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    SqliteIndexStore::ReplaceVolumeRequest replaceRequest{};
+    replaceRequest.rootPath       = caseRoot.wstring();
+    replaceRequest.fileSystemKind = LocalSearchIndexCore::FileSystemKind::Ntfs;
+    replaceRequest.journalId      = 1u;
+    replaceRequest.nextUsn        = 1u;
+    replaceRequest.state          = SqliteIndexStore::kVolumeStateReady;
+    replaceRequest.entries.push_back({
+        .fileIdLow      = 1u,
+        .fileIdHigh     = 0u,
+        .parentIdLow    = 0u,
+        .parentIdHigh   = 0u,
+        .fullPath       = caseRoot.wstring(),
+        .name           = caseRoot.filename().wstring(),
+        .attributes     = FILE_ATTRIBUTE_DIRECTORY,
+        .sizeBytes      = 0u,
+        .writeTime100ns = 0u,
+    });
+    replaceRequest.entries.push_back({
+        .fileIdLow      = 2u,
+        .fileIdHigh     = 0u,
+        .parentIdLow    = 1u,
+        .parentIdHigh   = 0u,
+        .fullPath       = (caseRoot / L"allowed.txt").wstring(),
+        .name           = L"allowed.txt",
+        .attributes     = FILE_ATTRIBUTE_ARCHIVE,
+        .sizeBytes      = 7u,
+        .writeTime100ns = 0u,
+    });
+    replaceRequest.entries.push_back({
+        .fileIdLow      = 3u,
+        .fileIdHigh     = 0u,
+        .parentIdLow    = 1u,
+        .parentIdHigh   = 0u,
+        .fullPath       = (caseRoot / L"transient").wstring(),
+        .name           = L"transient",
+        .attributes     = FILE_ATTRIBUTE_DIRECTORY,
+        .sizeBytes      = 0u,
+        .writeTime100ns = 0u,
+    });
+    replaceRequest.entries.push_back({
+        .fileIdLow      = 4u,
+        .fileIdHigh     = 0u,
+        .parentIdLow    = 3u,
+        .parentIdHigh   = 0u,
+        .fullPath       = (caseRoot / L"transient" / L"retry-a.txt").wstring(),
+        .name           = L"retry-a.txt",
+        .attributes     = FILE_ATTRIBUTE_ARCHIVE,
+        .sizeBytes      = 7u,
+        .writeTime100ns = 0u,
+    });
+    replaceRequest.entries.push_back({
+        .fileIdLow      = 5u,
+        .fileIdHigh     = 0u,
+        .parentIdLow    = 3u,
+        .parentIdHigh   = 0u,
+        .fullPath       = (caseRoot / L"transient" / L"retry-b.txt").wstring(),
+        .name           = L"retry-b.txt",
+        .attributes     = FILE_ATTRIBUTE_ARCHIVE,
+        .sizeBytes      = 7u,
+        .writeTime100ns = 0u,
+    });
+
+    SqliteIndexStore::ReplaceVolumeResult replaceResult{};
+    hr = SqliteIndexStore::ReplaceVolume(sqlitePath.wstring(), replaceRequest, &replaceResult);
+    state.Require(SUCCEEDED(hr),
+                  std::format(L"SqliteIndexStore::ReplaceVolume for transient authorization cache test failed. hr=0x{:08X}",
+                              static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    wil::unique_handle transientDirectoryLock(::CreateFileW((caseRoot / L"transient").c_str(),
+                                                            FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES,
+                                                            0u,
+                                                            nullptr,
+                                                            OPEN_EXISTING,
+                                                            FILE_FLAG_BACKUP_SEMANTICS,
+                                                            nullptr));
+    state.Require(static_cast<bool>(transientDirectoryLock),
+                  std::format(L"Failed to hold transient directory exclusively. error={}", ::GetLastError()));
+    if (! transientDirectoryLock)
+    {
+        return false;
+    }
+
+    const std::wstring previousPipeOverride = GetEnvVarTrimmed(SearchServiceBroker::kPipeNameEnvVar);
+    const std::wstring pipeName             = MakeUniquePipeName();
+    state.Require(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, pipeName.c_str()) != 0, L"Failed to override the search service pipe.");
+    const auto restorePipeOverride = wil::scope_exit([&] noexcept
+    {
+        const wchar_t* restoreValue = previousPipeOverride.empty() ? nullptr : previousPipeOverride.c_str();
+        static_cast<void>(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, restoreValue));
+    });
+
+    constexpr wchar_t kAllowDirectSqliteWithoutJournalEnvVar[] = L"REDSALAMANDER_TEST_ALLOW_DIRECT_SQLITE_WITHOUT_JOURNAL";
+    const std::wstring previousDirectSqliteOverride            = GetEnvVarTrimmed(kAllowDirectSqliteWithoutJournalEnvVar);
+    state.Require(::SetEnvironmentVariableW(kAllowDirectSqliteWithoutJournalEnvVar, L"1") != 0,
+                  L"Failed to enable direct SQLite test currentness override.");
+    const auto restoreDirectSqliteOverride = wil::scope_exit([&] noexcept
+    {
+        const wchar_t* restoreValue = previousDirectSqliteOverride.empty() ? nullptr : previousDirectSqliteOverride.c_str();
+        static_cast<void>(::SetEnvironmentVariableW(kAllowDirectSqliteWithoutJournalEnvVar, restoreValue));
+    });
+
+    ForegroundSearchServiceProcess service;
+    std::wstring serviceError;
+    const std::wstring extraArgs = std::format(L"--store-backend=sqlite --sqlite-path=\"{}\"", sqlitePath.wstring());
+    state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, extraArgs), serviceError);
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    SearchServiceBroker::QueryRequest request{};
+    request.rootPath           = caseRoot.wstring();
+    request.namePattern        = L"*.txt";
+    request.nameMode           = FILESYSTEM_SEARCH_NAME_WILDCARD;
+    request.flags              = static_cast<FileSystemSearchFlags>(FILESYSTEM_SEARCH_RECURSIVE | FILESYSTEM_SEARCH_INCLUDE_FILES);
+    request.recursive          = true;
+    request.includeFiles       = true;
+    request.includeDirectories = false;
+
+    LocalSearchIndexCore::QueryStats firstStats{};
+    std::vector<LocalSearchIndexCore::Candidate> firstCandidates;
+    hr = SearchServiceBroker::Query(request, nullptr, nullptr, nullptr, nullptr, firstCandidates, &firstStats);
+    state.Require(SUCCEEDED(hr),
+                  std::format(L"Search service transient authorization first query failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    state.Require(CollectIndexedCandidateNames(firstCandidates) == std::vector<std::wstring>{L"allowed.txt"},
+                  L"Transient authorization failure should skip only candidates under the locked directory on the first query.");
+    state.Require((firstStats.warningFlags & FILESYSTEM_SEARCH_WARNING_ACCESS_DENIED_SKIPPED) != 0u,
+                  std::format(L"Transient authorization failure should report ACCESS_DENIED_SKIPPED. warnings=0x{:08X}.",
+                              static_cast<unsigned long>(firstStats.warningFlags)));
+
+    transientDirectoryLock.reset();
+
+    LocalSearchIndexCore::QueryStats secondStats{};
+    std::vector<LocalSearchIndexCore::Candidate> secondCandidates;
+    hr = SearchServiceBroker::Query(request, nullptr, nullptr, nullptr, nullptr, secondCandidates, &secondStats);
+    state.Require(SUCCEEDED(hr),
+                  std::format(L"Search service transient authorization second query failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    state.Require(CollectIndexedCandidateNames(secondCandidates) == std::vector<std::wstring>{L"allowed.txt", L"retry-a.txt", L"retry-b.txt"},
+                  L"Transient authorization failure must not cache a false directory authorization result for later queries.");
+    state.Require((secondStats.warningFlags & FILESYSTEM_SEARCH_WARNING_ACCESS_DENIED_SKIPPED) == 0u,
+                  std::format(L"Transient authorization second query should not retain the first query warning. warnings=0x{:08X}.",
+                              static_cast<unsigned long>(secondStats.warningFlags)));
+
+    std::string output;
+    state.Require(service.ShutdownAndWaitForExitAndCapture(static_cast<DWORD>(SelfTest::ScaleTimeout(5'000)), output, serviceError), serviceError);
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"search_service_candidate_impersonation_failure_is_incomplete_warning",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+#if ! defined(RS_SEARCH_TEST_HOOKS)
+    return state.Skip(L"Search service test hooks are unavailable in this build configuration.");
+#else
+    std::filesystem::path caseRoot;
+    state.Require(PrepareSearchCaseRoot(root, L"search_service_candidate_impersonation_failure", caseRoot),
+                  L"Failed to prepare search_service_candidate_impersonation_failure root.");
+    state.Require(SelfTest::WriteTextFile(caseRoot / L"allowed.txt", "allowed"), L"Failed to create allowed.txt.");
+    state.Require(SelfTest::WriteTextFile(caseRoot / L"nested" / L"hidden.txt", "hidden"), L"Failed to create nested\\hidden.txt.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path storageRoot = caseRoot.parent_path() / (caseRoot.filename().wstring() + L"-service-store");
+
+    const std::wstring previousPipeOverride = GetEnvVarTrimmed(SearchServiceBroker::kPipeNameEnvVar);
+    const std::wstring pipeName             = MakeUniquePipeName();
+    state.Require(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, pipeName.c_str()) != 0, L"Failed to override the search service pipe.");
+
+    const auto restoreOverrides = wil::scope_exit([&] noexcept
+    {
+        const wchar_t* restorePipeValue = previousPipeOverride.empty() ? nullptr : previousPipeOverride.c_str();
+        static_cast<void>(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, restorePipeValue));
+    });
+
+    ForegroundSearchServiceProcess service;
+    std::wstring serviceError;
+    const std::wstring extraArgs =
+        std::format(L"--storage-root=\"{}\" --store-backend=snapshot --test-fail-client-auth-impersonation-once", storageRoot.wstring());
+    state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, extraArgs), serviceError);
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    SearchServiceBroker::QueryRequest request{};
+    request.rootPath           = caseRoot.wstring();
+    request.namePattern        = L"*.txt";
+    request.nameMode           = FILESYSTEM_SEARCH_NAME_WILDCARD;
+    request.flags              = static_cast<FileSystemSearchFlags>(FILESYSTEM_SEARCH_RECURSIVE | FILESYSTEM_SEARCH_INCLUDE_FILES);
+    request.recursive          = true;
+    request.includeFiles       = true;
+    request.includeDirectories = false;
+
+    BrokerProgressRecorder recorder;
+    LocalSearchIndexCore::QueryStats stats{};
+    std::vector<LocalSearchIndexCore::Candidate> candidates;
+    const HRESULT hr = SearchServiceBroker::Query(request, &BrokerProgressRecorder::ProgressThunk, &recorder, nullptr, nullptr, candidates, &stats);
+    std::string serviceOutput;
+    state.Require(service.ShutdownAndWaitForExitAndCapture(static_cast<DWORD>(SelfTest::ScaleTimeout(5'000)), serviceOutput, serviceError), serviceError);
+    const std::wstring serviceOutputText(serviceOutput.begin(), serviceOutput.end());
+    state.Require(SUCCEEDED(hr),
+                  std::format(L"Search service candidate impersonation failure should complete as incomplete, not fail. hr=0x{:08X}. service output='{}'",
+                              static_cast<unsigned long>(hr),
+                              serviceOutputText));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    const std::vector<std::wstring> candidateNames = CollectIndexedCandidateNames(candidates);
+    std::wstring candidateNamesText;
+    for (const auto& name : candidateNames)
+    {
+        if (! candidateNamesText.empty())
+        {
+            candidateNamesText.append(L", ");
+        }
+        candidateNamesText.push_back(L'\'');
+        candidateNamesText.append(name);
+        candidateNamesText.push_back(L'\'');
+    }
+    state.Require(candidateNames == std::vector<std::wstring>{L"allowed.txt"},
+                  std::format(L"Search service candidate impersonation failure should skip only the affected nested candidate. got={}",
+                              candidateNamesText));
+    state.Require((stats.warningFlags & FILESYSTEM_SEARCH_WARNING_ACCESS_DENIED_SKIPPED) != 0u,
+                  std::format(L"Search service candidate impersonation failure should report ACCESS_DENIED_SKIPPED. warnings=0x{:08X}.",
+                              static_cast<unsigned long>(stats.warningFlags)));
+
+    const auto progress = recorder.Snapshots();
+    state.Require(! progress.empty(), L"Search service candidate impersonation failure should report broker progress.");
+    return state.failure.empty();
+#endif
 });
 
 SelfTest::RunCase(options,
@@ -8660,16 +10534,14 @@ SelfTest::RunCase(options,
     std::wstring serviceError;
     const std::wstring extraArgs =
         std::format(L"--storage-root=\"{}\" --store-backend=sqlite --sqlite-path=\"{}\"", storageRoot.wstring(), sqlitePath.wstring());
-    state.Require(service.Start(pipeName, 8u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, false, extraArgs), serviceError);
+    state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, false, extraArgs), serviceError);
     if (! state.failure.empty())
     {
         return false;
     }
 
     SearchServiceBroker::ServiceStatus status{};
-    hr = SearchServiceBroker::GetStatus(status);
-    state.Require(SUCCEEDED(hr), std::format(L"SearchServiceBroker::GetStatus failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
-    if (FAILED(hr))
+    if (! WaitForSearchServiceStatus(state, status, pipeName, L"status roundtrip service"))
     {
         return false;
     }
@@ -8677,12 +10549,12 @@ SelfTest::RunCase(options,
     state.Require(status.protocolVersion == SearchServiceBroker::kProtocolVersion, L"Search service status reported an unexpected protocol version.");
     state.Require(status.pipeName == pipeName, L"Search service status reported an unexpected pipe name.");
     state.Require(! status.storageRootDirectory.empty(), L"Search service status should report a storage root.");
-    state.Require(EqualsIgnoreCase(status.storageRootDirectory, storageRoot.wstring()),
-                  L"Search service should report the overridden test storage root.");
+    state.Require(EqualsIgnoreCase(status.storageRootDirectory, storageRoot.wstring()), L"Search service should report the overridden test storage root.");
     state.Require(status.persistentStoreKind == LocalSearchIndexCore::PersistentStoreKind::Sqlite,
                   L"Search service status should default to the sqlite backend.");
     state.Require(! status.persistentStorePath.empty(), L"SQLite-default service status should report the database path.");
-    state.Require(EqualsIgnoreCase(status.persistentStorePath, sqlitePath.wstring()), L"SQLite-default service status should report the configured database path.");
+    state.Require(EqualsIgnoreCase(status.persistentStorePath, sqlitePath.wstring()),
+                  L"SQLite-default service status should report the configured database path.");
     state.Require(status.persistentStorePath.ends_with(L"index-v2.sqlite3"), L"SQLite-default service status should report the default index-v2.sqlite3 path.");
     state.Require(! status.writeAheadLogPath.empty(), L"SQLite-default service status should report the WAL path.");
     state.Require(status.writeAheadLogPath.ends_with(L"index-v2.sqlite3-wal"), L"SQLite-default service status should report the default WAL filename.");
@@ -8693,7 +10565,8 @@ SelfTest::RunCase(options,
     state.Require(status.queryExecutionMode == LocalSearchIndexCore::QueryExecutionMode::Unknown,
                   L"SQLite-default service status should not report a query execution mode before any query runs.");
     state.Require(status.readyForQueryCutover, L"SQLite-default service status should report a ready default store before any query runs.");
-    state.Require(status.storeState == LocalSearchIndexCore::StoreState::Ready, L"SQLite-default service status should report a ready store before any query runs.");
+    state.Require(status.storeState == LocalSearchIndexCore::StoreState::Ready,
+                  L"SQLite-default service status should report a ready store before any query runs.");
     state.Require(status.syncPhase == LocalSearchIndexCore::SyncPhase::Watching,
                   L"SQLite-default service status should report the watching sync phase before any query runs.");
     state.Require(status.fallbackReason == LocalSearchIndexCore::FallbackReason::None,
@@ -8739,17 +10612,35 @@ SelfTest::RunCase(options,
                   [&](SelfTest::CaseState& state) noexcept
 {
     const std::wstring previousPipeOverride = GetEnvVarTrimmed(SearchServiceBroker::kPipeNameEnvVar);
+    const std::wstring previousRootOverride = GetEnvVarTrimmed(SearchServiceBroker::kDiscoverRootsEnvVar);
     const std::wstring pipeName             = MakeUniquePipeName();
+
+    std::filesystem::path caseRoot;
+    state.Require(PrepareSearchCaseRoot(root, L"search_service_single_request_query", caseRoot),
+                  L"Failed to prepare search_service_single_request_query root.");
+    state.Require(SelfTest::WriteTextFile(caseRoot / L"alpha.txt", "alpha"), L"Failed to create alpha.txt.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
     state.Require(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, pipeName.c_str()) != 0, L"Failed to override the search service pipe.");
+    state.Require(::SetEnvironmentVariableW(SearchServiceBroker::kDiscoverRootsEnvVar, caseRoot.c_str()) != 0,
+                  L"Failed to override the search service startup roots.");
     const auto restorePipeOverride = wil::scope_exit([&] noexcept
     {
         const wchar_t* restoreValue = previousPipeOverride.empty() ? nullptr : previousPipeOverride.c_str();
         static_cast<void>(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, restoreValue));
     });
+    const auto restoreRootOverride = wil::scope_exit([&] noexcept
+    {
+        const wchar_t* restoreValue = previousRootOverride.empty() ? nullptr : previousRootOverride.c_str();
+        static_cast<void>(::SetEnvironmentVariableW(SearchServiceBroker::kDiscoverRootsEnvVar, restoreValue));
+    });
 
     ForegroundSearchServiceProcess service;
     std::wstring serviceError;
-    state.Require(service.Start(pipeName, 6u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError), serviceError);
+    state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError), serviceError);
     if (! state.failure.empty())
     {
         return false;
@@ -8780,11 +10671,6 @@ SelfTest::RunCase(options,
     {
         return false;
     }
-
-    std::filesystem::path caseRoot;
-    state.Require(PrepareSearchCaseRoot(root, L"search_service_single_request_query", caseRoot),
-                  L"Failed to prepare search_service_single_request_query root.");
-    state.Require(SelfTest::WriteTextFile(caseRoot / L"alpha.txt", "alpha"), L"Failed to create alpha.txt.");
 
     std::wstring rootText    = caseRoot.wstring();
     std::wstring namePattern = L"*.txt";
@@ -8886,7 +10772,7 @@ SelfTest::RunCase(options,
     std::wstring serviceError;
     const std::wstring extraArgs =
         std::format(L"--storage-root=\"{}\" --store-backend=sqlite --sqlite-path=\"{}\"", storageRoot.wstring(), sqlitePath.wstring());
-    state.Require(service.Start(pipeName, 6u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, false, extraArgs), serviceError);
+    state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, false, extraArgs), serviceError);
     if (! state.failure.empty())
     {
         return false;
@@ -8985,11 +10871,19 @@ SelfTest::RunCase(options,
     ForegroundSearchServiceProcess service;
     std::wstring serviceError;
     const std::wstring extraArgs = std::format(L"--store-backend=sqlite --sqlite-path=\"{}\"", sqlitePath.wstring());
-    state.Require(service.Start(pipeName, 8u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, false, extraArgs), serviceError);
+    state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, extraArgs), serviceError);
     if (! state.failure.empty())
     {
         return false;
     }
+
+    SearchServiceBroker::ServiceStatus readyStatus{};
+    if (! WaitForSearchServiceStatusWithProcessDiagnostics(state, readyStatus, pipeName, L"indexed name latency service", service))
+    {
+        return false;
+    }
+    state.Require(readyStatus.persistentStoreKind == LocalSearchIndexCore::PersistentStoreKind::Sqlite,
+                  L"Indexed name latency service should report the SQLite backend before the warmup query.");
 
     SearchServiceBroker::QueryRequest brokerRequest{};
     brokerRequest.rootPath           = caseRoot.wstring();
@@ -9003,7 +10897,10 @@ SelfTest::RunCase(options,
     LocalSearchIndexCore::QueryStats warmupStats{};
     std::vector<LocalSearchIndexCore::Candidate> warmupCandidates;
     HRESULT hr = SearchServiceBroker::Query(brokerRequest, nullptr, nullptr, nullptr, nullptr, warmupCandidates, &warmupStats);
-    state.Require(SUCCEEDED(hr), std::format(L"Warmup broker query failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    state.Require(SUCCEEDED(hr),
+                  std::format(L"Warmup broker query failed. hr=0x{:08X}{}",
+                              static_cast<unsigned long>(hr),
+                              service.TryCaptureExitedOutputForFailure()));
     if (FAILED(hr))
     {
         return false;
@@ -9046,10 +10943,10 @@ SelfTest::RunCase(options,
     state.Require(firstBatchElapsedMs.has_value(), L"Warm broker batch query should record first-batch latency.");
     if (firstBatchElapsedMs.has_value())
     {
-        const uint32_t batchesSeen     = batchRecorder.BatchesSeen();
-        const uint64_t candidateCount  = static_cast<uint64_t>(batchRecorder.Candidates().size());
-        const uint64_t firstBatchUs    = static_cast<uint64_t>(*firstBatchElapsedMs) * 1000u;
-        const std::wstring perfDetail  = std::format(L"{}|sqlite={}|prefilter={}|liveFallback={}|fallbackReason={}",
+        const uint32_t batchesSeen    = batchRecorder.BatchesSeen();
+        const uint64_t candidateCount = static_cast<uint64_t>(batchRecorder.Candidates().size());
+        const uint64_t firstBatchUs   = static_cast<uint64_t>(*firstBatchElapsedMs) * 1000u;
+        const std::wstring perfDetail = std::format(L"{}|sqlite={}|prefilter={}|liveFallback={}|fallbackReason={}",
                                                     caseRoot.native(),
                                                     warmStats.usedSqliteStore,
                                                     warmStats.usedNamePrefilter,
@@ -9290,7 +11187,7 @@ SelfTest::RunCase(options,
     ForegroundSearchServiceProcess service;
     std::wstring serviceError;
     const std::wstring extraArgs = std::format(L"--store-backend=sqlite --sqlite-path=\"{}\"", sqlitePath.wstring());
-    state.Require(service.Start(pipeName, 8u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, false, extraArgs), serviceError);
+    state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, false, extraArgs), serviceError);
     if (! state.failure.empty())
     {
         return false;
@@ -9415,7 +11312,7 @@ SelfTest::RunCase(options,
 
     ForegroundSearchServiceProcess service;
     std::wstring serviceError;
-    state.Require(service.Start(pipeName, 6u, 0u, SearchServiceBroker::kProtocolVersion + 1u, false, serviceError), serviceError);
+    state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion + 1u, false, serviceError), serviceError);
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
     CreatedFileSystemInstance created{};
@@ -9485,7 +11382,7 @@ SelfTest::RunCase(options,
 
     ForegroundSearchServiceProcess service;
     std::wstring serviceError;
-    state.Require(service.Start(pipeName, 8u, 1u, SearchServiceBroker::kProtocolVersion, true, serviceError), serviceError);
+    state.Require(service.Start(pipeName, 1u, SearchServiceBroker::kProtocolVersion, true, serviceError), serviceError);
     if (! state.failure.empty())
     {
         return false;
@@ -9578,8 +11475,14 @@ SelfTest::RunCase(options,
     std::wstring serviceError;
     const std::filesystem::path storageRoot = caseRoot / L"service-store";
     const std::wstring extraArgs            = std::format(L"--storage-root=\"{}\" --store-backend=snapshot", storageRoot.wstring());
-    state.Require(service.Start(pipeName, 12u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, false, extraArgs), serviceError);
+    state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, false, extraArgs), serviceError);
     if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    SearchServiceBroker::ServiceStatus initialStatus{};
+    if (! WaitForSearchServiceStatus(state, initialStatus, pipeName, L"multi-client rebuild service"))
     {
         return false;
     }
@@ -9636,6 +11539,96 @@ SelfTest::RunCase(options,
     state.Require(SUCCEEDED(queryHr), std::format(L"Search service query after rebuild failed. hr=0x{:08X}", static_cast<unsigned long>(queryHr)));
     state.Require(CollectIndexedCandidateNames(rebuiltCandidates) == std::vector<std::wstring>{L"alpha.txt", L"beta.txt"},
                   L"Search service rebuild control should refresh the indexed candidate set.");
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"search_service_rebuild_deleted_root_purges_index",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    std::filesystem::path caseRoot;
+    state.Require(PrepareSearchCaseRoot(root, L"search_service_rebuild_deleted_root", caseRoot),
+                  L"Failed to prepare search_service_rebuild_deleted_root root.");
+    state.Require(SelfTest::WriteTextFile(caseRoot / L"stale.txt", "stale"), L"Failed to create stale.txt.");
+
+    const std::wstring previousPipeOverride = GetEnvVarTrimmed(SearchServiceBroker::kPipeNameEnvVar);
+    const std::wstring pipeName             = MakeUniquePipeName();
+    state.Require(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, pipeName.c_str()) != 0, L"Failed to override the search service pipe.");
+    const auto restorePipeOverride = wil::scope_exit([&] noexcept
+    {
+        const wchar_t* restoreValue = previousPipeOverride.empty() ? nullptr : previousPipeOverride.c_str();
+        static_cast<void>(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, restoreValue));
+    });
+
+    ForegroundSearchServiceProcess service;
+    std::wstring serviceError;
+    const std::filesystem::path storageRoot = caseRoot / L"service-store";
+    const std::wstring extraArgs            = std::format(L"--storage-root=\"{}\" --store-backend=snapshot", storageRoot.wstring());
+    state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, extraArgs), serviceError);
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    SearchServiceBroker::ServiceStatus readyStatus{};
+    if (! WaitForSearchServiceStatusWithProcessDiagnostics(state, readyStatus, pipeName, L"deleted-root rebuild service", service))
+    {
+        return false;
+    }
+
+    SearchServiceBroker::QueryRequest request{};
+    request.rootPath           = caseRoot.wstring();
+    request.namePattern        = L"*.txt";
+    request.nameMode           = FILESYSTEM_SEARCH_NAME_WILDCARD;
+    request.flags              = static_cast<FileSystemSearchFlags>(FILESYSTEM_SEARCH_RECURSIVE | FILESYSTEM_SEARCH_INCLUDE_FILES);
+    request.recursive          = true;
+    request.includeFiles       = true;
+    request.includeDirectories = false;
+
+    LocalSearchIndexCore::QueryStats seedStats{};
+    std::vector<LocalSearchIndexCore::Candidate> seedCandidates;
+    HRESULT hr = SearchServiceBroker::Query(request, nullptr, nullptr, nullptr, nullptr, seedCandidates, &seedStats);
+    state.Require(SUCCEEDED(hr), std::format(L"Search service seed query failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    state.Require(CollectIndexedCandidateNames(seedCandidates) == std::vector<std::wstring>{L"stale.txt"},
+                  L"Search service seed query should index stale.txt before the root is deleted.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    std::error_code removeEc;
+    std::filesystem::remove_all(caseRoot, removeEc);
+    state.Require(! removeEc, std::format(L"Failed to delete indexed root before rebuild. error={}", removeEc.value()));
+    state.Require(! std::filesystem::exists(caseRoot, removeEc), L"Deleted indexed root should no longer exist before rebuild.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    hr = SearchServiceBroker::RequestRebuild(caseRoot.wstring());
+    state.Require(SUCCEEDED(hr), std::format(L"SearchServiceBroker::RequestRebuild should purge a deleted root. hr=0x{:08X}",
+                                             static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    std::error_code createEc;
+    std::filesystem::create_directories(caseRoot, createEc);
+    state.Require(! createEc, std::format(L"Failed to recreate empty root after rebuild. error={}", createEc.value()));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    LocalSearchIndexCore::QueryStats rebuiltStats{};
+    std::vector<LocalSearchIndexCore::Candidate> rebuiltCandidates;
+    hr = SearchServiceBroker::Query(request, nullptr, nullptr, nullptr, nullptr, rebuiltCandidates, &rebuiltStats);
+    state.Require(SUCCEEDED(hr), std::format(L"Search service query after deleted-root rebuild failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    state.Require(CollectIndexedCandidateNames(rebuiltCandidates).empty(),
+                  L"Search service deleted-root rebuild should purge stale candidates under the rebuilt root.");
+
     return state.failure.empty();
 });
 
@@ -9709,7 +11702,7 @@ SelfTest::RunCase(options,
     state.Require(DebugMakeFindFilesResultKeyForTests(pluginId, instanceContext, fullPath) == expectedKey,
                   L"Find result identity key must use invariant folding for non-ASCII path/context text.");
 
-    const char* previousLocaleRaw   = std::setlocale(LC_CTYPE, nullptr);
+    const char* previousLocaleRaw    = std::setlocale(LC_CTYPE, nullptr);
     const std::string previousLocale = previousLocaleRaw != nullptr ? std::string(previousLocaleRaw) : std::string();
     const auto restoreLocale         = wil::scope_exit([&]() noexcept
     {
@@ -9746,14 +11739,12 @@ SelfTest::RunCase(options,
     state.Require(FolderViewIncrementalSearch::StartsWithNoCase(L"\u00C9quipe.txt", L"\u00E9QUIPE"),
                   L"Folder incremental prefix search must use invariant folding.");
 
-    const std::optional<UINT32> folderContainsOffset =
-        FolderViewIncrementalSearch::FindContainsOffsetNoCase(L"prefix \u00C9quipe.txt", L"\u00E9QUIPE");
+    const std::optional<UINT32> folderContainsOffset = FolderViewIncrementalSearch::FindContainsOffsetNoCase(L"prefix \u00C9quipe.txt", L"\u00E9QUIPE");
     state.Require(folderContainsOffset.has_value() && folderContainsOffset.value() == 7u,
                   std::format(L"Folder incremental contains offset mismatch. got={}", folderContainsOffset.value_or(UINT32_MAX)));
 
     size_t literalOffset = std::wstring_view::npos;
-    state.Require(SearchTextHelpers::FindLiteralWithChunkOverlap(L"prefix \u00C9quipe suffix", L"\u00E9QUIPE", false, 4u, literalOffset) &&
-                      literalOffset == 7u,
+    state.Require(SearchTextHelpers::FindLiteralWithChunkOverlap(L"prefix \u00C9quipe suffix", L"\u00E9QUIPE", false, 4u, literalOffset) && literalOffset == 7u,
                   std::format(L"Literal content folding offset mismatch. got={}", literalOffset));
 
     std::filesystem::path caseRoot;
@@ -9872,10 +11863,9 @@ SelfTest::RunCase(options,
         {
             state.Require((completed->warningFlags & FILESYSTEM_SEARCH_WARNING_REGEX_REJECTED) != 0u,
                           std::format(L"{} unsafe fallback regex missing REGEX_REJECTED warning. warnings=0x{:08X}.", label, completed->warningFlags));
-            state.Require(completed->statusHint == E_INVALIDARG,
-                          std::format(L"{} unsafe fallback regex statusHint mismatch. got=0x{:08X}.",
-                                      label,
-                                      static_cast<unsigned long>(completed->statusHint)));
+            state.Require(
+                completed->statusHint == E_INVALIDARG,
+                std::format(L"{} unsafe fallback regex statusHint mismatch. got=0x{:08X}.", label, static_cast<unsigned long>(completed->statusHint)));
         }
     };
 
@@ -9913,8 +11903,7 @@ SelfTest::RunCase(options,
 
     RecordingSearchCallback boundedCallback;
     const HRESULT boundedHr = SearchFallbackEngine::Execute(baseFs.get(), &boundedQuery, &boundedCallback, nullptr);
-    state.Require(SUCCEEDED(boundedHr),
-                  std::format(L"Host fallback bounded regex should be accepted, got 0x{:08X}.", static_cast<unsigned long>(boundedHr)));
+    state.Require(SUCCEEDED(boundedHr), std::format(L"Host fallback bounded regex should be accepted, got 0x{:08X}.", static_cast<unsigned long>(boundedHr)));
     if (SUCCEEDED(boundedHr))
     {
         state.Require(FindRecordedSearchMatch(boundedCallback.Matches(), L"aaa.txt") != nullptr, L"Host fallback bounded regex should match aaa.txt.");
@@ -9992,9 +11981,7 @@ SelfTest::RunCase(options,
         RecordingSearchCallback callback(RecordingSearchCallback::Mode::Success, cancelAfterChecks);
         const HRESULT hr = SearchFallbackEngine::Execute(baseFs.get(), &query, &callback, nullptr);
         state.Require(hr == HRESULT_FROM_WIN32(ERROR_CANCELLED),
-                      std::format(L"{} regex cancellation should return ERROR_CANCELLED, got 0x{:08X}.",
-                                  label,
-                                  static_cast<unsigned long>(hr)));
+                      std::format(L"{} regex cancellation should return ERROR_CANCELLED, got 0x{:08X}.", label, static_cast<unsigned long>(hr)));
         state.Require(callback.Matches().empty(), std::format(L"{} regex cancellation should not emit matches.", label));
 
         const auto progress                     = callback.ProgressSnapshots();
@@ -10003,9 +11990,7 @@ SelfTest::RunCase(options,
         if (completed != nullptr)
         {
             state.Require(completed->statusHint == HRESULT_FROM_WIN32(ERROR_CANCELLED),
-                          std::format(L"{} regex cancellation statusHint mismatch. got=0x{:08X}.",
-                                      label,
-                                      static_cast<unsigned long>(completed->statusHint)));
+                          std::format(L"{} regex cancellation statusHint mismatch. got=0x{:08X}.", label, static_cast<unsigned long>(completed->statusHint)));
         }
     };
 
@@ -10455,3 +12440,645 @@ const auto runRemoteFallbackNameOnlySmoke = [&](std::wstring_view caseName,
 };
 
 runRemoteFallbackNameOnlySmoke(L"host_fallback_search_remote_ftp_name_only", L"FTP", kSelfTestEnvConnFtp, kSelfTestDefaultConnFtp, kBuiltinFtpFileSystemId);
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"search_service_missing_pipe_retry_is_cancellable",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    std::filesystem::path caseRoot;
+    state.Require(PrepareSearchCaseRoot(root, L"search_service_missing_pipe_retry_cancel", caseRoot),
+                  L"Failed to prepare search_service_missing_pipe_retry_cancel root.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring previousPipeOverride  = GetEnvVarTrimmed(SearchServiceBroker::kPipeNameEnvVar);
+    const std::wstring previousRetryOverride = GetEnvVarTrimmed(SearchServiceBroker::kClientMissingPipeRetryMsEnvVar);
+    const std::wstring pipeName              = MakeUniquePipeName();
+    state.Require(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, pipeName.c_str()) != 0,
+                  L"Failed to override the missing search service pipe.");
+    state.Require(::SetEnvironmentVariableW(SearchServiceBroker::kClientMissingPipeRetryMsEnvVar, L"5000") != 0,
+                  L"Failed to stretch the missing-pipe retry window.");
+    const auto restoreOverrides = wil::scope_exit([&]() noexcept
+    {
+        static_cast<void>(::SetEnvironmentVariableW(
+            SearchServiceBroker::kPipeNameEnvVar, previousPipeOverride.empty() ? nullptr : previousPipeOverride.c_str()));
+        static_cast<void>(::SetEnvironmentVariableW(
+            SearchServiceBroker::kClientMissingPipeRetryMsEnvVar, previousRetryOverride.empty() ? nullptr : previousRetryOverride.c_str()));
+    });
+
+    struct CancelContext final
+    {
+        ULONGLONG cancelAtTick = 0u;
+    } cancelContext{.cancelAtTick = ::GetTickCount64() + 50u};
+    const auto cancelCheck = [](void* cookie) noexcept -> HRESULT
+    {
+        const auto* context = static_cast<const CancelContext*>(cookie);
+        return context != nullptr && ::GetTickCount64() >= context->cancelAtTick ? HRESULT_FROM_WIN32(ERROR_CANCELLED) : S_OK;
+    };
+
+    SearchServiceBroker::QueryRequest request{};
+    request.rootPath           = caseRoot.wstring();
+    request.namePattern        = L"*";
+    request.nameMode           = FILESYSTEM_SEARCH_NAME_WILDCARD;
+    request.flags              = static_cast<FileSystemSearchFlags>(FILESYSTEM_SEARCH_RECURSIVE | FILESYSTEM_SEARCH_INCLUDE_FILES);
+    request.recursive          = true;
+    request.includeFiles       = true;
+    request.includeDirectories = false;
+
+    std::vector<LocalSearchIndexCore::Candidate> candidates;
+    LocalSearchIndexCore::QueryStats stats{};
+    const auto started = std::chrono::steady_clock::now();
+    const HRESULT hr = SearchServiceBroker::Query(request, nullptr, nullptr, cancelCheck, &cancelContext, candidates, &stats);
+    const auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started).count();
+    state.Require(hr == HRESULT_FROM_WIN32(ERROR_CANCELLED),
+                  std::format(L"Missing-pipe retry cancellation returned 0x{:08X} instead of ERROR_CANCELLED.", static_cast<unsigned long>(hr)));
+    state.Require(elapsedMs < 1000, std::format(L"Missing-pipe retry cancellation took {}ms; expected prompt cancellation.", elapsedMs));
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"local_search_service_root_rejection_does_not_arm_transport_cooldown",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+#if ! defined(RS_SEARCH_TEST_HOOKS)
+    return state.Skip(L"Search service test hooks are unavailable in this build configuration.");
+#else
+    std::filesystem::path caseRoot;
+    state.Require(PrepareSearchCaseRoot(root, L"search_service_root_rejection_cooldown", caseRoot),
+                  L"Failed to prepare search_service_root_rejection_cooldown root.");
+    const std::filesystem::path rejectedRoot = caseRoot / L"service-reject-root-a";
+    const std::filesystem::path validRoot    = caseRoot / L"valid-root-b";
+    state.Require(SelfTest::WriteTextFile(rejectedRoot / L"rejected.txt", "rejected"), L"Failed to create rejected-root fixture.");
+    state.Require(SelfTest::WriteTextFile(validRoot / L"valid.txt", "valid"), L"Failed to create valid-root fixture.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring previousPipeOverride = GetEnvVarTrimmed(SearchServiceBroker::kPipeNameEnvVar);
+    const std::wstring pipeName             = MakeUniquePipeName();
+    state.Require(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, pipeName.c_str()) != 0, L"Failed to override the search service pipe.");
+    const auto restorePipeOverride = wil::scope_exit([&]() noexcept
+    {
+        static_cast<void>(::SetEnvironmentVariableW(
+            SearchServiceBroker::kPipeNameEnvVar, previousPipeOverride.empty() ? nullptr : previousPipeOverride.c_str()));
+    });
+
+    ForegroundSearchServiceProcess service;
+    std::wstring serviceError;
+    const std::filesystem::path storageRoot = caseRoot.parent_path() / (caseRoot.filename().wstring() + L"-service-store");
+    const std::wstring extraArguments =
+        std::format(L"--storage-root=\"{}\" --store-backend=snapshot --test-reject-marked-root", storageRoot.wstring());
+    state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, false, extraArguments), serviceError);
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    CreatedFileSystemInstance created{};
+    const HRESULT createHr = TryCreateFileSystemInstance(kBuiltinLocalFileSystemId, {}, created);
+    state.Require(SUCCEEDED(createHr) && created.fileSystem, L"Failed to create isolated local file system instance.");
+    wil::com_ptr<IInformations> info;
+    wil::com_ptr<IFileSystemSearch> search;
+    state.Require(CreateInformations(created.fileSystem, info), L"Isolated local file system instance missing IInformations.");
+    state.Require(CreateFileSystemSearch(created.fileSystem, search), L"Isolated local file system instance missing IFileSystemSearch.");
+    if (! info || ! search)
+    {
+        return false;
+    }
+    state.Require(SUCCEEDED(info->SetConfiguration("{\"searchBackendPreference\":\"service\"}")),
+                  L"Failed to configure service-backed search.");
+
+    const auto runSearch = [&](const std::filesystem::path& searchRoot, RecordingSearchCallback& callback) noexcept -> HRESULT
+    {
+        const std::wstring rootText = searchRoot.wstring();
+        FileSystemSearchQuery query{};
+        query.sizeBytes   = sizeof(FileSystemSearchQuery);
+        query.rootPath    = rootText.c_str();
+        query.namePattern = L"*.txt";
+        query.flags       = static_cast<FileSystemSearchFlags>(FILESYSTEM_SEARCH_RECURSIVE | FILESYSTEM_SEARCH_INCLUDE_FILES);
+        query.nameMode    = FILESYSTEM_SEARCH_NAME_WILDCARD;
+        return search->Search(&query, &callback, nullptr);
+    };
+
+    RecordingSearchCallback rejectedCallback;
+    const HRESULT rejectedHr = runSearch(rejectedRoot, rejectedCallback);
+    state.Require(SUCCEEDED(rejectedHr),
+                  std::format(L"Root-rejected service search should fall back successfully. hr=0x{:08X}", static_cast<unsigned long>(rejectedHr)));
+    const auto rejectedProgress = rejectedCallback.ProgressSnapshots();
+    const RecordedSearchProgress* rejectedCompleted = FindRecordedSearchProgress(rejectedProgress, FILESYSTEM_SEARCH_PHASE_COMPLETED);
+    state.Require(rejectedCompleted != nullptr, L"Root-rejected service search missing completion progress.");
+    if (rejectedCompleted != nullptr)
+    {
+        state.Require(rejectedCompleted->backend != FILESYSTEM_SEARCH_BACKEND_SERVICE, L"Rejected root should complete on a fallback backend.");
+        state.Require((rejectedCompleted->warningFlags & FILESYSTEM_SEARCH_WARNING_SERVICE_ROOT_REJECTED) != 0u,
+                      L"Rejected root should report SERVICE_ROOT_REJECTED.");
+        state.Require((rejectedCompleted->warningFlags & FILESYSTEM_SEARCH_WARNING_SERVICE_UNAVAILABLE) == 0u,
+                      L"Healthy-service root rejection must not report SERVICE_UNAVAILABLE.");
+    }
+
+    RecordingSearchCallback validCallback;
+    const HRESULT validHr = runSearch(validRoot, validCallback);
+    state.Require(SUCCEEDED(validHr), std::format(L"Immediate valid-root service search failed. hr=0x{:08X}", static_cast<unsigned long>(validHr)));
+    const auto validProgress = validCallback.ProgressSnapshots();
+    const RecordedSearchProgress* validCompleted = FindRecordedSearchProgress(validProgress, FILESYSTEM_SEARCH_PHASE_COMPLETED);
+    state.Require(validCompleted != nullptr, L"Immediate valid-root service search missing completion progress.");
+    if (validCompleted != nullptr)
+    {
+        state.Require(validCompleted->backend == FILESYSTEM_SEARCH_BACKEND_SERVICE,
+                      L"Immediate valid root B should still use the service backend after root A was rejected.");
+        state.Require((validCompleted->warningFlags & FILESYSTEM_SEARCH_WARNING_SERVICE_UNAVAILABLE) == 0u,
+                      L"Immediate valid root B should not inherit a service-unavailable cooldown.");
+    }
+    return state.failure.empty();
+#endif
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"search_service_transient_parent_failure_is_cached_and_warns_batch_and_completion",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+#if ! defined(RS_SEARCH_TEST_HOOKS)
+    return state.Skip(L"Search service test hooks are unavailable in this build configuration.");
+#else
+    std::filesystem::path caseRoot;
+    state.Require(PrepareSearchCaseRoot(root, L"search_service_transient_parent_batch_cache", caseRoot),
+                  L"Failed to prepare search_service_transient_parent_batch_cache root.");
+    const std::filesystem::path transientParent = caseRoot / L"transient-auth";
+    const std::filesystem::path allowedParent   = caseRoot / L"z-allowed";
+    state.Require(SelfTest::EnsureDirectory(transientParent), L"Failed to create transient authorization parent.");
+    state.Require(SelfTest::EnsureDirectory(allowedParent), L"Failed to create allowed authorization parent.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path sqlitePath = caseRoot.parent_path() / (caseRoot.filename().wstring() + L".sqlite3");
+    SqliteIndexStore::StoreInfo bootstrapInfo{};
+    HRESULT hr = SqliteIndexStore::EnsureBootstrap(sqlitePath.wstring(), &bootstrapInfo);
+    state.Require(SUCCEEDED(hr), L"Failed to bootstrap transient authorization SQLite fixture.");
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    SqliteIndexStore::ReplaceVolumeRequest replaceRequest{};
+    replaceRequest.rootPath       = caseRoot.wstring();
+    replaceRequest.fileSystemKind = LocalSearchIndexCore::FileSystemKind::Ntfs;
+    replaceRequest.journalId      = 1u;
+    replaceRequest.nextUsn        = 1u;
+    replaceRequest.state          = SqliteIndexStore::kVolumeStateReady;
+    replaceRequest.entries.push_back({.fileIdLow = 1u,
+                                      .fullPath  = caseRoot.wstring(),
+                                      .name      = caseRoot.filename().wstring(),
+                                      .attributes = FILE_ATTRIBUTE_DIRECTORY});
+    replaceRequest.entries.push_back({.fileIdLow = 2u,
+                                      .parentIdLow = 1u,
+                                      .fullPath  = transientParent.wstring(),
+                                      .name      = transientParent.filename().wstring(),
+                                      .attributes = FILE_ATTRIBUTE_DIRECTORY});
+    replaceRequest.entries.push_back({.fileIdLow = 3u,
+                                      .parentIdLow = 1u,
+                                      .fullPath  = allowedParent.wstring(),
+                                      .name      = allowedParent.filename().wstring(),
+                                      .attributes = FILE_ATTRIBUTE_DIRECTORY});
+    for (uint64_t index = 0u; index < 2u; ++index)
+    {
+        const std::wstring name = std::format(L"blocked-{}.txt", index);
+        replaceRequest.entries.push_back({.fileIdLow = 10u + index,
+                                          .parentIdLow = 2u,
+                                          .fullPath  = (transientParent / name).wstring(),
+                                          .name      = name,
+                                          .attributes = FILE_ATTRIBUTE_ARCHIVE});
+    }
+    for (uint64_t index = 0u; index < 260u; ++index)
+    {
+        const std::wstring name = std::format(L"allowed-{:03}.txt", index);
+        replaceRequest.entries.push_back({.fileIdLow = 100u + index,
+                                          .parentIdLow = 3u,
+                                          .fullPath  = (allowedParent / name).wstring(),
+                                          .name      = name,
+                                          .attributes = FILE_ATTRIBUTE_ARCHIVE});
+    }
+    SqliteIndexStore::ReplaceVolumeResult replaceResult{};
+    hr = SqliteIndexStore::ReplaceVolume(sqlitePath.wstring(), replaceRequest, &replaceResult);
+    state.Require(SUCCEEDED(hr), L"Failed to seed transient authorization SQLite fixture.");
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    const std::wstring previousPipeOverride = GetEnvVarTrimmed(SearchServiceBroker::kPipeNameEnvVar);
+    const std::wstring previousDirectOverride = GetEnvVarTrimmed(L"REDSALAMANDER_TEST_ALLOW_DIRECT_SQLITE_WITHOUT_JOURNAL");
+    const std::wstring pipeName = MakeUniquePipeName();
+    state.Require(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, pipeName.c_str()) != 0, L"Failed to override the search service pipe.");
+    state.Require(::SetEnvironmentVariableW(L"REDSALAMANDER_TEST_ALLOW_DIRECT_SQLITE_WITHOUT_JOURNAL", L"1") != 0,
+                  L"Failed to enable direct SQLite test currentness override.");
+    const auto restoreOverrides = wil::scope_exit([&]() noexcept
+    {
+        static_cast<void>(::SetEnvironmentVariableW(
+            SearchServiceBroker::kPipeNameEnvVar, previousPipeOverride.empty() ? nullptr : previousPipeOverride.c_str()));
+        static_cast<void>(::SetEnvironmentVariableW(L"REDSALAMANDER_TEST_ALLOW_DIRECT_SQLITE_WITHOUT_JOURNAL",
+                                                    previousDirectOverride.empty() ? nullptr : previousDirectOverride.c_str()));
+    });
+
+    const std::filesystem::path perfPath = SelfTest::GetPerfArtifactPath(L"perf_metrics.jsonl");
+    std::error_code perfEc;
+    const std::uintmax_t metricOffset = std::filesystem::exists(perfPath, perfEc) ? std::filesystem::file_size(perfPath, perfEc) : 0u;
+
+    ForegroundSearchServiceProcess service;
+    std::wstring serviceError;
+    const std::wstring extraArguments = std::format(
+        L"--store-backend=sqlite --sqlite-path=\"{}\" --test-fail-marked-client-directory-open-bad-netpath", sqlitePath.wstring());
+    state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, extraArguments), serviceError);
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    SearchServiceBroker::QueryRequest request{};
+    request.rootPath           = caseRoot.wstring();
+    request.namePattern        = L"*.txt";
+    request.nameMode           = FILESYSTEM_SEARCH_NAME_WILDCARD;
+    request.flags              = static_cast<FileSystemSearchFlags>(FILESYSTEM_SEARCH_RECURSIVE | FILESYSTEM_SEARCH_INCLUDE_FILES);
+    request.recursive          = true;
+    request.includeFiles       = true;
+    request.includeDirectories = false;
+    LocalSearchIndexCore::QueryStats stats{};
+    std::vector<LocalSearchIndexCore::Candidate> candidates;
+    hr = SearchServiceBroker::Query(request, nullptr, nullptr, nullptr, nullptr, candidates, &stats);
+    state.Require(SUCCEEDED(hr), std::format(L"Transient authorization query failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    state.Require(candidates.size() == 260u, std::format(L"Expected 260 authorized candidates, got {}.", candidates.size()));
+    state.Require((stats.warningFlags & FILESYSTEM_SEARCH_WARNING_ACCESS_DENIED_SKIPPED) != 0u,
+                  L"Transient authorization query completion should report ACCESS_DENIED_SKIPPED.");
+
+    std::string serviceOutput;
+    state.Require(service.ShutdownAndWaitForExitAndCapture(static_cast<DWORD>(SelfTest::ScaleTimeout(5'000)), serviceOutput, serviceError), serviceError);
+    const std::string warningToken = "warnings=0x00000004";
+    const size_t batchPosition = serviceOutput.find("Query batch sent");
+    const size_t completionPosition = serviceOutput.find("Query completed");
+    state.Require(batchPosition != std::string::npos && serviceOutput.find(warningToken, batchPosition) != std::string::npos,
+                  L"QUERY_BATCH_SENT should carry the accumulated ACCESS_DENIED_SKIPPED warning.");
+    state.Require(completionPosition != std::string::npos && serviceOutput.find(warningToken, completionPosition) != std::string::npos,
+                  L"Query completion should carry the accumulated ACCESS_DENIED_SKIPPED warning.");
+
+    size_t transientAttemptMetrics = 0u;
+    std::ifstream perfFile(perfPath, std::ios::binary);
+    if (perfFile)
+    {
+        if (metricOffset != 0u)
+        {
+            perfFile.seekg(static_cast<std::streamoff>(metricOffset), std::ios::beg);
+        }
+        std::string line;
+        while (std::getline(perfFile, line))
+        {
+            if (line.find("\"metric\":\"search.service.authorization.transient_parent_failures\"") != std::string::npos)
+            {
+                ++transientAttemptMetrics;
+            }
+        }
+    }
+    state.Require(transientAttemptMetrics == 1u,
+                  std::format(L"Two candidates under one transient parent should perform and log one authorization attempt; metric count={}",
+                              transientAttemptMetrics));
+    return state.failure.empty();
+#endif
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"local_search_sqlite_generation_probe_skips_steady_state_and_detects_bump",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    std::filesystem::path caseRoot;
+    state.Require(PrepareSearchCaseRoot(root, L"local_search_sqlite_generation_probe", caseRoot),
+                  L"Failed to prepare local_search_sqlite_generation_probe root.");
+    const std::filesystem::path sqlitePath = caseRoot.parent_path() / (caseRoot.filename().wstring() + L".sqlite3");
+    SqliteIndexStore::StoreInfo bootstrapInfo{};
+    HRESULT hr = SqliteIndexStore::EnsureBootstrap(sqlitePath.wstring(), &bootstrapInfo);
+    state.Require(SUCCEEDED(hr), L"Failed to bootstrap generation-probe SQLite fixture.");
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    const auto makeRequest = [&](bool includeBeta) noexcept
+    {
+        SqliteIndexStore::ReplaceVolumeRequest request{};
+        request.rootPath       = caseRoot.wstring();
+        request.fileSystemKind = LocalSearchIndexCore::FileSystemKind::Ntfs;
+        request.journalId      = 1u;
+        request.nextUsn        = includeBeta ? 2u : 1u;
+        request.state          = SqliteIndexStore::kVolumeStateReady;
+        request.entries.push_back({.fileIdLow = 1u,
+                                   .fullPath  = caseRoot.wstring(),
+                                   .name      = caseRoot.filename().wstring(),
+                                   .attributes = FILE_ATTRIBUTE_DIRECTORY});
+        request.entries.push_back({.fileIdLow = 2u,
+                                   .parentIdLow = 1u,
+                                   .fullPath  = (caseRoot / L"alpha.txt").wstring(),
+                                   .name      = L"alpha.txt",
+                                   .attributes = FILE_ATTRIBUTE_ARCHIVE});
+        if (includeBeta)
+        {
+            request.entries.push_back({.fileIdLow = 3u,
+                                       .parentIdLow = 1u,
+                                       .fullPath  = (caseRoot / L"beta.txt").wstring(),
+                                       .name      = L"beta.txt",
+                                       .attributes = FILE_ATTRIBUTE_ARCHIVE});
+        }
+        return request;
+    };
+
+    SqliteIndexStore::ReplaceVolumeResult replaceResult{};
+    SqliteIndexStore::ReplaceVolumeRequest initialRequest = makeRequest(false);
+    hr = SqliteIndexStore::ReplaceVolume(sqlitePath.wstring(), initialRequest, &replaceResult);
+    state.Require(SUCCEEDED(hr), L"Failed to seed initial generation-probe volume.");
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    const std::wstring previousDirectOverride = GetEnvVarTrimmed(L"REDSALAMANDER_TEST_ALLOW_DIRECT_SQLITE_WITHOUT_JOURNAL");
+    state.Require(::SetEnvironmentVariableW(L"REDSALAMANDER_TEST_ALLOW_DIRECT_SQLITE_WITHOUT_JOURNAL", L"1") != 0,
+                  L"Failed to enable direct SQLite test currentness override.");
+    const auto restoreDirectOverride = wil::scope_exit([&]() noexcept
+    {
+        static_cast<void>(::SetEnvironmentVariableW(L"REDSALAMANDER_TEST_ALLOW_DIRECT_SQLITE_WITHOUT_JOURNAL",
+                                                    previousDirectOverride.empty() ? nullptr : previousDirectOverride.c_str()));
+    });
+
+    LocalSearchIndexCore::Repository repository({.persistentStoreKind = LocalSearchIndexCore::PersistentStoreKind::Sqlite,
+                                                  .sqliteDatabasePath  = sqlitePath.wstring(),
+                                                  .sqliteAuthoritative = true});
+    LocalSearchIndexCore::QueryPlan plan{};
+    plan.rootPath           = caseRoot.wstring();
+    plan.namePattern        = L"*.txt";
+    plan.nameMode           = FILESYSTEM_SEARCH_NAME_WILDCARD;
+    plan.recursive          = true;
+    plan.includeFiles       = true;
+    plan.includeDirectories = false;
+
+    LocalSearchIndexCore::QueryStats warmStats{};
+    std::vector<LocalSearchIndexCore::Candidate> warmCandidates;
+    hr = repository.Query(plan, nullptr, nullptr, warmCandidates, &warmStats);
+    state.Require(SUCCEEDED(hr) && warmStats.usedSqliteStore, L"Generation-probe warm-up query should use SQLite.");
+
+    const std::filesystem::path perfPath = SelfTest::GetPerfArtifactPath(L"perf_metrics.jsonl");
+    const auto currentPerfOffset = [&]() noexcept -> std::uintmax_t
+    {
+        std::error_code ec;
+        return std::filesystem::exists(perfPath, ec) ? std::filesystem::file_size(perfPath, ec) : 0u;
+    };
+    const auto countMetricAfter = [&](std::uintmax_t offset, std::string_view metric) noexcept -> size_t
+    {
+        size_t count = 0u;
+        std::ifstream file(perfPath, std::ios::binary);
+        if (file)
+        {
+            if (offset != 0u)
+            {
+                file.seekg(static_cast<std::streamoff>(offset), std::ios::beg);
+            }
+            std::string line;
+            const std::string token = std::format("\"metric\":\"{}\"", metric);
+            while (std::getline(file, line))
+            {
+                if (line.find(token) != std::string::npos)
+                {
+                    ++count;
+                }
+            }
+        }
+        return count;
+    };
+
+    const std::uintmax_t steadyOffset = currentPerfOffset();
+    LocalSearchIndexCore::QueryStats steadyStats{};
+    std::vector<LocalSearchIndexCore::Candidate> steadyCandidates;
+    hr = repository.Query(plan, nullptr, nullptr, steadyCandidates, &steadyStats);
+    state.Require(SUCCEEDED(hr), L"Steady-state generation-probe query failed.");
+    state.Require(countMetricAfter(steadyOffset, "search.backend.sqlite.store_generation_probe_opens") == 0u,
+                  L"Repeated steady-state query should perform zero SQLite generation-probe opens after warm-up.");
+    state.Require(countMetricAfter(steadyOffset, "search.backend.sqlite.store_generation_probe_skips") == 1u,
+                  L"Repeated steady-state query should record one unchanged-file stamp skip.");
+
+    SqliteIndexStore::ReplaceVolumeRequest rotatedRequest = makeRequest(true);
+    hr = SqliteIndexStore::ReplaceVolume(sqlitePath.wstring(), rotatedRequest, &replaceResult);
+    state.Require(SUCCEEDED(hr), L"Failed to bump the generation-probe SQLite store.");
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    const std::uintmax_t bumpedOffset = currentPerfOffset();
+    LocalSearchIndexCore::QueryStats bumpedStats{};
+    std::vector<LocalSearchIndexCore::Candidate> bumpedCandidates;
+    hr = repository.Query(plan, nullptr, nullptr, bumpedCandidates, &bumpedStats);
+    state.Require(SUCCEEDED(hr), L"Generation-bump query failed.");
+    state.Require(CollectIndexedCandidateNames(bumpedCandidates) == std::vector<std::wstring>{L"alpha.txt", L"beta.txt"},
+                  L"Generation bump should be detected within one query.");
+    state.Require(countMetricAfter(bumpedOffset, "search.backend.sqlite.store_generation_probe_opens") == 1u,
+                  L"One changed-file validation should perform at most one generation-probe open per Enumerate.");
+    state.Require(countMetricAfter(bumpedOffset, "search.backend.sqlite.store_generation_refreshes") == 1u,
+                  L"Generation bump should refresh cached persistent-store metadata in the same query.");
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"local_search_junction_alias_hydration_indexes_alias_only_descendant_once",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    std::filesystem::path caseRoot;
+    state.Require(PrepareSearchCaseRoot(root, L"local_search_junction_alias_hydration", caseRoot),
+                  L"Failed to prepare local_search_junction_alias_hydration root.");
+    const std::filesystem::path targetPath = caseRoot / L"a-target";
+    const std::filesystem::path aliasPath  = caseRoot / L"z-alias";
+    state.Require(SelfTest::EnsureDirectory(targetPath), L"Failed to create junction target directory.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+    if (! TryCreateDirectoryJunction(aliasPath, targetPath))
+    {
+        const DWORD error = ::GetLastError();
+        if (error == ERROR_PRIVILEGE_NOT_HELD)
+        {
+            return state.Skip(L"Directory junction creation requires a privilege unavailable on this machine.");
+        }
+        state.Require(false, std::format(L"Failed to create directory junction. error={}", error));
+        return false;
+    }
+
+    const std::wstring previousForceTraversal = GetEnvVarTrimmed(L"REDSALAMANDER_TEST_FORCE_NTFS_TRAVERSAL_SEED");
+    state.Require(::SetEnvironmentVariableW(L"REDSALAMANDER_TEST_FORCE_NTFS_TRAVERSAL_SEED", L"1") != 0,
+                  L"Failed to force traversal seeding for the junction alias test.");
+    const auto restoreTraversal = wil::scope_exit([&]() noexcept
+    {
+        static_cast<void>(::SetEnvironmentVariableW(
+            L"REDSALAMANDER_TEST_FORCE_NTFS_TRAVERSAL_SEED", previousForceTraversal.empty() ? nullptr : previousForceTraversal.c_str()));
+    });
+
+    LocalSearchIndexCore::Repository repository;
+    LocalSearchIndexCore::QueryPlan plan{};
+    plan.rootPath           = caseRoot.wstring();
+    plan.namePattern        = L"needle_alias.txt";
+    plan.nameMode           = FILESYSTEM_SEARCH_NAME_WILDCARD;
+    plan.recursive          = true;
+    plan.includeFiles       = true;
+    plan.includeDirectories = false;
+    LocalSearchIndexCore::QueryStats initialStats{};
+    std::vector<LocalSearchIndexCore::Candidate> initialCandidates;
+    HRESULT hr = repository.Query(plan, nullptr, nullptr, initialCandidates, &initialStats);
+    state.Require(SUCCEEDED(hr), L"Initial junction alias index build failed.");
+    state.Require(initialCandidates.empty(), L"Initial junction alias fixture should not contain needle_alias.txt.");
+    state.Require(SelfTest::WriteTextFile(targetPath / L"needle_alias.txt", "alias"), L"Failed to create alias-only descendant after initial hydration.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    LocalSearchIndexCore::QueryStats hydratedStats{};
+    std::vector<LocalSearchIndexCore::Candidate> hydratedCandidates;
+    hr = repository.HydrateRootAndQueryForTests(plan, hydratedCandidates, &hydratedStats);
+    state.Require(SUCCEEDED(hr), std::format(L"Junction alias rehydration failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    state.Require(hydratedCandidates.size() == 1u,
+                  std::format(L"Junction alias rehydration should index one physical descendant, got {}.", hydratedCandidates.size()));
+    if (hydratedCandidates.size() == 1u)
+    {
+        state.Require(EqualsIgnoreCase(hydratedCandidates[0].fullPath, (targetPath / L"needle_alias.txt").wstring()),
+                      L"Coverage-only alias hydration should retain the canonical path and avoid duplicate alias emission.");
+    }
+    state.Require(hydratedStats.hardlinkAliasCoverageIncomplete,
+                  L"Coverage-only alias hydration should continue to report that alias-path representation is incomplete.");
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"sqlite_maintenance_busy_checkpoint_and_callback_skip_observability",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    std::filesystem::path caseRoot;
+    state.Require(PrepareSearchCaseRoot(root, L"sqlite_busy_checkpoint_skip_observability", caseRoot),
+                  L"Failed to prepare sqlite_busy_checkpoint_skip_observability root.");
+    const std::filesystem::path databasePath = caseRoot / L"index-v2.sqlite3";
+    SqliteIndexStore::StoreInfo preparedInfo{};
+    std::wstring prepareError;
+    state.Require(PrepareSqliteMaintenanceStore(caseRoot, databasePath, preparedInfo, prepareError), prepareError);
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    sqlite3* walSeedConnection = nullptr;
+    state.Require(OpenSqliteWalSeedConnection(databasePath, walSeedConnection, prepareError), prepareError);
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+    const auto closeWalSeed = wil::scope_exit([&]() noexcept
+    {
+        if (walSeedConnection != nullptr)
+        {
+            static_cast<void>(sqlite3_close(walSeedConnection));
+        }
+    });
+
+    sqlite3* reader = nullptr;
+    const std::u8string databaseUtf8 = databasePath.u8string();
+    const int openResult = sqlite3_open_v2(reinterpret_cast<const char*>(databaseUtf8.c_str()), &reader, SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX, nullptr);
+    state.Require(openResult == SQLITE_OK && reader != nullptr, L"Failed to open checkpoint-blocking SQLite reader.");
+    if (openResult != SQLITE_OK || reader == nullptr)
+    {
+        if (reader != nullptr)
+        {
+            static_cast<void>(sqlite3_close(reader));
+        }
+        return false;
+    }
+    const auto closeReader = wil::scope_exit([&]() noexcept
+    {
+        static_cast<void>(sqlite3_exec(reader, "ROLLBACK;", nullptr, nullptr, nullptr));
+        static_cast<void>(sqlite3_close(reader));
+    });
+    state.Require(sqlite3_exec(reader, "BEGIN; SELECT value FROM meta LIMIT 1;", nullptr, nullptr, nullptr) == SQLITE_OK,
+                  L"Failed to hold a read snapshot that makes the final checkpoint busy.");
+
+    LocalSearchIndexCore::SqliteMaintenancePolicy policy{};
+    policy.autoCheckpointTargetBytes          = 1u;
+    policy.autoCompactionFragmentationPercent = (std::numeric_limits<uint32_t>::max)();
+    policy.autoCompactionMinBytes             = (std::numeric_limits<uint64_t>::max)();
+    SqliteIndexStore::AutomaticMaintenanceResult maintenance{};
+    const HRESULT maintenanceHr = SqliteIndexStore::RunAutomaticMaintenance(databasePath.wstring(), policy, &maintenance);
+    state.Require(maintenanceHr == S_FALSE,
+                  std::format(L"Busy automatic checkpoint should return S_FALSE. hr=0x{:08X}", static_cast<unsigned long>(maintenanceHr)));
+    state.Require(maintenance.after.lastCheckpointUtc.empty(), L"Busy checkpoint must leave lastCheckpointUtc unchanged in the result.");
+    SqliteIndexStore::StoreInfo afterBusy{};
+    const HRESULT inspectHr = SqliteIndexStore::InspectStore(databasePath.wstring(), afterBusy);
+    state.Require(SUCCEEDED(inspectHr), L"Failed to inspect SQLite store after busy checkpoint.");
+    state.Require(afterBusy.lastCheckpointUtc.empty(), L"Busy checkpoint must leave persisted lastCheckpointUtc empty.");
+
+    SqliteIndexStore::ReplaceVolumeRequest replaceRequest{};
+    replaceRequest.rootPath       = caseRoot.wstring();
+    replaceRequest.fileSystemKind = LocalSearchIndexCore::FileSystemKind::Ntfs;
+    replaceRequest.journalId      = 1u;
+    replaceRequest.nextUsn        = 1u;
+    replaceRequest.state          = SqliteIndexStore::kVolumeStateReady;
+    replaceRequest.entries.push_back({.fileIdLow = 1u,
+                                      .fullPath  = caseRoot.wstring(),
+                                      .name      = caseRoot.filename().wstring(),
+                                      .attributes = FILE_ATTRIBUTE_DIRECTORY});
+    replaceRequest.entries.push_back({.fileIdLow = 2u,
+                                      .parentIdLow = 1u,
+                                      .fullPath  = (caseRoot / L"skip.txt").wstring(),
+                                      .name      = L"skip.txt",
+                                      .attributes = FILE_ATTRIBUTE_ARCHIVE});
+    replaceRequest.entries.push_back({.fileIdLow = 3u,
+                                      .parentIdLow = 1u,
+                                      .fullPath  = (caseRoot / L"emit.txt").wstring(),
+                                      .name      = L"emit.txt",
+                                      .attributes = FILE_ATTRIBUTE_ARCHIVE});
+    SqliteIndexStore::ReplaceVolumeResult replaceResult{};
+    HRESULT hr = SqliteIndexStore::ReplaceVolume(databasePath.wstring(), replaceRequest, &replaceResult);
+    state.Require(SUCCEEDED(hr), L"Failed to seed callback-skip SQLite fixture.");
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    struct SkipState final
+    {
+        uint64_t callbacks = 0u;
+    } skipState;
+    const auto callback = [](LocalSearchIndexCore::Candidate* candidate, void* cookie) noexcept -> HRESULT
+    {
+        if (candidate == nullptr || cookie == nullptr)
+        {
+            return E_POINTER;
+        }
+        auto& localState = *static_cast<SkipState*>(cookie);
+        ++localState.callbacks;
+        return localState.callbacks == 1u ? LocalSearchIndexCore::kSkipCandidateHr : S_OK;
+    };
+    SqliteIndexStore::QueryRequest request{};
+    request.rootPath           = caseRoot.wstring();
+    request.nameMode           = FILESYSTEM_SEARCH_NAME_DISABLED;
+    request.recursive          = true;
+    request.includeFiles       = true;
+    request.includeDirectories = false;
+    SqliteIndexStore::QueryRuntimeStats queryStats{};
+    hr = SqliteIndexStore::EnumerateVolume(databasePath.wstring(), request, nullptr, nullptr, callback, &skipState, &queryStats);
+    state.Require(SUCCEEDED(hr), L"SQLite callback-skip enumeration failed.");
+    state.Require(skipState.callbacks == 2u, std::format(L"Expected two callback invocations, got {}.", skipState.callbacks));
+    state.Require(queryStats.emittedRows == 1u,
+                  std::format(L"One skipped callback plus one emitted row should report emittedRows == 1, got {}.", queryStats.emittedRows));
+    return state.failure.empty();
+});

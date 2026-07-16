@@ -6,11 +6,17 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
+#include <charconv>
 #include <cstddef>
+#include <condition_variable>
 #include <cstring>
 #include <format>
 #include <limits>
+#include <semaphore>
 #include <string>
+#include <system_error>
+#include <thread>
 #include <vector>
 
 namespace FsS3 = FileSystemS3Internal;
@@ -21,11 +27,21 @@ static HRESULT TryGetS3ObjectSummaryFromClient(Aws::S3Crt::S3CrtClient& client,
                                                std::string_view key,
                                                uint64_t& outSizeBytes,
                                                __int64& outLastWriteTime,
-                                               bool& outFound) noexcept
+                                               bool& outFound,
+                                               Aws::String* outEtag = nullptr,
+                                               Aws::String* outVersionId = nullptr) noexcept
 {
     outSizeBytes     = 0;
     outLastWriteTime = 0;
     outFound         = false;
+    if (outEtag != nullptr)
+    {
+        outEtag->clear();
+    }
+    if (outVersionId != nullptr)
+    {
+        outVersionId->clear();
+    }
 
     if (bucket.empty() || key.empty())
     {
@@ -56,6 +72,49 @@ static HRESULT TryGetS3ObjectSummaryFromClient(Aws::S3Crt::S3CrtClient& client,
     outFound           = true;
     outSizeBytes       = static_cast<uint64_t>(result.GetContentLength());
     outLastWriteTime   = FsS3::AwsDateTimeToFileTime64(result.GetLastModified());
+    if (outEtag != nullptr)
+    {
+        *outEtag = result.GetETag();
+    }
+    if (outVersionId != nullptr)
+    {
+        *outVersionId = result.GetVersionId();
+    }
+    return S_OK;
+}
+
+void ApplyS3ReadVersionPin(Aws::S3Crt::Model::GetObjectRequest& request, const Aws::String& etag, const Aws::String& versionId) noexcept
+{
+    if (! versionId.empty())
+    {
+        request.SetVersionId(versionId);
+    }
+    else if (! etag.empty())
+    {
+        request.SetIfMatch(etag);
+    }
+}
+
+[[nodiscard]] HRESULT ObserveS3ReadVersion(Aws::String& etag,
+                                           Aws::String& versionId,
+                                           const Aws::String& responseEtag,
+                                           const Aws::String& responseVersionId) noexcept
+{
+    if (etag.empty() && versionId.empty())
+    {
+        if (responseEtag.empty() && responseVersionId.empty())
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+        etag      = responseEtag;
+        versionId = responseVersionId;
+        return S_OK;
+    }
+    if ((! etag.empty() && ! responseEtag.empty() && etag != responseEtag) ||
+        (! versionId.empty() && ! responseVersionId.empty() && versionId != responseVersionId))
+    {
+        return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+    }
     return S_OK;
 }
 
@@ -70,6 +129,125 @@ HRESULT FsS3::TryGetS3ObjectSummary(FileSystemS3& fs,
     const auto client = GetS3Client(fs, bucketCtx);
     return TryGetS3ObjectSummaryFromClient(*client, bucketCtx, bucket, key, outSizeBytes, outLastWriteTime, outFound);
 }
+
+HRESULT FsS3::ValidateS3RangeResponseLength(uint64_t expectedBytes, long long responseContentLength, uint64_t bodyBytesRead) noexcept
+{
+    if (responseContentLength < 0)
+    {
+        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+    }
+
+    const uint64_t responseBytes = static_cast<uint64_t>(responseContentLength);
+    if (responseBytes != expectedBytes || bodyBytesRead != expectedBytes)
+    {
+        return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+    }
+
+    return S_OK;
+}
+
+namespace
+{
+struct S3ContentRange final
+{
+    uint64_t first = 0;
+    uint64_t last  = 0;
+    uint64_t total = 0;
+};
+
+[[nodiscard]] HRESULT ParseS3ContentRange(std::string_view text, S3ContentRange& range) noexcept
+{
+    constexpr std::string_view prefix = "bytes ";
+    if (! text.starts_with(prefix))
+    {
+        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+    }
+
+    text.remove_prefix(prefix.size());
+    const size_t dash  = text.find('-');
+    const size_t slash = text.find('/');
+    if (dash == std::string_view::npos || slash == std::string_view::npos || dash == 0u || slash <= dash + 1u || slash + 1u >= text.size())
+    {
+        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+    }
+
+    const auto parse = [](std::string_view value, uint64_t& output) noexcept
+    {
+        const char* const begin = value.data();
+        const char* const end   = begin + value.size();
+        const auto [cursor, error] = std::from_chars(begin, end, output);
+        return error == std::errc{} && cursor == end;
+    };
+
+    if (! parse(text.substr(0u, dash), range.first) || ! parse(text.substr(dash + 1u, slash - dash - 1u), range.last) ||
+        ! parse(text.substr(slash + 1u), range.total) || range.first > range.last || range.last >= range.total)
+    {
+        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+    }
+    return S_OK;
+}
+
+[[nodiscard]] bool ShouldDiscoverS3SizeFromRange(HRESULT headHr) noexcept
+{
+    return headHr == HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+}
+} // namespace
+
+#if defined(_DEBUG)
+void FsS3::RunDebugRangeReadContractSelfTest(unsigned int& passed, unsigned int& failed) noexcept
+{
+    const auto check = [&](bool condition, const wchar_t* message) noexcept -> bool
+    {
+        if (condition)
+        {
+            ++passed;
+            return true;
+        }
+
+        ++failed;
+        Debug::Error(L"FileSystemS3 debug selftest failed: {}", message);
+        return false;
+    };
+
+    check(ValidateS3RangeResponseLength(10u, 10, 10u) == S_OK, L"S3 range read contract should accept exact Content-Length and exact body bytes");
+    check(ValidateS3RangeResponseLength(10u, 9, 9u) == HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY),
+          L"S3 range read contract should fail a short ranged response length");
+    check(ValidateS3RangeResponseLength(10u, 10, 9u) == HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY),
+          L"S3 range read contract should fail early EOF despite matching Content-Length");
+    check(ValidateS3RangeResponseLength(10u, 12, 10u) == HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY),
+          L"S3 range read contract should fail an overlong ranged response length");
+    check(ValidateS3RangeResponseLength(10u, -1, 0u) == HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
+          L"S3 range read contract should fail missing or invalid Content-Length");
+
+    S3ContentRange contentRange{};
+    check(ShouldDiscoverS3SizeFromRange(HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED)),
+          L"S3 reader should defer a HEAD access denial to ranged GET size discovery");
+    check(! ShouldDiscoverS3SizeFromRange(HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND)),
+          L"S3 reader should not hide non-permission HEAD failures");
+    check(ParseS3ContentRange("bytes 0-9/25", contentRange) == S_OK && contentRange.first == 0u && contentRange.last == 9u && contentRange.total == 25u,
+          L"S3 reader should discover object size from a validated Content-Range");
+    check(ParseS3ContentRange("bytes 10-9/25", contentRange) == HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
+          L"S3 reader should reject a reversed Content-Range");
+    check(ParseS3ContentRange("bytes 0-25/25", contentRange) == HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
+          L"S3 reader should reject a Content-Range ending beyond the object size");
+
+    Aws::String etag;
+    Aws::String versionId;
+    check(ObserveS3ReadVersion(etag, versionId, "\"v1\"", {}) == S_OK, L"S3 reader should capture the first response ETag");
+    Aws::S3Crt::Model::GetObjectRequest etagRequest;
+    ApplyS3ReadVersionPin(etagRequest, etag, versionId);
+    check(etagRequest.GetIfMatch() == "\"v1\"", L"S3 reader should apply If-Match to subsequent ranges");
+    check(ObserveS3ReadVersion(etag, versionId, "\"v2\"", {}) == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH),
+          L"S3 reader should reject a same-size object version swap");
+
+    etag.clear();
+    versionId.clear();
+    check(ObserveS3ReadVersion(etag, versionId, "\"v1\"", "version-1") == S_OK, L"S3 reader should capture an object version ID");
+    Aws::S3Crt::Model::GetObjectRequest versionRequest;
+    ApplyS3ReadVersionPin(versionRequest, etag, versionId);
+    check(versionRequest.GetVersionId() == "version-1", L"S3 reader should prefer immutable versionId pinning when available");
+}
+#endif
 
 namespace
 {
@@ -307,6 +485,14 @@ public:
         {
             return hr;
         }
+        if (! _sizeKnown)
+        {
+            const HRESULT rangeHr = FillBufferFrom(0u);
+            if (FAILED(rangeHr))
+            {
+                return rangeHr;
+            }
+        }
 
         *sizeBytes = _sizeBytes;
         return S_OK;
@@ -341,6 +527,14 @@ public:
             if (FAILED(hr))
             {
                 return hr;
+            }
+            if (! _sizeKnown)
+            {
+                const HRESULT rangeHr = FillBufferFrom(0u);
+                if (FAILED(rangeHr))
+                {
+                    return rangeHr;
+                }
             }
             base = _sizeBytes;
         }
@@ -390,7 +584,21 @@ public:
             return E_POINTER;
         }
 
-        if (_sizeKnown && _position >= _sizeBytes)
+        const HRESULT sizeHr = EnsureSizeKnown();
+        if (FAILED(sizeHr))
+        {
+            return sizeHr;
+        }
+        if (! _sizeKnown)
+        {
+            const HRESULT rangeHr = FillBufferFrom(_position);
+            if (FAILED(rangeHr))
+            {
+                return rangeHr;
+            }
+        }
+
+        if (_position >= _sizeBytes)
         {
             return S_OK;
         }
@@ -461,7 +669,8 @@ private:
         uint64_t sizeBytes    = 0;
         __int64 lastWriteTime = 0;
         bool found            = false;
-        const HRESULT hr      = TryGetS3ObjectSummaryFromClient(*_client, _bucketCtx, _bucket, _key, sizeBytes, lastWriteTime, found);
+        const HRESULT hr =
+            TryGetS3ObjectSummaryFromClient(*_client, _bucketCtx, _bucket, _key, sizeBytes, lastWriteTime, found, &_etag, &_versionId);
         if (FAILED(hr))
         {
             return hr;
@@ -511,6 +720,10 @@ private:
             _buffer.resize(static_cast<size_t>(maxBytes));
         }
 
+        if (start > (std::numeric_limits<uint64_t>::max)() - (maxBytes - 1u))
+        {
+            return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
+        }
         const uint64_t endInclusive = start + maxBytes - 1u;
         const std::string range     = std::string("bytes=") + std::to_string(start) + "-" + std::to_string(endInclusive);
 
@@ -518,6 +731,7 @@ private:
         req.SetBucket(Aws::String(_bucket.data(), _bucket.size()));
         req.SetKey(Aws::String(_key.data(), _key.size()));
         req.SetRange(Aws::String(range.data(), range.size()));
+        ApplyS3ReadVersionPin(req, _etag, _versionId);
 
         auto outcome = _client->GetObject(req);
         if (! outcome.IsSuccess())
@@ -529,13 +743,44 @@ private:
             return FsS3::HresultFromAwsError(err);
         }
 
-        auto result           = outcome.GetResultWithOwnership();
-        Aws::IOStream& stream = result.GetBody();
+        auto result                      = outcome.GetResultWithOwnership();
+        const Aws::String responseEtag   = result.GetETag();
+        const Aws::String responseVersionId = result.GetVersionId();
+        const HRESULT versionHr = ObserveS3ReadVersion(_etag, _versionId, responseEtag, responseVersionId);
+        if (FAILED(versionHr))
+        {
+            return versionHr;
+        }
+        const auto responseContentLength = result.GetContentLength();
+        uint64_t expectedBytes           = maxBytes;
+        const Aws::String responseContentRange = result.GetContentRange();
+        S3ContentRange contentRange{};
+        const HRESULT contentRangeHr = ParseS3ContentRange(std::string_view(responseContentRange.data(), responseContentRange.size()), contentRange);
+        if (FAILED(contentRangeHr) || contentRange.first != start)
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+        if (! _sizeKnown)
+        {
+            _sizeBytes = contentRange.total;
+            _sizeKnown = true;
+        }
+        else if (_sizeBytes != contentRange.total)
+        {
+            return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+        }
+
+        expectedBytes = std::min<uint64_t>(maxBytes, _sizeBytes - start);
+        if (contentRange.last != start + expectedBytes - 1u)
+        {
+            return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+        }
+        Aws::IOStream& stream            = result.GetBody();
 
         size_t total = 0;
-        while (stream.good() && total < static_cast<size_t>(maxBytes))
+        while (stream.good() && total < static_cast<size_t>(expectedBytes))
         {
-            const size_t want = static_cast<size_t>(maxBytes) - total;
+            const size_t want = static_cast<size_t>(expectedBytes) - total;
             stream.read(reinterpret_cast<char*>(_buffer.data()) + total, static_cast<std::streamsize>(want));
             const std::streamsize got = stream.gcount();
             if (got <= 0)
@@ -545,11 +790,12 @@ private:
             total += static_cast<size_t>(got);
         }
 
-        _bufferHave = total;
-        if (! _sizeKnown && total < static_cast<size_t>(maxBytes))
+        _bufferHave              = total;
+        const HRESULT validateHr = FsS3::ValidateS3RangeResponseLength(expectedBytes, responseContentLength, static_cast<uint64_t>(total));
+        if (FAILED(validateHr))
         {
-            _sizeBytes = _bufferStart + static_cast<uint64_t>(total);
-            _sizeKnown = true;
+            _bufferHave = 0;
+            return validateHr;
         }
 
         return S_OK;
@@ -569,10 +815,17 @@ private:
     uint64_t _bufferStart = 0;
     size_t _bufferHave    = 0;
     std::vector<std::byte> _buffer;
+    Aws::String _etag;
+    Aws::String _versionId;
 };
 
 [[nodiscard]] HRESULT EnsureWritableS3Target(
-    FileSystemS3& owner, const FsS3::ResolvedAwsContext& bucketCtx, std::string_view bucket, std::string_view key, bool allowOverwrite) noexcept
+    FileSystemS3& owner,
+    const FsS3::ResolvedAwsContext& bucketCtx,
+    std::string_view bucket,
+    std::string_view key,
+    std::wstring_view pluginPath,
+    bool allowOverwrite) noexcept
 {
     if (bucket.empty() || key.empty())
     {
@@ -598,8 +851,31 @@ private:
         trimmedKey.pop_back();
     }
 
-    for (size_t slash = trimmedKey.find('/'); slash != std::string::npos; slash = trimmedKey.find('/', slash + 1u))
+    std::vector<std::wstring> ancestorPluginPaths;
+    std::wstring currentPluginPath = FsS3::NormalizePluginPath(pluginPath);
+    const size_t ancestorCount = static_cast<size_t>(std::count(trimmedKey.begin(), trimmedKey.end(), '/'));
+    ancestorPluginPaths.reserve(ancestorCount);
+    for (size_t index = 0; index < ancestorCount; ++index)
     {
+        const size_t slash = currentPluginPath.find_last_of(L'/');
+        if (slash == std::wstring::npos)
+        {
+            ancestorPluginPaths.clear();
+            break;
+        }
+        currentPluginPath.resize(slash == 0u ? 1u : slash);
+        ancestorPluginPaths.push_back(currentPluginPath);
+    }
+    std::reverse(ancestorPluginPaths.begin(), ancestorPluginPaths.end());
+
+    size_t ancestorIndex = 0;
+    for (size_t slash = trimmedKey.find('/'); slash != std::string::npos; slash = trimmedKey.find('/', slash + 1u), ++ancestorIndex)
+    {
+        if (ancestorIndex < ancestorPluginPaths.size() && owner.HasFreshWritableDirectoryValidation(ancestorPluginPaths[ancestorIndex]))
+        {
+            continue;
+        }
+
         const std::string ancestor = trimmedKey.substr(0, slash);
         uint64_t ancestorSize      = 0;
         __int64 ancestorLastWrite  = 0;
@@ -612,6 +888,10 @@ private:
         if (ancestorFound)
         {
             return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+        }
+        if (ancestorIndex < ancestorPluginPaths.size())
+        {
+            owner.RememberWritableDirectoryValidation(ancestorPluginPaths[ancestorIndex]);
         }
     }
 
@@ -642,6 +922,68 @@ private:
     }
 
     return S_OK;
+}
+
+#if defined(_DEBUG)
+struct MultipartWriterDebugTransport final
+{
+    void* cookie = nullptr;
+    HRESULT (*begin)(void*, FsS3::S3MultipartUploadSession&) noexcept = nullptr;
+    HRESULT (*upload)(void*, int, size_t, std::string&) noexcept = nullptr;
+    HRESULT (*complete)(void*, const std::vector<FsS3::S3MultipartUploadedPart>&) noexcept = nullptr;
+    HRESULT (*abort)(void*) noexcept = nullptr;
+};
+
+std::atomic<const MultipartWriterDebugTransport*> g_multipartWriterDebugTransport{nullptr};
+
+class MultipartWriterDebugTransportScope final
+{
+public:
+    explicit MultipartWriterDebugTransportScope(const MultipartWriterDebugTransport& transport) noexcept
+    {
+        g_multipartWriterDebugTransport.store(&transport, std::memory_order_release);
+    }
+
+    ~MultipartWriterDebugTransportScope() noexcept
+    {
+        g_multipartWriterDebugTransport.store(nullptr, std::memory_order_release);
+    }
+
+    MultipartWriterDebugTransportScope(const MultipartWriterDebugTransportScope&)            = delete;
+    MultipartWriterDebugTransportScope(MultipartWriterDebugTransportScope&&)                 = delete;
+    MultipartWriterDebugTransportScope& operator=(const MultipartWriterDebugTransportScope&) = delete;
+    MultipartWriterDebugTransportScope& operator=(MultipartWriterDebugTransportScope&&)      = delete;
+};
+
+struct MultipartWriterDebugContext final
+{
+    MultipartWriterDebugContext()  = default;
+    ~MultipartWriterDebugContext() = default;
+    MultipartWriterDebugContext(const MultipartWriterDebugContext&)            = delete;
+    MultipartWriterDebugContext(MultipartWriterDebugContext&&)                 = delete;
+    MultipartWriterDebugContext& operator=(const MultipartWriterDebugContext&) = delete;
+    MultipartWriterDebugContext& operator=(MultipartWriterDebugContext&&)      = delete;
+
+    std::mutex mutex;
+    std::condition_variable cv;
+    bool uploadStarted = false;
+    bool allowUploadCompletion = false;
+    unsigned int beginCalls = 0u;
+    unsigned int uploadCalls = 0u;
+    unsigned int completeCalls = 0u;
+    unsigned int abortCalls = 0u;
+};
+#endif
+
+constexpr ptrdiff_t kMultipartWriterBufferSlots = 4;
+constexpr uint64_t kMultipartWriterBufferBudgetBytes =
+    static_cast<uint64_t>(kMultipartWriterBufferSlots) * static_cast<uint64_t>(FsS3::kMultipartMinPartSizeBytes);
+static_assert(kMultipartWriterBufferBudgetBytes == 256ull * 1024ull * 1024ull);
+
+std::counting_semaphore<kMultipartWriterBufferSlots>& GetMultipartWriterBufferBudget() noexcept
+{
+    static std::counting_semaphore<kMultipartWriterBufferSlots> budget(kMultipartWriterBufferSlots);
+    return budget;
 }
 
 class MultipartS3FileWriter final : public IFileWriter
@@ -739,24 +1081,42 @@ public:
             return _failedHr;
         }
 
-        if (bytesToWrite > (std::numeric_limits<size_t>::max)() - _buffer.size())
+        if (! _hasBufferBudget)
         {
-            _failedHr = E_OUTOFMEMORY;
-            return _failedHr;
+            GetMultipartWriterBufferBudget().acquire();
+            _hasBufferBudget = true;
         }
 
         const auto* src = static_cast<const std::byte*>(buffer);
-        _buffer.insert(_buffer.end(), src, src + bytesToWrite);
-
-        const HRESULT hr = FlushBufferedParts();
-        if (FAILED(hr))
+        unsigned long remaining = bytesToWrite;
+        while (remaining > 0u)
         {
-            _failedHr = hr;
-            return hr;
+            if (_uploadThread.joinable())
+            {
+                const HRESULT collectHr = CollectAsyncPart();
+                if (FAILED(collectHr))
+                {
+                    _failedHr = collectHr;
+                    return collectHr;
+                }
+            }
+
+            const size_t available   = FsS3::kMultipartMinPartSizeBytes - _buffer.size();
+            const size_t appendBytes = (std::min)(available, static_cast<size_t>(remaining));
+            _buffer.insert(_buffer.end(), src, src + appendBytes);
+            src += appendBytes;
+            remaining -= static_cast<unsigned long>(appendBytes);
+            _position += appendBytes;
+            *bytesWritten += static_cast<unsigned long>(appendBytes);
+
+            const HRESULT flushHr = FlushBufferedParts();
+            if (FAILED(flushHr))
+            {
+                _failedHr = flushHr;
+                return flushHr;
+            }
         }
 
-        _position += bytesToWrite;
-        *bytesWritten = bytesToWrite;
         return S_OK;
     }
 
@@ -777,11 +1137,7 @@ public:
             return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
         }
 
-        HRESULT hr = EnsureWritableS3Target(*_owner.get(), _bucketCtx, _bucket, _key, _allowOverwrite);
-        if (FAILED(hr))
-        {
-            return hr;
-        }
+        HRESULT hr = S_OK;
 
         if (! _hasSession)
         {
@@ -794,6 +1150,14 @@ public:
         }
         else
         {
+            hr = CollectAsyncPart();
+            if (FAILED(hr))
+            {
+                const HRESULT abortHr = AbortMultipartUpload();
+                _failedHr             = FAILED(abortHr) ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : hr;
+                return _failedHr;
+            }
+
             if (! _buffer.empty())
             {
                 hr = UploadPart(_buffer.data(), _buffer.size());
@@ -812,7 +1176,14 @@ public:
                 return FAILED(abortHr) ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
             }
 
+#if defined(_DEBUG)
+            const MultipartWriterDebugTransport* debugTransport = g_multipartWriterDebugTransport.load(std::memory_order_acquire);
+            hr = (debugTransport != nullptr && debugTransport->complete != nullptr)
+                     ? debugTransport->complete(debugTransport->cookie, _parts)
+                     : FsS3::CompleteS3MultipartUpload(*_owner.get(), _session, _parts);
+#else
             hr = FsS3::CompleteS3MultipartUpload(*_owner.get(), _session, _parts);
+#endif
             if (FAILED(hr))
             {
                 const HRESULT abortHr = AbortMultipartUpload();
@@ -826,12 +1197,14 @@ public:
 
         _committed = true;
         _owner->NotifySyntheticPathCreated(_pluginPath);
+        ReleaseBufferBudget();
         return S_OK;
     }
 
 private:
     ~MultipartS3FileWriter()
     {
+        static_cast<void>(CollectAsyncPart());
         if (! _committed)
         {
             const HRESULT hr = AbortMultipartUpload();
@@ -840,6 +1213,7 @@ private:
                 Debug::Warning(L"S3: multipart upload cleanup failed path='{}' hr=0x{:08X}.", _pluginPath, static_cast<unsigned long>(hr));
             }
         }
+        ReleaseBufferBudget();
     }
 
     HRESULT EnsureMultipartSession() noexcept
@@ -854,7 +1228,14 @@ private:
             return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
         }
 
+#if defined(_DEBUG)
+        const MultipartWriterDebugTransport* debugTransport = g_multipartWriterDebugTransport.load(std::memory_order_acquire);
+        HRESULT hr = (debugTransport != nullptr && debugTransport->begin != nullptr)
+                         ? debugTransport->begin(debugTransport->cookie, _session)
+                         : FsS3::BeginS3MultipartUpload(*_owner.get(), _bucketCtx, _bucket, _key, _session);
+#else
         HRESULT hr = FsS3::BeginS3MultipartUpload(*_owner.get(), _bucketCtx, _bucket, _key, _session);
+#endif
         if (FAILED(hr))
         {
             return hr;
@@ -877,7 +1258,14 @@ private:
         }
 
         std::string etag;
+#if defined(_DEBUG)
+        const MultipartWriterDebugTransport* debugTransport = g_multipartWriterDebugTransport.load(std::memory_order_acquire);
+        HRESULT hr = (debugTransport != nullptr && debugTransport->upload != nullptr)
+                         ? debugTransport->upload(debugTransport->cookie, _nextPartNumber, sizeBytes, etag)
+                         : FsS3::UploadS3MultipartPartFromMemory(*_owner.get(), _session, _nextPartNumber, data, sizeBytes, etag);
+#else
         HRESULT hr = FsS3::UploadS3MultipartPartFromMemory(*_owner.get(), _session, _nextPartNumber, data, sizeBytes, etag);
+#endif
         if (FAILED(hr))
         {
             return hr;
@@ -891,31 +1279,115 @@ private:
         return S_OK;
     }
 
-    HRESULT FlushBufferedParts() noexcept
+    HRESULT CollectAsyncPart() noexcept
     {
-        while (_buffer.size() >= FsS3::kMultipartMinPartSizeBytes)
+        if (! _uploadThread.joinable())
         {
-            HRESULT hr = EnsureMultipartSession();
-            if (FAILED(hr))
-            {
-                return hr;
-            }
-
-            hr = UploadPart(_buffer.data(), FsS3::kMultipartMinPartSizeBytes);
-            if (FAILED(hr))
-            {
-                return hr;
-            }
-
-            const size_t remainingBytes = _buffer.size() - FsS3::kMultipartMinPartSizeBytes;
-            if (remainingBytes > 0)
-            {
-                std::memmove(_buffer.data(), _buffer.data() + FsS3::kMultipartMinPartSizeBytes, remainingBytes);
-            }
-            _buffer.resize(remainingBytes);
+            return S_OK;
         }
 
+        _uploadThread.join();
+        std::vector<std::byte>().swap(_inFlightData);
+        if (FAILED(_inFlightHr))
+        {
+            return _inFlightHr;
+        }
+
+        FsS3::S3MultipartUploadedPart part{};
+        part.partNumber = _inFlightPartNumber;
+        part.eTag       = std::move(_inFlightEtag);
+        _parts.push_back(std::move(part));
+        ++_nextPartNumber;
+        _inFlightPartNumber = 0;
         return S_OK;
+    }
+
+    HRESULT ScheduleAsyncPart() noexcept
+    {
+        if (_uploadThread.joinable() || _buffer.size() < FsS3::kMultipartMinPartSizeBytes)
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+        }
+
+        HRESULT hr = EnsureMultipartSession();
+        if (FAILED(hr))
+        {
+            if (ShouldDiscoverS3SizeFromRange(hr))
+            {
+                Debug::Warning(L"S3: HeadObject was denied for bucket='{}' key='{}'; discovering size from ranged GetObject.",
+                               FsS3::Utf16FromUtf8(_bucket),
+                               FsS3::Utf16FromUtf8(_key));
+                return S_OK;
+            }
+            return hr;
+        }
+        if (_nextPartNumber > 10000)
+        {
+            return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+        }
+
+        _inFlightData = std::move(_buffer);
+        _buffer.clear();
+
+        _inFlightPartNumber = _nextPartNumber;
+        _inFlightHr         = S_OK;
+        _inFlightEtag.clear();
+        try
+        {
+            _uploadThread = std::jthread([this](std::stop_token) noexcept
+            {
+#if defined(_DEBUG)
+                const MultipartWriterDebugTransport* debugTransport = g_multipartWriterDebugTransport.load(std::memory_order_acquire);
+                _inFlightHr = (debugTransport != nullptr && debugTransport->upload != nullptr)
+                                  ? debugTransport->upload(debugTransport->cookie, _inFlightPartNumber, _inFlightData.size(), _inFlightEtag)
+                                  : FsS3::UploadS3MultipartPartFromMemory(
+                                        *_owner.get(), _session, _inFlightPartNumber, _inFlightData.data(), _inFlightData.size(), _inFlightEtag);
+#else
+                _inFlightHr = FsS3::UploadS3MultipartPartFromMemory(
+                    *_owner.get(), _session, _inFlightPartNumber, _inFlightData.data(), _inFlightData.size(), _inFlightEtag);
+#endif
+            });
+        }
+        catch (const std::bad_alloc&)
+        {
+            std::terminate();
+        }
+        catch (const std::system_error& error)
+        {
+            // std::jthread construction is the ABI boundary here; fail the upload cleanly when
+            // Windows cannot create the worker instead of unwinding through IFileWriter::Write.
+            Debug::Error(L"S3: unable to start asynchronous multipart upload worker. error={}", error.code().value());
+            _inFlightData.clear();
+            _inFlightPartNumber = 0;
+            return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_MEMORY);
+        }
+        return S_OK;
+    }
+
+    HRESULT FlushBufferedParts() noexcept
+    {
+        if (_buffer.size() < FsS3::kMultipartMinPartSizeBytes)
+        {
+            return S_OK;
+        }
+        if (_buffer.size() != FsS3::kMultipartMinPartSizeBytes || _uploadThread.joinable())
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+        }
+        return ScheduleAsyncPart();
+    }
+
+    void ReleaseBufferBudget() noexcept
+    {
+        if (! _hasBufferBudget)
+        {
+            return;
+        }
+
+        std::vector<std::byte>().swap(_buffer);
+        std::vector<std::byte>().swap(_inFlightData);
+        _hasBufferBudget = false;
+        GetMultipartWriterBufferBudget().release();
     }
 
     HRESULT AbortMultipartUpload() noexcept
@@ -925,7 +1397,13 @@ private:
             return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
         }
 
+#if defined(_DEBUG)
+        const MultipartWriterDebugTransport* debugTransport = g_multipartWriterDebugTransport.load(std::memory_order_acquire);
+        const HRESULT hr = (debugTransport != nullptr && debugTransport->abort != nullptr) ? debugTransport->abort(debugTransport->cookie)
+                                                                                           : FsS3::AbortS3MultipartUpload(*_owner.get(), _session);
+#else
         const HRESULT hr = FsS3::AbortS3MultipartUpload(*_owner.get(), _session);
+#endif
         _hasSession      = false;
         _parts.clear();
         return hr;
@@ -938,16 +1416,128 @@ private:
     std::string _key;
     std::wstring _pluginPath;
     std::vector<std::byte> _buffer;
+    std::vector<std::byte> _inFlightData;
     std::vector<FsS3::S3MultipartUploadedPart> _parts;
+    std::jthread _uploadThread;
     FsS3::S3MultipartUploadSession _session{};
+    std::string _inFlightEtag;
     uint64_t _position   = 0;
     HRESULT _failedHr    = S_OK;
+    HRESULT _inFlightHr  = S_OK;
     int _nextPartNumber  = 1;
+    int _inFlightPartNumber = 0;
     bool _allowOverwrite = false;
     bool _committed      = false;
     bool _hasSession     = false;
+    bool _hasBufferBudget = false;
 };
 } // namespace
+
+#if defined(_DEBUG)
+void FsS3::RunDebugMultipartWriterContractSelfTest(unsigned int& passed, unsigned int& failed) noexcept
+{
+    const auto check = [&](bool condition, const wchar_t* message) noexcept
+    {
+        if (condition)
+        {
+            ++passed;
+            return;
+        }
+
+        ++failed;
+        Debug::Error(L"FileSystemS3 multipart-writer selftest failed: {}", message);
+    };
+
+    wil::com_ptr<FileSystemS3> owner;
+    owner.attach(new (std::nothrow) FileSystemS3(FileSystemS3Mode::S3, nullptr));
+    check(static_cast<bool>(owner), L"S3 filesystem allocation should succeed");
+    if (! owner)
+    {
+        return;
+    }
+
+    wil::com_ptr<IFileSystemAtomicWriter> atomicWriter;
+    check(owner.try_query_to(atomicWriter.put()) && atomicWriter, L"S3 should expose the explicit atomic-writer capability");
+    BOOL atomicSupported = FALSE;
+    check(atomicWriter && SUCCEEDED(atomicWriter->SupportsAtomicWriterCommit(L"/bucket/final.bin", FILESYSTEM_FLAG_NONE, &atomicSupported)) &&
+              atomicSupported == TRUE,
+          L"S3 final-key multipart commit should be advertised as atomic");
+
+    MultipartWriterDebugContext context{};
+    const MultipartWriterDebugTransport transport{
+        .cookie = &context,
+        .begin = [](void* cookie, FsS3::S3MultipartUploadSession& session) noexcept -> HRESULT
+        {
+            auto* value = static_cast<MultipartWriterDebugContext*>(cookie);
+            ++value->beginCalls;
+            session.bucket   = "bucket";
+            session.key      = "final.bin";
+            session.uploadId = "debug-upload";
+            return S_OK;
+        },
+        .upload = [](void* cookie, int partNumber, size_t sizeBytes, std::string& eTag) noexcept -> HRESULT
+        {
+            auto* value = static_cast<MultipartWriterDebugContext*>(cookie);
+            if (partNumber != 1 || sizeBytes != FsS3::kMultipartMinPartSizeBytes)
+            {
+                return E_INVALIDARG;
+            }
+
+            std::unique_lock lock(value->mutex);
+            ++value->uploadCalls;
+            value->uploadStarted = true;
+            value->cv.notify_all();
+            if (! value->cv.wait_for(lock, std::chrono::seconds(5), [&] noexcept { return value->allowUploadCompletion; }))
+            {
+                return HRESULT_FROM_WIN32(ERROR_TIMEOUT);
+            }
+            eTag = "debug-etag";
+            return S_OK;
+        },
+        .complete = [](void* cookie, const std::vector<FsS3::S3MultipartUploadedPart>& parts) noexcept -> HRESULT
+        {
+            auto* value = static_cast<MultipartWriterDebugContext*>(cookie);
+            ++value->completeCalls;
+            return parts.size() == 1u && parts.front().partNumber == 1 && parts.front().eTag == "debug-etag" ? S_OK : E_INVALIDARG;
+        },
+        .abort = [](void* cookie) noexcept -> HRESULT
+        {
+            auto* value = static_cast<MultipartWriterDebugContext*>(cookie);
+            ++value->abortCalls;
+            return S_OK;
+        },
+    };
+    const MultipartWriterDebugTransportScope transportScope(transport);
+
+    wil::com_ptr<IFileWriter> writer;
+    writer.attach(new (std::nothrow)
+                      MultipartS3FileWriter(owner.get(), FsS3::ResolvedAwsContext{}, "bucket", "final.bin", L"/bucket/final.bin", true));
+    check(static_cast<bool>(writer), L"multipart writer allocation should succeed");
+    if (! writer)
+    {
+        return;
+    }
+
+    std::vector<std::byte> part(static_cast<size_t>(FsS3::kMultipartMinPartSizeBytes), std::byte{0x5a});
+    unsigned long bytesWritten = 0u;
+    const HRESULT writeHr = writer->Write(part.data(), static_cast<unsigned long>(part.size()), &bytesWritten);
+    check(SUCCEEDED(writeHr) && bytesWritten == part.size(), L"multipart Write should schedule a complete part without waiting for upload completion");
+
+    bool observedInFlight = false;
+    {
+        std::unique_lock lock(context.mutex);
+        observedInFlight = context.cv.wait_for(lock, std::chrono::seconds(2), [&] noexcept { return context.uploadStarted; });
+        context.allowUploadCompletion = true;
+    }
+    context.cv.notify_all();
+    check(observedInFlight, L"multipart upload should overlap the caller after Write returns");
+
+    const HRESULT commitHr = writer->Commit();
+    check(SUCCEEDED(commitHr), L"multipart Commit should join the in-flight part and complete the upload");
+    check(context.beginCalls == 1u && context.uploadCalls == 1u && context.completeCalls == 1u && context.abortCalls == 0u,
+          L"multipart writer should use one begin, one overlapped part, one complete, and no abort");
+}
+#endif
 
 HRESULT STDMETHODCALLTYPE FileSystemS3::GetAttributes(const wchar_t* path, unsigned long* fileAttributes) noexcept
 {
@@ -1254,25 +1844,6 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::CreateFileWriter(const wchar_t* path, Fi
 
     const bool allowOverwrite = (static_cast<unsigned long>(flags) & FILESYSTEM_FLAG_ALLOW_OVERWRITE) != 0;
 
-    unsigned long existingAttrs = 0;
-    const HRESULT hrAttr        = GetAttributes(path, &existingAttrs);
-    if (SUCCEEDED(hrAttr))
-    {
-        if ((existingAttrs & FILE_ATTRIBUTE_DIRECTORY) != 0)
-        {
-            return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
-        }
-
-        if (! allowOverwrite)
-        {
-            return HRESULT_FROM_WIN32(ERROR_FILE_EXISTS);
-        }
-    }
-    else if (hrAttr != HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND) && hrAttr != HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND))
-    {
-        return hrAttr;
-    }
-
     Settings settings;
     {
         std::lock_guard lock(_stateMutex);
@@ -1328,7 +1899,7 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::CreateFileWriter(const wchar_t* path, Fi
         return hr;
     }
 
-    hr = EnsureWritableS3Target(*this, bucketCtx, bucket, key, allowOverwrite);
+    hr = EnsureWritableS3Target(*this, bucketCtx, bucket, key, path, allowOverwrite);
     if (FAILED(hr))
     {
         return hr;
@@ -1341,6 +1912,24 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::CreateFileWriter(const wchar_t* path, Fi
     }
 
     *writer = impl;
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE FileSystemS3::SupportsAtomicWriterCommit(const wchar_t* path,
+                                                                   [[maybe_unused]] FileSystemFlags flags,
+                                                                   BOOL* supported) noexcept
+{
+    if (supported == nullptr)
+    {
+        return E_POINTER;
+    }
+    *supported = FALSE;
+    if (path == nullptr || path[0] == L'\0')
+    {
+        return E_INVALIDARG;
+    }
+
+    *supported = _mode == FileSystemS3Mode::S3 ? TRUE : FALSE;
     return S_OK;
 }
 

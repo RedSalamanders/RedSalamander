@@ -62,7 +62,7 @@ Example (Release):
 The canonical JSON Schema is stored in the repo at:
 - `Specs/SettingsStore.schema.json`
 
-On every successful save, a schema file is written next to the settings file:
+Every explicit `SaveSettingsAndSchema` save writes a schema file next to the settings file:
 - `<AppId>.settings.schema.json`
 
 The settings JSON includes a `$schema` property referencing it (relative path):
@@ -72,6 +72,18 @@ Notes:
 - `Common.dll` writes the base schema (identical to `Specs/SettingsStore.schema.json`) as a best-effort convenience for manual editing.
 - `Common.dll` loads the base schema text from `SettingsStore.schema.json` shipped next to the exe (copied from `Specs/SettingsStore.schema.json` during the build) and caches it in memory.
 - `RedSalamander.exe` overwrites that file with an aggregated schema that includes plugin configuration schemas under `plugins.configurationByPluginId[pluginId]` (best-effort).
+- UI controls that change values without changing schema shape MAY use the process-wide serialized
+  asynchronous settings queue. Those saves capture an immutable caller-thread snapshot, debounce and
+  coalesce consecutive snapshots for the same app, write only the settings JSON, and leave the
+  existing schema file unchanged.
+- Process shutdown stops the directory watcher without waiting for old saves, captures the final
+  settings and plugin-schema snapshots, enqueues one schema-writing final request, and waits at most
+  five seconds for that request. Timeout returns `ERROR_TIMEOUT`; the request and its completion
+  remain worker-owned, and UI teardown continues without a join.
+- The serialized worker and hot-reload session state are explicitly process-lifetime in
+  `RedSalamander.exe`. Entering process shutdown rejects later submissions and prevents late worker
+  completion from posting UI payloads or emitting Debug/perf callbacks. This process-lifetime
+  exception does not apply to plugin DLL workers.
 
 ### UI entry point
 
@@ -96,10 +108,23 @@ Saving must be atomic to prevent partial/corrupt writes:
 ### Recovery behavior
 
 For the normal startup / explicit recovery path (`LoadSettings(...)`):
-- If loading fails (missing file, unreadable file, invalid JSON, or invalid types), start with defaults.
-- If a file existed but was invalid, rename it to a backup for diagnostics:
+- If the file is missing, unreadable, not valid JSON, has an invalid root/schema marker, or uses an
+  unsupported older schema, start with defaults.
+- If a whole-document failure existed on disk, rename it to a backup for diagnostics:
   - `<SettingsFileName>.bad.<UTC timestamp>`
 - Startup callers that need to explain recovery to the user call `LoadSettingsWithRecoveryInfo(...)`. When a previous settings file is backed up and defaults are restored, the app MUST show a localized warning that includes the original settings path, the backup path, and explains that the current run is using default settings. The warning should tell the user to close the app, compare the backup with the new settings file at the original path, and copy back only the settings they still need.
+- `fileActions`, `userMenu`, and `shortcuts` are independent optional sections. A malformed one resets only
+  that section, leaves every valid section loaded, records a `SettingsSectionRecoveryInfo` entry, and does
+  not move or back up the whole settings file. The malformed section is retained as owned opaque JSON so a
+  later canonical save does not destroy information the user may need to repair.
+- A schema version greater than the current version is forward data, not a corrupt file. Startup uses
+  defaults for the running process but leaves the source bytes and path untouched, records the source
+  version, and marks the resulting settings snapshot `ExplicitReplacementRequired`. All automatic,
+  explicit-normal, asynchronous, and shutdown saves reject that snapshot with `ERROR_REVISION_MISMATCH`.
+  RedSalamander MUST surface an actionable warning that automatic persistence is disabled. A deliberate
+  user-approved replacement may clear the block only after the source has been moved successfully to the
+  standard timestamped backup path. The startup decision defaults to preservation; replacement requires an
+  explicit affirmative choice and keeps the exact newer source bytes in that backup.
 
 For the non-destructive hot-reload path (`TryLoadSettingsNoRecovery(...)`):
 - Missing file returns `S_FALSE`.
@@ -109,7 +134,9 @@ For the non-destructive hot-reload path (`TryLoadSettingsNoRecovery(...)`):
 
 ### Tolerant reads, canonical writes
 
-- Unknown top-level keys must be ignored (forward compatibility).
+- Unknown top-level keys must be copied into `SettingsPersistenceState::opaqueTopLevelMembers` as owned
+  `JsonValue` data and written back unchanged at the JSON-value level (forward compatibility). No yyjson
+  pointer or borrowed string may survive the parsed document lifetime.
 - Missing keys use defaults.
 - Writer emits strict JSON with stable formatting and ordering for present keys, but **omits default values** (and whole sections) when there is nothing meaningful to persist.
 - Reader accepts JSON5 features (comments, trailing commas) and UTF-8 BOM; writer outputs strict JSON and does not preserve comments/trailing commas.
@@ -147,6 +174,7 @@ namespace Common::Settings
     HRESULT LoadSettingsWithRecoveryInfo(std::wstring_view appId, Settings& out, SettingsLoadRecoveryInfo* recovery) noexcept;
     HRESULT TryLoadSettingsNoRecovery(std::wstring_view appId, Settings& out) noexcept;
     HRESULT TryGetSettingsFileStamp(std::wstring_view appId, SettingsFileStamp& out) noexcept;
+    HRESULT BackupSettingsForExplicitReplacement(std::wstring_view appId, std::filesystem::path& backupPath) noexcept;
     HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept;
 
     // Writes `<AppId>.settings.schema.json` next to the settings file.
@@ -154,7 +182,14 @@ namespace Common::Settings
 }
 ```
 
-`SettingsLoadRecoveryInfo` reports whether the startup recovery path used defaults, whether an existing file was moved to a backup, the original settings path, the backup path, the recovery reason, and the unsupported schema version when that was the failure. `LoadSettings(...)` is the compatibility wrapper for callers that do not need this detail.
+Parsed `JsonValue` consumers use the shared `Common::Settings::FindMember`,
+`GetString`, `GetWString`, `GetBool`, `GetUInt32`, and `GetArray` accessors rather
+than duplicating variant/object traversal. Typed accessors return no value for a
+missing or wrong-typed member; `GetUInt32` also rejects negative and overflowing
+numbers, and `GetWString` rejects malformed UTF-8 instead of substituting a
+replacement character.
+
+`SettingsLoadRecoveryInfo` reports whether the startup recovery path used defaults, whether an existing file was moved to a backup, the original settings path, the backup path, the recovery reason, the unsupported schema version when that was the failure, and zero or more section-scoped recovery records. `LoadSettings(...)` is the compatibility wrapper for callers that do not need this detail.
 
 ### File-stamp helper
 
@@ -173,9 +208,13 @@ Return contract:
   - `S_FALSE`: file missing
   - failure `HRESULT`: unexpected I/O/query failure
 - `TryLoadSettingsNoRecovery(...)`
-  - `S_OK`: settings loaded and validated
+  - `S_OK`: settings loaded; malformed recoverable optional sections use their defaults and retain their
+    opaque source member
   - `S_FALSE`: file missing
   - failure `HRESULT`: invalid/unreadable/unsupported file without fallback or backup
+- `SaveSettingsValuesOnlyWithStamp(...)` returns the stamp of the flushed temporary file that was
+  atomically moved into place. It MUST NOT re-stat the destination path after replacement, because a
+  later external writer may already own that path.
 
 ## Live Reload Semantics (RedSalamander.exe)
 
@@ -183,7 +222,21 @@ Return contract:
 
 Watcher rules:
 - Detection is event-driven (directory change notification), but only the main settings file stamp is authoritative.
-- `RedSalamander.exe` writes its own settings through a shared save helper that refreshes the applied stamp immediately after save.
+- `SettingsHotReload::Start(...)` must not synchronously wait on directory-watch readiness during window creation and must not return `WAIT_TIMEOUT` for a transient initial `FindFirstChangeNotificationW(...)` arming failure.
+- Directory watcher readiness is worker-internal state; startup and main-window creation continue after launching the watcher, while the worker retries asynchronously until it can arm.
+- The worker creates a missing settings directory before it arms the directory notification, and retry waits remain cancellation-aware so teardown does not wait for the next retry interval.
+- The worker captures the initial authoritative settings-file stamp before arming and performs a post-arm catch-up comparison. A replacement made between the initial stamp and successful notification arming MUST post `WndMsg::kSettingsFileChanged` even when no directory event is subsequently delivered.
+- After a transient watcher-arm failure, the watcher self-arms on a later retry when the settings directory becomes reachable, and subsequent directory changes still post `WndMsg::kSettingsFileChanged`.
+- `RedSalamander.exe` writes its own settings through a shared save helper that opens an internal-save
+  epoch, writes values-only, publishes the exact atomic-writer stamp with the originating session
+  token, and ends the epoch before aggregate-schema I/O.
+- A watcher notification observed while that internal-save epoch is active is deferred and rechecked
+  after the exact stamp is published. An external replacement made after the app's atomic move has a
+  different stamp and MUST be loaded even when schema generation or another post-write step is still
+  running.
+- If an internal-save epoch begins or ends between a reload stamp/load check, the reload retries its
+  observation. Repeated epoch churn reposts a change notification; it must not silently consume an
+  external event, including when the internal save fails.
 - A changed stamp already recorded as `lastAppliedStamp` or `lastRejectedStamp` is ignored on the next reload check.
 - `Themes\\*.theme.json5` files are **not** watched in this iteration.
 - `RedSalamanderMonitor.exe` settings do not participate in this main-app hot-reload flow.
@@ -200,6 +253,10 @@ Merge policy after a valid external reload:
   - `folders.historyFilters`
   - `folders.items[*].current`
 - External reload must not live-move existing windows or navigate panes to the paths stored on disk.
+- Settings-driven plugin rediscovery must capture each live pane's plugin ID, short ID, instance
+  context, and raw provider path before releasing providers, qualify that raw path exactly once, then
+  restore and re-enumerate both panes after providers reload. A provider refresh must never leave
+  retained pane locations with empty item models or double-qualify mounted/archive paths.
 
 Invalid external file behavior:
 - Keep the current runtime settings unchanged.
@@ -219,7 +276,9 @@ Manual association reload:
 
 The root JSON object may contain (depending on the application):
 - `schemaVersion` (integer): format version (current: v16 = `16`); unsupported versions are treated as invalid (file is backed up and defaults are used, no migration).
-- Startup recovery for an unsupported version uses the same `.bad.<UTC timestamp>` backup path and user-facing warning as other destructive recoveries. v15 files are intentionally not migrated to v16.
+- Startup recovery for an unsupported older version uses the same `.bad.<UTC timestamp>` backup path and
+  user-facing warning as other destructive recoveries. v15 files are intentionally not migrated to v16.
+  Unsupported future versions are preserved in place and block persistence as defined under Recovery behavior.
 - `windows` (object): per-window placement records
 - `theme` (object): current theme + custom themes
 - `plugins` (object): plugin discovery + per-plugin configuration
@@ -319,7 +378,7 @@ Each action definition:
 - `enabled` (bool, optional): default `true`; disabled actions remain configured but cannot be launched.
 - `kind` (string): required; `viewerPlugin` for an internal viewer plugin, or `externalProgram` for an external process. Unknown kinds are invalid.
 - `pluginId` (string, required when `kind` is `viewerPlugin`, forbidden when `kind` is `externalProgram`): viewer plugin ID.
-- `executablePath` (string, required when `kind` is `externalProgram`, forbidden when `kind` is `viewerPlugin`): process path, which may contain launch macros.
+- `executablePath` (string, required when `kind` is `externalProgram`, forbidden when `kind` is `viewerPlugin`): an explicit absolute drive, UNC, or Win32 extended path to the process. Relative paths, drive-relative paths, rooted paths without a drive, device paths, and bare program names are never resolved through `PATH` or a working directory.
 - `arguments` (string, optional): process arguments, which may contain launch macros.
 - `workingDirectory` (string, optional): process working directory, which may contain launch macros.
 - `appliesTo.matches` (array, optional): file matches the action can handle; empty means no file-match filter.
@@ -345,9 +404,9 @@ Each editor association rule:
 
 Pattern and extension association rows share the same specificity bucket. If multiple rows in the same priority bucket match, the first row in persisted order wins.
 
-Association action IDs must reference an action in the same `viewers.actions` or `editors.actions` array. References match action IDs case-insensitively. Two actions whose IDs differ only by case are invalid duplicates and must be rejected by the reader before resolution or `View With` / `Edit With` collection. The reader rejects duplicate association keys with the same `match` plus `computerName`, duplicate action IDs, malformed matches, unknown action kinds, editor actions that are not `externalProgram`, `viewerPlugin` actions without `pluginId`, `viewerPlugin` actions with `executablePath`, `externalProgram` actions without `executablePath`, and `externalProgram` actions with `pluginId`. Normal `LoadSettings` backs up malformed settings and starts from defaults; no-recovery loads return a failure.
+Association action IDs must reference an action in the same `viewers.actions` or `editors.actions` array. References match action IDs case-insensitively. Two actions whose IDs differ only by case are invalid duplicates and must be rejected by the reader before resolution or `View With` / `Edit With` collection. The reader rejects duplicate association keys with the same `match` plus `computerName`, duplicate action IDs, malformed matches, unknown action kinds, editor actions that are not `externalProgram`, `viewerPlugin` actions without `pluginId`, `viewerPlugin` actions with `executablePath`, `externalProgram` actions without `executablePath`, and `externalProgram` actions with `pluginId`. Normal `LoadSettings` backs up malformed settings and starts from defaults; no-recovery loads return a failure. For compatibility, a configured relative or bare external executable is preserved verbatim but forced disabled instead of invalidating unrelated settings. Preferences blocks newly edited literal external paths unless they are explicit and absolute, but it still allows supported macros in `executablePath`; it never guesses or rewrites a path.
 
-Launch macro strings are interpreted by the command layer, not by the settings store. Supported macros are `{Path}`, `{FullPath}`, `{PathAndFilename}`, `{Filename}`, `{SelectedPathsFile}`, `{OppositePanePath}`, and `{ComputerName}`. `executablePath` and `workingDirectory` expand macros as raw text. `arguments` expands each macro as a Windows command-line argument by quoting and escaping the macro value; when a macro is already wrapped in literal quotes in the template, the macro content is escaped without adding another quote pair.
+Launch macro strings are interpreted by the command layer, not by the settings store. Supported macros are `{Path}`, `{FullPath}`, `{PathAndFilename}`, `{Filename}`, `{SelectedPathsFile}`, `{OppositePanePath}`, and `{ComputerName}`. `workingDirectory` expands macros as raw text. `arguments` expands each macro as a Windows command-line argument by quoting and escaping the macro value; when a macro is already wrapped in literal quotes in the template, the macro content is escaped without adding another quote pair. Launch planning validates the expanded `executablePath` again and fails unless it is an explicit absolute executable path, so direct callers and externally edited JSON cannot bypass the settings or Preferences checks.
 
 Omitting `fileActions` uses the built-in viewer/editor defaults. Explicit empty `fileActions.viewers` or `fileActions.editors` sections mean the user cleared that action family and must round-trip as empty instead of being repopulated from defaults.
 
@@ -422,6 +481,15 @@ Notes:
 - The `cmd/shortcut/unassigned` sentinel is preserved during save/load and import/export, consumes its chord as a no-op at runtime, is hidden from assignable command lists, and is excluded from command reverse lookup.
 - If a binding references a command that is not implemented, invoking it shows a localized “not yet implemented” message box and does nothing else (see `Specs/UI/UI_CommandMenuKeyboard.md`).
 - The `ShortcutsWindow` selected row and live search text are transient UI state, not persisted settings fields. Reopen restores persisted group collapse, logical sort, and visible column layout, then selects a valid row from the restored grid.
+
+All persisted grid-layout arrays (`shortcuts.gridLayout`, `search.resultsGridLayout`,
+`batchRename.previewGridLayout`, and `fileOperations.issuesPaneGridLayout`) use one parser contract. Each valid
+entry requires a non-empty string `columnId`; non-object entries and entries with a missing, wrong-type, or
+empty ID are skipped. Optional unsigned `displayIndex` defaults to zero, numeric `widthDip` is clamped to
+`0..10000`, and unknown entry members are ignored. Input order and duplicate IDs are preserved for the owning
+UI model to validate. Batch Rename additionally strips single-line control characters from `columnId`; the
+other sections preserve their decoded IDs. An invalid strict section such as Shortcuts recovers independently
+without discarding valid grid layouts in other sections.
 
 ## Window Placement
 
@@ -516,9 +584,21 @@ Defaults (when keys are missing):
 ### Theme definitions
 
 Custom themes are stored in `theme.themes[]`. Each custom theme:
+- Requires `formatVersion: 2`; missing versions and every other version are rejected
 - Has an `id` and `name`
 - Declares a `baseThemeId` (built-in theme used as a base)
-- Provides a `colors` map of overrides
+- May define a reusable `palette` map
+- Provides a `colors` map of authored semantic overrides
+
+There is no version-1 reader, legacy direct-color-only shape, or flattened compatibility writer. All inline, standalone, imported, exported, and shipped themes use version 2.
+
+RedConfigure standalone export preserves that authored representation with stable key ordering and deterministic comments for the named palette and each semantic color-key group. It writes through a sibling temporary file, atomically replaces the destination, and reparses the written version 2 document before reporting success.
+
+Inline settings themes use a lenient recovery policy so one damaged theme cannot make the entire settings document unreadable:
+- Structurally valid theme objects are retained when possible. Names are clamped to the supported length, unknown `baseThemeId` values are preserved for forward compatibility, and invalid known color overrides are ignored while valid fields continue to load.
+- Structurally unusable or non-object `theme.themes[]` entries are preserved as opaque JSON entries and written back unchanged by the settings store instead of being silently discarded.
+- The settings loader emits one aggregate recovery warning for skipped or repaired inline-theme data rather than logging one warning per field or entry.
+- Standalone `Themes\\*.theme.json5` files remain strict: malformed files fail that file's load and do not use the inline-settings recovery policy.
 
 ### UI integration (v1)
 
@@ -533,15 +613,37 @@ In addition to `theme.themes[]` stored in the settings file, `RedSalamander` may
 - Format: a single `ThemeDefinition` JSON5 object (same shape as items in `theme.themes[]`)
 - Persistence: these themes are **not** written into the settings file on save; only `theme.currentThemeId` is persisted when the user selects one
 - Precedence: if a theme ID exists both in settings and on disk, the settings version wins
-- The disk-theme loader must use the same `ThemeDefinition` JSON5 parser and validation rules as settings-file themes so duplicate IDs, invalid IDs, malformed colors, and schema errors cannot diverge between the two load paths.
+- Both `theme.themes[]` in the settings file and disk theme files must use the shared `ThemeDefinition` JSON5 parser and validation rules so duplicate IDs, invalid IDs, malformed color keys, malformed color values, and schema errors cannot diverge between the two load paths.
 
-### Color representation
+### Version 2 color sources
 
-Color values are hex strings:
-- `#RRGGBB` (opaque)
-- `#AARRGGBB` (alpha + RGB)
+`palette` and `colors` values are authored strings. A value is either `#RRGGBB`, `#AARRGGBB`, or one of the closed expression forms below. References use `palette.<name>` for palette entries and the normal semantic key for `colors` entries. Palette names and semantic keys are case-sensitive; palette names cannot contain `.`.
 
-RedConfigure may offer authoring-time color expressions such as `ref(app.accent)`, `darken(app.accent,20%)`, or `blend(menu.background,app.accent,16%)`. Until the runtime schema explicitly supports a durable `colorExpressions` object, exported `.theme.json5` files must flatten those expressions into direct `colors` values so existing RedSalamander builds can consume them.
+- `ref(key)`
+- `lighten(key,amount)`, `darken(key,amount)`, `alpha(key,amount)`
+- `blend(firstKey,secondKey,amount)`
+- `contrast(backgroundKey)` or `contrast(backgroundKey,lightKey,darkKey)`
+- `perceptualTone(key,0..100)`
+- `ensureContrast(foregroundKey,backgroundKey,1..21)`
+- `harmonize(key,targetKey,amount)`
+- `systemAccent()` or `systemColor(accent|accentLight|accentDark|window|windowText|highlight|highlightText)`
+- `tone(lightKey,darkKey)`
+- `seededRainbow(runtime.seed,saturation,value,alpha,hueOffset)`
+- `seededChoice(runtime.seed,key1,key2[,key3...key8])`
+
+Amounts accept `0.0` through `1.0` or percentage syntax. Expressions are deliberately non-nested; authors name intermediate palette entries instead. Missing references, dependency cycles, references to paint-time sources, and sources longer than 256 UTF-16 code units are validation errors. Resolution has a maximum dependency depth of 32. Theme definitions are bounded to 128 palette entries and 512 semantic entries.
+
+Static and event-time values resolve when a theme is applied or a relevant system event occurs. Paint-time sources are parsed and compiled once, then evaluated from a stable 32-bit runtime seed without parsing, allocation, locking, or I/O in the paint path. `seededChoice` has two through eight pre-resolved candidates. High Contrast continues to override authored and Rainbow output.
+
+Startup, explicit theme selection, system color/theme notifications, and settings hot reload all resolve the authored graph before application. A hot reload whose selected theme graph does not resolve is rejected before replacing runtime settings, retains the last valid live theme, and uses the existing non-destructive invalid-reload alert path.
+
+`builtin/rainbow` remains the application-wide Rainbow base and preserves its existing light/dark base selection. A version 2 custom theme can inherit it and statically override individual semantic tokens. Static overrides suppress Rainbow only for those tokens. Other bases may use `seededRainbow` or `seededChoice` on supported dynamic tokens without enabling plugin-wide Rainbow behavior.
+
+### Theme performance contract
+
+The protected resolver scenario contains 128 palette entries and 512 semantic sources, including the maximum eight-candidate `seededChoice` program. The protected paint scenario evaluates both eight-candidate `seededChoice` and `seededRainbow` over fixed seeds. Resolver and preview work must be bounded; compiled paint evaluation must remain allocation-free and perform no parsing, locking, callbacks, system queries, or I/O.
+
+Instrumentation uses `theme.resolve_us`, `theme.resolve.node_count`, `theme.resolve.edge_count`, `theme.dynamic.evaluate_us`, `theme.dynamic.evaluate_count`, and `redconfigure.theme.preview_resolve_us`. The deterministic selftest records at least 200 resolver samples and 250 dynamic batches so p95 is meaningful. Release guards are 16.667 ms for the worst allowed graph and 5 ms for a batch of 2,000 dynamic evaluations; Debug guards are 100 ms and 50 ms respectively. Changes to the resolver, compiled programs, preview recomputation, or dynamic paint consumption require same-machine archived evidence under `Specs/TestRuns/`.
 
 ### Color keys (recommended set)
 
@@ -660,6 +762,8 @@ These keys are the global defaults edited by `Preferences -> File Operations`. P
 ### Stored data
 
 - `fileOperations.autoDismissSuccess`: whether completed successful/cancelled task cards auto-dismiss from the File Operations popup (bool, default: `false`).
+- `fileOperations.popupFooterOnly`: whether the File Operations popup presents only its aggregate footer instead of task cards (bool, default: `false`; owned by the popup, not edited in Preferences).
+- `fileOperations.popupCompactDensity`: whether the File Operations popup uses compact task-card density (bool, default: `false`; owned by the popup, not edited in Preferences).
 - `fileOperations.preCalcEnabled`: whether copy, move, and permanent delete tasks run the recursive pre-calculation pass when that operation type supports it (bool, default: `true`).
 - `fileOperations.preCalcMaxWorkers`: maximum worker count for the host-side pre-calculation tree walk (integer, `1..8`, default: `4`).
 - `fileOperations.crossFsBridgeBufferSizeKB`: default per-buffer size for host-driven cross-filesystem bridge copies (integer, `512..16384`, default: `4096`). Two buffers are allocated per active bridged file transfer.
@@ -678,9 +782,15 @@ These keys control the host-owned File Operations diagnostics log and exported i
 - `fileOperations.diagnosticsFlushIntervalMs`: periodic diagnostics flush interval in milliseconds (integer, `>= 1`, default: `5000`; advanced JSON-only setting).
 - `fileOperations.diagnosticsCleanupIntervalMs`: interval between diagnostics log cleanup passes in milliseconds (integer, `>= 1`, default: `900000`; advanced JSON-only setting).
 
+### Issues pane view state
+
+- `fileOperations.issuesPaneSortColumnId`: stable column identifier used to restore the issues-pane sort column (string, default: empty).
+- `fileOperations.issuesPaneSortDescending`: whether the restored issues-pane sort direction is descending (bool, default: `false`). The value remains part of non-default-state detection even when a malformed or migrated payload omits the corresponding column id.
+- `fileOperations.issuesPaneGridLayout`: persisted issues-pane column order and widths (array of grid-column layout entries, default: empty).
+
 ### UI ownership
 
-- `Preferences -> File Operations` edits only the host-owned `fileOperations.*` defaults above.
+- `Preferences -> File Operations` edits only the host-owned operational defaults above. Popup presentation and issues-pane view-state keys are written by their owning UI surfaces.
 - `Preferences -> Plugins -> File System` owns plugin-specific file-operation settings such as:
   - `concurrencyMode`
   - `copyMoveMaxConcurrency`
@@ -936,6 +1046,24 @@ The `63` default and the `0..63` range come from `Specs/SettingsStore.schema.jso
 Examples in the canonical schema: `mainMenuSettings.menuBarVisible` uses `x-ui-pane: "General"`, `x-ui-section: "Display"`, `x-ui-order: 10`, `x-ui-control: "toggle"`; `fileOperationsSettings.maxDiagnosticsLogFiles` uses `x-ui-pane: "Advanced"`, `x-ui-section: "File Operations"`; and section-owning objects such as `themeSettings`, `pluginsSettings`, and `foldersSettings` carry `x-ui-pane` + `x-ui-control: "custom"` so a dedicated Preferences page renders them.
 
 When adding or moving a setting that should appear in Preferences, set the appropriate `x-ui-*` annotations in `Specs/SettingsStore.schema.json` so the parser routes it to the correct page; omit `x-ui-pane` for settings that are intentionally JSON-only (for example the advanced `fileOperations` diagnostics knobs above).
+
+### Plugin configuration schema/model/codec
+
+`Common::PluginConfiguration` is the single dependency-layer model and codec used by both Manage Plugins and
+Preferences. It parses the plugin `fields` array into the supported `text`, `value`, `bool`/`boolean`, `option`,
+and `selection` field types, including defaults, numeric limits, choices, folder browsing, and `x-ui-*`
+metadata. Invalid JSON, invalid roots/fields, duplicate field keys or choices, unsupported types, invalid
+constraints/defaults, and wrong-typed configuration values produce explicit validation issues rather than
+surface-specific parser behavior. Fields with an explicit `x-ui-order` are sorted first while source order
+remains stable within equal order.
+
+Configuration parsing starts from schema defaults and applies the shared tolerant coercion rules. Serialization
+overlays known field values on a deep copy of the original configuration object: unknown/future members retain
+their JSON values and original order, known members retain their position when updated, duplicate known members
+are removed, and numeric constraints are enforced. Canceling either editor does not serialize or save. An option
+is rendered as a boolean toggle only when it has exactly two choices and their labels or values identify distinct
+`on`/`off`, `true`/`false`, or `1`/`0` states; all other options remain choice controls. These semantics must be
+identical in Manage Plugins and Preferences.
 
 ## Example Settings Files
 

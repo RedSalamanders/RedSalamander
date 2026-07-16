@@ -44,9 +44,11 @@
 #include "PlugInterfaces/Host.h"
 #include "PlugInterfaces/Informations.h"
 #include "PlugInterfaces/Viewer.h"
+#include "ViewerSpace.ScanPolicy.h"
 
 [[nodiscard]] const char* GetViewerSpaceStaticConfigurationSchema() noexcept;
 void ShutdownViewerSpaceModuleState() noexcept;
+[[nodiscard]] bool CanUnloadViewerSpaceModuleNow() noexcept;
 
 class ViewerSpace final : public EmbeddedViewerBase<ViewerSpace>, public IInformations
 {
@@ -124,13 +126,14 @@ private:
         uint32_t childrenStart    = 0;
         uint32_t childrenCount    = 0;
         uint32_t childrenCapacity = 0;
-        uint32_t aggregateFolders = 0;
-        uint32_t aggregateFiles   = 0;
+        uint64_t aggregateBytes   = 0;
+        uint64_t aggregateFolders = 0;
+        uint64_t aggregateFiles   = 0;
     };
 
-    static constexpr uint32_t kFileRecordIdBase      = 0x40000000u;
-    static constexpr uint32_t kSyntheticNodeIdBase   = 0x80000000u;
-    static constexpr uint32_t kTreemapItemIdMask     = 0x3FFFFFFFu;
+    static constexpr uint32_t kFileRecordIdBase    = 0x40000000u;
+    static constexpr uint32_t kSyntheticNodeIdBase = 0x80000000u;
+    static constexpr uint32_t kTreemapItemIdMask   = 0x3FFFFFFFu;
 
     struct FileRecord final
     {
@@ -150,8 +153,8 @@ private:
         ScanState scanState = ScanState::Done;
         std::wstring_view name;
         uint64_t totalBytes       = 0;
-        uint32_t aggregateFolders = 0;
-        uint32_t aggregateFiles   = 0;
+        uint64_t aggregateFolders = 0;
+        uint64_t aggregateFiles   = 0;
     };
 
     struct DrawItem final
@@ -223,6 +226,7 @@ private:
             UpdateState,
             DirectoryFilesSummary,
             Progress,
+            ResourceSummary,
         };
 
         Kind kind           = Kind::UpdateSize;
@@ -235,13 +239,22 @@ private:
         bool isDirectory = false;
         bool isSynthetic = false;
 
-        uint32_t scannedFolders = 0;
-        uint32_t scannedFiles   = 0;
+        uint64_t scannedFolders = 0;
+        uint64_t scannedFiles   = 0;
 
-        uint64_t otherBytes  = 0;
-        uint32_t otherCount  = 0;
-        uint32_t otherNodeId = 0;
+        uint64_t otherBytes   = 0;
+        uint64_t otherFolders = 0;
+        uint64_t otherFiles   = 0;
         std::vector<FileSummaryItem> topFiles;
+
+        uint64_t acceptedEntries         = 0;
+        uint64_t rejectedEntries         = 0;
+        uint64_t cappedDirectories       = 0;
+        uint64_t cappedFiles             = 0;
+        uint64_t retainedNameBytes       = 0;
+        uint64_t retainedChildReferences = 0;
+        uint64_t traversedDirectories    = 0;
+        ViewerSpaceScan::ValidationError validationError = ViewerSpaceScan::ValidationError::None;
     };
 
     static ATOM RegisterWndClass(HINSTANCE instance) noexcept;
@@ -290,8 +303,8 @@ private:
     void StartScan(std::wstring_view rootPath, bool allowCache = true);
     void CancelScan() noexcept;
     void CancelScanByUser() noexcept;
-    void CancelScanAndWait() noexcept;
-    void ReapFinishedScanWorkers(bool wait) noexcept;
+    void AbandonScanWorkers() noexcept;
+    void ReapFinishedScanWorkers() noexcept;
     void ScanMain(std::stop_token stopToken,
                   uint32_t generation,
                   wil::com_ptr<IFileSystem> fileSystem,
@@ -300,7 +313,8 @@ private:
                   uint32_t rootNodeId,
                   uint32_t nextNodeId,
                   size_t topFilesPerDirectory,
-                  uint32_t scanThreads) noexcept;
+                  uint32_t scanThreads,
+                  ViewerSpaceScan::ResourcePolicy resourcePolicy) noexcept;
 
     void PostUpdate(PendingUpdate&& update) noexcept;
     void DrainUpdates() noexcept;
@@ -317,7 +331,9 @@ private:
     static uint32_t SyntheticOtherBucketIdForParent(uint32_t parentId) noexcept;
     static uint64_t SubtractAtomicFloor(std::atomic_uint64_t& value, uint64_t delta) noexcept;
     std::span<const uint32_t> GetRealNodeChildren(const Node& node) const noexcept;
-    void AddRealNodeChild(Node& parent, uint32_t childItemId) noexcept;
+    [[nodiscard]] bool AddRealNodeChild(Node& parent, uint32_t childItemId) noexcept;
+    [[nodiscard]] std::optional<uint32_t> AllocateChildArenaBlock(uint32_t capacity) noexcept;
+    void ReleaseChildArenaBlock(uint32_t start, uint32_t capacity) noexcept;
     std::wstring BuildNodePathText(uint32_t nodeId) const;
     std::wstring BuildItemPathText(uint32_t itemId) const;
     void UpdateViewPathText() noexcept;
@@ -379,9 +395,9 @@ private:
         wil::com_ptr<ID2D1DeviceContext> d2dContext;
         wil::com_ptr<IDXGISwapChain1> swapChain;
         wil::com_ptr<ID2D1Bitmap1> targetBitmap;
-        UINT swapChainWidthPx              = 0;
-        UINT swapChainHeightPx             = 0;
-        D3D_FEATURE_LEVEL featureLevel      = D3D_FEATURE_LEVEL_11_0;
+        UINT swapChainWidthPx          = 0;
+        UINT swapChainHeightPx         = 0;
+        D3D_FEATURE_LEVEL featureLevel = D3D_FEATURE_LEVEL_11_0;
     };
 
     wil::com_ptr<ID2D1Factory1> _d2dFactory;
@@ -400,14 +416,14 @@ private:
     struct StaticTreemapCache final
     {
         wil::com_ptr<ID2D1Bitmap1> bitmap;
-        UINT widthPx = 0;
-        UINT heightPx = 0;
-        uint64_t generation = 0u;
-        uint64_t hits = 0u;
-        uint64_t misses = 0u;
-        uint64_t recordCount = 0u;
+        UINT widthPx          = 0;
+        UINT heightPx         = 0;
+        uint64_t generation   = 0u;
+        uint64_t hits         = 0u;
+        uint64_t misses       = 0u;
+        uint64_t recordCount  = 0u;
         uint64_t lastRecordUs = 0u;
-        uint64_t bytes = 0u;
+        uint64_t bytes        = 0u;
     };
     StaticTreemapCache _staticTreemapCache;
 
@@ -441,6 +457,13 @@ private:
     std::pmr::vector<Node> _nodes             = std::pmr::vector<Node>(&_nodePool);
     std::pmr::vector<FileRecord> _fileRecords = std::pmr::vector<FileRecord>(&_nodePool);
     std::pmr::vector<uint32_t> _childrenArena = std::pmr::vector<uint32_t>(&_nodePool);
+    struct ChildArenaFreeBlock final
+    {
+        uint32_t start    = 0u;
+        uint32_t capacity = 0u;
+    };
+    std::vector<ChildArenaFreeBlock> _childrenArenaFreeBlocks;
+    ViewerSpaceScan::ResourcePolicy _scanResourcePolicy = ViewerSpaceScan::kProductionResourcePolicy;
 
     ScanWorker _scanWorker;
     std::vector<ScanWorker> _retiredScanWorkers;
@@ -449,6 +472,12 @@ private:
 
     std::mutex _updateMutex;
     std::deque<PendingUpdate> _pendingUpdates;
+#ifdef ENABLE_TESTS
+    std::atomic<HANDLE> _debugPostUpdateEnteredEvent{nullptr};
+    std::atomic<HANDLE> _debugPostUpdateReleaseEvent{nullptr};
+    std::atomic_bool _debugPauseNextPostUpdate{false};
+    std::atomic_uint64_t _debugPostUpdateInnerGenerationRejects{0u};
+#endif
 
     std::shared_ptr<void> _scanCacheBuildSnapshot;
     std::wstring _scanCacheBuildRootKey;
@@ -460,6 +489,14 @@ private:
     size_t _scanCacheBuildNodesNext              = 0;
     size_t _scanCacheBuildFileRecordsNext        = 0;
     uint64_t _lastScanCacheSnapshotBytes         = 0u;
+    uint64_t _lastModelAcceptedEntries           = 0u;
+    uint64_t _lastModelRejectedEntries           = 0u;
+    uint64_t _lastModelCappedDirectories         = 0u;
+    uint64_t _lastModelCappedFiles               = 0u;
+    uint64_t _lastModelRetainedNameBytes         = 0u;
+    uint64_t _lastModelRetainedChildReferences   = 0u;
+    uint64_t _lastModelTraversedDirectories      = 0u;
+    ViewerSpaceScan::ValidationError _lastModelValidationError = ViewerSpaceScan::ValidationError::None;
 
     std::unordered_map<uint32_t, Node> _syntheticNodes;
     std::unordered_map<uint32_t, uint32_t> _layoutMaxItemsByNode;
@@ -467,8 +504,8 @@ private:
     std::unordered_map<uint32_t, LayoutCandidateCacheEntry> _layoutCandidateCache;
     uint64_t _layoutCandidateCacheHits   = 0u;
     uint64_t _layoutCandidateCacheMisses = 0u;
-    uint32_t _rootNodeId          = 0;
-    uint32_t _viewNodeId          = 0;
+    uint32_t _rootNodeId                 = 0;
+    uint32_t _viewNodeId                 = 0;
     std::wstring _scanRootPath;
     std::optional<std::wstring> _scanRootParentPath;
     std::wstring _viewPathText;
@@ -478,8 +515,8 @@ private:
     double _scanCompletedSinceSeconds = 0.0;
 
     uint64_t _scanProgressBytes    = 0;
-    uint32_t _scanProgressFolders  = 0;
-    uint32_t _scanProgressFiles    = 0;
+    uint64_t _scanProgressFolders  = 0;
+    uint64_t _scanProgressFiles    = 0;
     uint32_t _scanProcessingNodeId = 0;
     std::wstring _scanProcessingFolderName;
     UINT _headerStatusId = 0;
@@ -499,16 +536,16 @@ private:
     struct HitGrid final
     {
         D2D1_RECT_F bounds{};
-        uint32_t columns = 0u;
-        uint32_t rows = 0u;
+        uint32_t columns              = 0u;
+        uint32_t rows                 = 0u;
         uint32_t maxCandidatesPerCell = 0u;
         std::vector<std::vector<uint32_t>> cells;
 
         void Clear() noexcept
         {
-            bounds = {};
-            columns = 0u;
-            rows = 0u;
+            bounds               = {};
+            columns              = 0u;
+            rows                 = 0u;
             maxCandidatesPerCell = 0u;
             cells.clear();
         }
@@ -523,27 +560,27 @@ private:
     double _tooltipCandidateSinceSeconds = 0.0;
     D2D1_POINT_2F _tooltipAnchorDip      = D2D1::Point2F(0.0f, 0.0f);
 #ifdef ENABLE_TESTS
-    uint64_t _tooltipPaintCount = 0u;
+    uint64_t _tooltipPaintCount            = 0u;
     bool _debugHasLastMouseMoveClientPoint = false;
     POINT _debugLastMouseMoveClientPoint{};
     bool _debugHasLastContextMenuScreenPoint = false;
     POINT _debugLastContextMenuScreenPoint{};
-    uint32_t _debugLastContextMenuHitNodeId = 0;
-    uint64_t _lastPaintUs = 0u;
-    uint64_t _lastLayoutUs = 0u;
-    uint64_t _lastDrainUs = 0u;
-    uint64_t _lastWorkingSetBytes = 0u;
-    uint64_t _lastTileDrawCount = 0u;
-    uint64_t _lastTextDrawCount = 0u;
-    uint64_t _layoutGeneration = 0u;
-    uint32_t _rendererDeviceCreateCount = 0u;
-    uint32_t _swapChainResizeCount = 0u;
-    uint32_t _rendererBrushCreateCount = 0u;
-    uint32_t _rendererTextFormatCreateCount = 0u;
-    uint32_t _rendererFailureStage = 0u;
-    uint32_t _rendererFailureHr = 0u;
-    uint32_t _debugForcedRendererFault = 0u;
-    mutable uint64_t _lastHitTestUs = 0u;
+    uint32_t _debugLastContextMenuHitNodeId        = 0;
+    uint64_t _lastPaintUs                          = 0u;
+    uint64_t _lastLayoutUs                         = 0u;
+    uint64_t _lastDrainUs                          = 0u;
+    uint64_t _lastWorkingSetBytes                  = 0u;
+    uint64_t _lastTileDrawCount                    = 0u;
+    uint64_t _lastTextDrawCount                    = 0u;
+    uint64_t _layoutGeneration                     = 0u;
+    uint32_t _rendererDeviceCreateCount            = 0u;
+    uint32_t _swapChainResizeCount                 = 0u;
+    uint32_t _rendererBrushCreateCount             = 0u;
+    uint32_t _rendererTextFormatCreateCount        = 0u;
+    uint32_t _rendererFailureStage                 = 0u;
+    uint32_t _rendererFailureHr                    = 0u;
+    uint32_t _debugForcedRendererFault             = 0u;
+    mutable uint64_t _lastHitTestUs                = 0u;
     mutable uint32_t _lastHitTestCandidatesChecked = 0u;
 #endif
 

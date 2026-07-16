@@ -30,10 +30,10 @@ struct MenuGlyphTag
 };
 
 const MenuGlyphTag kMenuGlyphConnections{FluentIcons::kConnections};
-constexpr int kLeftNavigationControlId  = 1001;
-constexpr int kRightNavigationControlId = 1003;
+constexpr int kLeftNavigationControlId                   = 1001;
+constexpr int kRightNavigationControlId                  = 1003;
 constexpr float kEmbeddedDestinationDropdownMaxHeightDip = 420.0f;
-constexpr GUID kKnownFolderIdOneDrive   = {
+constexpr GUID kKnownFolderIdOneDrive                    = {
     0xA52BBA46,
     0xE9E1,
     0x435F,
@@ -843,17 +843,18 @@ bool NavigationView::ExecuteDriveMenuAction(UINT menuId)
 
 void NavigationView::ShowMenuDropdown(bool ignoreInitialLeftButtonUp, bool focusFirstNavigableItem)
 {
-    TraceNavigationViewMenuDiagnostics(L"navigation.menu-dropdown.enter",
-                                       L"hwnd={:#x} showMenu={} hasMenu={} ignoreInitialLeftButtonUp={} focusFirst={} embedded={} focus={:#x} active={:#x} capture={:#x}",
-                                       reinterpret_cast<uintptr_t>(_hWnd.get()),
-                                       _showMenuSection ? 1 : 0,
-                                       _navigationMenu ? 1 : 0,
-                                       ignoreInitialLeftButtonUp ? 1 : 0,
-                                       focusFirstNavigableItem ? 1 : 0,
-                                       _embeddedDestinationMode ? 1 : 0,
-                                       reinterpret_cast<uintptr_t>(GetFocus()),
-                                       reinterpret_cast<uintptr_t>(GetActiveWindow()),
-                                       reinterpret_cast<uintptr_t>(GetCapture()));
+    TraceNavigationViewMenuDiagnostics(
+        L"navigation.menu-dropdown.enter",
+        L"hwnd={:#x} showMenu={} hasMenu={} ignoreInitialLeftButtonUp={} focusFirst={} embedded={} focus={:#x} active={:#x} capture={:#x}",
+        reinterpret_cast<uintptr_t>(_hWnd.get()),
+        _showMenuSection ? 1 : 0,
+        _navigationMenu ? 1 : 0,
+        ignoreInitialLeftButtonUp ? 1 : 0,
+        focusFirstNavigableItem ? 1 : 0,
+        _embeddedDestinationMode ? 1 : 0,
+        reinterpret_cast<uintptr_t>(GetFocus()),
+        reinterpret_cast<uintptr_t>(GetActiveWindow()),
+        reinterpret_cast<uintptr_t>(GetCapture()));
     if (! _showMenuSection || ! _navigationMenu)
     {
         TraceNavigationViewMenuDiagnostics(L"navigation.menu-dropdown.skip",
@@ -1404,10 +1405,8 @@ void NavigationView::ShowMenuDropdown(bool ignoreInitialLeftButtonUp, bool focus
 
     if (popupItems.empty())
     {
-        TraceNavigationViewMenuDiagnostics(L"navigation.menu-dropdown.skip",
-                                           L"hwnd={:#x} reason=no-popup-items sourceCount={}",
-                                           reinterpret_cast<uintptr_t>(_hWnd.get()),
-                                           count);
+        TraceNavigationViewMenuDiagnostics(
+            L"navigation.menu-dropdown.skip", L"hwnd={:#x} reason=no-popup-items sourceCount={}", reinterpret_cast<uintptr_t>(_hWnd.get()), count);
         return;
     }
 
@@ -1416,9 +1415,7 @@ void NavigationView::ShowMenuDropdown(bool ignoreInitialLeftButtonUp, bool focus
     const HWND popupOwner = GetAncestor(_hWnd.get(), GA_ROOT);
     if (! popupOwner)
     {
-        TraceNavigationViewMenuDiagnostics(L"navigation.menu-dropdown.skip",
-                                           L"hwnd={:#x} reason=no-popup-owner",
-                                           reinterpret_cast<uintptr_t>(_hWnd.get()));
+        TraceNavigationViewMenuDiagnostics(L"navigation.menu-dropdown.skip", L"hwnd={:#x} reason=no-popup-owner", reinterpret_cast<uintptr_t>(_hWnd.get()));
         return;
     }
 
@@ -1427,7 +1424,7 @@ void NavigationView::ShowMenuDropdown(bool ignoreInitialLeftButtonUp, bool focus
     sessionCallbacks.focusFirstNavigableItem   = focusFirstNavigableItem;
     ApplyEmbeddedDestinationDropdownOptions(sessionCallbacks, _embeddedDestinationMode);
 
-    const auto startedAt  = std::chrono::steady_clock::now();
+    const auto startedAt = std::chrono::steady_clock::now();
     TraceNavigationViewMenuDiagnostics(L"navigation.menu-dropdown.show",
                                        L"hwnd={:#x} owner={:#x} point=({}, {}) items={} embedded={} active={:#x} foreground={:#x}",
                                        reinterpret_cast<uintptr_t>(_hWnd.get()),
@@ -1955,22 +1952,21 @@ void NavigationView::ShowFileSystemDriveMenuDropdown(bool ignoreInitialLeftButto
 
 void NavigationView::ShowHistoryDropdown(bool ignoreInitialLeftButtonUp, bool focusFirstNavigableItem)
 {
-    TraceNavigationViewMenuDiagnostics(L"navigation.history-dropdown.enter",
-                                       L"hwnd={:#x} historyCount={} ignoreInitialLeftButtonUp={} focusFirst={} embedded={} currentPath='{}' focus={:#x} active={:#x} capture={:#x}",
-                                       reinterpret_cast<uintptr_t>(_hWnd.get()),
-                                       _pathHistory.size(),
-                                       ignoreInitialLeftButtonUp ? 1 : 0,
-                                       focusFirstNavigableItem ? 1 : 0,
-                                       _embeddedDestinationMode ? 1 : 0,
-                                       _currentPath.has_value() ? _currentPath->wstring() : std::wstring{},
-                                       reinterpret_cast<uintptr_t>(GetFocus()),
-                                       reinterpret_cast<uintptr_t>(GetActiveWindow()),
-                                       reinterpret_cast<uintptr_t>(GetCapture()));
+    TraceNavigationViewMenuDiagnostics(
+        L"navigation.history-dropdown.enter",
+        L"hwnd={:#x} historyCount={} ignoreInitialLeftButtonUp={} focusFirst={} embedded={} currentPath='{}' focus={:#x} active={:#x} capture={:#x}",
+        reinterpret_cast<uintptr_t>(_hWnd.get()),
+        _pathHistory.size(),
+        ignoreInitialLeftButtonUp ? 1 : 0,
+        focusFirstNavigableItem ? 1 : 0,
+        _embeddedDestinationMode ? 1 : 0,
+        _currentPath.has_value() ? _currentPath->wstring() : std::wstring{},
+        reinterpret_cast<uintptr_t>(GetFocus()),
+        reinterpret_cast<uintptr_t>(GetActiveWindow()),
+        reinterpret_cast<uintptr_t>(GetCapture()));
     if (_pathHistory.empty())
     {
-        TraceNavigationViewMenuDiagnostics(L"navigation.history-dropdown.skip",
-                                           L"hwnd={:#x} reason=empty-history",
-                                           reinterpret_cast<uintptr_t>(_hWnd.get()));
+        TraceNavigationViewMenuDiagnostics(L"navigation.history-dropdown.skip", L"hwnd={:#x} reason=empty-history", reinterpret_cast<uintptr_t>(_hWnd.get()));
         return;
     }
 
@@ -2060,9 +2056,7 @@ void NavigationView::ShowHistoryDropdown(bool ignoreInitialLeftButtonUp, bool fo
     const HWND popupOwner = GetAncestor(_hWnd.get(), GA_ROOT);
     if (! popupOwner)
     {
-        TraceNavigationViewMenuDiagnostics(L"navigation.history-dropdown.skip",
-                                           L"hwnd={:#x} reason=no-popup-owner",
-                                           reinterpret_cast<uintptr_t>(_hWnd.get()));
+        TraceNavigationViewMenuDiagnostics(L"navigation.history-dropdown.skip", L"hwnd={:#x} reason=no-popup-owner", reinterpret_cast<uintptr_t>(_hWnd.get()));
         return;
     }
 
@@ -2070,38 +2064,40 @@ void NavigationView::ShowHistoryDropdown(bool ignoreInitialLeftButtonUp, bool fo
     sessionCallbacks.ignoreInitialLeftButtonUp = ignoreInitialLeftButtonUp;
     sessionCallbacks.focusFirstNavigableItem   = focusFirstNavigableItem;
     ApplyEmbeddedDestinationDropdownOptions(sessionCallbacks, _embeddedDestinationMode);
-    sessionCallbacks.rootHorizontalAlignment   = RedSalamander::DxUi::ContextMenuRootHorizontalAlignment::End;
+    sessionCallbacks.rootHorizontalAlignment = RedSalamander::DxUi::ContextMenuRootHorizontalAlignment::End;
 
     const auto startedAt = std::chrono::steady_clock::now();
-    TraceNavigationViewMenuDiagnostics(L"navigation.history-dropdown.show",
-                                       L"hwnd={:#x} owner={:#x} point=({}, {}) items={} selectedIndex={} ignoreInitialLeftButtonUp={} focusFirst={} active={:#x} foreground={:#x}",
-                                       reinterpret_cast<uintptr_t>(_hWnd.get()),
-                                       reinterpret_cast<uintptr_t>(popupOwner),
-                                       pt.x,
-                                       pt.y,
-                                       items.size(),
-                                       _navDropdownSelectedIndex,
-                                       ignoreInitialLeftButtonUp ? 1 : 0,
-                                       focusFirstNavigableItem ? 1 : 0,
-                                       reinterpret_cast<uintptr_t>(GetActiveWindow()),
-                                       reinterpret_cast<uintptr_t>(GetForegroundWindow()));
+    TraceNavigationViewMenuDiagnostics(
+        L"navigation.history-dropdown.show",
+        L"hwnd={:#x} owner={:#x} point=({}, {}) items={} selectedIndex={} ignoreInitialLeftButtonUp={} focusFirst={} active={:#x} foreground={:#x}",
+        reinterpret_cast<uintptr_t>(_hWnd.get()),
+        reinterpret_cast<uintptr_t>(popupOwner),
+        pt.x,
+        pt.y,
+        items.size(),
+        _navDropdownSelectedIndex,
+        ignoreInitialLeftButtonUp ? 1 : 0,
+        focusFirstNavigableItem ? 1 : 0,
+        reinterpret_cast<uintptr_t>(GetActiveWindow()),
+        reinterpret_cast<uintptr_t>(GetForegroundWindow()));
 #ifdef ENABLE_TESTS
     ++_debugHistoryDropdownOpenCount;
 #endif
     const auto selectedId =
         RedSalamander::DxUi::ContextMenu::Show(popupOwner, pt, items, MakeAppThemeDxPalette(_appTheme, ColorToCOLORREF(_theme.background)), sessionCallbacks);
     const uint64_t elapsedUs = Debug::Perf::ElapsedUs(startedAt);
-    TraceNavigationViewMenuDiagnostics(L"navigation.history-dropdown.result",
-                                       L"hwnd={:#x} selected={} durationUs={} items={} selectedIndex={} focus={:#x} active={:#x} foreground={:#x} capture={:#x}",
-                                       reinterpret_cast<uintptr_t>(_hWnd.get()),
-                                       selectedId.has_value() ? selectedId.value() : 0,
-                                       elapsedUs,
-                                       items.size(),
-                                       _navDropdownSelectedIndex,
-                                       reinterpret_cast<uintptr_t>(GetFocus()),
-                                       reinterpret_cast<uintptr_t>(GetActiveWindow()),
-                                       reinterpret_cast<uintptr_t>(GetForegroundWindow()),
-                                       reinterpret_cast<uintptr_t>(GetCapture()));
+    TraceNavigationViewMenuDiagnostics(
+        L"navigation.history-dropdown.result",
+        L"hwnd={:#x} selected={} durationUs={} items={} selectedIndex={} focus={:#x} active={:#x} foreground={:#x} capture={:#x}",
+        reinterpret_cast<uintptr_t>(_hWnd.get()),
+        selectedId.has_value() ? selectedId.value() : 0,
+        elapsedUs,
+        items.size(),
+        _navDropdownSelectedIndex,
+        reinterpret_cast<uintptr_t>(GetFocus()),
+        reinterpret_cast<uintptr_t>(GetActiveWindow()),
+        reinterpret_cast<uintptr_t>(GetForegroundWindow()),
+        reinterpret_cast<uintptr_t>(GetCapture()));
     Debug::Perf::Emit(L"navigation.ui.dropdown_popup_us",
                       L"history",
                       elapsedUs,
@@ -2117,6 +2113,11 @@ void NavigationView::ShowHistoryDropdown(bool ignoreInitialLeftButtonUp, bool fo
         }
     }
 
+    RestoreFolderViewFocusAfterDropdown();
+}
+
+void NavigationView::RestoreFolderViewFocusAfterDropdown() noexcept
+{
     if (_requestFolderViewFocusCallback)
     {
         const HWND root = GetAncestor(_hWnd.get(), GA_ROOT);
@@ -2359,6 +2360,8 @@ void NavigationView::ShowDiskInfoDropdown(bool ignoreInitialLeftButtonUp, bool f
     {
         static_cast<void>(ExecuteDriveMenuAction(static_cast<UINT>(selectedId.value())));
     }
+
+    RestoreFolderViewFocusAfterDropdown();
 }
 
 bool NavigationView::TryGetSiblingFolders(const std::filesystem::path& parentPath, std::vector<std::filesystem::path>& siblings)
@@ -2565,10 +2568,8 @@ void NavigationView::ShowSiblingsDropdown(size_t separatorIndex)
     const HWND popupOwner = GetAncestor(_hWnd.get(), GA_ROOT);
     if (! popupOwner)
     {
-        TraceNavigationViewMenuDiagnostics(L"navigation.siblings-dropdown.skip",
-                                           L"hwnd={:#x} reason=no-popup-owner index={}",
-                                           reinterpret_cast<uintptr_t>(_hWnd.get()),
-                                           separatorIndex);
+        TraceNavigationViewMenuDiagnostics(
+            L"navigation.siblings-dropdown.skip", L"hwnd={:#x} reason=no-popup-owner index={}", reinterpret_cast<uintptr_t>(_hWnd.get()), separatorIndex);
         return;
     }
 
@@ -2592,18 +2593,19 @@ void NavigationView::ShowSiblingsDropdown(size_t separatorIndex)
     const auto selectedId =
         RedSalamander::DxUi::ContextMenu::Show(popupOwner, pt, items, MakeAppThemeDxPalette(_appTheme, ColorToCOLORREF(_theme.background)), sessionCallbacks);
     const uint64_t elapsedUs = Debug::Perf::ElapsedUs(startedAt);
-    TraceNavigationViewMenuDiagnostics(L"navigation.siblings-dropdown.result",
-                                       L"hwnd={:#x} selected={} durationUs={} index={} items={} selectedIndex={} focus={:#x} active={:#x} foreground={:#x} capture={:#x}",
-                                       reinterpret_cast<uintptr_t>(_hWnd.get()),
-                                       selectedId.has_value() ? selectedId.value() : 0,
-                                       elapsedUs,
-                                       separatorIndex,
-                                       items.size(),
-                                       _navDropdownSelectedIndex,
-                                       reinterpret_cast<uintptr_t>(GetFocus()),
-                                       reinterpret_cast<uintptr_t>(GetActiveWindow()),
-                                       reinterpret_cast<uintptr_t>(GetForegroundWindow()),
-                                       reinterpret_cast<uintptr_t>(GetCapture()));
+    TraceNavigationViewMenuDiagnostics(
+        L"navigation.siblings-dropdown.result",
+        L"hwnd={:#x} selected={} durationUs={} index={} items={} selectedIndex={} focus={:#x} active={:#x} foreground={:#x} capture={:#x}",
+        reinterpret_cast<uintptr_t>(_hWnd.get()),
+        selectedId.has_value() ? selectedId.value() : 0,
+        elapsedUs,
+        separatorIndex,
+        items.size(),
+        _navDropdownSelectedIndex,
+        reinterpret_cast<uintptr_t>(GetFocus()),
+        reinterpret_cast<uintptr_t>(GetActiveWindow()),
+        reinterpret_cast<uintptr_t>(GetForegroundWindow()),
+        reinterpret_cast<uintptr_t>(GetCapture()));
     Debug::Perf::Emit(L"navigation.ui.dropdown_popup_us",
                       L"siblings",
                       elapsedUs,
@@ -2619,13 +2621,5 @@ void NavigationView::ShowSiblingsDropdown(size_t separatorIndex)
         }
     }
 
-    if (_requestFolderViewFocusCallback)
-    {
-        const HWND root = GetAncestor(_hWnd.get(), GA_ROOT);
-        if (root && GetActiveWindow() != root)
-        {
-            SetActiveWindow(root);
-        }
-        _requestFolderViewFocusCallback();
-    }
+    RestoreFolderViewFocusAfterDropdown();
 }

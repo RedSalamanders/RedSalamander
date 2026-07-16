@@ -1161,6 +1161,11 @@ bool FolderView::DebugIsEmptyFolderStateActive() const noexcept
     return CanShowEmptyFolderState() && _emptyFolderState.has_value();
 }
 
+std::wstring_view FolderView::DebugGetEmptyStateMessage() const noexcept
+{
+    return _emptyStateMessage;
+}
+
 FolderView::DebugEmptyFolderItemMetrics FolderView::DebugGetEmptyFolderItemMetrics() const noexcept
 {
     return DebugEmptyFolderItemMetrics{

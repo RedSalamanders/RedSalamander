@@ -6,6 +6,7 @@
 
 namespace RedSalamander::DxUi
 {
+[[nodiscard]] std::weak_ptr<int> GetControlLifetimeToken(const Control& control) noexcept;
 struct safearray_deleter
 {
     void operator()(SAFEARRAY* sa) const noexcept
@@ -24,9 +25,7 @@ using unique_safearray = std::unique_ptr<SAFEARRAY, safearray_deleter>;
 [[nodiscard]] D2D1_RECT_F SnapRectToPixel(const WindowHost& host, const D2D1_RECT_F& rect) noexcept;
 [[nodiscard]] std::optional<size_t> FindMnemonicTextIndex(std::wstring_view text, wchar_t mnemonic) noexcept;
 
-[[nodiscard]] D2D1_COLOR_F BlendColor(const D2D1_COLOR_F& a, const D2D1_COLOR_F& b, float t) noexcept;
 [[nodiscard]] D2D1_COLOR_F CompositeOverBackground(const D2D1_COLOR_F& overlay, const D2D1_COLOR_F& background) noexcept;
-[[nodiscard]] D2D1_COLOR_F ColorFromArgb(uint32_t argb) noexcept;
 [[nodiscard]] uint32_t PackColor(const D2D1_COLOR_F& color) noexcept;
 [[nodiscard]] std::wstring_view LoadDxUiString(UINT resourceId, std::wstring_view fallback) noexcept;
 [[nodiscard]] D2D1_COLOR_F RainbowTint(std::wstring_view seed, bool dark) noexcept;
@@ -39,8 +38,11 @@ using unique_safearray = std::unique_ptr<SAFEARRAY, safearray_deleter>;
 void ResolveAdornmentColors(const ThemePalette& theme, AdornmentTone tone, D2D1_COLOR_F& fill, D2D1_COLOR_F& text) noexcept;
 [[nodiscard]] bool RaiseWindowHostTextInputAutomationEvent(HWND hwnd, const Control* control, TextInputAutomationEventKind kind) noexcept;
 [[nodiscard]] ITextStoreACP* CreateNativeTextInputTextStore(WindowHost& host, Control& control) noexcept;
+void DetachNativeTextInputTextStore(IUnknown* store) noexcept;
+void DisconnectNativeTextInputTextStore(IUnknown* textStore) noexcept;
 [[nodiscard]] bool IsDxUiRenderStageActiveForDebug() noexcept;
 void EmitDxUiRenderMutationBlockedForDebug() noexcept;
+[[nodiscard]] bool CaptureBackdropScreenRegion(const RECT& screenRect, WindowHostBitmapCapture& outCapture, std::wstring_view componentName) noexcept;
 
 inline constexpr float kMenuItemHeightDip                  = 30.0f;
 inline constexpr float kMenuCompactItemHeightDip           = 24.0f;
@@ -203,10 +205,20 @@ void DrawTextWithMnemonic(WindowHost& host,
 
 void RegisterWindowHostAccessibilityTarget(HWND hwnd, WindowHost* host) noexcept;
 void UnregisterWindowHostAccessibilityTarget(HWND hwnd, WindowHost* host) noexcept;
+void NotifyWindowHostAccessibilityDestroyed(HWND hwnd) noexcept;
+void RefreshWindowHostAccessibilitySnapshot(HWND hwnd, WindowHost* host) noexcept;
+void PublishEmptyWindowHostAccessibilitySnapshot(HWND hwnd, WindowHost* host) noexcept;
 [[nodiscard]] LRESULT ReturnWindowHostAccessibilityProvider(HWND hwnd, WPARAM wp, LPARAM lp) noexcept;
 [[nodiscard]] bool TryHandleWindowHostAccessibilityMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, LRESULT& outResult) noexcept;
 #if defined(ENABLE_TESTS)
 [[nodiscard]] IRawElementProviderFragmentRoot* CreateWindowHostAccessibilityProvider(HWND hwnd) noexcept;
+void DebugSetAccessibilityUiActionHandlerStallForTest(HANDLE enteredEvent, HANDLE releaseEvent) noexcept;
+void DebugSetAccessibilityUiActionHandlerTakenStallForTest(HANDLE enteredEvent, HANDLE releaseEvent) noexcept;
+void DebugSetAccessibilityUiActionPostedEventForTest(HANDLE postedEvent) noexcept;
+void DebugSetAccessibilityUiActionDispatchTimeoutForTest(DWORD timeoutMs) noexcept;
+void DebugResetAccessibilityUiActionExecutionCountForTest() noexcept;
+[[nodiscard]] uint32_t DebugGetAccessibilityUiActionExecutionCountForTest() noexcept;
+void DebugSetAccessibilityOffscreenSelectedRowMaterializationLimitForTest(size_t limit) noexcept;
 #endif
 
 // Scrollbar shared helpers (shared by Grid and Tree)
@@ -234,12 +246,18 @@ struct ScrollbarAnimationTargets
 };
 
 [[nodiscard]] ResolvedScrollbarVisuals ResolveScrollbarVisuals(const ThemePalette& theme, bool trackHovered, bool thumbHovered, bool thumbDragging) noexcept;
-[[nodiscard]] ResolvedScrollbarVisuals ResolveScrollbarVisuals(
-    const ThemePalette& theme, bool trackHovered, bool thumbHovered, bool thumbDragging, float trackHotStrength, float thumbHotStrength) noexcept;
+[[nodiscard]] ResolvedScrollbarVisuals ResolveScrollbarVisuals(const ThemePalette& theme,
+                                                               ScrollbarAnimationTargets targets,
+                                                               float trackHotStrength,
+                                                               float thumbHotStrength) noexcept;
 [[nodiscard]] ScrollbarAnimationTargets ResolveScrollbarAnimationTargets(bool trackHovered, bool thumbHovered, bool thumbDragging) noexcept;
 void UpdateScrollbarAnimation(WindowHost& host, ScrollbarAnimationState& animation, bool trackHovered, bool thumbHovered, bool thumbDragging) noexcept;
 [[nodiscard]] bool AdvanceScrollbarAnimation(const WindowHost& host, ScrollbarAnimationState& animation, uint64_t nowTickMs) noexcept;
 
+[[nodiscard]] float ComputeScrollbarPageStepDip(const D2D1_RECT_F& trackRect,
+                                                ScrollbarOrientation orientation,
+                                                float viewportDip,
+                                                float totalContentDip) noexcept;
 [[nodiscard]] D2D1_RECT_F ComputeScrollbarThumbRect(const D2D1_RECT_F& trackRect,
                                                     ScrollbarOrientation orientation,
                                                     float viewportDip,
@@ -258,7 +276,6 @@ void PaintScrollbar(WindowHost& host, const D2D1_RECT_F& trackRect, const D2D1_R
 // Typeahead / case-insensitive search helpers (shared by Tree and ComboBox)
 constexpr uint64_t kTypeaheadResetMs = 1000u;
 
-[[nodiscard]] wchar_t NormalizeTypeaheadChar(wchar_t ch) noexcept;
 [[nodiscard]] bool StartsWithInsensitive(std::wstring_view text, std::wstring_view prefix) noexcept;
 
 // Single-line text editing helpers (shared by TextField and ComboBox)
@@ -268,12 +285,15 @@ constexpr uint64_t kTypeaheadResetMs = 1000u;
 [[nodiscard]] size_t StepToNextCodePoint(std::wstring_view text, size_t caretIndex) noexcept;
 [[nodiscard]] size_t StepToPreviousTextElement(std::wstring_view text, size_t caretIndex) noexcept;
 [[nodiscard]] size_t StepToNextTextElement(std::wstring_view text, size_t caretIndex) noexcept;
+[[nodiscard]] size_t CountTextElements(std::wstring_view text) noexcept;
 [[nodiscard]] size_t SnapCaretIndexToTextElementBoundary(std::wstring_view text, size_t caretIndex) noexcept;
 [[nodiscard]] bool IsWordCharacter(wchar_t ch) noexcept;
 [[nodiscard]] bool IsPathSeparator(wchar_t ch) noexcept;
 [[nodiscard]] size_t FindPreviousWordBoundary(std::wstring_view text, size_t caretIndex) noexcept;
 [[nodiscard]] size_t FindNextWordBoundary(std::wstring_view text, size_t caretIndex) noexcept;
 [[nodiscard]] bool ShouldEmitSingleLineBiDiTextMetric(std::wstring_view text, DWRITE_READING_DIRECTION readingDirection) noexcept;
+
+void ClearSingleLineTextLayoutCache(SingleLineTextLayoutCache& cache, bool secureText = false) noexcept;
 
 [[nodiscard]] float MeasureSingleLineTextWidthDip(const WindowHost* host,
                                                   std::wstring_view text,
@@ -287,6 +307,15 @@ constexpr uint64_t kTypeaheadResetMs = 1000u;
     float widthDip,
     float heightDip,
     DWRITE_READING_DIRECTION readingDirection = DWRITE_READING_DIRECTION_LEFT_TO_RIGHT) noexcept;
+[[nodiscard]] wil::com_ptr<IDWriteTextLayout> GetOrCreateSingleLineTextLayout(
+    const WindowHost* host,
+    SingleLineTextLayoutCache* cache,
+    std::wstring_view text,
+    FontRole role,
+    float minimumWidthDip,
+    float heightDip,
+    DWRITE_READING_DIRECTION readingDirection = DWRITE_READING_DIRECTION_LEFT_TO_RIGHT,
+    bool secureCacheText                      = false) noexcept;
 [[nodiscard]] float MeasureCaretOffsetDip(const WindowHost* host,
                                           std::wstring_view text,
                                           FontRole role,
@@ -294,6 +323,7 @@ constexpr uint64_t kTypeaheadResetMs = 1000u;
                                           float heightDip,
                                           DWRITE_READING_DIRECTION readingDirection = DWRITE_READING_DIRECTION_LEFT_TO_RIGHT,
                                           float layoutWidthDip                      = 0.0f) noexcept;
+[[nodiscard]] float MeasureCaretOffsetDip(IDWriteTextLayout* layout, std::wstring_view text, size_t caretIndex) noexcept;
 [[nodiscard]] size_t HitTestCaretIndexDip(const WindowHost* host,
                                           std::wstring_view text,
                                           FontRole role,
@@ -309,6 +339,14 @@ void DrawSingleLineTextClipped(WindowHost& host,
                                const D2D1_COLOR_F& color,
                                float scrollDip,
                                DWRITE_READING_DIRECTION readingDirection = DWRITE_READING_DIRECTION_LEFT_TO_RIGHT) noexcept;
+void DrawSingleLineTextClippedWithLayout(WindowHost& host,
+                                         std::wstring_view text,
+                                         const D2D1_RECT_F& rect,
+                                         FontRole role,
+                                         const D2D1_COLOR_F& color,
+                                         float scrollDip,
+                                         DWRITE_READING_DIRECTION readingDirection,
+                                         IDWriteTextLayout* layout) noexcept;
 
 [[nodiscard]] std::optional<std::pair<size_t, size_t>> GetSingleLineSelectionRange(std::optional<size_t> anchorIndex, size_t caretIndex) noexcept;
 void SetSingleLineCaretIndex(size_t& caretIndex, std::optional<size_t>& anchorIndex, size_t nextCaretIndex, bool extendSelection) noexcept;
@@ -343,6 +381,17 @@ void DrawSingleLineSelection(WindowHost& host,
                              float scrollDip,
                              std::optional<std::pair<size_t, size_t>> selectionRange,
                              DWRITE_READING_DIRECTION readingDirection = DWRITE_READING_DIRECTION_LEFT_TO_RIGHT) noexcept;
+void DrawSingleLineSelectionWithLayout(WindowHost& host,
+                                       std::wstring_view text,
+                                       const D2D1_RECT_F& rect,
+                                       FontRole role,
+                                       const D2D1_COLOR_F& textColor,
+                                       const D2D1_COLOR_F& selectionFill,
+                                       const D2D1_COLOR_F& selectionText,
+                                       float scrollDip,
+                                       std::optional<std::pair<size_t, size_t>> selectionRange,
+                                       DWRITE_READING_DIRECTION readingDirection,
+                                       IDWriteTextLayout* layout) noexcept;
 
 [[nodiscard]] std::optional<std::pair<size_t, size_t>> ResolveNativeTextInputOptionalRange(const NativeTextInputState& state,
                                                                                            std::optional<size_t> startIndex,

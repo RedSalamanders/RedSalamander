@@ -9,7 +9,6 @@
 #include <filesystem>
 #include <memory>
 #include <string>
-#include <thread>
 #include <vector>
 
 #pragma warning(push)
@@ -109,6 +108,7 @@ private:
     struct AsyncParseResult
     {
         uint64_t requestId = 0;
+        uint64_t windowIdentity = 0;
         HRESULT hr         = E_FAIL;
         std::wstring title;
         std::wstring subtitle;
@@ -118,6 +118,13 @@ private:
 
     void StartAsyncParse(HWND hwnd, wil::com_ptr<IFileSystem> fileSystem, std::wstring path) noexcept;
     void OnAsyncParseComplete(std::unique_ptr<AsyncParseResult> result) noexcept;
+    void CompleteAsyncParseFailure(HRESULT hr) noexcept;
+    void PollAsyncParseTerminalFallback() noexcept;
+    void CancelAsyncParse() noexcept;
+
+    struct AsyncParseScheduler;
+    static void CALLBACK AsyncParseThreadpoolCallback(PTP_CALLBACK_INSTANCE instance, void* context) noexcept;
+    [[nodiscard]] static bool QueueAsyncParseWorker(const std::shared_ptr<AsyncParseScheduler>& scheduler) noexcept;
 
 private:
     std::atomic_ulong _refCount{1};
@@ -131,6 +138,7 @@ private:
     std::string _configurationJson;
 
     bool _isLoading = false;
+    HRESULT _lastParseHr = E_PENDING;
 
     wil::com_ptr<IHostAlerts> _hostAlerts;
 
@@ -172,5 +180,9 @@ private:
     std::wstring _markdownText;
 
     std::atomic_uint64_t _parseRequestId{0};
-    std::jthread _worker;
+    std::shared_ptr<AsyncParseScheduler> _parseScheduler;
+    uint64_t _windowIdentity = 0u;
+#ifdef ENABLE_TESTS
+    unsigned int _debugNextAsyncFault = 0u;
+#endif
 };

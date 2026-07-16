@@ -3,12 +3,14 @@
 #include "ConnectionManagerWindow.h"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cstdint>
 #include <cwctype>
 #include <format>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -29,6 +31,7 @@
 #include "DxUi/DxUi.Typography.h"
 #include "DxUi/DxUi.h"
 #include "DxUiThemePalette.h"
+#include "FileSystemPluginManager.h"
 #include "FolderWindow.h"
 #include "Helpers.h"
 #include "HostServices.h"
@@ -279,6 +282,14 @@ private:
 {
     return IsOneDrivePersonalPluginId(pluginId) || IsOneDriveBusinessPluginId(pluginId) || IsSharePointPluginId(pluginId);
 }
+[[nodiscard]] bool IsCloudOAuthPluginId(std::wstring_view pluginId) noexcept
+{
+    return IsGoogleDrivePluginId(pluginId) || IsMicrosoftPluginId(pluginId);
+}
+[[nodiscard]] bool IsMtpPluginId(std::wstring_view pluginId) noexcept
+{
+    return pluginId == L"builtin/file-system-mtp";
+}
 
 [[nodiscard]] std::wstring SanitizeUnsignedText(std::wstring_view text) noexcept
 {
@@ -296,33 +307,12 @@ private:
 
 [[nodiscard]] std::wstring TrimWhitespace(std::wstring_view text) noexcept
 {
-    size_t start = 0u;
-    while (start < text.size() && std::iswspace(static_cast<wint_t>(text[start])) != 0)
-    {
-        ++start;
-    }
-    size_t end = text.size();
-    while (end > start && std::iswspace(static_cast<wint_t>(text[end - 1u])) != 0)
-    {
-        --end;
-    }
-    return std::wstring(text.substr(start, end - start));
+    return StringUtils::TrimWhitespaceCopy(text);
 }
 
 [[nodiscard]] bool EqualsIgnoreCase(std::wstring_view a, std::wstring_view b) noexcept
 {
-    if (a.size() != b.size())
-    {
-        return false;
-    }
-    for (size_t i = 0; i < a.size(); ++i)
-    {
-        if (std::towlower(a[i]) != std::towlower(b[i]))
-        {
-            return false;
-        }
-    }
-    return true;
+    return OrdinalString::EqualsNoCase(a, b);
 }
 
 [[nodiscard]] std::wstring NewGuidString() noexcept
@@ -396,62 +386,9 @@ private:
     return base;
 }
 
-// UTF helpers for the JSON `extra` payload - strings are stored as UTF-8.
-[[nodiscard]] std::wstring Utf16FromUtf8(std::string_view text) noexcept
-{
-    if (text.empty())
-    {
-        return {};
-    }
-    const int needed = MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), nullptr, 0);
-    if (needed <= 0)
-    {
-        return {};
-    }
-    std::wstring result(static_cast<size_t>(needed), L'\0');
-    static_cast<void>(MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), result.data(), needed));
-    return result;
-}
-
 [[nodiscard]] std::string Utf8FromUtf16(std::wstring_view text) noexcept
 {
-    if (text.empty())
-    {
-        return {};
-    }
-    const int needed = WideCharToMultiByte(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
-    if (needed <= 0)
-    {
-        return {};
-    }
-    std::string result(static_cast<size_t>(needed), '\0');
-    static_cast<void>(WideCharToMultiByte(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), result.data(), needed, nullptr, nullptr));
-    return result;
-}
-
-// `extra` JSON helpers for plugin-specific connection profile fields.
-[[nodiscard]] std::optional<std::wstring> ExtraGetString(const Common::Settings::JsonValue& extra, std::string_view key) noexcept
-{
-    const auto* objPtr = std::get_if<Common::Settings::JsonValue::ObjectPtr>(&extra.value);
-    if (! objPtr || ! *objPtr)
-    {
-        return std::nullopt;
-    }
-    for (const auto& [k, v] : (*objPtr)->members)
-    {
-        if (k != key)
-        {
-            continue;
-        }
-        const auto* str = std::get_if<std::string>(&v.value);
-        if (! str)
-        {
-            return std::nullopt;
-        }
-        const std::wstring wide = Utf16FromUtf8(*str);
-        return wide.empty() && ! str->empty() ? std::nullopt : std::make_optional(wide);
-    }
-    return std::nullopt;
+    return Common::Strings::Utf8FromUtf16ReplacingInvalid(text);
 }
 
 void ExtraSetString(Common::Settings::JsonValue& extra, std::string_view key, std::wstring_view value)
@@ -552,6 +489,81 @@ void ExtraSetUInt32(Common::Settings::JsonValue& extra, std::string_view key, ui
     obj->members.emplace_back(keyUtf8, std::move(v));
 }
 
+[[nodiscard]] bool IsMtpProfileExtraKey(std::string_view key) noexcept
+{
+    return key == "devicePuid" || key == "friendlyName" || key == "defaultStoragePuid" || key == "defaultStorageName" || key == "readOnly" ||
+           key == "byteVerifyOnOverwrite" || key == "commandTimeoutMs" || key == "enumerationPageSize";
+}
+
+[[nodiscard]] bool NormalizeConnectionProfileForProtocol(Common::Settings::ConnectionProfile& profile)
+{
+    bool changed = false;
+    if (IsCloudOAuthPluginId(profile.pluginId) && profile.authMode != Common::Settings::ConnectionAuthMode::OAuth2Pkce)
+    {
+        profile.authMode = Common::Settings::ConnectionAuthMode::OAuth2Pkce;
+        changed          = true;
+    }
+
+    if (! IsMtpPluginId(profile.pluginId))
+    {
+        return changed;
+    }
+
+    if (profile.port != 0u)
+    {
+        profile.port = 0u;
+        changed      = true;
+    }
+    if (! profile.userName.empty())
+    {
+        profile.userName.clear();
+        changed = true;
+    }
+    if (profile.authMode != Common::Settings::ConnectionAuthMode::Anonymous)
+    {
+        profile.authMode = Common::Settings::ConnectionAuthMode::Anonymous;
+        changed          = true;
+    }
+    if (profile.savePassword)
+    {
+        profile.savePassword = false;
+        changed              = true;
+    }
+    if (profile.requireWindowsHello)
+    {
+        profile.requireWindowsHello = false;
+        changed                     = true;
+    }
+
+    Common::Settings::JsonValue::ObjectPtr obj;
+    if (auto* existing = std::get_if<Common::Settings::JsonValue::ObjectPtr>(&profile.extra.value); existing && *existing)
+    {
+        obj = *existing;
+    }
+    else
+    {
+        obj                 = std::make_shared<Common::Settings::JsonObject>();
+        profile.extra.value = obj;
+        changed             = true;
+    }
+
+    const auto originalMemberCount = obj->members.size();
+    std::erase_if(obj->members, [](const auto& member) noexcept { return ! IsMtpProfileExtraKey(member.first); });
+    if (obj->members.size() != originalMemberCount)
+    {
+        changed = true;
+    }
+
+    const std::optional<bool> existingReadOnly = ConnectionProfileUtils::ExtraGetBool(profile.extra, "readOnly");
+    if (! existingReadOnly.has_value())
+    {
+        ExtraSetBool(profile.extra, "readOnly", true);
+        changed = true;
+    }
+
+    return changed;
+}
+
 [[nodiscard]] bool IsQuickConnectProfile(const Common::Settings::ConnectionProfile& profile) noexcept
 {
     return RedSalamander::Connections::IsQuickConnectConnectionId(profile.id);
@@ -584,6 +596,8 @@ enum class ConnectionProfileValidationError : uint8_t
     EmptyName,
     DuplicateName,
     ReservedName,
+    InvalidPathSeparator,
+    HostRequired,
 };
 
 struct ConnectionProfileValidationResult
@@ -626,6 +640,12 @@ struct ConnectionProfileValidationResult
         return result;
     }
 
+    if (result.normalizedName.find_first_of(L"/\\") != std::wstring::npos)
+    {
+        result.error = ConnectionProfileValidationError::InvalidPathSeparator;
+        return result;
+    }
+
     for (size_t index = 0; index < profiles.size(); ++index)
     {
         if (index == editedIndex)
@@ -653,6 +673,8 @@ struct ConnectionProfileValidationResult
         case ConnectionProfileValidationError::EmptyName: return IDS_CONNECTIONS_ERR_NAME_REQUIRED;
         case ConnectionProfileValidationError::DuplicateName: return IDS_CONNECTIONS_ERR_NAME_UNIQUE;
         case ConnectionProfileValidationError::ReservedName: return IDS_CONNECTIONS_ERR_NAME_RESERVED;
+        case ConnectionProfileValidationError::InvalidPathSeparator: return IDS_CONNECTIONS_ERR_NAME_INVALID_PATH_SEPARATOR;
+        case ConnectionProfileValidationError::HostRequired: return IDS_CONNECTIONS_ERR_HOST_REQUIRED;
         default: return 0u;
     }
 }
@@ -688,20 +710,24 @@ struct EditorVisibility
     bool isS3               = false;
     bool isS3Table          = false;
     bool isAwsS3            = false;
+    bool isMtp              = false;
     bool anonymous          = false;
     bool oauth2             = false;
     bool showProtocol       = false;
     bool showHostEdit       = false;
     bool showAwsRegion      = false;
+    bool showInitialPath    = false;
     bool showPort           = false;
     bool showConcurrency    = false;
     bool showAnonymous      = false;
     bool showSshSection     = false;
     bool showS3Section      = false;
     bool showVirtual        = false;
+    bool showAuthSection    = false;
     bool showSecretRow      = false;
     bool authInputsEnabled  = false;
     bool showIgnoreSslTrust = false;
+    bool showMtpSection     = false;
 };
 
 struct ProtocolItem
@@ -721,6 +747,7 @@ constexpr ProtocolItem kProtocolItems[] = {
     {L"builtin/file-system-sharepoint", L"SharePoint"},
     {L"builtin/file-system-s3", L"S3"},
     {L"builtin/file-system-s3table", L"S3 Table"},
+    {L"builtin/file-system-mtp", L"MTP"},
 };
 
 struct AwsRegionItem
@@ -790,6 +817,82 @@ constexpr AwsRegionItem kAwsRegionItems[] = {
     return items;
 }
 
+using MtpPickerDeviceEntry  = FileSystemPluginManager::ConnectionBrowseDevice;
+using MtpPickerStorageEntry = FileSystemPluginManager::ConnectionBrowseStorage;
+
+enum class MtpPickerRequestKind : uint8_t
+{
+    Devices,
+    Storages,
+};
+
+struct MtpPickerResultPayload
+{
+    MtpPickerRequestKind kind = MtpPickerRequestKind::Devices;
+    HRESULT hr                = S_OK;
+    bool manual               = false;
+    std::wstring pnpId;
+    std::vector<MtpPickerDeviceEntry> devices;
+    std::vector<MtpPickerStorageEntry> storages;
+};
+
+struct MtpPickerWorkerContext
+{
+    MtpPickerWorkerContext() = default;
+    MtpPickerWorkerContext(const MtpPickerWorkerContext&) = delete;
+    MtpPickerWorkerContext& operator=(const MtpPickerWorkerContext&) = delete;
+    MtpPickerWorkerContext(MtpPickerWorkerContext&&) noexcept = default;
+    MtpPickerWorkerContext& operator=(MtpPickerWorkerContext&&) noexcept = default;
+
+    HWND hwnd                 = nullptr;
+    uint64_t requestId        = 0;
+    MtpPickerRequestKind kind = MtpPickerRequestKind::Devices;
+    bool manual               = false;
+    std::wstring pnpId;
+    FileSystemPluginManager::ConnectionBrowseWork browseWork;
+};
+
+void CALLBACK MtpPickerWorkerCallback(PTP_CALLBACK_INSTANCE /*instance*/, void* context, PTP_WORK /*workItem*/) noexcept
+{
+    auto* work = static_cast<MtpPickerWorkerContext*>(context);
+    if (! work)
+    {
+        return;
+    }
+
+    auto result    = std::make_unique<MtpPickerResultPayload>();
+    result->kind   = work->kind;
+    result->manual = work->manual;
+    result->pnpId  = work->pnpId;
+
+    result->hr = work->browseWork.Execute(result->devices, result->storages);
+
+    if (! work->hwnd || IsWindow(work->hwnd) == FALSE ||
+        ! PostMessagePayload(work->hwnd, WndMsg::kConnectionManagerMtpPickerComplete, static_cast<WPARAM>(work->requestId), std::move(result)))
+    {
+        Debug::Warning(L"ConnectionManagerWindow: dropping MTP picker result because the target window is gone.");
+    }
+}
+
+using UniqueMtpPickerWork = wil::unique_any<PTP_WORK, decltype(&::CloseThreadpoolWork), ::CloseThreadpoolWork>;
+
+struct OwnedMtpPickerWork
+{
+    OwnedMtpPickerWork() = default;
+    OwnedMtpPickerWork(std::unique_ptr<MtpPickerWorkerContext> ownedContext, UniqueMtpPickerWork ownedWork) noexcept
+        : context(std::move(ownedContext)),
+          work(std::move(ownedWork))
+    {
+    }
+    OwnedMtpPickerWork(const OwnedMtpPickerWork&) = delete;
+    OwnedMtpPickerWork& operator=(const OwnedMtpPickerWork&) = delete;
+    OwnedMtpPickerWork(OwnedMtpPickerWork&&) noexcept = default;
+    OwnedMtpPickerWork& operator=(OwnedMtpPickerWork&&) noexcept = default;
+
+    std::unique_ptr<MtpPickerWorkerContext> context;
+    UniqueMtpPickerWork work;
+};
+
 class WindowImpl final : public IDxGridDelegate
 {
 public:
@@ -839,6 +942,7 @@ public:
 #ifdef ENABLE_TESTS
     void DebugFillSnapshot(::ConnectionManagerDebugSnapshot& out) const noexcept;
     [[nodiscard]] bool DebugClickListRow(size_t rowIndex) noexcept;
+    [[nodiscard]] bool DebugClearListSelection() noexcept;
     [[nodiscard]] bool DebugScrollListByWheelDetents(int detents) noexcept;
     [[nodiscard]] bool DebugFocusFirstInput() noexcept;
     [[nodiscard]] bool DebugFocusUserInput() noexcept;
@@ -937,6 +1041,7 @@ private:
     void ReloadConnectionsFromSettingsPreservingSelection() noexcept;
     void RebuildList(bool refreshEditor = true) noexcept;
     [[nodiscard]] std::optional<size_t> GetSelectedModelIndex() const noexcept;
+    [[nodiscard]] std::optional<size_t> ResolveEditedModelIndexForValidation() const noexcept;
     void SelectConnectionModelIndex(size_t modelIndex) noexcept;
     void RefreshEditorFromSelection() noexcept;
     void LoadEditorFromProfile(const Common::Settings::ConnectionProfile& profile) noexcept;
@@ -950,6 +1055,17 @@ private:
     void ApplyEditorVisibility(const EditorVisibility& visibility) noexcept;
     void OnEditorFieldChanged() noexcept;
     void OnProtocolChanged(size_t comboIndex) noexcept;
+    void PopulateMtpDevicePicker(const Common::Settings::ConnectionProfile& profile) noexcept;
+    void PopulateMtpStoragePicker(const Common::Settings::ConnectionProfile& profile) noexcept;
+    void RequestMtpDevicePickerRefresh(bool manual) noexcept;
+    void RequestMtpStoragePickerRefresh(std::wstring pnpId, bool manual) noexcept;
+    [[nodiscard]] bool QueueMtpPickerWork(std::unique_ptr<MtpPickerWorkerContext> context) noexcept;
+    void CompleteMtpPickerWork(MtpPickerRequestKind kind, uint64_t requestId) noexcept;
+    void StopMtpPickerWorkers() noexcept;
+    void OnMtpPickerResult(uint64_t requestId, std::unique_ptr<MtpPickerResultPayload> result) noexcept;
+    void OnMtpDeviceSelectionChanged(size_t index) noexcept;
+    void OnMtpStorageSelectionChanged(size_t index) noexcept;
+    void OnMtpReadOnlyChanged(bool checked) noexcept;
     [[nodiscard]] bool BrowseSshFile(TextField* target) noexcept;
     void RequestCloseWindow() noexcept;
     void RefreshBaselineConnectionIds() noexcept;
@@ -1012,6 +1128,9 @@ private:
     Label* _labelName                   = nullptr;
     Label* _labelProtocol               = nullptr;
     Label* _labelHost                   = nullptr;
+    Label* _labelMtpDevice              = nullptr;
+    Label* _labelMtpStorage             = nullptr;
+    Label* _labelMtpReadOnly            = nullptr;
     Label* _labelPort                   = nullptr;
     Label* _labelInitialPath            = nullptr;
     Label* _labelCopyMoveMaxConcurrency = nullptr;
@@ -1043,10 +1162,12 @@ private:
     TextField* _editSshKnownHosts          = nullptr;
 
     // Combos (2).
-    ComboBox* _comboProtocol  = nullptr;
-    ComboBox* _comboAwsRegion = nullptr;
+    ComboBox* _comboProtocol   = nullptr;
+    ComboBox* _comboAwsRegion  = nullptr;
+    ComboBox* _comboMtpDevice  = nullptr;
+    ComboBox* _comboMtpStorage = nullptr;
 
-    // Toggles (7).
+    // Toggles (8).
     Toggle* _toggleAnonymous              = nullptr;
     Toggle* _toggleSavePassword           = nullptr;
     Toggle* _toggleRequireHello           = nullptr;
@@ -1054,11 +1175,13 @@ private:
     Toggle* _toggleS3UseHttps             = nullptr;
     Toggle* _toggleS3VerifyTls            = nullptr;
     Toggle* _toggleS3UseVirtualAddressing = nullptr;
+    Toggle* _toggleMtpReadOnly            = nullptr;
 
-    // Form action buttons (3).
+    // Form action buttons (4).
     Button* _btnShowSecret          = nullptr;
     Button* _btnSshPrivateKeyBrowse = nullptr;
     Button* _btnSshKnownHostsBrowse = nullptr;
+    Button* _btnMtpRefreshDevices   = nullptr;
 
     // Footer buttons (3).
     Button* _connectButton = nullptr;
@@ -1069,6 +1192,11 @@ private:
     ConnectionListGridModel _listModel;
     std::wstring _toggleOnLabel;
     std::wstring _toggleOffLabel;
+    std::vector<MtpPickerDeviceEntry> _mtpPickerDevices;
+    std::vector<MtpPickerStorageEntry> _mtpPickerStorages;
+    uint64_t _mtpPickerDeviceRequestId  = 0u;
+    uint64_t _mtpPickerStorageRequestId = 0u;
+    std::vector<OwnedMtpPickerWork> _mtpPickerWork;
 
     std::wstring _appId;
     Common::Settings::Settings* _settings = nullptr;
@@ -1312,6 +1440,19 @@ void WindowImpl::BuildEditorForm()
     addLabel(_labelHost, IDS_CONNECTIONS_LABEL_HOST);
     addEdit(_editHost);
     _labelHost->SetMnemonicTarget(_editHost);
+
+    addLabel(_labelMtpDevice, IDS_CONNECTIONS_LABEL_MTP_DEVICE);
+    addCombo(_comboMtpDevice, /*editable=*/false);
+    _labelMtpDevice->SetMnemonicTarget(_comboMtpDevice);
+    addActionButton(_btnMtpRefreshDevices, LoadStringResource(nullptr, IDS_CONNECTIONS_BTN_REFRESH_DEVICES));
+    _btnMtpRefreshDevices->SetOnClick([this] { RequestMtpDevicePickerRefresh(true); });
+
+    addLabel(_labelMtpStorage, IDS_CONNECTIONS_LABEL_MTP_STORAGE);
+    addCombo(_comboMtpStorage, /*editable=*/false);
+    _labelMtpStorage->SetMnemonicTarget(_comboMtpStorage);
+
+    addLabel(_labelMtpReadOnly, IDS_CONNECTIONS_LABEL_MTP_READ_ONLY);
+    addToggle(_toggleMtpReadOnly);
 
     addLabel(_labelPort, IDS_CONNECTIONS_LABEL_PORT);
     addEdit(_editPort);
@@ -1665,6 +1806,9 @@ void WindowImpl::LayoutEditorForm(D2D1_RECT_F editorRect) noexcept
     // toggles which of the two is visible based on the protocol (host edit
     // for non-S3, region combo for S3). Both occupy the same rect.
     layoutRow(_labelHost, _editHost);
+    layoutRowWithAction(_labelMtpDevice, _comboMtpDevice, _btnMtpRefreshDevices);
+    layoutRow(_labelMtpStorage, _comboMtpStorage);
+    layoutRow(_labelMtpReadOnly, _toggleMtpReadOnly);
     if (_comboAwsRegion)
     {
         const float ctrlTop = (y - kFormRowHeightDip - kFormRowGapDip) + (kFormRowHeightDip - kFormControlHeightDip) * 0.5f;
@@ -1791,6 +1935,14 @@ void WindowImpl::WireEditorChangeCallbacks()
         _comboAwsRegion->SetOnTextChanged(onTextChanged);
         _comboAwsRegion->SetOnSelectionChanged([this](size_t) { OnEditorFieldChanged(); });
     }
+    if (_comboMtpDevice)
+    {
+        _comboMtpDevice->SetOnSelectionChanged([this](size_t index) { OnMtpDeviceSelectionChanged(index); });
+    }
+    if (_comboMtpStorage)
+    {
+        _comboMtpStorage->SetOnSelectionChanged([this](size_t index) { OnMtpStorageSelectionChanged(index); });
+    }
 
     auto wireToggle = [&](Toggle* toggle)
     {
@@ -1806,6 +1958,10 @@ void WindowImpl::WireEditorChangeCallbacks()
     wireToggle(_toggleS3UseHttps);
     wireToggle(_toggleS3VerifyTls);
     wireToggle(_toggleS3UseVirtualAddressing);
+    if (_toggleMtpReadOnly)
+    {
+        _toggleMtpReadOnly->SetOnToggled([this](bool checked) { OnMtpReadOnlyChanged(checked); });
+    }
 }
 
 EditorVisibility WindowImpl::ComputeEditorVisibility() const noexcept
@@ -1816,31 +1972,35 @@ EditorVisibility WindowImpl::ComputeEditorVisibility() const noexcept
     {
         return v;
     }
-    const auto& profile = _connections[*modelIndex];
-    v.hasSelection      = true;
-    v.isFtp             = IsFtpPluginId(profile.pluginId);
-    v.isSsh             = IsSshPluginId(profile.pluginId);
-    v.isImap            = IsImapPluginId(profile.pluginId);
-    v.isGoogleDrive     = IsGoogleDrivePluginId(profile.pluginId);
-    v.isMicrosoft       = IsMicrosoftPluginId(profile.pluginId);
-    v.isS3              = IsS3PluginId(profile.pluginId);
-    v.isS3Table         = IsS3TablePluginId(profile.pluginId);
-    v.isAwsS3           = v.isS3 || v.isS3Table;
-    v.anonymous         = v.isFtp && profile.authMode == Common::Settings::ConnectionAuthMode::Anonymous;
-    v.oauth2            = (v.isMicrosoft || v.isGoogleDrive) && profile.authMode == Common::Settings::ConnectionAuthMode::OAuth2Pkce;
-    v.showProtocol      = v.hasSelection && _filterPluginId.empty();
-    v.showAwsRegion     = v.hasSelection && v.isAwsS3;
-    v.showHostEdit =
-        v.hasSelection && ! v.isAwsS3 && ! v.isGoogleDrive && ! IsOneDrivePersonalPluginId(profile.pluginId) && ! IsOneDriveBusinessPluginId(profile.pluginId);
-    v.showConcurrency    = v.hasSelection;
+    const auto& profile  = _connections[*modelIndex];
+    v.hasSelection       = true;
+    v.isFtp              = IsFtpPluginId(profile.pluginId);
+    v.isSsh              = IsSshPluginId(profile.pluginId);
+    v.isImap             = IsImapPluginId(profile.pluginId);
+    v.isGoogleDrive      = IsGoogleDrivePluginId(profile.pluginId);
+    v.isMicrosoft        = IsMicrosoftPluginId(profile.pluginId);
+    v.isS3               = IsS3PluginId(profile.pluginId);
+    v.isS3Table          = IsS3TablePluginId(profile.pluginId);
+    v.isAwsS3            = v.isS3 || v.isS3Table;
+    v.isMtp              = IsMtpPluginId(profile.pluginId);
+    v.anonymous          = v.isFtp && profile.authMode == Common::Settings::ConnectionAuthMode::Anonymous;
+    v.oauth2             = (v.isMicrosoft || v.isGoogleDrive) && profile.authMode == Common::Settings::ConnectionAuthMode::OAuth2Pkce;
+    v.showProtocol       = v.hasSelection && _filterPluginId.empty();
+    v.showAwsRegion      = v.hasSelection && v.isAwsS3;
+    v.showHostEdit       = v.hasSelection && ! v.isAwsS3 && ! v.isGoogleDrive && ! v.isMtp && ! IsOneDrivePersonalPluginId(profile.pluginId) &&
+                           ! IsOneDriveBusinessPluginId(profile.pluginId);
+    v.showInitialPath    = v.hasSelection && ! v.isMtp;
+    v.showConcurrency    = v.hasSelection && ! v.isMtp;
     v.showAnonymous      = v.hasSelection && v.isFtp;
     v.showSshSection     = v.hasSelection && v.isSsh;
     v.showS3Section      = v.hasSelection && v.isAwsS3;
     v.showVirtual        = v.showS3Section && v.isS3;
-    v.showSecretRow      = v.hasSelection && ! v.oauth2;
-    v.authInputsEnabled  = v.hasSelection && ! v.anonymous;
+    v.showAuthSection    = v.hasSelection && ! v.isMtp;
+    v.showSecretRow      = v.showAuthSection && ! v.oauth2;
+    v.authInputsEnabled  = v.showAuthSection && ! v.anonymous;
     v.showIgnoreSslTrust = v.hasSelection && v.isImap;
-    v.showPort           = v.hasSelection && ! v.isAwsS3 && ! v.isMicrosoft && ! v.isGoogleDrive;
+    v.showPort           = v.hasSelection && ! v.isAwsS3 && ! v.isMicrosoft && ! v.isGoogleDrive && ! v.isMtp;
+    v.showMtpSection     = v.hasSelection && v.isMtp;
     return v;
 }
 
@@ -1856,7 +2016,7 @@ void WindowImpl::ApplyEditorVisibility(const EditorVisibility& v) noexcept
 
     // Card visibility tracks the section
     setVisible(_connectionCard, v.hasSelection);
-    setVisible(_authCard, v.hasSelection);
+    setVisible(_authCard, v.showAuthSection);
     setVisible(_s3Card, v.showS3Section);
     setVisible(_sshCard, v.showSshSection);
     setVisible(_s3EndpointCard, false);
@@ -1870,28 +2030,35 @@ void WindowImpl::ApplyEditorVisibility(const EditorVisibility& v) noexcept
     setVisible(_labelHost, v.hasSelection && (v.showHostEdit || v.showAwsRegion));
     setVisible(_editHost, v.showHostEdit);
     setVisible(_comboAwsRegion, v.showAwsRegion);
+    setVisible(_labelMtpDevice, v.showMtpSection);
+    setVisible(_comboMtpDevice, v.showMtpSection);
+    setVisible(_btnMtpRefreshDevices, v.showMtpSection);
+    setVisible(_labelMtpStorage, v.showMtpSection);
+    setVisible(_comboMtpStorage, v.showMtpSection);
+    setVisible(_labelMtpReadOnly, v.showMtpSection);
+    setVisible(_toggleMtpReadOnly, v.showMtpSection);
     setVisible(_labelPort, v.showPort);
     setVisible(_editPort, v.showPort);
-    setVisible(_labelInitialPath, v.hasSelection);
-    setVisible(_editInitialPath, v.hasSelection);
+    setVisible(_labelInitialPath, v.showInitialPath);
+    setVisible(_editInitialPath, v.showInitialPath);
     setVisible(_labelCopyMoveMaxConcurrency, v.showConcurrency);
     setVisible(_editCopyMoveMaxConcurrency, v.showConcurrency);
     setVisible(_labelDeleteMaxConcurrency, v.showConcurrency);
     setVisible(_editDeleteMaxConcurrency, v.showConcurrency);
 
     // Auth group
-    setVisible(_sectionAuth, v.hasSelection);
+    setVisible(_sectionAuth, v.showAuthSection);
     setVisible(_labelAnonymous, v.showAnonymous);
     setVisible(_toggleAnonymous, v.showAnonymous);
-    setVisible(_labelUser, v.hasSelection && ! v.oauth2);
-    setVisible(_editUser, v.hasSelection && ! v.oauth2);
+    setVisible(_labelUser, v.showAuthSection && ! v.oauth2);
+    setVisible(_editUser, v.showAuthSection && ! v.oauth2);
     setVisible(_labelSecret, v.showSecretRow);
     setVisible(_editSecret, v.showSecretRow);
     setVisible(_btnShowSecret, v.showSecretRow);
-    setVisible(_labelSavePassword, v.hasSelection);
-    setVisible(_toggleSavePassword, v.hasSelection);
-    setVisible(_labelRequireHello, v.hasSelection);
-    setVisible(_toggleRequireHello, v.hasSelection);
+    setVisible(_labelSavePassword, v.showAuthSection);
+    setVisible(_toggleSavePassword, v.showAuthSection);
+    setVisible(_labelRequireHello, v.showAuthSection);
+    setVisible(_toggleRequireHello, v.showAuthSection);
     setVisible(_labelIgnoreSslTrust, v.showIgnoreSslTrust);
     setVisible(_toggleIgnoreSslTrust, v.showIgnoreSslTrust);
 
@@ -2033,6 +2200,8 @@ void WindowImpl::OnEditorFieldChanged() noexcept
         ExtraSetUInt32(profile.extra, "deleteMaxConcurrency", value);
     }
 
+    static_cast<void>(NormalizeConnectionProfileForProtocol(profile));
+
     // Update the list row text if the name changed and refresh the visible list.
     RebuildList(false);
     // Visibility may need to flip when authMode changes (e.g. Anonymous toggle).
@@ -2055,9 +2224,370 @@ void WindowImpl::OnProtocolChanged(size_t comboIndex) noexcept
     {
         return;
     }
-    auto& profile    = _connections[*modelIndex];
+    auto& profile = _connections[*modelIndex];
+    if (profile.pluginId == kProtocolItems[comboIndex].pluginId)
+    {
+        return;
+    }
+
     profile.pluginId = kProtocolItems[comboIndex].pluginId;
-    OnEditorFieldChanged();
+    static_cast<void>(NormalizeConnectionProfileForProtocol(profile));
+    MarkConnectionsDirty();
+    RebuildList(false);
+    LoadEditorFromProfile(profile);
+}
+
+void WindowImpl::PopulateMtpDevicePicker(const Common::Settings::ConnectionProfile& profile) noexcept
+{
+    if (! _comboMtpDevice)
+    {
+        return;
+    }
+
+    std::vector<ComboBox::Item> items;
+    items.reserve(_mtpPickerDevices.size() + 1u);
+    std::optional<size_t> selected;
+    for (size_t index = 0u; index < _mtpPickerDevices.size(); ++index)
+    {
+        const MtpPickerDeviceEntry& device = _mtpPickerDevices[index];
+        items.push_back(ComboBox::Item{.value = device.pnpId, .display = device.friendlyName.empty() ? device.pnpId : device.friendlyName});
+        if (! profile.host.empty() && OrdinalString::EqualsNoCase(profile.host, device.pnpId))
+        {
+            selected = index;
+        }
+    }
+
+    if (! selected.has_value() && ! profile.host.empty())
+    {
+        std::wstring display = Common::Settings::GetWString(profile.extra, "friendlyName").value_or(profile.host);
+        if (display.empty())
+        {
+            display = profile.host;
+        }
+        selected = items.size();
+        items.push_back(ComboBox::Item{.value = profile.host, .display = std::move(display)});
+    }
+    else if (! selected.has_value() && profile.host.empty() && items.size() == 1u)
+    {
+        selected = 0u;
+    }
+
+    _comboMtpDevice->SetItems(std::move(items));
+    _comboMtpDevice->SetSelectedIndex(selected);
+}
+
+void WindowImpl::PopulateMtpStoragePicker(const Common::Settings::ConnectionProfile& profile) noexcept
+{
+    if (! _comboMtpStorage)
+    {
+        return;
+    }
+
+    std::vector<ComboBox::Item> items;
+    std::optional<size_t> selected;
+
+    const std::wstring rootLabel = LoadStringResource(nullptr, IDS_CONNECTIONS_MTP_STORAGE_ROOT);
+    items.push_back(ComboBox::Item{.value = L"/", .display = rootLabel.empty() ? std::wstring(L"Device root") : rootLabel});
+    if (profile.initialPath.empty() || profile.initialPath == L"/")
+    {
+        selected = 0u;
+    }
+
+    for (size_t index = 0u; index < _mtpPickerStorages.size(); ++index)
+    {
+        const MtpPickerStorageEntry& storage = _mtpPickerStorages[index];
+        items.push_back(ComboBox::Item{.value = storage.initialPath, .display = storage.name});
+        if (! selected.has_value() && OrdinalString::EqualsNoCase(profile.initialPath, storage.initialPath))
+        {
+            selected = index + 1u;
+        }
+    }
+
+    if (! selected.has_value() && ! profile.initialPath.empty())
+    {
+        selected = items.size();
+        items.push_back(ComboBox::Item{.value = profile.initialPath, .display = profile.initialPath});
+    }
+
+    _comboMtpStorage->SetItems(std::move(items));
+    _comboMtpStorage->SetSelectedIndex(selected.value_or(0u));
+}
+
+void WindowImpl::RequestMtpDevicePickerRefresh(bool manual) noexcept
+{
+    if (! _hwnd)
+    {
+        return;
+    }
+    const auto modelIndex = GetSelectedModelIndex();
+    if (! modelIndex || *modelIndex >= _connections.size() || ! IsMtpPluginId(_connections[*modelIndex].pluginId))
+    {
+        return;
+    }
+
+    auto work       = std::make_unique<MtpPickerWorkerContext>();
+    work->hwnd      = _hwnd.get();
+    work->requestId = ++_mtpPickerDeviceRequestId;
+    work->kind      = MtpPickerRequestKind::Devices;
+    work->manual    = manual;
+    const HRESULT prepareHr = FileSystemPluginManager::GetInstance().PrepareConnectionBrowseDevices(_connections[*modelIndex].pluginId, work->browseWork);
+    if (FAILED(prepareHr) || ! QueueMtpPickerWork(std::move(work)))
+    {
+        std::wstring title = LoadStringResource(nullptr, IDS_CAPTION_CONNECTIONS);
+        if (title.empty())
+        {
+            title = L"Connections";
+        }
+        std::wstring message = LoadStringResource(nullptr, IDS_CONNECTIONS_ERR_MTP_DEVICE_PICKER_FAILED);
+        if (message.empty())
+        {
+            message = L"Could not enumerate MTP devices.";
+        }
+        ShowConnectionManagerAlert(_hwnd.get(), HOST_ALERT_WARNING, title, message);
+        return;
+    }
+
+}
+
+void WindowImpl::RequestMtpStoragePickerRefresh(std::wstring pnpId, bool manual) noexcept
+{
+    const auto modelIndex = GetSelectedModelIndex();
+    if (! _hwnd || pnpId.empty())
+    {
+        ++_mtpPickerStorageRequestId;
+        _mtpPickerStorages.clear();
+        if (modelIndex && *modelIndex < _connections.size())
+        {
+            PopulateMtpStoragePicker(_connections[*modelIndex]);
+        }
+        return;
+    }
+    if (! modelIndex || *modelIndex >= _connections.size() || ! IsMtpPluginId(_connections[*modelIndex].pluginId))
+    {
+        return;
+    }
+
+    auto work       = std::make_unique<MtpPickerWorkerContext>();
+    work->hwnd      = _hwnd.get();
+    work->requestId = ++_mtpPickerStorageRequestId;
+    work->kind      = MtpPickerRequestKind::Storages;
+    work->manual    = manual;
+    work->pnpId     = std::move(pnpId);
+    const HRESULT prepareHr = FileSystemPluginManager::GetInstance().PrepareConnectionBrowseStorages(
+        _connections[*modelIndex].pluginId, work->pnpId, work->browseWork);
+    if (FAILED(prepareHr) || ! QueueMtpPickerWork(std::move(work)))
+    {
+        Debug::Warning(L"ConnectionManagerWindow: failed to queue MTP storage picker refresh.");
+        return;
+    }
+
+}
+
+bool WindowImpl::QueueMtpPickerWork(std::unique_ptr<MtpPickerWorkerContext> context) noexcept
+{
+    if (! context)
+    {
+        return false;
+    }
+
+    UniqueMtpPickerWork work(CreateThreadpoolWork(MtpPickerWorkerCallback, context.get(), nullptr));
+    if (! work)
+    {
+        Debug::ErrorWithLastError(L"ConnectionManagerWindow: CreateThreadpoolWork failed for MTP picker refresh.");
+        return false;
+    }
+
+    _mtpPickerWork.emplace_back(std::move(context), std::move(work));
+    SubmitThreadpoolWork(_mtpPickerWork.back().work.get());
+    return true;
+}
+
+void WindowImpl::CompleteMtpPickerWork(MtpPickerRequestKind kind, uint64_t requestId) noexcept
+{
+    const auto match = [kind, requestId](const OwnedMtpPickerWork& owned) noexcept
+    {
+        return owned.context && owned.context->kind == kind && owned.context->requestId == requestId;
+    };
+    const auto it = std::find_if(_mtpPickerWork.begin(), _mtpPickerWork.end(), match);
+    if (it == _mtpPickerWork.end())
+    {
+        return;
+    }
+
+    WaitForThreadpoolWorkCallbacks(it->work.get(), FALSE);
+    _mtpPickerWork.erase(it);
+}
+
+void WindowImpl::StopMtpPickerWorkers() noexcept
+{
+    for (OwnedMtpPickerWork& owned : _mtpPickerWork)
+    {
+        if (owned.work)
+        {
+            WaitForThreadpoolWorkCallbacks(owned.work.get(), TRUE);
+        }
+    }
+    _mtpPickerWork.clear();
+}
+
+void WindowImpl::OnMtpPickerResult(uint64_t requestId, std::unique_ptr<MtpPickerResultPayload> result) noexcept
+{
+    if (! result)
+    {
+        return;
+    }
+    CompleteMtpPickerWork(result->kind, requestId);
+    const uint64_t currentRequestId = result->kind == MtpPickerRequestKind::Devices ? _mtpPickerDeviceRequestId : _mtpPickerStorageRequestId;
+    if (requestId != currentRequestId)
+    {
+        return;
+    }
+    const auto modelIndex = GetSelectedModelIndex();
+    if (! modelIndex || *modelIndex >= _connections.size() || ! IsMtpPluginId(_connections[*modelIndex].pluginId))
+    {
+        return;
+    }
+
+    Common::Settings::ConnectionProfile& profile = _connections[*modelIndex];
+    if (FAILED(result->hr))
+    {
+        if (result->manual && _hwnd)
+        {
+            std::wstring title = LoadStringResource(nullptr, IDS_CAPTION_CONNECTIONS);
+            if (title.empty())
+            {
+                title = L"Connections";
+            }
+            std::wstring message = LoadStringResource(nullptr, IDS_CONNECTIONS_ERR_MTP_DEVICE_PICKER_FAILED);
+            if (message.empty())
+            {
+                message = L"Could not enumerate MTP devices.";
+            }
+            ShowConnectionManagerAlert(_hwnd.get(), HOST_ALERT_WARNING, title, message);
+        }
+        return;
+    }
+
+    _loadingEditor        = true;
+    auto loadingEditorOff = wil::scope_exit([this]() noexcept { _loadingEditor = false; });
+
+    if (result->kind == MtpPickerRequestKind::Devices)
+    {
+        _mtpPickerDevices = std::move(result->devices);
+        PopulateMtpDevicePicker(profile);
+        _loadingEditor = false;
+        if (_comboMtpDevice && _comboMtpDevice->GetSelectedIndex().has_value())
+        {
+            OnMtpDeviceSelectionChanged(_comboMtpDevice->GetSelectedIndex().value());
+        }
+        else if (result->manual && _mtpPickerDevices.empty() && _hwnd)
+        {
+            std::wstring title = LoadStringResource(nullptr, IDS_CAPTION_CONNECTIONS);
+            if (title.empty())
+            {
+                title = L"Connections";
+            }
+            std::wstring message = LoadStringResource(nullptr, IDS_CONNECTIONS_ERR_MTP_NO_DEVICES);
+            if (message.empty())
+            {
+                message = L"No MTP devices were found.";
+            }
+            ShowConnectionManagerAlert(_hwnd.get(), HOST_ALERT_WARNING, title, message);
+        }
+    }
+    else
+    {
+        if (! profile.host.empty() && OrdinalString::EqualsNoCase(profile.host, result->pnpId))
+        {
+            _mtpPickerStorages = std::move(result->storages);
+            PopulateMtpStoragePicker(profile);
+        }
+    }
+
+    Layout();
+}
+
+void WindowImpl::OnMtpDeviceSelectionChanged(size_t index) noexcept
+{
+    if (_loadingEditor)
+    {
+        return;
+    }
+    const auto modelIndex = GetSelectedModelIndex();
+    if (! modelIndex || *modelIndex >= _connections.size() || ! IsMtpPluginId(_connections[*modelIndex].pluginId) || index >= _mtpPickerDevices.size())
+    {
+        return;
+    }
+
+    MtpPickerDeviceEntry device                  = _mtpPickerDevices[index];
+    Common::Settings::ConnectionProfile& profile = _connections[*modelIndex];
+    profile.host                                 = device.pnpId;
+    ExtraSetString(profile.extra, "friendlyName", device.friendlyName);
+    ExtraSetString(profile.extra, "devicePuid", device.devicePuid);
+    if (_editHost)
+    {
+        _editHost->SetText(profile.host);
+    }
+    MarkConnectionsDirty();
+    _mtpPickerStorages.clear();
+    PopulateMtpStoragePicker(profile);
+    RequestMtpStoragePickerRefresh(profile.host, false);
+    RebuildList(false);
+    Layout();
+}
+
+void WindowImpl::OnMtpStorageSelectionChanged(size_t index) noexcept
+{
+    if (_loadingEditor || ! _comboMtpStorage)
+    {
+        return;
+    }
+    const auto modelIndex = GetSelectedModelIndex();
+    if (! modelIndex || *modelIndex >= _connections.size() || ! IsMtpPluginId(_connections[*modelIndex].pluginId))
+    {
+        return;
+    }
+
+    const auto items = _comboMtpStorage->GetItems();
+    if (index >= items.size())
+    {
+        return;
+    }
+
+    Common::Settings::ConnectionProfile& profile = _connections[*modelIndex];
+    profile.initialPath                          = std::wstring(items[index].value.empty() ? std::wstring_view(L"/") : std::wstring_view(items[index].value));
+    if (index > 0u && (index - 1u) < _mtpPickerStorages.size())
+    {
+        const MtpPickerStorageEntry& storage = _mtpPickerStorages[index - 1u];
+        ExtraSetString(profile.extra, "defaultStorageName", storage.name);
+        ExtraSetString(profile.extra, "defaultStoragePuid", storage.persistentId);
+    }
+    else
+    {
+        ExtraSetString(profile.extra, "defaultStorageName", L"");
+        ExtraSetString(profile.extra, "defaultStoragePuid", L"");
+    }
+    if (_editInitialPath)
+    {
+        _editInitialPath->SetText(profile.initialPath);
+    }
+    MarkConnectionsDirty();
+}
+
+void WindowImpl::OnMtpReadOnlyChanged(bool checked) noexcept
+{
+    if (_loadingEditor)
+    {
+        return;
+    }
+    const auto modelIndex = GetSelectedModelIndex();
+    if (! modelIndex || *modelIndex >= _connections.size() || ! IsMtpPluginId(_connections[*modelIndex].pluginId))
+    {
+        return;
+    }
+
+    ExtraSetBool(_connections[*modelIndex].extra, "readOnly", checked);
+    MarkConnectionsDirty();
 }
 
 bool WindowImpl::BrowseSshFile(TextField* target) noexcept
@@ -2504,7 +3034,7 @@ void WindowImpl::ShowNameValidationError(const ConnectionProfileValidationResult
         message = L"Connection name is not valid.";
     }
 
-    Debug::Warning(L"ConnectionManagerWindow: rejected connection profile name proposed='{}' normalized='{}' error={}",
+    Debug::Warning(L"ConnectionManagerWindow: rejected connection profile proposed='{}' normalized='{}' error={}",
                    validation.proposedName,
                    validation.normalizedName,
                    static_cast<unsigned>(validation.error));
@@ -2516,6 +3046,13 @@ void WindowImpl::ShowNameValidationError(const ConnectionProfileValidationResult
     }
     ShowConnectionManagerAlert(_hwnd.get(), HOST_ALERT_WARNING, title, message);
 
+    if (validation.error == ConnectionProfileValidationError::HostRequired && _editHost)
+    {
+        _dxHost.SetFocusControl(_editHost);
+        _editHost->SetSelectionRange(0u, std::numeric_limits<size_t>::max());
+        return;
+    }
+
     if (_editName)
     {
         _dxHost.SetFocusControl(_editName);
@@ -2525,8 +3062,8 @@ void WindowImpl::ShowNameValidationError(const ConnectionProfileValidationResult
 
 bool WindowImpl::TryValidateAndNormalizeConnectionProfiles() noexcept
 {
-    bool normalizedAny            = false;
-    const auto selectedModelIndex = GetSelectedModelIndex();
+    bool normalizedAny          = false;
+    const auto editedModelIndex = ResolveEditedModelIndexForValidation();
 
     for (size_t index = 0; index < _connections.size(); ++index)
     {
@@ -2536,7 +3073,7 @@ bool WindowImpl::TryValidateAndNormalizeConnectionProfiles() noexcept
         }
 
         std::wstring proposedName = _connections[index].name;
-        if (selectedModelIndex && *selectedModelIndex == index && _editName)
+        if (editedModelIndex && *editedModelIndex == index && _editName)
         {
             proposedName = std::wstring(_editName->GetText());
         }
@@ -2555,12 +3092,56 @@ bool WindowImpl::TryValidateAndNormalizeConnectionProfiles() noexcept
             normalizedAny            = true;
         }
 
-        if (selectedModelIndex && *selectedModelIndex == index && _editName && std::wstring(_editName->GetText()) != validation.normalizedName)
+        if (editedModelIndex && *editedModelIndex == index && _editName && std::wstring(_editName->GetText()) != validation.normalizedName)
         {
             _loadingEditor                   = true;
             const auto loadingEditorScopeOff = wil::scope_exit([this]() noexcept { _loadingEditor = false; });
             _editName->SetText(validation.normalizedName);
         }
+
+        if (IsMtpPluginId(_connections[index].pluginId))
+        {
+            std::wstring proposedHost = _connections[index].host;
+            if (editedModelIndex && *editedModelIndex == index && _editHost)
+            {
+                proposedHost = std::wstring(_editHost->GetText());
+            }
+
+            const std::wstring normalizedHost = TrimWhitespace(proposedHost);
+            if (normalizedHost.empty())
+            {
+                ConnectionProfileValidationResult hostValidation{};
+                hostValidation.error          = ConnectionProfileValidationError::HostRequired;
+                hostValidation.proposedName   = std::move(proposedHost);
+                hostValidation.normalizedName = normalizedHost;
+                SelectConnectionModelIndex(index);
+                ShowNameValidationError(hostValidation);
+                return false;
+            }
+
+            if (_connections[index].host != normalizedHost)
+            {
+                _connections[index].host = normalizedHost;
+                normalizedAny            = true;
+            }
+
+            if (editedModelIndex && *editedModelIndex == index && _editHost && std::wstring(_editHost->GetText()) != normalizedHost)
+            {
+                _loadingEditor                   = true;
+                const auto loadingEditorScopeOff = wil::scope_exit([this]() noexcept { _loadingEditor = false; });
+                _editHost->SetText(normalizedHost);
+            }
+        }
+
+        if (NormalizeConnectionProfileForProtocol(_connections[index]))
+        {
+            normalizedAny = true;
+        }
+    }
+
+    if (editedModelIndex && *editedModelIndex < _connections.size())
+    {
+        _selectedConnectionName = _connections[*editedModelIndex].name;
     }
 
     if (normalizedAny)
@@ -2803,6 +3384,9 @@ void WindowImpl::OnClose() noexcept
 void WindowImpl::OnNcDestroy() noexcept
 {
     const HWND destroyedHwnd = _hwnd ? _hwnd.get() : _closingHwnd;
+    ++_mtpPickerDeviceRequestId;
+    ++_mtpPickerStorageRequestId;
+    StopMtpPickerWorkers();
     if (_settingsHotReloadRegistered)
     {
         SettingsHotReload::UnregisterParticipant(destroyedHwnd);
@@ -2815,6 +3399,7 @@ void WindowImpl::OnNcDestroy() noexcept
     if (destroyedHwnd)
     {
         SetWindowLongPtrW(destroyedHwnd, GWLP_USERDATA, 0);
+        static_cast<void>(DrainPostedPayloadsForWindow(destroyedHwnd));
     }
     if (_list)
     {
@@ -2822,22 +3407,29 @@ void WindowImpl::OnNcDestroy() noexcept
         _list->SetModel(nullptr);
     }
     _dxHost.Detach();
-    _root           = nullptr;
-    _listPane       = nullptr;
-    _editorPane     = nullptr;
-    _footerPane     = nullptr;
-    _list           = nullptr;
-    _newButton      = nullptr;
-    _renameButton   = nullptr;
-    _removeButton   = nullptr;
-    _connectButton  = nullptr;
-    _closeButton    = nullptr;
-    _cancelButton   = nullptr;
-    _connectionCard = nullptr;
-    _authCard       = nullptr;
-    _s3Card         = nullptr;
-    _sshCard        = nullptr;
-    _s3EndpointCard = nullptr;
+    _root                 = nullptr;
+    _listPane             = nullptr;
+    _editorPane           = nullptr;
+    _footerPane           = nullptr;
+    _list                 = nullptr;
+    _newButton            = nullptr;
+    _renameButton         = nullptr;
+    _removeButton         = nullptr;
+    _connectButton        = nullptr;
+    _closeButton          = nullptr;
+    _cancelButton         = nullptr;
+    _connectionCard       = nullptr;
+    _authCard             = nullptr;
+    _s3Card               = nullptr;
+    _sshCard              = nullptr;
+    _s3EndpointCard       = nullptr;
+    _labelMtpDevice       = nullptr;
+    _labelMtpStorage      = nullptr;
+    _labelMtpReadOnly     = nullptr;
+    _comboMtpDevice       = nullptr;
+    _comboMtpStorage      = nullptr;
+    _toggleMtpReadOnly    = nullptr;
+    _btnMtpRefreshDevices = nullptr;
 
     if (! _isModalFacade)
     {
@@ -2891,8 +3483,8 @@ void WindowImpl::CaptureRestoreFolderViewWindow() noexcept
 void WindowImpl::RestoreOwnerFocusAfterClose() noexcept
 {
     const HWND restoreOwner = (_notifyOwner && IsWindow(_notifyOwner) != FALSE) ? _notifyOwner : nullptr;
-    const HWND restoreFocus = (_restoreFolderViewWindow && IsWindow(_restoreFolderViewWindow) != FALSE) ? _restoreFolderViewWindow
-                                                                                                       : ResolveRestoreFolderViewWindow();
+    const HWND restoreFocus =
+        (_restoreFolderViewWindow && IsWindow(_restoreFolderViewWindow) != FALSE) ? _restoreFolderViewWindow : ResolveRestoreFolderViewWindow();
 
     if (restoreOwner)
     {
@@ -3142,6 +3734,29 @@ std::optional<size_t> WindowImpl::GetSelectedModelIndex() const noexcept
     return _viewToModel[*primary];
 }
 
+std::optional<size_t> WindowImpl::ResolveEditedModelIndexForValidation() const noexcept
+{
+    if (const auto selectedModelIndex = GetSelectedModelIndex())
+    {
+        return selectedModelIndex;
+    }
+
+    if (_selectedConnectionName.empty())
+    {
+        return std::nullopt;
+    }
+
+    const auto match = std::find_if(_connections.begin(), _connections.end(), [this](const Common::Settings::ConnectionProfile& profile) noexcept {
+        return profile.name == _selectedConnectionName;
+    });
+    if (match == _connections.end())
+    {
+        return std::nullopt;
+    }
+
+    return static_cast<size_t>(std::distance(_connections.begin(), match));
+}
+
 void WindowImpl::SelectConnectionModelIndex(size_t modelIndex) noexcept
 {
     if (! _list || ! _list->GetModel())
@@ -3277,7 +3892,7 @@ void WindowImpl::LoadEditorFromProfile(const Common::Settings::ConnectionProfile
     }
     if (_editS3EndpointOverride)
     {
-        _editS3EndpointOverride->SetText(ExtraGetString(profile.extra, "endpointOverride").value_or(std::wstring{}));
+        _editS3EndpointOverride->SetText(Common::Settings::GetWString(profile.extra, "endpointOverride").value_or(std::wstring{}));
     }
     if (_toggleS3UseHttps)
     {
@@ -3293,11 +3908,11 @@ void WindowImpl::LoadEditorFromProfile(const Common::Settings::ConnectionProfile
     }
     if (_editSshPrivateKey)
     {
-        _editSshPrivateKey->SetText(ExtraGetString(profile.extra, "sshPrivateKey").value_or(std::wstring{}));
+        _editSshPrivateKey->SetText(Common::Settings::GetWString(profile.extra, "sshPrivateKey").value_or(std::wstring{}));
     }
     if (_editSshKnownHosts)
     {
-        _editSshKnownHosts->SetText(ExtraGetString(profile.extra, "sshKnownHosts").value_or(std::wstring{}));
+        _editSshKnownHosts->SetText(Common::Settings::GetWString(profile.extra, "sshKnownHosts").value_or(std::wstring{}));
     }
     if (_editCopyMoveMaxConcurrency)
     {
@@ -3309,9 +3924,42 @@ void WindowImpl::LoadEditorFromProfile(const Common::Settings::ConnectionProfile
         const uint32_t v = ConnectionProfileUtils::ExtraGetUInt32(profile.extra, "deleteMaxConcurrency").value_or(0u);
         _editDeleteMaxConcurrency->SetText(v == 0u ? std::wstring{} : std::to_wstring(v));
     }
+    if (_toggleMtpReadOnly)
+    {
+        _toggleMtpReadOnly->SetChecked(ConnectionProfileUtils::ExtraGetBool(profile.extra, "readOnly").value_or(true));
+    }
+    if (IsMtpPluginId(profile.pluginId))
+    {
+        PopulateMtpDevicePicker(profile);
+        PopulateMtpStoragePicker(profile);
+    }
+    else
+    {
+        _mtpPickerDevices.clear();
+        _mtpPickerStorages.clear();
+        if (_comboMtpDevice)
+        {
+            _comboMtpDevice->SetItems({});
+            _comboMtpDevice->SetSelectedIndex(std::nullopt);
+        }
+        if (_comboMtpStorage)
+        {
+            _comboMtpStorage->SetItems({});
+            _comboMtpStorage->SetSelectedIndex(std::nullopt);
+        }
+    }
 
     ApplyEditorVisibility(ComputeEditorVisibility());
     Layout();
+
+    if (IsMtpPluginId(profile.pluginId))
+    {
+        RequestMtpDevicePickerRefresh(false);
+        if (! profile.host.empty())
+        {
+            RequestMtpStoragePickerRefresh(profile.host, false);
+        }
+    }
 }
 
 void WindowImpl::ClearEditor() noexcept
@@ -3363,6 +4011,19 @@ void WindowImpl::ClearEditor() noexcept
     clearToggle(_toggleS3UseHttps, true);
     clearToggle(_toggleS3VerifyTls, true);
     clearToggle(_toggleS3UseVirtualAddressing, false);
+    clearToggle(_toggleMtpReadOnly, true);
+    _mtpPickerDevices.clear();
+    _mtpPickerStorages.clear();
+    if (_comboMtpDevice)
+    {
+        _comboMtpDevice->SetItems({});
+        _comboMtpDevice->SetSelectedIndex(std::nullopt);
+    }
+    if (_comboMtpStorage)
+    {
+        _comboMtpStorage->SetItems({});
+        _comboMtpStorage->SetSelectedIndex(std::nullopt);
+    }
 
     ApplyEditorVisibility(ComputeEditorVisibility());
     Layout();
@@ -3386,6 +4047,7 @@ void WindowImpl::OnNewClicked() noexcept
     profile.authMode            = Common::Settings::ConnectionAuthMode::Password;
     profile.savePassword        = false;
     profile.requireWindowsHello = true;
+    static_cast<void>(NormalizeConnectionProfileForProtocol(profile));
 
     _connections.push_back(std::move(profile));
     MarkConnectionsDirty();
@@ -3467,11 +4129,11 @@ void WindowImpl::OnRemoveClicked() noexcept
 void WindowImpl::OnCloseClicked() noexcept
 {
     // Close persists dirty state and closes without selecting a connection.
-    _selectedConnectionName.clear();
     if (! TryValidateAndNormalizeConnectionProfiles())
     {
         return;
     }
+    _selectedConnectionName.clear();
     if (! SaveConnectionsSettings())
     {
         if (_modalResult)
@@ -3567,17 +4229,17 @@ bool WindowImpl::OnCommand(WORD commandId) noexcept
 
 LRESULT WindowImpl::WindowProc(UINT msg, WPARAM wp, LPARAM lp) noexcept
 {
+    if (msg == WM_NCDESTROY)
+    {
+        OnNcDestroy();
+        return 0;
+    }
+
     const HWND messageHwnd = _hwnd ? _hwnd.get() : _closingHwnd;
     bool dxHandled         = false;
     const LRESULT dxResult = _dxHost.HandleMessage(messageHwnd, msg, wp, lp, dxHandled);
     if (dxHandled)
     {
-        if (msg == WM_NCDESTROY)
-        {
-            // DxUi::WindowHost consumes WM_NCDESTROY after detaching; the owner must still run singleton cleanup and focus restore.
-            OnNcDestroy();
-            return dxResult;
-        }
         if (msg == WM_SIZE)
         {
             Layout();
@@ -3605,7 +4267,9 @@ LRESULT WindowImpl::WindowProc(UINT msg, WPARAM wp, LPARAM lp) noexcept
             }
             break;
         case WM_CLOSE: OnClose(); return 0;
-        case WM_NCDESTROY: OnNcDestroy(); return 0;
+        case WndMsg::kConnectionManagerMtpPickerComplete:
+            OnMtpPickerResult(static_cast<uint64_t>(wp), TakeMessagePayload<MtpPickerResultPayload>(lp));
+            return 0;
         case WndMsg::kSettingsReloadedFromDisk: OnSettingsReloadedFromDisk(); return 0;
         default: break;
     }
@@ -3625,6 +4289,7 @@ LRESULT CALLBACK WindowImpl::WndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARAM
             return FALSE;
         }
         self->_hwnd.reset(hwnd);
+        InitPostedPayloadWindow(hwnd);
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self));
     }
 
@@ -3832,12 +4497,13 @@ void WindowImpl::DebugFillSnapshot(::ConnectionManagerDebugSnapshot& out) const 
         CountIfVisibleControl(_editCopyMoveMaxConcurrency) + CountIfVisibleControl(_editDeleteMaxConcurrency) + CountIfVisibleControl(_editUser) +
         CountIfVisibleControl(_editSecret) + CountIfVisibleControl(_editS3EndpointOverride) + CountIfVisibleControl(_editSshPrivateKey) +
         CountIfVisibleControl(_editSshKnownHosts) + CountIfVisibleControl(_comboProtocol) + CountIfVisibleControl(_comboAwsRegion) +
-        CountIfVisibleControl(_toggleAnonymous) + CountIfVisibleControl(_toggleSavePassword) + CountIfVisibleControl(_toggleRequireHello) +
-        CountIfVisibleControl(_toggleIgnoreSslTrust) + CountIfVisibleControl(_toggleS3UseHttps) + CountIfVisibleControl(_toggleS3VerifyTls) +
-        CountIfVisibleControl(_toggleS3UseVirtualAddressing);
-    out.visibleDxFormActionButtonHostCount =
-        CountIfVisibleControl(_btnShowSecret) + CountIfVisibleControl(_btnSshPrivateKeyBrowse) + CountIfVisibleControl(_btnSshKnownHostsBrowse);
-    out.visibleDxListHostCount = CountIfVisibleControl(_list);
+        CountIfVisibleControl(_comboMtpDevice) + CountIfVisibleControl(_comboMtpStorage) + CountIfVisibleControl(_toggleAnonymous) +
+        CountIfVisibleControl(_toggleSavePassword) + CountIfVisibleControl(_toggleRequireHello) + CountIfVisibleControl(_toggleIgnoreSslTrust) +
+        CountIfVisibleControl(_toggleS3UseHttps) + CountIfVisibleControl(_toggleS3VerifyTls) + CountIfVisibleControl(_toggleS3UseVirtualAddressing) +
+        CountIfVisibleControl(_toggleMtpReadOnly);
+    out.visibleDxFormActionButtonHostCount = CountIfVisibleControl(_btnShowSecret) + CountIfVisibleControl(_btnSshPrivateKeyBrowse) +
+                                             CountIfVisibleControl(_btnSshKnownHostsBrowse) + CountIfVisibleControl(_btnMtpRefreshDevices);
+    out.visibleDxListHostCount             = CountIfVisibleControl(_list);
 
     // List metrics
     out.listRowCount = _listModel.GetRowCount();
@@ -3963,20 +4629,37 @@ void WindowImpl::DebugFillSnapshot(::ConnectionManagerDebugSnapshot& out) const 
     observeTextFieldHeight(_editSshKnownHosts);
     out.layoutTextFieldsAvoidClipping = out.minVisibleTextFieldHeightDip >= 28.0f;
 
-    // Selected list state
+    // Selected list state. The editor can intentionally remain bound to the last edited
+    // model while the grid has no primary row, so expose its text independently.
+    out.currentNameText = _editName ? std::wstring(_editName->GetText()) : std::wstring{};
     if (const auto modelIndex = GetSelectedModelIndex(); modelIndex && *modelIndex < _connections.size())
     {
         const auto& profile     = _connections[*modelIndex];
         out.selectedListRowName = profile.name;
-        out.currentNameText     = _editName ? std::wstring(_editName->GetText()) : profile.name;
         out.currentPluginId     = profile.pluginId;
     }
     else
     {
         out.selectedListRowName.clear();
-        out.currentNameText.clear();
-        out.currentPluginId.clear();
+        const auto editedModelIndex = ResolveEditedModelIndexForValidation();
+        out.currentPluginId = editedModelIndex && *editedModelIndex < _connections.size() ? _connections[*editedModelIndex].pluginId : std::wstring{};
     }
+    out.authSectionVisible        = _authCard && _authCard->IsVisible();
+    out.userFieldVisible          = _editUser && _editUser->IsVisible();
+    out.secretFieldVisible        = _editSecret && _editSecret->IsVisible();
+    out.hostFieldVisible          = _editHost && _editHost->IsVisible();
+    out.initialPathFieldVisible   = _editInitialPath && _editInitialPath->IsVisible();
+    out.mtpDevicePickerVisible    = _comboMtpDevice && _comboMtpDevice->IsVisible();
+    out.mtpStoragePickerVisible   = _comboMtpStorage && _comboMtpStorage->IsVisible();
+    out.mtpReadOnlyVisible        = _toggleMtpReadOnly && _toggleMtpReadOnly->IsVisible();
+    out.mtpRefreshButtonVisible   = _btnMtpRefreshDevices && _btnMtpRefreshDevices->IsVisible();
+    out.mtpDevicePickerItemCount  = _comboMtpDevice ? _comboMtpDevice->GetItems().size() : 0u;
+    out.mtpStoragePickerItemCount = _comboMtpStorage ? _comboMtpStorage->GetItems().size() : 0u;
+    out.currentMtpDeviceValue =
+        _comboMtpDevice && _comboMtpDevice->GetSelectedIndex().has_value() ? std::wstring(_comboMtpDevice->GetSelectedValue()) : std::wstring{};
+    out.currentMtpStorageValue =
+        _comboMtpStorage && _comboMtpStorage->GetSelectedIndex().has_value() ? std::wstring(_comboMtpStorage->GetSelectedValue()) : std::wstring{};
+    out.currentMtpReadOnly             = _toggleMtpReadOnly && _toggleMtpReadOnly->IsChecked();
     out.secretMasked                   = _editSecret && _editSecret->IsMasked();
     out.secretStoredPlaceholderVisible = _secretStoredPlaceholderVisible;
     out.secretStoredPlaceholderLength  = _secretStoredPlaceholderLength;
@@ -4131,13 +4814,24 @@ void WindowImpl::DebugFillSnapshot(::ConnectionManagerDebugSnapshot& out) const 
                 out.focusLabel = resourceText(IDS_CONNECTIONS_LABEL_SSH_KNOWNHOSTS);
             }
         }
-        else if (focused == _comboProtocol || focused == _comboAwsRegion)
+        else if (focused == _comboProtocol || focused == _comboAwsRegion || focused == _comboMtpDevice || focused == _comboMtpStorage)
         {
-            out.focusKind  = ConnectionManagerDebugFocusKind::Combo;
-            out.focusLabel = resourceText(focused == _comboProtocol ? IDS_CONNECTIONS_LABEL_PROTOCOL : IDS_CONNECTIONS_LABEL_REGION);
+            out.focusKind = ConnectionManagerDebugFocusKind::Combo;
+            if (focused == _comboProtocol)
+            {
+                out.focusLabel = resourceText(IDS_CONNECTIONS_LABEL_PROTOCOL);
+            }
+            else if (focused == _comboAwsRegion)
+            {
+                out.focusLabel = resourceText(IDS_CONNECTIONS_LABEL_REGION);
+            }
+            else
+            {
+                out.focusLabel = resourceText(focused == _comboMtpDevice ? IDS_CONNECTIONS_LABEL_MTP_DEVICE : IDS_CONNECTIONS_LABEL_MTP_STORAGE);
+            }
         }
         else if (focused == _toggleAnonymous || focused == _toggleSavePassword || focused == _toggleRequireHello || focused == _toggleIgnoreSslTrust ||
-                 focused == _toggleS3UseHttps || focused == _toggleS3VerifyTls || focused == _toggleS3UseVirtualAddressing)
+                 focused == _toggleS3UseHttps || focused == _toggleS3VerifyTls || focused == _toggleS3UseVirtualAddressing || focused == _toggleMtpReadOnly)
         {
             out.focusKind = ConnectionManagerDebugFocusKind::Toggle;
             if (focused == _toggleAnonymous)
@@ -4164,12 +4858,16 @@ void WindowImpl::DebugFillSnapshot(::ConnectionManagerDebugSnapshot& out) const 
             {
                 out.focusLabel = resourceText(IDS_CONNECTIONS_LABEL_VERIFY_TLS);
             }
+            else if (focused == _toggleMtpReadOnly)
+            {
+                out.focusLabel = resourceText(IDS_CONNECTIONS_LABEL_MTP_READ_ONLY);
+            }
             else
             {
                 out.focusLabel = resourceText(IDS_CONNECTIONS_LABEL_USE_VIRTUAL_ADDRESSING);
             }
         }
-        else if (focused == _btnShowSecret || focused == _btnSshPrivateKeyBrowse || focused == _btnSshKnownHostsBrowse)
+        else if (focused == _btnShowSecret || focused == _btnSshPrivateKeyBrowse || focused == _btnSshKnownHostsBrowse || focused == _btnMtpRefreshDevices)
         {
             out.focusKind = ConnectionManagerDebugFocusKind::FormActionButton;
             if (focused == _btnShowSecret)
@@ -4179,6 +4877,10 @@ void WindowImpl::DebugFillSnapshot(::ConnectionManagerDebugSnapshot& out) const 
             else if (focused == _btnSshPrivateKeyBrowse)
             {
                 out.focusLabel = buttonText(_btnSshPrivateKeyBrowse);
+            }
+            else if (focused == _btnMtpRefreshDevices)
+            {
+                out.focusLabel = buttonText(_btnMtpRefreshDevices);
             }
             else
             {
@@ -4230,6 +4932,21 @@ bool WindowImpl::DebugClickListRow(size_t rowIndex) noexcept
     }
     RefreshEditorFromSelection();
     return true;
+}
+
+bool WindowImpl::DebugClearListSelection() noexcept
+{
+    if (! _list)
+    {
+        return false;
+    }
+
+    // Exercise the validation fallback where the edited model remains active even though
+    // the grid no longer exposes a primary row. A normal selection-change notification
+    // intentionally reloads/clears the editor and would erase the state this seam verifies.
+    _list->GetSelectionModel().Clear();
+    _dxHost.Invalidate();
+    return ! GetSelectedModelIndex().has_value();
 }
 
 bool WindowImpl::DebugScrollListByWheelDetents(int detents) noexcept
@@ -4592,6 +5309,17 @@ bool DebugClickListRow(size_t rowIndex) noexcept
     }
     auto* impl = reinterpret_cast<WindowImpl*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
     return impl && impl->DebugClickListRow(rowIndex);
+}
+
+bool DebugClearListSelection() noexcept
+{
+    const HWND hwnd = GetWindowHandle();
+    if (! hwnd)
+    {
+        return false;
+    }
+    auto* impl = reinterpret_cast<WindowImpl*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    return impl && impl->DebugClearListSelection();
 }
 
 bool DebugScrollListByWheelDetents(int detents) noexcept
@@ -5064,6 +5792,11 @@ bool DebugGetConnectionManagerDialogSnapshot(ConnectionManagerDebugSnapshot& out
 bool DebugClickConnectionManagerListRow(size_t rowIndex) noexcept
 {
     return RedSalamander::ConnectionManager::SingleCanvas::DebugClickListRow(rowIndex);
+}
+
+bool DebugClearConnectionManagerListSelection() noexcept
+{
+    return RedSalamander::ConnectionManager::SingleCanvas::DebugClearListSelection();
 }
 
 bool DebugScrollConnectionManagerListByWheelDetents(int detents) noexcept

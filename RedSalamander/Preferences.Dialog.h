@@ -29,6 +29,8 @@ namespace PreferencesDialog
 [[nodiscard]] HWND DebugGetShellHostHandle() noexcept;
 [[nodiscard]] bool DebugSelectCategory(PrefCategory category) noexcept;
 [[nodiscard]] bool DebugSelectPluginsTreeChild(size_t childIndex) noexcept;
+[[nodiscard]] bool DebugFocusCategoryTree() noexcept;
+[[nodiscard]] bool DebugSendCategoryTreeKey(UINT virtualKey) noexcept;
 [[nodiscard]] bool DebugScrollCategoryTreeByWheelDelta(int wheelDelta) noexcept;
 [[nodiscard]] bool DebugScrollCategoryTreeByWheelDetents(int detents) noexcept;
 [[nodiscard]] bool DebugDragPageHostDxScrollbarThumb(int distancePx, int moveCount) noexcept;

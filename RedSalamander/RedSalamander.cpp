@@ -5,6 +5,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstddef>
+#include <cstdlib>
 #include <cstring>
 #include <cwchar>
 #include <cwctype>
@@ -48,6 +49,7 @@
 // Each executable must have its own provider instance with the same GUID
 #define REDSAL_DEFINE_TRACE_PROVIDER
 #include "Helpers.h"
+#include "PathUtils.h"
 
 #include "ExceptionHelpers.h"
 #include "Version.h"
@@ -71,6 +73,7 @@
 #include "HostServices.h"
 #include "IconCache.h"
 #include "ManagePluginsDialog.h"
+#include "ModalWindowShell.h"
 #include "Preferences.h"
 #include "RedSalamander.h"
 #include "SessionState.h"
@@ -123,12 +126,23 @@ constexpr wchar_t kFatalErrorDialogWindowClassName[] = L"RedSalamander.FatalErro
 constexpr wchar_t kExternalHelpUrl[]                 = L"https://github.com/RedSalamanders/RedSalamander/tree/main/docs#readme";
 constexpr wchar_t kLeftPaneSlot[]                    = L"left";
 constexpr wchar_t kRightPaneSlot[]                   = L"right";
+
+enum class RuntimeSettingsSaveOwner : uint8_t
+{
+    None,
+    SessionEnd,
+    NormalShutdown,
+};
+
+std::atomic<RuntimeSettingsSaveOwner> g_runtimeSettingsSaveOwner{RuntimeSettingsSaveOwner::None};
 #ifdef ENABLE_TESTS
 constexpr UINT kFatalErrorDialogDebugGetSnapshotMessage   = WM_APP + 0x71;
 constexpr UINT kFatalErrorDialogDebugScrollByWheelMessage = WM_APP + 0x72;
 constexpr double kSelfTestTimeoutMultiplierDefault        = 1.0;
 constexpr double kSelfTestTimeoutMultiplierMin            = 0.1;
 constexpr double kSelfTestTimeoutMultiplierMax            = 100.0;
+constexpr uint32_t kSelfTestRepeatDefault                 = 1u;
+constexpr uint32_t kSelfTestRepeatMax                     = 100u;
 std::mutex g_debugConnectionManagerConnectMutex;
 bool g_debugConnectionManagerConnectSeen    = false;
 uint8_t g_debugConnectionManagerConnectPane = 0u;
@@ -138,6 +152,9 @@ std::mutex g_debugRereadAssociationsMutex;
 const Common::Settings::Settings* g_debugRereadAssociationsSettingsOverride = nullptr;
 RereadAssociationsDebugSnapshot g_debugRereadAssociationsSnapshot{};
 bool g_debugRereadAssociationsSnapshotValid = false;
+std::mutex g_debugSessionEndSettingsMutex;
+SessionEndSettingsWriterForSelfTest g_debugSessionEndSettingsWriter = nullptr;
+SessionEndSettingsDebugSnapshot g_debugSessionEndSettingsSnapshot{};
 #endif
 
 [[nodiscard]] HWND NormalizeOwnedWindow(HWND ownerWindow) noexcept
@@ -145,25 +162,7 @@ bool g_debugRereadAssociationsSnapshotValid = false;
     return (ownerWindow && IsWindow(ownerWindow) != FALSE) ? ownerWindow : nullptr;
 }
 AppTheme ResolveConfiguredTheme() noexcept;
-
-void CenterWindowOnOwner(HWND window, HWND owner) noexcept
-{
-    if (! window || IsWindow(window) == FALSE || ! owner || IsWindow(owner) == FALSE)
-    {
-        return;
-    }
-
-    RECT ownerRect{};
-    RECT windowRect{};
-    if (GetWindowRect(owner, &ownerRect) == FALSE || GetWindowRect(window, &windowRect) == FALSE)
-    {
-        return;
-    }
-
-    const int x = ownerRect.left + (((ownerRect.right - ownerRect.left) - (windowRect.right - windowRect.left)) / 2);
-    const int y = ownerRect.top + (((ownerRect.bottom - ownerRect.top) - (windowRect.bottom - windowRect.top)) / 2);
-    SetWindowPos(window, nullptr, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-}
+bool IsConfiguredThemeResolvable(const Common::Settings::Settings& settings) noexcept;
 
 [[nodiscard]] const wchar_t* TraceApplicationLoopMessageName(UINT message) noexcept
 {
@@ -212,10 +211,10 @@ void TraceFindFilesApplicationLoopMessage(const MSG& msg, HWND root, std::wstrin
     const HWND findRoot = root;
 
     POINT cursorScreen{};
-    const bool haveCursor = GetCursorPos(&cursorScreen) != FALSE; // getcursorpos-allow: diagnostic-only
-    POINT rootClient      = cursorScreen;
+    const bool haveCursor     = GetCursorPos(&cursorScreen) != FALSE; // getcursorpos-allow: diagnostic-only
+    POINT rootClient          = cursorScreen;
     const bool haveRootClient = haveCursor && ScreenToClient(findRoot, &rootClient) != FALSE;
-    HWND childAtCursor         = nullptr;
+    HWND childAtCursor        = nullptr;
     if (haveRootClient)
     {
         childAtCursor = ChildWindowFromPointEx(findRoot, rootClient, CWP_SKIPINVISIBLE);
@@ -266,6 +265,18 @@ struct SelfTestTimeoutMultiplierParseResult final
     double value = kSelfTestTimeoutMultiplierDefault;
 };
 
+struct SelfTestRepeatCountParseResult final
+{
+    bool valid    = false;
+    uint32_t value = kSelfTestRepeatDefault;
+};
+
+struct SelfTestShuffleSeedParseResult final
+{
+    bool valid    = false;
+    uint64_t value = 0u;
+};
+
 [[nodiscard]] SelfTestTimeoutMultiplierParseResult ParseSelfTestTimeoutMultiplier(std::wstring_view value) noexcept
 {
     std::wstring valueCopy(value);
@@ -292,6 +303,52 @@ struct SelfTestTimeoutMultiplierParseResult final
     }
 
     return {.valid = true, .value = clamped};
+}
+
+[[nodiscard]] SelfTestRepeatCountParseResult ParseSelfTestRepeatCount(std::wstring_view value) noexcept
+{
+    std::wstring valueCopy(value);
+    wchar_t* end                = nullptr;
+    errno                       = 0;
+    const unsigned long parsed  = wcstoul(valueCopy.c_str(), &end, 10);
+    const bool parseFailure     = valueCopy.empty() || end == valueCopy.c_str() || (end && *end != L'\0') || errno != 0;
+    const bool rangeFailure     = parsed < static_cast<unsigned long>(kSelfTestRepeatDefault);
+    if (parseFailure || rangeFailure)
+    {
+        Debug::Error(L"Invalid --selftest-repeat value '{}'. Expected an integer in [{}, {}].",
+                     valueCopy,
+                     kSelfTestRepeatDefault,
+                     kSelfTestRepeatMax);
+        return {};
+    }
+
+    const uint32_t clamped = static_cast<uint32_t>(std::min<unsigned long>(parsed, kSelfTestRepeatMax));
+    if (clamped != parsed)
+    {
+        Debug::Warning(L"Clamped --selftest-repeat from {} to {}. Supported range is [{}, {}].",
+                       parsed,
+                       clamped,
+                       kSelfTestRepeatDefault,
+                       kSelfTestRepeatMax);
+    }
+
+    return {.valid = true, .value = clamped};
+}
+
+[[nodiscard]] SelfTestShuffleSeedParseResult ParseSelfTestShuffleSeed(std::wstring_view value) noexcept
+{
+    std::wstring valueCopy(value);
+    wchar_t* end                      = nullptr;
+    errno                             = 0;
+    const unsigned long long parsed   = wcstoull(valueCopy.c_str(), &end, 0);
+    const bool parseFailure           = valueCopy.empty() || end == valueCopy.c_str() || (end && *end != L'\0') || errno != 0;
+    if (parseFailure)
+    {
+        Debug::Error(L"Invalid --selftest-shuffle value '{}'. Expected a deterministic unsigned seed, decimal or 0x-prefixed hex.", valueCopy);
+        return {};
+    }
+
+    return {.valid = true, .value = static_cast<uint64_t>(parsed)};
 }
 
 [[nodiscard]] std::wstring EscapeJsonString(std::wstring_view value)
@@ -473,67 +530,29 @@ public:
             return classHr;
         }
 
-        const DWORD style        = WS_CAPTION | WS_SYSMENU | WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
-        const DWORD exStyle      = WS_EX_DLGMODALFRAME;
-        const UINT dpi           = _ownerWindow && IsWindow(_ownerWindow) != FALSE ? GetDpiForWindow(_ownerWindow) : GetDpiForSystem();
-        const int clientWidthPx  = MulDiv(420, static_cast<int>(dpi == 0u ? 96u : dpi), 96);
-        const int clientHeightPx = MulDiv(170, static_cast<int>(dpi == 0u ? 96u : dpi), 96);
-
-        RECT bounds{0, 0, clientWidthPx, clientHeightPx};
-        if (AdjustWindowRectExForDpi(&bounds, style, FALSE, exStyle, dpi) == FALSE)
-        {
-            return HRESULT_FROM_WIN32(GetLastError());
-        }
-
         const std::wstring caption = LoadStringResource(nullptr, IDS_ABOUT_WINDOW_CAPTION);
-        const HWND hwnd            = CreateWindowExW(exStyle,
-                                                     kAboutDialogWindowClassName,
-                                                     caption.c_str(),
-                                                     style,
-                                                     CW_USEDEFAULT,
-                                                     CW_USEDEFAULT,
-                                                     bounds.right - bounds.left,
-                                                     bounds.bottom - bounds.top,
-                                                     nullptr,
-                                                     nullptr,
-                                                     g_hInstance,
-                                                     this);
-        if (! hwnd)
+        Common::ModalWindowShell modalShell(_ownerWindow);
+        Common::ModalWindowCreateOptions createOptions;
+        createOptions.instance         = g_hInstance;
+        createOptions.className        = kAboutDialogWindowClassName;
+        createOptions.caption          = caption.c_str();
+        createOptions.clientWidthDip   = 420;
+        createOptions.clientHeightDip  = 170;
+        createOptions.createParameter  = this;
+
+        HWND hwnd{};
+        const HRESULT createHr = modalShell.CreateCentered(createOptions, hwnd);
+        if (FAILED(createHr))
         {
-            return HRESULT_FROM_WIN32(GetLastError());
+            return createHr;
         }
         if (! _hWnd)
         {
             _hWnd.reset(hwnd);
         }
 
-        CenterWindowOnOwner(_hWnd.get(), _ownerWindow);
         static_cast<void>(_dxHost.PrimeForShow());
-        ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
-        UpdateWindow(_hWnd.get());
-        SetForegroundWindow(_hWnd.get());
-
-        MSG msg{};
-        while (! _done)
-        {
-            const BOOL getMessageResult = GetMessageW(&msg, nullptr, 0, 0);
-            if (getMessageResult == -1)
-            {
-                return HRESULT_FROM_WIN32(GetLastError());
-            }
-            if (getMessageResult == 0)
-            {
-                _done   = true;
-                _result = S_FALSE;
-                PostQuitMessage(static_cast<int>(msg.wParam));
-                break;
-            }
-
-            TranslateMessage(&msg);
-            DispatchMessageW(&msg);
-        }
-
-        return _result;
+        return modalShell.ShowAndRun(_hWnd.get(), _done, _result, L"About");
     }
 
     static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
@@ -743,7 +762,7 @@ private:
         _result = S_OK;
         if (_hWnd && IsWindow(_hWnd.get()) != FALSE)
         {
-            DestroyWindow(_hWnd.get());
+            _hWnd.reset();
         }
     }
 
@@ -792,81 +811,29 @@ public:
             return classHr;
         }
 
-        const DWORD style        = WS_CAPTION | WS_SYSMENU | WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
-        const DWORD exStyle      = WS_EX_DLGMODALFRAME;
-        const UINT dpi           = _ownerWindow && IsWindow(_ownerWindow) != FALSE ? GetDpiForWindow(_ownerWindow) : GetDpiForSystem();
-        const int clientWidthPx  = MulDiv(480, static_cast<int>(dpi == 0u ? 96u : dpi), 96);
-        const int clientHeightPx = MulDiv(220, static_cast<int>(dpi == 0u ? 96u : dpi), 96);
-
-        RECT bounds{0, 0, clientWidthPx, clientHeightPx};
-        if (AdjustWindowRectExForDpi(&bounds, style, FALSE, exStyle, dpi) == FALSE)
-        {
-            return HRESULT_FROM_WIN32(GetLastError());
-        }
-
-        const bool restoreOwnerEnabled = _ownerWindow && IsWindow(_ownerWindow) != FALSE && IsWindowEnabled(_ownerWindow) != FALSE;
-        if (restoreOwnerEnabled)
-        {
-            EnableWindow(_ownerWindow, FALSE);
-        }
-        const auto restoreOwner = wil::scope_exit([this, restoreOwnerEnabled]() noexcept
-        {
-            if (restoreOwnerEnabled && _ownerWindow && IsWindow(_ownerWindow) != FALSE)
-            {
-                EnableWindow(_ownerWindow, TRUE);
-                SetActiveWindow(_ownerWindow);
-            }
-        });
-
         const std::wstring caption = _caption.empty() ? LoadEmbeddedStringResource(nullptr, IDS_APP_TITLE) : _caption;
-        const HWND hwnd            = CreateWindowExW(exStyle,
-                                                     kFatalErrorDialogWindowClassName,
-                                                     caption.c_str(),
-                                                     style,
-                                                     CW_USEDEFAULT,
-                                                     CW_USEDEFAULT,
-                                                     bounds.right - bounds.left,
-                                                     bounds.bottom - bounds.top,
-                                                     _ownerWindow,
-                                                     nullptr,
-                                                     g_hInstance,
-                                                     this);
-        if (! hwnd)
+        Common::ModalWindowShell modalShell(_ownerWindow);
+        Common::ModalWindowCreateOptions createOptions;
+        createOptions.instance         = g_hInstance;
+        createOptions.className        = kFatalErrorDialogWindowClassName;
+        createOptions.caption          = caption.c_str();
+        createOptions.clientWidthDip   = 480;
+        createOptions.clientHeightDip  = 220;
+        createOptions.createParameter  = this;
+
+        HWND hwnd{};
+        const HRESULT createHr = modalShell.CreateCentered(createOptions, hwnd);
+        if (FAILED(createHr))
         {
-            return HRESULT_FROM_WIN32(GetLastError());
+            return createHr;
         }
         if (! _hWnd)
         {
             _hWnd.reset(hwnd);
         }
 
-        CenterWindowOnOwner(_hWnd.get(), _ownerWindow);
         static_cast<void>(_dxHost.PrimeForShow());
-        ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
-        UpdateWindow(_hWnd.get());
-        SetForegroundWindow(_hWnd.get());
-
-        MSG msg{};
-        while (! _done)
-        {
-            const BOOL getMessageResult = GetMessageW(&msg, nullptr, 0, 0);
-            if (getMessageResult == -1)
-            {
-                return HRESULT_FROM_WIN32(GetLastError());
-            }
-            if (getMessageResult == 0)
-            {
-                _done   = true;
-                _result = S_FALSE;
-                PostQuitMessage(static_cast<int>(msg.wParam));
-                break;
-            }
-
-            TranslateMessage(&msg);
-            DispatchMessageW(&msg);
-        }
-
-        return _result;
+        return modalShell.ShowAndRun(_hWnd.get(), _done, _result, L"Fatal Error");
     }
 
     static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
@@ -1135,7 +1102,7 @@ private:
         _result = S_OK;
         if (_hWnd && IsWindow(_hWnd.get()) != FALSE)
         {
-            DestroyWindow(_hWnd.get());
+            _hWnd.reset();
         }
     }
 
@@ -1376,6 +1343,25 @@ constexpr GUID kKnownFolderIdOneDrive = {
 
 void ShowFatalErrorDialog(HWND owner, const wchar_t* caption, const wchar_t* message) noexcept
 {
+#ifdef ENABLE_TESTS
+    if (IsRunningAnySelfTest())
+    {
+        SelfTest::AppendSelfTestTrace(L"ShowFatalErrorDialog: suppressed fatal-error modal during self-test.");
+        OutputDebugStringW(L"ShowFatalErrorDialog: suppressed fatal-error modal during self-test.\n");
+        if (caption && *caption)
+        {
+            OutputDebugStringW(caption);
+            OutputDebugStringW(L"\n");
+        }
+        if (message && *message)
+        {
+            OutputDebugStringW(message);
+            OutputDebugStringW(L"\n");
+        }
+        return;
+    }
+#endif
+
     const AppTheme theme = ResolveConfiguredTheme();
     FatalErrorDialogWindow dialog(owner, theme, caption ? std::wstring(caption) : std::wstring(), message ? std::wstring(message) : std::wstring());
     static_cast<void>(dialog.ShowModal());
@@ -1425,18 +1411,54 @@ std::optional<uint32_t> g_functionBarPressedKeyClearPending;
 constexpr UINT_PTR kFileOpsSelfTestTimerId     = 1002u;
 constexpr UINT kFileOpsSelfTestTimerIntervalMs = 50u;
 constexpr UINT kCommandsSelfTestStartMessage   = WM_APP + 0x6A;
-constexpr wchar_t kSelfTestRunMutexName[]      = L"Local\\RedSalamander_SelfTestRun";
-int g_selfTestExitCode                         = 0;
+constexpr std::wstring_view kSelfTestRunMutexPrefix{L"Local\\RedSalamander_SelfTestRun_"};
+int g_selfTestExitCode = 0;
 SelfTest::SelfTestOptions g_selfTestOptions{};
 SelfTest::SelfTestRunResult g_selfTestRunResult{};
 std::optional<std::chrono::time_point<std::chrono::steady_clock>> g_selfTestRunStart{};
 bool g_selfTestRunFinalized = false;
 wil::unique_handle g_selfTestRunMutex;
 std::vector<std::wstring> g_fileOpsSelfTestRunFilters;
-std::vector<std::wstring> g_fileOpsSelfTestExpectedCases;
+std::vector<uint32_t> g_fileOpsSelfTestRunRepeatIndexes;
+std::vector<SelfTest::SelfTestCaseExecution> g_fileOpsSelfTestExpectedCases;
 size_t g_fileOpsSelfTestRunIndex = 0;
 SelfTest::SelfTestSuiteResult g_fileOpsSelfTestAggregateResult{};
 bool g_fileOpsSelfTestStartPending = false;
+
+struct FileOpsRepeatedRunPlan final
+{
+    std::vector<std::wstring> filters;
+    std::vector<uint32_t> repeatIndexes;
+};
+
+struct FileOpsExecutionPlan final
+{
+    std::vector<std::wstring> filters;
+    std::vector<uint32_t> repeatIndexes;
+    std::vector<SelfTest::SelfTestCaseExecution> expectedCases;
+};
+
+[[nodiscard]] uint64_t HashSelfTestRootForMutex(std::wstring_view value) noexcept
+{
+    uint64_t hash = 14695981039346656037ull;
+    for (const wchar_t ch : value)
+    {
+        const wchar_t folded = static_cast<wchar_t>(std::towlower(ch));
+        hash ^= static_cast<uint64_t>(folded);
+        hash *= 1099511628211ull;
+    }
+    return hash;
+}
+
+[[nodiscard]] std::array<wchar_t, 64> BuildSelfTestRunMutexName() noexcept
+{
+    std::array<wchar_t, 64> name{};
+    const std::wstring& root = SelfTest::SelfTestRoot().native();
+    const uint64_t rootHash  = HashSelfTestRootForMutex(root);
+    const auto result        = std::format_to_n(name.data(), static_cast<std::ptrdiff_t>(name.size() - 1), L"{}{:016X}", kSelfTestRunMutexPrefix, rootHash);
+    *result.out              = L'\0';
+    return name;
+}
 
 [[nodiscard]] bool TryAcquireSelfTestRunMutex() noexcept
 {
@@ -1446,7 +1468,8 @@ bool g_fileOpsSelfTestStartPending = false;
     }
 
     SetLastError(ERROR_SUCCESS);
-    wil::unique_handle mutex(::CreateMutexW(nullptr, FALSE, kSelfTestRunMutexName));
+    const std::array<wchar_t, 64> mutexName = BuildSelfTestRunMutexName();
+    wil::unique_handle mutex(::CreateMutexW(nullptr, FALSE, mutexName.data()));
     if (! mutex)
     {
         Debug::ErrorWithLastError(L"CreateMutexW failed for the self-test run guard.");
@@ -1518,10 +1541,40 @@ void FinalizeSelfTestRun() noexcept
     g_selfTestRunResult.failFast     = g_selfTestOptions.failFast;
     g_selfTestRunResult.timeoutScale = g_selfTestOptions.timeoutScale;
     g_selfTestRunResult.caseFilter   = g_selfTestOptions.caseFilter;
+    g_selfTestRunResult.repeatCount  = g_selfTestOptions.repeatCount;
+    g_selfTestRunResult.shuffleSeed  = g_selfTestOptions.shuffleSeed;
 
     const std::filesystem::path runJsonPath = SelfTest::SelfTestRoot() / L"last_run" / L"results.json";
     SelfTest::WriteRunJson(g_selfTestRunResult, runJsonPath);
     SelfTest::TryArchiveLastRunToRepo(GetSelfTestArchiveArea(), g_selfTestExitCode, g_selfTestRunResult.durationMs, &g_selfTestRunResult);
+    g_selfTestRunMutex.reset();
+    g_selfTestRunFinalized = true;
+}
+
+void RecordSelfTestUnhandledExceptionCrash(DWORD exceptionCode, const wchar_t* exceptionName) noexcept
+{
+    if (g_selfTestRunFinalized)
+    {
+        return;
+    }
+
+    const std::wstring crashReason =
+        std::format(L"crashed: unhandled exception code=0x{:08X} name={}", static_cast<unsigned>(exceptionCode), exceptionName ? exceptionName : L"unknown");
+    SelfTest::MarkInFlightSelfTestCaseCrashed(g_selfTestRunResult, crashReason);
+    if (g_selfTestRunStart.has_value())
+    {
+        const auto now                 = std::chrono::steady_clock::now();
+        g_selfTestRunResult.durationMs = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(now - g_selfTestRunStart.value()).count());
+    }
+    g_selfTestRunResult.failFast     = g_selfTestOptions.failFast;
+    g_selfTestRunResult.timeoutScale = g_selfTestOptions.timeoutScale;
+    g_selfTestRunResult.caseFilter   = g_selfTestOptions.caseFilter;
+    g_selfTestRunResult.repeatCount  = g_selfTestOptions.repeatCount;
+    g_selfTestRunResult.shuffleSeed  = g_selfTestOptions.shuffleSeed;
+
+    const std::filesystem::path runJsonPath = SelfTest::SelfTestRoot() / L"last_run" / L"results.json";
+    SelfTest::WriteRunJson(g_selfTestRunResult, runJsonPath);
+    SelfTest::TryArchiveLastRunToRepo(GetSelfTestArchiveArea(), -1, g_selfTestRunResult.durationMs, &g_selfTestRunResult);
     g_selfTestRunMutex.reset();
     g_selfTestRunFinalized = true;
 }
@@ -1531,9 +1584,23 @@ void TraceSelfTestExitCode(std::wstring_view source, int exitCode) noexcept
     SelfTest::AppendSelfTestTrace(std::format(L"{}: exit_code={}", source, exitCode));
 }
 
-void MergeFileOpsCase(SelfTest::SelfTestCaseResult& target, const SelfTest::SelfTestCaseResult& source) noexcept
+void MergeRepeatedSelfTestCase(SelfTest::SelfTestCaseResult& target, const SelfTest::SelfTestCaseResult& source) noexcept
 {
     target.durationMs += source.durationMs;
+
+    if (target.status == SelfTest::SelfTestCaseResult::Status::crashed || source.status == SelfTest::SelfTestCaseResult::Status::crashed)
+    {
+        target.status = SelfTest::SelfTestCaseResult::Status::crashed;
+        if (source.status == SelfTest::SelfTestCaseResult::Status::crashed && ! source.reason.empty())
+        {
+            target.reason = source.reason;
+        }
+        else if (target.reason.empty())
+        {
+            target.reason = source.reason;
+        }
+        return;
+    }
 
     if (target.status == SelfTest::SelfTestCaseResult::Status::failed || source.status == SelfTest::SelfTestCaseResult::Status::failed)
     {
@@ -1563,38 +1630,147 @@ void MergeFileOpsCase(SelfTest::SelfTestCaseResult& target, const SelfTest::Self
     }
 }
 
-void MergeFileOpsSuite(SelfTest::SelfTestSuiteResult& aggregate, const SelfTest::SelfTestSuiteResult& current) noexcept
+[[nodiscard]] FileOpsRepeatedRunPlan BuildFileOpsRepeatedRunPlan(std::span<const std::wstring> baseFilters, uint32_t repeatCount)
 {
-    aggregate.suite = SelfTest::SelfTestSuite::FileOperations;
+    const uint32_t boundedRepeatCount = std::max(1u, repeatCount);
+    FileOpsRepeatedRunPlan plan{};
+    plan.filters.reserve(baseFilters.size() * static_cast<size_t>(boundedRepeatCount));
+    plan.repeatIndexes.reserve(plan.filters.capacity());
+
+    for (uint32_t repeatIndex = 1u; repeatIndex <= boundedRepeatCount; ++repeatIndex)
+    {
+        for (const std::wstring& filter : baseFilters)
+        {
+            plan.filters.push_back(filter);
+            plan.repeatIndexes.push_back(repeatIndex);
+        }
+    }
+
+    return plan;
+}
+
+[[nodiscard]] std::vector<SelfTest::SelfTestCaseExecution> BuildFileOpsRepeatedExpectedCases(
+    std::span<const std::wstring> baseExpectedCases, uint32_t repeatCount)
+{
+    const uint32_t boundedRepeatCount = std::max(1u, repeatCount);
+    std::vector<SelfTest::SelfTestCaseExecution> expected;
+    expected.reserve(baseExpectedCases.size() * static_cast<size_t>(boundedRepeatCount));
+
+    for (uint32_t repeatIndex = 1u; repeatIndex <= boundedRepeatCount; ++repeatIndex)
+    {
+        for (const std::wstring& name : baseExpectedCases)
+        {
+            expected.push_back(SelfTest::SelfTestCaseExecution{.name = name, .repeatIndex = repeatIndex});
+        }
+    }
+
+    return expected;
+}
+
+[[nodiscard]] bool IsFileOpsStructuralCaseName(std::wstring_view name) noexcept
+{
+    return name == L"Setup" || name == L"Cleanup_RestorePluginConfig";
+}
+
+[[nodiscard]] FileOpsExecutionPlan BuildFileOpsExecutionPlan(std::span<const std::wstring> baseFilters,
+                                                             std::span<const std::wstring> baseExpectedCases,
+                                                             const SelfTest::SelfTestOptions& options)
+{
+    FileOpsExecutionPlan plan{};
+    if (! options.shuffleSeed.has_value())
+    {
+        FileOpsRepeatedRunPlan repeatedPlan = BuildFileOpsRepeatedRunPlan(baseFilters, options.repeatCount);
+        plan.filters                        = std::move(repeatedPlan.filters);
+        plan.repeatIndexes                  = std::move(repeatedPlan.repeatIndexes);
+        plan.expectedCases                  = BuildFileOpsRepeatedExpectedCases(baseExpectedCases, options.repeatCount);
+        return plan;
+    }
+
+    std::vector<std::wstring> declaredCases;
+    declaredCases.reserve(baseExpectedCases.size());
+    for (const std::wstring& name : baseExpectedCases)
+    {
+        if (! IsFileOpsStructuralCaseName(name))
+        {
+            declaredCases.push_back(name);
+        }
+    }
+
+    SelfTest::SelfTestOptions orderOptions = options;
+    orderOptions.caseFilter.clear();
+    const std::vector<SelfTest::SelfTestCaseExecution> executionOrder = SelfTest::BuildSelfTestCaseExecutionOrder(orderOptions, declaredCases);
+
+    plan.filters.reserve(executionOrder.size());
+    plan.repeatIndexes.reserve(executionOrder.size());
+    for (const SelfTest::SelfTestCaseExecution& execution : executionOrder)
+    {
+        plan.filters.push_back(execution.name);
+        plan.repeatIndexes.push_back(execution.repeatIndex);
+    }
+
+    const uint32_t boundedRepeatCount = std::max(1u, options.repeatCount);
+    plan.expectedCases.reserve(executionOrder.size() + (static_cast<size_t>(boundedRepeatCount) * 2u));
+    for (uint32_t repeatIndex = 1u; repeatIndex <= boundedRepeatCount; ++repeatIndex)
+    {
+        plan.expectedCases.push_back(SelfTest::SelfTestCaseExecution{.name = L"Setup", .repeatIndex = repeatIndex});
+        for (const SelfTest::SelfTestCaseExecution& execution : executionOrder)
+        {
+            if (execution.repeatIndex == repeatIndex)
+            {
+                plan.expectedCases.push_back(execution);
+            }
+        }
+        plan.expectedCases.push_back(SelfTest::SelfTestCaseExecution{.name = L"Cleanup_RestorePluginConfig", .repeatIndex = repeatIndex});
+    }
+
+    SelfTest::AppendSuiteTrace(
+        SelfTest::SelfTestSuite::FileOperations,
+        std::format(L"FileOpsSelfTest: explicit execution order count={} repeat={} shuffleSeed={}",
+                    executionOrder.size(),
+                    options.repeatCount,
+                    options.shuffleSeed.has_value() ? std::format(L"{}", options.shuffleSeed.value()) : std::wstring(L"none")));
+
+    return plan;
+}
+
+void MergeRepeatedSelfTestSuite(
+    SelfTest::SelfTestSuiteResult& aggregate, SelfTest::SelfTestSuite suite, const SelfTest::SelfTestSuiteResult& current, uint32_t repeatIndex) noexcept
+{
+    aggregate.suite = suite;
     aggregate.durationMs += current.durationMs;
     if (aggregate.failureMessage.empty() && ! current.failureMessage.empty())
     {
         aggregate.failureMessage = current.failureMessage;
     }
 
-    for (const auto& item : current.cases)
+    for (auto item : current.cases)
     {
+        item.repeatIndex = repeatIndex;
         const auto it = std::find_if(
-            aggregate.cases.begin(), aggregate.cases.end(), [&](const SelfTest::SelfTestCaseResult& existing) noexcept { return existing.name == item.name; });
+            aggregate.cases.begin(),
+            aggregate.cases.end(),
+            [&](const SelfTest::SelfTestCaseResult& existing) noexcept { return existing.name == item.name && existing.repeatIndex == item.repeatIndex; });
         if (it == aggregate.cases.end())
         {
             aggregate.cases.push_back(item);
             continue;
         }
 
-        MergeFileOpsCase(*it, item);
+        MergeRepeatedSelfTestCase(*it, item);
     }
 }
 
-void FinalizeFileOpsAggregateResult(SelfTest::SelfTestSuiteResult& aggregate, const std::vector<std::wstring>& expectedCases, bool stoppedEarly) noexcept
+void FinalizeRepeatedSelfTestAggregateResult(
+    SelfTest::SelfTestSuiteResult& aggregate, const std::vector<SelfTest::SelfTestCaseExecution>& expectedCases, bool stoppedEarly) noexcept
 {
     std::vector<SelfTest::SelfTestCaseResult> orderedCases;
     orderedCases.reserve(expectedCases.size());
 
-    for (const std::wstring& expectedName : expectedCases)
+    for (const SelfTest::SelfTestCaseExecution& expectedCase : expectedCases)
     {
-        const auto it = std::find_if(
-            aggregate.cases.begin(), aggregate.cases.end(), [&](const SelfTest::SelfTestCaseResult& item) noexcept { return item.name == expectedName; });
+        const auto it = std::find_if(aggregate.cases.begin(), aggregate.cases.end(), [&](const SelfTest::SelfTestCaseResult& item) noexcept {
+            return item.name == expectedCase.name && item.repeatIndex == expectedCase.repeatIndex;
+        });
         if (it != aggregate.cases.end())
         {
             orderedCases.push_back(*it);
@@ -1602,10 +1778,11 @@ void FinalizeFileOpsAggregateResult(SelfTest::SelfTestSuiteResult& aggregate, co
         }
 
         SelfTest::SelfTestCaseResult skipped{};
-        skipped.name       = expectedName;
-        skipped.status     = SelfTest::SelfTestCaseResult::Status::skipped;
-        skipped.durationMs = 0;
-        skipped.reason     = stoppedEarly ? L"not executed (suite stopped early)" : L"not executed";
+        skipped.name        = expectedCase.name;
+        skipped.status      = SelfTest::SelfTestCaseResult::Status::skipped;
+        skipped.durationMs  = 0;
+        skipped.repeatIndex = expectedCase.repeatIndex;
+        skipped.reason      = stoppedEarly ? L"not executed (suite stopped early)" : L"not executed";
         orderedCases.push_back(std::move(skipped));
     }
 
@@ -1621,6 +1798,7 @@ void FinalizeFileOpsAggregateResult(SelfTest::SelfTestSuiteResult& aggregate, co
         {
             case SelfTest::SelfTestCaseResult::Status::passed: ++aggregate.passed; break;
             case SelfTest::SelfTestCaseResult::Status::failed:
+            case SelfTest::SelfTestCaseResult::Status::crashed:
                 ++aggregate.failed;
                 if (aggregate.failureMessage.empty() && ! item.reason.empty())
                 {
@@ -1632,10 +1810,73 @@ void FinalizeFileOpsAggregateResult(SelfTest::SelfTestSuiteResult& aggregate, co
     }
 }
 
-SelfTest::SelfTestOptions MakeFileOpsRunOptions(std::wstring_view runFilter)
+bool RunCompareDirectoriesSelfTestPlan(const SelfTest::SelfTestOptions& options, SelfTest::SelfTestSuiteResult* outResult) noexcept
+{
+    if (! SelfTest::ShouldUseExplicitCaseExecutionOrder(options))
+    {
+        return CompareDirectoriesSelfTest::Run(options, outResult);
+    }
+
+    const std::vector<std::wstring> declaredCases                         = CompareDirectoriesSelfTest::ListCases(options);
+    const std::vector<SelfTest::SelfTestCaseExecution> executionOrder     = SelfTest::BuildSelfTestCaseExecutionOrder(options, declaredCases);
+    SelfTest::SelfTestSuiteResult aggregate{};
+    aggregate.suite = SelfTest::SelfTestSuite::CompareDirectories;
+    SelfTest::AppendSuiteTrace(
+        SelfTest::SelfTestSuite::CompareDirectories,
+        std::format(L"CompareSelfTest: explicit execution order count={} repeat={} shuffleSeed={}",
+                    executionOrder.size(),
+                    options.repeatCount,
+                    options.shuffleSeed.has_value() ? std::format(L"{}", options.shuffleSeed.value()) : std::wstring(L"none")));
+
+    bool stoppedEarly = false;
+    for (const SelfTest::SelfTestCaseExecution& execution : executionOrder)
+    {
+        SelfTest::SelfTestOptions caseOptions = options;
+        caseOptions.caseFilter                    = execution.name;
+        caseOptions.repeatCount                   = 1u;
+        caseOptions.repeatIndex                   = execution.repeatIndex;
+        caseOptions.writeJsonSummary              = false;
+        caseOptions.classifierProofSuiteContext   = true;
+        caseOptions.classifierProofShuffleContext = options.shuffleSeed.has_value();
+        caseOptions.shuffleSeed.reset();
+
+        SelfTest::SelfTestSuiteResult current{};
+        const bool passed = CompareDirectoriesSelfTest::Run(caseOptions, &current);
+        MergeRepeatedSelfTestSuite(aggregate, SelfTest::SelfTestSuite::CompareDirectories, current, execution.repeatIndex);
+        if (! passed)
+        {
+            stoppedEarly = options.failFast;
+            if (options.failFast)
+            {
+                break;
+            }
+        }
+    }
+
+    FinalizeRepeatedSelfTestAggregateResult(aggregate, executionOrder, stoppedEarly);
+    if (options.writeJsonSummary)
+    {
+        const std::filesystem::path jsonPath = SelfTest::GetSuiteArtifactPath(SelfTest::SelfTestSuite::CompareDirectories, L"results.json");
+        SelfTest::WriteSuiteJson(aggregate, jsonPath);
+    }
+
+    if (outResult)
+    {
+        *outResult = aggregate;
+    }
+
+    return aggregate.failed == 0;
+}
+
+SelfTest::SelfTestOptions MakeFileOpsRunOptions(std::wstring_view runFilter, uint32_t repeatIndex)
 {
     SelfTest::SelfTestOptions options = g_selfTestOptions;
-    options.caseFilter                = std::wstring(runFilter);
+    options.caseFilter                    = std::wstring(runFilter);
+    options.repeatCount                   = 1u;
+    options.repeatIndex                   = repeatIndex;
+    options.classifierProofSuiteContext   = SelfTest::ShouldUseExplicitCaseExecutionOrder(g_selfTestOptions);
+    options.classifierProofShuffleContext = g_selfTestOptions.shuffleSeed.has_value();
+    options.shuffleSeed.reset();
     return options;
 }
 
@@ -1647,12 +1888,16 @@ void StartNextFileOpsSelfTestRun(HWND hWnd) noexcept
     }
 
     const std::wstring& runFilter = g_fileOpsSelfTestRunFilters[g_fileOpsSelfTestRunIndex];
+    const uint32_t repeatIndex =
+        g_fileOpsSelfTestRunIndex < g_fileOpsSelfTestRunRepeatIndexes.size() ? g_fileOpsSelfTestRunRepeatIndexes[g_fileOpsSelfTestRunIndex] : 1u;
     SelfTest::AppendSuiteTrace(
         SelfTest::SelfTestSuite::FileOperations,
-        std::format(L"FileOpsSelfTest: family {}/{} -> {}", g_fileOpsSelfTestRunIndex + 1, g_fileOpsSelfTestRunFilters.size(), runFilter));
+        std::format(
+            L"FileOpsSelfTest: family {}/{} repeat {} -> {}", g_fileOpsSelfTestRunIndex + 1, g_fileOpsSelfTestRunFilters.size(), repeatIndex, runFilter));
     SelfTest::AppendSelfTestTrace(
-        std::format(L"FileOpsSelfTest: family {}/{} -> {}", g_fileOpsSelfTestRunIndex + 1, g_fileOpsSelfTestRunFilters.size(), runFilter));
-    FileOperationsSelfTest::Start(hWnd, MakeFileOpsRunOptions(runFilter));
+        std::format(
+            L"FileOpsSelfTest: family {}/{} repeat {} -> {}", g_fileOpsSelfTestRunIndex + 1, g_fileOpsSelfTestRunFilters.size(), repeatIndex, runFilter));
+    FileOperationsSelfTest::Start(hWnd, MakeFileOpsRunOptions(runFilter, repeatIndex));
     ++g_fileOpsSelfTestRunIndex;
 }
 
@@ -1667,7 +1912,10 @@ void ResetSelfTestRunState() noexcept
     g_selfTestRunResult.failFast     = g_selfTestOptions.failFast;
     g_selfTestRunResult.timeoutScale = g_selfTestOptions.timeoutScale;
     g_selfTestRunResult.caseFilter   = g_selfTestOptions.caseFilter;
+    g_selfTestRunResult.repeatCount  = g_selfTestOptions.repeatCount;
+    g_selfTestRunResult.shuffleSeed  = g_selfTestOptions.shuffleSeed;
     g_fileOpsSelfTestRunFilters.clear();
+    g_fileOpsSelfTestRunRepeatIndexes.clear();
     g_fileOpsSelfTestExpectedCases.clear();
     g_fileOpsSelfTestRunIndex        = 0;
     g_fileOpsSelfTestAggregateResult = {};
@@ -1845,7 +2093,11 @@ LRESULT OnMainWindowTimer(HWND hWnd, UINT_PTR timerId) noexcept
         {
             const bool currentRunFailed                          = FileOperationsSelfTest::DidFail();
             const SelfTest::SelfTestSuiteResult currentRunResult = FileOperationsSelfTest::GetSuiteResult();
-            MergeFileOpsSuite(g_fileOpsSelfTestAggregateResult, currentRunResult);
+            const size_t completedRunIndex                       = g_fileOpsSelfTestRunIndex == 0u ? 0u : g_fileOpsSelfTestRunIndex - 1u;
+            const uint32_t currentRepeatIndex = completedRunIndex < g_fileOpsSelfTestRunRepeatIndexes.size()
+                                                  ? g_fileOpsSelfTestRunRepeatIndexes[completedRunIndex]
+                                                  : 1u;
+            MergeRepeatedSelfTestSuite(g_fileOpsSelfTestAggregateResult, SelfTest::SelfTestSuite::FileOperations, currentRunResult, currentRepeatIndex);
             g_selfTestExitCode |= currentRunFailed ? 1 : 0;
 
             const bool hasMoreRuns = g_fileOpsSelfTestRunIndex < g_fileOpsSelfTestRunFilters.size();
@@ -1857,7 +2109,7 @@ LRESULT OnMainWindowTimer(HWND hWnd, UINT_PTR timerId) noexcept
             }
 
             KillTimer(hWnd, kFileOpsSelfTestTimerId);
-            FinalizeFileOpsAggregateResult(g_fileOpsSelfTestAggregateResult, g_fileOpsSelfTestExpectedCases, stopEarly);
+            FinalizeRepeatedSelfTestAggregateResult(g_fileOpsSelfTestAggregateResult, g_fileOpsSelfTestExpectedCases, stopEarly);
 
             const bool fileOpsFailed = g_fileOpsSelfTestAggregateResult.failed != 0;
             g_selfTestExitCode |= fileOpsFailed ? 1 : 0;
@@ -1913,27 +2165,6 @@ LRESULT OnMainWindowTimer(HWND hWnd, UINT_PTR timerId) noexcept
 
     g_functionBarPressedKeyClearPending = std::nullopt;
     return 0;
-}
-
-ThemeMode ThemeModeFromThemeId(std::wstring_view id) noexcept
-{
-    if (id == L"builtin/light")
-    {
-        return ThemeMode::Light;
-    }
-    if (id == L"builtin/dark")
-    {
-        return ThemeMode::Dark;
-    }
-    if (id == L"builtin/rainbow")
-    {
-        return ThemeMode::Rainbow;
-    }
-    if (id == L"builtin/highContrast")
-    {
-        return ThemeMode::HighContrast;
-    }
-    return ThemeMode::System;
 }
 
 FolderView::DisplayMode DisplayModeFromSettings(Common::Settings::FolderDisplayMode mode) noexcept
@@ -2134,175 +2365,14 @@ struct CustomThemeGroups
     return groups;
 }
 
-COLORREF ColorRefFromArgb(uint32_t argb) noexcept
+bool IsConfiguredThemeResolvable(const Common::Settings::Settings& settings) noexcept
 {
-    const uint8_t r = static_cast<uint8_t>((argb >> 16) & 0xFFu);
-    const uint8_t g = static_cast<uint8_t>((argb >> 8) & 0xFFu);
-    const uint8_t b = static_cast<uint8_t>(argb & 0xFFu);
-    return RGB(r, g, b);
-}
-
-float AlphaFromArgb(uint32_t argb) noexcept
-{
-    const uint8_t a = static_cast<uint8_t>((argb >> 24) & 0xFFu);
-    return static_cast<float>(a) / 255.0f;
-}
-
-std::optional<uint32_t> FindColorOverride(const std::unordered_map<std::wstring, uint32_t>& colors, std::wstring_view key) noexcept
-{
-    const auto it = colors.find(std::wstring(key));
-    if (it == colors.end())
-    {
-        return std::nullopt;
-    }
-    return it->second;
-}
-
-void ApplyThemeOverrides(AppTheme& theme, const std::unordered_map<std::wstring, uint32_t>& colors) noexcept
-{
-    const auto applyColorRef = [&](std::wstring_view key, COLORREF& target) noexcept
-    {
-        const auto argb = FindColorOverride(colors, key);
-        if (! argb)
-        {
-            return;
-        }
-        target = ColorRefFromArgb(*argb);
-    };
-
-    const auto applyD2D = [&](std::wstring_view key, D2D1::ColorF& target) noexcept
-    {
-        const auto argb = FindColorOverride(colors, key);
-        if (! argb)
-        {
-            return;
-        }
-        const COLORREF rgb = ColorRefFromArgb(*argb);
-        target             = ColorFromCOLORREF(rgb, AlphaFromArgb(*argb));
-    };
-
-    applyD2D(L"app.accent", theme.accent);
-    applyColorRef(L"window.background", theme.windowBackground);
-
-    applyColorRef(L"menu.background", theme.menu.background);
-    applyColorRef(L"menu.text", theme.menu.text);
-    applyColorRef(L"menu.disabledText", theme.menu.disabledText);
-    applyColorRef(L"menu.selectionBg", theme.menu.selectionBg);
-    applyColorRef(L"menu.selectionText", theme.menu.selectionText);
-    applyColorRef(L"menu.separator", theme.menu.separator);
-    applyColorRef(L"menu.border", theme.menu.border);
-
-    applyD2D(L"navigation.background", theme.navigationView.background);
-    applyD2D(L"navigation.backgroundHover", theme.navigationView.backgroundHover);
-    applyD2D(L"navigation.backgroundPressed", theme.navigationView.backgroundPressed);
-    applyD2D(L"navigation.text", theme.navigationView.text);
-    applyD2D(L"navigation.separator", theme.navigationView.separator);
-    applyD2D(L"navigation.accent", theme.navigationView.accent);
-    applyD2D(L"navigation.progressOk", theme.navigationView.progressOk);
-    applyD2D(L"navigation.progressWarn", theme.navigationView.progressWarn);
-    applyD2D(L"navigation.progressBackground", theme.navigationView.progressBackground);
-
-    if (const auto argb = FindColorOverride(colors, L"navigation.background"))
-    {
-        const COLORREF rgb                 = ColorRefFromArgb(*argb);
-        theme.navigationView.gdiBackground = rgb;
-        theme.navigationView.gdiBorder     = rgb;
-    }
-
-    if (const auto argb = FindColorOverride(colors, L"navigation.separator"))
-    {
-        theme.navigationView.gdiBorderPen = ColorRefFromArgb(*argb);
-    }
-
-    applyD2D(L"folderView.background", theme.folderView.backgroundColor);
-    applyD2D(L"folderView.itemBackgroundNormal", theme.folderView.itemBackgroundNormal);
-    applyD2D(L"folderView.itemBackgroundHovered", theme.folderView.itemBackgroundHovered);
-    applyD2D(L"folderView.itemBackgroundSelected", theme.folderView.itemBackgroundSelected);
-    applyD2D(L"folderView.itemBackgroundSelectedInactive", theme.folderView.itemBackgroundSelectedInactive);
-    applyD2D(L"folderView.itemBackgroundFocused", theme.folderView.itemBackgroundFocused);
-    applyD2D(L"folderView.textNormal", theme.folderView.textNormal);
-    applyD2D(L"folderView.textSelected", theme.folderView.textSelected);
-    applyD2D(L"folderView.textSelectedInactive", theme.folderView.textSelectedInactive);
-    applyD2D(L"folderView.textDisabled", theme.folderView.textDisabled);
-    applyD2D(L"folderView.focusBorder", theme.folderView.focusBorder);
-    applyD2D(L"folderView.gridLines", theme.folderView.gridLines);
-    applyD2D(L"folderView.errorBackground", theme.folderView.errorBackground);
-    applyD2D(L"folderView.errorText", theme.folderView.errorText);
-    applyD2D(L"folderView.warningBackground", theme.folderView.warningBackground);
-    applyD2D(L"folderView.warningText", theme.folderView.warningText);
-    applyD2D(L"folderView.infoBackground", theme.folderView.infoBackground);
-    applyD2D(L"folderView.infoText", theme.folderView.infoText);
-
-    // Derive file operation colors from the effective theme (post-overrides).
-    theme.fileOperations.progressBackground = theme.navigationView.progressBackground;
-    theme.fileOperations.progressTotal      = theme.navigationView.progressOk;
-    theme.fileOperations.progressItem       = theme.navigationView.accent;
-
-    const D2D1::ColorF menuBorder   = ColorFromCOLORREF(theme.menu.border);
-    const D2D1::ColorF menuDisabled = ColorFromCOLORREF(theme.menu.disabledText);
-
-    theme.fileOperations.graphBackground =
-        D2D1::ColorF(theme.fileOperations.progressBackground.r, theme.fileOperations.progressBackground.g, theme.fileOperations.progressBackground.b, 0.35f);
-    theme.fileOperations.graphGrid      = D2D1::ColorF(menuBorder.r, menuBorder.g, menuBorder.b, 0.35f);
-    theme.fileOperations.graphLimit     = D2D1::ColorF(menuDisabled.r, menuDisabled.g, menuDisabled.b, 0.85f);
-    theme.fileOperations.graphLine      = theme.fileOperations.progressItem;
-    theme.fileOperations.scrollbarTrack = D2D1::ColorF(menuBorder.r, menuBorder.g, menuBorder.b, 0.12f);
-    theme.fileOperations.scrollbarThumb = D2D1::ColorF(menuBorder.r, menuBorder.g, menuBorder.b, 0.40f);
-
-    applyD2D(L"fileOps.progressBackground", theme.fileOperations.progressBackground);
-    applyD2D(L"fileOps.progressTotal", theme.fileOperations.progressTotal);
-    applyD2D(L"fileOps.progressItem", theme.fileOperations.progressItem);
-    applyD2D(L"fileOps.graphBackground", theme.fileOperations.graphBackground);
-    applyD2D(L"fileOps.graphGrid", theme.fileOperations.graphGrid);
-    applyD2D(L"fileOps.graphLimit", theme.fileOperations.graphLimit);
-    applyD2D(L"fileOps.graphLine", theme.fileOperations.graphLine);
-    applyD2D(L"fileOps.scrollbarTrack", theme.fileOperations.scrollbarTrack);
-    applyD2D(L"fileOps.scrollbarThumb", theme.fileOperations.scrollbarThumb);
-
-    applyD2D(L"viewer.diff.addedBackground", theme.viewerDiff.addedBackground);
-    applyD2D(L"viewer.diff.removedBackground", theme.viewerDiff.removedBackground);
-    applyD2D(L"viewer.diff.contextBackground", theme.viewerDiff.contextBackground);
-    applyD2D(L"viewer.diff.headerBackground", theme.viewerDiff.headerBackground);
-    applyD2D(L"viewer.diff.bannerBackground", theme.viewerDiff.bannerBackground);
-    applyD2D(L"viewer.diff.placeholderBackground", theme.viewerDiff.placeholderBackground);
-    applyD2D(L"viewer.diff.divider", theme.viewerDiff.divider);
-
-    if (! FindColorOverride(colors, L"folderView.itemBackgroundSelectedInactive"))
-    {
-        if (const auto argb = FindColorOverride(colors, L"folderView.itemBackgroundSelected"))
-        {
-            const float inactiveSelectionAlphaScale = theme.highContrast ? 0.80f : 0.65f;
-            const COLORREF rgb                      = ColorRefFromArgb(*argb);
-            theme.folderView.itemBackgroundSelectedInactive =
-                ColorFromCOLORREF(rgb, std::clamp(AlphaFromArgb(*argb) * inactiveSelectionAlphaScale, 0.0f, 1.0f));
-        }
-    }
-
-    if (! FindColorOverride(colors, L"folderView.textSelectedInactive") && ! theme.highContrast)
-    {
-        const float alpha             = std::clamp(theme.folderView.itemBackgroundSelectedInactive.a, 0.0f, 1.0f);
-        const D2D1::ColorF background = theme.folderView.backgroundColor;
-        const D2D1::ColorF overlay    = theme.folderView.itemBackgroundSelectedInactive;
-
-        const D2D1::ColorF composite = D2D1::ColorF(overlay.r * alpha + background.r * (1.0f - alpha),
-                                                    overlay.g * alpha + background.g * (1.0f - alpha),
-                                                    overlay.b * alpha + background.b * (1.0f - alpha),
-                                                    1.0f);
-
-        const COLORREF contrastText           = ChooseContrastingTextColor(ColorToCOLORREF(composite));
-        theme.folderView.textSelectedInactive = ColorFromCOLORREF(contrastText);
-    }
-}
-
-std::optional<D2D1::ColorF> FindAccentOverride(const std::unordered_map<std::wstring, uint32_t>& colors) noexcept
-{
-    const auto argb = FindColorOverride(colors, L"app.accent");
-    if (! argb)
-    {
-        return std::nullopt;
-    }
-    const COLORREF rgb = ColorRefFromArgb(*argb);
-    return ColorFromCOLORREF(rgb, AlphaFromArgb(*argb));
+    const std::wstring_view themeId = settings.theme.currentThemeId;
+    if (! themeId.starts_with(L"user/")) return true;
+    const auto custom = std::find_if(settings.theme.themes.begin(), settings.theme.themes.end(), [&](const Common::Settings::ThemeDefinition& candidate) noexcept
+    { return candidate.id == themeId; });
+    if (custom == settings.theme.themes.end()) return false;
+    return ResolveAppThemeSelection(themeId, &*custom, L"RedSalamander").customDefinitionResolved;
 }
 
 AppTheme ResolveConfiguredTheme() noexcept
@@ -2315,22 +2385,7 @@ AppTheme ResolveConfiguredTheme() noexcept
         custom = FindThemeById(themeId);
     }
 
-    ThemeMode baseMode = ThemeModeFromThemeId(themeId);
-    std::optional<D2D1::ColorF> accentOverride;
-    const std::unordered_map<std::wstring, uint32_t>* overrides = nullptr;
-
-    if (custom)
-    {
-        baseMode       = ThemeModeFromThemeId(custom->baseThemeId);
-        accentOverride = FindAccentOverride(custom->colors);
-        overrides      = &custom->colors;
-    }
-
-    AppTheme theme = ResolveAppTheme(baseMode, L"RedSalamander", accentOverride);
-    if (overrides)
-    {
-        ApplyThemeOverrides(theme, *overrides);
-    }
+    AppTheme theme = ResolveAppThemeSelection(themeId, custom, L"RedSalamander").theme;
 
     SettingsHotReload::ApplyUiPreferencesToTheme(g_settings, theme);
 
@@ -2536,10 +2591,73 @@ void CaptureRuntimeSettings(HWND hWnd) noexcept
     CaptureRuntimeSettings(g_settings, hWnd);
 }
 
+[[nodiscard]] HRESULT WriteSessionEndSettings(const Common::Settings::Settings& settings) noexcept
+{
+#ifdef ENABLE_TESTS
+    SessionEndSettingsWriterForSelfTest writer = nullptr;
+    {
+        const std::scoped_lock lock(g_debugSessionEndSettingsMutex);
+        writer = g_debugSessionEndSettingsWriter;
+    }
+    if (writer)
+    {
+        return writer(kAppId, settings);
+    }
+#endif
+
+    return Common::Settings::SaveSettings(kAppId, settings);
+}
+
+void CaptureAndSaveRuntimeSettingsForSessionEnd(HWND hWnd) noexcept
+{
+    RuntimeSettingsSaveOwner expected = RuntimeSettingsSaveOwner::None;
+    if (! g_runtimeSettingsSaveOwner.compare_exchange_strong(
+            expected, RuntimeSettingsSaveOwner::SessionEnd, std::memory_order_acq_rel, std::memory_order_acquire))
+    {
+        return;
+    }
+
+    const auto startedAt = std::chrono::steady_clock::now();
+    CaptureRuntimeSettings(hWnd);
+    const Common::Settings::Settings settingsToSave = SettingsSave::PrepareForSave(g_settings);
+    const HRESULT saveHr                            = WriteSessionEndSettings(settingsToSave);
+    const uint64_t durationUs                        = Debug::Perf::ElapsedUs(startedAt);
+    Debug::Perf::Emit(L"App.Shutdown.SessionEndSettingsSave", L"confirmed-session-end", durationUs, 1u, 0u, saveHr);
+
+#ifdef ENABLE_TESTS
+    {
+        const std::scoped_lock lock(g_debugSessionEndSettingsMutex);
+        ++g_debugSessionEndSettingsSnapshot.writerCallCount;
+        g_debugSessionEndSettingsSnapshot.durationUs = durationUs;
+        g_debugSessionEndSettingsSnapshot.lastResult = saveHr;
+        g_debugSessionEndSettingsSnapshot.settings   = settingsToSave;
+    }
+#endif
+
+    if (FAILED(saveHr))
+    {
+        const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(kAppId);
+        DBGOUT_ERROR(L"Session-end SaveSettings failed (hr=0x{:08X}) path={}\n", static_cast<unsigned long>(saveHr), settingsPath.wstring());
+    }
+}
+
 void SaveAppSettings(HWND hWnd) noexcept
 {
-    CaptureRuntimeSettings(hWnd);
+    constexpr DWORD kFinalSettingsSaveTimeoutMs = 5000u;
+    RuntimeSettingsSaveOwner expected           = RuntimeSettingsSaveOwner::None;
+    const bool saveSettings = g_runtimeSettingsSaveOwner.compare_exchange_strong(
+        expected, RuntimeSettingsSaveOwner::NormalShutdown, std::memory_order_acq_rel, std::memory_order_acquire);
+    if (saveSettings)
+    {
+        CaptureRuntimeSettings(hWnd);
+    }
 
+#ifdef ENABLE_TESTS
+    {
+        const std::scoped_lock lock(g_debugSessionEndSettingsMutex);
+        ++g_debugSessionEndSettingsSnapshot.normalTeardownCallCount;
+    }
+#endif
     g_folderWindow.CloseAllViewers();
     const auto pluginSchemas = CollectPluginConfigurationSchemas(g_settings);
     if (g_hFolderWindow.exchange(nullptr, std::memory_order_acq_rel))
@@ -2549,7 +2667,13 @@ void SaveAppSettings(HWND hWnd) noexcept
     FileSystemPluginManager::GetInstance().Shutdown(g_settings);
     ViewerPluginManager::GetInstance().Shutdown(g_settings);
 
-    const HRESULT saveHr = SettingsHotReload::SaveSettingsAndSchema(kAppId, g_settings, pluginSchemas);
+    if (! saveSettings)
+    {
+        return;
+    }
+
+    const HRESULT saveHr =
+        SettingsHotReload::SaveSettingsAndSchemaForProcessShutdown(kAppId, g_settings, pluginSchemas, kFinalSettingsSaveTimeoutMs);
     if (SUCCEEDED(saveHr))
     {
         return;
@@ -3476,6 +3600,8 @@ void UpdatePaneMenuChecks() noexcept
     }
 }
 
+[[nodiscard]] std::optional<std::wstring> TryGetDynamicMenuShortcutText(UINT menuCommandId) noexcept;
+
 void ShowSortMenuPopup(HWND hWnd, FolderWindow::Pane pane, POINT screenPoint) noexcept
 {
     const auto loadLabel = [](UINT stringId, std::wstring_view fallback) noexcept -> std::wstring
@@ -3535,10 +3661,11 @@ void ShowSortMenuPopup(HWND hWnd, FolderWindow::Pane pane, POINT screenPoint) no
     auto makeRadioItem = [&](UINT commandId, UINT stringId, std::wstring_view fallback) noexcept
     {
         RedSalamander::DxUi::MenuFlyoutItem item{};
-        item.kind      = RedSalamander::DxUi::MenuItemKind::Radio;
-        item.text      = loadLabel(stringId, fallback);
-        item.commandId = static_cast<int>(commandId);
-        item.checked   = commandId == checkedId;
+        item.kind            = RedSalamander::DxUi::MenuItemKind::Radio;
+        item.text            = loadLabel(stringId, fallback);
+        item.commandId       = static_cast<int>(commandId);
+        item.checked         = commandId == checkedId;
+        item.acceleratorText = TryGetDynamicMenuShortcutText(commandId).value_or(std::wstring{});
         return item;
     };
 
@@ -4787,6 +4914,7 @@ public:
 #ifdef ENABLE_TESTS
     void DebugSetHoverSuppressionCursorOverride(const std::optional<POINT>& point) noexcept
     {
+        const std::lock_guard lock(_debugMenuBarSuppressionCursorOverrideMutex);
         _debugMenuBarSuppressionCursorOverride = point;
     }
 #endif
@@ -4861,10 +4989,13 @@ private:
     [[nodiscard]] bool ReadHoverSuppressionCursor(POINT& cursor) const noexcept
     {
 #ifdef ENABLE_TESTS
-        if (_debugMenuBarSuppressionCursorOverride.has_value())
         {
-            cursor = _debugMenuBarSuppressionCursorOverride.value();
-            return true;
+            const std::lock_guard lock(_debugMenuBarSuppressionCursorOverrideMutex);
+            if (_debugMenuBarSuppressionCursorOverride.has_value())
+            {
+                cursor = _debugMenuBarSuppressionCursorOverride.value();
+                return true;
+            }
         }
 #endif
         return GetCursorPos(&cursor) != FALSE; // getcursorpos-allow: menu-bar stale-hover suppression only
@@ -5142,6 +5273,7 @@ private:
             Debug::Info(L"RedSalamander::MenuTrace MainMenu root-switch {} accepted from={} to={} label='{}'", source, activeIndex, targetIndex, targetLabel);
             _activePopupIndex            = targetIndex;
             _pendingHoverRootSwitchIndex = std::nullopt;
+            ArmMismatchedLiveCursorHoverSuppression(targetIndex);
             return request;
         }
 
@@ -5180,6 +5312,7 @@ private:
         }
 
         _pendingHoverRootSwitchIndex = hoverIndex;
+        const std::uintptr_t pendingSequence = ++_pendingHoverRootSwitchSequence;
         HWND target                  = GetCapture();
         if (! target || IsWindow(target) == FALSE)
         {
@@ -5188,8 +5321,8 @@ private:
         if (! target || IsWindow(target) == FALSE)
         {
             Debug::Info(L"RedSalamander::MenuTrace MainMenu hover-switch no-target hover={} active={}",
-                         hoverIndex.value(),
-                         _activePopupIndex.value_or(static_cast<size_t>(-1)));
+                        hoverIndex.value(),
+                        _activePopupIndex.value_or(static_cast<size_t>(-1)));
             _pendingHoverRootSwitchIndex = std::nullopt;
             if (_activePopupIndex.has_value())
             {
@@ -5198,7 +5331,7 @@ private:
             return;
         }
 
-        if (PostMessageW(target, WndMsg::kDxUiContextMenuRootHoverChanged, static_cast<WPARAM>(hoverIndex.value()), 0) == 0)
+        if (PostMessageW(target, WndMsg::kDxUiContextMenuRootHoverChanged, static_cast<WPARAM>(hoverIndex.value()), static_cast<LPARAM>(pendingSequence)) == 0)
         {
             Debug::Info(L"RedSalamander::MenuTrace MainMenu hover-switch post-failed target={:#x} hover={} active={}",
                         reinterpret_cast<uintptr_t>(target),
@@ -5259,7 +5392,9 @@ private:
 
         const auto flyoutItems = ConvertHMenuToDxFlyoutItems(popupMenu);
         RedSalamander::DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
-        sessionCallbacks.focusFirstNavigableItem = keyboardInvocation;
+        sessionCallbacks.focusFirstNavigableItem   = keyboardInvocation;
+        sessionCallbacks.ignoreInitialLeftButtonUp  = keyboardInvocation;
+        sessionCallbacks.ignoreInitialRightButtonUp = keyboardInvocation;
 
         _popupSessionActive = true;
         _activePopupIndex   = index;
@@ -5321,16 +5456,30 @@ private:
 
             return TryBuildRootSwitchFromVisualIndex(nextIndex.value(), L"keyboard");
         };
-        sessionCallbacks.switchRootFromMenuBarHover = [this]() -> std::optional<RedSalamander::DxUi::ContextMenuRootSwitchRequest>
+        sessionCallbacks.switchRootFromMenuBarHover = [this](size_t postedHoverIndex,
+                                                             std::uintptr_t postedSequence) -> std::optional<RedSalamander::DxUi::ContextMenuRootSwitchRequest>
         {
             const std::optional<size_t> hoverIndex = _pendingHoverRootSwitchIndex;
-            _pendingHoverRootSwitchIndex.reset();
             if (! hoverIndex.has_value())
             {
-                Debug::Info(L"RedSalamander::MenuTrace MainMenu root-switch menu-bar-hover no-pending active={}",
+                Debug::Info(L"RedSalamander::MenuTrace MainMenu root-switch menu-bar-hover no-pending posted={} sequence={} active={}",
+                            postedHoverIndex,
+                            postedSequence,
                             _activePopupIndex.value_or(static_cast<size_t>(-1)));
                 return std::nullopt;
             }
+            if (hoverIndex.value() != postedHoverIndex || postedSequence != _pendingHoverRootSwitchSequence)
+            {
+                Debug::Info(L"RedSalamander::MenuTrace MainMenu root-switch menu-bar-hover stale-message posted={} sequence={} pending={} pendingSequence={} active={}",
+                            postedHoverIndex,
+                            postedSequence,
+                            hoverIndex.value(),
+                            _pendingHoverRootSwitchSequence,
+                            _activePopupIndex.value_or(static_cast<size_t>(-1)));
+                return std::nullopt;
+            }
+
+            _pendingHoverRootSwitchIndex.reset();
 
             const std::optional<size_t> currentHoverIndex = _menuBar ? _menuBar->GetHoveredIndex() : std::nullopt;
             if (currentHoverIndex != hoverIndex)
@@ -5439,6 +5588,7 @@ private:
             {
                 if (self->_popupSessionActive)
                 {
+                    self->PostPendingMenuBarHoverRootSwitch(std::nullopt);
                     self->ArmMenuBarHoverSuppressionAtCursor();
                 }
                 else
@@ -5568,11 +5718,13 @@ private:
     bool _popupSessionActive = false;
     std::optional<size_t> _activePopupIndex;
     std::optional<size_t> _pendingHoverRootSwitchIndex;
+    std::uintptr_t _pendingHoverRootSwitchSequence = 0u;
     std::optional<POINT> _suppressedMenuBarHoverPoint;
 #ifdef ENABLE_TESTS
     // Self-test override for the live cursor used to arm stale-hover suppression. Lets the
     // menu-bar self-tests exercise the suppression deterministically with delivered messages
     // instead of warping the interactive user's real cursor (see ReadHoverSuppressionCursor).
+    mutable std::mutex _debugMenuBarSuppressionCursorOverrideMutex;
     std::optional<POINT> _debugMenuBarSuppressionCursorOverride;
 #endif
 };
@@ -5721,7 +5873,7 @@ ShortcutManager g_shortcutManager;
 
 [[nodiscard]] bool LooksLikeUncPath(std::wstring_view text) noexcept
 {
-    return text.rfind(L"\\\\", 0) == 0 || text.rfind(L"//", 0) == 0;
+    return Common::Paths::ClassifyWindowsPath(text) == Common::Paths::WindowsPathClass::Unc;
 }
 
 [[nodiscard]] std::optional<std::wstring> TryGetUncShareRoot(std::wstring_view text) noexcept
@@ -5810,9 +5962,8 @@ ShortcutManager g_shortcutManager;
         dialog.cbStructure       = sizeof(dialog);
         dialog.hwndOwner         = ownerWindow;
         dialog.lpConnRes         = &netResource;
-        dialog.dwFlags           = CONNDLG_RO_PATH;
+        dialog.dwFlags           = CONNDLG_RO_PATH | CONNDLG_USE_MRU;
         netResource.lpRemoteName = remoteName.data();
-        dialog.dwFlags           = CONNDLG_USE_MRU;
         error                    = WNetConnectionDialog1W(&dialog);
     }
     else
@@ -6930,7 +7081,14 @@ constexpr wchar_t kRedSalamanderHelpText[] =
     L"  --fileops-selftest              Run FileOperations self-test suite.\r\n"
     L"  --selftest-fail-fast            Stop after first failing self-test case.\r\n"
     L"  --selftest-case=NAME            Run the exact matching self-test case, a case-prefix family when NAME ends in '_', or comma-separated exact cases.\r\n"
+    L"  --selftest-crash-case=NAME      Raise an access violation when the exact matching self-test case starts; crash-signal proof only.\r\n"
+    L"  --selftest-flaky-proof-case=NAME Fail the named case in suite context for classifier proof; exact-case and shuffle retries pass.\r\n"
+    L"  --selftest-order-proof-case=NAME Fail the named case in suite/shuffle context for classifier proof; exact-case retry passes.\r\n"
+    L"  --selftest-repeat=N             Run each matched self-test case N times in-process, clamped to [1, 100].\r\n"
+    L"  --selftest-shuffle=SEED         Shuffle matched self-test case order with a reproducible decimal or 0x-prefixed seed.\r\n"
     L"  --selftest-list-cases           Emit self-test case inventory JSON and exit; combine with suite flags or --selftest-case.\r\n"
+    L"  --selftest-perf-budget=PATH     Apply focused self-test performance budgets from a JSON5 file.\r\n"
+    L"  --selftest-require-perf-budgets Fail focused perf selftests when no current-machine hard budget applies.\r\n"
     L"  --selftest-timeout-multiplier=N Multiply self-test timeouts by finite N, clamped to [0.1, 100.0] (default 1.0).\r\n"
 #endif
     L"\r\n";
@@ -7126,16 +7284,8 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
                 return WriteConsoleW(handle, msg.data(), static_cast<DWORD>(msg.size()), &written, nullptr) != FALSE;
             }
 
-            const int bytesNeeded = WideCharToMultiByte(CP_UTF8, 0, msg.data(), static_cast<int>(msg.size()), nullptr, 0, nullptr, nullptr);
-            if (bytesNeeded <= 0)
-            {
-                return false;
-            }
-
-            std::string utf8;
-            utf8.resize(static_cast<size_t>(bytesNeeded));
-            const int converted = WideCharToMultiByte(CP_UTF8, 0, msg.data(), static_cast<int>(msg.size()), utf8.data(), bytesNeeded, nullptr, nullptr);
-            if (converted != bytesNeeded)
+            const std::string utf8 = Common::Strings::Utf8FromUtf16ReplacingInvalid(msg);
+            if (utf8.empty() && ! msg.empty())
             {
                 return false;
             }
@@ -7197,6 +7347,11 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
     std::wstring unsupportedSelfTestArg;
     if (hasArg(L"--selftest") || hasArg(L"--compare-selftest") || hasArg(L"--commands-selftest") || hasArg(L"--fileops-selftest") ||
         hasArg(L"--selftest-fail-fast") || hasArg(L"--selftest-list-cases") || getArgValue(L"--selftest-case=", unsupportedSelfTestArg) ||
+        getArgValue(L"--selftest-crash-case=", unsupportedSelfTestArg) || getArgValue(L"--selftest-repeat=", unsupportedSelfTestArg) ||
+        getArgValue(L"--selftest-shuffle=", unsupportedSelfTestArg) ||
+        getArgValue(L"--selftest-flaky-proof-case=", unsupportedSelfTestArg) ||
+        getArgValue(L"--selftest-order-proof-case=", unsupportedSelfTestArg) ||
+        getArgValue(L"--selftest-perf-budget=", unsupportedSelfTestArg) || hasArg(L"--selftest-require-perf-budgets") ||
         getArgValue(L"--selftest-timeout-multiplier=", unsupportedSelfTestArg))
     {
         Debug::Error(L"Self-test command-line arguments require ENABLE_TESTS.");
@@ -7210,6 +7365,16 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
     g_selfTestOptions.timeoutScale     = kSelfTestTimeoutMultiplierDefault;
     g_selfTestOptions.writeJsonSummary = true;
     g_selfTestOptions.caseFilter.clear();
+    g_selfTestOptions.repeatCount = kSelfTestRepeatDefault;
+    g_selfTestOptions.repeatIndex = 1u;
+    g_selfTestOptions.shuffleSeed.reset();
+    g_selfTestOptions.crashCaseName.clear();
+    g_selfTestOptions.flakyProofCaseName.clear();
+    g_selfTestOptions.orderProofCaseName.clear();
+    g_selfTestOptions.classifierProofSuiteContext = false;
+    g_selfTestOptions.classifierProofShuffleContext = false;
+    g_selfTestOptions.perfBudgetPath.clear();
+    g_selfTestOptions.requirePerfBudgets = hasArg(L"--selftest-require-perf-budgets");
 
     std::wstring multiplierArg;
     if (getArgValue(L"--selftest-timeout-multiplier=", multiplierArg))
@@ -7229,6 +7394,54 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
         g_selfTestOptions.caseFilter = std::move(caseFilterArg);
     }
 
+    std::wstring repeatArg;
+    if (getArgValue(L"--selftest-repeat=", repeatArg))
+    {
+        const SelfTestRepeatCountParseResult parsed = ParseSelfTestRepeatCount(repeatArg);
+        if (! parsed.valid)
+        {
+            return 2;
+        }
+
+        g_selfTestOptions.repeatCount = parsed.value;
+    }
+
+    std::wstring shuffleArg;
+    if (getArgValue(L"--selftest-shuffle=", shuffleArg))
+    {
+        const SelfTestShuffleSeedParseResult parsed = ParseSelfTestShuffleSeed(shuffleArg);
+        if (! parsed.valid)
+        {
+            return 2;
+        }
+
+        g_selfTestOptions.shuffleSeed = parsed.value;
+    }
+
+    std::wstring crashCaseArg;
+    if (getArgValue(L"--selftest-crash-case=", crashCaseArg))
+    {
+        g_selfTestOptions.crashCaseName = std::move(crashCaseArg);
+    }
+
+    std::wstring flakyProofCaseArg;
+    if (getArgValue(L"--selftest-flaky-proof-case=", flakyProofCaseArg))
+    {
+        g_selfTestOptions.flakyProofCaseName = std::move(flakyProofCaseArg);
+    }
+
+    std::wstring orderProofCaseArg;
+    if (getArgValue(L"--selftest-order-proof-case=", orderProofCaseArg))
+    {
+        g_selfTestOptions.orderProofCaseName = std::move(orderProofCaseArg);
+    }
+
+    std::wstring perfBudgetArg;
+    if (getArgValue(L"--selftest-perf-budget=", perfBudgetArg))
+    {
+        g_selfTestOptions.perfBudgetPath = std::filesystem::path(perfBudgetArg);
+    }
+
     if (hasArg(L"--selftest-list-cases"))
     {
         const bool selfTestArgSelected  = hasArg(L"--selftest");
@@ -7243,6 +7456,7 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
 
         g_selfTestOptions.writeJsonSummary = false;
         g_selfTestOptions.listCasesOnly    = true;
+        SelfTest::GetSelfTestOptions()     = g_selfTestOptions;
         writeHelpText(BuildSelfTestCaseListJson(g_selfTestOptions, includeCompare, includeCommands, includeFileOps));
         return 0;
     }
@@ -7269,6 +7483,14 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
     if (hasArg(L"--commands-selftest"))
     {
         g_runCommandsSelfTest = true;
+    }
+
+    const bool selfTestShuffleSupported = g_runCommandsSelfTest || g_runCompareDirectoriesSelfTest || g_runFileOpsSelfTest;
+    if (g_selfTestOptions.shuffleSeed.has_value() && ! selfTestShuffleSupported)
+    {
+        Debug::Error(
+            L"--selftest-shuffle is currently supported for --commands-selftest, --compare-selftest, and --fileops-selftest.");
+        return 2;
     }
 
     if (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest)
@@ -7360,7 +7582,7 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
         Localization::RegisterResourceOwner(kAppId, GetModuleHandleW(nullptr));
         Localization::ApplyLanguagePreference(GetLanguagePreferenceFromSettings(g_settings));
     }
-    if (settingsHr == S_OK)
+    if (settingsHr == S_OK || ! settingsRecovery.sectionRecoveries.empty())
     {
         std::wstring_view themeId = g_settings.theme.currentThemeId;
         if (themeId.rfind(L"user/", 0) == 0)
@@ -7388,7 +7610,30 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
     const bool anySelfTest                = false;
 #endif
 
-    if (! anySelfTest && settingsRecovery.backedUp && ! settingsRecovery.backupPath.empty())
+    if (! anySelfTest &&
+        g_settings.persistence.savePermission == Common::Settings::SettingsSavePermission::ExplicitReplacementRequired)
+    {
+        const std::wstring title = LoadStringResource(nullptr, IDS_CAPTION_SETTINGS_NEWER_VERSION_PRESERVED);
+        const std::wstring message = FormatStringResource(nullptr,
+                                                          IDS_FMT_SETTINGS_NEWER_VERSION_PRESERVED,
+                                                          settingsRecovery.unsupportedSchemaVersion,
+                                                          settingsRecovery.settingsPath.wstring());
+        const int choice = MessageBoxCenteredText(nullptr, message, title, MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2);
+        if (choice == IDYES)
+        {
+            std::filesystem::path backupPath;
+            const HRESULT replaceHr = SettingsHotReload::ReplaceBlockedSettingsAndSchema(kAppId, g_settings, backupPath);
+            if (FAILED(replaceHr))
+            {
+                const std::wstring failure = FormatStringResource(nullptr,
+                                                                  IDS_FMT_SETTINGS_SAVE_FAILED,
+                                                                  settingsRecovery.settingsPath.wstring(),
+                                                                  static_cast<unsigned long>(replaceHr));
+                MessageBoxCenteredText(nullptr, failure, title, MB_OK | MB_ICONERROR);
+            }
+        }
+    }
+    else if (! anySelfTest && settingsRecovery.backedUp && ! settingsRecovery.backupPath.empty())
     {
         const std::wstring title = LoadStringResource(nullptr, IDS_CAPTION_SETTINGS_RESTORED_DEFAULTS);
         const std::wstring message =
@@ -7489,7 +7734,7 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
         SelfTest::InitSelfTestRun(g_selfTestOptions);
         SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::CompareDirectories, L"CompareSelfTest: begin");
         SelfTest::AppendSelfTestTrace(L"CompareSelfTest: begin");
-        g_selfTestExitCode |= CompareDirectoriesSelfTest::Run(g_selfTestOptions, &compareResult) ? 0 : 1;
+        g_selfTestExitCode |= RunCompareDirectoriesSelfTestPlan(g_selfTestOptions, &compareResult) ? 0 : 1;
         RecordSelfTestSuite(compareResult);
         if (g_selfTestExitCode != 0)
         {
@@ -7787,6 +8032,17 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
 
 namespace
 {
+[[nodiscard]] bool ConfigureSafeDllSearchDirectories() noexcept
+{
+    if (::SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_SYSTEM32 | LOAD_LIBRARY_SEARCH_APPLICATION_DIR) != FALSE)
+    {
+        return true;
+    }
+
+    Debug::ErrorWithLastError(L"wWinMain: failed to configure safe DLL search directories");
+    return false;
+}
+
 void BuildFatalExceptionMessage(HINSTANCE hInstance, const wchar_t* exceptionName, DWORD exceptionCode, wchar_t* outMessage, size_t outMessageChars) noexcept
 {
     if (! outMessage || outMessageChars == 0)
@@ -7811,6 +8067,11 @@ void BuildFatalExceptionMessage(HINSTANCE hInstance, const wchar_t* exceptionNam
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance, [[maybe_unused]] _In_opt_ HINSTANCE hPrevInstance, [[maybe_unused]] _In_ LPWSTR lpCmdLine, _In_ int nCmdShow)
 {
+    if (! ConfigureSafeDllSearchDirectories())
+    {
+        return 1;
+    }
+
     if (! Common::MinimumOsVersion::EnsureCurrentWindowsVersionSupported(nullptr))
     {
         return 1;
@@ -7843,6 +8104,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, [[maybe_unused]] _In_opt_ HINSTA
             {
                 SelfTest::AppendSelfTestTrace(L"wWinMain: unhandled exception");
             }
+
+            RecordSelfTestUnhandledExceptionCrash(exceptionCode, exceptionName);
         }
 #endif
         wchar_t errorMsg[512]{};
@@ -8335,11 +8598,50 @@ void RefreshRunningPluginsFromSettings(HWND hWnd) noexcept
         return;
     }
 
+    struct PaneRestoreState final
+    {
+        FolderWindow::Pane pane = FolderWindow::Pane::Left;
+        std::wstring pluginId;
+        std::wstring pluginShortId;
+        std::wstring instanceContext;
+        std::optional<std::filesystem::path> folderPath;
+    };
+
+    const auto capturePane = [](FolderWindow::Pane pane) -> PaneRestoreState
+    {
+        return PaneRestoreState{.pane            = pane,
+                                .pluginId        = std::wstring(g_folderWindow.GetFileSystemPluginId(pane)),
+                                .pluginShortId   = std::wstring(g_folderWindow.GetFileSystemPluginShortId(pane)),
+                                .instanceContext = std::wstring(g_folderWindow.GetFileSystemInstanceContext(pane)),
+                                .folderPath      = g_folderWindow.GetCurrentPluginPath(pane)};
+    };
+
+    const FolderWindow::Pane activePane = g_folderWindow.GetActivePane();
+    const std::array paneRestoreStates{capturePane(FolderWindow::Pane::Left), capturePane(FolderWindow::Pane::Right)};
+
     g_folderWindow.CloseAllViewers();
     g_folderWindow.ReleaseFileSystemPluginsForRefresh();
     static_cast<void>(FileSystemPluginManager::GetInstance().Refresh(g_settings));
     static_cast<void>(ViewerPluginManager::GetInstance().Refresh(g_settings));
     static_cast<void>(g_folderWindow.ReloadFileSystemPlugins());
+
+    for (const PaneRestoreState& saved : paneRestoreStates)
+    {
+        const bool providerRestored = ! saved.pluginId.empty() && ! saved.pluginShortId.empty() &&
+                                      OrdinalString::EqualsNoCase(g_folderWindow.GetFileSystemPluginId(saved.pane), saved.pluginId) &&
+                                      OrdinalString::EqualsNoCase(g_folderWindow.GetFileSystemPluginShortId(saved.pane), saved.pluginShortId);
+        if (providerRestored && saved.folderPath.has_value())
+        {
+            const std::filesystem::path displayPath =
+                NavigationLocation::FormatHistoryPath(saved.pluginShortId, saved.instanceContext, saved.folderPath.value());
+            g_folderWindow.SetFolderPath(saved.pane, displayPath);
+        }
+        else if (g_folderWindow.GetCurrentPath(saved.pane).has_value())
+        {
+            g_folderWindow.CommandRefresh(saved.pane);
+        }
+    }
+    g_folderWindow.SetActivePane(activePane);
     RebuildPluginsMenuDynamicItems(hWnd);
 }
 
@@ -8454,7 +8756,22 @@ void RereadAssociations(HWND hWnd) noexcept
 
     Common::Settings::Settings runtimeSettings = g_settings;
     CaptureRuntimeSettings(runtimeSettings, hWnd);
-    g_settings = SettingsHotReload::MergeDiskSettingsWithRuntimeSession(diskSettings, runtimeSettings, CollectRuntimeSettingsWindowIds());
+    Common::Settings::Settings mergedSettings =
+        SettingsHotReload::MergeDiskSettingsWithRuntimeSession(diskSettings, runtimeSettings, CollectRuntimeSettingsWindowIds());
+    if (! IsConfiguredThemeResolvable(mergedSettings))
+    {
+        const HRESULT themeHr = HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        perf.SetHr(themeHr);
+        Debug::Warning(L"RereadAssociations: rejected settings because the selected theme graph is invalid.");
+        SettingsHotReload::ShowInvalidReloadAlert(Common::Settings::GetSettingsPath(kAppId));
+#ifdef ENABLE_TESTS
+        snapshot.hr = themeHr;
+        snapshot.loaded = false;
+        DebugPublishRereadAssociationsSnapshot(snapshot);
+#endif
+        return;
+    }
+    g_settings = std::move(mergedSettings);
     ShortcutDefaults::EnsureShortcutsInitialized(g_settings);
 
     SettingsHotReload::ClearInvalidReloadAlert();
@@ -8555,7 +8872,16 @@ LRESULT OnMainWindowSettingsFileChanged(HWND hWnd, LPARAM lParam) noexcept
     Common::Settings::Settings runtimeSettings = g_settings;
     CaptureRuntimeSettings(runtimeSettings, hWnd);
 
-    g_settings = SettingsHotReload::MergeDiskSettingsWithRuntimeSession(loadResult.settings, runtimeSettings, CollectRuntimeSettingsWindowIds());
+    Common::Settings::Settings mergedSettings =
+        SettingsHotReload::MergeDiskSettingsWithRuntimeSession(loadResult.settings, runtimeSettings, CollectRuntimeSettingsWindowIds());
+    if (! IsConfiguredThemeResolvable(mergedSettings))
+    {
+        if (loadResult.stamp.has_value()) SettingsHotReload::MarkRejectedStamp(loadResult.stamp.value());
+        Debug::Warning(L"SettingsHotReload: rejected settings because the selected theme graph is invalid.");
+        SettingsHotReload::ShowInvalidReloadAlert(Common::Settings::GetSettingsPath(kAppId));
+        return 0;
+    }
+    g_settings = std::move(mergedSettings);
     ShortcutDefaults::EnsureShortcutsInitialized(g_settings);
 
     SettingsHotReload::ClearInvalidReloadAlert();
@@ -8942,7 +9268,7 @@ LRESULT OnMainWindowCreate(HWND hWnd, [[maybe_unused]] const CREATESTRUCTW* crea
         SelfTest::InitSelfTestRun(g_selfTestOptions);
         SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::CompareDirectories, L"CompareSelfTest: begin");
         SelfTest::AppendSelfTestTrace(L"CompareSelfTest: begin");
-        g_selfTestExitCode |= CompareDirectoriesSelfTest::Run(g_selfTestOptions, &compareResult) ? 0 : 1;
+        g_selfTestExitCode |= RunCompareDirectoriesSelfTestPlan(g_selfTestOptions, &compareResult) ? 0 : 1;
         RecordSelfTestSuite(compareResult);
         if (g_selfTestExitCode != 0)
         {
@@ -8981,8 +9307,12 @@ LRESULT OnMainWindowCreate(HWND hWnd, [[maybe_unused]] const CREATESTRUCTW* crea
         Debug::Info(L"FileOpsSelfTest: scheduling");
         SelfTest::InitSelfTestRun(g_selfTestOptions);
         SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::FileOperations, L"FileOpsSelfTest: scheduling");
-        g_fileOpsSelfTestRunFilters            = FileOperationsSelfTest::BuildRunFilters(g_selfTestOptions);
-        g_fileOpsSelfTestExpectedCases         = FileOperationsSelfTest::BuildExpectedCaseNames(g_selfTestOptions);
+        const std::vector<std::wstring> baseFileOpsRunFilters    = FileOperationsSelfTest::BuildRunFilters(g_selfTestOptions);
+        const std::vector<std::wstring> baseFileOpsExpectedCases = FileOperationsSelfTest::BuildExpectedCaseNames(g_selfTestOptions);
+        FileOpsExecutionPlan fileOpsExecutionPlan = BuildFileOpsExecutionPlan(baseFileOpsRunFilters, baseFileOpsExpectedCases, g_selfTestOptions);
+        g_fileOpsSelfTestRunFilters              = std::move(fileOpsExecutionPlan.filters);
+        g_fileOpsSelfTestRunRepeatIndexes        = std::move(fileOpsExecutionPlan.repeatIndexes);
+        g_fileOpsSelfTestExpectedCases           = std::move(fileOpsExecutionPlan.expectedCases);
         g_fileOpsSelfTestRunIndex              = 0;
         g_fileOpsSelfTestAggregateResult       = {};
         g_fileOpsSelfTestAggregateResult.suite = SelfTest::SelfTestSuite::FileOperations;
@@ -10917,14 +11247,29 @@ LRESULT OnMainWindowClose(HWND hWnd)
     return 0;
 }
 
+LRESULT OnMainWindowQueryEndSession() noexcept
+{
+    return TRUE;
+}
+
+LRESULT OnMainWindowEndSession(HWND hWnd, bool sessionEnding) noexcept
+{
+    if (sessionEnding)
+    {
+        CaptureAndSaveRuntimeSettingsForSessionEnd(hWnd);
+    }
+    return 0;
+}
+
 LRESULT OnMainWindowDestroy(HWND hWnd)
 {
-    SettingsHotReload::Stop();
+    SettingsHotReload::StopWatchingForProcessShutdown();
     g_mainMenuBarHost.Destroy();
 
 #ifdef ENABLE_TESTS
     if (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest)
     {
+        SettingsHotReload::BeginProcessShutdown();
         g_folderWindow.CloseAllViewers();
         g_folderWindow.SetSettings(nullptr);
         if (g_hFolderWindow.exchange(nullptr, std::memory_order_acq_rel))
@@ -11008,7 +11353,9 @@ bool DebugGetConnectionManagerConnectNavigation(uint8_t& outPane, std::wstring& 
 
 void DebugShowFatalErrorDialog(HWND ownerWindow, const wchar_t* caption, const wchar_t* message) noexcept
 {
-    ShowFatalErrorDialog(ownerWindow, caption, message);
+    const AppTheme theme = ResolveConfiguredTheme();
+    FatalErrorDialogWindow dialog(ownerWindow, theme, caption ? std::wstring(caption) : std::wstring(), message ? std::wstring(message) : std::wstring());
+    static_cast<void>(dialog.ShowModal());
 }
 
 bool DebugGetFatalErrorDialogSnapshot(FatalErrorDialogDebugSnapshot& out) noexcept
@@ -11036,6 +11383,26 @@ bool DebugScrollFatalErrorDialogByWheelDetents(int detents) noexcept
 
     return false;
 }
+
+void DebugResetSessionEndSettingsSaveForSelfTest() noexcept
+{
+    g_runtimeSettingsSaveOwner.store(RuntimeSettingsSaveOwner::None, std::memory_order_release);
+    const std::scoped_lock lock(g_debugSessionEndSettingsMutex);
+    g_debugSessionEndSettingsWriter   = nullptr;
+    g_debugSessionEndSettingsSnapshot = {};
+}
+
+void DebugSetSessionEndSettingsWriterForSelfTest(SessionEndSettingsWriterForSelfTest writer) noexcept
+{
+    const std::scoped_lock lock(g_debugSessionEndSettingsMutex);
+    g_debugSessionEndSettingsWriter = writer;
+}
+
+SessionEndSettingsDebugSnapshot DebugGetSessionEndSettingsSnapshotForSelfTest()
+{
+    const std::scoped_lock lock(g_debugSessionEndSettingsMutex);
+    return g_debugSessionEndSettingsSnapshot;
+}
 #endif
 // Processes messages for the main window.
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
@@ -11055,6 +11422,20 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         case WndMsg::kPreferencesRequestSettingsSnapshot: CaptureRuntimeSettings(hWnd); return 0;
         case WndMsg::kPaneRestoreFolderFocus:
         {
+            // A delayed restore posted while a modeless dialog is closing must not
+            // reactivate the main window after another top-level window takes focus.
+            if (IsWindowEnabled(hWnd) == FALSE)
+            {
+                return 0;
+            }
+            if (const HWND activeWindow = GetActiveWindow(); activeWindow && activeWindow != hWnd)
+            {
+                return 0;
+            }
+            if (const HWND foregroundWindow = GetForegroundWindow(); foregroundWindow && foregroundWindow != hWnd)
+            {
+                return 0;
+            }
             if (IsIconic(hWnd) != FALSE)
             {
                 ShowWindow(hWnd, SW_RESTORE);
@@ -11107,6 +11488,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 DestroyWindow(hWnd);
             }
             return 0;
+        case WM_QUERYENDSESSION: return OnMainWindowQueryEndSession();
+        case WM_ENDSESSION: return OnMainWindowEndSession(hWnd, wParam != FALSE);
         case WM_CLOSE: return OnMainWindowClose(hWnd);
         case WM_SETTINGCHANGE:
         case WM_THEMECHANGED:

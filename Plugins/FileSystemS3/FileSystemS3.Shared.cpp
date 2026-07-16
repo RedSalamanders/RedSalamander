@@ -1,4 +1,6 @@
 #include "FileSystemS3.Internal.h"
+#include "HandleIo.h"
+#include "YyjsonHelpers.h"
 
 #include <functional>
 
@@ -59,30 +61,7 @@ void AwsSdkLifetime::Release() noexcept
 
 [[nodiscard]] std::wstring Utf16FromUtf8(std::string_view text) noexcept
 {
-    if (text.empty())
-    {
-        return {};
-    }
-
-    if (text.size() > static_cast<size_t>((std::numeric_limits<int>::max)()))
-    {
-        return {};
-    }
-
-    const int required = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0);
-    if (required <= 0)
-    {
-        return {};
-    }
-
-    std::wstring out(static_cast<size_t>(required), L'\0');
-    const int written = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), out.data(), required);
-    if (written != required)
-    {
-        return {};
-    }
-
-    return out;
+    return Common::Strings::Utf16FromUtf8StrictOrEmpty(text);
 }
 
 [[nodiscard]] std::wstring Utf16FromUtf8(const char* text) noexcept
@@ -102,30 +81,7 @@ void AwsSdkLifetime::Release() noexcept
 
 [[nodiscard]] std::string Utf8FromUtf16(std::wstring_view text) noexcept
 {
-    if (text.empty())
-    {
-        return {};
-    }
-
-    if (text.size() > static_cast<size_t>((std::numeric_limits<int>::max)()))
-    {
-        return {};
-    }
-
-    const int required = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
-    if (required <= 0)
-    {
-        return {};
-    }
-
-    std::string out(static_cast<size_t>(required), '\0');
-    const int written = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), out.data(), required, nullptr, nullptr);
-    if (written != required)
-    {
-        return {};
-    }
-
-    return out;
+    return Common::Strings::Utf8FromUtf16StrictOrEmpty(text);
 }
 
 [[nodiscard]] std::wstring NormalizePluginPath(std::wstring_view rawPath) noexcept
@@ -236,122 +192,41 @@ void AwsSdkLifetime::Release() noexcept
 
 [[nodiscard]] HRESULT GetFileSizeBytes(HANDLE file, uint64_t& out) noexcept
 {
-    out = 0;
-    if (! file || file == INVALID_HANDLE_VALUE)
-    {
-        return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
-    }
-
-    LARGE_INTEGER size{};
-    if (GetFileSizeEx(file, &size) == 0)
-    {
-        return HRESULT_FROM_WIN32(GetLastError());
-    }
-
-    if (size.QuadPart < 0)
-    {
-        return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
-    }
-
-    out = static_cast<uint64_t>(size.QuadPart);
-    return S_OK;
+    return Common::HandleIo::GetFileSizeBounded(file, (std::numeric_limits<uint64_t>::max)(), out);
 }
 
 [[nodiscard]] HRESULT ResetFilePointerToStart(HANDLE file) noexcept
 {
-    if (! file || file == INVALID_HANDLE_VALUE)
-    {
-        return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
-    }
-
-    LARGE_INTEGER zero{};
-    if (SetFilePointerEx(file, zero, nullptr, FILE_BEGIN) == 0)
-    {
-        return HRESULT_FROM_WIN32(GetLastError());
-    }
-    return S_OK;
+    return Common::HandleIo::Rewind(file);
 }
 
 [[nodiscard]] HRESULT WriteUtf8ToFile(HANDLE file, std::string_view text) noexcept
 {
-    if (! file || file == INVALID_HANDLE_VALUE)
-    {
-        return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
-    }
-
-    size_t offset = 0;
-    while (offset < text.size())
-    {
-        const size_t chunk = std::min<size_t>(text.size() - offset, static_cast<size_t>((std::numeric_limits<DWORD>::max)()));
-        DWORD written      = 0;
-        if (WriteFile(file, text.data() + offset, static_cast<DWORD>(chunk), &written, nullptr) == 0)
-        {
-            return HRESULT_FROM_WIN32(GetLastError());
-        }
-        if (written != chunk)
-        {
-            return HRESULT_FROM_WIN32(ERROR_WRITE_FAULT);
-        }
-
-        offset += chunk;
-    }
-
-    return S_OK;
+    return Common::HandleIo::WriteAll(file, text.data(), text.size());
 }
 
 [[nodiscard]] std::optional<std::wstring> TryGetJsonString(yyjson_val* root, const char* key) noexcept
 {
-    if (! root || ! yyjson_is_obj(root) || ! key)
-    {
-        return std::nullopt;
-    }
-
-    yyjson_val* v = yyjson_obj_get(root, key);
-    if (! v || ! yyjson_is_str(v))
-    {
-        return std::nullopt;
-    }
-
-    const char* s    = yyjson_get_str(v);
-    const size_t len = yyjson_get_len(v);
-    if (! s)
-    {
-        return std::nullopt;
-    }
-
-    return Utf16FromUtf8(std::string_view(s, len));
+    const Common::Json::MemberResult<std::wstring> value =
+        Common::Json::GetUtf16StringMemberStrict(root, key, Common::Json::MemberRequirement::Optional);
+    return value.HasValue() ? std::optional<std::wstring>{value.value} : std::nullopt;
 }
 
 [[nodiscard]] std::optional<uint64_t> TryGetJsonUInt(yyjson_val* root, const char* key) noexcept
 {
-    if (! root || ! yyjson_is_obj(root) || ! key)
-    {
-        return std::nullopt;
-    }
-
-    yyjson_val* v = yyjson_obj_get(root, key);
-    if (! v || ! yyjson_is_uint(v))
-    {
-        return std::nullopt;
-    }
-
-    return yyjson_get_uint(v);
+    const Common::Json::MemberResult<uint64_t> parsed = Common::Json::GetUInt64Member(root,
+                                                                                      key,
+                                                                                      Common::Json::MemberRequirement::Optional,
+                                                                                      Common::Json::NumericStringPolicy::Reject,
+                                                                                      Common::Json::UnsignedIntegerPolicy::RequireUnsignedStorage);
+    return parsed.HasValue() ? std::optional<uint64_t>{parsed.value} : std::nullopt;
 }
 
 [[nodiscard]] std::optional<bool> TryGetJsonBool(yyjson_val* root, const char* key) noexcept
 {
-    if (! root || ! yyjson_is_obj(root) || ! key)
-    {
-        return std::nullopt;
-    }
-
-    yyjson_val* v = yyjson_obj_get(root, key);
-    if (! v || ! yyjson_is_bool(v))
-    {
-        return std::nullopt;
-    }
-
-    return yyjson_get_bool(v) != 0;
+    const Common::Json::MemberResult<bool> value =
+        Common::Json::GetBoolMember(root, key, Common::Json::MemberRequirement::Optional);
+    return value.HasValue() ? std::optional<bool>{value.value} : std::nullopt;
 }
 
 namespace
@@ -389,7 +264,7 @@ namespace
     {
         return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
-    auto freeDoc = wil::scope_exit([&] { yyjson_doc_free(doc); });
+    Common::Json::UniqueDocument docOwner{doc};
 
     yyjson_val* root = yyjson_doc_get_root(doc);
     if (! root || ! yyjson_is_obj(root))

@@ -113,6 +113,93 @@ unsigned long TakeFileOpsBridgeFailNextSourceGetSizeAttemptsForSelfTest() noexce
     return g_fileOpsBridgeFailNextSourceGetSizeAttempts.exchange(0u, std::memory_order_acq_rel);
 }
 
+void SetFileOpsBridgeFailNextDestinationGetSizeForSelfTest(unsigned long count) noexcept
+{
+    g_fileOpsBridgeFailNextDestinationGetSizeAttempts.store(0u, std::memory_order_release);
+    g_fileOpsBridgeFailNextDestinationGetSizeCount.store(count, std::memory_order_release);
+}
+
+unsigned long TakeFileOpsBridgeFailNextDestinationGetSizeAttemptsForSelfTest() noexcept
+{
+    return g_fileOpsBridgeFailNextDestinationGetSizeAttempts.exchange(0u, std::memory_order_acq_rel);
+}
+
+void SetFileOpsBridgeOverReportNextReadForSelfTest(unsigned long count) noexcept
+{
+    g_fileOpsBridgeOverReportNextReadAttempts.store(0u, std::memory_order_release);
+    g_fileOpsBridgeOverReportNextReadCount.store(count, std::memory_order_release);
+}
+
+unsigned long TakeFileOpsBridgeOverReportNextReadAttemptsForSelfTest() noexcept
+{
+    return g_fileOpsBridgeOverReportNextReadAttempts.exchange(0u, std::memory_order_acq_rel);
+}
+
+void SetFileOpsBridgePrematureEofNextReadForSelfTest(unsigned long count) noexcept
+{
+    g_fileOpsBridgePrematureEofNextReadAttempts.store(0u, std::memory_order_release);
+    g_fileOpsBridgePrematureEofNextReadCount.store(count, std::memory_order_release);
+}
+
+unsigned long TakeFileOpsBridgePrematureEofNextReadAttemptsForSelfTest() noexcept
+{
+    return g_fileOpsBridgePrematureEofNextReadAttempts.exchange(0u, std::memory_order_acq_rel);
+}
+
+void SetFileOpsBridgeUnderConsumeNextWriteForSelfTest(unsigned long count) noexcept
+{
+    g_fileOpsBridgeUnderConsumeNextWriteAttempts.store(0u, std::memory_order_release);
+    g_fileOpsBridgeUnderConsumeNextWriteCount.store(count, std::memory_order_release);
+}
+
+unsigned long TakeFileOpsBridgeUnderConsumeNextWriteAttemptsForSelfTest() noexcept
+{
+    return g_fileOpsBridgeUnderConsumeNextWriteAttempts.exchange(0u, std::memory_order_acq_rel);
+}
+
+void SetFileOpsBridgeOverReportNextWriteForSelfTest(unsigned long count) noexcept
+{
+    g_fileOpsBridgeOverReportNextWriteAttempts.store(0u, std::memory_order_release);
+    g_fileOpsBridgeOverReportNextWriteCount.store(count, std::memory_order_release);
+}
+
+unsigned long TakeFileOpsBridgeOverReportNextWriteAttemptsForSelfTest() noexcept
+{
+    return g_fileOpsBridgeOverReportNextWriteAttempts.exchange(0u, std::memory_order_acq_rel);
+}
+
+void SetFileOpsBridgeInjectHostileChildNamesForSelfTest(bool enabled) noexcept
+{
+    g_fileOpsBridgeInjectHostileChildNameAttempts.store(0u, std::memory_order_release);
+    g_fileOpsBridgeInjectHostileChildNames.store(enabled, std::memory_order_release);
+}
+
+unsigned long TakeFileOpsBridgeInjectHostileChildNameAttemptsForSelfTest() noexcept
+{
+    return g_fileOpsBridgeInjectHostileChildNameAttempts.exchange(0u, std::memory_order_acq_rel);
+}
+
+void SetFileOpsBridgeInjectFileReparseForSelfTest(unsigned long count) noexcept
+{
+    g_fileOpsBridgeInjectFileReparseAttempts.store(0u, std::memory_order_release);
+    g_fileOpsBridgeInjectFileReparseCount.store(count, std::memory_order_release);
+}
+
+unsigned long TakeFileOpsBridgeInjectFileReparseAttemptsForSelfTest() noexcept
+{
+    return g_fileOpsBridgeInjectFileReparseAttempts.exchange(0u, std::memory_order_acq_rel);
+}
+
+void SetFileOpsBridgeReparsePolicyOverrideForSelfTest(FileOpsBridgeReparsePolicyOverride policy) noexcept
+{
+    g_fileOpsBridgeReparsePolicyOverride.store(static_cast<int>(policy), std::memory_order_release);
+}
+
+unsigned long TakeFileOpsBridgeMutateDestinationBeforeMoveCleanupAttemptsForSelfTest() noexcept
+{
+    return g_fileOpsBridgeMutateDestinationBeforeMoveCleanupAttempts.exchange(0u, std::memory_order_acq_rel);
+}
+
 void SetFileOpsPreCalcThreadStartFailureForSelfTest(bool enabled) noexcept
 {
     g_fileOpsPreCalcThreadStartFailure.store(enabled, std::memory_order_release);
@@ -138,27 +225,81 @@ void SetFileOpsAutoConcurrencyOverrideForSelfTest(bool enabled, unsigned int pre
 
 void SetFileOpsPostFinishedCompletionPauseForSelfTest(bool enabled) noexcept
 {
-    if (enabled)
-    {
-        g_fileOpsPostFinishedCompletionPauseEntered.store(false, std::memory_order_release);
-        g_fileOpsPostFinishedCompletionPauseRelease.store(false, std::memory_order_release);
-        g_fileOpsPostFinishedCompletionPauseEnabled.store(true, std::memory_order_release);
-        return;
-    }
-
-    g_fileOpsPostFinishedCompletionPauseEnabled.store(false, std::memory_order_release);
-    g_fileOpsPostFinishedCompletionPauseRelease.store(true, std::memory_order_release);
+    g_fileOpsPostFinishedCompletionPausePoint.Set(enabled);
 }
 
 bool HasFileOpsPostFinishedCompletionPauseEnteredForSelfTest() noexcept
 {
-    return g_fileOpsPostFinishedCompletionPauseEntered.load(std::memory_order_acquire);
+    return g_fileOpsPostFinishedCompletionPausePoint.HasEntered();
 }
 
 void ReleaseFileOpsPostFinishedCompletionPauseForSelfTest() noexcept
 {
-    g_fileOpsPostFinishedCompletionPauseEnabled.store(false, std::memory_order_release);
-    g_fileOpsPostFinishedCompletionPauseRelease.store(true, std::memory_order_release);
+    g_fileOpsPostFinishedCompletionPausePoint.Release();
+}
+
+void SetFileOpsBridgeMoveSourceCleanupPauseForSelfTest(bool enabled) noexcept
+{
+    g_fileOpsBridgeMoveSourceCleanupPausePoint.Set(enabled);
+}
+
+bool HasFileOpsBridgeMoveSourceCleanupPauseEnteredForSelfTest() noexcept
+{
+    return g_fileOpsBridgeMoveSourceCleanupPausePoint.HasEntered();
+}
+
+void ReleaseFileOpsBridgeMoveSourceCleanupPauseForSelfTest() noexcept
+{
+    g_fileOpsBridgeMoveSourceCleanupPausePoint.Release();
+}
+
+void SetFileOpsBridgeMoveManifestTakePauseForSelfTest(bool enabled) noexcept
+{
+    g_fileOpsBridgeMoveManifestTakePausePoint.Set(enabled);
+}
+
+bool HasFileOpsBridgeMoveManifestTakePauseEnteredForSelfTest() noexcept
+{
+    return g_fileOpsBridgeMoveManifestTakePausePoint.HasEntered();
+}
+
+void ReleaseFileOpsBridgeMoveManifestTakePauseForSelfTest() noexcept
+{
+    g_fileOpsBridgeMoveManifestTakePausePoint.Release();
+}
+
+uint64_t GetFileOpsBridgeMoveManifestCurrentEntriesForSelfTest() noexcept
+{
+    return g_fileOpsBridgeMoveManifestCurrentEntries.load(std::memory_order_acquire);
+}
+
+uint64_t GetFileOpsBridgeMoveManifestPeakEntriesForSelfTest() noexcept
+{
+    return g_fileOpsBridgeMoveManifestPeakEntries.load(std::memory_order_acquire);
+}
+
+void FolderWindow::FileOperationState::DebugEnsurePopupVisibleForSelfTest() noexcept
+{
+    EnsurePopupVisible();
+}
+
+void SetFileOpsConflictMetadataPauseForSelfTest(bool enabled, ULONGLONG bailoutMs) noexcept
+{
+    if (enabled)
+    {
+        g_fileOpsConflictMetadataPauseBailoutMs.store(std::max<ULONGLONG>(1ull, bailoutMs), std::memory_order_release);
+    }
+    g_fileOpsConflictMetadataPausePoint.Set(enabled);
+}
+
+bool HasFileOpsConflictMetadataPauseEnteredForSelfTest() noexcept
+{
+    return g_fileOpsConflictMetadataPausePoint.HasEntered();
+}
+
+void ReleaseFileOpsConflictMetadataPauseForSelfTest() noexcept
+{
+    g_fileOpsConflictMetadataPausePoint.Release();
 }
 #endif
 
@@ -242,6 +383,8 @@ bool FolderWindow::FileOperationState::EnterOperation(Task& task, std::stop_toke
     {
         _queue.pop_front();
     }
+    task._waitForOthers.store(false, std::memory_order_release);
+    task.SetWaitingInQueue(false);
     ++_activeOperations;
     task._perf.queueActiveOperations = _activeOperations;
     const uint64_t waitedUs          = PerfElapsedUs(queueWaitStartUs);
@@ -283,9 +426,9 @@ void FolderWindow::FileOperationState::PostCompleted(Task& task) noexcept
         return;
     }
 
-    auto payload    = std::make_unique<TaskCompletedPayload>();
-    payload->taskId = task._taskId;
-    payload->hr     = task.GetResult();
+    auto payload          = std::make_unique<TaskCompletedPayload>();
+    payload->taskId       = task._taskId;
+    payload->hr           = task.GetResult();
     payload->warningCount = summary.warningCount;
     payload->errorCount   = summary.errorCount;
 

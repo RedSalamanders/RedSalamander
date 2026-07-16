@@ -93,6 +93,22 @@ BEGIN
     IDS_VIEWERWEB_WARNING_DEVTOOLS_DISABLED "DevTools is disabled in plugin settings."
     IDS_VIEWERWEB_PROMPT_OPEN_TEXT_VIEWER_FMT "{0} Open it in Text Viewer instead?"
     IDS_VIEWERWEB_ERROR_OPEN_TEXT_VIEWER_FAILED "Failed to open in Text Viewer."
+    IDS_VIEWERWEB_JSONL_BADGE "JSONL"
+    IDS_VIEWERWEB_JSONL_TITLE "Structured log view"
+    IDS_VIEWERWEB_JSONL_EXPAND_ALL "Expand all"
+    IDS_VIEWERWEB_JSONL_COLLAPSE_ALL "Collapse all"
+    IDS_VIEWERWEB_JSONL_RECORD_ONE_FMT "{0} record"
+    IDS_VIEWERWEB_JSONL_RECORD_MANY_FMT "{0} records"
+    IDS_VIEWERWEB_JSONL_VALUE_GENERIC "JSON value"
+    IDS_VIEWERWEB_JSONL_OBJECT_ONE_FMT "Object with {0} field"
+    IDS_VIEWERWEB_JSONL_OBJECT_MANY_FMT "Object with {0} fields"
+    IDS_VIEWERWEB_JSONL_ARRAY_ONE_FMT "Array with {0} item"
+    IDS_VIEWERWEB_JSONL_ARRAY_MANY_FMT "Array with {0} items"
+    IDS_VIEWERWEB_JSONL_VALUE_STRING "String value"
+    IDS_VIEWERWEB_JSONL_VALUE_BOOLEAN_TRUE "Boolean true"
+    IDS_VIEWERWEB_JSONL_VALUE_BOOLEAN_FALSE "Boolean false"
+    IDS_VIEWERWEB_JSONL_VALUE_NULL "Null value"
+    IDS_VIEWERWEB_JSONL_VALUE_NUMERIC_FMT "Numeric {0}"
 END
 
 /////////////////////////////////////////////////////////////////////////////

@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <limits>
 
@@ -18,6 +20,112 @@ namespace RedSalamander::DxUi
 {
 namespace
 {
+struct NativeTextInputThreadManagerState final
+{
+    wil::com_ptr_nothrow<ITfThreadMgr> threadMgr;
+    TfClientId clientId = 0u;
+    bool comInitialized = false;
+};
+
+[[nodiscard]] bool NativeTextInputControlBelongsToTree(const Control* root, const Control* target) noexcept
+{
+    if (! root || ! target)
+    {
+        return false;
+    }
+    if (root == target)
+    {
+        return true;
+    }
+    const auto* panel = dynamic_cast<const Panel*>(root);
+    if (! panel)
+    {
+        return false;
+    }
+    for (const auto& child : panel->GetChildren())
+    {
+        if (child && NativeTextInputControlBelongsToTree(child.get(), target))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+[[nodiscard]] NativeTextInputThreadManagerState& GetNativeTextInputThreadManagerState() noexcept
+{
+    thread_local NativeTextInputThreadManagerState state;
+    return state;
+}
+
+void ShutdownNativeTextInputThreadManagerState(NativeTextInputThreadManagerState& state) noexcept
+{
+    if (state.threadMgr && state.clientId != 0u)
+    {
+        static_cast<void>(state.threadMgr->SetFocus(nullptr));
+        static_cast<void>(state.threadMgr->Deactivate());
+    }
+
+    state.threadMgr.reset();
+    state.clientId = 0u;
+    if (state.comInitialized)
+    {
+        CoUninitialize();
+        state.comInitialized = false;
+    }
+}
+
+[[nodiscard]] bool EnsureNativeTextInputThreadManager(wil::com_ptr_nothrow<ITfThreadMgr>& outThreadMgr, TfClientId& outClientId) noexcept
+{
+    outThreadMgr.reset();
+    outClientId = 0u;
+
+    NativeTextInputThreadManagerState& state = GetNativeTextInputThreadManagerState();
+    if (state.threadMgr && state.clientId != 0u)
+    {
+        outThreadMgr = state.threadMgr;
+        outClientId  = state.clientId;
+        return true;
+    }
+    if (state.threadMgr)
+    {
+        ShutdownNativeTextInputThreadManagerState(state);
+    }
+
+    HRESULT hr = CoCreateInstance(CLSID_TF_ThreadMgr, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(state.threadMgr.put()));
+    if (hr == CO_E_NOTINITIALIZED)
+    {
+        const HRESULT coInitHr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+        if (FAILED(coInitHr))
+        {
+            return false;
+        }
+
+        state.comInitialized = true;
+        hr                   = CoCreateInstance(CLSID_TF_ThreadMgr, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(state.threadMgr.put()));
+    }
+
+    if (FAILED(hr) || ! state.threadMgr)
+    {
+        ShutdownNativeTextInputThreadManagerState(state);
+        return false;
+    }
+
+    TfClientId clientId = 0u;
+    hr                  = state.threadMgr->Activate(&clientId);
+    if (FAILED(hr) || clientId == 0u)
+    {
+        state.clientId = clientId;
+        ShutdownNativeTextInputThreadManagerState(state);
+        return false;
+    }
+
+    state.clientId = clientId;
+    outThreadMgr   = state.threadMgr;
+    outClientId    = state.clientId;
+    return true;
+}
+
 [[nodiscard]] NativeTextInputState ToNativeTextInputState(const Control& control, const TextInputState& controlState) noexcept
 {
     NativeTextInputState state;
@@ -469,6 +577,7 @@ void WindowHost::ActivateNativeTextInputSession(Control* control) noexcept
         ClearNativeTextInputCompositionState();
     }
     _nativeTextInputControl         = control;
+    _nativeTextInputControlLifetime = control->GetLifetimeToken();
     _nativeTextInputStateCache      = ToNativeTextInputState(*control, controlState);
     _nativeTextInputStateCacheValid = true;
     ApplyNativeTextInputCompositionStateToCache();
@@ -495,20 +604,29 @@ void WindowHost::ActivateNativeTextInputSession(Control* control) noexcept
                       S_OK);
 }
 
+void WindowHost::SecureClearNativeTextInputStateCache() noexcept
+{
+    SecureWipe::SecureClear(_nativeTextInputStateCache.text);
+    _nativeTextInputStateCache      = NativeTextInputState{};
+    _nativeTextInputStateCacheValid = false;
+}
+
 void WindowHost::DeactivateNativeTextInputSession(bool restoreHostFocus) noexcept
 {
     DeactivateNativeTextInputTsf();
 
     if (! _nativeTextInputControl)
     {
-        _nativeTextInputStateCacheValid = false;
+        _nativeTextInputControlLifetime.reset();
+        SecureClearNativeTextInputStateCache();
         ClearNativeTextInputCompositionState();
         _pendingNativeTextInputPaintMetric.reset();
         return;
     }
 
-    _nativeTextInputControl         = nullptr;
-    _nativeTextInputStateCacheValid = false;
+    _nativeTextInputControl = nullptr;
+    _nativeTextInputControlLifetime.reset();
+    SecureClearNativeTextInputStateCache();
     ClearNativeTextInputCompositionState();
     _pendingNativeTextInputPaintMetric.reset();
     ++_nativeTextInputEventCounters.deactivationCount;
@@ -540,40 +658,9 @@ bool WindowHost::ActivateNativeTextInputTsf(Control* control) noexcept
     }
 
     wil::com_ptr_nothrow<ITfThreadMgr> threadMgr;
-    HRESULT hr = CoCreateInstance(CLSID_TF_ThreadMgr, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(threadMgr.put()));
-    if (hr == CO_E_NOTINITIALIZED)
-    {
-        const HRESULT coInitHr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-        if (FAILED(coInitHr))
-        {
-            ++_nativeTextInputEventCounters.tsfActivationFailureCount;
-            return false;
-        }
-
-        _nativeTextInputTsfComInitialized = true;
-        hr                                = CoCreateInstance(CLSID_TF_ThreadMgr, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(threadMgr.put()));
-    }
-
-    if (FAILED(hr) || ! threadMgr)
-    {
-        if (_nativeTextInputTsfComInitialized)
-        {
-            CoUninitialize();
-            _nativeTextInputTsfComInitialized = false;
-        }
-        ++_nativeTextInputEventCounters.tsfActivationFailureCount;
-        return false;
-    }
-
     TfClientId clientId = 0u;
-    hr                  = threadMgr->Activate(&clientId);
-    if (FAILED(hr) || clientId == 0u)
+    if (! EnsureNativeTextInputThreadManager(threadMgr, clientId))
     {
-        if (_nativeTextInputTsfComInitialized)
-        {
-            CoUninitialize();
-            _nativeTextInputTsfComInitialized = false;
-        }
         ++_nativeTextInputEventCounters.tsfActivationFailureCount;
         return false;
     }
@@ -589,7 +676,7 @@ bool WindowHost::ActivateNativeTextInputTsf(Control* control) noexcept
     };
 
     wil::com_ptr_nothrow<ITfDocumentMgr> documentMgr;
-    hr = threadMgr->CreateDocumentMgr(documentMgr.put());
+    HRESULT hr = threadMgr->CreateDocumentMgr(documentMgr.put());
     if (FAILED(hr) || ! documentMgr)
     {
         return failActivation();
@@ -609,6 +696,13 @@ bool WindowHost::ActivateNativeTextInputTsf(Control* control) noexcept
         return failActivation();
     }
 
+    wil::com_ptr_nothrow<ITfDocumentMgr> previousFocusDocumentMgr;
+    hr = threadMgr->AssociateFocus(_hwnd, documentMgr.get(), previousFocusDocumentMgr.put());
+    _nativeTextInputTsfPreviousFocusDocumentMgr.reset();
+    if (SUCCEEDED(hr) && previousFocusDocumentMgr)
+    {
+        static_cast<void>(previousFocusDocumentMgr.query_to(_nativeTextInputTsfPreviousFocusDocumentMgr.put()));
+    }
     static_cast<void>(threadMgr->SetFocus(documentMgr.get()));
     static_cast<void>(documentMgr.query_to(_nativeTextInputTsfDocumentMgr.put()));
     static_cast<void>(context.query_to(_nativeTextInputTsfContext.put()));
@@ -621,6 +715,39 @@ bool WindowHost::ActivateNativeTextInputTsf(Control* control) noexcept
 void WindowHost::DeactivateNativeTextInputTsf() noexcept
 {
     const bool wasActive = _nativeTextInputTsfActive;
+    wil::com_ptr_nothrow<IUnknown> textStoreToDisconnect;
+    if (_nativeTextInputTsfTextStore)
+    {
+        static_cast<void>(_nativeTextInputTsfTextStore.query_to(textStoreToDisconnect.put()));
+    }
+    const bool controlIsLive = _nativeTextInputControl && ! _nativeTextInputControlLifetime.expired() &&
+                               NativeTextInputControlBelongsToTree(_root.get(), _nativeTextInputControl);
+    if (! controlIsLive)
+    {
+        // A retained TSF context may synchronously call its store during Pop. Sever all
+        // host/control access before Pop when the retained control is no longer alive.
+        DisconnectNativeTextInputTextStore(textStoreToDisconnect.get());
+        DetachNativeTextInputTextStore(textStoreToDisconnect.get());
+    }
+    if (_nativeTextInputTsfThreadMgr)
+    {
+        wil::com_ptr_nothrow<ITfThreadMgr> threadMgr;
+        if (SUCCEEDED(_nativeTextInputTsfThreadMgr.query_to(threadMgr.put())) && threadMgr)
+        {
+            static_cast<void>(threadMgr->SetFocus(nullptr));
+            if (_hwnd)
+            {
+                wil::com_ptr_nothrow<ITfDocumentMgr> previousFocusDocumentMgr;
+                if (_nativeTextInputTsfPreviousFocusDocumentMgr)
+                {
+                    static_cast<void>(_nativeTextInputTsfPreviousFocusDocumentMgr.query_to(previousFocusDocumentMgr.put()));
+                }
+
+                wil::com_ptr_nothrow<ITfDocumentMgr> replacedFocusDocumentMgr;
+                static_cast<void>(threadMgr->AssociateFocus(_hwnd, previousFocusDocumentMgr.get(), replacedFocusDocumentMgr.put()));
+            }
+        }
+    }
 
     if (_nativeTextInputTsfDocumentMgr)
     {
@@ -630,33 +757,32 @@ void WindowHost::DeactivateNativeTextInputTsf() noexcept
             static_cast<void>(documentMgr->Pop(TF_POPF_ALL));
         }
     }
+    _nativeTextInputTsfPreviousFocusDocumentMgr.reset();
 
-    if (_nativeTextInputTsfThreadMgr && _nativeTextInputTsfClientId != 0u)
-    {
-        wil::com_ptr_nothrow<ITfThreadMgr> threadMgr;
-        if (SUCCEEDED(_nativeTextInputTsfThreadMgr.query_to(threadMgr.put())) && threadMgr)
-        {
-            static_cast<void>(threadMgr->Deactivate());
-        }
-    }
-
-    _nativeTextInputTsfTextStore.reset();
+    // For a live retained control, TSF may synchronously query/unadvise during Pop.
+    // Keep that store attached until the ownership chain has unwound.
     _nativeTextInputTsfContext.reset();
     _nativeTextInputTsfDocumentMgr.reset();
     _nativeTextInputTsfThreadMgr.reset();
     _nativeTextInputTsfClientId = 0u;
     _nativeTextInputTsfActive   = false;
-
-    if (_nativeTextInputTsfComInitialized)
+    if (controlIsLive)
     {
-        CoUninitialize();
-        _nativeTextInputTsfComInitialized = false;
+        DisconnectNativeTextInputTextStore(textStoreToDisconnect.get());
+        DetachNativeTextInputTextStore(textStoreToDisconnect.get());
     }
+    _nativeTextInputTsfTextStore.reset();
 
     if (wasActive)
     {
         ++_nativeTextInputEventCounters.tsfDeactivationCount;
     }
+}
+
+void ShutdownNativeTextInputForCurrentThread() noexcept
+{
+    NativeTextInputThreadManagerState& state = GetNativeTextInputThreadManagerState();
+    ShutdownNativeTextInputThreadManagerState(state);
 }
 
 void WindowHost::SyncNativeTextInputSession(Control* control) noexcept
@@ -711,23 +837,34 @@ void WindowHost::RaiseNativeTextInputAccessibilityEvents(const NativeTextInputSt
     }
 
     const NativeTextInputState& currentState = _nativeTextInputStateCache;
-    if (previousState.text != currentState.text)
+    const bool textChanged                   = previousState.text != currentState.text;
+    const bool selectionChanged              = NativeTextInputSelectionChanged(previousState, currentState);
+    const bool activeTextPositionChanged     = NativeTextInputActiveTextPositionChanged(previousState, currentState);
+    const bool compositionChanged            = NativeTextInputCompositionChanged(previousState, currentState);
+    const bool conversionTargetChanged       = NativeTextInputConversionTargetChanged(previousState, currentState);
+    if (! textChanged && ! selectionChanged && ! activeTextPositionChanged && ! compositionChanged && ! conversionTargetChanged)
+    {
+        return;
+    }
+
+    RefreshWindowHostAccessibilitySnapshot(_hwnd, this);
+    if (textChanged)
     {
         RaiseNativeTextInputAccessibilityEvent(TextInputAutomationEventKind::TextChanged);
     }
-    if (NativeTextInputSelectionChanged(previousState, currentState))
+    if (selectionChanged)
     {
         RaiseNativeTextInputAccessibilityEvent(TextInputAutomationEventKind::TextSelectionChanged);
     }
-    if (NativeTextInputActiveTextPositionChanged(previousState, currentState))
+    if (activeTextPositionChanged)
     {
         RaiseNativeTextInputAccessibilityEvent(TextInputAutomationEventKind::ActiveTextPositionChanged);
     }
-    if (NativeTextInputCompositionChanged(previousState, currentState))
+    if (compositionChanged)
     {
         RaiseNativeTextInputAccessibilityEvent(TextInputAutomationEventKind::TextEditCompositionChanged);
     }
-    if (NativeTextInputConversionTargetChanged(previousState, currentState))
+    if (conversionTargetChanged)
     {
         RaiseNativeTextInputAccessibilityEvent(TextInputAutomationEventKind::TextEditConversionTargetChanged);
     }

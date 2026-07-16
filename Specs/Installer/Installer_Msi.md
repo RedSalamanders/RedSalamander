@@ -15,11 +15,12 @@ Primary files:
 - Install to **`Program Files`** (per-machine install, requires admin).
 - Include the **shipping runtime** from `.build\x64\Release\` (apps + plugins + runtime dependencies), excluding:
   - build artifacts (`*.pdb`, `*.lib`, `*.exp`, `*.ilk`, `*.iobj`, `*.ipdb`, `*.pch`)
-  - non-shipping executables (PoC/test `*.exe` other than `RedSalamander.exe` and `RedSalamanderMonitor.exe`)
+  - non-shipping executables (PoC/test `*.exe`; the shipping executables are `RedSalamander.exe`, `RedSalamanderMonitor.exe`, and `RedSalamanderSearchService.exe`)
   - `asan.supp`
 - Create Start Menu shortcuts for:
   - RedSalamander
   - RedSalamander Monitor
+- Install `RedSalamanderSearchService.exe` as the optional `RedSalamanderSearchService` Windows service. The service component is selected by default, runs as LocalSystem, starts automatically, and can be opted out with `INSTALLSEARCHSERVICE=0`.
 
 ## Non-Goals
 
@@ -58,6 +59,7 @@ In addition to the main installer, we produce a **Symbols MSI** that installs Re
 The symbols MSI includes:
 - `RedSalamander.pdb`
 - `RedSalamanderMonitor.pdb`
+- `RedSalamanderSearchService.pdb`
 - `Common.pdb`
 - `Plugins\*.pdb`
 

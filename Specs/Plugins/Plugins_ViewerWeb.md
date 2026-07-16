@@ -5,7 +5,7 @@
 **ViewerWeb.dll** is an **optional** viewer plugin DLL that embeds **Microsoft Edge WebView2**.
 It exposes three logical viewer plugins (one DLL, three plugin IDs):
 
-- `builtin/viewer-web`: HTML/PDF viewer (navigates to file:// URLs or a temp extract for non-Win32 paths).
+- `builtin/viewer-web`: isolated HTML/PDF viewer. HTML is served in memory from a private viewer origin; every PDF is copied from the active provider reader to a constrained staging file before WebView2 sees it.
 - `builtin/viewer-json`: JSON/JSON5/JSONL viewer (pretty highlighted text by default; optional tree view; structured JSONL log cards).
 - `builtin/viewer-markdown`: Markdown viewer with syntax highlighting (renders an internal HTML page).
 
@@ -27,9 +27,10 @@ Runtime requirements:
 
 Module lifetime:
 - ViewerWeb owns a DLL-global shared `ICoreWebView2Environment` so multiple viewer instances do not each pay WebView2 environment startup cost.
-- ViewerWeb exports `RedSalamanderPluginShutdown()` to reset that shared environment as the module quiet point. The hook is idempotent; `DllMain` process detach only repeats the same cleanup as a fallback.
-- WebView2 environment/controller creation callbacks keep `ViewerWeb.dll` pinned while the callback object can still be invoked, and callbacks capture a shared-environment generation so stale callbacks self-drop after module shutdown or rediscovery.
-- ViewerWeb does not request `RedSalamanderPluginRetainModuleUntilProcessExit()`: after viewers are closed and the shared environment quiet point has run, the host may explicitly unload the module.
+- ViewerWeb exports `RedSalamanderPluginShutdown()` to reset that shared environment, unregister the viewer window class, release its WIL-owned class brushes, and retry staged-file deletion as the required module quiet point. The hook is idempotent. `DllMain` process detach deliberately performs no COM release, GDI/container destruction, or staged-file I/O because those operations are forbidden under the loader lock.
+- WebView2 callbacks are protected by the host's unload protocol rather than by a callback-owned `FreeLibrary` reference. Callback construction records the WebView2 owner STA; every callback object contributes to a DLL-global live count, and invocation/final release must occur on that STA. A thread-affinity violation permanently votes not-unloadable for that DLL image. Environment/controller creation callbacks also capture a shared-environment generation so stale callbacks self-drop after shutdown/rediscovery. Removing the callback-owned module pin eliminates the self-unmap hazard inside `ComCallback::Release()`. After the last callback is deleted on the owner STA, a release epoch forces the first same-STA zero-live `RedSalamanderPluginCanUnloadNow()` poll to return false; only a later same-STA deferred-unload poll may return true, at which point the releasing stack is necessarily gone.
+- Load and Save-As threadpool work has a separate active-worker gate. Each work item acquires a module pin before queueing, transfers it at callback entry with `FreeLibraryWhenCallbackReturns`, and decrements the worker gate only at the callback epilogue. `CanUnloadNow()` requires zero WebView2 callbacks, zero active workers, completed class/brush shutdown cleanup, and no retained staged-file cleanup.
+- `RedSalamanderPluginRetainModuleUntilProcessExit()` votes true only when the same quiet-state check is still false during process shutdown. Runtime refresh uses `CanUnloadNow()` deferral; after a later clean poll the host may explicitly unload the module.
 
 ## Supported Extensions
 
@@ -43,17 +44,59 @@ Intended associations:
 ViewerWeb exposes a per-plugin configuration schema (`GetConfigurationSchema`) and accepts configuration via `SetConfiguration`.
 
 Keys (defaults):
-- `maxDocumentMiB` (`32`, `1..512`): maximum size for in-memory loads (JSON/Markdown).
+- `maxDocumentMiB` (`32`, `1..64`): maximum accepted source size. It applies to private-origin HTML, JSON/Markdown input, all staged PDF reads, and Save As source copies; the hard schema ceiling remains 64 MiB.
 - `viewMode` (`"pretty"`): JSON rendering mode (`"pretty"`, `"tree"`, or `"jsonl"`).
-- `allowExternalNavigation` (`true`): allow navigating to `http://` / `https://` links (Web/Markdown).
+- `allowExternalNavigation` (`false`): allow an explicit, user-initiated `http://` / `https://` link to open in the system browser. It never permits an external document to replace viewer content.
 - `devToolsEnabled` (`false`): allow opening WebView2 DevTools.
 
 Notes:
 - If ViewerWeb is missing/disabled, the host falls back to `builtin/viewer-text`.
 - Settings are per-plugin-ID (`builtin/viewer-web` vs `builtin/viewer-json` vs `builtin/viewer-markdown`).
+- Top-level, frame, and new-window requests use the same allow-list policy. Only the exact active private viewer URL or exact active PDF file URL, optionally followed by a fragment, may remain in the WebView. Query/path/scheme changes, frame escapes, redirects, and non-user-initiated external requests are canceled. An explicit user-initiated HTTP(S) request is canceled in-view and opened through the system browser only when `allowExternalNavigation = true`.
+- Document isolation is fail-closed. Before the first navigation and on every route transition, ViewerWeb must successfully apply the script, web-message, and DevTools settings. It must also successfully register top-level, frame, new-window, internal-resource filter, and internal-resource response hooks before navigation. Any failure discards/closes the partially configured controller and leaves a terminal initialization error; content is never navigated with inherited settings or missing policy hooks.
+- Once a private-origin document is requested, failure to inspect the request, build the in-memory response, or install that response also closes the controller. ViewerWeb never lets its synthetic `.invalid` origin fall through to proxy/DNS/network resolution.
+- An allowlisted external request is launched only after `put_Cancel(TRUE)` or `put_Handled(TRUE)` succeeds. If WebView2 cannot suppress the in-view/new-window request, ViewerWeb closes the controller, returns the policy error, and does not launch an external duplicate.
 - `.jsonl` / `.ndjson` files auto-prefer the JSONL card view even when `viewMode` is left at the default `"pretty"`.
 - If a `.json` / `.json5` document fails as a single JSON value but parses as multiple JSON values separated by newlines, the viewer falls back to the JSONL card view.
-- If a JSON/Markdown document exceeds `maxDocumentMiB`, ViewerWeb keeps the error message visible and offers to reopen the same file in `builtin/viewer-text`.
+- Every HTML/PDF/JSON/Markdown/Save-As provider read requires a successful `GetSize()`, seeks to byte zero and verifies the returned position, treats the reported size as an exact commitment, and bounds every request/returned count. Failed `Seek`/`Read`, premature EOF, and impossible over-return terminate the operation; a one-byte EOF probe rejects trailing data. A filesystem that understates/overstates its size therefore cannot bypass `maxDocumentMiB`, fabricate bytes, or cause an out-of-bounds append/write.
+- UTF-16 JSON/Markdown input is converted to UTF-8 incrementally. Conversion stops before the UTF-8 output exceeds the configured byte limit; ViewerWeb never retains a full raw buffer, full UTF-16 copy, and full UTF-8 copy together.
+- Generated-page publication has a second deterministic ceiling: 1 MiB fixed renderer allowance plus twice the configured input-byte limit, capped at 128 MiB. If renderer assets/escaping exceed that ceiling, the page is rejected before `_pendingDocumentUtf8` is published.
+- JSONL parsing additionally caps retained card count and aggregate retained strings under that publication budget, supplies yyjson with bounded parse/write allocators, and appends escaped fields directly into the final HTML instead of constructing a second full `entriesJs` buffer. Card titles, controls, record counts, and generated value summaries come from localized `IDS_*` resources and are inserted through the JavaScript-string escaper.
+- If a JSON/Markdown document exceeds `maxDocumentMiB`, ViewerWeb keeps the error message visible and offers to reopen the same file in `builtin/viewer-text`. Oversized HTML/PDF remains an error in ViewerWeb.
+
+## Content Isolation and Navigation Security
+
+Raw HTML:
+- Local and virtual-filesystem HTML bytes are read through `IFileSystemIO`, bounded by advertised and running byte limits, and returned through `WebResourceRequested` at an exact per-load URL under `https://viewer.redsalamander.invalid`.
+- Raw HTML is never navigated from its original/staged `file://` path and is never written to a temporary HTML file.
+- The raw response carries `Content-Type: text/html` without a forced charset so WebView2 can honor a BOM or document metadata. Its CSP sandbox uses `default-src 'none'`, `script-src 'none'`, `connect-src 'none'`, and explicit frame/object/base/form denial. Inline CSS and `data:` images are the only passive content allowances. WebView2 document scripting, web messages, and DevTools are disabled for this route.
+
+Generated JSON/JSONL/Markdown:
+- Generated pages use the same private origin but a separate CSP that permits only the bundled inline renderer and inline styles. Network connections, frames, objects, bases, and forms remain denied.
+- WebView2 scripting is enabled only for these generated pages. `devToolsEnabled` has an effect only on this route.
+
+PDF:
+- Path syntax is never treated as proof that an `IFileSystem` path identifies the same host-local file. Both Win32-looking and virtual PDF paths are read through `IFileSystemIO` and staged, closing the confused-deputy route where a custom provider could cause WebView2 to open an unrelated host `C:\...` or UNC path.
+- ViewerWeb creates `%TEMP%\rsw-{GUID}.pdf` with `CREATE_NEW` and at most 32 collision retries; `StringFromGUID2` supplies the literal braced GUID, and the implementation never falls back to a `.tmp` extension. The copy uses the exact-size reader contract above, writes every byte, flushes and closes before navigation, and remains within `maxDocumentMiB`. ViewerWeb tracks the staged path through completion and active use, deletes it on stale completion/switch/close, and submits it to the OS delayed-delete queue if WebView2 still holds the file at the teardown quiet point. If immediate deletion and delayed scheduling both fail, a module cleanup queue retains the path and keeps `CanUnloadNow()` false while retrying on later loads, shutdown, and unload polls.
+- Document scripting, web messages, and DevTools are disabled on the staged PDF route.
+
+Save As:
+- The save dialog runs on the UI thread, but provider acquisition, sizing, seek/read, and destination I/O run only in a module-pinned threadpool callback. Close or a newer save increments the atomic request generation and never waits for a provider call that is blocked; the worker owns the viewer/file-system lifetimes it needs and touches only atomic viewer state off-thread.
+- Save As enforces the configured and 64 MiB hard ceilings plus the exact-size reader contract. It creates `<destination-directory>\.rsw-save-{GUID}.tmp` with `CREATE_NEW` and at most 32 collision retries, handles partial `WriteFile` completions, flushes and closes the temp, releases the source reader (including for same-path saves), then commits with `MoveFileExW(..., MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)`. Every pre-commit failure closes provider/destination resources and deletes only the temp before publishing completion, leaving the source and any pre-existing destination byte-identical.
+- A sharing violation or other atomic-replacement failure against an open/locked destination is a commit failure: ViewerWeb deletes the sibling staging file and leaves every pre-existing destination byte unchanged.
+- Completion carries viewer, HWND, and save-generation identity. A stale completion is ignored. If payload posting fails, an allocation-free atomic terminal record plus payload-free message/paint fallback clears the current UI state; closing the viewer never joins the worker. Debug builds expose the same production primitive through `DebugSaveAsRequest` (with write/flush/commit fault bits) so on-disk safety tests do not automate the modal dialog.
+
+Debug control ABI (`ENABLE_TESTS`):
+- Registered message `RedSalamander.ViewerWeb.DebugControl.1` takes `DebugControlAction` in `wParam`: `1` arms one load-completion post failure, `2` arms one save-completion post failure, and `3` submits Save As.
+- Action `3` requires `lParam = DebugSaveAsRequest*`, `sizeBytes >= sizeof(DebugSaveAsRequest)`, and a non-empty `destinationPath`. `faultMask` accepts only `0x1` (write), `0x2` (flush), and `0x4` (commit), singly or combined; unknown bits fail submission with `E_INVALIDARG`. The handler returns `TRUE` for a structurally valid request and writes the actual queueing result to `submissionHr`.
+- Registered message `RedSalamander.ViewerWeb.DebugSnapshot.1` takes `DebugSnapshot*` in `lParam`; its Save-As fields are `saveInProgress` and cumulative `asyncSavePostFailures`. Load-post fallback is exposed as cumulative `asyncLoadPostFailures` plus `loadPostFailureTerminal`.
+
+Diagnostics emit `viewer.web.load_bytes`, `viewer.web.rejected_bytes`, `viewer.web.normalized_bytes`, `viewer.web.output_bytes`, and `viewer.web.save_as_bytes` scenario metrics for accepted/rejected input, conversion/output size, and committed exports. The Debug snapshot also exposes load/save completion-post failure counts and Save-As in-progress state.
+
+Focused regression coverage lives in `ViewerPETests`:
+- `TestViewerWebSecurityPolicyAndBounds` covers both CSPs, exact/fragment URL policy, false defaults, running-byte arithmetic, bounded UTF conversion/output, and fault-injected staged-cleanup retry retention.
+- `TestViewerWebVirtualHtmlUsesPrivateOriginAndEnforcesByteCaps` loads hostile UTF-16-BOM HTML through a virtual filesystem and observes the actual private WebView2 source and disabled script setting; it also proves exact-size/over-return/output rejection and successful constrained local/virtual PDF staging, collision-safe `.pdf` paths, and quiet-point cleanup.
+- `TestViewerWebTransactionalSaveAsAndCloseSafety` exercises same-path and pre-existing-destination success plus byte-for-byte destination preservation for a locked destination, seek mismatch, failed provider `Read`, premature EOF, trailing data, impossible over-return, and injected write/flush/commit failure, with no sibling staging residue. It also covers the allocation-free completion-post fallback, requires a later quiescent `RedSalamanderPluginCanUnloadNow()` observation after the callback release epoch changes, and proves sub-500 ms close, a false unload vote, and continued DLL mapping while a module-pinned Save-As callback is blocked in provider `Read`; after release, the canceled worker must remove its temp, preserve the destination, retire provider state, and only then allow the callback-return pin to unload the module.
 
 ## UI / UX
 
@@ -62,7 +105,7 @@ Layout:
 - **Content**: WebView2 surface.
 - Header status text is a DirectWrite/Direct2D-only render path. If the DX path cannot draw the status message, ViewerWeb deliberately shows no fallback GDI status text and logs one error so the failure is visible in diagnostics.
 - Internal HTML pages (`json`, `jsonl`, `markdown`) theme their own scrollbars from the current viewer colors, including nested code-block scrollers.
-- Generated `json`, `jsonl`, and `markdown` pages are delivered to WebView2 through an in-memory `WebResourceRequested` response on a private viewer URL, so large rendered documents do not rely on `NavigateToString()` or a temp `.html` file.
+- Raw HTML and generated `json`, `jsonl`, and `markdown` pages are delivered to WebView2 through in-memory `WebResourceRequested` responses on private viewer URLs, so rendered documents do not rely on `NavigateToString()` or a temp `.html` file.
 
 Menu (DxUi-hosted from the hidden native menu model):
 - File: Save As, Refresh, Exit, Other Files navigation (Next/Previous/First/Last)

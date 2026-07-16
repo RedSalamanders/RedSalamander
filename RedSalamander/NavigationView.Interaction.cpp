@@ -108,10 +108,7 @@ void NavigationView::ClearHoverState(std::wstring_view source, bool renderChange
 
     if (_menuButtonHovered)
     {
-        TraceNavigationViewMenuDiagnostics(L"navigation.hover-clear",
-                                           L"hwnd={:#x} source={} target=menu",
-                                           reinterpret_cast<uintptr_t>(_hWnd.get()),
-                                           source);
+        TraceNavigationViewMenuDiagnostics(L"navigation.hover-clear", L"hwnd={:#x} source={} target=menu", reinterpret_cast<uintptr_t>(_hWnd.get()), source);
         _menuButtonHovered = false;
         if (renderChanges)
         {
@@ -121,10 +118,7 @@ void NavigationView::ClearHoverState(std::wstring_view source, bool renderChange
 
     if (_historyButtonHovered)
     {
-        TraceNavigationViewMenuDiagnostics(L"navigation.hover-clear",
-                                           L"hwnd={:#x} source={} target=history",
-                                           reinterpret_cast<uintptr_t>(_hWnd.get()),
-                                           source);
+        TraceNavigationViewMenuDiagnostics(L"navigation.hover-clear", L"hwnd={:#x} source={} target=history", reinterpret_cast<uintptr_t>(_hWnd.get()), source);
         _historyButtonHovered = false;
         if (renderChanges)
         {
@@ -134,10 +128,7 @@ void NavigationView::ClearHoverState(std::wstring_view source, bool renderChange
 
     if (_diskInfoHovered)
     {
-        TraceNavigationViewMenuDiagnostics(L"navigation.hover-clear",
-                                           L"hwnd={:#x} source={} target=disk",
-                                           reinterpret_cast<uintptr_t>(_hWnd.get()),
-                                           source);
+        TraceNavigationViewMenuDiagnostics(L"navigation.hover-clear", L"hwnd={:#x} source={} target=disk", reinterpret_cast<uintptr_t>(_hWnd.get()), source);
         _diskInfoHovered = false;
         if (renderChanges)
         {
@@ -177,40 +168,35 @@ void NavigationView::OnLButtonDown(const RedSalamander::DxUi::PointerInputEvent&
 void NavigationView::OnLButtonDown(POINT pt)
 {
     TraceNavigationInputState(L"lbutton-down", pt);
-    TraceNavigationViewMenuDiagnostics(L"navigation.lbutton-down",
-                                       L"hwnd={:#x} pt=({}, {}) editMode={} embedded={} historyRect=({}, {}, {}, {}) historyCount={} focus={:#x} active={:#x} capture={:#x}",
-                                       reinterpret_cast<uintptr_t>(_hWnd.get()),
-                                       pt.x,
-                                       pt.y,
-                                       _editMode ? 1 : 0,
-                                       _embeddedDestinationMode ? 1 : 0,
-                                       _sectionHistoryRect.left,
-                                       _sectionHistoryRect.top,
-                                       _sectionHistoryRect.right,
-                                       _sectionHistoryRect.bottom,
-                                       _pathHistory.size(),
-                                       reinterpret_cast<uintptr_t>(GetFocus()),
-                                       reinterpret_cast<uintptr_t>(GetActiveWindow()),
-                                       reinterpret_cast<uintptr_t>(GetCapture()));
+    TraceNavigationViewMenuDiagnostics(
+        L"navigation.lbutton-down",
+        L"hwnd={:#x} pt=({}, {}) editMode={} embedded={} historyRect=({}, {}, {}, {}) historyCount={} focus={:#x} active={:#x} capture={:#x}",
+        reinterpret_cast<uintptr_t>(_hWnd.get()),
+        pt.x,
+        pt.y,
+        _editMode ? 1 : 0,
+        _embeddedDestinationMode ? 1 : 0,
+        _sectionHistoryRect.left,
+        _sectionHistoryRect.top,
+        _sectionHistoryRect.right,
+        _sectionHistoryRect.bottom,
+        _pathHistory.size(),
+        reinterpret_cast<uintptr_t>(GetFocus()),
+        reinterpret_cast<uintptr_t>(GetActiveWindow()),
+        reinterpret_cast<uintptr_t>(GetCapture()));
     if (_editMode)
     {
         const bool clickOnNavigationButton = (_showMenuSection && PtInRect(&_sectionDriveRect, pt)) || PtInRect(&_sectionHistoryRect, pt) ||
                                              (_showDiskInfoSection && PtInRect(&_sectionDiskInfoRect, pt));
         if (! clickOnNavigationButton)
         {
-            TraceNavigationViewMenuDiagnostics(L"navigation.lbutton-down.ignored",
-                                               L"hwnd={:#x} reason=edit-mode pt=({}, {})",
-                                               reinterpret_cast<uintptr_t>(_hWnd.get()),
-                                               pt.x,
-                                               pt.y);
+            TraceNavigationViewMenuDiagnostics(
+                L"navigation.lbutton-down.ignored", L"hwnd={:#x} reason=edit-mode pt=({}, {})", reinterpret_cast<uintptr_t>(_hWnd.get()), pt.x, pt.y);
             return;
         }
 
-        TraceNavigationViewMenuDiagnostics(L"navigation.lbutton-down.exit-edit",
-                                           L"hwnd={:#x} pt=({}, {})",
-                                           reinterpret_cast<uintptr_t>(_hWnd.get()),
-                                           pt.x,
-                                           pt.y);
+        TraceNavigationViewMenuDiagnostics(
+            L"navigation.lbutton-down.exit-edit", L"hwnd={:#x} pt=({}, {})", reinterpret_cast<uintptr_t>(_hWnd.get()), pt.x, pt.y);
         ExitEditMode(false, L"nav-button-click");
     }
 
@@ -295,7 +281,10 @@ void NavigationView::OnLButtonDown(POINT pt)
 
         if (segment.bounds.left <= clickPt.x && clickPt.x <= segment.bounds.right && segment.bounds.top <= clickPt.y && clickPt.y <= segment.bounds.bottom)
         {
-            RequestOwnerPaneFocus();
+            if (! _embeddedDestinationMode)
+            {
+                RequestOwnerPaneFocus();
+            }
             TraceNavigationViewMenuDiagnostics(L"navigation.segment-click",
                                                L"hwnd={:#x} pt=({}, {}) index={} last={} ellipsis={} local=({:.1f}, {:.1f})",
                                                reinterpret_cast<uintptr_t>(_hWnd.get()),
@@ -331,7 +320,10 @@ void NavigationView::OnLButtonDown(POINT pt)
 
         if (bounds.left <= clickPt.x && clickPt.x <= bounds.right && bounds.top <= clickPt.y && clickPt.y <= bounds.bottom)
         {
-            RequestOwnerPaneFocus();
+            if (! _embeddedDestinationMode)
+            {
+                RequestOwnerPaneFocus();
+            }
             const bool adjacentToEllipsis = (separator.leftSegmentIndex < _segments.size() && _segments[separator.leftSegmentIndex].isEllipsis) ||
                                             (separator.rightSegmentIndex < _segments.size() && _segments[separator.rightSegmentIndex].isEllipsis);
             if (adjacentToEllipsis)
@@ -450,7 +442,6 @@ void NavigationView::OnLButtonDblClk(POINT pt)
         _debugLastDoubleClickLocalX        = clickPt.x;
         _debugLastDoubleClickLocalY        = clickPt.y;
 #endif
-        RequestOwnerPaneFocus();
         EnterEditMode();
     }
 }
@@ -482,9 +473,9 @@ void NavigationView::OnMouseMove(POINT pt)
     if (! _trackingMouse)
     {
         TRACKMOUSEEVENT tme{};
-        tme.cbSize    = sizeof(tme);
-        tme.dwFlags   = TME_LEAVE;
-        tme.hwndTrack = _hWnd.get();
+        tme.cbSize         = sizeof(tme);
+        tme.dwFlags        = TME_LEAVE;
+        tme.hwndTrack      = _hWnd.get();
         const BOOL tracked = TrackMouseEvent(&tme);
         const DWORD error  = tracked == FALSE ? GetLastError() : ERROR_SUCCESS;
         _trackingMouse     = tracked != FALSE;
@@ -517,7 +508,8 @@ void NavigationView::OnMouseMove(POINT pt)
     }
 
     TraceNavigationViewMenuDiagnostics(L"navigation.hover-candidates",
-                                       L"hwnd={:#x} pt=({}, {}) candidateMenu={} candidateHistory={} candidateDisk={} currentMenu={} currentHistory={} currentDisk={} currentSegment={} currentSeparator={}",
+                                       L"hwnd={:#x} pt=({}, {}) candidateMenu={} candidateHistory={} candidateDisk={} currentMenu={} currentHistory={} "
+                                       L"currentDisk={} currentSegment={} currentSeparator={}",
                                        reinterpret_cast<uintptr_t>(_hWnd.get()),
                                        pt.x,
                                        pt.y,
@@ -691,16 +683,17 @@ void NavigationView::OnTimer(UINT_PTR timerId)
 void NavigationView::OnEnterMenuLoop([[maybe_unused]] bool isTrackPopupMenu)
 {
     TraceNavigationInputState(L"enter-menu-loop.before");
-    TraceNavigationViewMenuDiagnostics(L"navigation.enter-menu-loop",
-                                       L"hwnd={:#x} isTrackPopupMenu={} menuOpenSeparator={} pendingSeparator={} focus={:#x} active={:#x} foreground={:#x} capture={:#x}",
-                                       reinterpret_cast<uintptr_t>(_hWnd.get()),
-                                       isTrackPopupMenu ? 1 : 0,
-                                       _menuOpenForSeparator,
-                                       _pendingSeparatorMenuSwitchIndex,
-                                       reinterpret_cast<uintptr_t>(GetFocus()),
-                                       reinterpret_cast<uintptr_t>(GetActiveWindow()),
-                                       reinterpret_cast<uintptr_t>(GetForegroundWindow()),
-                                       reinterpret_cast<uintptr_t>(GetCapture()));
+    TraceNavigationViewMenuDiagnostics(
+        L"navigation.enter-menu-loop",
+        L"hwnd={:#x} isTrackPopupMenu={} menuOpenSeparator={} pendingSeparator={} focus={:#x} active={:#x} foreground={:#x} capture={:#x}",
+        reinterpret_cast<uintptr_t>(_hWnd.get()),
+        isTrackPopupMenu ? 1 : 0,
+        _menuOpenForSeparator,
+        _pendingSeparatorMenuSwitchIndex,
+        reinterpret_cast<uintptr_t>(GetFocus()),
+        reinterpret_cast<uintptr_t>(GetActiveWindow()),
+        reinterpret_cast<uintptr_t>(GetForegroundWindow()),
+        reinterpret_cast<uintptr_t>(GetCapture()));
     _inMenuLoop = true;
     UpdateHoverTimerState();
     TraceNavigationInputState(L"enter-menu-loop.after");
@@ -709,16 +702,17 @@ void NavigationView::OnEnterMenuLoop([[maybe_unused]] bool isTrackPopupMenu)
 void NavigationView::OnExitMenuLoop([[maybe_unused]] bool isShortcut)
 {
     TraceNavigationInputState(L"exit-menu-loop.before");
-    TraceNavigationViewMenuDiagnostics(L"navigation.exit-menu-loop",
-                                       L"hwnd={:#x} isShortcut={} menuOpenSeparator={} pendingSeparator={} focus={:#x} active={:#x} foreground={:#x} capture={:#x}",
-                                       reinterpret_cast<uintptr_t>(_hWnd.get()),
-                                       isShortcut ? 1 : 0,
-                                       _menuOpenForSeparator,
-                                       _pendingSeparatorMenuSwitchIndex,
-                                       reinterpret_cast<uintptr_t>(GetFocus()),
-                                       reinterpret_cast<uintptr_t>(GetActiveWindow()),
-                                       reinterpret_cast<uintptr_t>(GetForegroundWindow()),
-                                       reinterpret_cast<uintptr_t>(GetCapture()));
+    TraceNavigationViewMenuDiagnostics(
+        L"navigation.exit-menu-loop",
+        L"hwnd={:#x} isShortcut={} menuOpenSeparator={} pendingSeparator={} focus={:#x} active={:#x} foreground={:#x} capture={:#x}",
+        reinterpret_cast<uintptr_t>(_hWnd.get()),
+        isShortcut ? 1 : 0,
+        _menuOpenForSeparator,
+        _pendingSeparatorMenuSwitchIndex,
+        reinterpret_cast<uintptr_t>(GetFocus()),
+        reinterpret_cast<uintptr_t>(GetActiveWindow()),
+        reinterpret_cast<uintptr_t>(GetForegroundWindow()),
+        reinterpret_cast<uintptr_t>(GetCapture()));
     _inMenuLoop = false;
     // Clear menu state and reverse rotation animation
     if (_menuOpenForSeparator != -1)
@@ -771,6 +765,47 @@ void NavigationView::OnKillFocus(HWND newFocus)
     if (IsEditValidationPopupWindow(newFocus))
     {
         return;
+    }
+
+    if (_editMode && _pathEdit && _pathEdit->hwnd && IsWindowVisible(_pathEdit->hwnd.get()) == FALSE)
+    {
+        if (_hWnd)
+        {
+            InvalidateRect(_hWnd.get(), nullptr, FALSE);
+        }
+        return;
+    }
+
+    if (_editMode && _redrawSuspended)
+    {
+        const uint64_t now = GetTickCount64();
+        if (_redrawSuspendedUntilTickMs == 0u || now <= _redrawSuspendedUntilTickMs)
+        {
+            if (_hWnd)
+            {
+                InvalidateRect(_hWnd.get(), nullptr, FALSE);
+            }
+            return;
+        }
+
+        Debug::Warning(L"NavigationView: clearing stale redraw-suspended state during edit kill-focus.");
+        _redrawSuspended            = false;
+        _redrawSuspendedUntilTickMs = 0;
+    }
+
+    if (! _embeddedDestinationMode && _editMode && _pathEditBlurSuppressActive && _pathEdit && _pathEdit->hwnd &&
+        IsWindowVisible(_pathEdit->hwnd.get()) != FALSE)
+    {
+        if (GetTickCount64() <= _pathEditBlurSuppressUntilTickMs)
+        {
+            SetFocus(_pathEdit->hwnd.get());
+            if (_hWnd)
+            {
+                InvalidateRect(_hWnd.get(), nullptr, FALSE);
+            }
+            return;
+        }
+        _pathEditBlurSuppressActive = false;
     }
 
     if (_editMode)

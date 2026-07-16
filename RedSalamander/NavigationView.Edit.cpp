@@ -563,9 +563,10 @@ void NavigationView::EnterEditMode()
         ++_debugEnterEditAbortCount;
         _debugLastEnterEditAbortReason.assign(reason);
 #endif
-        _editMode = false;
+        _editMode                        = false;
+        _pathEditBlurSuppressActive      = false;
         _pathEditBlurSuppressUntilTickMs = 0;
-        _renderMode = RenderMode::Breadcrumb;
+        _renderMode                      = RenderMode::Breadcrumb;
         _currentEditPath.reset();
         if (_hWnd)
         {
@@ -574,22 +575,25 @@ void NavigationView::EnterEditMode()
         UpdateHoverTimerState();
     };
 
-    if (_pathEdit &&
-        (! _pathEdit->field || ! _pathEdit->hwnd || IsWindow(_pathEdit->hwnd.get()) == FALSE || IsWindowVisible(_pathEdit->hwnd.get()) == FALSE))
+    if (_pathEdit && (! _pathEdit->field || ! _pathEdit->hwnd || IsWindow(_pathEdit->hwnd.get()) == FALSE || IsWindowVisible(_pathEdit->hwnd.get()) == FALSE))
     {
         _pathEdit->DeactivateForHideOrDestroy();
         _pathEdit.reset();
     }
 
-    _editMode   = true;
-    _renderMode = RenderMode::Edit;
-    _pathEditBlurSuppressUntilTickMs = _embeddedDestinationMode ? 0u : (GetTickCount64() + 250u);
+    _editMode                        = true;
+    _renderMode                      = RenderMode::Edit;
+    _pathEditBlurSuppressActive      = ! _embeddedDestinationMode;
+    _pathEditBlurSuppressUntilTickMs = _pathEditBlurSuppressActive ? (GetTickCount64() + 250u) : 0u;
     _editSuggestItems.clear();
     _editSuggestHighlightText.clear();
     CloseEditSuggestPopup();
 
-    const std::filesystem::path& currentPath = _currentEditPath.has_value() ? _currentEditPath.value() : _currentPath.value();
-    _currentEditPath                         = currentPath;
+    if (! _currentEditPath.has_value())
+    {
+        _currentEditPath = _currentPath.value();
+    }
+    const std::filesystem::path& currentPath = _currentEditPath.value();
 
     if (! _pathEdit)
     {
@@ -611,7 +615,7 @@ void NavigationView::EnterEditMode()
 
         auto hostState = std::make_unique<NavigationDxTextHost>();
         HWND hwnd      = CreateWindowExW(0,
-                                          kDxHostClassName,
+                                         kDxHostClassName,
                                          L"",
                                          WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
                                          chrome.editRect.left,
@@ -620,8 +624,8 @@ void NavigationView::EnterEditMode()
                                          hostHeight,
                                          _hWnd.get(),
                                          reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_PATH_EDIT)),
-                                          _hInstance,
-                                          &hostState->host);
+                                         _hInstance,
+                                         &hostState->host);
         if (! hwnd)
         {
             abortEnterEditMode(L"create-edit-host-window");
@@ -751,11 +755,14 @@ void NavigationView::EnterEditMode()
         {
             return;
         }
-        if (! _embeddedDestinationMode && _pathEditBlurSuppressUntilTickMs != 0u && GetTickCount64() <= _pathEditBlurSuppressUntilTickMs && _pathEdit && _pathEdit->hwnd &&
-            IsWindowVisible(_pathEdit->hwnd.get()) != FALSE)
+        if (! _embeddedDestinationMode && _pathEditBlurSuppressActive && _pathEdit && _pathEdit->hwnd && IsWindowVisible(_pathEdit->hwnd.get()) != FALSE)
         {
-            SetFocus(_pathEdit->hwnd.get());
-            return;
+            if (GetTickCount64() <= _pathEditBlurSuppressUntilTickMs)
+            {
+                SetFocus(_pathEdit->hwnd.get());
+                return;
+            }
+            _pathEditBlurSuppressActive = false;
         }
         if (_editMode)
         {
@@ -897,7 +904,8 @@ void NavigationView::ExitEditMode(bool accept, std::wstring_view reason)
         }
     }
 
-    _editMode = false;
+    _editMode                        = false;
+    _pathEditBlurSuppressActive      = false;
     _pathEditBlurSuppressUntilTickMs = 0;
 
     if (_pathEdit && _pathEdit->hwnd)
@@ -1743,7 +1751,7 @@ void NavigationView::EnsureEditSuggestPopupD2DResources()
             const COLORREF surface    = _appTheme.systemHighContrast ? GetSysColor(COLOR_WINDOW) : _appTheme.menu.background;
             const int highlightWeight = _appTheme.dark ? 30 : 18;
             const COLORREF highlightColor =
-                _appTheme.systemHighContrast ? GetSysColor(COLOR_HIGHLIGHT) : UiMetrics::BlendColor(surface, _appTheme.menu.text, highlightWeight, 255);
+                _appTheme.systemHighContrast ? GetSysColor(COLOR_HIGHLIGHT) : UiMetrics::BlendColorRefWeightedTruncate(surface, _appTheme.menu.text, highlightWeight, 255);
             _editSuggestPopupTarget->CreateSolidColorBrush(ColorFromCOLORREF(highlightColor), _editSuggestPopupHoverBrush.addressof());
         }
         if (! _editSuggestPopupBorderBrush)
@@ -1751,7 +1759,7 @@ void NavigationView::EnsureEditSuggestPopupD2DResources()
             if (! _appTheme.systemHighContrast)
             {
                 const COLORREF surface = _appTheme.menu.background;
-                const COLORREF border  = UiMetrics::BlendColor(surface, _appTheme.menu.text, _appTheme.dark ? 60 : 40, 255);
+                const COLORREF border  = UiMetrics::BlendColorRefWeightedTruncate(surface, _appTheme.menu.text, _appTheme.dark ? 60 : 40, 255);
                 _editSuggestPopupTarget->CreateSolidColorBrush(ColorFromCOLORREF(border), _editSuggestPopupBorderBrush.addressof());
             }
         }
@@ -2413,11 +2421,18 @@ void NavigationView::RefreshActiveEditHostAfterParentPaint() noexcept
         return;
     }
 
-    const HWND hostHwnd  = _pathEdit->hwnd.get();
-    const HWND inputHwnd = _pathEdit->GetTextInputHwnd();
-    const HWND focused   = GetFocus();
-    const bool focusStillBelongsToEdit =
-        focused == nullptr || focused == _hWnd.get() || focused == hostHwnd || focused == inputHwnd || IsChild(hostHwnd, focused) != FALSE;
+    const HWND hostHwnd                = _pathEdit->hwnd.get();
+    const HWND inputHwnd               = _pathEdit->GetTextInputHwnd();
+    const HWND focused                 = GetFocus();
+    const HWND root                    = _hWnd ? GetAncestor(_hWnd.get(), GA_ROOT) : nullptr;
+    const bool focusStillBelongsToEdit = focused == _hWnd.get() || focused == hostHwnd || focused == inputHwnd || IsChild(hostHwnd, focused) != FALSE;
+    const bool focusStillBelongsToRoot = root && focused && (focused == root || GetAncestor(focused, GA_ROOT) == root || IsChild(root, focused) != FALSE);
+
+    if (! _embeddedDestinationMode)
+    {
+        _pathEditBlurSuppressActive      = true;
+        _pathEditBlurSuppressUntilTickMs = GetTickCount64() + 2000u;
+    }
 
     ShowWindow(hostHwnd, SW_SHOWNOACTIVATE);
     SetWindowPos(hostHwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
@@ -2429,13 +2444,16 @@ void NavigationView::RefreshActiveEditHostAfterParentPaint() noexcept
         _pathEdit->host.Invalidate();
     }
 
-    if (_hWnd && focusStillBelongsToEdit)
+    const HWND foreground     = GetForegroundWindow();
+    DWORD foregroundProcessId = 0;
+    if (foreground)
     {
-        const HWND root = GetAncestor(_hWnd.get(), GA_ROOT);
-        if (! root || GetActiveWindow() == root)
-        {
-            SetFocus(hostHwnd);
-        }
+        static_cast<void>(GetWindowThreadProcessId(foreground, &foregroundProcessId));
+    }
+    const bool canRestoreNullFocus = focused == nullptr && foregroundProcessId == GetCurrentProcessId();
+    if (_hWnd && root && (focusStillBelongsToEdit || focusStillBelongsToRoot || canRestoreNullFocus))
+    {
+        SetFocus(hostHwnd);
     }
 
     RedrawWindow(hostHwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_UPDATENOW | RDW_ALLCHILDREN);
@@ -2913,9 +2931,7 @@ bool NavigationView::TryRetireInactiveEditTextHostForPointer(HWND hwnd, UINT msg
 
     switch (msg)
     {
-        case WM_NCHITTEST:
-            result = HTTRANSPARENT;
-            return true;
+        case WM_NCHITTEST: result = HTTRANSPARENT; return true;
         case WM_MOUSEACTIVATE:
         {
             const UINT mouseMessage = HIWORD(lp);
@@ -2935,12 +2951,8 @@ bool NavigationView::TryRetireInactiveEditTextHostForPointer(HWND hwnd, UINT msg
             result = MA_NOACTIVATE;
             return true;
         }
-        case WM_SETCURSOR:
-            result = _hWnd ? SendMessageW(_hWnd.get(), WM_SETCURSOR, reinterpret_cast<WPARAM>(_hWnd.get()), lp) : TRUE;
-            return true;
-        default:
-            result = ForwardEditTextHostPointerMessage(hwnd, msg, wp, lp);
-            return true;
+        case WM_SETCURSOR: result = _hWnd ? SendMessageW(_hWnd.get(), WM_SETCURSOR, reinterpret_cast<WPARAM>(_hWnd.get()), lp) : TRUE; return true;
+        default: result = ForwardEditTextHostPointerMessage(hwnd, msg, wp, lp); return true;
     }
 }
 
@@ -2965,7 +2977,7 @@ void NotifyPaneFocusChangedForEdit(const NavigationView* self) noexcept
 
 LRESULT CALLBACK NavigationView::EditWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
-    auto* self = reinterpret_cast<NavigationView*>(GetPropW(hwnd, kNavigationEditOwnerProp));
+    auto* self                     = reinterpret_cast<NavigationView*>(GetPropW(hwnd, kNavigationEditOwnerProp));
     LRESULT inactiveEditHostResult = 0;
     if (self && self->TryRetireInactiveEditTextHostForPointer(hwnd, msg, wp, lp, inactiveEditHostResult))
     {

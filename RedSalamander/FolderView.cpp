@@ -89,7 +89,7 @@ void FolderView::RecordPendingInputToPaintStart(
         metricName = L"folder.frame.input_to_paint_us";
     }
 
-    _pendingInputToPaintMetric = PendingInputToPaintMetric{
+    _pendingInputToPaintMetric = PendingToPaintMetric{
         .startedAt  = inputStartedAt,
         .metricName = std::move(metricName),
         .detail     = std::move(detail),
@@ -116,8 +116,74 @@ void FolderView::EmitPendingInputToPaintMetricAfterPresent() noexcept
         return;
     }
 
-    PendingInputToPaintMetric metric = std::move(_pendingInputToPaintMetric.value());
+    PendingToPaintMetric metric = std::move(_pendingInputToPaintMetric.value());
     _pendingInputToPaintMetric.reset();
+    Debug::Perf::Emit(metric.metricName, metric.detail, Debug::Perf::ElapsedUs(metric.startedAt), metric.value0, metric.value1, S_OK);
+}
+
+void FolderView::RecordPendingRefreshToPaintStart(uint64_t generation, uint64_t debounceDelayMs) noexcept
+{
+    _pendingRefreshToPaintMetric.reset();
+    _pendingRefreshToPaintMetric.emplace(PendingToPaintMetric{
+        .startedAt   = std::chrono::steady_clock::now(),
+        .metricName  = L"folder.refresh.request_to_paint_us",
+        .generation  = generation,
+        .value0      = 0u,
+        .value1      = debounceDelayMs,
+        .resultReady = false,
+    });
+}
+
+void FolderView::UpdatePendingRefreshToPaintResult(uint64_t generation, uint64_t itemCount) noexcept
+{
+    if (! _pendingRefreshToPaintMetric.has_value() || _pendingRefreshToPaintMetric->generation != generation)
+    {
+        return;
+    }
+
+    _pendingRefreshToPaintMetric->value0 = itemCount;
+    _pendingRefreshToPaintMetric->resultReady = true;
+}
+
+void FolderView::CancelPendingRefreshToPaint(uint64_t generation) noexcept
+{
+    if (_pendingRefreshToPaintMetric.has_value() && _pendingRefreshToPaintMetric->generation == generation)
+    {
+        _pendingRefreshToPaintMetric.reset();
+    }
+}
+
+void FolderView::ClearPendingPaintMetricsOnFailedFrame() noexcept
+{
+    _pendingInputToPaintMetric.reset();
+    _pendingRefreshToPaintMetric.reset();
+}
+
+uint64_t FolderView::PendingRefreshDebounceDelayMs(uint64_t generation) const noexcept
+{
+    if (! _pendingRefreshToPaintMetric.has_value() || _pendingRefreshToPaintMetric->generation != generation)
+    {
+        return 0u;
+    }
+
+    return _pendingRefreshToPaintMetric->value1;
+}
+
+void FolderView::EmitPendingRefreshToPaintMetricAfterPresent() noexcept
+{
+    if (! _pendingRefreshToPaintMetric.has_value() || ! _pendingRefreshToPaintMetric->resultReady)
+    {
+        return;
+    }
+
+    if (_pendingRefreshToPaintMetric->generation != _enumerationGeneration.load(std::memory_order_acquire))
+    {
+        _pendingRefreshToPaintMetric.reset();
+        return;
+    }
+
+    PendingToPaintMetric metric = std::move(_pendingRefreshToPaintMetric.value());
+    _pendingRefreshToPaintMetric.reset();
     Debug::Perf::Emit(metric.metricName, metric.detail, Debug::Perf::ElapsedUs(metric.startedAt), metric.value0, metric.value1, S_OK);
 }
 
@@ -219,12 +285,17 @@ void FolderView::SetFolderPath(const std::optional<std::filesystem::path>& folde
 {
     if (! folderPath)
     {
+        ++_folderPathGeneration;
         ExitIncrementalSearch();
         DismissAlertOverlay();
         _hiddenNames.store(std::shared_ptr<const HiddenNamesFilter>{}, std::memory_order_release);
         _pendingExternalCommandAfterEnumeration.reset();
+        _pendingRefreshSelectionRenames.clear();
+        _recentlyMissingRefreshSelections.clear();
         ClearErrorOverlay(ErrorOverlayKind::Enumeration);
         _directoryCachePin = DirectoryInfoCache::Pin{};
+        _pendingRefreshToPaintMetric.reset();
+        _pendingRefreshDebounceDelayMs = 0u;
         _currentFolder.reset();
         _displayedFolder.reset();
         _items.clear();
@@ -239,6 +310,10 @@ void FolderView::SetFolderPath(const std::optional<std::filesystem::path>& folde
     {
         ExitIncrementalSearch();
         DismissAlertOverlay();
+        _pendingRefreshToPaintMetric.reset();
+        _pendingRefreshDebounceDelayMs = 0u;
+        _pendingRefreshSelectionRenames.clear();
+        _recentlyMissingRefreshSelections.clear();
 
         const auto hiddenNames = _hiddenNames.load(std::memory_order_acquire);
         if (hiddenNames && ! hiddenNames->names.empty())
@@ -252,6 +327,7 @@ void FolderView::SetFolderPath(const std::optional<std::filesystem::path>& folde
     }
 
     _currentFolder = folderPath;
+    ++_folderPathGeneration;
     if (_fileSystem && _hWnd)
     {
         _directoryCachePin =
@@ -281,6 +357,7 @@ void FolderView::ForceRefresh()
     {
         DirectoryInfoCache::GetInstance().InvalidateFolder(_fileSystem.get(), _currentFolder.value());
         _lastDirectoryCacheRefreshTick = GetTickCount64();
+        _pendingRefreshDebounceDelayMs = 0u;
         RequestRefreshFromCache();
         return;
     }
@@ -520,6 +597,8 @@ void FolderView::SetFileSystem(const wil::com_ptr<IFileSystem>& fileSystem)
     _items.clear();
     _itemsArenaBuffer.reset();
     _itemsFolder.clear();
+    _pendingRefreshSelectionRenames.clear();
+    _recentlyMissingRefreshSelections.clear();
     _columnLayout.clear();
     _columnCounts.clear();
     _columnPrefixSums.clear();
@@ -532,6 +611,7 @@ void FolderView::SetFileSystem(const wil::com_ptr<IFileSystem>& fileSystem)
     _focusMemory.clear();
     _focusMemoryRootKey.clear();
     _fileSystemMetadata = nullptr;
+    _localShellBackedFileSystem = false;
     if (_fileSystem)
     {
         wil::com_ptr<IInformations> infos;
@@ -547,15 +627,17 @@ void FolderView::SetFileSystem(const wil::com_ptr<IFileSystem>& fileSystem)
             }
         }
     }
+    const std::wstring_view fileSystemPluginShortId =
+        (_fileSystemMetadata && _fileSystemMetadata->shortId) ? std::wstring_view(_fileSystemMetadata->shortId) : std::wstring_view{};
+    _localShellBackedFileSystem = NavigationLocation::IsFilePluginShortId(fileSystemPluginShortId);
 
     if (_currentFolder && _fileSystem && _hWnd)
     {
         const std::wstring currentFolderText = _currentFolder->wstring();
         const bool currentLooksWindows       = NavigationLocation::LooksLikeWindowsAbsolutePath(currentFolderText);
         const bool currentLooksPluginPath    = ! currentFolderText.empty() && (currentFolderText.front() == L'/' || currentFolderText.front() == L'\\');
-        const std::wstring_view pluginShortId =
-            (_fileSystemMetadata && _fileSystemMetadata->shortId) ? std::wstring_view(_fileSystemMetadata->shortId) : std::wstring_view{};
-        const bool isFilePlugin = NavigationLocation::IsFilePluginShortId(pluginShortId);
+        const std::wstring_view pluginShortId = fileSystemPluginShortId;
+        const bool isFilePlugin               = _localShellBackedFileSystem;
 
         if ((isFilePlugin && currentLooksPluginPath && ! currentLooksWindows) || (! isFilePlugin && currentLooksWindows))
         {
@@ -648,9 +730,24 @@ LRESULT FolderView::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             OnDirectoryImpact(std::move(impact));
             return 0;
         }
+        case WndMsg::kFolderViewPasteShortcutComplete:
+        {
+            auto result = TakeMessagePayload<PasteShortcutResult>(lParam);
+            if (result)
+            {
+                OnPasteShortcutComplete(std::move(*result));
+            }
+            return 0;
+        }
         case WndMsg::kFolderViewDirectoryCacheDirty: OnDirectoryCacheDirty(); return 0;
         case WM_DESTROY: OnDestroy(); return 0;
-        case WM_NCDESTROY: static_cast<void>(DrainPostedPayloadsForWindow(hwnd)); break;
+        case WM_NCDESTROY:
+            _pasteShortcutInFlight = false;
+            _activePasteShortcutRequestId = 0u;
+            _pasteShortcutStartedAt = {};
+            _pendingPasteShortcutRequests.clear();
+            static_cast<void>(DrainPostedPayloadsForWindow(hwnd));
+            break;
         case WM_DPICHANGED_AFTERPARENT: OnDpiChanged(static_cast<float>(GetDpiForWindow(hwnd))); return 0;
         case WM_SIZE: OnSize(LOWORD(lParam), HIWORD(lParam)); return 0;
         case WM_ERASEBKGND: return 1;
@@ -854,9 +951,9 @@ void FolderView::OnSize(UINT width, UINT height)
     _clientSize.cy = static_cast<int>(height);
 
     // Debug::Info(L"FolderView::OnSize {}x{}", width, height);
-    _swapChainResizePending = true;
-    _pendingSwapChainWidth  = static_cast<UINT>(std::max(1L, _clientSize.cx));
-    _pendingSwapChainHeight = static_cast<UINT>(std::max(1L, _clientSize.cy));
+    _swapChainResizePending     = true;
+    _pendingSwapChainWidth      = static_cast<UINT>(std::max(1L, _clientSize.cx));
+    _pendingSwapChainHeight     = static_cast<UINT>(std::max(1L, _clientSize.cy));
     _forceFullRenderOnNextPaint = true;
 
     LayoutItems();
@@ -931,6 +1028,7 @@ void FolderView::OnPaint()
         {
             _deferredInitPosted = PostMessageW(_hWnd.get(), WndMsg::kFolderViewDeferredInit, 0, 0) != 0;
         }
+        ClearPendingPaintMetricsOnFailedFrame();
         return;
     }
 
@@ -973,9 +1071,9 @@ bool FolderView::DebugWarmRenderingForSelfTest() noexcept
         return false;
     }
 
-    _swapChainResizePending = true;
-    _pendingSwapChainWidth  = static_cast<UINT>(std::max<LONG>(1L, _clientSize.cx));
-    _pendingSwapChainHeight = static_cast<UINT>(std::max<LONG>(1L, _clientSize.cy));
+    _swapChainResizePending     = true;
+    _pendingSwapChainWidth      = static_cast<UINT>(std::max<LONG>(1L, _clientSize.cx));
+    _pendingSwapChainHeight     = static_cast<UINT>(std::max<LONG>(1L, _clientSize.cy));
     _forceFullRenderOnNextPaint = true;
 
     OnDeferredInit();
@@ -1025,16 +1123,68 @@ bool FolderView::DebugWarmRenderingForSelfTest() noexcept
 FolderView::RenderingDebugSnapshot FolderView::DebugGetRenderingSnapshot() const noexcept
 {
     return RenderingDebugSnapshot{
-        .dpi                       = _dpi,
-        .clientSizePx              = _clientSize,
-        .hasD2DTarget              = _d2dTarget != nullptr,
-        .swapChainResizePending    = _swapChainResizePending,
-        .forceFullRenderOnNextPaint = _forceFullRenderOnNextPaint,
-        .lastRenderWasFullClient   = _debugLastRenderWasFullClient,
-        .dpiChangeCount            = _debugDpiChangeCount,
-        .fullClientRenderCount     = _debugFullClientRenderCount,
-        .lastRenderInvalidRectPx   = _debugLastRenderInvalidRectPx,
+        .dpi                                = _dpi,
+        .clientSizePx                       = _clientSize,
+        .hasD2DTarget                       = _d2dTarget != nullptr,
+        .swapChainResizePending             = _swapChainResizePending,
+        .forceFullRenderOnNextPaint       = _forceFullRenderOnNextPaint,
+        .lastRenderWasFullClient          = _debugLastRenderWasFullClient,
+        .dpiChangeCount                   = _debugDpiChangeCount,
+        .fullClientRenderCount            = _debugFullClientRenderCount,
+        .deviceLossRecoveryCount            = _debugDeviceLossRecoveryCount,
+        .deviceLossDiscardedResourcesCount  = _debugDeviceLossDiscardedResourcesCount,
+        .drawItemTransientBrushCreateCount = _debugDrawItemTransientBrushCreateCount.load(std::memory_order_acquire),
+        .lastRenderInvalidRectPx            = _debugLastRenderInvalidRectPx,
     };
+}
+
+void FolderView::DebugForceNextRenderFailure(DebugRenderFailurePoint point, HRESULT hr) noexcept
+{
+    _debugNextRenderFailure = DebugRenderFailure{
+        .point = point,
+        .hr    = hr,
+    };
+}
+
+std::optional<HRESULT> FolderView::DebugConsumeNextRenderFailure(DebugRenderFailurePoint point) noexcept
+{
+    if (! _debugNextRenderFailure.has_value() || _debugNextRenderFailure->point != point)
+    {
+        return std::nullopt;
+    }
+
+    const HRESULT hr = _debugNextRenderFailure->hr;
+    _debugNextRenderFailure.reset();
+    return hr;
+}
+
+bool FolderView::DebugSetHoveredItemByDisplayName(std::wstring_view displayName) noexcept
+{
+    if (displayName.empty())
+    {
+        _hoveredIndex = static_cast<size_t>(-1);
+        return true;
+    }
+
+    for (size_t i = 0; i < _items.size(); ++i)
+    {
+        if (_items[i].displayName == displayName)
+        {
+            _hoveredIndex = i;
+            if (_hWnd)
+            {
+                InvalidateRect(_hWnd.get(), nullptr, FALSE);
+            }
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void FolderView::DebugResetDrawItemTransientBrushCreateCount() noexcept
+{
+    _debugDrawItemTransientBrushCreateCount.store(0, std::memory_order_release);
 }
 #endif
 

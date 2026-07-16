@@ -12,8 +12,8 @@
 
 #include <wil/com.h>
 
-#include "PlugInterfaces/FileSystem.h"
 #include "FileSystemRenameBatch.h"
+#include "PlugInterfaces/FileSystem.h"
 
 namespace
 {

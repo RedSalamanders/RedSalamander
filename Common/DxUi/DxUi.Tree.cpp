@@ -3,19 +3,22 @@
 #include <algorithm>
 #include <cmath>
 
+#include "Helpers.h"
+
 namespace RedSalamander::DxUi
 {
 namespace
 {
-constexpr UINT kDxUiNoDataStringId             = 1305u;
-constexpr float kTreeBadgeMinWidthDip          = 28.0f;
-constexpr float kTreeBadgeMinHeightDip         = 16.0f;
-constexpr float kTreeBadgeMaxHeightDip         = 18.0f;
-constexpr float kTreeBadgeHorizontalPaddingDip = 16.0f;
-constexpr float kTreeContentInsetDip           = 2.0f;
-constexpr float kTreeChevronHalfWidthDip       = 4.0f;
-constexpr float kTreeChevronHalfHeightDip      = 2.5f;
-constexpr float kPiOverTwo                     = 1.57079632679f;
+constexpr UINT kDxUiNoDataStringId              = 1305u;
+constexpr float kTreeBadgeMinWidthDip           = 28.0f;
+constexpr float kTreeBadgeMinHeightDip          = 16.0f;
+constexpr float kTreeBadgeMaxHeightDip          = 18.0f;
+constexpr float kTreeBadgeHorizontalPaddingDip  = 16.0f;
+constexpr float kTreeContentInsetDip            = 2.0f;
+constexpr float kTreeChevronHalfWidthDip        = 4.0f;
+constexpr float kTreeChevronHalfHeightDip       = 2.5f;
+constexpr float kPiOverTwo                      = 1.57079632679f;
+constexpr size_t kTreeBadgeWidthCacheMaxEntries = 64u;
 
 struct TreeResolvedRowVisuals final
 {
@@ -39,28 +42,6 @@ struct TreeResolvedRowVisuals final
 {
     const float scale = density == Density::Compact ? 0.82f : 1.0f;
     return (std::max)(minimumDip, baseDip * scale);
-}
-
-[[nodiscard]] std::wstring ResolveTreeTooltipText(const WindowHost& host, const TreeItemData& item, const TreeItemLayoutMetrics& layout) noexcept
-{
-    if (! item.tooltipText.empty())
-    {
-        return item.tooltipText;
-    }
-
-    const float availableWidthDip = (std::max)(0.0f, layout.textRect.right - layout.textRect.left);
-    if (availableWidthDip <= 0.0f || item.text.empty())
-    {
-        return {};
-    }
-
-    const float textWidthDip = MeasureSingleLineTextWidthDip(&host, item.text, FontRole::Body);
-    if (textWidthDip > (availableWidthDip + 0.5f))
-    {
-        return item.text;
-    }
-
-    return {};
 }
 
 [[nodiscard]] TreeResolvedRowVisuals ResolveTreeRowVisuals(
@@ -294,6 +275,15 @@ Tree::Tree()
     SetFocusable(true);
 }
 
+void Tree::InvalidateTreeTextMeasurementCaches() const noexcept
+{
+    _badgeWidthCache.clear();
+    _tooltipOverflowCache.valid = false;
+    _tooltipOverflowCache.text.clear();
+    _tooltipOverflowCache.tooltipText.clear();
+    _tooltipOverflowCache.resolvedTooltipText.clear();
+}
+
 void Tree::SetModel(IDxTreeModel* model) noexcept
 {
     // Non-owning pointer assignment. Caller responsible for model lifetime.
@@ -302,6 +292,7 @@ void Tree::SetModel(IDxTreeModel* model) noexcept
     _verticalScrollbarHotPart = ScrollbarHotPart::None;
     _dragVerticalThumb        = false;
     _dragThumbOffsetDip       = 0.0f;
+    InvalidateTreeTextMeasurementCaches();
     ClearTreeExpansionAnimation();
     NotifyDataChanged();
 }
@@ -324,6 +315,7 @@ void Tree::SetIndentDip(float indentDip) noexcept
 
 void Tree::NotifyDataChanged()
 {
+    InvalidateTreeTextMeasurementCaches();
     if (_selectedItemId && (! _model || ! _model->FindVisibleItemById(_selectedItemId.value())))
     {
         _selectedItemId.reset();
@@ -345,6 +337,7 @@ void Tree::NotifyDataChanged()
     {
         ClearTreeExpansionAnimation();
     }
+    RefreshAccessibilitySnapshot();
 }
 
 void Tree::SetSelectedItemId(std::optional<uint64_t> itemId) noexcept
@@ -354,6 +347,7 @@ void Tree::SetSelectedItemId(std::optional<uint64_t> itemId) noexcept
     {
         EnsureVisibleIndex(selectedIndex.value());
     }
+    RefreshAccessibilitySnapshot();
 }
 
 std::optional<uint64_t> Tree::GetSelectedItemId() const noexcept
@@ -361,10 +355,19 @@ std::optional<uint64_t> Tree::GetSelectedItemId() const noexcept
     return _selectedItemId;
 }
 
+void Tree::RefreshAccessibilitySnapshot() const noexcept
+{
+    if (WindowHost* const host = GetHost())
+    {
+        RefreshWindowHostAccessibilitySnapshot(host->GetHwnd(), host);
+    }
+}
+
 void Tree::OnDensityChanged() noexcept
 {
     Control::OnDensityChanged();
     _rowHeightDip = ResolveDensityScaledTreeMetricDip(_rowHeightBaseDip, kMinimumInteractiveTextRowHeightDip, GetDensity());
+    InvalidateTreeTextMeasurementCaches();
     ClampScrollOffset();
 }
 
@@ -386,7 +389,7 @@ bool Tree::RequestExpandedState(size_t visibleIndex, bool expanded) noexcept
         return false;
     }
 
-    const std::vector<TreeItemData> beforeItems = CaptureVisibleItems();
+    std::vector<TreeItemData> beforeItems = CaptureVisibleItems();
     TreeItemData item;
     _model->GetVisibleItem(visibleIndex, item);
     if (! item.hasChildren)
@@ -401,7 +404,8 @@ bool Tree::RequestExpandedState(size_t visibleIndex, bool expanded) noexcept
 
     StartExpanderAnimation(item.id, item.expanded, expanded);
     _delegate->OnTreeToggleExpanded(item.id, expanded);
-    BeginTreeExpansionAnimation(item.id, expanded, std::vector<TreeItemData>(beforeItems), CaptureVisibleItems(), GetTickCount64());
+    BeginTreeExpansionAnimation(item.id, expanded, std::move(beforeItems), CaptureVisibleItems(), GetTickCount64());
+    RefreshAccessibilitySnapshot();
     return true;
 }
 
@@ -426,13 +430,7 @@ float Tree::DebugGetVerticalScrollDip() const noexcept
 
 size_t Tree::DebugGetFirstVisibleIndex() const noexcept
 {
-    if (! _model || _model->GetVisibleItemCount() == 0u || _rowHeightDip <= 0.0f)
-    {
-        return 0u;
-    }
-
-    const size_t firstVisibleIndex = static_cast<size_t>((std::max)(0.0f, _verticalScrollDip) / _rowHeightDip);
-    return (std::min)(firstVisibleIndex, _model->GetVisibleItemCount() - 1u);
+    return GetFirstVisibleItemIndex();
 }
 
 std::optional<size_t> Tree::DebugGetSelectedVisibleIndex() const noexcept
@@ -481,12 +479,7 @@ TreeScrollbarVisualState Tree::DebugGetScrollbarVisualState(const ThemePalette& 
     state.verticalTrackHotProgress = theme.reducedMotion ? targets.track : _verticalScrollbarAnimation.trackProgress;
     state.verticalThumbHotProgress = theme.reducedMotion ? targets.thumb : _verticalScrollbarAnimation.thumbProgress;
 
-    const ResolvedScrollbarVisuals visuals = ResolveScrollbarVisuals(theme,
-                                                                     state.verticalTrackHovered,
-                                                                     state.verticalThumbHovered,
-                                                                     state.verticalThumbDragging,
-                                                                     state.verticalTrackHotProgress,
-                                                                     state.verticalThumbHotProgress);
+    const ResolvedScrollbarVisuals visuals = ResolveScrollbarVisuals(theme, targets, state.verticalTrackHotProgress, state.verticalThumbHotProgress);
     state.verticalTrackArgb                = PackColor(visuals.track);
     state.verticalThumbArgb                = PackColor(visuals.thumb);
     return state;
@@ -600,9 +593,7 @@ void Tree::Paint(WindowHost& host) const
         const bool thumbHovered                 = _verticalScrollbarHotPart == ScrollbarHotPart::Thumb;
         const ScrollbarAnimationTargets targets = ResolveScrollbarAnimationTargets(trackHovered, thumbHovered, _dragVerticalThumb);
         const ResolvedScrollbarVisuals visuals  = ResolveScrollbarVisuals(theme,
-                                                                          trackHovered,
-                                                                          thumbHovered,
-                                                                          _dragVerticalThumb,
+                                                                          targets,
                                                                           theme.reducedMotion ? targets.track : _verticalScrollbarAnimation.trackProgress,
                                                                           theme.reducedMotion ? targets.thumb : _verticalScrollbarAnimation.thumbProgress);
         PaintScrollbar(host, track, GetVerticalThumbRect(), visuals);
@@ -693,7 +684,7 @@ bool Tree::OnMouseMove(WindowHost& host, D2D1_POINT_2F point, UINT /*modifiers*/
         TreeItemData item;
         _model->GetVisibleItem(_hoveredVisibleIndex.value(), item);
         const TreeItemLayoutMetrics layout = ComputeItemLayoutMetrics(host, _hoveredVisibleIndex.value(), item);
-        std::wstring tooltipText           = ResolveTreeTooltipText(host, item, layout);
+        std::wstring tooltipText           = ResolveCachedTreeTooltipText(host, _hoveredVisibleIndex.value(), item, layout);
         tooltipChanged                     = tooltipText.empty() ? host.BeginTooltipHideDelay() : host.SetTooltip(std::move(tooltipText), point);
     }
     else
@@ -755,10 +746,12 @@ bool Tree::OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightButton, 
         }
         else
         {
-            const size_t visibleRows =
-                (std::max<size_t>)(1u, static_cast<size_t>(std::floor((std::max)(1.0f, GetContentRect().bottom - GetContentRect().top) / _rowHeightDip)));
-            _verticalScrollDip += point.y < GetVerticalThumbHitRect().top ? -(_rowHeightDip * static_cast<float>(visibleRows))
-                                                                          : (_rowHeightDip * static_cast<float>(visibleRows));
+            const D2D1_RECT_F thumb       = GetVerticalThumbHitRect();
+            const D2D1_RECT_F contentRect = GetContentRect();
+            const float viewportDip       = (std::max)(1.0f, contentRect.bottom - contentRect.top);
+            const float extent            = GetVerticalScrollableExtent();
+            const float pageStep = ComputeScrollbarPageStepDip(GetVerticalScrollbarRect(), ScrollbarOrientation::Vertical, viewportDip, viewportDip + extent);
+            _verticalScrollDip += point.y < thumb.top ? -pageStep : pageStep;
             ClampScrollOffset();
             SyncScrollbarAnimation(host);
         }
@@ -875,6 +868,10 @@ bool Tree::OnKeyDown(WindowHost& host, UINT virtualKey, UINT /*modifiers*/)
     const auto selectAndInvalidate = [this, &host](size_t visibleIndex) -> bool
     {
         SelectVisibleIndex(visibleIndex, true);
+        if (const HWND hwnd = host.GetHwnd(); hwnd && IsWindow(hwnd) != FALSE && GetFocus() != hwnd)
+        {
+            static_cast<void>(SetFocus(hwnd));
+        }
         Invalidate(host);
         return true;
     };
@@ -973,6 +970,17 @@ bool Tree::OnChar(WindowHost& host, wchar_t ch, UINT /*modifiers*/)
         return true;
     }
 
+    if (_typeaheadBuffer.size() > 1u)
+    {
+        _typeaheadBuffer.assign(1u, ch);
+        if (const std::optional<size_t> matchIndex = FindNextTypeaheadMatch(_typeaheadBuffer))
+        {
+            SelectVisibleIndex(matchIndex.value(), true);
+            Invalidate(host);
+            return true;
+        }
+    }
+
     return false;
 }
 
@@ -987,7 +995,13 @@ bool Tree::OnContextMenu(WindowHost& host, bool keyboardInvocation, D2D1_POINT_2
     D2D1_POINT_2F anchorDip = pointDip;
     if (keyboardInvocation)
     {
-        visibleIndex = FindSelectedVisibleIndex().value_or(0u);
+        visibleIndex                  = FindSelectedVisibleIndex().value_or(0u);
+        const float previousScrollDip = _verticalScrollDip;
+        EnsureVisibleIndex(visibleIndex);
+        if (_verticalScrollDip != previousScrollDip)
+        {
+            Invalidate(host);
+        }
 
         const D2D1_RECT_F contentRect = GetContentRect();
         const float rowTop            = contentRect.top + (static_cast<float>(visibleIndex) * _rowHeightDip) - _verticalScrollDip;
@@ -1019,6 +1033,73 @@ bool Tree::OnContextMenu(WindowHost& host, bool keyboardInvocation, D2D1_POINT_2
     _model->GetVisibleItem(visibleIndex, item);
     _delegate->OnTreeContextMenu(item.id, host.DipPointToScreenPoint(anchorDip));
     return true;
+}
+
+float Tree::MeasureCachedBadgeTextWidthDip(const WindowHost& host, std::wstring_view badgeText) const noexcept
+{
+    auto* textFormat = host.GetTextFormat(FontRole::Small);
+    for (const TreeBadgeWidthCacheEntry& entry : _badgeWidthCache)
+    {
+        if (entry.text == badgeText && entry.textFormat == textFormat)
+        {
+            return entry.widthDip;
+        }
+    }
+
+    const float widthDip = MeasureSingleLineTextWidthDip(&host, badgeText, FontRole::Small);
+    if (Debug::Perf::IsCaptureEnabled())
+    {
+        Debug::Perf::Emit(L"dxui.tree.badge_width_cache_miss_count", L"", 0u, 1u, static_cast<uint64_t>(_badgeWidthCache.size()), S_OK);
+    }
+    if (_badgeWidthCache.size() >= kTreeBadgeWidthCacheMaxEntries)
+    {
+        _badgeWidthCache.erase(_badgeWidthCache.begin());
+    }
+    _badgeWidthCache.push_back(TreeBadgeWidthCacheEntry{.text = std::wstring(badgeText), .textFormat = textFormat, .widthDip = widthDip});
+    return widthDip;
+}
+
+std::wstring Tree::ResolveCachedTreeTooltipText(const WindowHost& host,
+                                                size_t visibleIndex,
+                                                const TreeItemData& item,
+                                                const TreeItemLayoutMetrics& layout) const
+{
+    const float availableWidthDip   = (std::max)(0.0f, layout.textRect.right - layout.textRect.left);
+    auto* textFormat                = host.GetTextFormat(FontRole::Body);
+    TreeTooltipOverflowCache& cache = _tooltipOverflowCache;
+    if (cache.valid && cache.visibleIndex == visibleIndex && cache.itemId == item.id && cache.text == item.text && cache.tooltipText == item.tooltipText &&
+        cache.textFormat == textFormat && cache.availableWidthDip == availableWidthDip)
+    {
+        return cache.resolvedTooltipText;
+    }
+
+    std::wstring resolvedTooltipText;
+    if (! item.tooltipText.empty())
+    {
+        resolvedTooltipText = item.tooltipText;
+    }
+    else if (availableWidthDip > 0.0f && ! item.text.empty())
+    {
+        const float textWidthDip = MeasureSingleLineTextWidthDip(&host, item.text, FontRole::Body);
+        if (textWidthDip > (availableWidthDip + 0.5f))
+        {
+            resolvedTooltipText = item.text;
+        }
+    }
+
+    if (Debug::Perf::IsCaptureEnabled())
+    {
+        Debug::Perf::Emit(L"dxui.tree.tooltip_overflow_cache_miss_count", L"", 0u, 1u, resolvedTooltipText.empty() ? 0u : 1u, S_OK);
+    }
+    cache.valid               = true;
+    cache.visibleIndex        = visibleIndex;
+    cache.itemId              = item.id;
+    cache.text                = item.text;
+    cache.tooltipText         = item.tooltipText;
+    cache.textFormat          = textFormat;
+    cache.availableWidthDip   = availableWidthDip;
+    cache.resolvedTooltipText = resolvedTooltipText;
+    return cache.resolvedTooltipText;
 }
 
 TreeItemLayoutMetrics Tree::ComputeItemLayoutMetrics(const WindowHost& host, size_t visibleIndex, const TreeItemData& item) const noexcept
@@ -1053,7 +1134,7 @@ TreeItemLayoutMetrics Tree::ComputeItemLayoutMetrics(const WindowHost& host, siz
     float contentRight = contentRect.right - 8.0f;
     if (metrics.hasBadge)
     {
-        const float badgeTextWidth = MeasureSingleLineTextWidthDip(&host, item.badgeText, FontRole::Small);
+        const float badgeTextWidth = MeasureCachedBadgeTextWidthDip(host, item.badgeText);
         const float badgeWidth     = (std::clamp)(badgeTextWidth + kTreeBadgeHorizontalPaddingDip,
                                                   kTreeBadgeMinWidthDip,
                                                   (std::max)(kTreeBadgeMinWidthDip, contentRect.right - contentRect.left - 16.0f));
@@ -1099,7 +1180,7 @@ TreeItemLayoutMetrics Tree::ComputeItemLayoutMetrics(const WindowHost& host, flo
     float contentRight = contentRect.right - 8.0f;
     if (metrics.hasBadge)
     {
-        const float badgeTextWidth = MeasureSingleLineTextWidthDip(&host, item.badgeText, FontRole::Small);
+        const float badgeTextWidth = MeasureCachedBadgeTextWidthDip(host, item.badgeText);
         const float badgeWidth     = (std::clamp)(badgeTextWidth + kTreeBadgeHorizontalPaddingDip,
                                                   kTreeBadgeMinWidthDip,
                                                   (std::max)(kTreeBadgeMinWidthDip, contentRect.right - contentRect.left - 16.0f));
@@ -1166,6 +1247,65 @@ Tree::HitInfo Tree::HitTestPoint(PointDip pointDip) const noexcept
         hit.zone = HitZone::Expander;
     }
     return hit;
+}
+
+size_t Tree::GetFirstVisibleItemIndex() const noexcept
+{
+    if (! _model || _model->GetVisibleItemCount() == 0u || _rowHeightDip <= 0.0f)
+    {
+        return 0u;
+    }
+
+    const size_t firstVisibleIndex = static_cast<size_t>((std::max)(0.0f, _verticalScrollDip) / _rowHeightDip);
+    return (std::min)(firstVisibleIndex, _model->GetVisibleItemCount() - 1u);
+}
+
+std::optional<D2D1_RECT_F> Tree::GetVisibleItemHitRect(size_t visibleIndex) const noexcept
+{
+    if (! _model || visibleIndex >= _model->GetVisibleItemCount() || _rowHeightDip <= 0.0f)
+    {
+        return std::nullopt;
+    }
+
+    const D2D1_RECT_F contentRect = GetContentRect();
+    if (contentRect.right <= contentRect.left || contentRect.bottom <= contentRect.top)
+    {
+        return std::nullopt;
+    }
+
+    const float rowTop = contentRect.top + (static_cast<float>(visibleIndex) * _rowHeightDip) - _verticalScrollDip;
+    const D2D1_RECT_F rowRect =
+        D2D1::RectF(contentRect.left + 2.0f, rowTop, (std::max)(contentRect.left + 2.0f, contentRect.right - 2.0f), rowTop + _rowHeightDip);
+    return (rowRect.bottom >= contentRect.top && rowRect.top <= contentRect.bottom) ? std::optional<D2D1_RECT_F>{rowRect} : std::nullopt;
+}
+
+std::optional<size_t> Tree::FindVisibleItemAtPoint(D2D1_POINT_2F pointDip) const noexcept
+{
+    if (! _model || _model->GetVisibleItemCount() == 0u || _rowHeightDip <= 0.0f || ! PointInRect(GetHitBounds(), pointDip))
+    {
+        return std::nullopt;
+    }
+
+    const D2D1_RECT_F scrollbarRect = GetVerticalScrollbarRect();
+    if (scrollbarRect.right > scrollbarRect.left && PointInRect(scrollbarRect, pointDip))
+    {
+        return std::nullopt;
+    }
+
+    const D2D1_RECT_F contentRect = GetContentRect();
+    if (! PointInRect(contentRect, pointDip))
+    {
+        return std::nullopt;
+    }
+
+    const float offsetDip = (pointDip.y - contentRect.top) + _verticalScrollDip;
+    if (offsetDip < 0.0f)
+    {
+        return std::nullopt;
+    }
+
+    const size_t visibleIndex = static_cast<size_t>(offsetDip / _rowHeightDip);
+    return visibleIndex < _model->GetVisibleItemCount() ? std::optional<size_t>{visibleIndex} : std::nullopt;
 }
 
 float Tree::GetVerticalScrollableExtent() const noexcept
@@ -1286,6 +1426,7 @@ void Tree::SelectVisibleIndex(size_t visibleIndex, bool notifyDelegate)
     {
         _delegate->OnTreeSelectionChanged(item.id);
     }
+    RefreshAccessibilitySnapshot();
 }
 
 void Tree::ToggleExpanded(size_t visibleIndex)
@@ -1353,15 +1494,6 @@ void Tree::StartExpanderAnimation(uint64_t itemId, bool fromExpanded, bool toExp
 float Tree::GetExpanderProgress(uint64_t itemId, bool expanded, uint64_t nowTickMs) const noexcept
 {
     return ComputeExpanderProgress(itemId, expanded, nowTickMs);
-}
-
-bool Tree::HasActiveExpanderAnimation(uint64_t itemId, bool expanded, uint64_t nowTickMs) const noexcept
-{
-    const float progress = ComputeExpanderProgress(itemId, expanded, nowTickMs);
-    return progress > 0.0f && progress < 1.0f &&
-           std::find_if(_expanderAnimations.begin(), _expanderAnimations.end(), [itemId](const ExpanderAnimationState& animation) {
-        return animation.itemId == itemId;
-    }) != _expanderAnimations.end();
 }
 
 std::vector<TreeItemData> Tree::CaptureVisibleItems() const

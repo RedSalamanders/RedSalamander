@@ -56,6 +56,15 @@ namespace
         }
         if (text[index] != L'{')
         {
+            if (text[index] == L'}')
+            {
+                if (index + 1u < text.size() && text[index + 1u] == L'}')
+                {
+                    ++index;
+                    continue;
+                }
+                return RedConfigure::Localization::PlaceholderStatus::InvalidPlaceholder;
+            }
             continue;
         }
 
@@ -63,7 +72,7 @@ namespace
         const size_t close = text.find(L'}', index + 1u);
         if (close == std::wstring_view::npos)
         {
-            continue;
+            return RedConfigure::Localization::PlaceholderStatus::InvalidPlaceholder;
         }
 
         const std::wstring_view body = text.substr(index + 1u, close - index - 1u);
@@ -77,8 +86,7 @@ namespace
         }
         if (! IsDigit(body.front()))
         {
-            index = close;
-            continue;
+            return RedConfigure::Localization::PlaceholderStatus::InvalidPlaceholder;
         }
 
         size_t pos = 0u;
@@ -88,8 +96,7 @@ namespace
         }
         if (pos < body.size() && body[pos] != L':')
         {
-            index = close;
-            continue;
+            return RedConfigure::Localization::PlaceholderStatus::InvalidPlaceholder;
         }
 
         out.emplace_back(text.substr(start, close - start + 1u));

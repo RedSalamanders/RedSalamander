@@ -6,12 +6,14 @@
 
 #include "DxUi.h"
 #include "RedConfigureSession.h"
+#include "RedConfigureWorkflow.h"
 #include "RedConfigureUiHelpers.h"
 #include "SettingsStore.h"
 #include "resource.h"
 
 #include <algorithm>
 #include <cstdint>
+#include <format>
 #include <iterator>
 #include <optional>
 #include <string>
@@ -29,7 +31,7 @@ using RedSalamander::DxUi::IDxGridModel;
 
 [[nodiscard]] inline uint64_t StableLocalizationReviewRowId(std::wstring_view ownerName, std::wstring_view id) noexcept
 {
-    uint64_t hash = 14695981039346656037ull;
+    uint64_t hash  = 14695981039346656037ull;
     const auto mix = [&hash](wchar_t ch) noexcept
     {
         hash ^= static_cast<uint64_t>(ch);
@@ -559,6 +561,13 @@ public:
                                           .kind        = GridColumnKind::Text,
                                           .sortable    = false,
                                           .multiline   = false});
+        _columns.push_back(GridColumnDesc{.id          = L"group",
+                                          .title       = LoadAppString(_instance, IDS_REDCONFIGURE_COL_GROUP),
+                                          .widthDip    = 88.0f,
+                                          .minWidthDip = 64.0f,
+                                          .kind        = GridColumnKind::Text,
+                                          .sortable    = false,
+                                          .multiline   = false});
         _columns.push_back(GridColumnDesc{.id          = L"effective",
                                           .title       = LoadAppString(_instance, IDS_REDCONFIGURE_COL_EFFECTIVE_VALUE),
                                           .widthDip    = 120.0f,
@@ -570,6 +579,27 @@ public:
                                           .title       = LoadAppString(_instance, IDS_REDCONFIGURE_COL_AUTHORED_VALUE),
                                           .widthDip    = 190.0f,
                                           .minWidthDip = 120.0f,
+                                          .kind        = GridColumnKind::Text,
+                                          .sortable    = false,
+                                          .multiline   = false});
+        _columns.push_back(GridColumnDesc{.id          = L"source",
+                                          .title       = LoadAppString(_instance, IDS_REDCONFIGURE_COL_SOURCE_TYPE),
+                                          .widthDip    = 92.0f,
+                                          .minWidthDip = 72.0f,
+                                          .kind        = GridColumnKind::Text,
+                                          .sortable    = false,
+                                          .multiline   = false});
+        _columns.push_back(GridColumnDesc{.id          = L"usage",
+                                          .title       = LoadAppString(_instance, IDS_REDCONFIGURE_COL_USAGE),
+                                          .widthDip    = 54.0f,
+                                          .minWidthDip = 48.0f,
+                                          .kind        = GridColumnKind::Text,
+                                          .sortable    = false,
+                                          .multiline   = false});
+        _columns.push_back(GridColumnDesc{.id          = L"contrast",
+                                          .title       = LoadAppString(_instance, IDS_REDCONFIGURE_COL_CONTRAST),
+                                          .widthDip    = 78.0f,
+                                          .minWidthDip = 64.0f,
                                           .kind        = GridColumnKind::Text,
                                           .sortable    = false,
                                           .multiline   = false});
@@ -604,10 +634,13 @@ public:
         }
 
         const std::wstring& key = _keys[rowIndex];
+        const RedConfigure::Workflow::ThemeTokenMetadata metadata =
+            RedConfigure::Workflow::BuildThemeTokenMetadata(_session.GetThemePreviewModel(), key);
         switch (columnIndex)
         {
             case 0u: outCell.text = key; break;
-            case 1u:
+            case 1u: outCell.text = metadata.group; break;
+            case 2u:
                 if (const std::optional<uint32_t> color = _session.GetThemePreviewModel().GetEffectiveColor(key))
                 {
                     outCell.text           = Common::Settings::FormatColor(color.value());
@@ -615,11 +648,16 @@ public:
                     outCell.swatchArgb     = color.value();
                 }
                 break;
-            case 2u: outCell.text = _session.GetThemePreviewModel().GetAuthoredColorText(key); break;
+            case 3u: outCell.text = _session.GetThemePreviewModel().GetAuthoredColorText(key); break;
+            case 4u: outCell.text = metadata.sourceType; break;
+            case 5u: outCell.text = std::to_wstring(metadata.usageCount); break;
+            case 6u:
+                outCell.text = metadata.contrastKnown ? std::format(L"{:.1f}:1 {}", metadata.contrastRatio, metadata.contrastPass ? L"AA" : L"Fail") : L"—";
+                break;
             default: break;
         }
 
-        outCell.tooltipText = outCell.text.empty() ? key : outCell.text;
+        outCell.tooltipText = metadata.description;
         outCell.multiline   = false;
     }
 

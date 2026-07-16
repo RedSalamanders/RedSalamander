@@ -71,8 +71,25 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
-    <Content Include="..\..\.build\$(Platform)\$(Configuration)\**\*" Exclude="..\..\.build\$(Platform)\$(Configuration)\**\*.pdb;..\..\.build\$(Platform)\$(Configuration)\**\*.lib;..\..\.build\$(Platform)\$(Configuration)\**\*.exp;..\..\.build\$(Platform)\$(Configuration)\**\*.ilk;..\..\.build\$(Platform)\$(Configuration)\**\*.iobj;..\..\.build\$(Platform)\$(Configuration)\**\*.ipdb;..\..\.build\$(Platform)\$(Configuration)\**\*.exe;..\..\.build\$(Platform)\$(Configuration)\**\asan.supp;..\..\.build\$(Platform)\$(Configuration)\**\aws-cpp-sdk-dynamodb.dll;..\..\.build\$(Platform)\$(Configuration)\**\aws-cpp-sdk-kinesis.dll;..\..\.build\$(Platform)\$(Configuration)\**\aws-cpp-sdk-s3.dll;..\..\.build\$(Platform)\$(Configuration)\**\brotlienc.dll;..\..\.build\$(Platform)\$(Configuration)\**\*.WebView2\**\*">
+    <Content Include="..\..\.build\$(Platform)\$(Configuration)\**\*" Exclude="..\..\.build\$(Platform)\$(Configuration)\Plugins\**\*;..\..\.build\$(Platform)\$(Configuration)\Lang\**\*;..\..\.build\$(Platform)\$(Configuration)\Themes\**\*;..\..\.build\$(Platform)\$(Configuration)\**\*.pdb;..\..\.build\$(Platform)\$(Configuration)\**\*.lib;..\..\.build\$(Platform)\$(Configuration)\**\*.exp;..\..\.build\$(Platform)\$(Configuration)\**\*.ilk;..\..\.build\$(Platform)\$(Configuration)\**\*.iobj;..\..\.build\$(Platform)\$(Configuration)\**\*.ipdb;..\..\.build\$(Platform)\$(Configuration)\**\*.exe;..\..\.build\$(Platform)\$(Configuration)\**\asan.supp;..\..\.build\$(Platform)\$(Configuration)\**\aws-cpp-sdk-dynamodb.dll;..\..\.build\$(Platform)\$(Configuration)\**\aws-cpp-sdk-kinesis.dll;..\..\.build\$(Platform)\$(Configuration)\**\aws-cpp-sdk-s3.dll;..\..\.build\$(Platform)\$(Configuration)\**\brotlienc.dll;..\..\.build\$(Platform)\$(Configuration)\**\*.WebView2\**\*">
       <PackagePath>%(RecursiveDir)%(Filename)%(Extension)</PackagePath>
+      <Link>%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <TargetPath>%(RecursiveDir)%(Filename)%(Extension)</TargetPath>
+    </Content>
+    <Content Include="..\..\.build\$(Platform)\$(Configuration)\Plugins\**\*" Exclude="..\..\.build\$(Platform)\$(Configuration)\Plugins\**\*.pdb;..\..\.build\$(Platform)\$(Configuration)\Plugins\**\*.lib;..\..\.build\$(Platform)\$(Configuration)\Plugins\**\*.exp;..\..\.build\$(Platform)\$(Configuration)\Plugins\**\*.ilk;..\..\.build\$(Platform)\$(Configuration)\Plugins\**\*.iobj;..\..\.build\$(Platform)\$(Configuration)\Plugins\**\*.ipdb">
+      <PackagePath>Plugins\%(RecursiveDir)%(Filename)%(Extension)</PackagePath>
+      <Link>Plugins\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <TargetPath>Plugins\%(RecursiveDir)%(Filename)%(Extension)</TargetPath>
+    </Content>
+    <Content Include="..\..\.build\$(Platform)\$(Configuration)\Lang\**\*" Exclude="..\..\.build\$(Platform)\$(Configuration)\Lang\**\*.pdb;..\..\.build\$(Platform)\$(Configuration)\Lang\**\*.lib;..\..\.build\$(Platform)\$(Configuration)\Lang\**\*.exp;..\..\.build\$(Platform)\$(Configuration)\Lang\**\*.ilk;..\..\.build\$(Platform)\$(Configuration)\Lang\**\*.iobj;..\..\.build\$(Platform)\$(Configuration)\Lang\**\*.ipdb">
+      <PackagePath>Lang\%(RecursiveDir)%(Filename)%(Extension)</PackagePath>
+      <Link>Lang\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <TargetPath>Lang\%(RecursiveDir)%(Filename)%(Extension)</TargetPath>
+    </Content>
+    <Content Include="..\..\.build\$(Platform)\$(Configuration)\Themes\**\*">
+      <PackagePath>Themes\%(RecursiveDir)%(Filename)%(Extension)</PackagePath>
+      <Link>Themes\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <TargetPath>Themes\%(RecursiveDir)%(Filename)%(Extension)</TargetPath>
     </Content>
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath)\Microsoft\DesktopBridge\Microsoft.DesktopBridge.targets" Condition="Exists('$(MSBuildExtensionsPath)\Microsoft\DesktopBridge\Microsoft.DesktopBridge.targets')" />

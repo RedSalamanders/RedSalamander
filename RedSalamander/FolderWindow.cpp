@@ -1017,13 +1017,9 @@ uint64_t FolderWindow::AddFileOperationCompletedCallback(FileOperationCompletedC
 {
     const uint64_t token = _nextFileOperationCompletedCallbackToken++;
     const std::weak_ptr<void> emptyLifetimeGuard;
-    const bool hasLifetimeGuard =
-        ! lifetimeGuard.expired() || lifetimeGuard.owner_before(emptyLifetimeGuard) || emptyLifetimeGuard.owner_before(lifetimeGuard);
-    _fileOperationCompletedCallbacks.push_back(
-        FileOperationCompletedSubscription{.token = token,
-                                           .callback = std::move(callback),
-                                           .lifetimeGuard = std::move(lifetimeGuard),
-                                           .hasLifetimeGuard = hasLifetimeGuard});
+    const bool hasLifetimeGuard = ! lifetimeGuard.expired() || lifetimeGuard.owner_before(emptyLifetimeGuard) || emptyLifetimeGuard.owner_before(lifetimeGuard);
+    _fileOperationCompletedCallbacks.push_back(FileOperationCompletedSubscription{
+        .token = token, .callback = std::move(callback), .lifetimeGuard = std::move(lifetimeGuard), .hasLifetimeGuard = hasLifetimeGuard});
     return token;
 }
 
@@ -2146,6 +2142,24 @@ void FolderWindow::DebugClearPaneRenderingFailureForSelfTest(Pane pane) const
     const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
     state.folderView.DebugClearRenderingFailureForSelfTest();
 }
+
+void FolderWindow::DebugForcePaneNextRenderFailure(Pane pane, FolderView::DebugRenderFailurePoint point, HRESULT hr) noexcept
+{
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    state.folderView.DebugForceNextRenderFailure(point, hr);
+}
+
+bool FolderWindow::DebugSetPaneHoveredItemByDisplayName(Pane pane, std::wstring_view displayName) noexcept
+{
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    return state.folderView.DebugSetHoveredItemByDisplayName(displayName);
+}
+
+void FolderWindow::DebugResetPaneDrawItemTransientBrushCreateCount(Pane pane) noexcept
+{
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    state.folderView.DebugResetDrawItemTransientBrushCreateCount();
+}
 #endif
 
 void FolderWindow::ShowPaneAlertOverlay(Pane pane,
@@ -2318,16 +2332,13 @@ void FolderWindow::RefreshPanesAfterBatchRename(const std::wstring_view sourcePl
     };
 
     const auto spanTouchesFolder = [&](const std::filesystem::path& folder, const std::span<const std::filesystem::path> paths) noexcept
-    {
-        return std::ranges::any_of(paths, [&](const std::filesystem::path& path) noexcept
-        { return pathTouchesFolder(folder, path); });
-    };
+    { return std::ranges::any_of(paths, [&](const std::filesystem::path& path) noexcept { return pathTouchesFolder(folder, path); }); };
 
     // When `source` is a path-segment-aware case-insensitive ancestor of `folder` (strictly: `folder`
     // lives somewhere below the renamed directory), returns the corresponding folder under `target`.
-    const auto retargetDescendantFolder =
-        [](const std::filesystem::path& folder, const std::filesystem::path& source, const std::filesystem::path& target) noexcept
-        -> std::optional<std::filesystem::path>
+    const auto retargetDescendantFolder = [](const std::filesystem::path& folder,
+                                             const std::filesystem::path& source,
+                                             const std::filesystem::path& target) noexcept -> std::optional<std::filesystem::path>
     {
         if (folder.empty() || source.empty() || target.empty())
         {
@@ -2508,13 +2519,9 @@ void FolderWindow::CommandBatchRename(Pane pane, std::optional<std::filesystem::
     // Capture the originating pane's identity now: the Batch Rename window is modeless, so the pane may
     // navigate elsewhere (e.g. into an archive) before renames complete.
     context.onSuccessfulRename = [this, sourcePluginId = state.pluginId, sourceInstanceContext = state.instanceContext](
-                                     std::span<const std::filesystem::path> sourcePaths,
-                                     std::span<const std::filesystem::path> targetPaths) noexcept
-    {
-        RefreshPanesAfterBatchRename(sourcePluginId, sourceInstanceContext, sourcePaths, targetPaths);
-    };
-    context.onRevealPath = [this, pane](const std::filesystem::path& path) noexcept
-    { return RevealBatchRenamePathInPane(pane, path); };
+                                     std::span<const std::filesystem::path> sourcePaths, std::span<const std::filesystem::path> targetPaths) noexcept
+    { RefreshPanesAfterBatchRename(sourcePluginId, sourceInstanceContext, sourcePaths, targetPaths); };
+    context.onRevealPath = [this, pane](const std::filesystem::path& path) noexcept { return RevealBatchRenamePathInPane(pane, path); };
 
     static_cast<void>(ShowBatchRenameWindow(_hWnd.get(), *_settings, _theme, std::move(context)));
 }

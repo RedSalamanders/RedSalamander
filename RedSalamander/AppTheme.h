@@ -16,6 +16,8 @@
 #include <Windows.h>
 #include <d2d1.h>
 
+#include "ThemeExpression.h"
+
 enum class ThemeMode : uint8_t
 {
     System,
@@ -121,8 +123,10 @@ struct FolderViewTheme
     D2D1::ColorF dropTargetHighlight = D2D1::ColorF(0.0f, 0.478f, 1.0f, 0.4f);
     D2D1::ColorF dragSourceGhost     = D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.5f);
 
-    bool rainbowMode = false;
-    bool darkBase    = false;
+    std::optional<Common::Settings::CompiledThemeColor> itemBackgroundSelectedDynamic;
+    bool itemBackgroundSelectedUsesInheritedRainbow = false;
+    bool rainbowMode                                = false;
+    bool darkBase                                   = false;
 };
 
 struct FileOperationsTheme
@@ -130,6 +134,7 @@ struct FileOperationsTheme
     D2D1::ColorF progressBackground = D2D1::ColorF(230.0f / 255.0f, 230.0f / 255.0f, 230.0f / 255.0f);
     D2D1::ColorF progressTotal      = D2D1::ColorF(0.0f, 0.47f, 0.84f);
     D2D1::ColorF progressItem       = D2D1::ColorF(0.0f, 0.47f, 0.84f);
+    D2D1::ColorF successText        = D2D1::ColorF(0.10f, 0.55f, 0.22f);
 
     D2D1::ColorF graphBackground = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.20f);
     D2D1::ColorF graphGrid       = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.20f);
@@ -173,7 +178,16 @@ struct AppTheme
     COLORREF windowBackground = RGB(255, 255, 255);
 };
 
+struct AppThemeSelectionResolution
+{
+    AppTheme theme;
+    ThemeMode baseMode = ThemeMode::System;
+    std::optional<Common::Settings::ResolvedThemeColors> resolvedColors;
+    bool customDefinitionResolved = true;
+};
+
 ThemeMode ParseThemeMode(std::wstring_view value) noexcept;
+ThemeMode ThemeModeFromThemeId(std::wstring_view id) noexcept;
 ThemeMode GetInitialThemeModeFromEnvironment() noexcept;
 
 bool IsHighContrastEnabled() noexcept;
@@ -193,6 +207,13 @@ COLORREF ChooseContrastingTextColor(COLORREF background) noexcept;
 
 AppTheme ResolveAppTheme(ThemeMode requestedMode, std::wstring_view rainbowSeed) noexcept;
 AppTheme ResolveAppTheme(ThemeMode requestedMode, std::wstring_view rainbowSeed, std::optional<D2D1::ColorF> accentOverride) noexcept;
+void ApplyAppThemeColorOverrides(AppTheme& theme, const std::unordered_map<std::wstring, uint32_t>& colors) noexcept;
+[[nodiscard]] AppThemeSelectionResolution ResolveAppThemeSelection(std::wstring_view selectedThemeId,
+                                                                   const Common::Settings::ThemeDefinition* customDefinition,
+                                                                   std::wstring_view rainbowSeed) noexcept;
+std::optional<uint32_t> FindAppThemeColorArgb(const AppTheme& theme, std::wstring_view key) noexcept;
+Common::Settings::ThemeResolutionContext MakeAppThemeResolutionContext(const AppTheme& baseTheme);
+void ApplyResolvedDynamicThemeOverrides(AppTheme& theme, const Common::Settings::ResolvedThemeColors& resolved) noexcept;
 TitleBarTheme ResolveEffectiveTitleBarTheme(const AppTheme& theme, bool windowActive) noexcept;
 void ApplyTitleBarTheme(HWND hwnd, const TitleBarTheme& theme) noexcept;
 void ApplyTitleBarTheme(HWND hwnd, const AppTheme& theme, bool windowActive) noexcept;

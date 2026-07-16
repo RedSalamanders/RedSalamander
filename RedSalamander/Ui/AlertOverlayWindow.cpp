@@ -802,7 +802,7 @@ void AlertOverlayWindow::OnPaint() noexcept
     _overlay.Draw(_target.get(), _dwriteFactory.get(), widthDip, heightDip, now);
 #if defined(ENABLE_TESTS)
     const float lastDrawOpacity = _overlay.DebugGetLastDrawOpacityForTest();
-    _debugMinimumDrawOpacity   = (_debugPaintCount == 0u) ? lastDrawOpacity : std::min(_debugMinimumDrawOpacity, lastDrawOpacity);
+    _debugMinimumDrawOpacity    = (_debugPaintCount == 0u) ? lastDrawOpacity : std::min(_debugMinimumDrawOpacity, lastDrawOpacity);
     ++_debugPaintCount;
 #endif
 
@@ -928,7 +928,7 @@ void AlertOverlayWindow::OnLButtonUp(POINT pt) noexcept
     }
 
     const AlertHitTest pressed = _pressedHit;
-    _pressedHit               = {};
+    _pressedHit                = {};
     if (GetCapture() == _hwnd.get())
     {
         ReleaseCapture();
@@ -1304,13 +1304,13 @@ HRESULT AlertOverlayWindow::TransitionVisibility(bool show, const AlertTheme* th
     _pressedHit         = {};
     _panelRegionPx.reset();
 #if defined(ENABLE_TESTS)
-    _debugPaintCount          = 0;
-    _debugMinimumDrawOpacity = 1.0f;
+    _debugPaintCount           = 0;
+    _debugMinimumDrawOpacity   = 1.0f;
     _debugBackdropCaptureCount = 0;
     _debugBackdropSizePx       = {};
-    _debugMouseDownCount      = 0;
-    _debugMouseUpCount        = 0;
-    _debugDismissCount        = 0;
+    _debugMouseDownCount       = 0;
+    _debugMouseUpCount         = 0;
+    _debugDismissCount         = 0;
     _debugLastMouseDownPointPx = {};
     _debugLastMouseUpPointPx   = {};
     _debugLastMouseDownHitPart = -1;
@@ -1799,7 +1799,7 @@ void AlertOverlayWindow::CaptureBackdrop(bool preserveExistingOnFailure) noexcep
     }
 
     [[maybe_unused]] const auto oldBitmap = wil::SelectObject(memoryDc.get(), bitmap.get());
-    bool capturedPixels = false;
+    bool capturedPixels                   = false;
     if (_anchor && IsWindow(_anchor) != FALSE)
     {
         RECT anchorRect{};
@@ -1959,16 +1959,16 @@ bool DebugGetAlertOverlayWindowSnapshot(HWND hwnd, AlertOverlayWindowDebugSnapsh
         return false;
     }
 
-    out.visible            = window->_visible;
-    out.hasLayout          = window->_overlay.HasLayout();
-    out.hasBackdropBitmap  = window->_backdropBitmap != nullptr;
-    out.paintCount         = window->_debugPaintCount;
-    out.lastDrawOpacity    = window->_overlay.DebugGetLastDrawOpacityForTest();
-    out.lastDrawScrimOpacity = window->_overlay.DebugGetLastDrawScrimOpacityForTest();
-    out.minimumDrawOpacity = window->_debugMinimumDrawOpacity;
-    out.backdropCaptureCount = window->_debugBackdropCaptureCount;
-    out.clientSizePx       = window->_clientSizePx;
-    out.backdropSizePx     = window->_debugBackdropSizePx;
+    out.visible                    = window->_visible;
+    out.hasLayout                  = window->_overlay.HasLayout();
+    out.hasBackdropBitmap          = window->_backdropBitmap != nullptr;
+    out.paintCount                 = window->_debugPaintCount;
+    out.lastDrawOpacity            = window->_overlay.DebugGetLastDrawOpacityForTest();
+    out.lastDrawScrimOpacity       = window->_overlay.DebugGetLastDrawScrimOpacityForTest();
+    out.minimumDrawOpacity         = window->_debugMinimumDrawOpacity;
+    out.backdropCaptureCount       = window->_debugBackdropCaptureCount;
+    out.clientSizePx               = window->_clientSizePx;
+    out.backdropSizePx             = window->_debugBackdropSizePx;
     const D2D1_RECT_F closeRectDip = window->_overlay.DebugGetCloseRectForTest();
     out.closeRectPx.left           = window->PxFromDipFloor(closeRectDip.left);
     out.closeRectPx.top            = window->PxFromDipFloor(closeRectDip.top);

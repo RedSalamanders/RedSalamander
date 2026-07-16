@@ -7,6 +7,7 @@
 #include "FileActionResolver.h"
 #include "FolderWindowInternal.h"
 #include "Helpers.h"
+#include "PathUtils.h"
 #include "HostServices.h"
 #include "MaskSyntax.h"
 #include "NavigationLocation.h"
@@ -15,6 +16,7 @@
 #include "ViewerPluginManager.h"
 #include "Win32CallbackHelpers.h"
 #include "WindowMessages.h"
+#include "WindowSizing.h"
 #ifdef ENABLE_TESTS
 #include "SelfTestCommon.h"
 #endif
@@ -472,50 +474,10 @@ void PruneFolderHistoryFilters(Common::Settings::FoldersSettings& folders, const
     folders.historyFilters = std::move(pruned);
 }
 
-bool LooksLikeWindowsDrivePath(std::wstring_view text) noexcept
-{
-    if (text.size() < 2)
-    {
-        return false;
-    }
-
-    const wchar_t first = text[0];
-    if (! ((first >= L'A' && first <= L'Z') || (first >= L'a' && first <= L'z')))
-    {
-        return false;
-    }
-
-    return text[1] == L':';
-}
-
-bool LooksLikeUncPath(std::wstring_view text) noexcept
-{
-    return text.rfind(L"\\\\", 0) == 0 || text.rfind(L"//", 0) == 0;
-}
-
-bool LooksLikeExtendedPath(std::wstring_view text) noexcept
-{
-    return text.rfind(L"\\\\?\\", 0) == 0 || text.rfind(L"\\\\.\\", 0) == 0;
-}
-
 bool LooksLikeWindowsAbsolutePath(std::wstring_view text) noexcept
 {
-    if (text.empty())
-    {
-        return false;
-    }
-
-    if (LooksLikeExtendedPath(text))
-    {
-        return true;
-    }
-
-    if (LooksLikeUncPath(text))
-    {
-        return true;
-    }
-
-    return LooksLikeWindowsDrivePath(text);
+    const Common::Paths::WindowsPathClass pathClass = Common::Paths::ClassifyWindowsPath(text);
+    return pathClass != Common::Paths::WindowsPathClass::Relative && pathClass != Common::Paths::WindowsPathClass::Rooted;
 }
 
 std::filesystem::path GetDefaultFileSystemRoot() noexcept
@@ -676,30 +638,6 @@ HWND GetOwnerWindowOrSelf(HWND window) noexcept
     }
 
     return window;
-}
-
-void CenterWindowOnOwner(HWND window, HWND owner) noexcept
-{
-    if (! window || ! owner)
-    {
-        return;
-    }
-
-    RECT ownerRc{};
-    RECT windowRc{};
-    if (! GetWindowRect(owner, &ownerRc) || ! GetWindowRect(window, &windowRc))
-    {
-        return;
-    }
-
-    const int ownerW  = ownerRc.right - ownerRc.left;
-    const int ownerH  = ownerRc.bottom - ownerRc.top;
-    const int windowW = windowRc.right - windowRc.left;
-    const int windowH = windowRc.bottom - windowRc.top;
-
-    const int x = ownerRc.left + (ownerW - windowW) / 2;
-    const int y = ownerRc.top + (ownerH - windowH) / 2;
-    SetWindowPos(window, nullptr, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
 [[nodiscard]] bool IsActuallyVisibleChildWindow(HWND hwnd) noexcept
@@ -1060,7 +998,7 @@ public:
             _hWnd.reset(hwnd);
         }
 
-        CenterWindowOnOwner(_hWnd.get(), _ownerWindow);
+        static_cast<void>(Common::WindowSizing::CenterExistingWindowOnOwner(_hWnd.get(), _ownerWindow));
         ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
         UpdateWindow(_hWnd.get());
         SetForegroundWindow(_hWnd.get());
@@ -1437,18 +1375,21 @@ private:
 
         _result = FolderView::NameFilterState{_enabled, trimmed};
         _done   = true;
-        if (_hWnd && IsWindow(_hWnd.get()) != FALSE)
-        {
-            _hWnd.reset();
-        }
+        ClosePromptWindow();
     }
 
     void Cancel() noexcept
     {
         _result.reset();
         _done = true;
+        ClosePromptWindow();
+    }
+
+    void ClosePromptWindow() noexcept
+    {
         if (_hWnd && IsWindow(_hWnd.get()) != FALSE)
         {
+            _dxHost.SetFocusControl(nullptr);
             _hWnd.reset();
         }
     }
@@ -1634,7 +1575,7 @@ public:
             _hWnd.reset(hwnd);
         }
 
-        CenterWindowOnOwner(_hWnd.get(), _ownerWindow);
+        static_cast<void>(Common::WindowSizing::CenterExistingWindowOnOwner(_hWnd.get(), _ownerWindow));
         ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
         UpdateWindow(_hWnd.get());
         SetForegroundWindow(_hWnd.get());
@@ -1820,6 +1761,7 @@ private:
 
         _textField = _root->AddChild<TextField>();
         _textField->SetMultiline(false);
+        _textField->SetAccessibleName(_labelText);
         _textField->SetOnSubmitted([this] { Confirm(); });
 
         _historyButton = _root->AddChild<Button>(LoadStringResource(nullptr, IDS_BTN_HISTORY));
@@ -2012,18 +1954,21 @@ private:
 
         _result = std::move(trimmed);
         _done   = true;
-        if (_hWnd && IsWindow(_hWnd.get()) != FALSE)
-        {
-            _hWnd.reset();
-        }
+        ClosePromptWindow();
     }
 
     void Cancel() noexcept
     {
         _result.reset();
         _done = true;
+        ClosePromptWindow();
+    }
+
+    void ClosePromptWindow() noexcept
+    {
         if (_hWnd && IsWindow(_hWnd.get()) != FALSE)
         {
+            _dxHost.SetFocusControl(nullptr);
             _hWnd.reset();
         }
     }
@@ -2319,7 +2264,7 @@ public:
             _hWnd.reset(hwnd);
         }
 
-        CenterWindowOnOwner(_hWnd.get(), _ownerWindow);
+        static_cast<void>(Common::WindowSizing::CenterExistingWindowOnOwner(_hWnd.get(), _ownerWindow));
         static_cast<void>(_dxHost.PrimeForShow());
         ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
         UpdateWindow(_hWnd.get());
@@ -2665,18 +2610,21 @@ private:
 
         _result = trimmed;
         _done   = true;
-        if (_hWnd && IsWindow(_hWnd.get()) != FALSE)
-        {
-            _hWnd.reset();
-        }
+        ClosePromptWindow();
     }
 
     void Cancel() noexcept
     {
         _result.reset();
         _done = true;
+        ClosePromptWindow();
+    }
+
+    void ClosePromptWindow() noexcept
+    {
         if (_hWnd && IsWindow(_hWnd.get()) != FALSE)
         {
+            _dxHost.SetFocusControl(nullptr);
             _hWnd.reset();
         }
     }
@@ -2862,7 +2810,7 @@ public:
             _hWnd.reset(hwnd);
         }
 
-        CenterWindowOnOwner(_hWnd.get(), _ownerWindow);
+        static_cast<void>(Common::WindowSizing::CenterExistingWindowOnOwner(_hWnd.get(), _ownerWindow));
         static_cast<void>(_dxHost.PrimeForShow());
         ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
         UpdateWindow(_hWnd.get());
@@ -3316,18 +3264,21 @@ private:
 
         _result = EditNewPromptResult{.fileName = trimmed, .editorActionId = _selectedEditorActionId};
         _done   = true;
-        if (_hWnd && IsWindow(_hWnd.get()) != FALSE)
-        {
-            _hWnd.reset();
-        }
+        ClosePromptWindow();
     }
 
     void Cancel() noexcept
     {
         _result.reset();
         _done = true;
+        ClosePromptWindow();
+    }
+
+    void ClosePromptWindow() noexcept
+    {
         if (_hWnd && IsWindow(_hWnd.get()) != FALSE)
         {
+            _dxHost.SetFocusControl(nullptr);
             _hWnd.reset();
         }
     }
@@ -3556,7 +3507,7 @@ public:
             _hWnd.reset(hwnd);
         }
 
-        CenterWindowOnOwner(_hWnd.get(), _ownerWindow);
+        static_cast<void>(Common::WindowSizing::CenterExistingWindowOnOwner(_hWnd.get(), _ownerWindow));
         ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
         UpdateWindow(_hWnd.get());
         SetForegroundWindow(_hWnd.get());
@@ -3882,18 +3833,21 @@ private:
     {
         _result = BuildOptionsFromSelections();
         _done   = true;
-        if (_hWnd && IsWindow(_hWnd.get()) != FALSE)
-        {
-            _hWnd.reset();
-        }
+        ClosePromptWindow();
     }
 
     void Cancel() noexcept
     {
         _result.reset();
         _done = true;
+        ClosePromptWindow();
+    }
+
+    void ClosePromptWindow() noexcept
+    {
         if (_hWnd && IsWindow(_hWnd.get()) != FALSE)
         {
+            _dxHost.SetFocusControl(nullptr);
             _hWnd.reset();
         }
     }
@@ -4597,6 +4551,61 @@ HRESULT FolderWindow::ExecuteInPane(Pane pane,
     focusFolderView();
     flushPaneVisuals();
     return S_OK;
+}
+
+HRESULT FolderWindow::ExecuteInPaneLocation(Pane pane,
+                                            std::wstring_view pluginId,
+                                            std::wstring_view pluginShortId,
+                                            std::wstring_view instanceContext,
+                                            const std::filesystem::path& folderPath,
+                                            std::wstring_view focusItemDisplayName,
+                                            unsigned int folderViewCommandId,
+                                            bool activateWindow) noexcept
+{
+    if (pluginId.empty() || pluginShortId.empty() || folderPath.empty())
+    {
+        return E_INVALIDARG;
+    }
+
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    const std::wstring previousPluginId(state.pluginId);
+    const std::wstring previousPluginShortId(state.pluginShortId);
+    const std::wstring previousInstanceContext(state.instanceContext);
+    const std::optional<std::filesystem::path> previousFolderPath = state.folderView.GetFolderPath();
+
+    auto restorePreviousLocation = [&]() noexcept
+    {
+        if (previousPluginId.empty())
+        {
+            return;
+        }
+
+        if (! NavigationLocation::EqualsNoCase(state.pluginId, previousPluginId))
+        {
+            const HRESULT restoreHr = SetFileSystemPluginForPane(pane, previousPluginId);
+            if (FAILED(restoreHr))
+            {
+                Debug::Error(L"File Operations completed action could not restore pane provider: 0x{:08X}", restoreHr);
+                return;
+            }
+        }
+
+        if (! previousPluginShortId.empty() && previousFolderPath.has_value())
+        {
+            SetFolderPath(pane, NavigationLocation::FormatHistoryPath(previousPluginShortId, previousInstanceContext, previousFolderPath.value()));
+        }
+    };
+
+    const std::filesystem::path qualifiedPath = NavigationLocation::FormatHistoryPath(pluginShortId, instanceContext, folderPath);
+    SetFolderPath(pane, qualifiedPath);
+    if (! NavigationLocation::EqualsNoCase(state.pluginId, pluginId) || ! NavigationLocation::EqualsNoCase(state.pluginShortId, pluginShortId) ||
+        ! NavigationLocation::EqualsNoCase(state.instanceContext, instanceContext))
+    {
+        restorePreviousLocation();
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+
+    return ExecuteInPane(pane, folderPath, focusItemDisplayName, folderViewCommandId, activateWindow);
 }
 
 void FolderWindow::SetFolderPath(const std::filesystem::path& path)

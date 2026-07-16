@@ -16,6 +16,7 @@
 #include <ranges>
 #include <span>
 #include <thread>
+#include <unordered_map>
 #include <utility>
 
 #include <shellapi.h>
@@ -29,6 +30,7 @@ namespace FileSystemInternal
 {
 // Module anchor for AcquireModuleReferenceFromAddress — keeps the DLL loaded while worker threads are running.
 const int kFileSystemModuleAnchor = 0;
+std::atomic<uint64_t> g_copyTempPathCounter{0};
 
 // Result of one step of a dynamic (self-feeding) job. Dynamic jobs replace the old
 // long-lived `for(;;)` consumer loops: a worker processes ONE unit per dispatch and
@@ -72,8 +74,8 @@ public:
         // count of immediately-runnable units owned by the caller) instead of nextIndex/
         // totalItems, and the job completes when dynamicFinished is set with no work in
         // flight. processDynamic is invoked once per dispatch and returns a DynamicStep.
-        bool isDynamic                              = false;
-        const std::atomic<size_t>* readyCountPtr    = nullptr;
+        bool isDynamic                           = false;
+        const std::atomic<size_t>* readyCountPtr = nullptr;
         std::function<DynamicStep(uint64_t)> processDynamic;
         std::atomic<bool> dynamicFinished{false};
 
@@ -352,8 +354,7 @@ private:
                 continue;
             }
 
-            const bool finished =
-                job->isDynamic ? job->dynamicFinished.load(std::memory_order_acquire) : (job->nextIndex >= job->totalItems);
+            const bool finished = job->isDynamic ? job->dynamicFinished.load(std::memory_order_acquire) : (job->nextIndex >= job->totalItems);
             if (finished && job->inFlight == 0)
             {
                 finishJob(*job);
@@ -575,7 +576,36 @@ void ShutdownSharedFileOpsJobScheduler() noexcept
     GetSharedFileOpsJobScheduler().ShutdownAndJoin();
 }
 
+[[nodiscard]] HRESULT NormalizeReparseCopyFailure(HRESULT failure, bool allowOverwrite) noexcept
+{
+    if (! allowOverwrite && failure == HRESULT_FROM_WIN32(ERROR_INVALID_PARAMETER))
+    {
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+    return failure;
+}
+
 #if defined(_DEBUG)
+void RunDebugReparseCopyErrorMappingSelfTest(unsigned int& passed, unsigned int& failed) noexcept
+{
+    const auto check = [&](bool condition, const wchar_t* message) noexcept
+    {
+        if (condition)
+        {
+            ++passed;
+            return;
+        }
+        ++failed;
+        Debug::Error(L"FileSystem debug selftest failed: {}", message);
+    };
+
+    constexpr HRESULT invalidParameter = HRESULT_FROM_WIN32(ERROR_INVALID_PARAMETER);
+    check(NormalizeReparseCopyFailure(invalidParameter, true) == invalidParameter,
+          L"staged symlink overwrite must preserve ERROR_INVALID_PARAMETER from the failed promotion");
+    check(NormalizeReparseCopyFailure(invalidParameter, false) == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED),
+          L"non-overwrite symlink copy may map ERROR_INVALID_PARAMETER to ERROR_NOT_SUPPORTED");
+}
+
 void RunDebugSharedFileOpsSchedulerShutdownSelfTest(unsigned int& passed, unsigned int& failed) noexcept
 {
     const auto check = [&](bool condition, const wchar_t* message) noexcept -> bool
@@ -599,7 +629,7 @@ void RunDebugSharedFileOpsSchedulerShutdownSelfTest(unsigned int& passed, unsign
 
     struct ProbeState
     {
-        ProbeState()                              = default;
+        ProbeState()                             = default;
         ProbeState(const ProbeState&)            = delete;
         ProbeState(ProbeState&&)                 = delete;
         ProbeState& operator=(const ProbeState&) = delete;
@@ -607,15 +637,17 @@ void RunDebugSharedFileOpsSchedulerShutdownSelfTest(unsigned int& passed, unsign
 
         std::mutex mutex;
         std::condition_variable cv;
-        bool workerEntered   = false;
-        bool releaseWorker   = false;
-        bool callbackActive  = false;
-        bool workerExited    = false;
-        bool waiterReturned  = false;
+        bool workerEntered    = false;
+        bool releaseWorker    = false;
+        bool callbackActive   = false;
+        bool workerExited     = false;
+        bool waiterReturned   = false;
         bool shutdownReturned = false;
     } probe;
 
-    const auto job = scheduler.StartJob(1u, 1u, [&](size_t, uint64_t) noexcept
+    const auto job = scheduler.StartJob(1u,
+                                        1u,
+                                        [&](size_t, uint64_t) noexcept
     {
         std::unique_lock lock(probe.mutex);
         probe.workerEntered  = true;
@@ -749,6 +781,25 @@ enum class BandwidthThrottleWorkerMode : uint8_t
     PerWorkerSubBudget,
 };
 
+struct MoveCopyProof final
+{
+    BY_HANDLE_FILE_INFORMATION sourceInfo{};
+    BY_HANDLE_FILE_INFORMATION destinationInfo{};
+};
+
+struct MoveCopyProofManifest final
+{
+    MoveCopyProofManifest() = default;
+    ~MoveCopyProofManifest() = default;
+    MoveCopyProofManifest(const MoveCopyProofManifest&)            = delete;
+    MoveCopyProofManifest& operator=(const MoveCopyProofManifest&) = delete;
+    MoveCopyProofManifest(MoveCopyProofManifest&&)                 = delete;
+    MoveCopyProofManifest& operator=(MoveCopyProofManifest&&)      = delete;
+
+    std::mutex mutex;
+    std::unordered_map<std::wstring, MoveCopyProof> files;
+};
+
 struct OperationContext
 {
     FileSystemOperation type      = FILESYSTEM_COPY;
@@ -756,22 +807,22 @@ struct OperationContext
     void* callbackCookie          = nullptr;
     uint64_t progressStreamId     = 0;
     FileSystemOptions optionsState{};
-    FileSystemOptions* options           = nullptr;
-    unsigned long totalItems             = 0;
-    unsigned long completedItems         = 0;
-    uint64_t totalBytes                  = 0;
-    uint64_t completedBytes              = 0;
-    bool continueOnError                 = false;
-    bool allowOverwrite                  = false;
-    bool allowReplaceReadonly            = false;
-    bool recursive                       = false;
-    bool useRecycleBin                   = false;
+    FileSystemOptions* options   = nullptr;
+    unsigned long totalItems     = 0;
+    unsigned long completedItems = 0;
+    uint64_t totalBytes          = 0;
+    uint64_t completedBytes      = 0;
+    bool continueOnError         = false;
+    bool allowOverwrite          = false;
+    bool allowReplaceReadonly    = false;
+    bool recursive               = false;
+    bool useRecycleBin           = false;
     // Per-conflict grants from a single answered FileSystemIssue prompt (no apply-to-all).
     // They authorize only the child whose conflict loop set them: cleared when that child's
     // retry loop exits and when recursion enters a child directory, so one answer can never
     // silently authorize overwrites the user was not asked about.
-    bool oneShotAllowOverwrite       = false;
-    bool oneShotAllowReplaceReadonly = false;
+    bool oneShotAllowOverwrite           = false;
+    bool oneShotAllowReplaceReadonly     = false;
     unsigned int deleteConcurrencyBudget = 1;
     unsigned int recycleBinBatchSize     = 1;
     FileSystemArenaOwner itemArena;
@@ -783,6 +834,7 @@ struct OperationContext
     const wchar_t* progressDestination                      = nullptr;
 
     ParallelOperationState* parallel = nullptr;
+    MoveCopyProofManifest* moveCopyProofs = nullptr;
 
     ULONGLONG lastProgressReportTick = 0;
 
@@ -1510,13 +1562,15 @@ constexpr uint64_t kBandwidthThrottleWorkerActiveWindowMs = 500ull;
 constexpr uint64_t kBandwidthThrottleBoundaryGuardMs      = 10ull;
 constexpr DWORD kBandwidthThrottleCancelPollMs            = 10u;
 #ifdef _DEBUG
-constexpr std::wstring_view kBandwidthThrottleWorkerModeEnvVar = L"REDSALAMANDER_FILEOPS_BW_WORKER_MODE";
-constexpr std::wstring_view kForceMoveCopyFallbackEnvVar       = L"REDSALAMANDER_FILEOPS_FORCE_MOVE_COPY_FALLBACK";
-constexpr std::wstring_view kDeleteToctouSwapPathEnvVar        = L"REDSALAMANDER_FILEOPS_DELETE_TOCTOU_SWAP_PATH";
-constexpr std::wstring_view kDeleteToctouSwapTargetEnvVar      = L"REDSALAMANDER_FILEOPS_DELETE_TOCTOU_SWAP_TARGET";
-constexpr std::wstring_view kDeleteToctouSwapFiredEnvVar       = L"REDSALAMANDER_FILEOPS_DELETE_TOCTOU_SWAP_FIRED";
-constexpr std::wstring_view kReparseMoveSourceDeleteFailPathEnvVar = L"REDSALAMANDER_FILEOPS_REPARSE_MOVE_SOURCE_DELETE_FAIL_PATH";
+constexpr std::wstring_view kBandwidthThrottleWorkerModeEnvVar      = L"REDSALAMANDER_FILEOPS_BW_WORKER_MODE";
+constexpr std::wstring_view kForceMoveCopyFallbackEnvVar            = L"REDSALAMANDER_FILEOPS_FORCE_MOVE_COPY_FALLBACK";
+constexpr std::wstring_view kDeleteToctouSwapPathEnvVar             = L"REDSALAMANDER_FILEOPS_DELETE_TOCTOU_SWAP_PATH";
+constexpr std::wstring_view kDeleteToctouSwapTargetEnvVar           = L"REDSALAMANDER_FILEOPS_DELETE_TOCTOU_SWAP_TARGET";
+constexpr std::wstring_view kDeleteToctouSwapFiredEnvVar            = L"REDSALAMANDER_FILEOPS_DELETE_TOCTOU_SWAP_FIRED";
+constexpr std::wstring_view kReparseMoveSourceDeleteFailPathEnvVar  = L"REDSALAMANDER_FILEOPS_REPARSE_MOVE_SOURCE_DELETE_FAIL_PATH";
 constexpr std::wstring_view kReparseMoveSourceDeleteFailFiredEnvVar = L"REDSALAMANDER_FILEOPS_REPARSE_MOVE_SOURCE_DELETE_FAIL_FIRED";
+constexpr std::wstring_view kStagedCopyPromoteFailPathEnvVar        = L"REDSALAMANDER_FILEOPS_STAGED_COPY_PROMOTE_FAIL_PATH";
+constexpr std::wstring_view kStagedCopyPromoteFailFiredEnvVar       = L"REDSALAMANDER_FILEOPS_STAGED_COPY_PROMOTE_FAIL_FIRED";
 #endif
 
 constexpr uint64_t SaturatingBytesForElapsedMs(uint64_t bytesPerSecond, uint64_t elapsedMs) noexcept
@@ -1916,8 +1970,37 @@ void MaybeInjectDeleteToctouSwapForSelfTest(const std::wstring& candidateExtende
     Debug::Perf::EmitCounter(L"FileOps.Move.DebugReparseSourceDeleteFailureInjected");
     return true;
 }
+
+[[nodiscard]] bool ShouldFailStagedCopyPromoteForSelfTest(const std::wstring& destinationExtended, HRESULT& failureHr) noexcept
+{
+    failureHr = S_OK;
+
+    const std::wstring failPath = GetDebugEnvironmentString(kStagedCopyPromoteFailPathEnvVar);
+    if (failPath.empty())
+    {
+        return false;
+    }
+
+    const PathInfo failInfo = MakePathInfo(failPath);
+    if (! OrdinalString::EqualsNoCase(destinationExtended, failInfo.extended))
+    {
+        return false;
+    }
+
+    static_cast<void>(::SetEnvironmentVariableW(kStagedCopyPromoteFailPathEnvVar.data(), nullptr));
+    static_cast<void>(::SetEnvironmentVariableW(kStagedCopyPromoteFailFiredEnvVar.data(), L"1"));
+    failureHr = HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+    Debug::Perf::EmitCounter(L"FileOps.Copy.DebugStagedPromoteFailureInjected");
+    return true;
+}
 #else
 [[nodiscard]] bool ShouldFailReparseMoveSourceDeleteForSelfTest(const std::wstring&, HRESULT& failureHr) noexcept
+{
+    failureHr = S_OK;
+    return false;
+}
+
+[[nodiscard]] bool ShouldFailStagedCopyPromoteForSelfTest(const std::wstring&, HRESULT& failureHr) noexcept
 {
     failureHr = S_OK;
     return false;
@@ -2764,16 +2847,182 @@ void CopyPathBasicInformationBestEffort(const std::wstring& sourcePath, const st
     return ! destinationExistedBeforeCopy && ! sourceContentDeleted;
 }
 
+DWORD CALLBACK CopyProgressRoutine(LARGE_INTEGER totalFileSize,
+                                   LARGE_INTEGER totalBytesTransferred,
+                                   LARGE_INTEGER streamSize,
+                                   LARGE_INTEGER streamBytesTransferred,
+                                   DWORD streamNumber,
+                                   DWORD callbackReason,
+                                   HANDLE sourceFile,
+                                   HANDLE destinationFile,
+                                   LPVOID context) noexcept;
+
+[[nodiscard]] std::wstring MakeCopyTempSiblingPath(std::wstring_view finalPath) noexcept
+{
+    const uint64_t counter = g_copyTempPathCounter.fetch_add(1u, std::memory_order_acq_rel);
+    return std::format(L"{}.rs_copy_tmp_{:08X}_{:08X}_{:016X}",
+                       finalPath,
+                       static_cast<unsigned int>(::GetCurrentProcessId()),
+                       static_cast<unsigned int>(::GetCurrentThreadId()),
+                       static_cast<unsigned long long>(counter));
+}
+
+void BestEffortDeleteCopiedTemp(const std::wstring& tempPath) noexcept
+{
+    if (tempPath.empty())
+    {
+        return;
+    }
+
+    const DWORD attributes = ::GetFileAttributesW(tempPath.c_str());
+    if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_READONLY) != 0u)
+    {
+        static_cast<void>(::SetFileAttributesW(tempPath.c_str(), attributes & ~FILE_ATTRIBUTE_READONLY));
+    }
+
+    if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0u)
+    {
+        if (::RemoveDirectoryW(tempPath.c_str()) == 0 && (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u)
+        {
+            static_cast<void>(::DeleteFileW(tempPath.c_str()));
+        }
+        return;
+    }
+
+    if (::DeleteFileW(tempPath.c_str()) == 0 && attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u)
+    {
+        static_cast<void>(::RemoveDirectoryW(tempPath.c_str()));
+    }
+}
+
+void RollBackStagedProgress(OperationContext& context, CopyProgressContext& progress) noexcept
+{
+    if (progress.lastItemBytesTransferred == 0u)
+    {
+        return;
+    }
+
+    if (! context.parallel)
+    {
+        context.completedBytes            = progress.itemBaseBytes;
+        progress.lastItemBytesTransferred = 0u;
+        return;
+    }
+
+    const uint64_t rollbackBytes = progress.lastItemBytesTransferred;
+    uint64_t current             = context.parallel->completedBytes.load(std::memory_order_acquire);
+    while (current >= rollbackBytes &&
+           ! context.parallel->completedBytes.compare_exchange_weak(current, current - rollbackBytes, std::memory_order_acq_rel, std::memory_order_acquire))
+    {
+    }
+
+    progress.lastItemBytesTransferred = 0u;
+}
+
+[[nodiscard]] bool TempCopySizeIsPlausible(const PathInfo& source, const std::wstring& tempPath, uint64_t expectedFileBytes) noexcept
+{
+    uint64_t tempBytes = 0;
+    if (FAILED(GetFileSizeBytes(tempPath, &tempBytes)))
+    {
+        return false;
+    }
+
+    if (tempBytes >= expectedFileBytes)
+    {
+        return true;
+    }
+
+    uint64_t currentSourceBytes = 0;
+    if (FAILED(GetFileSizeBytes(source.extended, &currentSourceBytes)))
+    {
+        return false;
+    }
+
+    return tempBytes >= std::min(expectedFileBytes, currentSourceBytes);
+}
+
+[[nodiscard]] HRESULT CopyFileExWithStagedOverwrite(OperationContext& context,
+                                                    const PathInfo& source,
+                                                    const PathInfo& destination,
+                                                    DWORD copyFlags,
+                                                    CopyProgressContext& progress,
+                                                    uint64_t expectedFileBytes,
+                                                    bool verifyTempSize,
+                                                    bool replacementIsReparsePoint) noexcept
+{
+    std::wstring tempPath;
+    DWORD lastError = ERROR_SUCCESS;
+    for (unsigned int attempt = 0; attempt < 32u; ++attempt)
+    {
+        tempPath                  = MakeCopyTempSiblingPath(destination.extended);
+        const DWORD tempCopyFlags = copyFlags | COPY_FILE_FAIL_IF_EXISTS;
+        if (::CopyFileExW(source.extended.c_str(), tempPath.c_str(), CopyProgressRoutine, &progress, nullptr, tempCopyFlags))
+        {
+            lastError = ERROR_SUCCESS;
+            break;
+        }
+
+        lastError = ::GetLastError();
+        BestEffortDeleteCopiedTemp(tempPath);
+        if (lastError != ERROR_FILE_EXISTS && lastError != ERROR_ALREADY_EXISTS)
+        {
+            break;
+        }
+
+        tempPath.clear();
+    }
+
+    if (lastError != ERROR_SUCCESS)
+    {
+        if (lastError == ERROR_REQUEST_ABORTED || lastError == ERROR_CANCELLED)
+        {
+            return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        }
+        return HRESULT_FROM_WIN32(lastError != 0u ? lastError : ERROR_GEN_FAILURE);
+    }
+
+    auto cleanupTemp = wil::scope_exit([&]() noexcept { BestEffortDeleteCopiedTemp(tempPath); });
+
+    if (verifyTempSize)
+    {
+        if (! TempCopySizeIsPlausible(source, tempPath, expectedFileBytes))
+        {
+            return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+        }
+    }
+
+    HRESULT injectedPromoteFailure = S_OK;
+    if (ShouldFailStagedCopyPromoteForSelfTest(destination.extended, injectedPromoteFailure))
+    {
+        return injectedPromoteFailure;
+    }
+
+    const DWORD tempAttributes = ::GetFileAttributesW(tempPath.c_str());
+    StagedPromotionOptions promoteOptions{};
+    promoteOptions.allowReplaceReadOnly        = HasReplaceReadonlyGrant(context);
+    promoteOptions.preserveReplacementReadOnly = tempAttributes != INVALID_FILE_ATTRIBUTES && (tempAttributes & FILE_ATTRIBUTE_READONLY) != 0u;
+    promoteOptions.replacementIsReparsePoint   = replacementIsReparsePoint;
+
+    const HRESULT promoteHr = PromoteStagedTempIntoFinalPath(tempPath, destination.extended, promoteOptions);
+    if (FAILED(promoteHr))
+    {
+        return promoteHr;
+    }
+
+    cleanupTemp.release();
+    return S_OK;
+}
+
 struct DeleteHandleSnapshot final
 {
-    DeleteHandleSnapshot() = default;
-    DeleteHandleSnapshot(const DeleteHandleSnapshot&) = delete;
+    DeleteHandleSnapshot()                                       = default;
+    DeleteHandleSnapshot(const DeleteHandleSnapshot&)            = delete;
     DeleteHandleSnapshot& operator=(const DeleteHandleSnapshot&) = delete;
-    DeleteHandleSnapshot(DeleteHandleSnapshot&&) = default;
-    DeleteHandleSnapshot& operator=(DeleteHandleSnapshot&&) = default;
+    DeleteHandleSnapshot(DeleteHandleSnapshot&&)                 = default;
+    DeleteHandleSnapshot& operator=(DeleteHandleSnapshot&&)      = default;
 
     wil::unique_handle handle;
-    DWORD attributes = 0;
+    DWORD attributes   = 0;
     uint64_t fileBytes = 0;
 };
 
@@ -2872,7 +3121,7 @@ HRESULT MarkHandleForDeletion(DeleteHandleSnapshot& snapshot) noexcept
 
 HRESULT DeleteOpenedPathNoFollow(OperationContext& context, DeleteHandleSnapshot& snapshot, bool countCompletion) noexcept
 {
-    bool restoreReadonly = false;
+    bool restoreReadonly      = false;
     auto restoreReadonlyScope = wil::scope_exit([&]() noexcept
     {
         if (restoreReadonly)
@@ -2923,10 +3172,10 @@ struct DirectoryEnumHandle final
     wil::unique_handle handle;
     DWORD attributes = 0;
 
-    DirectoryEnumHandle()                                      = default;
-    DirectoryEnumHandle(const DirectoryEnumHandle&)            = delete;
-    DirectoryEnumHandle& operator=(const DirectoryEnumHandle&) = delete;
-    DirectoryEnumHandle(DirectoryEnumHandle&&) noexcept        = default;
+    DirectoryEnumHandle()                                          = default;
+    DirectoryEnumHandle(const DirectoryEnumHandle&)                = delete;
+    DirectoryEnumHandle& operator=(const DirectoryEnumHandle&)     = delete;
+    DirectoryEnumHandle(DirectoryEnumHandle&&) noexcept            = default;
     DirectoryEnumHandle& operator=(DirectoryEnumHandle&&) noexcept = default;
 };
 
@@ -2960,17 +3209,14 @@ struct DirectoryEnumHandle final
 // Streams FILE_FULL_DIR_INFO records through the verified handle. onEntry(name, attributes,
 // sizeBytes) returning anything other than S_OK stops the walk (S_FALSE = benign early stop);
 // "." and ".." are filtered here.
-template <typename TOnEntry>
-[[nodiscard]] HRESULT EnumerateDirectoryByHandle(HANDLE directory, TOnEntry&& onEntry) noexcept
+template <typename TOnEntry> [[nodiscard]] HRESULT EnumerateDirectoryByHandle(HANDLE directory, TOnEntry&& onEntry) noexcept
 {
     alignas(8) std::array<std::byte, 64u * 1024u> buffer{};
     bool restart = true;
     for (;;)
     {
-        if (! ::GetFileInformationByHandleEx(directory,
-                                             restart ? FileFullDirectoryRestartInfo : FileFullDirectoryInfo,
-                                             buffer.data(),
-                                             static_cast<DWORD>(buffer.size())))
+        if (! ::GetFileInformationByHandleEx(
+                directory, restart ? FileFullDirectoryRestartInfo : FileFullDirectoryInfo, buffer.data(), static_cast<DWORD>(buffer.size())))
         {
             const DWORD error = ::GetLastError();
             if (error == ERROR_NO_MORE_FILES)
@@ -3129,13 +3375,10 @@ struct MoveSourceDeleteStats final
 
 [[nodiscard]] bool SameFileIdentity(const BY_HANDLE_FILE_INFORMATION& left, const BY_HANDLE_FILE_INFORMATION& right) noexcept
 {
-    return left.dwVolumeSerialNumber == right.dwVolumeSerialNumber && left.nFileIndexHigh == right.nFileIndexHigh &&
-           left.nFileIndexLow == right.nFileIndexLow;
+    return left.dwVolumeSerialNumber == right.dwVolumeSerialNumber && left.nFileIndexHigh == right.nFileIndexHigh && left.nFileIndexLow == right.nFileIndexLow;
 }
 
-[[nodiscard]] bool OpenPlainFileForReadNoFollow(const std::wstring& pathExtended,
-                                                wil::unique_handle& handleOut,
-                                                BY_HANDLE_FILE_INFORMATION& infoOut) noexcept
+[[nodiscard]] bool OpenPlainFileForReadNoFollow(const std::wstring& pathExtended, wil::unique_handle& handleOut, BY_HANDLE_FILE_INFORMATION& infoOut) noexcept
 {
     handleOut.reset();
     infoOut = {};
@@ -3184,8 +3427,8 @@ struct MoveSourceDeleteStats final
         const DWORD chunk = static_cast<DWORD>(std::min<uint64_t>(remaining, static_cast<uint64_t>(leftBuffer.size())));
         DWORD leftRead    = 0;
         DWORD rightRead   = 0;
-        if (! ::ReadFile(left, leftBuffer.data(), chunk, &leftRead, nullptr) ||
-            ! ::ReadFile(right, rightBuffer.data(), chunk, &rightRead, nullptr) || leftRead != chunk || rightRead != chunk)
+        if (! ::ReadFile(left, leftBuffer.data(), chunk, &leftRead, nullptr) || ! ::ReadFile(right, rightBuffer.data(), chunk, &rightRead, nullptr) ||
+            leftRead != chunk || rightRead != chunk)
         {
             return false;
         }
@@ -3199,6 +3442,133 @@ struct MoveSourceDeleteStats final
     }
 
     return true;
+}
+
+[[nodiscard]] bool SameFileSnapshot(const BY_HANDLE_FILE_INFORMATION& left, const BY_HANDLE_FILE_INFORMATION& right) noexcept
+{
+    return SameFileIdentity(left, right) && FileSizeFromInformation(left) == FileSizeFromInformation(right) &&
+           CompareFileTime(&left.ftLastWriteTime, &right.ftLastWriteTime) == 0;
+}
+
+[[nodiscard]] bool HashPlainFile(HANDLE file, uint64_t bytes, uint64_t& hashOut) noexcept
+{
+    LARGE_INTEGER zero{};
+    if (! ::SetFilePointerEx(file, zero, nullptr, FILE_BEGIN))
+    {
+        return false;
+    }
+
+    constexpr uint64_t kOffsetBasis = 14695981039346656037ull;
+    constexpr uint64_t kPrime       = 1099511628211ull;
+    std::array<std::byte, 256u * 1024u> buffer{};
+    uint64_t hash      = kOffsetBasis;
+    uint64_t remaining = bytes;
+    while (remaining > 0u)
+    {
+        const DWORD chunk = static_cast<DWORD>((std::min)(remaining, static_cast<uint64_t>(buffer.size())));
+        DWORD bytesRead   = 0;
+        if (! ::ReadFile(file, buffer.data(), chunk, &bytesRead, nullptr) || bytesRead != chunk)
+        {
+            return false;
+        }
+
+        for (DWORD index = 0; index < bytesRead; ++index)
+        {
+            hash ^= static_cast<uint64_t>(std::to_integer<unsigned char>(buffer[index]));
+            hash *= kPrime;
+        }
+        remaining -= bytesRead;
+    }
+
+    hashOut = hash;
+    return true;
+}
+
+[[nodiscard]] HRESULT RecordExistingIdenticalMoveCopyProof(OperationContext& context,
+                                                           const std::wstring& sourceExtended,
+                                                           const std::wstring& destinationExtended,
+                                                           uint64_t& identicalBytesOut) noexcept
+{
+    identicalBytesOut = 0;
+    if (context.moveCopyProofs == nullptr)
+    {
+        return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+    }
+
+    wil::unique_handle sourceHandle;
+    BY_HANDLE_FILE_INFORMATION sourceBefore{};
+    if (! OpenPlainFileForReadNoFollow(sourceExtended, sourceHandle, sourceBefore))
+    {
+        return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+    }
+
+    wil::unique_handle destinationHandle;
+    BY_HANDLE_FILE_INFORMATION destinationBefore{};
+    if (! OpenPlainFileForReadNoFollow(destinationExtended, destinationHandle, destinationBefore))
+    {
+        return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+    }
+
+    const uint64_t sourceBytes = FileSizeFromInformation(sourceBefore);
+    if (sourceBytes != FileSizeFromInformation(destinationBefore))
+    {
+        return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+    }
+
+    uint64_t sourceHash      = 0;
+    uint64_t destinationHash = 0;
+    if (! HashPlainFile(sourceHandle.get(), sourceBytes, sourceHash) || ! HashPlainFile(destinationHandle.get(), sourceBytes, destinationHash) ||
+        sourceHash != destinationHash)
+    {
+        return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+    }
+
+    BY_HANDLE_FILE_INFORMATION sourceAfter{};
+    BY_HANDLE_FILE_INFORMATION destinationAfter{};
+    if (! ::GetFileInformationByHandle(sourceHandle.get(), &sourceAfter) || ! ::GetFileInformationByHandle(destinationHandle.get(), &destinationAfter) ||
+        ! SameFileSnapshot(sourceBefore, sourceAfter) || ! SameFileSnapshot(destinationBefore, destinationAfter))
+    {
+        return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+    }
+
+    std::scoped_lock lock(context.moveCopyProofs->mutex);
+    context.moveCopyProofs->files.insert_or_assign(sourceExtended, MoveCopyProof{.sourceInfo = sourceAfter, .destinationInfo = destinationAfter});
+    identicalBytesOut = sourceBytes;
+    return S_OK;
+}
+
+// A successful CopyFileEx/CopyFile2 operation byte-proves the destination. Preserve that proof
+// without re-reading either file: the source must still match its pre-copy snapshot and the final
+// destination must have the same size. MOVE cleanup later rechecks both snapshots before deletion.
+[[nodiscard]] HRESULT RecordCompletedMoveCopyProof(OperationContext& context,
+                                                    const std::wstring& sourceExtended,
+                                                    HANDLE sourceHandle,
+                                                    const BY_HANDLE_FILE_INFORMATION& sourceBefore,
+                                                    const std::wstring& destinationExtended) noexcept
+{
+    if (context.moveCopyProofs == nullptr)
+    {
+        return S_OK;
+    }
+
+    BY_HANDLE_FILE_INFORMATION sourceAfter{};
+    if (sourceHandle == nullptr || sourceHandle == INVALID_HANDLE_VALUE || ! ::GetFileInformationByHandle(sourceHandle, &sourceAfter) ||
+        ! SameFileSnapshot(sourceBefore, sourceAfter))
+    {
+        return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+    }
+
+    wil::unique_handle destinationHandle;
+    BY_HANDLE_FILE_INFORMATION destinationInfo{};
+    if (! OpenPlainFileForReadNoFollow(destinationExtended, destinationHandle, destinationInfo) ||
+        FileSizeFromInformation(destinationInfo) != FileSizeFromInformation(sourceAfter))
+    {
+        return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+    }
+
+    std::scoped_lock lock(context.moveCopyProofs->mutex);
+    context.moveCopyProofs->files.insert_or_assign(sourceExtended, MoveCopyProof{.sourceInfo = sourceAfter, .destinationInfo = destinationInfo});
+    return S_OK;
 }
 
 [[nodiscard]] bool PlainFilesEqualByContentNoFollow(const std::wstring& leftExtended, const std::wstring& rightExtended, uint64_t* bytesEqual) noexcept
@@ -3240,18 +3610,29 @@ struct MoveSourceDeleteStats final
 // still resolves to the same no-follow file opened for deletion and its bytes equal destination.
 [[nodiscard]] bool DestinationMatchesSourceFile(const std::wstring& sourceExtended,
                                                 const DeleteHandleSnapshot& sourceSnapshot,
-                                                const std::wstring& destinationExtended) noexcept
+                                                const std::wstring& destinationExtended,
+                                                MoveCopyProofManifest* moveCopyProofs) noexcept
 {
-    BY_HANDLE_FILE_INFORMATION sourceSnapshotInfo{};
-    if (! sourceSnapshot.handle || ! ::GetFileInformationByHandle(sourceSnapshot.handle.get(), &sourceSnapshotInfo) ||
-        IsDirectory(sourceSnapshotInfo.dwFileAttributes) || IsReparsePoint(sourceSnapshotInfo.dwFileAttributes))
+    if (moveCopyProofs == nullptr)
     {
         return false;
     }
 
-    wil::unique_handle sourceReadHandle;
-    BY_HANDLE_FILE_INFORMATION sourceReadInfo{};
-    if (! OpenPlainFileForReadNoFollow(sourceExtended, sourceReadHandle, sourceReadInfo) || ! SameFileIdentity(sourceSnapshotInfo, sourceReadInfo))
+    MoveCopyProof proof{};
+    {
+        std::scoped_lock lock(moveCopyProofs->mutex);
+        const auto found = moveCopyProofs->files.find(sourceExtended);
+        if (found == moveCopyProofs->files.end())
+        {
+            return false;
+        }
+        proof = found->second;
+    }
+
+    BY_HANDLE_FILE_INFORMATION sourceSnapshotInfo{};
+    if (! sourceSnapshot.handle || ! ::GetFileInformationByHandle(sourceSnapshot.handle.get(), &sourceSnapshotInfo) ||
+        IsDirectory(sourceSnapshotInfo.dwFileAttributes) || IsReparsePoint(sourceSnapshotInfo.dwFileAttributes) ||
+        ! SameFileSnapshot(sourceSnapshotInfo, proof.sourceInfo))
     {
         return false;
     }
@@ -3263,9 +3644,7 @@ struct MoveSourceDeleteStats final
         return false;
     }
 
-    const uint64_t sourceBytes      = FileSizeFromInformation(sourceReadInfo);
-    const uint64_t destinationBytes = FileSizeFromInformation(destinationInfo);
-    return sourceBytes == destinationBytes && FileContentsEqual(sourceReadHandle.get(), destinationReadHandle.get(), sourceBytes);
+    return SameFileSnapshot(destinationInfo, proof.destinationInfo);
 }
 
 // Move-fallback delete phase: deletes a source entry only when its destination counterpart
@@ -3376,7 +3755,7 @@ HRESULT DeleteCopiedSourceEntryForMove(OperationContext& context,
         return S_OK;
     }
 
-    if (! DestinationMatchesSourceFile(sourceExtended, snapshot, destinationExtended))
+    if (! DestinationMatchesSourceFile(sourceExtended, snapshot, destinationExtended, context.moveCopyProofs))
     {
         stats.anySkipped = true;
         return S_OK;
@@ -3520,7 +3899,11 @@ HRESULT CopyFileInternal(OperationContext& context, const PathInfo& source, cons
         if (! allowOverwriteEffective)
         {
             uint64_t identicalBytes = 0;
-            if (PlainFilesEqualByContentNoFollow(source.extended, destination.extended, &identicalBytes))
+            const bool existingFilesMatch = context.moveCopyProofs != nullptr
+                                                ? SUCCEEDED(RecordExistingIdenticalMoveCopyProof(
+                                                      context, source.extended, destination.extended, identicalBytes))
+                                                : PlainFilesEqualByContentNoFollow(source.extended, destination.extended, &identicalBytes);
+            if (existingFilesMatch)
             {
                 *bytesCopied = identicalBytes;
                 if (context.parallel)
@@ -3538,7 +3921,10 @@ HRESULT CopyFileInternal(OperationContext& context, const PathInfo& source, cons
                 {
                     return HRESULT_FROM_WIN32(ERROR_CANCELLED);
                 }
-                return FAILED(progressHr) ? progressHr : S_OK;
+                // S_FALSE is the ABI's host-visible "completed without rewriting" status hint.
+                // The destination bytes already matched, but metadata, ACLs, and alternate streams
+                // remain destination-owned and therefore this is not a full overwrite success.
+                return FAILED(progressHr) ? progressHr : S_FALSE;
             }
 
             return returnFailure(HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS));
@@ -3561,8 +3947,21 @@ HRESULT CopyFileInternal(OperationContext& context, const PathInfo& source, cons
         }
     }
 
+    wil::unique_handle moveProofSourceHandle;
+    BY_HANDLE_FILE_INFORMATION moveProofSourceBefore{};
     uint64_t fileBytes = 0;
-    hr                 = GetFileSizeBytes(source.extended, &fileBytes);
+    if (context.moveCopyProofs != nullptr)
+    {
+        if (! OpenPlainFileForReadNoFollow(source.extended, moveProofSourceHandle, moveProofSourceBefore))
+        {
+            return returnFailure(HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY));
+        }
+        fileBytes = FileSizeFromInformation(moveProofSourceBefore);
+    }
+    else
+    {
+        hr = GetFileSizeBytes(source.extended, &fileBytes);
+    }
     if (FAILED(hr))
     {
         return returnFailure(hr);
@@ -3584,27 +3983,50 @@ HRESULT CopyFileInternal(OperationContext& context, const PathInfo& source, cons
         return returnFailure(hr, fileBytes, 0);
     }
 
-    const DWORD copyFlags = allowOverwriteEffective ? 0u : COPY_FILE_FAIL_IF_EXISTS;
-    if (! CopyFileExW(source.extended.c_str(), destination.extended.c_str(), CopyProgressRoutine, &progress, nullptr, copyFlags))
+    HRESULT copyHr = S_OK;
+    if (allowOverwriteEffective)
+    {
+        copyHr = CopyFileExWithStagedOverwrite(context, source, destination, 0u, progress, fileBytes, true, false);
+    }
+    else if (! CopyFileExW(source.extended.c_str(), destination.extended.c_str(), CopyProgressRoutine, &progress, nullptr, COPY_FILE_FAIL_IF_EXISTS))
     {
         const DWORD error = GetLastError();
         if (ShouldRollbackCopiedDestination(destinationExisted, false))
         {
             static_cast<void>(TryRollbackCopiedDestination(destination.extended));
         }
-        if (error == ERROR_REQUEST_ABORTED || error == ERROR_CANCELLED)
+        copyHr = (error == ERROR_REQUEST_ABORTED || error == ERROR_CANCELLED) ? HRESULT_FROM_WIN32(ERROR_CANCELLED)
+                                                                              : HRESULT_FROM_WIN32(error != 0u ? error : ERROR_GEN_FAILURE);
+    }
+
+    if (FAILED(copyHr))
+    {
+        if (IsCancellationHr(copyHr))
         {
             const HRESULT hrCancelled = HRESULT_FROM_WIN32(ERROR_CANCELLED);
             EmitSequentialThrottleSummary(context, progress, fileBytes, hrCancelled);
             return hrCancelled;
         }
-        const HRESULT hrFailure = returnFailure(HRESULT_FROM_WIN32(error), fileBytes, progress.lastItemBytesTransferred);
+
+        if (allowOverwriteEffective)
+        {
+            RollBackStagedProgress(context, progress);
+        }
+        const HRESULT hrFailure = returnFailure(copyHr, fileBytes, progress.lastItemBytesTransferred);
         EmitSequentialThrottleSummary(context, progress, fileBytes, hrFailure);
         return hrFailure;
     }
 
     restoreDestinationReadonly = false;
     *bytesCopied               = fileBytes;
+    const HRESULT proofHr = RecordCompletedMoveCopyProof(
+        context, source.extended, moveProofSourceHandle.get(), moveProofSourceBefore, destination.extended);
+    if (FAILED(proofHr))
+    {
+        const HRESULT hrFailure = returnFailure(proofHr, fileBytes, fileBytes);
+        EmitSequentialThrottleSummary(context, progress, fileBytes, hrFailure);
+        return hrFailure;
+    }
     if (context.parallel)
     {
         if (fileBytes > progress.lastItemBytesTransferred)
@@ -3717,28 +4139,41 @@ CopyReparsePointInternal(OperationContext& context, const PathInfo& source, cons
             restoreDestinationReadonly = true;
         }
 
-        const DWORD overwriteFlag = allowOverwriteEffective ? 0u : COPY_FILE_FAIL_IF_EXISTS;
-        const DWORD copyFlags     = overwriteFlag | COPY_FILE_COPY_SYMLINK;
-        if (! CopyFileExW(source.extended.c_str(), destination.extended.c_str(), CopyProgressRoutine, &progress, nullptr, copyFlags))
+        HRESULT copyHr = S_OK;
+        if (allowOverwriteEffective)
+        {
+            copyHr = CopyFileExWithStagedOverwrite(context, source, destination, COPY_FILE_COPY_SYMLINK, progress, fileBytes, false, true);
+        }
+        else if (! CopyFileExW(source.extended.c_str(),
+                               destination.extended.c_str(),
+                               CopyProgressRoutine,
+                               &progress,
+                               nullptr,
+                               COPY_FILE_FAIL_IF_EXISTS | COPY_FILE_COPY_SYMLINK))
         {
             const DWORD error = GetLastError();
             if (ShouldRollbackCopiedDestination(destinationExisted, false))
             {
                 static_cast<void>(TryRollbackCopiedDestination(destination.extended));
             }
-            if (error == ERROR_REQUEST_ABORTED || error == ERROR_CANCELLED)
+            copyHr = (error == ERROR_REQUEST_ABORTED || error == ERROR_CANCELLED) ? HRESULT_FROM_WIN32(ERROR_CANCELLED)
+                                                                                  : HRESULT_FROM_WIN32(error != 0u ? error : ERROR_GEN_FAILURE);
+        }
+
+        if (FAILED(copyHr))
+        {
+            if (IsCancellationHr(copyHr))
             {
                 const HRESULT hrCancelled = HRESULT_FROM_WIN32(ERROR_CANCELLED);
                 EmitSequentialThrottleSummary(context, progress, fileBytes, hrCancelled);
                 return hrCancelled;
             }
-            if (error == ERROR_INVALID_PARAMETER)
+            copyHr = NormalizeReparseCopyFailure(copyHr, allowOverwriteEffective);
+            if (allowOverwriteEffective)
             {
-                const HRESULT hrFailure = returnFailure(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED), fileBytes, progress.lastItemBytesTransferred);
-                EmitSequentialThrottleSummary(context, progress, fileBytes, hrFailure);
-                return hrFailure;
+                RollBackStagedProgress(context, progress);
             }
-            const HRESULT hrFailure = returnFailure(HRESULT_FROM_WIN32(error), fileBytes, progress.lastItemBytesTransferred);
+            const HRESULT hrFailure = returnFailure(copyHr, fileBytes, progress.lastItemBytesTransferred);
             EmitSequentialThrottleSummary(context, progress, fileBytes, hrFailure);
             return hrFailure;
         }
@@ -3887,8 +4322,7 @@ CopyReparsePointInternal(OperationContext& context, const PathInfo& source, cons
         {
             const std::wstring normalizedDestinationRoot =
                 TrimTrailingSeparatorsPreserveRoot(StripWin32ExtendedPrefix(MakeAbsolutePath(context.reparseRootDestinationPath)));
-            const std::wstring normalizedMappedTarget =
-                TrimTrailingSeparatorsPreserveRoot(StripWin32ExtendedPrefix(MakeAbsolutePath(mappedTargetPath)));
+            const std::wstring normalizedMappedTarget = TrimTrailingSeparatorsPreserveRoot(StripWin32ExtendedPrefix(MakeAbsolutePath(mappedTargetPath)));
             if (! IsPathWithinRoot(normalizedMappedTarget, normalizedDestinationRoot))
             {
                 return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
@@ -4037,6 +4471,7 @@ HRESULT CopyDirectoryInternal(OperationContext& context, const PathInfo& source,
 
     bool hadFailure = false;
     bool hadSkipped = false;
+    bool hadIdenticalFileSkip = false;
 
     do
     {
@@ -4105,6 +4540,10 @@ HRESULT CopyDirectoryInternal(OperationContext& context, const PathInfo& source,
                 childHr = CopyFileInternal(context, childSource, childDestination, &childBytes);
             }
 
+            if (childHr == S_FALSE)
+            {
+                hadIdenticalFileSkip = true;
+            }
             if (SUCCEEDED(childHr))
             {
                 break;
@@ -4184,7 +4623,7 @@ HRESULT CopyDirectoryInternal(OperationContext& context, const PathInfo& source,
         return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
     }
 
-    return S_OK;
+    return hadIdenticalFileSkip ? S_FALSE : S_OK;
 }
 
 HRESULT CopyPathInternal(OperationContext& context, const PathInfo& source, const PathInfo& destination, uint64_t* bytesCopied) noexcept
@@ -4324,6 +4763,7 @@ struct RecursiveCopyWorkItem
 
     std::atomic<bool> hadFailure{false};
     std::atomic<bool> hadSkipped{false};
+    std::atomic<bool> hadIdenticalFileSkip{false};
 
     std::atomic<uint64_t> queuedFiles{0};
     std::atomic<uint64_t> queuedDirectories{0};
@@ -4382,6 +4822,7 @@ struct RecursiveCopyWorkItem
             context, rootContext.type, flags, sharedOptionsState, rootContext.callback, rootContext.callbackCookie, 1, reparsePointPolicy);
         context.options                    = sharedOptionsState;
         context.parallel                   = &parallel;
+        context.moveCopyProofs             = rootContext.moveCopyProofs;
         context.totalBytes                 = 0; // let the host provide totals via pre-calc
         context.progressStreamId           = progressStreamId;
         context.reparseRootSourcePath      = rootSource;
@@ -4482,8 +4923,7 @@ struct RecursiveCopyWorkItem
         {
             // Same rule as the serial path: a reparse-point destination is never a silent
             // merge target; Overwrite consent replaces the link with a real directory.
-            const bool destinationIsRealDirectory =
-                (destinationAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0 && ! IsReparsePoint(destinationAttributes);
+            const bool destinationIsRealDirectory = (destinationAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0 && ! IsReparsePoint(destinationAttributes);
             if (! destinationIsRealDirectory)
             {
                 if (! HasOverwriteGrant(context))
@@ -4653,6 +5093,10 @@ struct RecursiveCopyWorkItem
                     break;
             }
 
+            if (itemHr == S_FALSE)
+            {
+                hadIdenticalFileSkip.store(true, std::memory_order_release);
+            }
             if (SUCCEEDED(itemHr))
             {
                 return;
@@ -4838,7 +5282,7 @@ struct RecursiveCopyWorkItem
         return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
     }
 
-    return S_OK;
+    return hadIdenticalFileSkip.load(std::memory_order_acquire) ? S_FALSE : S_OK;
 }
 
 [[nodiscard]] HRESULT CopyPathInternalWithDirectoryParallelism(OperationContext& context,
@@ -4992,8 +5436,7 @@ HRESULT MoveDirectoryMergeByRename(OperationContext& context,
 
     std::wstring searchPattern = AppendPath(sourceExtended, L"*");
     WIN32_FIND_DATAW data{};
-    wil::unique_hfind findHandle(
-        FindFirstFileExW(searchPattern.c_str(), FindExInfoBasic, &data, FindExSearchNameMatch, nullptr, FIND_FIRST_EX_LARGE_FETCH));
+    wil::unique_hfind findHandle(FindFirstFileExW(searchPattern.c_str(), FindExInfoBasic, &data, FindExSearchNameMatch, nullptr, FIND_FIRST_EX_LARGE_FETCH));
     if (! findHandle)
     {
         if (::GetLastError() != ERROR_FILE_NOT_FOUND)
@@ -5125,8 +5568,8 @@ HRESULT MovePathInternal(OperationContext& context,
     const bool sourceIsDirectory = (sourceAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
     const bool sourceIsReparse   = IsReparsePoint(sourceAttributes);
 
-    bool caseOnlyRename         = false;
-    DWORD destinationAttributes = GetFileAttributesW(destination.extended.c_str());
+    bool caseOnlyRename                     = false;
+    DWORD destinationAttributes             = GetFileAttributesW(destination.extended.c_str());
     const bool destinationExistedBeforeCopy = destinationAttributes != INVALID_FILE_ATTRIBUTES;
     const bool destinationIsDirectory       = destinationExistedBeforeCopy && (destinationAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
     const bool directoryMergeDestination    = sourceIsDirectory && ! sourceIsReparse && destinationIsDirectory;
@@ -5353,6 +5796,11 @@ HRESULT MovePathInternal(OperationContext& context,
         }
     }
 
+    MoveCopyProofManifest moveCopyProofs;
+    MoveCopyProofManifest* const previousMoveCopyProofs = context.moveCopyProofs;
+    context.moveCopyProofs = &moveCopyProofs;
+    auto restoreMoveCopyProofs = wil::scope_exit([&]() noexcept { context.moveCopyProofs = previousMoveCopyProofs; });
+
     uint64_t bytesCopied = 0;
     const HRESULT copyHr = CopyPathInternalWithDirectoryParallelism(context, source, destination, flags, reparsePointPolicy, maxCopyConcurrency, &bytesCopied);
     if (FAILED(copyHr))
@@ -5442,14 +5890,14 @@ HRESULT MovePathInternal(OperationContext& context,
     DeletePhaseCallback deleteCallback(context.callback);
 
     OperationContext deleteContext{};
-    deleteContext.type           = FILESYSTEM_DELETE;
-    deleteContext.callback       = &deleteCallback;
-    deleteContext.callbackCookie = context.callbackCookie;
-    deleteContext.options        = nullptr;
-    deleteContext.totalItems     = 0;
-    deleteContext.completedItems = 0;
-    deleteContext.totalBytes     = 0;
-    deleteContext.completedBytes = 0;
+    deleteContext.type            = FILESYSTEM_DELETE;
+    deleteContext.callback        = &deleteCallback;
+    deleteContext.callbackCookie  = context.callbackCookie;
+    deleteContext.options         = nullptr;
+    deleteContext.totalItems      = 0;
+    deleteContext.completedItems  = 0;
+    deleteContext.totalBytes      = 0;
+    deleteContext.completedBytes  = 0;
     deleteContext.continueOnError = false;
     deleteContext.allowOverwrite  = false;
     // Moving owns the source: a readonly source is removed after its copy is verified, matching
@@ -5458,6 +5906,7 @@ HRESULT MovePathInternal(OperationContext& context,
     deleteContext.recursive              = true;
     deleteContext.useRecycleBin          = false;
     deleteContext.parallel               = nullptr;
+    deleteContext.moveCopyProofs         = &moveCopyProofs;
     deleteContext.lastProgressReportTick = 0;
 
     // Delete only entries whose destination counterpart proves they were copied. A blind
@@ -6583,9 +7032,9 @@ struct DeleteFlattenResult final
 
         // NOTE: child frames are pushed onto the same vector while enumerating this directory.
         // Avoid holding references into `stack` across `push_back` (realloc can invalidate).
-        bool capReached        = false;
-        const HRESULT walkHr   = EnumerateDirectoryByHandle(frame.handle.get(),
-                                                            [&](std::wstring_view name, DWORD childAttributes, uint64_t /*sizeBytes*/) noexcept -> HRESULT
+        bool capReached      = false;
+        const HRESULT walkHr = EnumerateDirectoryByHandle(frame.handle.get(),
+                                                          [&](std::wstring_view name, DWORD childAttributes, uint64_t /*sizeBytes*/) noexcept -> HRESULT
         {
             const std::wstring childName(name);
 

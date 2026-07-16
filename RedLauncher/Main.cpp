@@ -309,6 +309,13 @@ void ShowError(std::wstring_view message)
 
 int LaunchRedSalamander()
 {
+    if (::SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_SYSTEM32 | LOAD_LIBRARY_SEARCH_APPLICATION_DIR) == FALSE)
+    {
+        const DWORD error = ::GetLastError();
+        ShowError(std::format(L"Failed to configure safe DLL search directories. Win32 error {}.", error));
+        return 1;
+    }
+
     if (! IsCurrentWindowsVersionSupported())
     {
         ShowError(kUnsupportedWindowsMessage);
@@ -355,7 +362,8 @@ int LaunchRedSalamander()
     ::GetStartupInfoW(&startupInfo);
 
     PROCESS_INFORMATION processInfo{};
-    if (::CreateProcessW(targetPath.c_str(), commandLineBuffer.data(), nullptr, nullptr, FALSE, 0u, nullptr, nullptr, &startupInfo, &processInfo) == FALSE)
+    if (::CreateProcessW(
+            targetPath.c_str(), commandLineBuffer.data(), nullptr, nullptr, FALSE, 0u, nullptr, packageDirectory.c_str(), &startupInfo, &processInfo) == FALSE)
     {
         const DWORD error = ::GetLastError();
         ShowError(std::format(L"Failed to launch '{}'. Win32 error {}.", targetPath, error));

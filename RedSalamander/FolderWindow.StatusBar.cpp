@@ -2,8 +2,12 @@
 
 #include "ConnectionProfileUtils.h"
 #include "DxUi/DxUi.Typography.h"
+#include "FileMetadataFormatting.h"
 #include "FluentIcons.h"
+#include "Helpers.h"
+#include "HwndRenderTargetResources.h"
 #include "SettingsStore.h"
+#include "WindowSizing.h"
 
 #include <d2d1.h>
 #include <windowsx.h>
@@ -14,6 +18,7 @@ constexpr int kStatusBarFocusLineHeightDip        = 2;
 constexpr int kStatusBarSecurityMinPartWidthDip   = 90;
 constexpr int kStatusBarSecurityMaxPartWidthDip   = 240;
 constexpr wchar_t kStatusBarRenderResourcesProp[] = L"RedSalamander.StatusBar.RenderResources";
+using Common::WindowSizing::PixelToDip;
 
 struct StatusBarParts final
 {
@@ -22,27 +27,19 @@ struct StatusBarParts final
     RECT sort{};
 };
 
-struct StatusBarRenderResources final
+struct StatusBarRenderResources final : Common::Rendering::HwndRenderTargetResources
 {
     UINT dpi                 = USER_DEFAULT_SCREEN_DPI;
     bool fluentIconAvailable = false;
-    wil::com_ptr<ID2D1Factory> d2dFactory;
     wil::com_ptr<IDWriteFactory> dwriteFactory;
     wil::com_ptr<IDWriteInlineObject> ellipsisSign;
-    wil::com_ptr<ID2D1HwndRenderTarget> target;
     wil::com_ptr<IDWriteTextFormat> selectionFormat;
     wil::com_ptr<IDWriteTextFormat> securityFormat;
     wil::com_ptr<IDWriteTextFormat> sortTextFormat;
     wil::com_ptr<IDWriteTextFormat> arrowFormat;
     wil::com_ptr<IDWriteTextFormat> iconLeadingFormat;
     wil::com_ptr<IDWriteTextFormat> iconCenteredFormat;
-    wil::com_ptr<ID2D1SolidColorBrush> solidBrush;
 };
-
-[[nodiscard]] float PixelToDip(float value, float dpi) noexcept
-{
-    return (value * static_cast<float>(USER_DEFAULT_SCREEN_DPI)) / std::max(1.0f, dpi);
-}
 
 [[nodiscard]] D2D1_RECT_F RectF(const RECT& rc, float dpi) noexcept
 {
@@ -70,8 +67,7 @@ struct StatusBarRenderResources final
 
 void ResetStatusBarTarget(StatusBarRenderResources& resources) noexcept
 {
-    resources.solidBrush.reset();
-    resources.target.reset();
+    resources.ResetTarget();
 }
 
 void ResetStatusBarTypography(StatusBarRenderResources& resources) noexcept
@@ -121,13 +117,9 @@ void DestroyStatusBarRenderResources(HWND hwnd) noexcept
 
 [[nodiscard]] bool EnsureStatusBarFactories(StatusBarRenderResources& resources) noexcept
 {
-    if (! resources.d2dFactory)
+    if (! resources.EnsureD2dFactory())
     {
-        const HRESULT hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, resources.d2dFactory.addressof());
-        if (FAILED(hr))
-        {
-            resources.d2dFactory.reset();
-        }
+        return false;
     }
 
     if (! resources.dwriteFactory)
@@ -295,53 +287,7 @@ void ApplyStatusBarTextTrimming(IDWriteTextFormat* format, IDWriteInlineObject* 
 
 [[nodiscard]] bool EnsureStatusBarTarget(HWND hwnd, StatusBarRenderResources& resources) noexcept
 {
-    if (! EnsureStatusBarFactories(resources))
-    {
-        return false;
-    }
-
-    RECT client{};
-    if (! GetClientRect(hwnd, &client))
-    {
-        return false;
-    }
-
-    const UINT width  = static_cast<UINT>(std::max(0L, client.right - client.left));
-    const UINT height = static_cast<UINT>(std::max(0L, client.bottom - client.top));
-    if (width == 0u || height == 0u)
-    {
-        return false;
-    }
-
-    if (! resources.target)
-    {
-        const D2D1_RENDER_TARGET_PROPERTIES props          = D2D1::RenderTargetProperties();
-        const D2D1_HWND_RENDER_TARGET_PROPERTIES hwndProps = D2D1::HwndRenderTargetProperties(hwnd, D2D1::SizeU(width, height));
-
-        wil::com_ptr<ID2D1HwndRenderTarget> target;
-        const HRESULT hr = resources.d2dFactory->CreateHwndRenderTarget(props, hwndProps, target.addressof());
-        if (FAILED(hr) || ! target)
-        {
-            resources.target.reset();
-            return false;
-        }
-
-        target->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_CLEARTYPE);
-        target->SetDpi(static_cast<float>(resources.dpi), static_cast<float>(resources.dpi));
-        resources.target = std::move(target);
-    }
-
-    if (! resources.solidBrush)
-    {
-        const HRESULT hr = resources.target->CreateSolidColorBrush(D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f), resources.solidBrush.addressof());
-        if (FAILED(hr))
-        {
-            resources.solidBrush.reset();
-            return false;
-        }
-    }
-
-    return resources.target && resources.solidBrush;
+    return resources.EnsureTarget(hwnd, resources.dpi);
 }
 
 void InvalidateStatusBarDeviceResources(HWND hwnd, bool resetTypography) noexcept
@@ -438,20 +384,7 @@ void UpdateStatusBarParts(HWND hwnd) noexcept
     return false;
 }
 
-[[nodiscard]] COLORREF BlendColor(COLORREF base, COLORREF overlay, int overlayWeight, int denom) noexcept
-{
-    if (denom <= 0)
-    {
-        return base;
-    }
-    overlayWeight        = std::clamp(overlayWeight, 0, denom);
-    const int baseWeight = denom - overlayWeight;
-
-    const int r = (static_cast<int>(GetRValue(base)) * baseWeight + static_cast<int>(GetRValue(overlay)) * overlayWeight) / denom;
-    const int g = (static_cast<int>(GetGValue(base)) * baseWeight + static_cast<int>(GetGValue(overlay)) * overlayWeight) / denom;
-    const int b = (static_cast<int>(GetBValue(base)) * baseWeight + static_cast<int>(GetBValue(overlay)) * overlayWeight) / denom;
-    return RGB(static_cast<BYTE>(r), static_cast<BYTE>(g), static_cast<BYTE>(b));
-}
+using Common::Colors::BlendColorRefWeightedTruncate;
 
 void FillStatusBarRect(StatusBarRenderResources& resources, const RECT& rc, COLORREF color) noexcept
 {
@@ -572,7 +505,7 @@ void PaintSortIndicatorGlyph(StatusBarRenderResources& resources, const RECT& rc
         return theme.menu.text;
     }
 
-    return BlendColor(theme.menu.background, theme.menu.text, 9, 20);
+    return BlendColorRefWeightedTruncate(theme.menu.background, theme.menu.text, 9, 20);
 }
 
 [[nodiscard]] bool PaintStatusBarDirectWrite(HWND hwnd) noexcept
@@ -640,7 +573,7 @@ void PaintSortIndicatorGlyph(StatusBarRenderResources& resources, const RECT& rc
     const bool hot = GetPropW(hwnd, kStatusBarSortHotProp) != nullptr;
     if (hot && has2)
     {
-        const COLORREF hotBg = BlendColor(theme.menu.background, theme.menu.selectionBg, 1, 2);
+        const COLORREF hotBg = BlendColorRefWeightedTruncate(theme.menu.background, theme.menu.selectionBg, 1, 2);
         FillStatusBarRect(*resources, part2, hotBg);
 
         RECT frame              = part2;
@@ -672,7 +605,7 @@ void PaintSortIndicatorGlyph(StatusBarRenderResources& resources, const RECT& rc
 
         if (securityRect.bottom > securityRect.top)
         {
-            const COLORREF securityBg = BlendColor(theme.menu.background, theme.menu.selectionBg, 1, 5);
+            const COLORREF securityBg = BlendColorRefWeightedTruncate(theme.menu.background, theme.menu.selectionBg, 1, 5);
             FillStatusBarRect(*resources, securityRect, securityBg);
         }
     }
@@ -972,65 +905,11 @@ LRESULT CALLBACK StatusBarWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPa
 namespace
 {
 
-std::wstring FormatLocalTime(int64_t fileTime)
-{
-    if (fileTime <= 0)
-    {
-        return {};
-    }
-
-    ULARGE_INTEGER uli{};
-    uli.QuadPart = static_cast<ULONGLONG>(fileTime);
-
-    FILETIME ft{};
-    ft.dwLowDateTime  = uli.LowPart;
-    ft.dwHighDateTime = uli.HighPart;
-
-    FILETIME local{};
-    SYSTEMTIME st{};
-    if (! FileTimeToLocalFileTime(&ft, &local) || ! FileTimeToSystemTime(&local, &st))
-    {
-        return {};
-    }
-
-    return std::format(L"{:04d}-{:02d}-{:02d} {:02d}:{:02d}", st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute);
-}
-
-std::wstring FormatFileAttributes(DWORD attrs)
-{
-    std::wstring result;
-    result.reserve(10);
-
-    auto add = [&](DWORD flag, wchar_t ch)
-    {
-        if ((attrs & flag) != 0)
-        {
-            result.push_back(ch);
-        }
-    };
-
-    add(FILE_ATTRIBUTE_READONLY, L'R');
-    add(FILE_ATTRIBUTE_HIDDEN, L'H');
-    add(FILE_ATTRIBUTE_SYSTEM, L'S');
-    add(FILE_ATTRIBUTE_ARCHIVE, L'A');
-    add(FILE_ATTRIBUTE_COMPRESSED, L'C');
-    add(FILE_ATTRIBUTE_ENCRYPTED, L'E');
-    add(FILE_ATTRIBUTE_TEMPORARY, L'T');
-    add(FILE_ATTRIBUTE_OFFLINE, L'O');
-    add(FILE_ATTRIBUTE_REPARSE_POINT, L'P');
-
-    if (result.empty())
-    {
-        result = L"-";
-    }
-
-    return result;
-}
-
 std::wstring BuildSingleItemSummaryText(const FolderView::SelectionStats::SelectedItemDetails& details, std::wstring_view directorySizeText)
 {
-    const std::wstring timeText  = FormatLocalTime(details.lastWriteTime);
-    const std::wstring attrsText = FormatFileAttributes(details.fileAttributes);
+    const auto fields = Common::FileMetadata::FormatDisplayFields(
+        {.lastWriteTime100nsSince1601 = details.lastWriteTime, .fileAttributes = details.fileAttributes},
+        Common::FileMetadata::DisplayProfile::CompactDetails);
 
     if (details.isDirectory)
     {
@@ -1040,19 +919,21 @@ std::wstring BuildSingleItemSummaryText(const FolderView::SelectionStats::Select
             sizeText = LoadEmbeddedStringResource(nullptr, IDS_STATUS_SIZE_UNKNOWN);
         }
 
-        if (! timeText.empty())
+        if (! fields.localTime.empty())
         {
-            return FormatEmbeddedStringResource(nullptr, IDS_FMT_STATUS_SELECTED_SINGLE_DIR_TIME_ATTRS, sizeText, timeText, attrsText);
+            return FormatEmbeddedStringResource(
+                nullptr, IDS_FMT_STATUS_SELECTED_SINGLE_DIR_TIME_ATTRS, sizeText, fields.localTime, fields.attributes);
         }
-        return FormatEmbeddedStringResource(nullptr, IDS_FMT_STATUS_SELECTED_SINGLE_DIR_ATTRS, sizeText, attrsText);
+        return FormatEmbeddedStringResource(nullptr, IDS_FMT_STATUS_SELECTED_SINGLE_DIR_ATTRS, sizeText, fields.attributes);
     }
 
     const std::wstring sizeText = FormatBytesCompact(details.sizeBytes);
-    if (! timeText.empty())
+    if (! fields.localTime.empty())
     {
-        return FormatEmbeddedStringResource(nullptr, IDS_FMT_STATUS_SELECTED_SINGLE_FILE_SIZE_TIME_ATTRS, sizeText, timeText, attrsText);
+        return FormatEmbeddedStringResource(
+            nullptr, IDS_FMT_STATUS_SELECTED_SINGLE_FILE_SIZE_TIME_ATTRS, sizeText, fields.localTime, fields.attributes);
     }
-    return FormatEmbeddedStringResource(nullptr, IDS_FMT_STATUS_SELECTED_SINGLE_FILE_SIZE_ATTRS, sizeText, attrsText);
+    return FormatEmbeddedStringResource(nullptr, IDS_FMT_STATUS_SELECTED_SINGLE_FILE_SIZE_ATTRS, sizeText, fields.attributes);
 }
 
 std::wstring BuildSelectionSummaryText(const FolderView::SelectionStats& stats,

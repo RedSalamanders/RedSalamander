@@ -287,10 +287,18 @@ LRESULT NavigationView::OnFullPathPopupLButtonDblClk(HWND /*hwnd*/, POINT pt)
     return 0;
 }
 
-LRESULT NavigationView::OnFullPathPopupActivate(WORD state)
+LRESULT NavigationView::OnFullPathPopupActivate(WORD state, HWND activatingWindow)
 {
     if (state == WA_INACTIVE)
     {
+        if (_fullPathPopupEditMode)
+        {
+            return 0;
+        }
+        if (_fullPathPopup && activatingWindow && (activatingWindow == _fullPathPopup.get() || IsChild(_fullPathPopup.get(), activatingWindow) != FALSE))
+        {
+            return 0;
+        }
         CloseFullPathPopup();
     }
     return 0;
@@ -388,7 +396,7 @@ LRESULT NavigationView::FullPathPopupWndProc(HWND hwnd, UINT msg, WPARAM wp, LPA
         case WM_MOUSELEAVE: return OnFullPathPopupMouseLeave(hwnd);
         case WM_LBUTTONDOWN: return OnFullPathPopupLButtonDown(hwnd, {GET_X_LPARAM(lp), GET_Y_LPARAM(lp)});
         case WM_LBUTTONDBLCLK: return OnFullPathPopupLButtonDblClk(hwnd, {GET_X_LPARAM(lp), GET_Y_LPARAM(lp)});
-        case WM_ACTIVATE: return OnFullPathPopupActivate(LOWORD(wp));
+        case WM_ACTIVATE: return OnFullPathPopupActivate(LOWORD(wp), reinterpret_cast<HWND>(lp));
         case WM_KEYDOWN: return OnFullPathPopupKeyDown(wp);
         case WM_SYSKEYDOWN: return OnFullPathPopupSysKeyDown(hwnd, wp, lp);
         case WM_SYSCHAR: return OnFullPathPopupSysChar(hwnd, wp, lp);
@@ -941,8 +949,13 @@ void NavigationView::RenderFullPathPopup()
     }
 
     _fullPathPopupTarget->BeginDraw();
-    auto endDraw = wil::scope_exit([&]
+    const auto endDraw = wil::scope_exit([&]
     {
+        if (! _fullPathPopupTarget)
+        {
+            return;
+        }
+
         const HRESULT hrEnd = _fullPathPopupTarget->EndDraw();
         if (FAILED(hrEnd))
         {
@@ -1016,12 +1029,6 @@ void NavigationView::RenderFullPathPopup()
 
         _fullPathPopupTarget->SetTransform(D2D1::Matrix3x2F::Identity());
         _fullPathPopupTarget->PopAxisAlignedClip();
-    }
-
-    const HRESULT hr = _fullPathPopupTarget->EndDraw();
-    if (hr == D2DERR_RECREATE_TARGET)
-    {
-        DiscardFullPathPopupD2DResources();
     }
 }
 
@@ -1208,7 +1215,7 @@ void NavigationView::ExitFullPathPopupEditMode(bool accept)
 
         _fullPathPopupEditMode = false;
         _fullPathPopupEdit->DeactivateForHideOrDestroy();
-        const HWND focused     = GetFocus();
+        const HWND focused = GetFocus();
         if (focused && _fullPathPopupEdit->hwnd &&
             (focused == _fullPathPopupEdit->hwnd.get() || focused == _fullPathPopupEdit->GetTextInputHwnd() ||
              IsChild(_fullPathPopupEdit->hwnd.get(), focused) != FALSE))

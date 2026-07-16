@@ -1,0 +1,12 @@
+#include <windows.h>
+#include "FileSystemMtpResources.h"
+
+STRINGTABLE
+BEGIN
+    IDS_FILESYSTEMMTP_NAME "MTP"
+    IDS_FILESYSTEMMTP_DESCRIPTION "Portable MTP/PTP devices over Windows Portable Devices."
+    IDS_FILESYSTEMMTP_FSNAME "MTP"
+    IDS_FILESYSTEMMTP_MENU_NO_DEVICES "No portable devices"
+    IDS_FILESYSTEMMTP_MENU_PROPERTIES "Properties"
+    IDS_FILESYSTEMMTP_MENU_DISCONNECT "Disconnect"
+END

@@ -1,5 +1,8 @@
 #pragma once
 
+#include "StringConversion.h"
+#include "PathUtils.h"
+
 #include <algorithm>
 #include <cstdint>
 #include <cwctype>
@@ -72,18 +75,7 @@ enum class TrailingSlashPolicy
 
 [[nodiscard]] inline bool LooksLikeWindowsDrivePath(std::wstring_view text) noexcept
 {
-    if (text.size() < 2u)
-    {
-        return false;
-    }
-
-    const wchar_t first = text[0];
-    if (! ((first >= L'A' && first <= L'Z') || (first >= L'a' && first <= L'z')))
-    {
-        return false;
-    }
-
-    return text[1] == L':';
+    return Common::Paths::IsDriveQualifiedWindowsPath(text);
 }
 
 [[nodiscard]] inline bool LooksLikeExtendedPath(std::wstring_view text) noexcept;
@@ -126,32 +118,21 @@ enum class TrailingSlashPolicy
 
 [[nodiscard]] inline bool LooksLikeUncPath(std::wstring_view text) noexcept
 {
-    return text.rfind(L"\\\\", 0) == 0 || text.rfind(L"//", 0) == 0;
+    return Common::Paths::ClassifyWindowsPath(text) == Common::Paths::WindowsPathClass::Unc;
 }
 
 [[nodiscard]] inline bool LooksLikeExtendedPath(std::wstring_view text) noexcept
 {
-    return text.rfind(L"\\\\?\\", 0) == 0 || text.rfind(L"\\\\.\\", 0) == 0;
+    return Common::Paths::IsExtendedWindowsPath(text) || Common::Paths::IsDeviceWindowsPath(text);
 }
 
 [[nodiscard]] inline bool LooksLikeWindowsAbsolutePath(std::wstring_view text) noexcept
 {
-    if (text.empty())
-    {
-        return false;
-    }
-
-    if (LooksLikeExtendedPath(text))
-    {
-        return true;
-    }
-
-    if (LooksLikeUncPath(text))
-    {
-        return true;
-    }
-
-    return LooksLikeWindowsDrivePath(text);
+    const Common::Paths::WindowsPathClass pathClass = Common::Paths::ClassifyWindowsPath(text);
+    return pathClass == Common::Paths::WindowsPathClass::DriveRelative || pathClass == Common::Paths::WindowsPathClass::DriveAbsolute ||
+           pathClass == Common::Paths::WindowsPathClass::Unc || pathClass == Common::Paths::WindowsPathClass::ExtendedDriveAbsolute ||
+           pathClass == Common::Paths::WindowsPathClass::ExtendedUnc || pathClass == Common::Paths::WindowsPathClass::ExtendedOther ||
+           pathClass == Common::Paths::WindowsPathClass::Device;
 }
 
 [[nodiscard]] inline bool IsValidPluginShortId(std::wstring_view prefix) noexcept
@@ -400,15 +381,8 @@ enum class TrailingSlashPolicy
             return true;
         }
 
-        const int byteLen = static_cast<int>(std::min<size_t>(bytes.size(), static_cast<size_t>((std::numeric_limits<int>::max)())));
-        if (byteLen <= 0)
-        {
-            bytes.clear();
-            return true;
-        }
-
-        const int needed = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, bytes.data(), byteLen, nullptr, 0);
-        if (needed <= 0)
+        const std::optional<std::wstring> utf16 = Common::Strings::TryUtf16FromUtf8Strict(bytes);
+        if (! utf16.has_value())
         {
             // Be forgiving: fall back to a byte-wise widening.
             for (const char ch : bytes)
@@ -418,23 +392,7 @@ enum class TrailingSlashPolicy
             bytes.clear();
             return true;
         }
-
-        std::wstring temp;
-        const size_t neededChars = static_cast<size_t>(needed);
-        if (neededChars > temp.max_size())
-        {
-            return false;
-        }
-        temp.resize(neededChars);
-
-        const int written = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, bytes.data(), byteLen, temp.data(), needed);
-        if (written <= 0)
-        {
-            return false;
-        }
-
-        temp.resize(static_cast<size_t>(written));
-        decoded.append(temp);
+        decoded.append(utf16.value());
         bytes.clear();
         return true;
     };

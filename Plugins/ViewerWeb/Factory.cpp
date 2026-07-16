@@ -24,8 +24,11 @@
 #include "ViewerWeb.h"
 #include "resource.h"
 
+#include "PlugInterfaces/FactoryImpl.h"
+
 extern HINSTANCE g_hInstance;
 void ResetSharedEnvironment() noexcept;
+[[nodiscard]] bool CanUnloadViewerWebModuleNow() noexcept;
 
 namespace
 {
@@ -82,140 +85,89 @@ struct LocalizedPluginMetaDataSet
 [[nodiscard]] const LocalizedPluginMetaDataSet& GetPluginMetaDataSet() noexcept
 {
     static const LocalizedPluginMetaDataSet data;
-
     return data;
 }
 
-static std::optional<ViewerWebKind> KindFromPluginId(std::wstring_view pluginId) noexcept
+// Per-entry metadata thunks (return contiguous array elements).
+const PluginMetaData* GetMetaDataWeb() noexcept
 {
-    if (pluginId == L"builtin/viewer-web")
-    {
-        return ViewerWebKind::Web;
-    }
-    if (pluginId == L"builtin/viewer-json")
-    {
-        return ViewerWebKind::Json;
-    }
-    if (pluginId == L"builtin/viewer-markdown")
-    {
-        return ViewerWebKind::Markdown;
-    }
-    return std::nullopt;
+    return &GetPluginMetaDataSet().plugins[0];
+}
+const PluginMetaData* GetMetaDataJson() noexcept
+{
+    return &GetPluginMetaDataSet().plugins[1];
+}
+const PluginMetaData* GetMetaDataMarkdown() noexcept
+{
+    return &GetPluginMetaDataSet().plugins[2];
 }
 
-[[nodiscard]] const char* GetPluginSchema(std::wstring_view pluginId) noexcept
+// Per-entry schema thunks.
+const char* GetSchemaWeb() noexcept
 {
-    const auto kind = KindFromPluginId(pluginId);
-    if (! kind.has_value())
-    {
-        return nullptr;
-    }
-
-    return GetViewerWebStaticConfigurationSchema(kind.value());
+    return GetViewerWebStaticConfigurationSchema(ViewerWebKind::Web);
 }
+const char* GetSchemaJson() noexcept
+{
+    return GetViewerWebStaticConfigurationSchema(ViewerWebKind::Json);
+}
+const char* GetSchemaMarkdown() noexcept
+{
+    return GetViewerWebStaticConfigurationSchema(ViewerWebKind::Markdown);
+}
+
+// Per-entry creation thunks.
+HRESULT CreateInstanceWeb(const FactoryOptions* /*factoryOptions*/, IHost* host, void** result) noexcept
+{
+    auto* instance = new (std::nothrow) ViewerWeb(ViewerWebKind::Web);
+    if (! instance)
+        return E_OUTOFMEMORY;
+    instance->SetHost(host);
+    const HRESULT hr = instance->QueryInterface(__uuidof(IViewer), result);
+    instance->Release();
+    return hr;
+}
+HRESULT CreateInstanceJson(const FactoryOptions* /*factoryOptions*/, IHost* host, void** result) noexcept
+{
+    auto* instance = new (std::nothrow) ViewerWeb(ViewerWebKind::Json);
+    if (! instance)
+        return E_OUTOFMEMORY;
+    instance->SetHost(host);
+    const HRESULT hr = instance->QueryInterface(__uuidof(IViewer), result);
+    instance->Release();
+    return hr;
+}
+HRESULT CreateInstanceMarkdown(const FactoryOptions* /*factoryOptions*/, IHost* host, void** result) noexcept
+{
+    auto* instance = new (std::nothrow) ViewerWeb(ViewerWebKind::Markdown);
+    if (! instance)
+        return E_OUTOFMEMORY;
+    instance->SetHost(host);
+    const HRESULT hr = instance->QueryInterface(__uuidof(IViewer), result);
+    instance->Release();
+    return hr;
+}
+
+const PluginFactoryEntry kEntries[] = {
+    {&GetMetaDataWeb, &GetSchemaWeb, &CreateInstanceWeb},
+    {&GetMetaDataJson, &GetSchemaJson, &CreateInstanceJson},
+    {&GetMetaDataMarkdown, &GetSchemaMarkdown, &CreateInstanceMarkdown},
+};
 } // namespace
-
-HRESULT CreatePluginInstance(REFIID riid, IHost* host, ViewerWebKind kind, void** result)
-{
-    if (result == nullptr)
-    {
-        return E_POINTER;
-    }
-
-    *result = nullptr;
-
-    if (riid == __uuidof(IViewer))
-    {
-        auto* instance = new (std::nothrow) ViewerWeb(kind);
-        if (! instance)
-        {
-            return E_OUTOFMEMORY;
-        }
-
-        instance->SetHost(host);
-
-        const HRESULT hr = instance->QueryInterface(riid, result);
-        instance->Release();
-        return hr;
-    }
-
-    return E_NOINTERFACE;
-}
 
 extern "C" HRESULT __stdcall RedSalamanderEnumeratePlugins(REFIID riid, const PluginMetaData** metaData, unsigned int* count)
 {
-    if (! metaData || ! count)
-    {
-        return E_POINTER;
-    }
-
-    *metaData = nullptr;
-    *count    = 0;
-
-    if (riid != __uuidof(IViewer))
-    {
-        return E_NOINTERFACE;
-    }
-
-    const auto& plugins = GetPluginMetaDataSet().plugins;
-    *metaData           = plugins.data();
-    *count              = static_cast<unsigned int>(plugins.size());
-    return S_OK;
+    return FactoryEnumeratePlugins<IViewer>(kEntries, riid, metaData, count);
 }
 
-extern "C" HRESULT __stdcall RedSalamanderCreate(REFIID riid, const FactoryOptions* /*factoryOptions*/, IHost* host, const wchar_t* pluginId, void** result)
+extern "C" HRESULT __stdcall RedSalamanderCreate(REFIID riid, const FactoryOptions* factoryOptions, IHost* host, const wchar_t* pluginId, void** result)
 {
-    if (! result)
-    {
-        return E_POINTER;
-    }
-
-    *result = nullptr;
-
-    if (riid != __uuidof(IViewer))
-    {
-        return E_NOINTERFACE;
-    }
-
-    if (! pluginId || pluginId[0] == L'\0')
-    {
-        return E_INVALIDARG;
-    }
-
-    const auto kind = KindFromPluginId(pluginId);
-    if (! kind.has_value())
-    {
-        return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
-    }
-
-    return CreatePluginInstance(riid, host, kind.value(), result);
+    return FactoryCreate<IViewer>(kEntries, riid, factoryOptions, host, pluginId, result);
 }
 
 extern "C" HRESULT __stdcall RedSalamanderGetConfigurationSchema(REFIID riid, const wchar_t* pluginId, const char** schemaJsonUtf8)
 {
-    if (! schemaJsonUtf8)
-    {
-        return E_POINTER;
-    }
-
-    *schemaJsonUtf8 = nullptr;
-    if (riid != __uuidof(IViewer))
-    {
-        return E_NOINTERFACE;
-    }
-    if (! pluginId || pluginId[0] == L'\0')
-    {
-        return E_INVALIDARG;
-    }
-
-    const char* schema = GetPluginSchema(pluginId);
-    if (! schema)
-    {
-        return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
-    }
-
-    *schemaJsonUtf8 = schema;
-    return S_OK;
+    return FactoryGetConfigurationSchema<IViewer>(kEntries, riid, pluginId, schemaJsonUtf8);
 }
 
 extern "C" PLUGFACTORY_API void __stdcall RedSalamanderPluginShutdown() noexcept
@@ -225,5 +177,10 @@ extern "C" PLUGFACTORY_API void __stdcall RedSalamanderPluginShutdown() noexcept
 
 extern "C" PLUGFACTORY_API BOOL __stdcall RedSalamanderPluginRetainModuleUntilProcessExit() noexcept
 {
-    return FALSE;
+    return CanUnloadViewerWebModuleNow() ? FALSE : TRUE;
+}
+
+extern "C" PLUGFACTORY_API BOOL __stdcall RedSalamanderPluginCanUnloadNow() noexcept
+{
+    return CanUnloadViewerWebModuleNow() ? TRUE : FALSE;
 }

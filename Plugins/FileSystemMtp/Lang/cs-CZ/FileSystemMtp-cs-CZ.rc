@@ -1,0 +1,13 @@
+#pragma code_page(65001)
+#include "../../FileSystemMtpResources.h"
+#include <winres.h>
+
+LANGUAGE LANG_CZECH, SUBLANG_DEFAULT
+
+STRINGTABLE
+BEGIN
+    IDS_FILESYSTEMMTP_DESCRIPTION "Prenosna zarizeni MTP/PTP pres Windows Portable Devices."
+    IDS_FILESYSTEMMTP_MENU_NO_DEVICES "Zadna prenosna zarizeni"
+    IDS_FILESYSTEMMTP_MENU_PROPERTIES "Vlastnosti"
+    IDS_FILESYSTEMMTP_MENU_DISCONNECT "Odpojit"
+END

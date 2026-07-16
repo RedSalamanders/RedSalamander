@@ -93,8 +93,8 @@ struct RegexGroupState final
         return result;
     }
 
-    size_t cursor = index + 1u;
-    size_t minimum = 0u;
+    size_t cursor   = index + 1u;
+    size_t minimum  = 0u;
     bool hasMinimum = false;
     while (cursor < pattern.size() && pattern[cursor] >= L'0' && pattern[cursor] <= L'9')
     {
@@ -640,10 +640,10 @@ bool ValidateRegexPatternSafety(std::wstring_view pattern, std::wstring& outReas
     }
 
     std::array<RegexGroupState, kMaxRegexGroupDepth + 1u> groups{};
-    size_t depth = 0u;
-    bool inCharClass = false;
-    bool lastWasEscape = false;
-    bool prevWasOpenParen = false;
+    size_t depth           = 0u;
+    bool inCharClass       = false;
+    bool lastWasEscape     = false;
+    bool prevWasOpenParen  = false;
     bool lastWasGroupClose = false;
     RegexGroupState lastClosedGroup{};
 
@@ -653,17 +653,17 @@ bool ValidateRegexPatternSafety(std::wstring_view pattern, std::wstring& outReas
 
         if (lastWasEscape)
         {
-            lastWasEscape    = false;
+            lastWasEscape     = false;
             lastWasGroupClose = false;
-            prevWasOpenParen = false;
+            prevWasOpenParen  = false;
             continue;
         }
 
         if (ch == L'\\')
         {
-            lastWasEscape    = true;
+            lastWasEscape     = true;
             lastWasGroupClose = false;
-            prevWasOpenParen = false;
+            prevWasOpenParen  = false;
             continue;
         }
 
@@ -678,9 +678,9 @@ bool ValidateRegexPatternSafety(std::wstring_view pattern, std::wstring& outReas
 
         if (ch == L'[')
         {
-            inCharClass      = true;
+            inCharClass       = true;
             lastWasGroupClose = false;
-            prevWasOpenParen = false;
+            prevWasOpenParen  = false;
             continue;
         }
 
@@ -700,9 +700,9 @@ bool ValidateRegexPatternSafety(std::wstring_view pattern, std::wstring& outReas
                 contentStart += 2u;
             }
 
-            groups[depth] = RegexGroupState{.contentStart = contentStart};
+            groups[depth]     = RegexGroupState{.contentStart = contentStart};
             lastWasGroupClose = false;
-            prevWasOpenParen = true;
+            prevWasOpenParen  = true;
             continue;
         }
 
@@ -720,12 +720,9 @@ bool ValidateRegexPatternSafety(std::wstring_view pattern, std::wstring& outReas
             lastClosedGroup = groups[depth];
             --depth;
 
-            groups[depth].containsUnboundedRepetition =
-                groups[depth].containsUnboundedRepetition || lastClosedGroup.containsUnboundedRepetition;
-            groups[depth].containsZeroMinimumRepetition =
-                groups[depth].containsZeroMinimumRepetition || lastClosedGroup.containsZeroMinimumRepetition;
-            groups[depth].hasOverlappingTopLevelAlternate =
-                groups[depth].hasOverlappingTopLevelAlternate || lastClosedGroup.hasOverlappingTopLevelAlternate;
+            groups[depth].containsUnboundedRepetition     = groups[depth].containsUnboundedRepetition || lastClosedGroup.containsUnboundedRepetition;
+            groups[depth].containsZeroMinimumRepetition   = groups[depth].containsZeroMinimumRepetition || lastClosedGroup.containsZeroMinimumRepetition;
+            groups[depth].hasOverlappingTopLevelAlternate = groups[depth].hasOverlappingTopLevelAlternate || lastClosedGroup.hasOverlappingTopLevelAlternate;
 
             lastWasGroupClose = true;
             continue;
@@ -759,13 +756,13 @@ bool ValidateRegexPatternSafety(std::wstring_view pattern, std::wstring& outReas
             }
 
             lastWasGroupClose = false;
-            prevWasOpenParen = false;
-            i = quantifier.end;
+            prevWasOpenParen  = false;
+            i                 = quantifier.end;
             continue;
         }
 
         lastWasGroupClose = false;
-        prevWasOpenParen = false;
+        prevWasOpenParen  = false;
     }
 
     return true;

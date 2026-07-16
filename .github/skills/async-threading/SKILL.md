@@ -175,7 +175,11 @@ When scheduling background work from a **plugin DLL** (viewers/file systems):
 3. If a callback can outlive the host’s last reference to the DLL, **pin the module** for the callback lifetime:
    - add a static anchor in the module: `static const int kMyPluginModuleAnchor = 0;`
    - store `wil::unique_hmodule moduleKeepAlive = AcquireModuleReferenceFromAddress(&kMyPluginModuleAnchor);` in the callback context
-   - touch it in the callback: `static_cast<void>(ctx->moduleKeepAlive);`
+   - if submission fails, let the context destroy the pin normally on the submitting thread
+   - at the start of a threadpool callback, transfer the owning pin with
+     `FreeLibraryWhenCallbackReturns(instance, ctx->moduleKeepAlive.release())`
+
+Do not let the callback context destroy its last `wil::unique_hmodule` while the callback body is returning. `FreeLibrary` can otherwise unmap the plugin's callback code before Windows crosses the callback return boundary. This transfer rule is specific to Windows threadpool callbacks; other callback/thread systems must retain their documented module ownership until their own quiet point.
 
 ## Best Practices
 

@@ -2,7 +2,9 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$testRunPlanScript = Join-Path $repoRoot 'Tools\TestRunPlan.ps1'
 $helperScript = Join-Path $repoRoot 'Installer\winget\WingetValidation.ps1'
+. $testRunPlanScript
 
 Describe 'Winget validation helper' {
     BeforeAll {
@@ -10,9 +12,10 @@ Describe 'Winget validation helper' {
     }
 
     function New-RSTemporaryWingetManifestRoot {
-        $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) "RSWingetValidationTest_$([Guid]::NewGuid())"
-        New-Item -ItemType Directory -Path $tempRoot -Force | Out-Null
-        return $tempRoot
+        return (New-RSTestSandboxScratchDirectory `
+                -RepoRoot $repoRoot `
+                -Harness 'tools-pester' `
+                -Case "winget-validation-$([Guid]::NewGuid().ToString('N'))")
     }
 
     function New-RSFakeWingetCommand {
@@ -190,6 +193,31 @@ Describe 'Winget manifest template' {
         $zipScript | Should Match 'Copy-Item \(Join-Path \$BuildOutputDir "red\.exe"\) \$TempDir'
         $zipScript | Should Not Match 'RedLauncherConsole\.exe'
     }
+
+    It 'preserves package subdirectories for plugins, language satellites, and themes' {
+        $zipScript | Should Match '\$LangSource = Join-Path \$BuildOutputDir "Lang"'
+        $zipScript | Should Match 'Copy-Item \$LangSource -Destination \$LangDest -Recurse -Force'
+
+        $catchAllInclude = 'Content Include="..\..\.build\$(Platform)\$(Configuration)\**\*"'
+        $catchAllIndex = $msixProject.IndexOf($catchAllInclude, [System.StringComparison]::Ordinal)
+        $catchAllIndex | Should Not Be -1
+        $catchAllEnd = $msixProject.IndexOf('>', $catchAllIndex)
+        $catchAllLine = $msixProject.Substring($catchAllIndex, $catchAllEnd - $catchAllIndex)
+
+        foreach ($folder in @('Plugins', 'Lang', 'Themes')) {
+            $include = 'Content Include="..\..\.build\$(Platform)\$(Configuration)\{0}\**\*"' -f $folder
+            $exclude = '..\..\.build\$(Platform)\$(Configuration)\{0}\**\*' -f $folder
+            $packagePath = '<PackagePath>{0}\%(RecursiveDir)%(Filename)%(Extension)</PackagePath>' -f $folder
+            $link = '<Link>{0}\%(RecursiveDir)%(Filename)%(Extension)</Link>' -f $folder
+            $targetPath = '<TargetPath>{0}\%(RecursiveDir)%(Filename)%(Extension)</TargetPath>' -f $folder
+
+            $msixProject.Contains($include) | Should Be $true
+            $catchAllLine.Contains($exclude) | Should Be $true
+            $msixProject.Contains($packagePath) | Should Be $true
+            $msixProject.Contains($link) | Should Be $true
+            $msixProject.Contains($targetPath) | Should Be $true
+        }
+    }
 }
 
 Describe 'RedLauncher project' {
@@ -276,11 +304,15 @@ Describe 'VC runtime ZIP helper' {
     }
 
     It 'selects the latest non-OneCore MSVC redist directory for the requested architecture' {
-        $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) "RSVcRuntimeTest_$([Guid]::NewGuid())"
+        $caseId = ([Guid]::NewGuid().ToString('N')).Substring(0, 8)
+        $tempRoot = New-RSTestSandboxScratchDirectory `
+            -RepoRoot $repoRoot `
+            -Harness 'tools-pester' `
+            -Case "vc-redist-$caseId"
         try {
-            $older = Join-Path $tempRoot 'Microsoft Visual Studio\18\BuildTools\VC\Redist\MSVC\14.50.10000\x64\Microsoft.VC145.CRT'
-            $newer = Join-Path $tempRoot 'Microsoft Visual Studio\18\BuildTools\VC\Redist\MSVC\14.51.20000\x64\Microsoft.VC145.CRT'
-            $oneCore = Join-Path $tempRoot 'Microsoft Visual Studio\18\BuildTools\VC\Redist\MSVC\14.99.99999\onecore\x64\Microsoft.VC145.CRT'
+            $older = Join-Path $tempRoot 'VS\VC\Redist\MSVC\14.50.10000\x64\Microsoft.VC145.CRT'
+            $newer = Join-Path $tempRoot 'VS\VC\Redist\MSVC\14.51.20000\x64\Microsoft.VC145.CRT'
+            $oneCore = Join-Path $tempRoot 'VS\VC\Redist\MSVC\14.99.99999\onecore\x64\Microsoft.VC145.CRT'
             New-Item -ItemType Directory -Path $older, $newer, $oneCore -Force | Out-Null
 
             Get-RSVcRuntimeRedistDirectory -Platform x64 -SearchRoots @($tempRoot) | Should Be $newer
@@ -290,10 +322,14 @@ Describe 'VC runtime ZIP helper' {
     }
 
     It 'copies app-local MSVC runtime DLLs and requires the core launch dependencies' {
-        $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) "RSVcRuntimeTest_$([Guid]::NewGuid())"
+        $caseId = ([Guid]::NewGuid().ToString('N')).Substring(0, 8)
+        $tempRoot = New-RSTestSandboxScratchDirectory `
+            -RepoRoot $repoRoot `
+            -Harness 'tools-pester' `
+            -Case "vc-copy-$caseId"
         $dest = Join-Path $tempRoot 'package'
         try {
-            $redist = Join-Path $tempRoot 'Microsoft Visual Studio\18\BuildTools\VC\Redist\MSVC\14.51.20000\arm64\Microsoft.VC145.CRT'
+            $redist = Join-Path $tempRoot 'VS\VC\Redist\MSVC\14.51.20000\arm64\Microsoft.VC145.CRT'
             New-Item -ItemType Directory -Path $redist, $dest -Force | Out-Null
             foreach ($dllName in @('msvcp140.dll', 'msvcp140_atomic_wait.dll', 'vcruntime140.dll', 'vcruntime140_1.dll', 'vccorlib140.dll')) {
                 Set-Content -Path (Join-Path $redist $dllName) -Value $dllName -Encoding ASCII
@@ -312,10 +348,14 @@ Describe 'VC runtime ZIP helper' {
     }
 
     It 'fails clearly when a required runtime DLL is missing' {
-        $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) "RSVcRuntimeTest_$([Guid]::NewGuid())"
+        $caseId = ([Guid]::NewGuid().ToString('N')).Substring(0, 8)
+        $tempRoot = New-RSTestSandboxScratchDirectory `
+            -RepoRoot $repoRoot `
+            -Harness 'tools-pester' `
+            -Case "vc-missing-$caseId"
         $dest = Join-Path $tempRoot 'package'
         try {
-            $redist = Join-Path $tempRoot 'Microsoft Visual Studio\18\BuildTools\VC\Redist\MSVC\14.51.20000\x64\Microsoft.VC145.CRT'
+            $redist = Join-Path $tempRoot 'VS\VC\Redist\MSVC\14.51.20000\x64\Microsoft.VC145.CRT'
             New-Item -ItemType Directory -Path $redist, $dest -Force | Out-Null
             foreach ($dllName in @('msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll')) {
                 Set-Content -Path (Join-Path $redist $dllName) -Value $dllName -Encoding ASCII

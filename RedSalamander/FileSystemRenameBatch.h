@@ -13,7 +13,7 @@ struct RenameOp final
 {
     std::filesystem::path sourcePath;
     std::wstring newLeaf;
-    size_t depth = 0u;
+    size_t depth     = 0u;
     bool isDirectory = false;
 };
 

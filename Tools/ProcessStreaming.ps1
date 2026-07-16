@@ -1,5 +1,12 @@
 Set-StrictMode -Version Latest
 
+$sanitizedEnvironmentScript = Join-Path $PSScriptRoot 'SanitizedEnvironment.ps1'
+if (-not (Test-Path $sanitizedEnvironmentScript)) {
+    throw "Sanitized environment helper not found: $sanitizedEnvironmentScript"
+}
+
+. $sanitizedEnvironmentScript
+
 function ConvertTo-RSStreamingQuotedArgument {
     param(
         [AllowNull()]
@@ -60,28 +67,21 @@ function Invoke-RSStreamingProcess {
 
         [string]$LogPath = '',
 
+        [hashtable]$AdditionalEnvironment = @{},
+
         [scriptblock]$OutputLineCallback
     )
 
-    $psi = [System.Diagnostics.ProcessStartInfo]::new()
-    $psi.FileName = $FilePath
-    if ($psi.PSObject.Properties['ArgumentList'] -and $null -ne $psi.ArgumentList) {
-        foreach ($argument in $Arguments) {
-            [void]$psi.ArgumentList.Add($argument)
-        }
-    }
-    else {
-        $psi.Arguments = (($Arguments | ForEach-Object { ConvertTo-RSStreamingQuotedArgument $_ }) -join ' ')
-    }
-
-    $psi.WorkingDirectory = $WorkingDirectory
-    $psi.UseShellExecute = $false
+    $psi = New-RSProcessStartInfo `
+        -FilePath $FilePath `
+        -Arguments $Arguments `
+        -WorkingDirectory $WorkingDirectory `
+        -AdditionalEnvironment $AdditionalEnvironment
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError = $true
     $psi.CreateNoWindow = $true
 
-    $process = [System.Diagnostics.Process]::new()
-    $process.StartInfo = $psi
+    $process = $null
 
     $logWriter = $null
     if (-not [string]::IsNullOrWhiteSpace($LogPath)) {
@@ -96,9 +96,7 @@ function Invoke-RSStreamingProcess {
     }
 
     try {
-        if (-not $process.Start()) {
-            throw "Failed to start process: $FilePath"
-        }
+        $process = Start-RSContainedProcess -ProcessStartInfo $psi
 
         $stdOutOpen = $true
         $stdErrOpen = $true
@@ -174,10 +172,11 @@ function Invoke-RSStreamingProcess {
         return $process.ExitCode
     }
     finally {
+        Close-RSContainedProcess -Process $process
+
         if ($logWriter) {
             $logWriter.Dispose()
         }
 
-        $process.Dispose()
     }
 }

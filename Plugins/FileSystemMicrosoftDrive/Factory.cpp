@@ -23,6 +23,8 @@
 
 #include "FileSystemMicrosoftDrive.h"
 
+#include "PlugInterfaces/FactoryImpl.h"
+
 extern HINSTANCE g_hInstance;
 
 namespace
@@ -89,127 +91,84 @@ struct LocalizedPluginMetaDataSet
 [[nodiscard]] const LocalizedPluginMetaDataSet& GetPluginMetaDataSet() noexcept
 {
     static const LocalizedPluginMetaDataSet data;
-
     return data;
 }
 
-[[nodiscard]] std::optional<FileSystemMicrosoftDriveMode> ModeFromPluginId(std::wstring_view pluginId) noexcept
+// Per-entry metadata thunks (return contiguous array elements).
+const PluginMetaData* GetMetaDataOneDrivePersonal() noexcept
 {
-    if (pluginId == kPluginIdOneDrivePersonal)
-    {
-        return FileSystemMicrosoftDriveMode::OneDrivePersonal;
-    }
-    if (pluginId == kPluginIdOneDriveBusiness)
-    {
-        return FileSystemMicrosoftDriveMode::OneDriveBusiness;
-    }
-    if (pluginId == kPluginIdSharePoint)
-    {
-        return FileSystemMicrosoftDriveMode::SharePoint;
-    }
-    return std::nullopt;
+    return &GetPluginMetaDataSet().plugins[0];
+}
+const PluginMetaData* GetMetaDataOneDriveBusiness() noexcept
+{
+    return &GetPluginMetaDataSet().plugins[1];
+}
+const PluginMetaData* GetMetaDataSharePoint() noexcept
+{
+    return &GetPluginMetaDataSet().plugins[2];
 }
 
-[[nodiscard]] const char* GetPluginSchema(std::wstring_view pluginId) noexcept
+// Per-entry schema thunks.
+const char* GetSchemaOneDrivePersonal() noexcept
 {
-    const auto mode = ModeFromPluginId(pluginId);
-    if (! mode.has_value())
-    {
-        return nullptr;
-    }
-
-    return GetFileSystemMicrosoftDriveStaticConfigurationSchema(mode.value());
+    return GetFileSystemMicrosoftDriveStaticConfigurationSchema(FileSystemMicrosoftDriveMode::OneDrivePersonal);
+}
+const char* GetSchemaOneDriveBusiness() noexcept
+{
+    return GetFileSystemMicrosoftDriveStaticConfigurationSchema(FileSystemMicrosoftDriveMode::OneDriveBusiness);
+}
+const char* GetSchemaSharePoint() noexcept
+{
+    return GetFileSystemMicrosoftDriveStaticConfigurationSchema(FileSystemMicrosoftDriveMode::SharePoint);
 }
 
-HRESULT CreatePluginInstance(REFIID riid, IHost* host, std::wstring_view pluginId, void** result)
+// Per-entry creation thunks.
+HRESULT CreateInstanceOneDrivePersonal(const FactoryOptions* /*factoryOptions*/, IHost* host, void** result) noexcept
 {
-    if (riid != __uuidof(IFileSystem))
-    {
-        return E_NOINTERFACE;
-    }
-
-    const auto mode = ModeFromPluginId(pluginId);
-    if (! mode.has_value())
-    {
-        return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
-    }
-
-    auto* instance = new (std::nothrow) FileSystemMicrosoftDrive(mode.value(), host);
+    auto* instance = new (std::nothrow) FileSystemMicrosoftDrive(FileSystemMicrosoftDriveMode::OneDrivePersonal, host);
     if (! instance)
-    {
         return E_OUTOFMEMORY;
-    }
-
-    const HRESULT hr = instance->QueryInterface(riid, result);
+    const HRESULT hr = instance->QueryInterface(__uuidof(IFileSystem), result);
     instance->Release();
     return hr;
 }
+HRESULT CreateInstanceOneDriveBusiness(const FactoryOptions* /*factoryOptions*/, IHost* host, void** result) noexcept
+{
+    auto* instance = new (std::nothrow) FileSystemMicrosoftDrive(FileSystemMicrosoftDriveMode::OneDriveBusiness, host);
+    if (! instance)
+        return E_OUTOFMEMORY;
+    const HRESULT hr = instance->QueryInterface(__uuidof(IFileSystem), result);
+    instance->Release();
+    return hr;
+}
+HRESULT CreateInstanceSharePoint(const FactoryOptions* /*factoryOptions*/, IHost* host, void** result) noexcept
+{
+    auto* instance = new (std::nothrow) FileSystemMicrosoftDrive(FileSystemMicrosoftDriveMode::SharePoint, host);
+    if (! instance)
+        return E_OUTOFMEMORY;
+    const HRESULT hr = instance->QueryInterface(__uuidof(IFileSystem), result);
+    instance->Release();
+    return hr;
+}
+
+const PluginFactoryEntry kEntries[] = {
+    {&GetMetaDataOneDrivePersonal, &GetSchemaOneDrivePersonal, &CreateInstanceOneDrivePersonal},
+    {&GetMetaDataOneDriveBusiness, &GetSchemaOneDriveBusiness, &CreateInstanceOneDriveBusiness},
+    {&GetMetaDataSharePoint, &GetSchemaSharePoint, &CreateInstanceSharePoint},
+};
 } // namespace
 
 extern "C" HRESULT __stdcall RedSalamanderEnumeratePlugins(REFIID riid, const PluginMetaData** metaData, unsigned int* count)
 {
-    if (! metaData || ! count)
-    {
-        return E_POINTER;
-    }
-
-    *metaData = nullptr;
-    *count    = 0;
-
-    if (riid != __uuidof(IFileSystem))
-    {
-        return E_NOINTERFACE;
-    }
-
-    const auto& plugins = GetPluginMetaDataSet().plugins;
-    *metaData           = plugins.data();
-    *count              = static_cast<unsigned int>(plugins.size());
-    return S_OK;
+    return FactoryEnumeratePlugins<IFileSystem>(kEntries, riid, metaData, count);
 }
 
-extern "C" HRESULT __stdcall RedSalamanderCreate(REFIID riid, const FactoryOptions* /*factoryOptions*/, IHost* host, const wchar_t* pluginId, void** result)
+extern "C" HRESULT __stdcall RedSalamanderCreate(REFIID riid, const FactoryOptions* factoryOptions, IHost* host, const wchar_t* pluginId, void** result)
 {
-    if (! result)
-    {
-        return E_POINTER;
-    }
-
-    *result = nullptr;
-    if (riid != __uuidof(IFileSystem))
-    {
-        return E_NOINTERFACE;
-    }
-    if (! pluginId || pluginId[0] == L'\0')
-    {
-        return E_INVALIDARG;
-    }
-
-    return CreatePluginInstance(riid, host, pluginId, result);
+    return FactoryCreate<IFileSystem>(kEntries, riid, factoryOptions, host, pluginId, result);
 }
 
 extern "C" HRESULT __stdcall RedSalamanderGetConfigurationSchema(REFIID riid, const wchar_t* pluginId, const char** schemaJsonUtf8)
 {
-    if (! schemaJsonUtf8)
-    {
-        return E_POINTER;
-    }
-
-    *schemaJsonUtf8 = nullptr;
-    if (riid != __uuidof(IFileSystem))
-    {
-        return E_NOINTERFACE;
-    }
-    if (! pluginId || pluginId[0] == L'\0')
-    {
-        return E_INVALIDARG;
-    }
-
-    const char* schema = GetPluginSchema(pluginId);
-    if (! schema)
-    {
-        return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
-    }
-
-    *schemaJsonUtf8 = schema;
-    return S_OK;
+    return FactoryGetConfigurationSchema<IFileSystem>(kEntries, riid, pluginId, schemaJsonUtf8);
 }

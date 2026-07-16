@@ -12,9 +12,83 @@
 
 using namespace FileSystemInternal;
 
+namespace FileSystemInternal
+{
+[[nodiscard]] bool IsNonFatalDirectorySizeChildError(DWORD error) noexcept
+{
+    switch (error)
+    {
+        case ERROR_ACCESS_DENIED:
+        case ERROR_PATH_NOT_FOUND:
+        case ERROR_SHARING_VIOLATION:
+        case ERROR_LOCK_VIOLATION:
+        case ERROR_NETWORK_BUSY:
+        case ERROR_BAD_NETPATH:
+        case ERROR_NETNAME_DELETED:
+        case ERROR_DEV_NOT_EXIST:
+        case ERROR_NOT_READY:
+        case ERROR_NETWORK_UNREACHABLE: return true;
+        default: return false;
+    }
+}
+
+#if defined(_DEBUG)
+void RunDebugDirectorySizeErrorPolicySelfTest(unsigned int& passed, unsigned int& failed) noexcept
+{
+    const auto check = [&](bool condition, const wchar_t* message) noexcept
+    {
+        if (condition)
+        {
+            ++passed;
+        }
+        else
+        {
+            ++failed;
+            Debug::Error(L"FileSystem debug selftest failed: {}", message);
+        }
+    };
+
+    check(IsNonFatalDirectorySizeChildError(ERROR_ACCESS_DENIED), L"directory-size child access denial should degrade to partial");
+    check(IsNonFatalDirectorySizeChildError(ERROR_SHARING_VIOLATION), L"directory-size child sharing violations should degrade to partial");
+    check(IsNonFatalDirectorySizeChildError(ERROR_NETWORK_BUSY), L"directory-size child transient network errors should degrade to partial");
+    check(! IsNonFatalDirectorySizeChildError(ERROR_INVALID_DATA), L"directory-size invalid data should remain fatal");
+}
+#endif
+} // namespace FileSystemInternal
+
 namespace
 {
 constexpr size_t kDefaultBufferSize = 512 * 1024;
+
+#if defined(_DEBUG)
+constexpr std::wstring_view kDirectorySizeFailChildPathEnvVar  = L"REDSALAMANDER_DIRECTORY_SIZE_FAIL_CHILD_PATH";
+constexpr std::wstring_view kDirectorySizeFailChildFiredEnvVar = L"REDSALAMANDER_DIRECTORY_SIZE_FAIL_CHILD_FIRED";
+
+[[nodiscard]] bool ShouldFailDirectorySizeChildForSelfTest(const std::wstring& directoryPath) noexcept
+{
+    const DWORD required = ::GetEnvironmentVariableW(kDirectorySizeFailChildPathEnvVar.data(), nullptr, 0u);
+    if (required == 0u)
+    {
+        return false;
+    }
+
+    std::wstring configured(static_cast<size_t>(required), L'\0');
+    const DWORD written = ::GetEnvironmentVariableW(kDirectorySizeFailChildPathEnvVar.data(), configured.data(), required);
+    if (written == 0u || written >= required)
+    {
+        return false;
+    }
+    configured.resize(static_cast<size_t>(written));
+    if (CompareStringOrdinal(configured.c_str(), -1, directoryPath.c_str(), -1, TRUE) != CSTR_EQUAL)
+    {
+        return false;
+    }
+
+    static_cast<void>(::SetEnvironmentVariableW(kDirectorySizeFailChildPathEnvVar.data(), nullptr));
+    static_cast<void>(::SetEnvironmentVariableW(kDirectorySizeFailChildFiredEnvVar.data(), L"1"));
+    return true;
+}
+#endif
 
 static_assert(sizeof(FileInfo) == sizeof(FILE_FULL_DIR_INFO), "FileInfo must match FILE_FULL_DIR_INFO layout.");
 static_assert(offsetof(FileInfo, FileName) == offsetof(FILE_FULL_DIR_INFO, FileName), "FileInfo must match FILE_FULL_DIR_INFO layout.");
@@ -694,7 +768,23 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetDirectorySize(
 
     std::vector<DirectoryFrame> stack;
 
-    auto pushDirectory = [&](std::wstring directoryPath) noexcept -> void
+    auto markPartial = [&]() noexcept
+    {
+        if (SUCCEEDED(result->status))
+        {
+            result->status = HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+        }
+    };
+
+    auto setFatalStatus = [&](DWORD error) noexcept
+    {
+        if (SUCCEEDED(result->status) || result->status == HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY))
+        {
+            result->status = HRESULT_FROM_WIN32(error != 0 ? error : ERROR_GEN_FAILURE);
+        }
+    };
+
+    auto pushDirectory = [&](std::wstring directoryPath, bool rootDirectory) noexcept -> bool
     {
         std::wstring searchPath = directoryPath;
         if (! searchPath.empty() && searchPath.back() != L'\\' && searchPath.back() != L'/')
@@ -704,19 +794,33 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetDirectorySize(
         searchPath += L'*';
 
         WIN32_FIND_DATAW findData{};
-        wil::unique_hfind findHandle(
-            ::FindFirstFileExW(searchPath.c_str(), FindExInfoBasic, &findData, FindExSearchNameMatch, nullptr, FIND_FIRST_EX_LARGE_FETCH));
+        wil::unique_hfind findHandle;
+#if defined(_DEBUG)
+        const bool injectedFailure = ! rootDirectory && ShouldFailDirectorySizeChildForSelfTest(directoryPath);
+#else
+        constexpr bool injectedFailure = false;
+#endif
+        if (! injectedFailure)
+        {
+            findHandle.reset(::FindFirstFileExW(searchPath.c_str(), FindExInfoBasic, &findData, FindExSearchNameMatch, nullptr, FIND_FIRST_EX_LARGE_FETCH));
+        }
         if (! findHandle)
         {
-            const DWORD lastError = ::GetLastError();
-            if (lastError != ERROR_FILE_NOT_FOUND && lastError != ERROR_ACCESS_DENIED)
+            const DWORD lastError = injectedFailure ? ERROR_ACCESS_DENIED : ::GetLastError();
+            if (lastError == ERROR_FILE_NOT_FOUND)
             {
-                if (SUCCEEDED(result->status))
-                {
-                    result->status = HRESULT_FROM_WIN32(lastError);
-                }
+                // Empty directory: FindFirstFileExW("dir\\*") reports ERROR_FILE_NOT_FOUND.
+                return true;
             }
-            return;
+
+            if (! rootDirectory && IsNonFatalDirectorySizeChildError(lastError))
+            {
+                markPartial();
+                return true;
+            }
+
+            setFatalStatus(lastError);
+            return false;
         }
 
         DirectoryFrame frame{};
@@ -726,6 +830,7 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetDirectorySize(
         frame.hasData       = true;
 
         stack.emplace_back(std::move(frame));
+        return true;
     };
 
     const auto advanceFrame = [&](DirectoryFrame& frame) noexcept
@@ -741,16 +846,23 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetDirectorySize(
         const DWORD lastError = ::GetLastError();
         if (lastError != ERROR_NO_MORE_FILES)
         {
-            if (SUCCEEDED(result->status))
+            if (IsNonFatalDirectorySizeChildError(lastError))
             {
-                result->status = HRESULT_FROM_WIN32(lastError);
+                markPartial();
+            }
+            else
+            {
+                setFatalStatus(lastError);
             }
         }
 
         frame.hasData = false;
     };
 
-    pushDirectory(std::wstring(path));
+    if (! pushDirectory(std::wstring(path), true))
+    {
+        return result->status;
+    }
     if (! checkCancellation())
     {
         return result->status;
@@ -839,7 +951,10 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetDirectorySize(
             // Advance the parent directory BEFORE descending; this keeps the parent frame consistent if the stack reallocates.
             advanceFrame(frame);
 
-            pushDirectory(std::move(childPath));
+            if (! pushDirectory(std::move(childPath), false))
+            {
+                return result->status;
+            }
             continue;
         }
 

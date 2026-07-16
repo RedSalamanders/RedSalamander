@@ -20,11 +20,13 @@
 #include "ViewerImgRaw.h"
 #include "resource.h"
 
+#include "PlugInterfaces/FactoryImpl.h"
+
 extern HINSTANCE g_hInstance;
 
 namespace
 {
-[[nodiscard]] const PluginMetaData& GetPluginMetaData() noexcept
+[[nodiscard]] const PluginMetaData* GetMetaData() noexcept
 {
     static const std::wstring name        = LoadStringResource(g_hInstance, IDS_VIEWERRAW_NAME);
     static const std::wstring description = LoadStringResource(g_hInstance, IDS_VIEWERRAW_DESCRIPTION);
@@ -36,106 +38,60 @@ namespace
         .author      = nullptr,
         .version     = VERSINFO_PLUGIN_VERSION,
     };
-    return metaData;
+    return &metaData;
 }
 
-[[nodiscard]] const char* GetPluginSchema(std::wstring_view pluginId) noexcept
+[[nodiscard]] const char* GetSchema() noexcept
 {
-    if (! pluginId.empty() && ! OrdinalString::EqualsNoCase(pluginId, GetPluginMetaData().id))
-    {
-        return nullptr;
-    }
-
     return GetViewerImgRawStaticConfigurationSchema();
 }
-} // namespace
 
-HRESULT CreatePluginInstance(REFIID riid, IHost* host, void** result)
+HRESULT CreateInstance(const FactoryOptions* /*factoryOptions*/, IHost* host, void** result) noexcept
 {
-    if (result == nullptr)
+    auto* instance = new (std::nothrow) ViewerImgRaw();
+    if (instance == nullptr)
     {
-        return E_POINTER;
+        return E_OUTOFMEMORY;
     }
 
-    *result = nullptr;
+    instance->SetHost(host);
 
-    if (riid == __uuidof(IViewer))
-    {
-        auto* instance = new (std::nothrow) ViewerImgRaw();
-        if (instance == nullptr)
-        {
-            return E_OUTOFMEMORY;
-        }
-
-        instance->SetHost(host);
-
-        const HRESULT hr = instance->QueryInterface(riid, result);
-        instance->Release();
-        return hr;
-    }
-
-    return E_NOINTERFACE;
+    const HRESULT hr = instance->QueryInterface(__uuidof(IViewer), result);
+    instance->Release();
+    return hr;
 }
+
+const PluginFactoryEntry kEntries[] = {
+    {&GetMetaData, &GetSchema, &CreateInstance},
+};
+} // namespace
 
 extern "C" HRESULT __stdcall RedSalamanderEnumeratePlugins(REFIID riid, const PluginMetaData** metaData, unsigned int* count)
 {
-    if (! metaData || ! count)
-    {
-        return E_POINTER;
-    }
-
-    *metaData = nullptr;
-    *count    = 0;
-    if (riid != __uuidof(IViewer))
-    {
-        return E_NOINTERFACE;
-    }
-
-    *metaData = &GetPluginMetaData();
-    *count    = 1;
-    return S_OK;
+    return FactoryEnumeratePlugins<IViewer>(kEntries, riid, metaData, count);
 }
 
-extern "C" HRESULT __stdcall RedSalamanderCreate(REFIID riid, const FactoryOptions* /*factoryOptions*/, IHost* host, const wchar_t* pluginId, void** result)
+extern "C" HRESULT __stdcall RedSalamanderCreate(REFIID riid, const FactoryOptions* factoryOptions, IHost* host, const wchar_t* pluginId, void** result)
 {
-    if (! result)
-    {
-        return E_POINTER;
-    }
-
-    *result = nullptr;
-    if (riid != __uuidof(IViewer))
-    {
-        return E_NOINTERFACE;
-    }
-    if (pluginId && pluginId[0] != L'\0' && ! OrdinalString::EqualsNoCase(pluginId, GetPluginMetaData().id))
-    {
-        return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
-    }
-
-    return CreatePluginInstance(riid, host, result);
+    return FactoryCreate<IViewer>(kEntries, riid, factoryOptions, host, pluginId, result);
 }
 
 extern "C" HRESULT __stdcall RedSalamanderGetConfigurationSchema(REFIID riid, const wchar_t* pluginId, const char** schemaJsonUtf8)
 {
-    if (! schemaJsonUtf8)
-    {
-        return E_POINTER;
-    }
+    return FactoryGetConfigurationSchema<IViewer>(kEntries, riid, pluginId, schemaJsonUtf8);
+}
 
-    *schemaJsonUtf8 = nullptr;
-    if (riid != __uuidof(IViewer))
-    {
-        return E_NOINTERFACE;
-    }
+extern "C" PLUGFACTORY_API void __stdcall RedSalamanderPluginShutdown() noexcept
+{
+    ShutdownViewerImgRawModuleState();
+}
 
-    const std::wstring_view requestedId = pluginId ? std::wstring_view(pluginId) : std::wstring_view{};
-    const char* schema                  = GetPluginSchema(requestedId);
-    if (! schema)
-    {
-        return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
-    }
+extern "C" PLUGFACTORY_API BOOL __stdcall RedSalamanderPluginRetainModuleUntilProcessExit() noexcept
+{
+    return FALSE;
+}
 
-    *schemaJsonUtf8 = schema;
-    return S_OK;
+extern "C" PLUGFACTORY_API BOOL __stdcall RedSalamanderPluginCanUnloadNow() noexcept
+{
+    return CanUnloadViewerImgRawModuleNow() ? TRUE : FALSE;
 }

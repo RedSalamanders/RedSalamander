@@ -33,6 +33,7 @@
 #include "PlugInterfaces/Host.h"
 #include "PlugInterfaces/Informations.h"
 #include "PlugInterfaces/Viewer.h"
+#include "ViewerWebSecurity.h"
 
 enum class ViewerWebKind : uint8_t
 {
@@ -85,14 +86,20 @@ private:
 
     struct ViewerWebConfig
     {
-        uint32_t maxDocumentMiB      = 32;
-        bool allowExternalNavigation = true;
+        uint32_t maxDocumentMiB      = ViewerWebSecurity::kDefaultMaxDocumentMiB;
+        bool allowExternalNavigation = ViewerWebSecurity::kDefaultAllowExternalNavigation;
         bool devToolsEnabled         = false;
         JsonViewMode jsonViewMode    = JsonViewMode::Pretty;
     };
 
     struct AsyncLoadResult
     {
+        AsyncLoadResult()                                  = default;
+        AsyncLoadResult(const AsyncLoadResult&)            = delete;
+        AsyncLoadResult(AsyncLoadResult&&)                 = delete;
+        AsyncLoadResult& operator=(const AsyncLoadResult&) = delete;
+        AsyncLoadResult& operator=(AsyncLoadResult&&)      = delete;
+
         ViewerWeb* viewer  = nullptr;
         HWND hwnd          = nullptr;
         uint64_t requestId = 0;
@@ -102,8 +109,44 @@ private:
         std::string utf8;
         std::wstring statusMessage;
         std::optional<std::filesystem::path> extractedWin32Path;
+        ViewerWebSecurity::DocumentRoute documentRoute = ViewerWebSecurity::DocumentRoute::None;
+        uint64_t loadedSourceBytes = 0u;
+        uint64_t generatedOutputBytes = 0u;
+        uint64_t generatedOutputLimit = 0u;
+        bool generatedOutputRejected = false;
         bool jsonExpandCollapseAvailable = false;
         bool offerTextViewerFallback     = false;
+
+        // Snapshot of UI-thread state captured in StartAsyncLoad so the worker never reads live members.
+        ViewerWebKind kindSnapshot{};
+        ViewerWebConfig configSnapshot{};
+        bool hasThemeSnapshot = false;
+        ViewerTheme themeSnapshot{};
+        bool markdownShowSourceSnapshot = false;
+        wil::com_ptr<IFileSystem> fileSystemSnapshot;
+        std::wstring metaIdSnapshot;
+        std::wstring metaNameSnapshot;
+    };
+
+    struct AsyncSaveWorkItem
+    {
+        AsyncSaveWorkItem()                                   = default;
+        AsyncSaveWorkItem(const AsyncSaveWorkItem&)            = delete;
+        AsyncSaveWorkItem(AsyncSaveWorkItem&&)                 = delete;
+        AsyncSaveWorkItem& operator=(const AsyncSaveWorkItem&) = delete;
+        AsyncSaveWorkItem& operator=(AsyncSaveWorkItem&&)      = delete;
+
+        ViewerWeb* viewer  = nullptr;
+        HWND hwnd          = nullptr;
+        uint64_t requestId = 0u;
+        uint64_t maxBytes  = 0u;
+        uint32_t testFaultMask = 0u;
+        HRESULT hr         = E_FAIL;
+        std::wstring sourcePath;
+        std::wstring destinationPath;
+        std::wstring statusMessage;
+        wil::com_ptr<IFileSystem> fileSystemSnapshot;
+        wil::unique_hmodule moduleKeepAlive;
     };
 
     static ATOM RegisterWndClass(HINSTANCE instance) noexcept;
@@ -124,6 +167,8 @@ private:
     LRESULT OnNcDestroy(HWND hwnd, WPARAM wp, LPARAM lp) noexcept;
     void OnFindMessage(const FINDREPLACEW* findReplace) noexcept;
     void OnAsyncLoadComplete(std::unique_ptr<AsyncLoadResult> result) noexcept;
+    void OnAsyncSaveComplete(std::unique_ptr<AsyncSaveWorkItem> result) noexcept;
+    void OnAsyncPostFailure(UINT operationKind) noexcept;
 
     void Layout(HWND hwnd) noexcept;
     void ComputeLayoutRects(HWND hwnd) noexcept;
@@ -136,7 +181,10 @@ private:
     HRESULT EnsureWebView2(HWND hwnd) noexcept;
     HRESULT CreateControllerFromEnvironment(HWND hwnd, ICoreWebView2Environment* environment, uint64_t sharedEnvironmentGeneration) noexcept;
     void DiscardWebView2() noexcept;
-    void ConfigureWebViewSettings() noexcept;
+    [[nodiscard]] HRESULT ConfigureWebViewSettings() noexcept;
+    HRESULT HandleNavigationStarting(ICoreWebView2NavigationStartingEventArgs* args,
+                                     ViewerWebSecurity::NavigationSurface surface) noexcept;
+    HRESULT HandleNewWindowRequested(ICoreWebView2NewWindowRequestedEventArgs* args) noexcept;
     void ApplyWebViewThemeScript() noexcept;
     HRESULT NavigatePendingContent(HWND hwnd) noexcept;
 
@@ -145,8 +193,10 @@ private:
 
     HRESULT StartAsyncLoad(HWND hwnd, const std::wstring& path) noexcept;
     static void AsyncLoadProc(AsyncLoadResult* payload) noexcept;
+    static void AsyncSaveProc(AsyncSaveWorkItem* payload) noexcept;
 
     HRESULT CommandSaveAs(HWND hwnd) noexcept;
+    HRESULT StartAsyncSave(HWND hwnd, const std::filesystem::path& destination, uint32_t testFaultMask = 0u) noexcept;
     void CommandFind(HWND hwnd) noexcept;
     void CommandFindNext(HWND hwnd) noexcept;
     void CommandFindPrevious(HWND hwnd) noexcept;
@@ -201,13 +251,30 @@ private:
     wil::unique_hbrush _headerBrush;
 
     uint64_t _openRequestId = 0;
+    std::atomic<uint64_t> _saveRequestId{0u};
+    std::atomic<uint64_t> _asyncLoadPostFailureRequestId{0u};
+    std::atomic<uint64_t> _asyncSavePostFailureRequestId{0u};
+    std::atomic<HRESULT> _asyncSavePostFailureHr{E_FAIL};
+    std::atomic<uint64_t> _asyncLoadPostFailureCount{0u};
+    std::atomic<uint64_t> _asyncSavePostFailureCount{0u};
     std::wstring _statusMessage;
+    bool _loadPostFailureTerminal = false;
+    bool _saveInProgress = false;
 
     std::optional<std::wstring> _pendingPath;
     std::optional<std::wstring> _pendingWebContent;
     std::optional<std::string> _pendingDocumentUtf8;
     std::optional<std::wstring> _internalDocumentUrl;
     std::optional<std::filesystem::path> _tempExtractedPath;
+    std::wstring _allowedDocumentUrl;
+    ViewerWebSecurity::DocumentRoute _documentRoute = ViewerWebSecurity::DocumentRoute::None;
+    uint64_t _loadedSourceBytes = 0u;
+    bool _documentScriptsEnabled = false;
+    bool _navigationCompleted = false;
+    bool _navigationSucceeded = false;
+    bool _generatedOutputRejected = false;
+    uint64_t _generatedOutputBytes = 0u;
+    uint64_t _generatedOutputLimit = 0u;
     bool _markdownShowSource          = false;
     bool _jsonExpandCollapseAvailable = false;
     bool _webViewInitInProgress       = false;
@@ -216,6 +283,8 @@ private:
     wil::com_ptr<ICoreWebView2> _webView;
 
     EventRegistrationToken _navStartingToken{};
+    EventRegistrationToken _frameNavStartingToken{};
+    EventRegistrationToken _newWindowRequestedToken{};
     EventRegistrationToken _navCompletedToken{};
     EventRegistrationToken _accelToken{};
     EventRegistrationToken _webResourceRequestedToken{};

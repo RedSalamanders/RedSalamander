@@ -6,8 +6,8 @@
 #include <aws/s3-crt/model/ListObjectsV2Request.h>
 #include <aws/s3-crt/model/ObjectIdentifier.h>
 
-#include <bcrypt.h>
 
+#include <algorithm>
 #include <filesystem>
 #include <format>
 #include <functional>
@@ -15,7 +15,6 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#pragma comment(lib, "bcrypt.lib")
 
 namespace FsS3 = FileSystemS3Internal;
 
@@ -230,7 +229,7 @@ struct TransferJournal
     std::vector<const PlannedTransferObject*> deletedSourceObjects;
 };
 
-inline constexpr size_t kMaxDeleteBatchSize = 1000u;
+inline constexpr size_t kMaxDeleteBatchSize                  = 1000u;
 inline constexpr unsigned int kMaxS3PerObjectConflictRetries = 16u;
 
 [[nodiscard]] HRESULT NormalizeCallbackResult(HRESULT hr) noexcept
@@ -443,8 +442,7 @@ public:
             outObjects.push_back(std::move(object));
         }
 
-        std::sort(outObjects.begin(), outObjects.end(), [](const PlannedTransferObject& left, const PlannedTransferObject& right) noexcept
-        {
+        std::sort(outObjects.begin(), outObjects.end(), [](const PlannedTransferObject& left, const PlannedTransferObject& right) noexcept {
             return left.sourceKey < right.sourceKey;
         });
         return S_OK;
@@ -861,75 +859,41 @@ private:
     return FsS3::UploadS3ObjectFromFile(fs, destinationCtx, destinationBucket, destinationKey, relayFile.get(), sizeBytes);
 }
 
-[[nodiscard]] HRESULT GenerateRandomBytes(std::span<std::byte> bytes) noexcept
-{
-    if (bytes.empty())
-    {
-        return S_OK;
-    }
-
-    const NTSTATUS status = BCryptGenRandom(nullptr, reinterpret_cast<PUCHAR>(bytes.data()), static_cast<ULONG>(bytes.size()), BCRYPT_USE_SYSTEM_PREFERRED_RNG);
-    return BCRYPT_SUCCESS(status) ? S_OK : HRESULT_FROM_NT(status);
-}
-
-void AppendHexToken(std::string& value, std::span<const std::byte> bytes)
-{
-    constexpr char kHex[] = "0123456789abcdef";
-    value.reserve(value.size() + (bytes.size() * 2u));
-    for (const std::byte byte : bytes)
-    {
-        const unsigned int v = std::to_integer<unsigned int>(byte);
-        value.push_back(kHex[(v >> 4u) & 0x0Fu]);
-        value.push_back(kHex[v & 0x0Fu]);
-    }
-}
-
 [[nodiscard]] HRESULT BuildHiddenSiblingKey(std::string_view destinationKey, std::string_view tag, std::string& keyOut) noexcept
 {
     keyOut.clear();
 
-    std::array<std::byte, 16> entropy{};
-    HRESULT hr = GenerateRandomBytes(entropy);
+    const size_t slash = destinationKey.find_last_of('/');
+
+    const std::string_view parent = (slash == std::string_view::npos) ? std::string_view{} : destinationKey.substr(0, slash + 1u);
+    const std::string_view leaf   = (slash == std::string_view::npos) ? destinationKey : destinationKey.substr(slash + 1u);
+
+    std::string marker = ".rs-";
+    marker.append(tag);
+    marker.push_back('-');
+    std::string suffix;
+    if (! leaf.empty())
+    {
+        suffix.push_back('-');
+        suffix.append(leaf);
+    }
+
+    std::string sibling;
+    const HRESULT hr = Common::Paths::BuildUniqueSiblingName(
+        std::string_view{}, std::string_view(marker), std::string_view(suffix), (std::numeric_limits<size_t>::max)(), sibling);
     if (FAILED(hr))
     {
         return hr;
     }
 
-    const size_t slash   = destinationKey.find_last_of('/');
-
-    const std::string_view parent = (slash == std::string_view::npos) ? std::string_view{} : destinationKey.substr(0, slash + 1u);
-    const std::string_view leaf   = (slash == std::string_view::npos) ? destinationKey : destinationKey.substr(slash + 1u);
-
-    std::string key;
-    key.reserve(parent.size() + 5u + tag.size() + (entropy.size() * 2u) + (leaf.empty() ? 0u : leaf.size() + 1u));
-    key.append(parent);
-    key.append(".rs-");
-    key.append(tag);
-    key.push_back('-');
-    AppendHexToken(key, entropy);
-    if (! leaf.empty())
-    {
-        key.push_back('-');
-        key.append(leaf);
-    }
-
-    keyOut = std::move(key);
+    keyOut.reserve(parent.size() + sibling.size());
+    keyOut.append(parent);
+    keyOut.append(sibling);
     return S_OK;
 }
 
 #if defined(_DEBUG)
-bool DebugCheck(bool condition, const wchar_t* message, unsigned int& passed, unsigned int& failed) noexcept
-{
-    if (condition)
-    {
-        ++passed;
-        return true;
-    }
-
-    ++failed;
-    Debug::Error(L"S3 debug selftest failed: {}", message);
-    return false;
-}
+constexpr Common::DebugSelfTest::Check DebugCheck{L"S3"};
 
 [[nodiscard]] bool IsHexToken(std::string_view token) noexcept
 {
@@ -1059,10 +1023,7 @@ void RunDebugHiddenSiblingKeyEntropySelfTest(unsigned int& passed, unsigned int&
     return hadFailure ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : S_OK;
 }
 
-[[nodiscard]] HRESULT RestoreBackupsFrom(FileSystemS3& fs,
-                                         const ResolvedS3Path& destination,
-                                         TransferJournal& journal,
-                                         size_t firstBackupIndex) noexcept
+[[nodiscard]] HRESULT RestoreBackupsFrom(FileSystemS3& fs, const ResolvedS3Path& destination, TransferJournal& journal, size_t firstBackupIndex) noexcept
 {
     if (firstBackupIndex >= journal.backups.size())
     {
@@ -1073,14 +1034,14 @@ void RunDebugHiddenSiblingKeyEntropySelfTest(unsigned int& passed, unsigned int&
     for (size_t index = journal.backups.size(); index > firstBackupIndex; --index)
     {
         const DestinationBackup& backup = journal.backups[index - 1u];
-        const HRESULT copyHr           = CopyS3ObjectWithFallback(fs,
-                                                        destination.bucketCtx,
-                                                        destination.bucket,
-                                                        backup.backupKey,
-                                                        destination.bucketCtx,
-                                                        destination.bucket,
-                                                        backup.destinationKey,
-                                                        backup.sizeBytes);
+        const HRESULT copyHr            = CopyS3ObjectWithFallback(fs,
+                                                                   destination.bucketCtx,
+                                                                   destination.bucket,
+                                                                   backup.backupKey,
+                                                                   destination.bucketCtx,
+                                                                   destination.bucket,
+                                                                   backup.destinationKey,
+                                                                   backup.sizeBytes);
         if (FAILED(copyHr))
         {
             hadFailure = true;
@@ -1166,30 +1127,6 @@ void RunDebugHiddenSiblingKeyEntropySelfTest(unsigned int& passed, unsigned int&
     }
 
     return S_OK;
-}
-
-[[nodiscard]] bool HasPlannedDestinationAncestorCollision(const TransferPlan& plan) noexcept
-{
-    std::unordered_set<std::string> plannedKeys;
-    plannedKeys.reserve(plan.objects.size());
-    for (const PlannedTransferObject& object : plan.objects)
-    {
-        plannedKeys.insert(object.destinationKey);
-    }
-
-    for (const PlannedTransferObject& object : plan.objects)
-    {
-        std::string_view key(object.destinationKey);
-        for (size_t slash = key.find('/'); slash != std::string_view::npos; slash = key.find('/', slash + 1u))
-        {
-            if (plannedKeys.contains(std::string(key.substr(0, slash))))
-            {
-                return true;
-            }
-        }
-    }
-
-    return false;
 }
 
 [[nodiscard]] HRESULT DeleteS3Keys(FileSystemS3& fs,
@@ -1346,11 +1283,6 @@ void RunDebugHiddenSiblingKeyEntropySelfTest(unsigned int& passed, unsigned int&
     {
         return hr;
     }
-    if (HasPlannedDestinationAncestorCollision(plan))
-    {
-        return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
-    }
-
     outTotalBytes = plan.totalBytes;
     return S_OK;
 }
@@ -1419,12 +1351,26 @@ void RunDebugHiddenSiblingKeyEntropySelfTest(unsigned int& passed, unsigned int&
     {
         return hr;
     }
-    if (HasPlannedDestinationAncestorCollision(plan))
-    {
-        return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
-    }
-
     outTotalBytes = plan.totalBytes;
+
+    // Process objects ancestor-first (lexicographic destination order) so that when the source contains both
+    // an object "a" and its descendant "a/b" (legal in S3's flat keyspace) the ancestor is staged before the
+    // descendant is evaluated. Real S3 ListObjectsV2 already returns sorted keys; sorting here makes the
+    // per-object resolution below deterministic regardless of listing/pagination order.
+    std::sort(plan.objects.begin(), plan.objects.end(), [](const PlannedTransferObject& lhs, const PlannedTransferObject& rhs) noexcept {
+        return lhs.destinationKey < rhs.destinationKey;
+    });
+
+    // Every destination key produced by THIS transfer. Used below to recognise an ancestor blocker that is
+    // itself a planned sibling: deleting it to make room for a descendant would destroy data we are
+    // transferring (the ancestor-of-self vector). Such a descendant is declined per object instead of
+    // aborting the whole prefix transfer up-front.
+    std::unordered_set<std::string> plannedDestinationKeys;
+    plannedDestinationKeys.reserve(plan.objects.size());
+    for (const PlannedTransferObject& object : plan.objects)
+    {
+        plannedDestinationKeys.insert(object.destinationKey);
+    }
 
     // Conflicts are recorded per object and resolved per object below; one existing destination
     // object must never abort a whole prefix transfer (the normative directory-merge rule).
@@ -1480,9 +1426,9 @@ void RunDebugHiddenSiblingKeyEntropySelfTest(unsigned int& passed, unsigned int&
         const PlannedTransferObject& object = plan.objects[i];
 
         const size_t objectBackupStart = journal.backups.size();
-        bool objectSkipped       = false;
-        bool overwriteThisObject = allowOverwrite;
-        unsigned int retryCount  = 0;
+        bool objectSkipped             = false;
+        bool overwriteThisObject       = allowOverwrite;
+        unsigned int retryCount        = 0;
         while (true)
         {
             hr = RefreshDestinationState(fs, destination, object.destinationKey, destinationStates[i]);
@@ -1497,6 +1443,17 @@ void RunDebugHiddenSiblingKeyEntropySelfTest(unsigned int& passed, unsigned int&
                 break;
             }
 
+            // If the blocking ancestor is itself a planned destination object in THIS transfer, removing it
+            // to make room would destroy a sibling we are transferring (the ancestor-of-self data-loss
+            // vector). That is not a user-resolvable overwrite, so decline this descendant per object: skip
+            // it, leave the planned sibling intact, and let the rest of the prefix transfer proceed.
+            if (destinationStates[i].ancestorConflict && ! destinationStates[i].ancestorKey.empty() &&
+                plannedDestinationKeys.contains(destinationStates[i].ancestorKey))
+            {
+                objectSkipped = true;
+                break;
+            }
+
             if (! overwriteThisObject)
             {
                 if (! reportIssue)
@@ -1506,11 +1463,10 @@ void RunDebugHiddenSiblingKeyEntropySelfTest(unsigned int& passed, unsigned int&
                 }
 
                 // Skip-everything arrives as repeated Skip answers from the host's apply-to-all cache.
-                FileSystemIssueAction action = FileSystemIssueAction::Cancel;
+                FileSystemIssueAction action           = FileSystemIssueAction::Cancel;
                 const std::wstring conflictSource      = BuildObjectDisplayPath(sourcePath, object.sourceKey, sourceRootKey);
                 const std::wstring conflictDestination = BuildObjectDisplayPath(destinationPath, object.destinationKey, destinationRootKey);
-                const HRESULT issueHr =
-                    reportIssue(conflictSource.c_str(), conflictDestination.c_str(), HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS), action);
+                const HRESULT issueHr = reportIssue(conflictSource.c_str(), conflictDestination.c_str(), HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS), action);
                 if (FAILED(issueHr))
                 {
                     const HRESULT rollbackHr = RollbackTransfer(fs, source, destination, journal);
@@ -1728,9 +1684,8 @@ void RunDebugRootObjectSkipSelfTest(unsigned int& passed, unsigned int& failed)
     graph.AddObject("src/child.txt", "child");
     graph.AddObject("dest", "root-object");
 
-    unsigned int prompts = 0;
-    const TransferIssueReporter reporter =
-        [&](const wchar_t*, const wchar_t*, HRESULT status, FileSystemIssueAction& action) noexcept -> HRESULT
+    unsigned int prompts                 = 0;
+    const TransferIssueReporter reporter = [&](const wchar_t*, const wchar_t*, HRESULT status, FileSystemIssueAction& action) noexcept -> HRESULT
     {
         ++prompts;
         DebugCheck(status == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS), L"S3 root-object Skip should report an exists conflict", passed, failed);
@@ -1772,9 +1727,8 @@ void RunDebugRootObjectOverwriteSelfTest(unsigned int& passed, unsigned int& fai
     graph.AddObject("src/child.txt", "child");
     graph.AddObject("dest", "root-object");
 
-    unsigned int prompts = 0;
-    const TransferIssueReporter reporter =
-        [&](const wchar_t*, const wchar_t*, HRESULT status, FileSystemIssueAction& action) noexcept -> HRESULT
+    unsigned int prompts                 = 0;
+    const TransferIssueReporter reporter = [&](const wchar_t*, const wchar_t*, HRESULT status, FileSystemIssueAction& action) noexcept -> HRESULT
     {
         ++prompts;
         DebugCheck(status == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS), L"S3 root-object Overwrite should report an exists conflict", passed, failed);
@@ -1818,9 +1772,8 @@ void RunDebugNestedAncestorStackSelfTest(unsigned int& passed, unsigned int& fai
     graph.AddObject("dest/a", "ancestor-a");
     graph.AddObject("dest/a/b", "ancestor-b");
 
-    unsigned int prompts = 0;
-    const TransferIssueReporter reporter =
-        [&](const wchar_t*, const wchar_t*, HRESULT status, FileSystemIssueAction& action) noexcept -> HRESULT
+    unsigned int prompts                 = 0;
+    const TransferIssueReporter reporter = [&](const wchar_t*, const wchar_t*, HRESULT status, FileSystemIssueAction& action) noexcept -> HRESULT
     {
         ++prompts;
         DebugCheck(status == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS), L"S3 nested ancestor stack should report exists conflicts", passed, failed);
@@ -1865,9 +1818,8 @@ void RunDebugPlannedDestinationAncestorCollisionSelfTest(unsigned int& passed, u
     graph.AddObject("src/a", "object-a");
     graph.AddObject("src/a/b", "child-b");
 
-    unsigned int prompts = 0;
-    const TransferIssueReporter reporter =
-        [&](const wchar_t*, const wchar_t*, HRESULT, FileSystemIssueAction& action) noexcept -> HRESULT
+    unsigned int prompts                 = 0;
+    const TransferIssueReporter reporter = [&](const wchar_t*, const wchar_t*, HRESULT, FileSystemIssueAction& action) noexcept -> HRESULT
     {
         ++prompts;
         action = FileSystemIssueAction::Overwrite;
@@ -1889,15 +1841,26 @@ void RunDebugPlannedDestinationAncestorCollisionSelfTest(unsigned int& passed, u
                                          totalBytes,
                                          reporter);
 
-    DebugCheck(hr == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS),
-               L"S3 planned destination ancestor collision should fail before self-deleting a same-transfer object",
+    // Per-object resolution (not a whole-transfer abort): the ancestor object "a" transfers; its descendant
+    // "a/b" is declined because staging it would require deleting the just-transferred sibling "dest/a".
+    // Nothing is lost -- "a" lands at the destination, "a/b" stays authoritative at the source -- and the
+    // partial outcome is reported via ERROR_PARTIAL_COPY. This is the data-safe replacement for the former
+    // up-front ERROR_ALREADY_EXISTS abort, while never self-deleting a same-transfer object.
+    DebugCheck(hr == HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY),
+               L"S3 planned destination ancestor collision should report a partial transfer, not abort the whole prefix",
                passed,
                failed);
-    DebugCheck(prompts == 0u, L"S3 planned destination ancestor collision should fail before conflict prompts", passed, failed);
-    DebugCheck(graph.BytesEqual("src/a", "object-a"), L"S3 planned destination ancestor collision should preserve source ancestor object", passed, failed);
-    DebugCheck(graph.BytesEqual("src/a/b", "child-b"), L"S3 planned destination ancestor collision should preserve source descendant object", passed, failed);
-    DebugCheck(! graph.Exists("dest/a"), L"S3 planned destination ancestor collision should not stage ancestor destination", passed, failed);
-    DebugCheck(! graph.Exists("dest/a/b"), L"S3 planned destination ancestor collision should not stage descendant destination", passed, failed);
+    DebugCheck(prompts == 0u, L"S3 planned destination ancestor collision should skip the descendant without a user prompt", passed, failed);
+    DebugCheck(graph.BytesEqual("dest/a", "object-a"), L"S3 planned destination ancestor collision should stage the ancestor object", passed, failed);
+    DebugCheck(
+        ! graph.Exists("dest/a/b"), L"S3 planned destination ancestor collision should not stage the descendant over its planned sibling", passed, failed);
+    DebugCheck(
+        ! graph.Exists("src/a"), L"S3 planned destination ancestor collision move should remove the transferred ancestor from the source", passed, failed);
+    DebugCheck(graph.BytesEqual("src/a/b", "child-b"),
+               L"S3 planned destination ancestor collision should preserve the skipped descendant at the source",
+               passed,
+               failed);
+    DebugCheck(! graph.HasKeyWithPrefix("dest/.rs-bak-"), L"S3 planned destination ancestor collision should leave no hidden backup objects", passed, failed);
 }
 
 extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderS3DebugSelfTests(unsigned int* passed, unsigned int* failed)
@@ -1910,6 +1873,8 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderS3DebugSelfTests
     *passed = 0;
     *failed = 0;
 
+    FsS3::RunDebugRangeReadContractSelfTest(*passed, *failed);
+    FsS3::RunDebugMultipartWriterContractSelfTest(*passed, *failed);
     RunDebugHiddenSiblingKeyEntropySelfTest(*passed, *failed);
     RunDebugRootObjectSkipSelfTest(*passed, *failed);
     RunDebugRootObjectOverwriteSelfTest(*passed, *failed);
@@ -2001,7 +1966,8 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::CopyItem(const wchar_t* sourcePath,
         {
             return HRESULT_FROM_WIN32(ERROR_CANCELLED);
         }
-        return NormalizeCallbackResult(callback->FileSystemIssue(FILESYSTEM_COPY, conflictSource, conflictDestination, status, &action, callbackOptions, cookie));
+        return NormalizeCallbackResult(
+            callback->FileSystemIssue(FILESYSTEM_COPY, conflictSource, conflictDestination, status, &action, callbackOptions, cookie));
     };
 
     HRESULT hr = checkCancel();
@@ -2132,7 +2098,8 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::MoveItem(const wchar_t* sourcePath,
         {
             return HRESULT_FROM_WIN32(ERROR_CANCELLED);
         }
-        return NormalizeCallbackResult(callback->FileSystemIssue(FILESYSTEM_MOVE, conflictSource, conflictDestination, status, &action, callbackOptions, cookie));
+        return NormalizeCallbackResult(
+            callback->FileSystemIssue(FILESYSTEM_MOVE, conflictSource, conflictDestination, status, &action, callbackOptions, cookie));
     };
 
     HRESULT hr = checkCancel();
@@ -2560,17 +2527,17 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::CopyItems(const wchar_t* const* sourcePa
             };
 
             itemHr        = ExecuteCopyOrMove(*this,
-                                       _mode,
-                                       _hostConnections.get(),
-                                       settings,
-                                       sourcePath,
-                                       destinationPath,
-                                       flags,
-                                       false,
-                                       checkCancel,
-                                       reportBytes,
-                                       itemTotalBytes,
-                                       callback ? TransferIssueReporter(reportIssue) : TransferIssueReporter{});
+                                              _mode,
+                                              _hostConnections.get(),
+                                              settings,
+                                              sourcePath,
+                                              destinationPath,
+                                              flags,
+                                              false,
+                                              checkCancel,
+                                              reportBytes,
+                                              itemTotalBytes,
+                                              callback ? TransferIssueReporter(reportIssue) : TransferIssueReporter{});
             progressBytes = itemBaseProgress + itemReportedBytes;
         }
 
@@ -2783,17 +2750,17 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::MoveItems(const wchar_t* const* sourcePa
             };
 
             itemHr        = ExecuteCopyOrMove(*this,
-                                       _mode,
-                                       _hostConnections.get(),
-                                       settings,
-                                       sourcePath,
-                                       destinationPath,
-                                       flags,
-                                       true,
-                                       checkCancel,
-                                       reportBytes,
-                                       itemTotalBytes,
-                                       callback ? TransferIssueReporter(reportIssue) : TransferIssueReporter{});
+                                              _mode,
+                                              _hostConnections.get(),
+                                              settings,
+                                              sourcePath,
+                                              destinationPath,
+                                              flags,
+                                              true,
+                                              checkCancel,
+                                              reportBytes,
+                                              itemTotalBytes,
+                                              callback ? TransferIssueReporter(reportIssue) : TransferIssueReporter{});
             progressBytes = itemBaseProgress + itemReportedBytes;
         }
 

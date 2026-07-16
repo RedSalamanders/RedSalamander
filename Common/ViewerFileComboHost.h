@@ -12,6 +12,7 @@
 #include <utility>
 
 #include "Win32CallbackHelpers.h"
+#include "WindowSizing.h"
 
 namespace RedSalamander::ViewerFileComboHost
 {
@@ -19,6 +20,31 @@ inline constexpr int kStandaloneComboHeightDip        = 28;
 inline constexpr int kStandaloneComboChromePaddingDip = 2;
 inline constexpr int kStandaloneComboAccentHeightDip  = 1;
 inline constexpr int kStandaloneComboAccentGapDip     = 1;
+inline constexpr size_t kStandaloneComboPopupMaxVisibleItems = 8u;
+inline constexpr int kStandaloneComboPopupRowHeightDip        = 24;
+inline constexpr int kStandaloneComboPopupChromeHeightDip     = 10;
+
+[[nodiscard]] inline bool MessageMayOpenWindowComboPopup(UINT msg, WPARAM wp) noexcept
+{
+    switch (msg)
+    {
+        case WM_LBUTTONDOWN:
+        case WM_LBUTTONDBLCLK: return true;
+        case WM_SYSKEYDOWN: return static_cast<UINT>(wp) == VK_DOWN || static_cast<UINT>(wp) == VK_UP;
+        case WM_KEYDOWN:
+        {
+            const UINT virtualKey = static_cast<UINT>(wp);
+            return virtualKey == VK_SPACE || virtualKey == VK_RETURN || virtualKey == VK_F4 || virtualKey == VK_DOWN || virtualKey == VK_UP;
+        }
+        default: return false;
+    }
+}
+
+[[nodiscard]] inline int ComputeStandaloneComboPopupHeightPx(size_t itemCount, UINT dpi) noexcept
+{
+    return Common::WindowSizing::ComputeBoundedListPopupHeightPx(
+        itemCount, kStandaloneComboPopupMaxVisibleItems, kStandaloneComboPopupRowHeightDip, kStandaloneComboPopupChromeHeightDip, dpi);
+}
 
 template <typename ViewerT>
 [[nodiscard]] LRESULT DispatchFileComboHostWndProc(

@@ -59,11 +59,6 @@ constexpr wchar_t kCompareOptionsDxHostClassName[]               = L"RedSalamand
     return CreateWindowExW(exStyle, kCompareOptionsDxHostClassName, L"", style, 0, 0, 10, 10, parent, nullptr, GetModuleHandleW(nullptr), nullptr);
 }
 
-[[nodiscard]] ThemePalette MakeDxPalette(const AppTheme& theme) noexcept
-{
-    return MakeAppThemeDxPalette(theme);
-}
-
 [[nodiscard]] std::wstring NormalizeDialogButtonCaption(std::wstring_view text)
 {
     std::wstring normalized;
@@ -282,63 +277,6 @@ void ConfigureCompareOptionsTextFormat(IDWriteTextFormat* format, DWRITE_WORD_WR
     return true;
 }
 
-void SetTwoStateToggleState(HWND toggle, bool highContrast, bool toggledOn) noexcept
-{
-    if (! toggle)
-    {
-        return;
-    }
-
-    const LONG_PTR style = GetWindowLongPtrW(toggle, GWL_STYLE);
-    const UINT type      = static_cast<UINT>(style & BS_TYPEMASK);
-    bool useBmCheck      = highContrast;
-    if (type == BS_OWNERDRAW)
-    {
-        useBmCheck = false;
-    }
-    else if (type == BS_CHECKBOX || type == BS_AUTOCHECKBOX || type == BS_3STATE || type == BS_AUTO3STATE || type == BS_RADIOBUTTON ||
-             type == BS_AUTORADIOBUTTON)
-    {
-        useBmCheck = true;
-    }
-
-    if (useBmCheck)
-    {
-        SendMessageW(toggle, BM_SETCHECK, toggledOn ? BST_CHECKED : BST_UNCHECKED, 0);
-        return;
-    }
-
-    SetWindowLongPtrW(toggle, GWLP_USERDATA, toggledOn ? 1 : 0);
-    InvalidateRect(toggle, nullptr, TRUE);
-}
-[[nodiscard]] bool GetTwoStateToggleState(HWND toggle, bool highContrast) noexcept
-{
-    if (! toggle)
-    {
-        return false;
-    }
-
-    const LONG_PTR style = GetWindowLongPtrW(toggle, GWL_STYLE);
-    const UINT type      = static_cast<UINT>(style & BS_TYPEMASK);
-    bool useBmCheck      = highContrast;
-    if (type == BS_OWNERDRAW)
-    {
-        useBmCheck = false;
-    }
-    else if (type == BS_CHECKBOX || type == BS_AUTOCHECKBOX || type == BS_3STATE || type == BS_AUTO3STATE || type == BS_RADIOBUTTON ||
-             type == BS_AUTORADIOBUTTON)
-    {
-        useBmCheck = true;
-    }
-
-    if (useBmCheck)
-    {
-        return SendMessageW(toggle, BM_GETCHECK, 0, 0) == BST_CHECKED;
-    }
-
-    return GetWindowLongPtrW(toggle, GWLP_USERDATA) != 0;
-}
-
 [[nodiscard]] WNDPROC GetStoredWndProc(HWND hwnd, const wchar_t* propName) noexcept
 {
     return RedSalamander::Win32Callback::GetStoredWndProc(hwnd, propName);
@@ -409,7 +347,7 @@ void RestoreWndProcHook(HWND hwnd, const wchar_t* originalWndProcProp) noexcept
 
 void CompareDirectoriesWindow::ApplyOptionsDialogTheme() noexcept
 {
-    if (! _optionsDlg)
+    if (! _optionsPanel.dlg)
     {
         return;
     }
@@ -417,8 +355,8 @@ void CompareDirectoriesWindow::ApplyOptionsDialogTheme() noexcept
     const bool darkBackground = ChooseContrastingTextColor(_theme.windowBackground) == RGB(255, 255, 255);
     const wchar_t* themeName  = _theme.highContrast ? L"" : (darkBackground ? L"DarkMode_Explorer" : L"Explorer");
 
-    SetWindowTheme(_optionsDlg.get(), themeName, nullptr);
-    SendMessageW(_optionsDlg.get(), WM_THEMECHANGED, 0, 0);
+    SetWindowTheme(_optionsPanel.dlg.get(), themeName, nullptr);
+    SendMessageW(_optionsPanel.dlg.get(), WM_THEMECHANGED, 0, 0);
 
     struct EnumData
     {
@@ -428,9 +366,9 @@ void CompareDirectoriesWindow::ApplyOptionsDialogTheme() noexcept
 
     EnumData data{};
     data.themeName   = themeName;
-    data.optionsHost = _optionsUi.host;
+    data.optionsHost = _optionsPanel.ui.host;
 
-    EnumChildWindows(_optionsDlg.get(),
+    EnumChildWindows(_optionsPanel.dlg.get(),
                      [](HWND child, LPARAM lParam) noexcept -> BOOL
     {
         auto* data = reinterpret_cast<const EnumData*>(lParam);
@@ -511,7 +449,7 @@ void CompareDirectoriesWindow::ApplyOptionsDialogTheme() noexcept
     SyncOptionsDxButtons();
     SyncOptionsDxToggles();
     SyncOptionsDxEdits();
-    RedrawWindow(_optionsDlg.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
+    RedrawWindow(_optionsPanel.dlg.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
 }
 
 INT_PTR CALLBACK CompareDirectoriesWindow::OptionsDlgProc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam) noexcept
@@ -539,7 +477,7 @@ INT_PTR CALLBACK CompareDirectoriesWindow::OptionsDlgProc(HWND dlg, UINT msg, WP
         case WM_CTLCOLORDLG: return self->OnOptionsCtlColorDlg(reinterpret_cast<HDC>(wParam));
         case WM_CTLCOLORSTATIC: return self->OnOptionsCtlColorStatic(reinterpret_cast<HDC>(wParam), reinterpret_cast<HWND>(lParam));
         case WM_CTLCOLORBTN: return self->OnOptionsCtlColorBtn(reinterpret_cast<HDC>(wParam), reinterpret_cast<HWND>(lParam));
-        case WM_NCDESTROY: SettingsHotReload::UnregisterParticipant(dlg); return FALSE;
+        case WM_NCDESTROY: self->UnregisterOptionsReloadParticipant(); return FALSE;
         default: break;
     }
 
@@ -554,23 +492,47 @@ INT_PTR CompareDirectoriesWindow::OnOptionsInitDialog(HWND dlg) noexcept
     SetWindowTheme(dlg, themeName, nullptr);
     SendMessageW(dlg, WM_THEMECHANGED, 0, 0);
 
-    SettingsHotReload::RegisterParticipant(dlg);
     EnsureOptionsControlsCreated(dlg);
     return TRUE;
+}
+
+void CompareDirectoriesWindow::RegisterOptionsReloadParticipant() noexcept
+{
+    if (_optionsPanel.reloadParticipantRegistered || ! _optionsPanel.dlg || IsWindow(_optionsPanel.dlg.get()) == FALSE)
+    {
+        return;
+    }
+
+    SettingsHotReload::RegisterParticipant(_optionsPanel.dlg.get());
+    _optionsPanel.reloadParticipantRegistered = true;
+}
+
+void CompareDirectoriesWindow::UnregisterOptionsReloadParticipant() noexcept
+{
+    if (! _optionsPanel.reloadParticipantRegistered)
+    {
+        return;
+    }
+
+    if (_optionsPanel.dlg)
+    {
+        SettingsHotReload::UnregisterParticipant(_optionsPanel.dlg.get());
+    }
+    _optionsPanel.reloadParticipantRegistered = false;
 }
 
 bool CompareDirectoriesWindow::EnsureOptionsDxStaticHosts() noexcept
 {
     DetachOptionsDxStaticHosts();
 
-    if (! _optionsUi.host)
+    if (! _optionsPanel.ui.host)
     {
         return false;
     }
 
     auto dxState = std::make_unique<OptionsDxUiState>();
 
-    wil::unique_hwnd hwnd(CreateCompareOptionsDxHostWindow(_optionsUi.host, WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | WS_TABSTOP | SS_NOTIFY));
+    wil::unique_hwnd hwnd(CreateCompareOptionsDxHostWindow(_optionsPanel.ui.host, WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | WS_TABSTOP | SS_NOTIFY));
     if (! hwnd)
     {
         return false;
@@ -595,7 +557,7 @@ bool CompareDirectoriesWindow::EnsureOptionsDxStaticHosts() noexcept
     const std::wstring offLabel = LoadStringResource(nullptr, IDS_PREFS_COMMON_OFF);
     const std::wstring onLabel  = LoadStringResource(nullptr, IDS_PREFS_COMMON_ON);
 
-    const auto makeToggleCard = [&](OptionsToggleCardDx& out, const UINT commandId, const HWND legacyToggle) noexcept
+    const auto makeToggleCard = [&](OptionsToggleCardDx& out, const UINT commandId) noexcept
     {
         out.card  = root->AddChild<CardPanel>();
         out.title = root->AddChild<Label>();
@@ -605,19 +567,10 @@ bool CompareDirectoriesWindow::EnsureOptionsDxStaticHosts() noexcept
         out.description->SetMultiline(true);
         out.toggle = root->AddChild<Toggle>();
         out.toggle->SetStateLabels(offLabel, onLabel);
-        out.toggle->SetOnToggled([this, commandId, legacyToggle](bool checked) noexcept
-        {
-            if (! _optionsDlg || ! legacyToggle || IsWindow(_optionsDlg.get()) == FALSE || IsWindow(legacyToggle) == FALSE)
-            {
-                return;
-            }
-
-            SetTwoStateToggleState(legacyToggle, _theme.highContrast, checked);
-            PostMessageW(_optionsDlg.get(), WM_COMMAND, MAKEWPARAM(commandId, BN_CLICKED), reinterpret_cast<LPARAM>(legacyToggle));
-        });
+        out.toggle->SetOnToggled([this, commandId](bool checked) noexcept { UpdateOptionsDraftToggle(commandId, checked); });
     };
 
-    const auto makeIgnoreCard = [&](OptionsIgnoreCardDx& out, const UINT commandId, const HWND legacyToggle, const HWND legacyEdit) noexcept
+    const auto makeIgnoreCard = [&](OptionsIgnoreCardDx& out, const UINT commandId, const UINT editId) noexcept
     {
         out.card  = root->AddChild<CardPanel>();
         out.title = root->AddChild<Label>();
@@ -627,63 +580,38 @@ bool CompareDirectoriesWindow::EnsureOptionsDxStaticHosts() noexcept
         out.description->SetMultiline(true);
         out.toggle = root->AddChild<Toggle>();
         out.toggle->SetStateLabels(offLabel, onLabel);
-        out.toggle->SetOnToggled([this, commandId, legacyToggle](bool checked) noexcept
-        {
-            if (! _optionsDlg || ! legacyToggle || IsWindow(_optionsDlg.get()) == FALSE || IsWindow(legacyToggle) == FALSE)
-            {
-                return;
-            }
-
-            SetTwoStateToggleState(legacyToggle, _theme.highContrast, checked);
-            PostMessageW(_optionsDlg.get(), WM_COMMAND, MAKEWPARAM(commandId, BN_CLICKED), reinterpret_cast<LPARAM>(legacyToggle));
-        });
+        out.toggle->SetOnToggled([this, commandId](bool checked) noexcept { UpdateOptionsDraftToggle(commandId, checked); });
         out.edit = root->AddChild<TextField>();
         out.title->SetMnemonicTarget(out.toggle);
-        out.edit->SetOnTextChanged([this, legacyEdit](std::wstring_view text) noexcept
-        {
-            if (_syncingOptionsDxEdits || ! legacyEdit || IsWindow(legacyEdit) == FALSE)
-            {
-                return;
-            }
-
-            const std::wstring currentText = Win32Text::GetWindowTextString(legacyEdit);
-            if (currentText == text)
-            {
-                return;
-            }
-
-            _syncingOptionsDxEdits = true;
-            SetWindowTextW(legacyEdit, std::wstring(text).c_str());
-            _syncingOptionsDxEdits = false;
-        });
+        out.edit->SetOnTextChanged([this, editId](std::wstring_view text) noexcept { UpdateOptionsDraftText(editId, text); });
     };
 
     // Keep retained children in the same order as the visible dialog so keyboard Tab traversal
     // follows the on-screen flow instead of the raw member declaration order.
     makeHeader(body.headerSubdirs);
-    makeToggleCard(body.compareSubdirectories, IDC_CMP_SUBDIRECTORIES, _optionsUi.compareSubdirectories.toggle);
+    makeToggleCard(body.compareSubdirectories, IDC_CMP_SUBDIRECTORIES);
 
     makeHeader(body.headerCompare);
-    makeToggleCard(body.compareSize, IDC_CMP_SIZE, _optionsUi.compareSize.toggle);
-    makeToggleCard(body.compareDateTime, IDC_CMP_DATETIME, _optionsUi.compareDateTime.toggle);
-    makeToggleCard(body.compareAttributes, IDC_CMP_ATTRIBUTES, _optionsUi.compareAttributes.toggle);
-    makeToggleCard(body.compareContent, IDC_CMP_CONTENT, _optionsUi.compareContent.toggle);
+    makeToggleCard(body.compareSize, IDC_CMP_SIZE);
+    makeToggleCard(body.compareDateTime, IDC_CMP_DATETIME);
+    makeToggleCard(body.compareAttributes, IDC_CMP_ATTRIBUTES);
+    makeToggleCard(body.compareContent, IDC_CMP_CONTENT);
 
     makeHeader(body.headerAdvanced);
-    makeToggleCard(body.compareSubdirAttributes, IDC_CMP_SUBDIR_ATTRIBUTES, _optionsUi.compareSubdirAttributes.toggle);
-    makeToggleCard(body.selectSubdirsOnlyInOnePane, IDC_CMP_SELECT_SUBDIRS_ONLY_ONE_PANE, _optionsUi.selectSubdirsOnlyInOnePane.toggle);
-    makeToggleCard(body.keepIdenticalItems, IDC_CMP_KEEP_IDENTICAL, _optionsUi.keepIdenticalItems.toggle);
+    makeToggleCard(body.compareSubdirAttributes, IDC_CMP_SUBDIR_ATTRIBUTES);
+    makeToggleCard(body.selectSubdirsOnlyInOnePane, IDC_CMP_SELECT_SUBDIRS_ONLY_ONE_PANE);
+    makeToggleCard(body.keepIdenticalItems, IDC_CMP_KEEP_IDENTICAL);
 
     makeHeader(body.headerIgnore);
-    makeIgnoreCard(body.ignoreFiles, IDC_CMP_IGNORE_FILES, _optionsUi.ignoreFiles.toggle, _optionsUi.ignoreFiles.edit);
-    makeIgnoreCard(body.ignoreDirectories, IDC_CMP_IGNORE_DIRECTORIES, _optionsUi.ignoreDirectories.toggle, _optionsUi.ignoreDirectories.edit);
+    makeIgnoreCard(body.ignoreFiles, IDC_CMP_IGNORE_FILES, IDC_CMP_IGNORE_FILES_PATTERNS);
+    makeIgnoreCard(body.ignoreDirectories, IDC_CMP_IGNORE_DIRECTORIES, IDC_CMP_IGNORE_DIRECTORIES_PATTERNS);
     body.ignoreFiles.title->SetMnemonic(L'F');
     body.ignoreDirectories.title->SetMnemonic(L'D');
 
     dxState->body.host.SetRoot(std::move(root));
     dxState->body.host.SetOnTabBoundary([this, hostHwnd = hwnd.get()](bool reverse) noexcept
     {
-        if (! _optionsDxUi)
+        if (! _optionsPanel.dxUi)
         {
             return MoveDialogTabFocusFromHost(hostHwnd, reverse);
         }
@@ -702,25 +630,25 @@ bool CompareDirectoriesWindow::EnsureOptionsDxStaticHosts() noexcept
 
         if (reverse)
         {
-            return focusButtonHost(_optionsDxUi->cancelButton);
+            return focusButtonHost(_optionsPanel.dxUi->cancelButton);
         }
 
-        _optionsDxUi->body.lastFooterReturnTarget = _optionsDxUi->body.host.GetFocusControl();
-        if (! _optionsDxUi->body.lastFooterReturnTarget)
+        _optionsPanel.dxUi->body.lastFooterReturnTarget = _optionsPanel.dxUi->body.host.GetFocusControl();
+        if (! _optionsPanel.dxUi->body.lastFooterReturnTarget)
         {
-            _optionsDxUi->body.lastFooterReturnTarget = _optionsDxUi->body.compareSubdirectories.toggle;
+            _optionsPanel.dxUi->body.lastFooterReturnTarget = _optionsPanel.dxUi->body.compareSubdirectories.toggle;
         }
-        return focusButtonHost(_optionsDxUi->okButton);
+        return focusButtonHost(_optionsPanel.dxUi->okButton);
     });
     dxState->body.host.SetOnFocusChanged([this](RedSalamander::DxUi::Control* control) noexcept
     { static_cast<void>(EnsureOptionsDxBodyControlVisible(control)); });
-    dxState->body.hostHwnd   = std::move(hwnd);
-    dxState->usesDxUiStatics = true;
-    dxState->usesDxUiToggles = true;
-    dxState->usesDxUiEdits   = true;
-    dxState->usesDxUiButtons = false;
-    _optionsDxUi             = std::move(dxState);
-    _syncingOptionsDxEdits   = false;
+    dxState->body.hostHwnd       = std::move(hwnd);
+    dxState->usesDxUiStatics     = true;
+    dxState->usesDxUiToggles     = true;
+    dxState->usesDxUiEdits       = true;
+    dxState->usesDxUiButtons     = false;
+    _optionsPanel.dxUi           = std::move(dxState);
+    _optionsPanel.syncingDxDraft = false;
     ApplyOptionsDxStaticTheme();
     SyncOptionsDxStatics();
     SyncOptionsDxToggles();
@@ -730,26 +658,26 @@ bool CompareDirectoriesWindow::EnsureOptionsDxStaticHosts() noexcept
 
 void CompareDirectoriesWindow::DetachOptionsDxStaticHosts() noexcept
 {
-    if (! _optionsDxUi)
+    if (! _optionsPanel.dxUi)
     {
         return;
     }
 
-    if (_optionsDxUi->body.hostHwnd)
+    if (_optionsPanel.dxUi->body.hostHwnd)
     {
-        RemovePropW(_optionsDxUi->body.hostHwnd.get(), kCompareOptionsDxHostStateProp);
-        RestoreWndProcHook(_optionsDxUi->body.hostHwnd.get(), kCompareOptionsDxHostOriginalWndProcProp);
+        RemovePropW(_optionsPanel.dxUi->body.hostHwnd.get(), kCompareOptionsDxHostStateProp);
+        RestoreWndProcHook(_optionsPanel.dxUi->body.hostHwnd.get(), kCompareOptionsDxHostOriginalWndProcProp);
     }
 
-    _optionsDxUi->Detach();
-    _optionsDxUi.reset();
-    _syncingOptionsDxEdits = false;
+    _optionsPanel.dxUi->Detach();
+    _optionsPanel.dxUi.reset();
+    _optionsPanel.syncingDxDraft = false;
 }
 
 bool CompareDirectoriesWindow::EnsureOptionsDxButtonHosts() noexcept
 {
-    const HWND dialog = _optionsDlg ? _optionsDlg.get() : (_optionsUi.host ? GetParent(_optionsUi.host) : nullptr);
-    if (! _optionsDxUi || ! dialog)
+    const HWND dialog = _optionsPanel.dlg ? _optionsPanel.dlg.get() : (_optionsPanel.ui.host ? GetParent(_optionsPanel.ui.host) : nullptr);
+    if (! _optionsPanel.dxUi || ! dialog)
     {
         return false;
     }
@@ -798,7 +726,7 @@ bool CompareDirectoriesWindow::EnsureOptionsDxButtonHosts() noexcept
         slot.button->SetPrimary(primary);
         slot.button->SetOnClick([this, legacyButton, commandId]() noexcept
         {
-            const HWND dialogHwnd = _optionsDlg ? _optionsDlg.get() : (_optionsUi.host ? GetParent(_optionsUi.host) : nullptr);
+            const HWND dialogHwnd = _optionsPanel.dlg ? _optionsPanel.dlg.get() : (_optionsPanel.ui.host ? GetParent(_optionsPanel.ui.host) : nullptr);
             if (! dialogHwnd || ! legacyButton || IsWindow(dialogHwnd) == FALSE || IsWindow(legacyButton) == FALSE)
             {
                 return;
@@ -809,7 +737,7 @@ bool CompareDirectoriesWindow::EnsureOptionsDxButtonHosts() noexcept
         slot.host.SetRoot(std::move(root));
         slot.host.SetOnTabBoundary([this, commandId, hostHwnd = hwnd.get()](bool reverse) noexcept
         {
-            if (! _optionsDxUi)
+            if (! _optionsPanel.dxUi)
             {
                 return MoveDialogTabFocusFromHost(hostHwnd, reverse);
             }
@@ -828,38 +756,38 @@ bool CompareDirectoriesWindow::EnsureOptionsDxButtonHosts() noexcept
 
             const auto focusBodyHost = [this](RedSalamander::DxUi::Control* preferredTarget) noexcept
             {
-                if (! _optionsDxUi || ! _optionsDxUi->body.hostHwnd || IsWindow(_optionsDxUi->body.hostHwnd.get()) == FALSE)
+                if (! _optionsPanel.dxUi || ! _optionsPanel.dxUi->body.hostHwnd || IsWindow(_optionsPanel.dxUi->body.hostHwnd.get()) == FALSE)
                 {
                     return false;
                 }
 
-                ::SetFocus(_optionsDxUi->body.hostHwnd.get());
+                ::SetFocus(_optionsPanel.dxUi->body.hostHwnd.get());
                 auto* target = preferredTarget;
                 if (! target)
                 {
-                    target = _optionsDxUi->body.host.GetFocusControl();
+                    target = _optionsPanel.dxUi->body.host.GetFocusControl();
                 }
                 if (! target)
                 {
-                    target = _optionsDxUi->body.compareSubdirectories.toggle;
+                    target = _optionsPanel.dxUi->body.compareSubdirectories.toggle;
                 }
                 if (! target)
                 {
                     return false;
                 }
 
-                _optionsDxUi->body.host.SetFocusControl(target);
+                _optionsPanel.dxUi->body.host.SetFocusControl(target);
                 static_cast<void>(EnsureOptionsDxBodyControlVisible(target));
-                return _optionsDxUi->body.host.GetFocusControl() == target;
+                return _optionsPanel.dxUi->body.host.GetFocusControl() == target;
             };
 
             if (commandId == IDOK)
             {
-                return reverse ? focusBodyHost(_optionsDxUi->body.lastFooterReturnTarget) : focusButtonHost(_optionsDxUi->cancelButton);
+                return reverse ? focusBodyHost(_optionsPanel.dxUi->body.lastFooterReturnTarget) : focusButtonHost(_optionsPanel.dxUi->cancelButton);
             }
             if (commandId == IDCANCEL)
             {
-                return reverse ? focusButtonHost(_optionsDxUi->okButton) : focusBodyHost(_optionsDxUi->body.compareSubdirectories.toggle);
+                return reverse ? focusButtonHost(_optionsPanel.dxUi->okButton) : focusBodyHost(_optionsPanel.dxUi->body.compareSubdirectories.toggle);
             }
 
             return MoveDialogTabFocusFromHost(hostHwnd, reverse);
@@ -869,45 +797,45 @@ bool CompareDirectoriesWindow::EnsureOptionsDxButtonHosts() noexcept
         return true;
     };
 
-    const bool okAttached         = attachButtonHost(_optionsDxUi->okButton, IDOK, true);
-    const bool cancelAttached     = attachButtonHost(_optionsDxUi->cancelButton, IDCANCEL, false);
-    _optionsDxUi->usesDxUiButtons = okAttached && cancelAttached;
-    if (_optionsDxUi->usesDxUiButtons)
+    const bool okAttached               = attachButtonHost(_optionsPanel.dxUi->okButton, IDOK, true);
+    const bool cancelAttached           = attachButtonHost(_optionsPanel.dxUi->cancelButton, IDCANCEL, false);
+    _optionsPanel.dxUi->usesDxUiButtons = okAttached && cancelAttached;
+    if (_optionsPanel.dxUi->usesDxUiButtons)
     {
         ApplyOptionsDxButtonTheme();
         SyncOptionsDxButtons();
     }
-    return _optionsDxUi->usesDxUiButtons;
+    return _optionsPanel.dxUi->usesDxUiButtons;
 }
 
 void CompareDirectoriesWindow::DetachOptionsDxButtonHosts() noexcept
 {
-    if (_optionsDxUi)
+    if (_optionsPanel.dxUi)
     {
-        _optionsDxUi->usesDxUiButtons = false;
-        if (_optionsDxUi->okButton.hostHwnd)
+        _optionsPanel.dxUi->usesDxUiButtons = false;
+        if (_optionsPanel.dxUi->okButton.hostHwnd)
         {
-            RemovePropW(_optionsDxUi->okButton.hostHwnd.get(), kCompareOptionsDxHostStateProp);
-            RestoreWndProcHook(_optionsDxUi->okButton.hostHwnd.get(), kCompareOptionsDxHostOriginalWndProcProp);
+            RemovePropW(_optionsPanel.dxUi->okButton.hostHwnd.get(), kCompareOptionsDxHostStateProp);
+            RestoreWndProcHook(_optionsPanel.dxUi->okButton.hostHwnd.get(), kCompareOptionsDxHostOriginalWndProcProp);
         }
-        if (_optionsDxUi->cancelButton.hostHwnd)
+        if (_optionsPanel.dxUi->cancelButton.hostHwnd)
         {
-            RemovePropW(_optionsDxUi->cancelButton.hostHwnd.get(), kCompareOptionsDxHostStateProp);
-            RestoreWndProcHook(_optionsDxUi->cancelButton.hostHwnd.get(), kCompareOptionsDxHostOriginalWndProcProp);
+            RemovePropW(_optionsPanel.dxUi->cancelButton.hostHwnd.get(), kCompareOptionsDxHostStateProp);
+            RestoreWndProcHook(_optionsPanel.dxUi->cancelButton.hostHwnd.get(), kCompareOptionsDxHostOriginalWndProcProp);
         }
-        _optionsDxUi->okButton.Detach();
-        _optionsDxUi->cancelButton.Detach();
+        _optionsPanel.dxUi->okButton.Detach();
+        _optionsPanel.dxUi->cancelButton.Detach();
     }
 }
 
 bool CompareDirectoriesWindow::EnsureOptionsDxToggleHosts() noexcept
 {
-    if (! _optionsDxUi)
+    if (! _optionsPanel.dxUi)
     {
         return false;
     }
 
-    _optionsDxUi->usesDxUiToggles = true;
+    _optionsPanel.dxUi->usesDxUiToggles = true;
     ApplyOptionsDxToggleTheme();
     SyncOptionsDxToggles();
     return true;
@@ -915,35 +843,35 @@ bool CompareDirectoriesWindow::EnsureOptionsDxToggleHosts() noexcept
 
 void CompareDirectoriesWindow::DetachOptionsDxToggleHosts() noexcept
 {
-    if (_optionsDxUi)
+    if (_optionsPanel.dxUi)
     {
-        _optionsDxUi->usesDxUiToggles = false;
+        _optionsPanel.dxUi->usesDxUiToggles = false;
     }
 }
 
 void CompareDirectoriesWindow::ApplyOptionsDxStaticTheme() noexcept
 {
-    if (! _optionsDxUi || ! _optionsDxUi->usesDxUiStatics)
+    if (! _optionsPanel.dxUi || ! _optionsPanel.dxUi->usesDxUiStatics)
     {
         return;
     }
 
-    _optionsDxUi->body.host.SetTheme(MakeDxPalette(_theme));
-    _optionsDxUi->body.host.Invalidate();
+    _optionsPanel.dxUi->body.host.SetTheme(MakeAppThemeDxPalette(_theme));
+    _optionsPanel.dxUi->body.host.Invalidate();
 }
 
 void CompareDirectoriesWindow::ApplyOptionsDxButtonTheme() noexcept
 {
-    if (! _optionsDxUi || ! _optionsDxUi->usesDxUiButtons)
+    if (! _optionsPanel.dxUi || ! _optionsPanel.dxUi->usesDxUiButtons)
     {
         return;
     }
 
-    const ThemePalette palette = MakeDxPalette(_theme);
-    _optionsDxUi->okButton.host.SetTheme(palette);
-    _optionsDxUi->cancelButton.host.SetTheme(palette);
-    _optionsDxUi->okButton.host.Invalidate();
-    _optionsDxUi->cancelButton.host.Invalidate();
+    const ThemePalette palette = MakeAppThemeDxPalette(_theme);
+    _optionsPanel.dxUi->okButton.host.SetTheme(palette);
+    _optionsPanel.dxUi->cancelButton.host.SetTheme(palette);
+    _optionsPanel.dxUi->okButton.host.Invalidate();
+    _optionsPanel.dxUi->cancelButton.host.Invalidate();
 }
 
 void CompareDirectoriesWindow::ApplyOptionsDxToggleTheme() noexcept
@@ -953,7 +881,7 @@ void CompareDirectoriesWindow::ApplyOptionsDxToggleTheme() noexcept
 
 void CompareDirectoriesWindow::SyncOptionsDxStatics() noexcept
 {
-    if (! _optionsDxUi || ! _optionsDxUi->usesDxUiStatics)
+    if (! _optionsPanel.dxUi || ! _optionsPanel.dxUi->usesDxUiStatics)
     {
         return;
     }
@@ -962,7 +890,7 @@ void CompareDirectoriesWindow::SyncOptionsDxStatics() noexcept
     const bool contentCompareSupported = ! _session || _session->IsContentCompareSupported();
     const UINT contentCompareDescId    = contentCompareSupported ? IDS_COMPARE_OPTIONS_CONTENT_DESC : IDS_COMPARE_OPTIONS_CONTENT_DESC_UNSUPPORTED;
 
-    auto& body = _optionsDxUi->body;
+    auto& body = _optionsPanel.dxUi->body;
 
     const auto syncSection = [](Label* section, const UINT textId) noexcept
     {
@@ -1016,14 +944,14 @@ void CompareDirectoriesWindow::SyncOptionsDxStatics() noexcept
 
 void CompareDirectoriesWindow::SyncOptionsDxButtons() noexcept
 {
-    if (! _optionsDxUi || ! _optionsDxUi->usesDxUiButtons || ! _optionsDlg)
+    if (! _optionsPanel.dxUi || ! _optionsPanel.dxUi->usesDxUiButtons || ! _optionsPanel.dlg)
     {
         return;
     }
 
     const auto syncButton = [&](OptionsButtonDx& slot, const int commandId, const bool primary) noexcept
     {
-        const HWND legacyButton = GetDlgItem(_optionsDlg.get(), commandId);
+        const HWND legacyButton = GetDlgItem(_optionsPanel.dlg.get(), commandId);
         if (! slot.button || ! legacyButton)
         {
             return;
@@ -1038,50 +966,53 @@ void CompareDirectoriesWindow::SyncOptionsDxButtons() noexcept
         slot.host.Invalidate();
     };
 
-    syncButton(_optionsDxUi->okButton, IDOK, true);
-    syncButton(_optionsDxUi->cancelButton, IDCANCEL, false);
+    syncButton(_optionsPanel.dxUi->okButton, IDOK, true);
+    syncButton(_optionsPanel.dxUi->cancelButton, IDCANCEL, false);
 }
 
 void CompareDirectoriesWindow::SyncOptionsDxToggles() noexcept
 {
-    if (! _optionsDxUi || ! _optionsDxUi->usesDxUiToggles)
+    if (! _optionsPanel.dxUi || ! _optionsPanel.dxUi->usesDxUiToggles)
     {
         return;
     }
 
-    const auto syncToggle = [&](Toggle* toggle, const HWND legacyToggle) noexcept
+    EnsureCompareSession();
+    const bool contentCompareSupported = ! _session || _session->IsContentCompareSupported();
+
+    const auto syncToggle = [](Toggle* toggle, const bool checked, const bool enabled = true) noexcept
     {
-        if (! toggle || ! legacyToggle)
+        if (! toggle)
         {
             return;
         }
 
-        toggle->SetChecked(GetTwoStateToggleState(legacyToggle, _theme.highContrast));
-        toggle->SetEnabled(IsWindowEnabled(legacyToggle) != FALSE);
+        toggle->SetChecked(checked);
+        toggle->SetEnabled(enabled);
     };
 
-    auto& body = _optionsDxUi->body;
-    syncToggle(body.compareSize.toggle, _optionsUi.compareSize.toggle);
-    syncToggle(body.compareDateTime.toggle, _optionsUi.compareDateTime.toggle);
-    syncToggle(body.compareAttributes.toggle, _optionsUi.compareAttributes.toggle);
-    syncToggle(body.compareContent.toggle, _optionsUi.compareContent.toggle);
-    syncToggle(body.compareSubdirectories.toggle, _optionsUi.compareSubdirectories.toggle);
-    syncToggle(body.compareSubdirAttributes.toggle, _optionsUi.compareSubdirAttributes.toggle);
-    syncToggle(body.selectSubdirsOnlyInOnePane.toggle, _optionsUi.selectSubdirsOnlyInOnePane.toggle);
-    syncToggle(body.keepIdenticalItems.toggle, _optionsUi.keepIdenticalItems.toggle);
-    syncToggle(body.ignoreFiles.toggle, _optionsUi.ignoreFiles.toggle);
-    syncToggle(body.ignoreDirectories.toggle, _optionsUi.ignoreDirectories.toggle);
+    auto& body = _optionsPanel.dxUi->body;
+    syncToggle(body.compareSize.toggle, _optionsPanel.draft.compareSize);
+    syncToggle(body.compareDateTime.toggle, _optionsPanel.draft.compareDateTime);
+    syncToggle(body.compareAttributes.toggle, _optionsPanel.draft.compareAttributes);
+    syncToggle(body.compareContent.toggle, contentCompareSupported && _optionsPanel.draft.compareContent, contentCompareSupported);
+    syncToggle(body.compareSubdirectories.toggle, _optionsPanel.draft.compareSubdirectories);
+    syncToggle(body.compareSubdirAttributes.toggle, _optionsPanel.draft.compareSubdirectoryAttributes);
+    syncToggle(body.selectSubdirsOnlyInOnePane.toggle, _optionsPanel.draft.selectSubdirsOnlyInOnePane);
+    syncToggle(body.keepIdenticalItems.toggle, _optionsPanel.draft.keepIdenticalItems);
+    syncToggle(body.ignoreFiles.toggle, _optionsPanel.draft.ignoreFiles);
+    syncToggle(body.ignoreDirectories.toggle, _optionsPanel.draft.ignoreDirectories);
     body.host.Invalidate();
 }
 
 bool CompareDirectoriesWindow::EnsureOptionsDxEditHosts() noexcept
 {
-    if (! _optionsDxUi)
+    if (! _optionsPanel.dxUi)
     {
         return false;
     }
 
-    _optionsDxUi->usesDxUiEdits = true;
+    _optionsPanel.dxUi->usesDxUiEdits = true;
     ApplyOptionsDxEditTheme();
     SyncOptionsDxEdits();
     return true;
@@ -1089,9 +1020,9 @@ bool CompareDirectoriesWindow::EnsureOptionsDxEditHosts() noexcept
 
 void CompareDirectoriesWindow::DetachOptionsDxEditHosts() noexcept
 {
-    if (_optionsDxUi)
+    if (_optionsPanel.dxUi)
     {
-        _optionsDxUi->usesDxUiEdits = false;
+        _optionsPanel.dxUi->usesDxUiEdits = false;
     }
 }
 
@@ -1102,44 +1033,33 @@ void CompareDirectoriesWindow::ApplyOptionsDxEditTheme() noexcept
 
 void CompareDirectoriesWindow::SyncOptionsDxEdits() noexcept
 {
-    if (! _optionsDxUi || ! _optionsDxUi->usesDxUiEdits)
+    if (! _optionsPanel.dxUi || ! _optionsPanel.dxUi->usesDxUiEdits)
     {
         return;
     }
 
-    const auto syncEdit = [&](TextField* edit, const HWND legacyEdit) noexcept
+    const auto syncEdit = [&](TextField* edit, const std::wstring& text, const bool enabled = true) noexcept
     {
-        if (! edit || ! legacyEdit || IsWindow(legacyEdit) == FALSE)
+        if (! edit)
         {
             return;
         }
 
-        _syncingOptionsDxEdits = true;
-        const int textLength   = GetWindowTextLengthW(legacyEdit);
-        std::wstring text(static_cast<size_t>(std::max(0, textLength)) + 1u, L'\0');
-        if (textLength > 0)
-        {
-            const int copied = GetWindowTextW(legacyEdit, text.data(), textLength + 1);
-            text.resize(static_cast<size_t>(std::max(0, copied)));
-        }
-        else
-        {
-            text.clear();
-        }
-        edit->SetText(std::move(text));
-        edit->SetEnabled(IsWindowEnabled(legacyEdit) != FALSE);
-        _syncingOptionsDxEdits = false;
+        _optionsPanel.syncingDxDraft = true;
+        edit->SetText(text);
+        edit->SetEnabled(enabled);
+        _optionsPanel.syncingDxDraft = false;
     };
 
-    auto& body = _optionsDxUi->body;
-    syncEdit(body.ignoreFiles.edit, _optionsUi.ignoreFiles.edit);
-    syncEdit(body.ignoreDirectories.edit, _optionsUi.ignoreDirectories.edit);
+    auto& body = _optionsPanel.dxUi->body;
+    syncEdit(body.ignoreFiles.edit, _optionsPanel.draft.ignoreFilesPatterns);
+    syncEdit(body.ignoreDirectories.edit, _optionsPanel.draft.ignoreDirectoriesPatterns);
     body.host.Invalidate();
 }
 
 bool CompareDirectoriesWindow::HandleOptionsDxMnemonic(const wchar_t mnemonic) noexcept
 {
-    if (! _optionsDxUi)
+    if (! _optionsPanel.dxUi)
     {
         return false;
     }
@@ -1151,31 +1071,31 @@ bool CompareDirectoriesWindow::HandleOptionsDxMnemonic(const wchar_t mnemonic) n
             return false;
         }
 
-        if (_optionsDxUi->body.hostHwnd && IsWindow(_optionsDxUi->body.hostHwnd.get()) != FALSE)
+        if (_optionsPanel.dxUi->body.hostHwnd && IsWindow(_optionsPanel.dxUi->body.hostHwnd.get()) != FALSE)
         {
-            ::SetFocus(_optionsDxUi->body.hostHwnd.get());
+            ::SetFocus(_optionsPanel.dxUi->body.hostHwnd.get());
         }
 
-        _optionsDxUi->body.host.SetFocusControl(control);
+        _optionsPanel.dxUi->body.host.SetFocusControl(control);
         static_cast<void>(EnsureOptionsDxBodyControlVisible(control));
-        _optionsDxUi->body.host.Invalidate();
-        return _optionsDxUi->body.host.GetFocusControl() == control;
+        _optionsPanel.dxUi->body.host.Invalidate();
+        return _optionsPanel.dxUi->body.host.GetFocusControl() == control;
     };
 
     switch (std::towlower(mnemonic))
     {
         case L'f':
         {
-            auto* const target = _optionsDxUi->body.ignoreFiles.edit && _optionsDxUi->body.ignoreFiles.edit->IsVisible()
-                                     ? static_cast<RedSalamander::DxUi::Control*>(_optionsDxUi->body.ignoreFiles.edit)
-                                     : static_cast<RedSalamander::DxUi::Control*>(_optionsDxUi->body.ignoreFiles.toggle);
+            auto* const target = _optionsPanel.dxUi->body.ignoreFiles.edit && _optionsPanel.dxUi->body.ignoreFiles.edit->IsVisible()
+                                     ? static_cast<RedSalamander::DxUi::Control*>(_optionsPanel.dxUi->body.ignoreFiles.edit)
+                                     : static_cast<RedSalamander::DxUi::Control*>(_optionsPanel.dxUi->body.ignoreFiles.toggle);
             return focusBodyControl(target);
         }
         case L'd':
         {
-            auto* const target = _optionsDxUi->body.ignoreDirectories.edit && _optionsDxUi->body.ignoreDirectories.edit->IsVisible()
-                                     ? static_cast<RedSalamander::DxUi::Control*>(_optionsDxUi->body.ignoreDirectories.edit)
-                                     : static_cast<RedSalamander::DxUi::Control*>(_optionsDxUi->body.ignoreDirectories.toggle);
+            auto* const target = _optionsPanel.dxUi->body.ignoreDirectories.edit && _optionsPanel.dxUi->body.ignoreDirectories.edit->IsVisible()
+                                     ? static_cast<RedSalamander::DxUi::Control*>(_optionsPanel.dxUi->body.ignoreDirectories.edit)
+                                     : static_cast<RedSalamander::DxUi::Control*>(_optionsPanel.dxUi->body.ignoreDirectories.toggle);
             return focusBodyControl(target);
         }
         default: break;
@@ -1184,36 +1104,36 @@ bool CompareDirectoriesWindow::HandleOptionsDxMnemonic(const wchar_t mnemonic) n
     const auto tryHost = [mnemonic](auto& slot) noexcept
     { return slot.hostHwnd && IsWindowVisible(slot.hostHwnd.get()) != FALSE && slot.host.HandleMnemonic(mnemonic); };
 
-    return tryHost(_optionsDxUi->body) || tryHost(_optionsDxUi->okButton) || tryHost(_optionsDxUi->cancelButton);
+    return tryHost(_optionsPanel.dxUi->body) || tryHost(_optionsPanel.dxUi->okButton) || tryHost(_optionsPanel.dxUi->cancelButton);
 }
 
 bool CompareDirectoriesWindow::EnsureOptionsDxBodyControlVisible(RedSalamander::DxUi::Control* control) noexcept
 {
-    if (! _optionsDxUi || ! _optionsDxUi->body.hostHwnd || ! _optionsUi.host || ! control || ! control->IsVisible())
+    if (! _optionsPanel.dxUi || ! _optionsPanel.dxUi->body.hostHwnd || ! _optionsPanel.ui.host || ! control || ! control->IsVisible())
     {
         return false;
     }
 
-    const HWND bodyHwnd            = _optionsDxUi->body.hostHwnd.get();
+    const HWND bodyHwnd            = _optionsPanel.dxUi->body.hostHwnd.get();
     const HWND focusedBeforeLayout = GetFocus();
     const bool restoreBodyFocus =
-        _optionsDxUi->body.host.GetFocusControl() == control && (focusedBeforeLayout == bodyHwnd || IsChild(bodyHwnd, focusedBeforeLayout) != FALSE);
+        _optionsPanel.dxUi->body.host.GetFocusControl() == control && (focusedBeforeLayout == bodyHwnd || IsChild(bodyHwnd, focusedBeforeLayout) != FALSE);
 
     RECT hostClient{};
-    if (! GetClientRect(_optionsUi.host, &hostClient))
+    if (! GetClientRect(_optionsPanel.ui.host, &hostClient))
     {
         return false;
     }
 
-    const UINT dpi           = GetDpiForWindow(_optionsUi.host);
+    const UINT dpi           = GetDpiForWindow(_optionsPanel.ui.host);
     const int paddingY       = UiMetrics::ScaleDip(dpi, 8);
     const int viewportTop    = hostClient.top + paddingY;
     const int viewportBottom = (std::max)(viewportTop, static_cast<int>(hostClient.bottom) - paddingY);
     const auto bounds        = control->GetBounds();
-    const int controlTop     = static_cast<int>(std::lround(_optionsDxUi->body.host.DipsToPixels(bounds.top)));
-    const int controlBottom  = static_cast<int>(std::lround(_optionsDxUi->body.host.DipsToPixels(bounds.bottom)));
+    const int controlTop     = static_cast<int>(std::lround(_optionsPanel.dxUi->body.host.DipsToPixels(bounds.top)));
+    const int controlBottom  = static_cast<int>(std::lround(_optionsPanel.dxUi->body.host.DipsToPixels(bounds.bottom)));
 
-    int newOffset = _optionsScrollOffset;
+    int newOffset = _optionsPanel.scrollOffset;
     if (controlTop < viewportTop)
     {
         newOffset += controlTop - viewportTop;
@@ -1223,24 +1143,24 @@ bool CompareDirectoriesWindow::EnsureOptionsDxBodyControlVisible(RedSalamander::
         newOffset += controlBottom - viewportBottom;
     }
 
-    newOffset = std::clamp(newOffset, 0, _optionsScrollMax);
-    if (newOffset == _optionsScrollOffset)
+    newOffset = std::clamp(newOffset, 0, _optionsPanel.scrollMax);
+    if (newOffset == _optionsPanel.scrollOffset)
     {
         return false;
     }
 
-    _optionsScrollOffset = newOffset;
+    _optionsPanel.scrollOffset = newOffset;
     LayoutOptionsControls();
-    if (restoreBodyFocus && _optionsDxUi && _optionsDxUi->body.hostHwnd && IsWindow(_optionsDxUi->body.hostHwnd.get()) != FALSE)
+    if (restoreBodyFocus && _optionsPanel.dxUi && _optionsPanel.dxUi->body.hostHwnd && IsWindow(_optionsPanel.dxUi->body.hostHwnd.get()) != FALSE)
     {
         const HWND currentFocus = GetFocus();
-        if (currentFocus != _optionsDxUi->body.hostHwnd.get() && IsChild(_optionsDxUi->body.hostHwnd.get(), currentFocus) == FALSE)
+        if (currentFocus != _optionsPanel.dxUi->body.hostHwnd.get() && IsChild(_optionsPanel.dxUi->body.hostHwnd.get(), currentFocus) == FALSE)
         {
-            ::SetFocus(_optionsDxUi->body.hostHwnd.get());
+            ::SetFocus(_optionsPanel.dxUi->body.hostHwnd.get());
         }
-        if (_optionsDxUi->body.host.GetFocusControl() != control)
+        if (_optionsPanel.dxUi->body.host.GetFocusControl() != control)
         {
-            _optionsDxUi->body.host.SetFocusControl(control);
+            _optionsPanel.dxUi->body.host.SetFocusControl(control);
         }
     }
     return true;
@@ -1248,13 +1168,13 @@ bool CompareDirectoriesWindow::EnsureOptionsDxBodyControlVisible(RedSalamander::
 
 LRESULT CompareDirectoriesWindow::HandleOptionsDxHostMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, bool& handled) noexcept
 {
-    if (! _optionsDxUi)
+    if (! _optionsPanel.dxUi)
     {
         handled = false;
         return 0;
     }
 
-    if (hwnd == _optionsDxUi->body.hostHwnd.get() && msg == WM_KEYDOWN && _optionsDlg && IsWindow(_optionsDlg.get()) != FALSE)
+    if (hwnd == _optionsPanel.dxUi->body.hostHwnd.get() && msg == WM_KEYDOWN && _optionsPanel.dlg && IsWindow(_optionsPanel.dlg.get()) != FALSE)
     {
         const bool altDown  = (GetKeyState(VK_MENU) & 0x8000) != 0;
         const bool ctrlDown = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
@@ -1262,18 +1182,21 @@ LRESULT CompareDirectoriesWindow::HandleOptionsDxHostMessage(HWND hwnd, UINT msg
         {
             if (wp == VK_RETURN)
             {
-                if (dynamic_cast<RedSalamander::DxUi::TextField*>(_optionsDxUi->body.host.GetFocusControl()) != nullptr)
+                if (dynamic_cast<RedSalamander::DxUi::TextField*>(_optionsPanel.dxUi->body.host.GetFocusControl()) != nullptr)
                 {
                     handled = true;
-                    PostMessageW(_optionsDlg.get(), WM_COMMAND, MAKEWPARAM(IDOK, BN_CLICKED), reinterpret_cast<LPARAM>(GetDlgItem(_optionsDlg.get(), IDOK)));
+                    PostMessageW(
+                        _optionsPanel.dlg.get(), WM_COMMAND, MAKEWPARAM(IDOK, BN_CLICKED), reinterpret_cast<LPARAM>(GetDlgItem(_optionsPanel.dlg.get(), IDOK)));
                     return 0;
                 }
             }
             else if (wp == VK_ESCAPE)
             {
                 handled = true;
-                PostMessageW(
-                    _optionsDlg.get(), WM_COMMAND, MAKEWPARAM(IDCANCEL, BN_CLICKED), reinterpret_cast<LPARAM>(GetDlgItem(_optionsDlg.get(), IDCANCEL)));
+                PostMessageW(_optionsPanel.dlg.get(),
+                             WM_COMMAND,
+                             MAKEWPARAM(IDCANCEL, BN_CLICKED),
+                             reinterpret_cast<LPARAM>(GetDlgItem(_optionsPanel.dlg.get(), IDCANCEL)));
                 return 0;
             }
         }
@@ -1296,19 +1219,19 @@ LRESULT CompareDirectoriesWindow::HandleOptionsDxHostMessage(HWND hwnd, UINT msg
         return host.HandleMessage(hwnd, msg, wp, lp, handled);
     };
 
-    if (const auto result = dispatch(_optionsDxUi->body.hostHwnd, _optionsDxUi->body.host))
+    if (const auto result = dispatch(_optionsPanel.dxUi->body.hostHwnd, _optionsPanel.dxUi->body.host))
     {
         if (handled && (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN || msg == WM_CHAR))
         {
-            static_cast<void>(EnsureOptionsDxBodyControlVisible(_optionsDxUi->body.host.GetFocusControl()));
+            static_cast<void>(EnsureOptionsDxBodyControlVisible(_optionsPanel.dxUi->body.host.GetFocusControl()));
         }
         return result.value();
     }
-    if (const auto result = dispatch(_optionsDxUi->okButton.hostHwnd, _optionsDxUi->okButton.host))
+    if (const auto result = dispatch(_optionsPanel.dxUi->okButton.hostHwnd, _optionsPanel.dxUi->okButton.host))
     {
         return result.value();
     }
-    if (const auto result = dispatch(_optionsDxUi->cancelButton.hostHwnd, _optionsDxUi->cancelButton.host))
+    if (const auto result = dispatch(_optionsPanel.dxUi->cancelButton.hostHwnd, _optionsPanel.dxUi->cancelButton.host))
     {
         return result.value();
     }
@@ -1319,19 +1242,25 @@ LRESULT CompareDirectoriesWindow::HandleOptionsDxHostMessage(HWND hwnd, UINT msg
 
 INT_PTR CompareDirectoriesWindow::OnOptionsEraseBkgnd(HWND dlg, HDC hdc) noexcept
 {
-    if (! _optionsBackgroundBrush)
+    if (! _optionsPanel.backgroundBrush)
     {
         return FALSE;
     }
 
     RECT rc{};
     GetClientRect(dlg, &rc);
-    FillRect(hdc, &rc, _optionsBackgroundBrush.get());
+    FillRect(hdc, &rc, _optionsPanel.backgroundBrush.get());
     return TRUE;
 }
 
 INT_PTR CompareDirectoriesWindow::OnOptionsSettingsReloadedFromDisk(HWND dlg) noexcept
 {
+    if (! dlg || IsWindowVisible(dlg) == FALSE)
+    {
+        ReloadOptionsDialogFromDisk();
+        return TRUE;
+    }
+
     if (IsOptionsDialogDirty())
     {
         SettingsHotReload::ExternalReloadChoice choice = SettingsHotReload::ExternalReloadChoice::KeepEditing;
@@ -1344,7 +1273,7 @@ INT_PTR CompareDirectoriesWindow::OnOptionsSettingsReloadedFromDisk(HWND dlg) no
 
         if (choice == SettingsHotReload::ExternalReloadChoice::KeepEditing)
         {
-            _optionsStaleFromExternalReload = true;
+            _optionsPanel.staleFromExternalReload = true;
             return TRUE;
         }
     }
@@ -1353,68 +1282,9 @@ INT_PTR CompareDirectoriesWindow::OnOptionsSettingsReloadedFromDisk(HWND dlg) no
     return TRUE;
 }
 
-INT_PTR CompareDirectoriesWindow::OnOptionsCommand([[maybe_unused]] HWND dlg, WPARAM wParam, LPARAM lParam) noexcept
+INT_PTR CompareDirectoriesWindow::OnOptionsCommand([[maybe_unused]] HWND dlg, WPARAM wParam, [[maybe_unused]] LPARAM lParam) noexcept
 {
-    const UINT controlId  = LOWORD(wParam);
-    const UINT notifyCode = HIWORD(wParam);
-    HWND hwndCtl          = reinterpret_cast<HWND>(lParam);
-
-    const auto isToggleControlId = [](const UINT id) noexcept
-    {
-        switch (id)
-        {
-            case IDC_CMP_SIZE:
-            case IDC_CMP_DATETIME:
-            case IDC_CMP_ATTRIBUTES:
-            case IDC_CMP_CONTENT:
-            case IDC_CMP_SUBDIRECTORIES:
-            case IDC_CMP_SUBDIR_ATTRIBUTES:
-            case IDC_CMP_SELECT_SUBDIRS_ONLY_ONE_PANE:
-            case IDC_CMP_KEEP_IDENTICAL:
-            case IDC_CMP_IGNORE_FILES:
-            case IDC_CMP_IGNORE_DIRECTORIES: return true;
-            default: return false;
-        }
-    };
-
-    if (notifyCode == BN_CLICKED && hwndCtl)
-    {
-        const LONG_PTR style             = GetWindowLongPtrW(hwndCtl, GWL_STYLE);
-        const UINT type                  = static_cast<UINT>(style & BS_TYPEMASK);
-        const bool syntheticHiddenToggle = isToggleControlId(controlId) && _optionsDxUi && _optionsDxUi->usesDxUiToggles && IsWindowVisible(hwndCtl) == FALSE;
-        if (type == BS_OWNERDRAW || syntheticHiddenToggle)
-        {
-            bool toggled = false;
-            if (! syntheticHiddenToggle)
-            {
-                switch (controlId)
-                {
-                    case IDC_CMP_SIZE:
-                    case IDC_CMP_DATETIME:
-                    case IDC_CMP_ATTRIBUTES:
-                    case IDC_CMP_CONTENT:
-                    case IDC_CMP_SUBDIRECTORIES:
-                    case IDC_CMP_SUBDIR_ATTRIBUTES:
-                    case IDC_CMP_SELECT_SUBDIRS_ONLY_ONE_PANE:
-                    case IDC_CMP_KEEP_IDENTICAL:
-                    case IDC_CMP_IGNORE_FILES:
-                    case IDC_CMP_IGNORE_DIRECTORIES:
-                    {
-                        const bool toggledOn = GetTwoStateToggleState(hwndCtl, _theme.highContrast);
-                        SetTwoStateToggleState(hwndCtl, _theme.highContrast, ! toggledOn);
-                        toggled = true;
-                        break;
-                    }
-                    default: break;
-                }
-            }
-
-            if (toggled || syntheticHiddenToggle)
-            {
-                SyncOptionsDxToggles();
-            }
-        }
-    }
+    const UINT controlId = LOWORD(wParam);
 
     switch (controlId)
     {
@@ -1450,8 +1320,6 @@ INT_PTR CompareDirectoriesWindow::OnOptionsCommand([[maybe_unused]] HWND dlg, WP
             }
             ShowOptionsPanel(false);
             return TRUE;
-        case IDC_CMP_IGNORE_FILES:
-        case IDC_CMP_IGNORE_DIRECTORIES: UpdateOptionsVisibility(); return TRUE;
         default: break;
     }
 
@@ -1460,14 +1328,15 @@ INT_PTR CompareDirectoriesWindow::OnOptionsCommand([[maybe_unused]] HWND dlg, WP
 
 INT_PTR CompareDirectoriesWindow::OnOptionsCtlColorEdit(HDC hdc, HWND control) noexcept
 {
-    if (! _optionsInputBrush)
+    if (! _optionsPanel.inputBrush)
     {
         return FALSE;
     }
 
     const bool enabled = ! control || IsWindowEnabled(control) != FALSE;
     const bool focused = enabled && control && GetFocus() == control;
-    const COLORREF bg  = enabled ? (focused ? _optionsInputFocusedBackgroundColor : _optionsInputBackgroundColor) : _optionsInputDisabledBackgroundColor;
+    const COLORREF bg =
+        enabled ? (focused ? _optionsPanel.inputFocusedBackgroundColor : _optionsPanel.inputBackgroundColor) : _optionsPanel.inputDisabledBackgroundColor;
 
     SetBkMode(hdc, OPAQUE);
     SetBkColor(hdc, bg);
@@ -1475,20 +1344,20 @@ INT_PTR CompareDirectoriesWindow::OnOptionsCtlColorEdit(HDC hdc, HWND control) n
 
     if (_theme.highContrast)
     {
-        return reinterpret_cast<INT_PTR>(_optionsBackgroundBrush.get());
+        return reinterpret_cast<INT_PTR>(_optionsPanel.backgroundBrush.get());
     }
 
     if (! enabled)
     {
-        return reinterpret_cast<INT_PTR>(_optionsInputDisabledBrush.get());
+        return reinterpret_cast<INT_PTR>(_optionsPanel.inputDisabledBrush.get());
     }
 
-    return reinterpret_cast<INT_PTR>(focused && _optionsInputFocusedBrush ? _optionsInputFocusedBrush.get() : _optionsInputBrush.get());
+    return reinterpret_cast<INT_PTR>(focused && _optionsPanel.inputFocusedBrush ? _optionsPanel.inputFocusedBrush.get() : _optionsPanel.inputBrush.get());
 }
 
 INT_PTR CompareDirectoriesWindow::OnOptionsCtlColorDlg(HDC hdc) noexcept
 {
-    if (! _optionsBackgroundBrush)
+    if (! _optionsPanel.backgroundBrush)
     {
         return FALSE;
     }
@@ -1496,12 +1365,12 @@ INT_PTR CompareDirectoriesWindow::OnOptionsCtlColorDlg(HDC hdc) noexcept
     SetBkMode(hdc, OPAQUE);
     SetBkColor(hdc, _theme.windowBackground);
     SetTextColor(hdc, _theme.menu.text);
-    return reinterpret_cast<INT_PTR>(_optionsBackgroundBrush.get());
+    return reinterpret_cast<INT_PTR>(_optionsPanel.backgroundBrush.get());
 }
 
 INT_PTR CompareDirectoriesWindow::OnOptionsCtlColorStatic(HDC hdc, HWND control) noexcept
 {
-    if (! _optionsBackgroundBrush)
+    if (! _optionsPanel.backgroundBrush)
     {
         return FALSE;
     }
@@ -1517,26 +1386,26 @@ INT_PTR CompareDirectoriesWindow::OnOptionsCtlColorStatic(HDC hdc, HWND control)
         SetBkMode(hdc, OPAQUE);
         SetBkColor(hdc, _theme.windowBackground);
         SetTextColor(hdc, textColor);
-        return reinterpret_cast<INT_PTR>(_optionsBackgroundBrush.get());
+        return reinterpret_cast<INT_PTR>(_optionsPanel.backgroundBrush.get());
     }
 
     SetBkMode(hdc, TRANSPARENT);
     SetTextColor(hdc, textColor);
     SetBkColor(hdc, _theme.windowBackground);
 
-    HBRUSH brush = _optionsBackgroundBrush.get();
-    if (control && _optionsUi.host && _optionsCardBrush && ! _optionsCards.empty())
+    HBRUSH brush = _optionsPanel.backgroundBrush.get();
+    if (control && _optionsPanel.ui.host && _optionsPanel.cardBrush && ! _optionsPanel.cards.empty())
     {
         RECT rc{};
         if (GetWindowRect(control, &rc) != FALSE)
         {
-            MapWindowPoints(nullptr, _optionsUi.host, reinterpret_cast<POINT*>(&rc), 2);
-            for (const RECT& card : _optionsCards)
+            MapWindowPoints(nullptr, _optionsPanel.ui.host, reinterpret_cast<POINT*>(&rc), 2);
+            for (const RECT& card : _optionsPanel.cards)
             {
                 RECT intersect{};
                 if (IntersectRect(&intersect, &card, &rc) != FALSE)
                 {
-                    brush = _optionsCardBrush.get();
+                    brush = _optionsPanel.cardBrush.get();
                     break;
                 }
             }
@@ -1548,7 +1417,7 @@ INT_PTR CompareDirectoriesWindow::OnOptionsCtlColorStatic(HDC hdc, HWND control)
 
 INT_PTR CompareDirectoriesWindow::OnOptionsCtlColorBtn(HDC hdc, HWND control) noexcept
 {
-    if (! _optionsBackgroundBrush)
+    if (! _optionsPanel.backgroundBrush)
     {
         return FALSE;
     }
@@ -1567,7 +1436,7 @@ INT_PTR CompareDirectoriesWindow::OnOptionsCtlColorBtn(HDC hdc, HWND control) no
     SetBkMode(hdc, TRANSPARENT);
     SetTextColor(hdc, enabled ? _theme.menu.text : _theme.menu.disabledText);
     SetBkColor(hdc, _theme.windowBackground);
-    return reinterpret_cast<INT_PTR>(_optionsBackgroundBrush.get());
+    return reinterpret_cast<INT_PTR>(_optionsPanel.backgroundBrush.get());
 }
 
 LRESULT CALLBACK CompareOptionsHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
@@ -1603,7 +1472,7 @@ LRESULT CALLBACK CompareOptionsHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARA
         }
         case WM_VSCROLL:
         {
-            if (! self || self->_optionsScrollMax <= 0)
+            if (! self || self->_optionsPanel.scrollMax <= 0)
             {
                 break;
             }
@@ -1616,11 +1485,11 @@ LRESULT CALLBACK CompareOptionsHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARA
             const UINT dpi  = GetDpiForWindow(hwnd);
             const int lineY = UiMetrics::ScaleDip(dpi, 24);
 
-            int newPos = self->_optionsScrollOffset;
+            int newPos = self->_optionsPanel.scrollOffset;
             switch (LOWORD(wp))
             {
                 case SB_TOP: newPos = 0; break;
-                case SB_BOTTOM: newPos = self->_optionsScrollMax; break;
+                case SB_BOTTOM: newPos = self->_optionsPanel.scrollMax; break;
                 case SB_LINEUP: newPos -= lineY; break;
                 case SB_LINEDOWN: newPos += lineY; break;
                 case SB_PAGEUP: newPos -= static_cast<int>(si.nPage); break;
@@ -1630,18 +1499,22 @@ LRESULT CALLBACK CompareOptionsHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARA
                 default: break;
             }
 
-            newPos = std::clamp(newPos, 0, self->_optionsScrollMax);
-            if (newPos != self->_optionsScrollOffset)
+            newPos = std::clamp(newPos, 0, self->_optionsPanel.scrollMax);
+            if (newPos != self->_optionsPanel.scrollOffset)
             {
-                self->_optionsScrollOffset = newPos;
+                self->_optionsPanel.scrollOffset = newPos;
                 self->LayoutOptionsControls();
             }
             return 0;
         }
         case WM_MOUSEWHEEL:
         {
-            if (! self || self->_optionsScrollMax <= 0)
+            if (! self || self->_optionsPanel.scrollMax <= 0)
             {
+                if (self)
+                {
+                    self->_optionsPanel.wheelRemainder = 0;
+                }
                 break;
             }
 
@@ -1651,9 +1524,9 @@ LRESULT CALLBACK CompareOptionsHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARA
                 return 0;
             }
 
-            self->_optionsWheelRemainder += delta;
-            const int notches = self->_optionsWheelRemainder / WHEEL_DELTA;
-            self->_optionsWheelRemainder -= notches * WHEEL_DELTA;
+            self->_optionsPanel.wheelRemainder += delta;
+            const int notches = self->_optionsPanel.wheelRemainder / WHEEL_DELTA;
+            self->_optionsPanel.wheelRemainder -= notches * WHEEL_DELTA;
             if (notches == 0)
             {
                 return 0;
@@ -1683,10 +1556,10 @@ LRESULT CALLBACK CompareOptionsHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARA
                 scrollDelta = notches * lineY * static_cast<int>(linesPerNotch);
             }
 
-            const int newPos = std::clamp(self->_optionsScrollOffset - scrollDelta, 0, self->_optionsScrollMax);
-            if (newPos != self->_optionsScrollOffset)
+            const int newPos = std::clamp(self->_optionsPanel.scrollOffset - scrollDelta, 0, self->_optionsPanel.scrollMax);
+            if (newPos != self->_optionsPanel.scrollOffset)
             {
-                self->_optionsScrollOffset = newPos;
+                self->_optionsPanel.scrollOffset = newPos;
                 self->LayoutOptionsControls();
             }
             return 0;
@@ -1725,13 +1598,13 @@ LRESULT CALLBACK CompareOptionsWheelRouteWndProc(HWND hwnd, UINT msg, WPARAM wp,
     {
         case WM_MOUSEWHEEL:
         {
-            if (! self->_optionsDlg || ! self->_optionsUi.host)
+            if (! self->_optionsPanel.dlg || ! self->_optionsPanel.ui.host)
             {
                 return 0;
             }
 
             static thread_local bool s_routingWheel = false;
-            if (s_routingWheel && hwnd != self->_optionsUi.host)
+            if (s_routingWheel && hwnd != self->_optionsPanel.ui.host)
             {
                 return 0;
             }
@@ -1741,30 +1614,31 @@ LRESULT CALLBACK CompareOptionsWheelRouteWndProc(HWND hwnd, UINT msg, WPARAM wp,
             ptScreen.y = GET_Y_LPARAM(lp);
 
             RECT dlgRect{};
-            if (GetWindowRect(self->_optionsDlg.get(), &dlgRect) == 0 || PtInRect(&dlgRect, ptScreen) == FALSE)
+            if (GetWindowRect(self->_optionsPanel.dlg.get(), &dlgRect) == 0 || PtInRect(&dlgRect, ptScreen) == FALSE)
             {
                 // Don't scroll the options dialog when the user is wheeling outside it.
                 return 0;
             }
 
             RECT hostRect{};
-            if (GetWindowRect(self->_optionsUi.host, &hostRect) == 0 || PtInRect(&hostRect, ptScreen) == FALSE)
+            if (GetWindowRect(self->_optionsPanel.ui.host, &hostRect) == 0 || PtInRect(&hostRect, ptScreen) == FALSE)
             {
                 // Only scroll when the wheel is over the options host area.
                 return 0;
             }
 
-            if (self->_optionsScrollMax <= 0)
+            if (self->_optionsPanel.scrollMax <= 0)
             {
                 // Nothing to scroll; swallow the wheel to avoid comctl32 forwarding loops.
+                self->_optionsPanel.wheelRemainder = 0;
                 return 0;
             }
 
-            if (hwnd != self->_optionsUi.host)
+            if (hwnd != self->_optionsPanel.ui.host)
             {
                 s_routingWheel = true;
                 auto reset     = wil::scope_exit([&] { s_routingWheel = false; });
-                SendMessageW(self->_optionsUi.host, msg, wp, lp);
+                SendMessageW(self->_optionsPanel.ui.host, msg, wp, lp);
                 return 0;
             }
 
@@ -1803,9 +1677,9 @@ LRESULT CALLBACK CompareOptionsDxHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPA
         return originalWndProc ? RedSalamander::Win32Callback::CallWindowProcNoThrow(originalWndProc, hwnd, msg, wp, lp) : DefWindowProcW(hwnd, msg, wp, lp);
     }
 
-    if (msg == WM_MOUSEWHEEL && self->_optionsDxUi && self->_optionsDxUi->body.hostHwnd && self->_optionsDxUi->body.hostHwnd.get() == hwnd)
+    if (msg == WM_MOUSEWHEEL && self->_optionsPanel.dxUi && self->_optionsPanel.dxUi->body.hostHwnd && self->_optionsPanel.dxUi->body.hostHwnd.get() == hwnd)
     {
-        if (! self->_optionsDlg || ! self->_optionsUi.host)
+        if (! self->_optionsPanel.dlg || ! self->_optionsPanel.ui.host)
         {
             return 0;
         }
@@ -1819,17 +1693,18 @@ LRESULT CALLBACK CompareOptionsDxHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPA
 
             RECT dlgRect{};
             RECT hostRect{};
-            if (GetWindowRect(self->_optionsDlg.get(), &dlgRect) != 0 && PtInRect(&dlgRect, ptScreen) != FALSE &&
-                GetWindowRect(self->_optionsUi.host, &hostRect) != 0 && PtInRect(&hostRect, ptScreen) != FALSE)
+            if (GetWindowRect(self->_optionsPanel.dlg.get(), &dlgRect) != 0 && PtInRect(&dlgRect, ptScreen) != FALSE &&
+                GetWindowRect(self->_optionsPanel.ui.host, &hostRect) != 0 && PtInRect(&hostRect, ptScreen) != FALSE)
             {
-                if (self->_optionsScrollMax <= 0)
+                if (self->_optionsPanel.scrollMax <= 0)
                 {
+                    self->_optionsPanel.wheelRemainder = 0;
                     return 0;
                 }
 
                 s_routingWheel = true;
                 auto reset     = wil::scope_exit([&] { s_routingWheel = false; });
-                SendMessageW(self->_optionsUi.host, msg, wp, lp);
+                SendMessageW(self->_optionsPanel.ui.host, msg, wp, lp);
                 return 0;
             }
         }
@@ -1847,131 +1722,29 @@ LRESULT CALLBACK CompareOptionsDxHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPA
 
 void CompareDirectoriesWindow::EnsureOptionsControlsCreated(HWND dlg) noexcept
 {
-    if (! dlg || _optionsUi.host)
+    if (! dlg || _optionsPanel.ui.host)
     {
         return;
     }
 
-    const HINSTANCE instance = GetModuleHandleW(nullptr);
-
-    _optionsUi.host = CreateCompareOptionsDxHostWindow(dlg, WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS, WS_EX_CONTROLPARENT);
-    if (_optionsUi.host)
+    _optionsPanel.ui.host = CreateCompareOptionsDxHostWindow(dlg, WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS, WS_EX_CONTROLPARENT);
+    if (_optionsPanel.ui.host)
     {
         const wchar_t* hostTheme = _theme.highContrast ? L"" : (_theme.dark ? L"DarkMode_Explorer" : L"Explorer");
-        SetWindowTheme(_optionsUi.host, hostTheme, nullptr);
-        SendMessageW(_optionsUi.host, WM_THEMECHANGED, 0, 0);
+        SetWindowTheme(_optionsPanel.ui.host, hostTheme, nullptr);
+        SendMessageW(_optionsPanel.ui.host, WM_THEMECHANGED, 0, 0);
 
-        if (! SetPropW(_optionsUi.host, kCompareOptionsHostStateProp, reinterpret_cast<HANDLE>(this)) ||
-            ! InstallWndProcHook(_optionsUi.host, kCompareOptionsHostOriginalWndProcProp, CompareOptionsHostWndProc))
+        if (! SetPropW(_optionsPanel.ui.host, kCompareOptionsHostStateProp, reinterpret_cast<HANDLE>(this)) ||
+            ! InstallWndProcHook(_optionsPanel.ui.host, kCompareOptionsHostOriginalWndProcProp, CompareOptionsHostWndProc))
         {
-            RemovePropW(_optionsUi.host, kCompareOptionsHostStateProp);
+            RemovePropW(_optionsPanel.ui.host, kCompareOptionsHostStateProp);
         }
     }
 
-    if (! _optionsUi.host)
+    if (! _optionsPanel.ui.host)
     {
         return;
     }
-
-    constexpr DWORD baseStaticStyle = WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX;
-    constexpr DWORD wrapStaticStyle = WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX | SS_EDITCONTROL;
-
-    constexpr DWORD toggleStyle = WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX;
-
-    const auto makeStatic = [&](DWORD style) noexcept -> HWND
-    { return CreateCompareOptionsDxHostWindow(_optionsUi.host, (style & ~(SS_LEFT | SS_NOPREFIX | SS_EDITCONTROL)) | WS_CLIPSIBLINGS); };
-
-    const auto makeToggle = [&](int id) noexcept -> HWND
-    {
-        return CreateWindowExW(
-            0, L"Button", L"", toggleStyle, 0, 0, 10, 10, _optionsUi.host, reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)), instance, nullptr);
-    };
-
-    const auto makeFramedEdit = [&](HWND& outFrame, HWND& outEdit, int editId) noexcept
-    {
-        outFrame = nullptr;
-        outEdit  = nullptr;
-
-        const bool customFrames = ! _theme.highContrast;
-        if (customFrames)
-        {
-            outFrame = CreateCompareOptionsDxHostWindow(_optionsUi.host, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS);
-        }
-
-        DWORD editStyle = WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL;
-        editStyle |= ES_MULTILINE;
-        editStyle &= ~ES_WANTRETURN;
-
-        const DWORD editExStyle = customFrames ? 0 : WS_EX_CLIENTEDGE;
-        outEdit                 = CreateWindowExW(
-            editExStyle, L"Edit", L"", editStyle, 0, 0, 10, 10, _optionsUi.host, reinterpret_cast<HMENU>(static_cast<INT_PTR>(editId)), instance, nullptr);
-
-        if (outEdit)
-        {
-            const wchar_t* themeName = (_theme.highContrast || _theme.systemHighContrast) ? L"" : ((_theme.dark) ? L"DarkMode_Explorer" : L"Explorer");
-            SetWindowTheme(outEdit, themeName, nullptr);
-            SendMessageW(outEdit, WM_THEMECHANGED, 0, 0);
-        }
-
-        if (customFrames && outFrame && outEdit)
-        {
-            ThemedInputFrames::InstallFrame(outFrame, outEdit, &_optionsFrameStyle);
-        }
-
-        if (outEdit)
-        {
-            const UINT dpi       = GetDpiForWindow(outEdit);
-            const int textMargin = UiMetrics::ScaleDip(dpi, 6);
-            SendMessageW(outEdit, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(textMargin, textMargin));
-        }
-    };
-
-    _optionsUi.headerCompare  = makeStatic(baseStaticStyle);
-    _optionsUi.headerSubdirs  = makeStatic(baseStaticStyle);
-    _optionsUi.headerAdvanced = makeStatic(baseStaticStyle);
-    _optionsUi.headerIgnore   = makeStatic(baseStaticStyle);
-
-    _optionsUi.compareSize.title       = makeStatic(baseStaticStyle);
-    _optionsUi.compareSize.description = makeStatic(wrapStaticStyle);
-    _optionsUi.compareSize.toggle      = makeToggle(IDC_CMP_SIZE);
-
-    _optionsUi.compareDateTime.title       = makeStatic(baseStaticStyle);
-    _optionsUi.compareDateTime.description = makeStatic(wrapStaticStyle);
-    _optionsUi.compareDateTime.toggle      = makeToggle(IDC_CMP_DATETIME);
-
-    _optionsUi.compareAttributes.title       = makeStatic(baseStaticStyle);
-    _optionsUi.compareAttributes.description = makeStatic(wrapStaticStyle);
-    _optionsUi.compareAttributes.toggle      = makeToggle(IDC_CMP_ATTRIBUTES);
-
-    _optionsUi.compareContent.title       = makeStatic(baseStaticStyle);
-    _optionsUi.compareContent.description = makeStatic(wrapStaticStyle);
-    _optionsUi.compareContent.toggle      = makeToggle(IDC_CMP_CONTENT);
-
-    _optionsUi.compareSubdirectories.title       = makeStatic(baseStaticStyle);
-    _optionsUi.compareSubdirectories.description = makeStatic(wrapStaticStyle);
-    _optionsUi.compareSubdirectories.toggle      = makeToggle(IDC_CMP_SUBDIRECTORIES);
-
-    _optionsUi.compareSubdirAttributes.title       = makeStatic(baseStaticStyle);
-    _optionsUi.compareSubdirAttributes.description = makeStatic(wrapStaticStyle);
-    _optionsUi.compareSubdirAttributes.toggle      = makeToggle(IDC_CMP_SUBDIR_ATTRIBUTES);
-
-    _optionsUi.selectSubdirsOnlyInOnePane.title       = makeStatic(baseStaticStyle);
-    _optionsUi.selectSubdirsOnlyInOnePane.description = makeStatic(wrapStaticStyle);
-    _optionsUi.selectSubdirsOnlyInOnePane.toggle      = makeToggle(IDC_CMP_SELECT_SUBDIRS_ONLY_ONE_PANE);
-
-    _optionsUi.keepIdenticalItems.title       = makeStatic(baseStaticStyle);
-    _optionsUi.keepIdenticalItems.description = makeStatic(wrapStaticStyle);
-    _optionsUi.keepIdenticalItems.toggle      = makeToggle(IDC_CMP_KEEP_IDENTICAL);
-
-    _optionsUi.ignoreFiles.title       = makeStatic(baseStaticStyle);
-    _optionsUi.ignoreFiles.description = makeStatic(wrapStaticStyle);
-    _optionsUi.ignoreFiles.toggle      = makeToggle(IDC_CMP_IGNORE_FILES);
-    makeFramedEdit(_optionsUi.ignoreFiles.frame, _optionsUi.ignoreFiles.edit, IDC_CMP_IGNORE_FILES_PATTERNS);
-
-    _optionsUi.ignoreDirectories.title       = makeStatic(baseStaticStyle);
-    _optionsUi.ignoreDirectories.description = makeStatic(wrapStaticStyle);
-    _optionsUi.ignoreDirectories.toggle      = makeToggle(IDC_CMP_IGNORE_DIRECTORIES);
-    makeFramedEdit(_optionsUi.ignoreDirectories.frame, _optionsUi.ignoreDirectories.edit, IDC_CMP_IGNORE_DIRECTORIES_PATTERNS);
 
     static_cast<void>(EnsureOptionsDxStaticHosts());
     static_cast<void>(EnsureOptionsDxButtonHosts());
@@ -1984,7 +1757,7 @@ void CompareDirectoriesWindow::EnsureOptionsControlsCreated(HWND dlg) noexcept
                      [](HWND child, LPARAM lParam) noexcept -> BOOL
     {
         auto* self = reinterpret_cast<CompareDirectoriesWindow*>(lParam);
-        if (! self || child == self->_optionsUi.host)
+        if (! self || child == self->_optionsPanel.ui.host)
         {
             return TRUE;
         }
@@ -2009,7 +1782,7 @@ void CompareDirectoriesWindow::PaintOptionsHostBackgroundAndCards(HDC hdc, HWND 
     {
         paint.FillRectangle(rc, _theme.windowBackground);
 
-        if (_theme.systemHighContrast || _theme.highContrast || _optionsCards.empty())
+        if (_theme.systemHighContrast || _theme.highContrast || _optionsPanel.cards.empty())
         {
             return;
         }
@@ -2017,38 +1790,38 @@ void CompareDirectoriesWindow::PaintOptionsHostBackgroundAndCards(HDC hdc, HWND 
         const UINT dpi         = GetDpiForWindow(host);
         const float radius     = static_cast<float>(UiMetrics::ScaleDip(dpi, 6));
         const COLORREF surface = UiMetrics::GetControlSurfaceColor(_theme);
-        const COLORREF border  = UiMetrics::BlendColor(surface, _theme.menu.text, _theme.dark ? 40 : 30, 255);
+        const COLORREF border  = UiMetrics::BlendColorRefWeightedTruncate(surface, _theme.menu.text, _theme.dark ? 40 : 30, 255);
 
-        for (const RECT& card : _optionsCards)
+        for (const RECT& card : _optionsPanel.cards)
         {
             paint.FillRoundedRectangle(card, radius, surface, border);
         }
 
-        if (_optionsUseTwoColumns && _optionsTwoColumnSeparatorX > rc.left && _optionsTwoColumnSeparatorX < rc.right)
+        if (_optionsPanel.useTwoColumns && _optionsPanel.twoColumnSeparatorX > rc.left && _optionsPanel.twoColumnSeparatorX < rc.right)
         {
-            const COLORREF separator = UiMetrics::BlendColor(surface, _theme.menu.text, _theme.dark ? 28 : 20, 255);
-            paint.DrawLine(static_cast<float>(_optionsTwoColumnSeparatorX),
+            const COLORREF separator = UiMetrics::BlendColorRefWeightedTruncate(surface, _theme.menu.text, _theme.dark ? 28 : 20, 255);
+            paint.DrawLine(static_cast<float>(_optionsPanel.twoColumnSeparatorX),
                            static_cast<float>(rc.top),
-                           static_cast<float>(_optionsTwoColumnSeparatorX),
+                           static_cast<float>(_optionsPanel.twoColumnSeparatorX),
                            static_cast<float>(rc.bottom),
                            separator);
         }
         return;
     }
 
-    if (_optionsBackgroundBrush)
+    if (_optionsPanel.backgroundBrush)
     {
-        FillRect(hdc, &rc, _optionsBackgroundBrush.get());
+        FillRect(hdc, &rc, _optionsPanel.backgroundBrush.get());
     }
 
-    if (_theme.systemHighContrast || _theme.highContrast || _optionsCards.empty())
+    if (_theme.systemHighContrast || _theme.highContrast || _optionsPanel.cards.empty())
     {
         return;
     }
 }
 void CompareDirectoriesWindow::LayoutOptionsControls() noexcept
 {
-    if (! _optionsDlg || ! _optionsUi.host)
+    if (! _optionsPanel.dlg || ! _optionsPanel.ui.host)
     {
         return;
     }
@@ -2056,18 +1829,14 @@ void CompareDirectoriesWindow::LayoutOptionsControls() noexcept
     Debug::Perf::Scope layoutPerf(L"compare.ui.options_layout_us");
 
     EnsureCompareSession();
+    ApplyOptionsDraftInterlocks();
     const bool contentCompareSupported = ! _session || _session->IsContentCompareSupported();
     const UINT contentCompareDescId    = contentCompareSupported ? IDS_COMPARE_OPTIONS_CONTENT_DESC : IDS_COMPARE_OPTIONS_CONTENT_DESC_UNSUPPORTED;
     SyncOptionsDxStatics();
-
-    if (_optionsUi.compareContent.toggle)
-    {
-        EnableWindow(_optionsUi.compareContent.toggle, contentCompareSupported ? TRUE : FALSE);
-    }
     SyncOptionsDxToggles();
 
     RECT rcDlg{};
-    if (! GetClientRect(_optionsDlg.get(), &rcDlg))
+    if (! GetClientRect(_optionsPanel.dlg.get(), &rcDlg))
     {
         return;
     }
@@ -2076,7 +1845,7 @@ void CompareDirectoriesWindow::LayoutOptionsControls() noexcept
     const int dlgH = std::max(0l, rcDlg.bottom - rcDlg.top);
     layoutPerf.SetValue0(static_cast<uint64_t>(dlgW));
 
-    const UINT dpi = GetDpiForWindow(_optionsDlg.get());
+    const UINT dpi = GetDpiForWindow(_optionsPanel.dlg.get());
 
     const int margin       = UiMetrics::ScaleDip(dpi, 16);
     const int gapY         = UiMetrics::ScaleDip(dpi, 12);
@@ -2090,17 +1859,16 @@ void CompareDirectoriesWindow::LayoutOptionsControls() noexcept
     const int cardGapX                               = UiMetrics::ScaleDip(dpi, 12);
     const int cardSpacingY                           = UiMetrics::ScaleDip(dpi, 8);
     const int sectionSpacing                         = UiMetrics::ScaleDip(dpi, 16);
-    const int framePadding                           = UiMetrics::ScaleDip(dpi, 2);
-    const int minLegacyToggleWidth                   = UiMetrics::ScaleDip(dpi, 90);
+    const int minToggleWidth                         = UiMetrics::ScaleDip(dpi, 90);
     const int columnSeparatorAreaW                   = UiMetrics::ScaleDip(dpi, 28);
     const int minColumnW                             = UiMetrics::ScaleDip(dpi, 360);
-    const CompareOptionsTypographyFormats typography = CreateCompareOptionsTypographyFormats(_optionsDlg.get());
-    _optionsUsesDxUiTypographyMetrics                = typography.IsReady();
-    layoutPerf.SetDetail(_optionsUsesDxUiTypographyMetrics ? L"dx-typography" : L"fallback-typography");
-    layoutPerf.SetValue1(_optionsUsesDxUiTypographyMetrics ? 1u : 0u);
+    const CompareOptionsTypographyFormats typography = CreateCompareOptionsTypographyFormats(_optionsPanel.dlg.get());
+    _optionsPanel.usesDxUiTypographyMetrics          = typography.IsReady();
+    layoutPerf.SetDetail(_optionsPanel.usesDxUiTypographyMetrics ? L"dx-typography" : L"fallback-typography");
+    layoutPerf.SetValue1(_optionsPanel.usesDxUiTypographyMetrics ? 1u : 0u);
 
-    const HWND okBtn     = GetDlgItem(_optionsDlg.get(), IDOK);
-    const HWND cancelBtn = GetDlgItem(_optionsDlg.get(), IDCANCEL);
+    const HWND okBtn     = GetDlgItem(_optionsPanel.dlg.get(), IDOK);
+    const HWND cancelBtn = GetDlgItem(_optionsPanel.dlg.get(), IDCANCEL);
 
     const std::wstring onLabel  = LoadStringResource(nullptr, IDS_PREFS_COMMON_ON);
     const std::wstring offLabel = LoadStringResource(nullptr, IDS_PREFS_COMMON_OFF);
@@ -2111,7 +1879,7 @@ void CompareDirectoriesWindow::LayoutOptionsControls() noexcept
     const int toggleGapX          = UiMetrics::ScaleDip(dpi, 8);
     const int toggleTrackW        = UiMetrics::ScaleDip(dpi, 34);
     const int toggleStateTextW    = std::max(onWidth, offWidth);
-    const int measuredToggleWidth = std::max(minLegacyToggleWidth, (2 * togglePaddingX) + toggleStateTextW + toggleGapX + toggleTrackW);
+    const int measuredToggleWidth = std::max(minToggleWidth, (2 * togglePaddingX) + toggleStateTextW + toggleGapX + toggleTrackW);
 
     const auto getWindowText = [](HWND hwnd) noexcept -> std::wstring
     {
@@ -2174,19 +1942,20 @@ void CompareDirectoriesWindow::LayoutOptionsControls() noexcept
     if (cancelBtn)
     {
         nextRight -= cancelW;
-        if (_optionsDxUi && _optionsDxUi->usesDxUiButtons && _optionsDxUi->cancelButton.hostHwnd)
+        if (_optionsPanel.dxUi && _optionsPanel.dxUi->usesDxUiButtons && _optionsPanel.dxUi->cancelButton.hostHwnd)
         {
             ShowWindow(cancelBtn, SW_HIDE);
-            if (_optionsDxUi->cancelButton.button)
+            if (_optionsPanel.dxUi->cancelButton.button)
             {
-                _optionsDxUi->cancelButton.button->SetBounds(D2D1::RectF(0.0f,
-                                                                         0.0f,
-                                                                         _optionsDxUi->cancelButton.host.PixelsToDip(static_cast<float>(cancelW)),
-                                                                         _optionsDxUi->cancelButton.host.PixelsToDip(static_cast<float>(buttonHeight))));
+                _optionsPanel.dxUi->cancelButton.button->SetBounds(
+                    D2D1::RectF(0.0f,
+                                0.0f,
+                                _optionsPanel.dxUi->cancelButton.host.PixelsToDip(static_cast<float>(cancelW)),
+                                _optionsPanel.dxUi->cancelButton.host.PixelsToDip(static_cast<float>(buttonHeight))));
             }
-            SetWindowPos(_optionsDxUi->cancelButton.hostHwnd.get(), nullptr, nextRight, buttonsY, cancelW, buttonHeight, flags | SWP_SHOWWINDOW);
-            _optionsDxUi->cancelButton.host.SetCancelButton(_optionsDxUi->cancelButton.button);
-            _optionsDxUi->cancelButton.host.Invalidate();
+            SetWindowPos(_optionsPanel.dxUi->cancelButton.hostHwnd.get(), nullptr, nextRight, buttonsY, cancelW, buttonHeight, flags | SWP_SHOWWINDOW);
+            _optionsPanel.dxUi->cancelButton.host.SetCancelButton(_optionsPanel.dxUi->cancelButton.button);
+            _optionsPanel.dxUi->cancelButton.host.Invalidate();
         }
         else
         {
@@ -2197,19 +1966,19 @@ void CompareDirectoriesWindow::LayoutOptionsControls() noexcept
     if (okBtn)
     {
         nextRight -= okW;
-        if (_optionsDxUi && _optionsDxUi->usesDxUiButtons && _optionsDxUi->okButton.hostHwnd)
+        if (_optionsPanel.dxUi && _optionsPanel.dxUi->usesDxUiButtons && _optionsPanel.dxUi->okButton.hostHwnd)
         {
             ShowWindow(okBtn, SW_HIDE);
-            if (_optionsDxUi->okButton.button)
+            if (_optionsPanel.dxUi->okButton.button)
             {
-                _optionsDxUi->okButton.button->SetBounds(D2D1::RectF(0.0f,
-                                                                     0.0f,
-                                                                     _optionsDxUi->okButton.host.PixelsToDip(static_cast<float>(okW)),
-                                                                     _optionsDxUi->okButton.host.PixelsToDip(static_cast<float>(buttonHeight))));
+                _optionsPanel.dxUi->okButton.button->SetBounds(D2D1::RectF(0.0f,
+                                                                           0.0f,
+                                                                           _optionsPanel.dxUi->okButton.host.PixelsToDip(static_cast<float>(okW)),
+                                                                           _optionsPanel.dxUi->okButton.host.PixelsToDip(static_cast<float>(buttonHeight))));
             }
-            SetWindowPos(_optionsDxUi->okButton.hostHwnd.get(), nullptr, nextRight, buttonsY, okW, buttonHeight, flags | SWP_SHOWWINDOW);
-            _optionsDxUi->okButton.host.SetDefaultButton(_optionsDxUi->okButton.button);
-            _optionsDxUi->okButton.host.Invalidate();
+            SetWindowPos(_optionsPanel.dxUi->okButton.hostHwnd.get(), nullptr, nextRight, buttonsY, okW, buttonHeight, flags | SWP_SHOWWINDOW);
+            _optionsPanel.dxUi->okButton.host.SetDefaultButton(_optionsPanel.dxUi->okButton.button);
+            _optionsPanel.dxUi->okButton.host.Invalidate();
         }
         else
         {
@@ -2221,10 +1990,10 @@ void CompareDirectoriesWindow::LayoutOptionsControls() noexcept
     const int hostY = margin;
     const int hostW = std::max(0, dlgW - 2 * margin);
     const int hostH = std::max(0, buttonsY - gapY - hostY);
-    SetWindowPos(_optionsUi.host, nullptr, hostX, hostY, hostW, hostH, flags);
+    SetWindowPos(_optionsPanel.ui.host, nullptr, hostX, hostY, hostW, hostH, flags);
 
     RECT hostClient{};
-    if (! GetClientRect(_optionsUi.host, &hostClient))
+    if (! GetClientRect(_optionsPanel.ui.host, &hostClient))
     {
         return;
     }
@@ -2306,8 +2075,8 @@ void CompareDirectoriesWindow::LayoutOptionsControls() noexcept
         layout.useTwoColumns = (! _theme.systemHighContrast && ! _theme.highContrast) && (contentW >= (2 * minColumnW + columnSeparatorAreaW));
         layout.separatorX    = layout.useTwoColumns ? (std::max(0, (contentW - columnSeparatorAreaW) / 2) + (columnSeparatorAreaW / 2)) : -1;
 
-        const bool ignoreFilesOn = GetTwoStateToggleState(_optionsUi.ignoreFiles.toggle, _theme.highContrast);
-        const bool ignoreDirsOn  = GetTwoStateToggleState(_optionsUi.ignoreDirectories.toggle, _theme.highContrast);
+        const bool ignoreFilesOn = _optionsPanel.draft.ignoreFiles;
+        const bool ignoreDirsOn  = _optionsPanel.draft.ignoreDirectories;
 
         const auto measureSectionHeader = [&](OptionsSectionPlacement& placement, int contentX, int availableWidth, int& y) noexcept
         {
@@ -2351,29 +2120,26 @@ void CompareDirectoriesWindow::LayoutOptionsControls() noexcept
             int y             = 0;
 
             measureSectionHeader(layout.headerSubdirs, 0, contentW, y);
-            measureToggleCard(layout.compareSubdirectories, 0, contentW, toggleW, LoadStringResourceView(nullptr, IDS_COMPARE_OPTIONS_SUBDIRS_DESC), y);
+            measureToggleCard(layout.compareSubdirectories, 0, contentW, toggleW, LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SUBDIRS_DESC), y);
 
             y += sectionSpacing;
             measureSectionHeader(layout.headerCompare, 0, contentW, y);
-            measureToggleCard(layout.compareSize, 0, contentW, toggleW, LoadStringResourceView(nullptr, IDS_COMPARE_OPTIONS_SIZE_DESC), y);
-            measureToggleCard(layout.compareDateTime, 0, contentW, toggleW, LoadStringResourceView(nullptr, IDS_COMPARE_OPTIONS_DATETIME_DESC), y);
-            measureToggleCard(layout.compareAttributes, 0, contentW, toggleW, LoadStringResourceView(nullptr, IDS_COMPARE_OPTIONS_ATTRIBUTES_DESC), y);
-            measureToggleCard(layout.compareContent, 0, contentW, toggleW, LoadStringResourceView(nullptr, contentCompareDescId), y);
+            measureToggleCard(layout.compareSize, 0, contentW, toggleW, LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SIZE_DESC), y);
+            measureToggleCard(layout.compareDateTime, 0, contentW, toggleW, LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_DATETIME_DESC), y);
+            measureToggleCard(layout.compareAttributes, 0, contentW, toggleW, LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_ATTRIBUTES_DESC), y);
+            measureToggleCard(layout.compareContent, 0, contentW, toggleW, LoadStringResource(nullptr, contentCompareDescId), y);
 
             y += sectionSpacing;
             measureSectionHeader(layout.headerAdvanced, 0, contentW, y);
-            measureToggleCard(
-                layout.compareSubdirAttributes, 0, contentW, toggleW, LoadStringResourceView(nullptr, IDS_COMPARE_OPTIONS_SUBDIR_ATTRIBUTES_DESC), y);
-            measureToggleCard(
-                layout.selectSubdirsOnlyInOnePane, 0, contentW, toggleW, LoadStringResourceView(nullptr, IDS_COMPARE_OPTIONS_SELECT_SUBDIRS_DESC), y);
-            measureToggleCard(layout.keepIdenticalItems, 0, contentW, toggleW, LoadStringResourceView(nullptr, IDS_COMPARE_OPTIONS_KEEP_IDENTICAL_DESC), y);
+            measureToggleCard(layout.compareSubdirAttributes, 0, contentW, toggleW, LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SUBDIR_ATTRIBUTES_DESC), y);
+            measureToggleCard(layout.selectSubdirsOnlyInOnePane, 0, contentW, toggleW, LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SELECT_SUBDIRS_DESC), y);
+            measureToggleCard(layout.keepIdenticalItems, 0, contentW, toggleW, LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_KEEP_IDENTICAL_DESC), y);
 
             y += sectionSpacing;
             measureSectionHeader(layout.headerIgnore, 0, contentW, y);
+            measureIgnoreCard(layout.ignoreFiles, 0, contentW, toggleW, LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_IGNORE_FILES_DESC), ignoreFilesOn, y);
             measureIgnoreCard(
-                layout.ignoreFiles, 0, contentW, toggleW, LoadStringResourceView(nullptr, IDS_COMPARE_OPTIONS_IGNORE_FILES_DESC), ignoreFilesOn, y);
-            measureIgnoreCard(
-                layout.ignoreDirectories, 0, contentW, toggleW, LoadStringResourceView(nullptr, IDS_COMPARE_OPTIONS_IGNORE_DIRECTORIES_DESC), ignoreDirsOn, y);
+                layout.ignoreDirectories, 0, contentW, toggleW, LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_IGNORE_DIRECTORIES_DESC), ignoreDirsOn, y);
 
             layout.contentHeight = y;
             return layout;
@@ -2387,33 +2153,33 @@ void CompareDirectoriesWindow::LayoutOptionsControls() noexcept
 
         int leftY = 0;
         measureSectionHeader(layout.headerSubdirs, 0, leftW, leftY);
-        measureToggleCard(layout.compareSubdirectories, 0, leftW, toggleWLeft, LoadStringResourceView(nullptr, IDS_COMPARE_OPTIONS_SUBDIRS_DESC), leftY);
+        measureToggleCard(layout.compareSubdirectories, 0, leftW, toggleWLeft, LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SUBDIRS_DESC), leftY);
 
         leftY += sectionSpacing;
         measureSectionHeader(layout.headerCompare, 0, leftW, leftY);
-        measureToggleCard(layout.compareSize, 0, leftW, toggleWLeft, LoadStringResourceView(nullptr, IDS_COMPARE_OPTIONS_SIZE_DESC), leftY);
-        measureToggleCard(layout.compareDateTime, 0, leftW, toggleWLeft, LoadStringResourceView(nullptr, IDS_COMPARE_OPTIONS_DATETIME_DESC), leftY);
-        measureToggleCard(layout.compareAttributes, 0, leftW, toggleWLeft, LoadStringResourceView(nullptr, IDS_COMPARE_OPTIONS_ATTRIBUTES_DESC), leftY);
-        measureToggleCard(layout.compareContent, 0, leftW, toggleWLeft, LoadStringResourceView(nullptr, contentCompareDescId), leftY);
+        measureToggleCard(layout.compareSize, 0, leftW, toggleWLeft, LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SIZE_DESC), leftY);
+        measureToggleCard(layout.compareDateTime, 0, leftW, toggleWLeft, LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_DATETIME_DESC), leftY);
+        measureToggleCard(layout.compareAttributes, 0, leftW, toggleWLeft, LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_ATTRIBUTES_DESC), leftY);
+        measureToggleCard(layout.compareContent, 0, leftW, toggleWLeft, LoadStringResource(nullptr, contentCompareDescId), leftY);
 
         int rightY = 0;
         measureSectionHeader(layout.headerAdvanced, rightX, rightW, rightY);
         measureToggleCard(
-            layout.compareSubdirAttributes, rightX, rightW, toggleWRight, LoadStringResourceView(nullptr, IDS_COMPARE_OPTIONS_SUBDIR_ATTRIBUTES_DESC), rightY);
+            layout.compareSubdirAttributes, rightX, rightW, toggleWRight, LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SUBDIR_ATTRIBUTES_DESC), rightY);
         measureToggleCard(
-            layout.selectSubdirsOnlyInOnePane, rightX, rightW, toggleWRight, LoadStringResourceView(nullptr, IDS_COMPARE_OPTIONS_SELECT_SUBDIRS_DESC), rightY);
+            layout.selectSubdirsOnlyInOnePane, rightX, rightW, toggleWRight, LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SELECT_SUBDIRS_DESC), rightY);
         measureToggleCard(
-            layout.keepIdenticalItems, rightX, rightW, toggleWRight, LoadStringResourceView(nullptr, IDS_COMPARE_OPTIONS_KEEP_IDENTICAL_DESC), rightY);
+            layout.keepIdenticalItems, rightX, rightW, toggleWRight, LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_KEEP_IDENTICAL_DESC), rightY);
 
         rightY += sectionSpacing;
         measureSectionHeader(layout.headerIgnore, rightX, rightW, rightY);
         measureIgnoreCard(
-            layout.ignoreFiles, rightX, rightW, toggleWRight, LoadStringResourceView(nullptr, IDS_COMPARE_OPTIONS_IGNORE_FILES_DESC), ignoreFilesOn, rightY);
+            layout.ignoreFiles, rightX, rightW, toggleWRight, LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_IGNORE_FILES_DESC), ignoreFilesOn, rightY);
         measureIgnoreCard(layout.ignoreDirectories,
                           rightX,
                           rightW,
                           toggleWRight,
-                          LoadStringResourceView(nullptr, IDS_COMPARE_OPTIONS_IGNORE_DIRECTORIES_DESC),
+                          LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_IGNORE_DIRECTORIES_DESC),
                           ignoreDirsOn,
                           rightY);
 
@@ -2428,7 +2194,7 @@ void CompareDirectoriesWindow::LayoutOptionsControls() noexcept
     int contentHeight                            = initialLayout.contentHeight;
     const bool wantsVScroll                      = viewportH > 0 && contentHeight > viewportH;
 
-    LONG_PTR styleNow    = GetWindowLongPtrW(_optionsUi.host, GWL_STYLE);
+    LONG_PTR styleNow    = GetWindowLongPtrW(_optionsPanel.ui.host, GWL_STYLE);
     LONG_PTR styleWanted = styleNow;
     styleWanted |= WS_TABSTOP;
     styleWanted &= ~WS_HSCROLL;
@@ -2444,29 +2210,30 @@ void CompareDirectoriesWindow::LayoutOptionsControls() noexcept
     const bool styleChanged = styleWanted != styleNow;
     if (styleChanged)
     {
-        SetWindowLongPtrW(_optionsUi.host, GWL_STYLE, styleWanted);
-        SetWindowPos(_optionsUi.host, nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+        SetWindowLongPtrW(_optionsPanel.ui.host, GWL_STYLE, styleWanted);
+        SetWindowPos(_optionsPanel.ui.host, nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
 
         const wchar_t* hostTheme = _theme.highContrast ? L"" : (_theme.dark ? L"DarkMode_Explorer" : L"Explorer");
-        SetWindowTheme(_optionsUi.host, hostTheme, nullptr);
-        SendMessageW(_optionsUi.host, WM_THEMECHANGED, 0, 0);
+        SetWindowTheme(_optionsPanel.ui.host, hostTheme, nullptr);
+        SendMessageW(_optionsPanel.ui.host, WM_THEMECHANGED, 0, 0);
     }
 
-    GetClientRect(_optionsUi.host, &hostClient);
+    GetClientRect(_optionsPanel.ui.host, &hostClient);
     const int viewportW2                          = std::max(0l, hostClient.right - hostClient.left);
     const int viewportH2                          = std::max(0l, hostClient.bottom - hostClient.top);
     const OptionsLayoutMeasurement measuredLayout = measureLayout(viewportW2);
 
-    _optionsUseTwoColumns       = measuredLayout.useTwoColumns;
-    _optionsTwoColumnSeparatorX = measuredLayout.separatorX;
+    _optionsPanel.useTwoColumns       = measuredLayout.useTwoColumns;
+    _optionsPanel.twoColumnSeparatorX = measuredLayout.separatorX;
 
-    contentHeight             = measuredLayout.contentHeight;
-    _optionsBodyContentHeight = contentHeight;
-    _optionsScrollMax         = (viewportH2 > 0) ? std::max(0, contentHeight - viewportH2) : 0;
-    _optionsScrollOffset      = std::clamp(_optionsScrollOffset, 0, _optionsScrollMax);
-    if (_optionsScrollMax <= 0)
+    contentHeight                   = measuredLayout.contentHeight;
+    _optionsPanel.bodyContentHeight = contentHeight;
+    _optionsPanel.scrollMax         = (viewportH2 > 0) ? std::max(0, contentHeight - viewportH2) : 0;
+    _optionsPanel.scrollOffset      = std::clamp(_optionsPanel.scrollOffset, 0, _optionsPanel.scrollMax);
+    if (_optionsPanel.scrollMax <= 0)
     {
-        _optionsScrollOffset = 0;
+        _optionsPanel.scrollOffset   = 0;
+        _optionsPanel.wheelRemainder = 0;
     }
 
     SCROLLINFO si{};
@@ -2475,94 +2242,27 @@ void CompareDirectoriesWindow::LayoutOptionsControls() noexcept
     si.nMin   = 0;
     si.nMax   = std::max(0, contentHeight - 1);
     si.nPage  = (viewportH2 > 0) ? static_cast<UINT>(viewportH2) : 0u;
-    si.nPos   = _optionsScrollOffset;
-    SetScrollInfo(_optionsUi.host, SB_VERT, &si, TRUE);
+    si.nPos   = _optionsPanel.scrollOffset;
+    SetScrollInfo(_optionsPanel.ui.host, SB_VERT, &si, TRUE);
 
-    _optionsCards.clear();
+    _optionsPanel.cards.clear();
 
     auto pushCard = [&](int x, int top, int width, int height) noexcept
     {
         RECT card{};
         card.left   = x;
-        card.top    = top - _optionsScrollOffset;
+        card.top    = top - _optionsPanel.scrollOffset;
         card.right  = x + width;
-        card.bottom = top + height - _optionsScrollOffset;
-        _optionsCards.push_back(card);
+        card.bottom = top + height - _optionsPanel.scrollOffset;
+        _optionsPanel.cards.push_back(card);
     };
 
-    if (_optionsDxUi && _optionsDxUi->usesDxUiStatics && _optionsDxUi->body.hostHwnd)
+    if (_optionsPanel.dxUi && _optionsPanel.dxUi->usesDxUiStatics && _optionsPanel.dxUi->body.hostHwnd)
     {
-        const auto hideLegacyToggleCard = [](const OptionsToggleCard& card) noexcept
-        {
-            if (card.title)
-            {
-                ShowWindow(card.title, SW_HIDE);
-            }
-            if (card.description)
-            {
-                ShowWindow(card.description, SW_HIDE);
-            }
-            if (card.toggle)
-            {
-                ShowWindow(card.toggle, SW_HIDE);
-            }
-        };
-
-        const auto hideLegacyIgnoreCard = [](const OptionsIgnoreCard& card) noexcept
-        {
-            if (card.title)
-            {
-                ShowWindow(card.title, SW_HIDE);
-            }
-            if (card.description)
-            {
-                ShowWindow(card.description, SW_HIDE);
-            }
-            if (card.toggle)
-            {
-                ShowWindow(card.toggle, SW_HIDE);
-            }
-            if (card.frame)
-            {
-                ShowWindow(card.frame, SW_HIDE);
-            }
-            if (card.edit)
-            {
-                ShowWindow(card.edit, SW_HIDE);
-            }
-        };
-
-        if (_optionsUi.headerCompare)
-        {
-            ShowWindow(_optionsUi.headerCompare, SW_HIDE);
-        }
-        if (_optionsUi.headerSubdirs)
-        {
-            ShowWindow(_optionsUi.headerSubdirs, SW_HIDE);
-        }
-        if (_optionsUi.headerAdvanced)
-        {
-            ShowWindow(_optionsUi.headerAdvanced, SW_HIDE);
-        }
-        if (_optionsUi.headerIgnore)
-        {
-            ShowWindow(_optionsUi.headerIgnore, SW_HIDE);
-        }
-        hideLegacyToggleCard(_optionsUi.compareSize);
-        hideLegacyToggleCard(_optionsUi.compareDateTime);
-        hideLegacyToggleCard(_optionsUi.compareAttributes);
-        hideLegacyToggleCard(_optionsUi.compareContent);
-        hideLegacyToggleCard(_optionsUi.compareSubdirectories);
-        hideLegacyToggleCard(_optionsUi.compareSubdirAttributes);
-        hideLegacyToggleCard(_optionsUi.selectSubdirsOnlyInOnePane);
-        hideLegacyToggleCard(_optionsUi.keepIdenticalItems);
-        hideLegacyIgnoreCard(_optionsUi.ignoreFiles);
-        hideLegacyIgnoreCard(_optionsUi.ignoreDirectories);
-
-        auto& bodyDx       = _optionsDxUi->body;
+        auto& bodyDx       = _optionsPanel.dxUi->body;
         const auto pxToDip = [dpi](int px) noexcept { return (static_cast<float>(px) * 96.0f) / static_cast<float>(std::max<UINT>(1u, dpi)); };
 
-        const int scrollOffset = _optionsScrollOffset;
+        const int scrollOffset = _optionsPanel.scrollOffset;
         SetWindowPos(bodyDx.hostHwnd.get(), nullptr, 0, 0, viewportW2, viewportH2, flags | SWP_SHOWWINDOW);
 
         const auto setHeaderVisible = [](Label* label, bool visible) noexcept
@@ -2734,381 +2434,25 @@ void CompareDirectoriesWindow::LayoutOptionsControls() noexcept
                            measuredLayout.ignoreDirectories);
 
         bodyDx.host.Invalidate();
-        InvalidateRect(_optionsUi.host, nullptr, TRUE);
+        InvalidateRect(_optionsPanel.ui.host, nullptr, TRUE);
         return;
     }
 
-    const int scrollOffset = _optionsScrollOffset;
-
-    const auto positionScrollable = [&](HWND hwnd, int x, int y, int w, int h) noexcept
-    {
-        if (! hwnd)
-        {
-            return;
-        }
-
-        SetWindowPos(hwnd, nullptr, x, y - scrollOffset, w, h, flags);
-    };
-
-    const auto showToggleCardControls = [&](const OptionsToggleCard& card, OptionsToggleDx* dxToggle, bool visible) noexcept
-    {
-        if (dxToggle && dxToggle->hostHwnd)
-        {
-            if (card.toggle)
-            {
-                ShowWindow(card.toggle, SW_HIDE);
-            }
-            ShowWindow(dxToggle->hostHwnd.get(), visible ? SW_SHOWNA : SW_HIDE);
-        }
-        else if (card.toggle)
-        {
-            ShowWindow(card.toggle, visible ? SW_SHOW : SW_HIDE);
-        }
-    };
-
-    const auto showIgnoreCardControls =
-        [&](const OptionsIgnoreCard& card, OptionsToggleDx* dxToggle, OptionsEditDx* dxEdit, bool visible, bool showEdit) noexcept
-    {
-        if (dxToggle && dxToggle->hostHwnd)
-        {
-            if (card.toggle)
-            {
-                ShowWindow(card.toggle, SW_HIDE);
-            }
-            ShowWindow(dxToggle->hostHwnd.get(), visible ? SW_SHOWNA : SW_HIDE);
-        }
-        else if (card.toggle)
-        {
-            ShowWindow(card.toggle, visible ? SW_SHOW : SW_HIDE);
-        }
-        if (card.frame)
-        {
-            ShowWindow(card.frame, (visible && showEdit && (! dxEdit || ! dxEdit->hostHwnd)) ? SW_SHOW : SW_HIDE);
-        }
-        if (card.edit)
-        {
-            ShowWindow(card.edit, (visible && showEdit && (! dxEdit || ! dxEdit->hostHwnd)) ? SW_SHOW : SW_HIDE);
-        }
-        if (dxEdit && dxEdit->hostHwnd)
-        {
-            ShowWindow(dxEdit->hostHwnd.get(), (visible && showEdit) ? SW_SHOWNA : SW_HIDE);
-        }
-    };
-
-    const auto layoutSectionHeader = [&](HWND header, OptionsSectionDxLabel* dxHeader, UINT textId, const OptionsSectionPlacement& placement) noexcept
-    {
-        if (! header && (! dxHeader || ! dxHeader->hostHwnd))
-        {
-            return;
-        }
-
-        const std::wstring text = LoadStringResource(nullptr, textId);
-        const bool visible      = placement.width > 0;
-        if (dxHeader && dxHeader->hostHwnd)
-        {
-            if (header)
-            {
-                ShowWindow(header, SW_HIDE);
-            }
-
-            ShowWindow(dxHeader->hostHwnd.get(), visible ? SW_SHOWNA : SW_HIDE);
-            if (! visible)
-            {
-                return;
-            }
-
-            if (dxHeader->label)
-            {
-                dxHeader->label->SetText(text);
-                dxHeader->label->SetBounds(D2D1::RectF(
-                    0.0f, 0.0f, dxHeader->host.PixelsToDip(static_cast<float>(placement.width)), dxHeader->host.PixelsToDip(static_cast<float>(headerHeight))));
-            }
-            positionScrollable(dxHeader->hostHwnd.get(), placement.x, placement.y, placement.width, headerHeight);
-            dxHeader->host.Invalidate();
-        }
-        else
-        {
-            ShowWindow(header, visible ? SW_SHOW : SW_HIDE);
-            if (! visible)
-            {
-                return;
-            }
-
-            SetWindowTextW(header, text.c_str());
-            positionScrollable(header, placement.x, placement.y, placement.width, headerHeight);
-        }
-    };
-
-    const auto layoutToggleCard = [&](const OptionsToggleCard& card,
-                                      OptionsCardDxText* dxCard,
-                                      OptionsToggleDx* dxToggle,
-                                      UINT titleId,
-                                      UINT descId,
-                                      const OptionsCardPlacement& placement) noexcept
-    {
-        const bool visible = placement.width > 0 && placement.height > 0;
-        showToggleCardControls(card, dxToggle, visible);
-        if (card.title)
-        {
-            ShowWindow(card.title, SW_HIDE);
-        }
-        if (card.description)
-        {
-            ShowWindow(card.description, SW_HIDE);
-        }
-        if (dxCard && dxCard->hostHwnd)
-        {
-            ShowWindow(dxCard->hostHwnd.get(), visible ? SW_SHOWNA : SW_HIDE);
-        }
-        if (! visible)
-        {
-            return;
-        }
-
-        const std::wstring titleText = LoadStringResource(nullptr, titleId);
-        const std::wstring descText  = LoadStringResource(nullptr, descId);
-        pushCard(placement.x, placement.y, placement.width, placement.height);
-
-        const int textX = placement.x + cardPaddingX;
-        const int textY = placement.y + cardPaddingY;
-        const int textH = std::max(rowHeight, titleHeight + cardGapY + placement.descriptionHeight);
-        if (dxCard && dxCard->hostHwnd)
-        {
-            if (dxCard->title)
-            {
-                dxCard->title->SetText(titleText);
-                dxCard->title->SetBounds(D2D1::RectF(
-                    0.0f, 0.0f, dxCard->host.PixelsToDip(static_cast<float>(placement.textWidth)), dxCard->host.PixelsToDip(static_cast<float>(titleHeight))));
-            }
-            if (dxCard->description)
-            {
-                const float descriptionTopDip = dxCard->host.PixelsToDip(static_cast<float>(titleHeight + cardGapY));
-                dxCard->description->SetText(descText);
-                dxCard->description->SetBounds(D2D1::RectF(0.0f,
-                                                           descriptionTopDip,
-                                                           dxCard->host.PixelsToDip(static_cast<float>(placement.textWidth)),
-                                                           descriptionTopDip + dxCard->host.PixelsToDip(static_cast<float>(placement.descriptionHeight))));
-            }
-            positionScrollable(dxCard->hostHwnd.get(), textX, textY, placement.textWidth, textH);
-            dxCard->host.Invalidate();
-        }
-        else
-        {
-            ShowWindow(card.title, SW_SHOW);
-            ShowWindow(card.description, SW_SHOW);
-            SetWindowTextW(card.title, titleText.c_str());
-            positionScrollable(card.title, textX, textY, placement.textWidth, titleHeight);
-
-            SetWindowTextW(card.description, descText.c_str());
-            positionScrollable(card.description, textX, textY + titleHeight + cardGapY, placement.textWidth, std::max(0, placement.descriptionHeight));
-        }
-
-        const int toggleX = placement.x + placement.width - cardPaddingX - placement.toggleWidth;
-        const int toggleY = placement.y + (placement.height - rowHeight) / 2;
-        if (dxToggle && dxToggle->hostHwnd && dxToggle->toggle)
-        {
-            dxToggle->toggle->SetBounds(D2D1::RectF(
-                0.0f, 0.0f, dxToggle->host.PixelsToDip(static_cast<float>(placement.toggleWidth)), dxToggle->host.PixelsToDip(static_cast<float>(rowHeight))));
-            positionScrollable(dxToggle->hostHwnd.get(), toggleX, toggleY, placement.toggleWidth, rowHeight);
-            dxToggle->host.Invalidate();
-        }
-        else
-        {
-            positionScrollable(card.toggle, toggleX, toggleY, placement.toggleWidth, rowHeight);
-        }
-    };
-
-    const auto layoutIgnoreCard = [&](const OptionsIgnoreCard& card,
-                                      OptionsCardDxText* dxCard,
-                                      OptionsToggleDx* dxToggle,
-                                      OptionsEditDx* dxEdit,
-                                      UINT titleId,
-                                      UINT descId,
-                                      const OptionsCardPlacement& placement) noexcept
-    {
-        const bool visible  = placement.width > 0 && placement.height > 0;
-        const bool showEdit = placement.showEdit;
-        showIgnoreCardControls(card, dxToggle, dxEdit, visible, showEdit);
-        if (card.title)
-        {
-            ShowWindow(card.title, SW_HIDE);
-        }
-        if (card.description)
-        {
-            ShowWindow(card.description, SW_HIDE);
-        }
-        if (dxCard && dxCard->hostHwnd)
-        {
-            ShowWindow(dxCard->hostHwnd.get(), visible ? SW_SHOWNA : SW_HIDE);
-        }
-        if (! visible)
-        {
-            return;
-        }
-
-        const std::wstring titleText = LoadStringResource(nullptr, titleId);
-        const std::wstring descText  = LoadStringResource(nullptr, descId);
-        pushCard(placement.x, placement.y, placement.width, placement.height);
-
-        const int textX = placement.x + cardPaddingX;
-        const int textY = placement.y + cardPaddingY;
-        const int textH = std::max(rowHeight, titleHeight + cardGapY + placement.descriptionHeight);
-        if (dxCard && dxCard->hostHwnd)
-        {
-            if (dxCard->title)
-            {
-                dxCard->title->SetText(titleText);
-                dxCard->title->SetBounds(D2D1::RectF(
-                    0.0f, 0.0f, dxCard->host.PixelsToDip(static_cast<float>(placement.textWidth)), dxCard->host.PixelsToDip(static_cast<float>(titleHeight))));
-            }
-            if (dxCard->description)
-            {
-                const float descriptionTopDip = dxCard->host.PixelsToDip(static_cast<float>(titleHeight + cardGapY));
-                dxCard->description->SetText(descText);
-                dxCard->description->SetBounds(D2D1::RectF(0.0f,
-                                                           descriptionTopDip,
-                                                           dxCard->host.PixelsToDip(static_cast<float>(placement.textWidth)),
-                                                           descriptionTopDip + dxCard->host.PixelsToDip(static_cast<float>(placement.descriptionHeight))));
-            }
-            positionScrollable(dxCard->hostHwnd.get(), textX, textY, placement.textWidth, textH);
-            dxCard->host.Invalidate();
-        }
-        else
-        {
-            ShowWindow(card.title, SW_SHOW);
-            ShowWindow(card.description, SW_SHOW);
-            SetWindowTextW(card.title, titleText.c_str());
-            positionScrollable(card.title, textX, textY, placement.textWidth, titleHeight);
-
-            SetWindowTextW(card.description, descText.c_str());
-            positionScrollable(card.description, textX, textY + titleHeight + cardGapY, placement.textWidth, std::max(0, placement.descriptionHeight));
-        }
-
-        const int toggleX = placement.x + placement.width - cardPaddingX - placement.toggleWidth;
-        const int toggleY = placement.y + cardPaddingY;
-        if (dxToggle && dxToggle->hostHwnd && dxToggle->toggle)
-        {
-            dxToggle->toggle->SetBounds(D2D1::RectF(
-                0.0f, 0.0f, dxToggle->host.PixelsToDip(static_cast<float>(placement.toggleWidth)), dxToggle->host.PixelsToDip(static_cast<float>(rowHeight))));
-            positionScrollable(dxToggle->hostHwnd.get(), toggleX, toggleY, placement.toggleWidth, rowHeight);
-            dxToggle->host.Invalidate();
-        }
-        else
-        {
-            positionScrollable(card.toggle, toggleX, toggleY, placement.toggleWidth, rowHeight);
-        }
-
-        if (showEdit && card.frame && card.edit)
-        {
-            const int editX = placement.x + cardPaddingX;
-            const int editW = std::max(0, placement.width - 2 * cardPaddingX);
-
-            const int contentTop    = placement.y + cardPaddingY;
-            const int contentBottom = contentTop + titleHeight + cardGapY + placement.descriptionHeight;
-            const int editTop       = contentBottom + cardGapY;
-
-            const int innerPadding = (! _theme.highContrast && card.frame) ? framePadding : 0;
-
-            if (dxEdit && dxEdit->hostHwnd && dxEdit->edit)
-            {
-                dxEdit->edit->SetBounds(
-                    D2D1::RectF(0.0f, 0.0f, dxEdit->host.PixelsToDip(static_cast<float>(editW)), dxEdit->host.PixelsToDip(static_cast<float>(rowHeight))));
-                positionScrollable(dxEdit->hostHwnd.get(), editX, editTop, editW, rowHeight);
-                dxEdit->host.Invalidate();
-            }
-            else
-            {
-                positionScrollable(card.frame, editX, editTop, editW, rowHeight);
-                positionScrollable(
-                    card.edit, editX + innerPadding, editTop + innerPadding, std::max(1, editW - 2 * innerPadding), std::max(1, rowHeight - 2 * innerPadding));
-            }
-        }
-    };
-
-    layoutSectionHeader(
-        _optionsUi.headerSubdirs, _optionsDxUi ? &_optionsDxUi->headerSubdirs : nullptr, IDS_COMPARE_OPTIONS_SECTION_SUBDIRS, measuredLayout.headerSubdirs);
-    layoutToggleCard(_optionsUi.compareSubdirectories,
-                     _optionsDxUi ? &_optionsDxUi->compareSubdirectories : nullptr,
-                     _optionsDxUi ? &_optionsDxUi->compareSubdirectoriesToggle : nullptr,
-                     IDS_COMPARE_OPTIONS_SUBDIRS_TITLE,
-                     IDS_COMPARE_OPTIONS_SUBDIRS_DESC,
-                     measuredLayout.compareSubdirectories);
-    layoutSectionHeader(
-        _optionsUi.headerCompare, _optionsDxUi ? &_optionsDxUi->headerCompare : nullptr, IDS_COMPARE_OPTIONS_SECTION_COMPARE, measuredLayout.headerCompare);
-    layoutToggleCard(_optionsUi.compareSize,
-                     _optionsDxUi ? &_optionsDxUi->compareSize : nullptr,
-                     _optionsDxUi ? &_optionsDxUi->compareSizeToggle : nullptr,
-                     IDS_COMPARE_OPTIONS_SIZE_TITLE,
-                     IDS_COMPARE_OPTIONS_SIZE_DESC,
-                     measuredLayout.compareSize);
-    layoutToggleCard(_optionsUi.compareDateTime,
-                     _optionsDxUi ? &_optionsDxUi->compareDateTime : nullptr,
-                     _optionsDxUi ? &_optionsDxUi->compareDateTimeToggle : nullptr,
-                     IDS_COMPARE_OPTIONS_DATETIME_TITLE,
-                     IDS_COMPARE_OPTIONS_DATETIME_DESC,
-                     measuredLayout.compareDateTime);
-    layoutToggleCard(_optionsUi.compareAttributes,
-                     _optionsDxUi ? &_optionsDxUi->compareAttributes : nullptr,
-                     _optionsDxUi ? &_optionsDxUi->compareAttributesToggle : nullptr,
-                     IDS_COMPARE_OPTIONS_ATTRIBUTES_TITLE,
-                     IDS_COMPARE_OPTIONS_ATTRIBUTES_DESC,
-                     measuredLayout.compareAttributes);
-    layoutToggleCard(_optionsUi.compareContent,
-                     _optionsDxUi ? &_optionsDxUi->compareContent : nullptr,
-                     _optionsDxUi ? &_optionsDxUi->compareContentToggle : nullptr,
-                     IDS_COMPARE_OPTIONS_CONTENT_TITLE,
-                     contentCompareDescId,
-                     measuredLayout.compareContent);
-    layoutSectionHeader(
-        _optionsUi.headerAdvanced, _optionsDxUi ? &_optionsDxUi->headerAdvanced : nullptr, IDS_COMPARE_OPTIONS_SECTION_ADVANCED, measuredLayout.headerAdvanced);
-    layoutToggleCard(_optionsUi.compareSubdirAttributes,
-                     _optionsDxUi ? &_optionsDxUi->compareSubdirAttributes : nullptr,
-                     _optionsDxUi ? &_optionsDxUi->compareSubdirAttributesToggle : nullptr,
-                     IDS_COMPARE_OPTIONS_SUBDIR_ATTRIBUTES_TITLE,
-                     IDS_COMPARE_OPTIONS_SUBDIR_ATTRIBUTES_DESC,
-                     measuredLayout.compareSubdirAttributes);
-    layoutToggleCard(_optionsUi.selectSubdirsOnlyInOnePane,
-                     _optionsDxUi ? &_optionsDxUi->selectSubdirsOnlyInOnePane : nullptr,
-                     _optionsDxUi ? &_optionsDxUi->selectSubdirsOnlyInOnePaneToggle : nullptr,
-                     IDS_COMPARE_OPTIONS_SELECT_SUBDIRS_TITLE,
-                     IDS_COMPARE_OPTIONS_SELECT_SUBDIRS_DESC,
-                     measuredLayout.selectSubdirsOnlyInOnePane);
-    layoutToggleCard(_optionsUi.keepIdenticalItems,
-                     _optionsDxUi ? &_optionsDxUi->keepIdenticalItems : nullptr,
-                     _optionsDxUi ? &_optionsDxUi->keepIdenticalItemsToggle : nullptr,
-                     IDS_COMPARE_OPTIONS_KEEP_IDENTICAL_TITLE,
-                     IDS_COMPARE_OPTIONS_KEEP_IDENTICAL_DESC,
-                     measuredLayout.keepIdenticalItems);
-    layoutSectionHeader(
-        _optionsUi.headerIgnore, _optionsDxUi ? &_optionsDxUi->headerIgnore : nullptr, IDS_COMPARE_OPTIONS_SECTION_IGNORE, measuredLayout.headerIgnore);
-    layoutIgnoreCard(_optionsUi.ignoreFiles,
-                     _optionsDxUi ? &_optionsDxUi->ignoreFiles : nullptr,
-                     _optionsDxUi ? &_optionsDxUi->ignoreFilesToggle : nullptr,
-                     _optionsDxUi ? &_optionsDxUi->ignoreFilesEdit : nullptr,
-                     IDS_COMPARE_OPTIONS_IGNORE_FILES_TITLE,
-                     IDS_COMPARE_OPTIONS_IGNORE_FILES_DESC,
-                     measuredLayout.ignoreFiles);
-    layoutIgnoreCard(_optionsUi.ignoreDirectories,
-                     _optionsDxUi ? &_optionsDxUi->ignoreDirectories : nullptr,
-                     _optionsDxUi ? &_optionsDxUi->ignoreDirectoriesToggle : nullptr,
-                     _optionsDxUi ? &_optionsDxUi->ignoreDirectoriesEdit : nullptr,
-                     IDS_COMPARE_OPTIONS_IGNORE_DIRECTORIES_TITLE,
-                     IDS_COMPARE_OPTIONS_IGNORE_DIRECTORIES_DESC,
-                     measuredLayout.ignoreDirectories);
-
-    InvalidateRect(_optionsUi.host, nullptr, TRUE);
+    InvalidateRect(_optionsPanel.ui.host, nullptr, TRUE);
 }
 void CompareDirectoriesWindow::ShowOptionsPanel(bool show) noexcept
 {
-    if (! _optionsDlg)
+    if (! _optionsPanel.dlg)
     {
         return;
     }
 
-    ShowWindow(_optionsDlg.get(), show ? SW_SHOW : SW_HIDE);
     if (show)
     {
+        _optionsPanel.staleFromExternalReload = false;
         LoadOptionsControlsFromSettings();
+        ShowWindow(_optionsPanel.dlg.get(), SW_SHOW);
+        RegisterOptionsReloadParticipant();
         if (const HWND fw = _folderWindow.GetHwnd())
         {
             ShowWindow(fw, SW_HIDE);
@@ -3116,13 +2460,17 @@ void CompareDirectoriesWindow::ShowOptionsPanel(bool show) noexcept
 
         Layout();
         ApplyOptionsDialogTheme();
-        SetWindowPos(_optionsDlg.get(), HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-        RedrawWindow(_optionsDlg.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
-        SetFocus(_optionsDlg.get());
+        SetWindowPos(_optionsPanel.dlg.get(), HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        RedrawWindow(_optionsPanel.dlg.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
+        SetFocus(_optionsPanel.dlg.get());
         UpdateCompareWatermark();
         UpdateViewMenuChecks();
         return;
     }
+
+    UnregisterOptionsReloadParticipant();
+    _optionsPanel.staleFromExternalReload = false;
+    ShowWindow(_optionsPanel.dlg.get(), SW_HIDE);
 
     if (_compareStarted)
     {
@@ -3133,7 +2481,7 @@ void CompareDirectoriesWindow::ShowOptionsPanel(bool show) noexcept
 
         Layout();
         const HWND focus = GetFocus();
-        if (! focus || (focus == _optionsDlg.get()) || IsChild(_optionsDlg.get(), focus))
+        if (! focus || (focus == _optionsPanel.dlg.get()) || IsChild(_optionsPanel.dlg.get(), focus))
         {
             SetFocus(_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left));
         }
@@ -3159,25 +2507,17 @@ Common::Settings::CompareDirectoriesSettings CompareDirectoriesWindow::GetEffect
 }
 Common::Settings::CompareDirectoriesSettings CompareDirectoriesWindow::ReadOptionsControlsToSettings() const noexcept
 {
-    Common::Settings::CompareDirectoriesSettings s = GetEffectiveCompareSettings();
-    if (! _optionsDlg || ! _optionsUi.host)
+    Common::Settings::CompareDirectoriesSettings s = _optionsPanel.draftLoaded ? _optionsPanel.draft : GetEffectiveCompareSettings();
+    if (! _optionsPanel.dlg || ! _optionsPanel.ui.host || ! _optionsPanel.draftLoaded)
     {
         return s;
     }
 
-    s.compareSize                   = GetTwoStateToggleState(_optionsUi.compareSize.toggle, _theme.highContrast);
-    s.compareDateTime               = GetTwoStateToggleState(_optionsUi.compareDateTime.toggle, _theme.highContrast);
-    s.compareAttributes             = GetTwoStateToggleState(_optionsUi.compareAttributes.toggle, _theme.highContrast);
-    s.compareContent                = GetTwoStateToggleState(_optionsUi.compareContent.toggle, _theme.highContrast);
-    s.compareSubdirectories         = GetTwoStateToggleState(_optionsUi.compareSubdirectories.toggle, _theme.highContrast);
-    s.compareSubdirectoryAttributes = GetTwoStateToggleState(_optionsUi.compareSubdirAttributes.toggle, _theme.highContrast);
-    s.selectSubdirsOnlyInOnePane    = GetTwoStateToggleState(_optionsUi.selectSubdirsOnlyInOnePane.toggle, _theme.highContrast);
-    s.keepIdenticalItems            = GetTwoStateToggleState(_optionsUi.keepIdenticalItems.toggle, _theme.highContrast);
-    s.ignoreFiles                   = GetTwoStateToggleState(_optionsUi.ignoreFiles.toggle, _theme.highContrast);
-    s.ignoreDirectories             = GetTwoStateToggleState(_optionsUi.ignoreDirectories.toggle, _theme.highContrast);
-    s.ignoreFilesPatterns = _optionsUi.ignoreFiles.edit ? Win32Text::GetDlgItemTextString(_optionsUi.host, IDC_CMP_IGNORE_FILES_PATTERNS) : std::wstring{};
-    s.ignoreDirectoriesPatterns =
-        _optionsUi.ignoreDirectories.edit ? Win32Text::GetDlgItemTextString(_optionsUi.host, IDC_CMP_IGNORE_DIRECTORIES_PATTERNS) : std::wstring{};
+    const bool contentCompareSupported = ! _session || _session->IsContentCompareSupported();
+    if (! contentCompareSupported)
+    {
+        s.compareContent = false;
+    }
 
     if (! s.keepIdenticalItems)
     {
@@ -3192,6 +2532,75 @@ bool CompareDirectoriesWindow::IsOptionsDialogDirty() const noexcept
     return ! AreEquivalentCompareDirectoriesSettings(ReadOptionsControlsToSettings(), GetEffectiveCompareSettings());
 }
 
+void CompareDirectoriesWindow::ApplyOptionsDraftInterlocks() noexcept
+{
+    EnsureCompareSession();
+    if (_session && ! _session->IsContentCompareSupported())
+    {
+        _optionsPanel.draft.compareContent = false;
+    }
+
+    if (! _optionsPanel.draft.keepIdenticalItems)
+    {
+        _optionsPanel.draft.showIdenticalItems = false;
+    }
+}
+
+void CompareDirectoriesWindow::UpdateOptionsDraftToggle(const UINT controlId, const bool checked) noexcept
+{
+    if (_optionsPanel.syncingDxDraft)
+    {
+        return;
+    }
+
+    bool requiresLayout = false;
+    switch (controlId)
+    {
+        case IDC_CMP_SIZE: _optionsPanel.draft.compareSize = checked; break;
+        case IDC_CMP_DATETIME: _optionsPanel.draft.compareDateTime = checked; break;
+        case IDC_CMP_ATTRIBUTES: _optionsPanel.draft.compareAttributes = checked; break;
+        case IDC_CMP_CONTENT: _optionsPanel.draft.compareContent = checked; break;
+        case IDC_CMP_SUBDIRECTORIES: _optionsPanel.draft.compareSubdirectories = checked; break;
+        case IDC_CMP_SUBDIR_ATTRIBUTES: _optionsPanel.draft.compareSubdirectoryAttributes = checked; break;
+        case IDC_CMP_SELECT_SUBDIRS_ONLY_ONE_PANE: _optionsPanel.draft.selectSubdirsOnlyInOnePane = checked; break;
+        case IDC_CMP_KEEP_IDENTICAL: _optionsPanel.draft.keepIdenticalItems = checked; break;
+        case IDC_CMP_IGNORE_FILES:
+            _optionsPanel.draft.ignoreFiles = checked;
+            requiresLayout                  = true;
+            break;
+        case IDC_CMP_IGNORE_DIRECTORIES:
+            _optionsPanel.draft.ignoreDirectories = checked;
+            requiresLayout                        = true;
+            break;
+        default: return;
+    }
+
+    _optionsPanel.draftLoaded = true;
+    ApplyOptionsDraftInterlocks();
+    SyncOptionsDxToggles();
+    if (requiresLayout)
+    {
+        UpdateOptionsVisibility();
+    }
+}
+
+void CompareDirectoriesWindow::UpdateOptionsDraftText(const UINT controlId, std::wstring_view text) noexcept
+{
+    if (_optionsPanel.syncingDxDraft)
+    {
+        return;
+    }
+
+    switch (controlId)
+    {
+        case IDC_CMP_IGNORE_FILES_PATTERNS: _optionsPanel.draft.ignoreFilesPatterns = text; break;
+        case IDC_CMP_IGNORE_DIRECTORIES_PATTERNS: _optionsPanel.draft.ignoreDirectoriesPatterns = text; break;
+        default: return;
+    }
+
+    _optionsPanel.draftLoaded = true;
+}
+
 #ifdef ENABLE_TESTS
 [[nodiscard]] bool WindowOwnsFocus(HWND hwnd, HWND focused) noexcept
 {
@@ -3200,17 +2609,20 @@ bool CompareDirectoriesWindow::IsOptionsDialogDirty() const noexcept
 
 bool CompareDirectoriesWindow::DebugGetOptionsSnapshot(::CompareDirectoriesOptionsDebugSnapshot& out) const noexcept
 {
-    out                              = {};
-    out.optionsDialogVisible         = _optionsDlg && IsWindowVisible(_optionsDlg.get()) != FALSE;
-    out.optionsUsesDxUiStatics       = _optionsDxUi && _optionsDxUi->usesDxUiStatics;
-    out.optionsUsesDxUiButtons       = _optionsDxUi && _optionsDxUi->usesDxUiButtons;
-    out.optionsUsesDxUiToggles       = _optionsDxUi && _optionsDxUi->usesDxUiToggles;
-    out.optionsUsesDxUiEdits         = _optionsDxUi && _optionsDxUi->usesDxUiEdits;
-    out.usesDxUiTypographyMetrics    = _optionsUsesDxUiTypographyMetrics;
-    out.compareSubdirectoriesChecked = GetTwoStateToggleState(_optionsUi.compareSubdirectories.toggle, _theme.highContrast);
-    out.themeDark                    = _theme.dark;
-    out.themeHighContrast            = _theme.highContrast;
-    out.themeRainbow                 = _theme.menu.rainbowMode;
+    out                                    = {};
+    out.optionsDialogVisible               = _optionsPanel.dlg && IsWindowVisible(_optionsPanel.dlg.get()) != FALSE;
+    out.optionsUsesDxUiStatics             = _optionsPanel.dxUi && _optionsPanel.dxUi->usesDxUiStatics;
+    out.optionsUsesDxUiButtons             = _optionsPanel.dxUi && _optionsPanel.dxUi->usesDxUiButtons;
+    out.optionsUsesDxUiToggles             = _optionsPanel.dxUi && _optionsPanel.dxUi->usesDxUiToggles;
+    out.optionsUsesDxUiEdits               = _optionsPanel.dxUi && _optionsPanel.dxUi->usesDxUiEdits;
+    out.usesDxUiTypographyMetrics          = _optionsPanel.usesDxUiTypographyMetrics;
+    out.optionsReloadParticipantRegistered = _optionsPanel.reloadParticipantRegistered;
+    out.optionsStaleFromExternalReload     = _optionsPanel.staleFromExternalReload;
+    out.optionsDialogDirty                 = IsOptionsDialogDirty();
+    out.compareSubdirectoriesChecked       = _optionsPanel.draft.compareSubdirectories;
+    out.themeDark                          = _theme.dark;
+    out.themeHighContrast                  = _theme.highContrast;
+    out.themeRainbow                       = _theme.menu.rainbowMode;
 
     const auto isActuallyVisibleChildWindow = [](HWND hwnd) noexcept
     {
@@ -3269,77 +2681,27 @@ bool CompareDirectoriesWindow::DebugGetOptionsSnapshot(::CompareDirectoriesOptio
         }
     };
 
-    countIfVisible(_optionsUi.headerCompare, out.visibleLegacyStaticCount);
-    countIfVisible(_optionsUi.headerSubdirs, out.visibleLegacyStaticCount);
-    countIfVisible(_optionsUi.headerAdvanced, out.visibleLegacyStaticCount);
-    countIfVisible(_optionsUi.headerIgnore, out.visibleLegacyStaticCount);
-
-    const auto countToggleCard = [&](const OptionsToggleCard& card) noexcept
-    {
-        countIfVisible(card.title, out.visibleLegacyStaticCount);
-        countIfVisible(card.description, out.visibleLegacyStaticCount);
-    };
-
-    const auto countIgnoreCard = [&](const OptionsIgnoreCard& card) noexcept
-    {
-        countIfVisible(card.title, out.visibleLegacyStaticCount);
-        countIfVisible(card.description, out.visibleLegacyStaticCount);
-    };
-
-    countToggleCard(_optionsUi.compareSize);
-    countToggleCard(_optionsUi.compareDateTime);
-    countToggleCard(_optionsUi.compareAttributes);
-    countToggleCard(_optionsUi.compareContent);
-    countToggleCard(_optionsUi.compareSubdirectories);
-    countToggleCard(_optionsUi.compareSubdirAttributes);
-    countToggleCard(_optionsUi.selectSubdirsOnlyInOnePane);
-    countToggleCard(_optionsUi.keepIdenticalItems);
-    countIgnoreCard(_optionsUi.ignoreFiles);
-    countIgnoreCard(_optionsUi.ignoreDirectories);
-    countIfVisible(_optionsUi.compareSize.toggle, out.visibleLegacyToggleCount);
-    countIfVisible(_optionsUi.compareDateTime.toggle, out.visibleLegacyToggleCount);
-    countIfVisible(_optionsUi.compareAttributes.toggle, out.visibleLegacyToggleCount);
-    countIfVisible(_optionsUi.compareContent.toggle, out.visibleLegacyToggleCount);
-    countIfVisible(_optionsUi.compareSubdirectories.toggle, out.visibleLegacyToggleCount);
-    countIfVisible(_optionsUi.compareSubdirAttributes.toggle, out.visibleLegacyToggleCount);
-    countIfVisible(_optionsUi.selectSubdirsOnlyInOnePane.toggle, out.visibleLegacyToggleCount);
-    countIfVisible(_optionsUi.keepIdenticalItems.toggle, out.visibleLegacyToggleCount);
-    countIfVisible(_optionsUi.ignoreFiles.toggle, out.visibleLegacyToggleCount);
-    countIfVisible(_optionsUi.ignoreDirectories.toggle, out.visibleLegacyToggleCount);
-    countIfVisible(_optionsUi.ignoreFiles.edit, out.visibleLegacyEditCount);
-    countIfVisible(_optionsUi.ignoreDirectories.edit, out.visibleLegacyEditCount);
-    countHiddenOwnerDrawButton(_optionsUi.compareSize.toggle, out.hiddenLegacyOwnerDrawToggleCount);
-    countHiddenOwnerDrawButton(_optionsUi.compareDateTime.toggle, out.hiddenLegacyOwnerDrawToggleCount);
-    countHiddenOwnerDrawButton(_optionsUi.compareAttributes.toggle, out.hiddenLegacyOwnerDrawToggleCount);
-    countHiddenOwnerDrawButton(_optionsUi.compareContent.toggle, out.hiddenLegacyOwnerDrawToggleCount);
-    countHiddenOwnerDrawButton(_optionsUi.compareSubdirectories.toggle, out.hiddenLegacyOwnerDrawToggleCount);
-    countHiddenOwnerDrawButton(_optionsUi.compareSubdirAttributes.toggle, out.hiddenLegacyOwnerDrawToggleCount);
-    countHiddenOwnerDrawButton(_optionsUi.selectSubdirsOnlyInOnePane.toggle, out.hiddenLegacyOwnerDrawToggleCount);
-    countHiddenOwnerDrawButton(_optionsUi.keepIdenticalItems.toggle, out.hiddenLegacyOwnerDrawToggleCount);
-    countHiddenOwnerDrawButton(_optionsUi.ignoreFiles.toggle, out.hiddenLegacyOwnerDrawToggleCount);
-    countHiddenOwnerDrawButton(_optionsUi.ignoreDirectories.toggle, out.hiddenLegacyOwnerDrawToggleCount);
-
-    if (_optionsDxUi && _optionsDxUi->body.hostHwnd && IsWindowVisible(_optionsDxUi->body.hostHwnd.get()) != FALSE)
+    if (_optionsPanel.dxUi && _optionsPanel.dxUi->body.hostHwnd && IsWindowVisible(_optionsPanel.dxUi->body.hostHwnd.get()) != FALSE)
     {
         RECT bodyClient{};
-        if (GetClientRect(_optionsDxUi->body.hostHwnd.get(), &bodyClient) != FALSE)
+        if (GetClientRect(_optionsPanel.dxUi->body.hostHwnd.get(), &bodyClient) != FALSE)
         {
             out.bodyDxHostWidth  = std::max(0l, bodyClient.right - bodyClient.left);
             out.bodyDxHostHeight = std::max(0l, bodyClient.bottom - bodyClient.top);
         }
 
-        if (_optionsDxUi->body.host.DebugGetRenderCount() != 0u)
+        if (_optionsPanel.dxUi->body.host.DebugGetRenderCount() != 0u)
         {
             out.visibleBodyRenderedDxHostCount = 1u;
         }
-        out.bodyDxHostResizeFailureCount  = static_cast<size_t>(_optionsDxUi->body.host.DebugGetResizeFailureCount());
-        out.bodyDxHostPresentFailureCount = static_cast<size_t>(_optionsDxUi->body.host.DebugGetPresentFailureCount());
-        out.bodyContentHeight             = _optionsBodyContentHeight;
-        out.bodyScrollOffset              = _optionsScrollOffset;
-        out.bodyScrollMax                 = _optionsScrollMax;
-        out.bodyUsesTwoColumns            = _optionsUseTwoColumns;
+        out.bodyDxHostResizeFailureCount  = static_cast<size_t>(_optionsPanel.dxUi->body.host.DebugGetResizeFailureCount());
+        out.bodyDxHostPresentFailureCount = static_cast<size_t>(_optionsPanel.dxUi->body.host.DebugGetPresentFailureCount());
+        out.bodyContentHeight             = _optionsPanel.bodyContentHeight;
+        out.bodyScrollOffset              = _optionsPanel.scrollOffset;
+        out.bodyScrollMax                 = _optionsPanel.scrollMax;
+        out.bodyUsesTwoColumns            = _optionsPanel.useTwoColumns;
 
-        const auto& body = _optionsDxUi->body;
+        const auto& body = _optionsPanel.dxUi->body;
         countDxControlIfVisible(body.headerCompare, out.visibleDxBodyHeaderCount);
         countDxControlIfVisible(body.headerSubdirs, out.visibleDxBodyHeaderCount);
         countDxControlIfVisible(body.headerAdvanced, out.visibleDxBodyHeaderCount);
@@ -3365,27 +2727,27 @@ bool CompareDirectoriesWindow::DebugGetOptionsSnapshot(::CompareDirectoriesOptio
         }
     };
 
-    if (_optionsDxUi)
+    if (_optionsPanel.dxUi)
     {
-        countDxButtonHost(_optionsDxUi->okButton);
-        countDxButtonHost(_optionsDxUi->cancelButton);
-        out.okFooterAttachFailureStage     = _optionsDxUi->okButton.attachFailureStage;
-        out.cancelFooterAttachFailureStage = _optionsDxUi->cancelButton.attachFailureStage;
+        countDxButtonHost(_optionsPanel.dxUi->okButton);
+        countDxButtonHost(_optionsPanel.dxUi->cancelButton);
+        out.okFooterAttachFailureStage     = _optionsPanel.dxUi->okButton.attachFailureStage;
+        out.cancelFooterAttachFailureStage = _optionsPanel.dxUi->cancelButton.attachFailureStage;
     }
 
-    countIfVisible(GetDlgItem(_optionsDlg.get(), IDOK), out.visibleLegacyFooterButtonCount);
-    countIfVisible(GetDlgItem(_optionsDlg.get(), IDCANCEL), out.visibleLegacyFooterButtonCount);
-    countHiddenOwnerDrawButton(GetDlgItem(_optionsDlg.get(), IDOK), out.hiddenLegacyOwnerDrawFooterButtonCount);
-    countHiddenOwnerDrawButton(GetDlgItem(_optionsDlg.get(), IDCANCEL), out.hiddenLegacyOwnerDrawFooterButtonCount);
+    countIfVisible(GetDlgItem(_optionsPanel.dlg.get(), IDOK), out.visibleLegacyFooterButtonCount);
+    countIfVisible(GetDlgItem(_optionsPanel.dlg.get(), IDCANCEL), out.visibleLegacyFooterButtonCount);
+    countHiddenOwnerDrawButton(GetDlgItem(_optionsPanel.dlg.get(), IDOK), out.hiddenLegacyOwnerDrawFooterButtonCount);
+    countHiddenOwnerDrawButton(GetDlgItem(_optionsPanel.dlg.get(), IDCANCEL), out.hiddenLegacyOwnerDrawFooterButtonCount);
 
     out.visibleNativeBodyControlCount =
         out.visibleLegacyStaticCount + out.visibleLegacyFooterButtonCount + out.visibleLegacyToggleCount + out.visibleLegacyEditCount;
 
     const HWND focused = GetFocus();
-    if (_optionsDxUi && focused)
+    if (_optionsPanel.dxUi && focused)
     {
-        const auto* bodyFocused     = _optionsDxUi->body.host.GetFocusControl();
-        const bool bodyOwnsFocus    = _optionsDxUi->body.hostHwnd && WindowOwnsFocus(_optionsDxUi->body.hostHwnd.get(), focused);
+        const auto* bodyFocused     = _optionsPanel.dxUi->body.host.GetFocusControl();
+        const bool bodyOwnsFocus    = _optionsPanel.dxUi->body.hostHwnd && WindowOwnsFocus(_optionsPanel.dxUi->body.hostHwnd.get(), focused);
         const auto assignBodyTarget = [&](const auto& slot, const CompareDirectoriesOptionsDebugFocusTarget target) noexcept
         {
             if (bodyOwnsFocus && slot == bodyFocused)
@@ -3397,7 +2759,7 @@ bool CompareDirectoriesWindow::DebugGetOptionsSnapshot(::CompareDirectoriesOptio
             return false;
         };
 
-        const auto& body = _optionsDxUi->body;
+        const auto& body = _optionsPanel.dxUi->body;
         if (assignBodyTarget(body.compareSubdirectories.toggle, CompareDirectoriesOptionsDebugFocusTarget::CompareSubdirectoriesToggle) ||
             assignBodyTarget(body.compareSize.toggle, CompareDirectoriesOptionsDebugFocusTarget::CompareSizeToggle) ||
             assignBodyTarget(body.compareDateTime.toggle, CompareDirectoriesOptionsDebugFocusTarget::CompareDateTimeToggle) ||
@@ -3414,15 +2776,15 @@ bool CompareDirectoriesWindow::DebugGetOptionsSnapshot(::CompareDirectoriesOptio
             return true;
         }
 
-        if (_optionsDxUi->okButton.button && WindowOwnsFocus(_optionsDxUi->okButton.hostHwnd.get(), focused) &&
-            _optionsDxUi->okButton.host.GetFocusControl() == _optionsDxUi->okButton.button)
+        if (_optionsPanel.dxUi->okButton.button && WindowOwnsFocus(_optionsPanel.dxUi->okButton.hostHwnd.get(), focused) &&
+            _optionsPanel.dxUi->okButton.host.GetFocusControl() == _optionsPanel.dxUi->okButton.button)
         {
             out.focusTarget = CompareDirectoriesOptionsDebugFocusTarget::OkButton;
             return true;
         }
 
-        if (_optionsDxUi->cancelButton.button && WindowOwnsFocus(_optionsDxUi->cancelButton.hostHwnd.get(), focused) &&
-            _optionsDxUi->cancelButton.host.GetFocusControl() == _optionsDxUi->cancelButton.button)
+        if (_optionsPanel.dxUi->cancelButton.button && WindowOwnsFocus(_optionsPanel.dxUi->cancelButton.hostHwnd.get(), focused) &&
+            _optionsPanel.dxUi->cancelButton.host.GetFocusControl() == _optionsPanel.dxUi->cancelButton.button)
         {
             out.focusTarget = CompareDirectoriesOptionsDebugFocusTarget::CancelButton;
             return true;
@@ -3434,35 +2796,35 @@ bool CompareDirectoriesWindow::DebugGetOptionsSnapshot(::CompareDirectoriesOptio
 
 bool CompareDirectoriesWindow::DebugFocusOptionsFirstControl() noexcept
 {
-    if (! _optionsDxUi)
+    if (! _optionsPanel.dxUi)
     {
         return false;
     }
 
-    auto* const toggle = _optionsDxUi->body.compareSubdirectories.toggle;
+    auto* const toggle = _optionsPanel.dxUi->body.compareSubdirectories.toggle;
     if (! toggle || ! toggle->IsVisible() || ! toggle->IsEnabled())
     {
         return false;
     }
 
-    if (_optionsDxUi->body.hostHwnd && IsWindow(_optionsDxUi->body.hostHwnd.get()) != FALSE)
+    if (_optionsPanel.dxUi->body.hostHwnd && IsWindow(_optionsPanel.dxUi->body.hostHwnd.get()) != FALSE)
     {
-        ::SetFocus(_optionsDxUi->body.hostHwnd.get());
+        ::SetFocus(_optionsPanel.dxUi->body.hostHwnd.get());
     }
-    _optionsDxUi->body.host.SetFocusControl(toggle);
+    _optionsPanel.dxUi->body.host.SetFocusControl(toggle);
     static_cast<void>(EnsureOptionsDxBodyControlVisible(toggle));
-    return _optionsDxUi->body.host.GetFocusControl() == toggle;
+    return _optionsPanel.dxUi->body.host.GetFocusControl() == toggle;
 }
 
 bool CompareDirectoriesWindow::DebugFocusOptionsTarget(const ::CompareDirectoriesOptionsDebugFocusTarget target) noexcept
 {
-    if (! _optionsDxUi)
+    if (! _optionsPanel.dxUi)
     {
         return false;
     }
 
     RedSalamander::DxUi::Control* focusControl = nullptr;
-    const auto& body                           = _optionsDxUi->body;
+    const auto& body                           = _optionsPanel.dxUi->body;
     switch (target)
     {
         case CompareDirectoriesOptionsDebugFocusTarget::CompareSubdirectoriesToggle: focusControl = body.compareSubdirectories.toggle; break;
@@ -3478,28 +2840,38 @@ bool CompareDirectoriesWindow::DebugFocusOptionsTarget(const ::CompareDirectorie
         case CompareDirectoriesOptionsDebugFocusTarget::IgnoreDirectoriesToggle: focusControl = body.ignoreDirectories.toggle; break;
         case CompareDirectoriesOptionsDebugFocusTarget::IgnoreDirectoriesEdit: focusControl = body.ignoreDirectories.edit; break;
         case CompareDirectoriesOptionsDebugFocusTarget::OkButton:
-            if (_optionsDxUi->okButton.button && _optionsDxUi->okButton.button->IsVisible() && _optionsDxUi->okButton.button->IsEnabled())
+            if (_optionsPanel.dxUi->okButton.button && _optionsPanel.dxUi->okButton.button->IsVisible() && _optionsPanel.dxUi->okButton.button->IsEnabled())
             {
-                if (_optionsDxUi->okButton.hostHwnd && IsWindow(_optionsDxUi->okButton.hostHwnd.get()) != FALSE)
+                if (_optionsPanel.dxUi->okButton.hostHwnd && IsWindow(_optionsPanel.dxUi->okButton.hostHwnd.get()) != FALSE)
                 {
-                    ::SetFocus(_optionsDxUi->okButton.hostHwnd.get());
+                    ::SetFocus(_optionsPanel.dxUi->okButton.hostHwnd.get());
                 }
-                _optionsDxUi->okButton.host.SetFocusControl(_optionsDxUi->okButton.button);
-                return _optionsDxUi->okButton.host.GetFocusControl() == _optionsDxUi->okButton.button;
+                _optionsPanel.dxUi->okButton.host.SetFocusControl(_optionsPanel.dxUi->okButton.button);
+                return _optionsPanel.dxUi->okButton.host.GetFocusControl() == _optionsPanel.dxUi->okButton.button;
             }
             return false;
         case CompareDirectoriesOptionsDebugFocusTarget::CancelButton:
-            if (_optionsDxUi->cancelButton.button && _optionsDxUi->cancelButton.button->IsVisible() && _optionsDxUi->cancelButton.button->IsEnabled())
+            if (_optionsPanel.dxUi->cancelButton.button && _optionsPanel.dxUi->cancelButton.button->IsVisible() &&
+                _optionsPanel.dxUi->cancelButton.button->IsEnabled())
             {
-                if (_optionsDxUi->cancelButton.hostHwnd && IsWindow(_optionsDxUi->cancelButton.hostHwnd.get()) != FALSE)
+                if (_optionsPanel.dxUi->cancelButton.hostHwnd && IsWindow(_optionsPanel.dxUi->cancelButton.hostHwnd.get()) != FALSE)
                 {
-                    ::SetFocus(_optionsDxUi->cancelButton.hostHwnd.get());
+                    ::SetFocus(_optionsPanel.dxUi->cancelButton.hostHwnd.get());
                 }
-                _optionsDxUi->cancelButton.host.SetFocusControl(_optionsDxUi->cancelButton.button);
-                return _optionsDxUi->cancelButton.host.GetFocusControl() == _optionsDxUi->cancelButton.button;
+                _optionsPanel.dxUi->cancelButton.host.SetFocusControl(_optionsPanel.dxUi->cancelButton.button);
+                return _optionsPanel.dxUi->cancelButton.host.GetFocusControl() == _optionsPanel.dxUi->cancelButton.button;
             }
             return false;
         case CompareDirectoriesOptionsDebugFocusTarget::None:
+            if (_optionsPanel.dxUi->body.hostHwnd && IsWindow(_optionsPanel.dxUi->body.hostHwnd.get()) != FALSE)
+            {
+                ::SetFocus(_optionsPanel.dxUi->body.hostHwnd.get());
+            }
+            _optionsPanel.dxUi->body.host.SetFocusControl(nullptr);
+            _optionsPanel.dxUi->okButton.host.SetFocusControl(nullptr);
+            _optionsPanel.dxUi->cancelButton.host.SetFocusControl(nullptr);
+            return _optionsPanel.dxUi->body.host.GetFocusControl() == nullptr && _optionsPanel.dxUi->okButton.host.GetFocusControl() == nullptr &&
+                   _optionsPanel.dxUi->cancelButton.host.GetFocusControl() == nullptr;
         default: return false;
     }
 
@@ -3508,24 +2880,25 @@ bool CompareDirectoriesWindow::DebugFocusOptionsTarget(const ::CompareDirectorie
         return false;
     }
 
-    if (_optionsDxUi->body.hostHwnd && IsWindow(_optionsDxUi->body.hostHwnd.get()) != FALSE)
+    if (_optionsPanel.dxUi->body.hostHwnd && IsWindow(_optionsPanel.dxUi->body.hostHwnd.get()) != FALSE)
     {
-        ::SetFocus(_optionsDxUi->body.hostHwnd.get());
+        ::SetFocus(_optionsPanel.dxUi->body.hostHwnd.get());
     }
-    _optionsDxUi->body.host.SetFocusControl(focusControl);
+    _optionsPanel.dxUi->body.host.SetFocusControl(focusControl);
     static_cast<void>(EnsureOptionsDxBodyControlVisible(focusControl));
-    return _optionsDxUi->body.host.GetFocusControl() == focusControl;
+    return _optionsPanel.dxUi->body.host.GetFocusControl() == focusControl;
 }
 
 bool CompareDirectoriesWindow::DebugSetOptionsIgnoreFilesEnabled(const bool enabled) noexcept
 {
-    if (! _optionsDlg || ! _optionsUi.ignoreFiles.toggle || ! _optionsDxUi || IsWindow(_optionsUi.ignoreFiles.toggle) == FALSE)
+    if (! _optionsPanel.dlg || ! _optionsPanel.dxUi)
     {
         return false;
     }
 
-    SetTwoStateToggleState(_optionsUi.ignoreFiles.toggle, _theme.highContrast, enabled);
-    SyncOptionsDxToggles();
+    _optionsPanel.draft.ignoreFiles = enabled;
+    _optionsPanel.draftLoaded       = true;
+    ApplyOptionsDraftInterlocks();
     UpdateOptionsVisibility();
 
     CompareDirectoriesOptionsDebugSnapshot snapshot{};
@@ -3534,13 +2907,14 @@ bool CompareDirectoriesWindow::DebugSetOptionsIgnoreFilesEnabled(const bool enab
 
 bool CompareDirectoriesWindow::DebugSetOptionsIgnoreDirectoriesEnabled(const bool enabled) noexcept
 {
-    if (! _optionsDlg || ! _optionsUi.ignoreDirectories.toggle || ! _optionsDxUi || IsWindow(_optionsUi.ignoreDirectories.toggle) == FALSE)
+    if (! _optionsPanel.dlg || ! _optionsPanel.dxUi)
     {
         return false;
     }
 
-    SetTwoStateToggleState(_optionsUi.ignoreDirectories.toggle, _theme.highContrast, enabled);
-    SyncOptionsDxToggles();
+    _optionsPanel.draft.ignoreDirectories = enabled;
+    _optionsPanel.draftLoaded             = true;
+    ApplyOptionsDraftInterlocks();
     UpdateOptionsVisibility();
 
     CompareDirectoriesOptionsDebugSnapshot snapshot{};
@@ -3549,35 +2923,35 @@ bool CompareDirectoriesWindow::DebugSetOptionsIgnoreDirectoriesEnabled(const boo
 
 HWND CompareDirectoriesWindow::DebugGetOptionsDialogHandle() const noexcept
 {
-    if (! _optionsDlg || IsWindow(_optionsDlg.get()) == FALSE)
+    if (! _optionsPanel.dlg || IsWindow(_optionsPanel.dlg.get()) == FALSE)
     {
         return nullptr;
     }
 
-    return _optionsDlg.get();
+    return _optionsPanel.dlg.get();
 }
 
 bool CompareDirectoriesWindow::DebugScrollOptionsBodyPages(const int pageDelta) noexcept
 {
-    if (! _optionsUi.host || IsWindow(_optionsUi.host) == FALSE || pageDelta == 0 || _optionsScrollMax <= 0)
+    if (! _optionsPanel.ui.host || IsWindow(_optionsPanel.ui.host) == FALSE || pageDelta == 0 || _optionsPanel.scrollMax <= 0)
     {
         return false;
     }
 
     RECT hostClient{};
-    if (! GetClientRect(_optionsUi.host, &hostClient))
+    if (! GetClientRect(_optionsPanel.ui.host, &hostClient))
     {
         return false;
     }
 
     const int pageHeight = std::max(1l, hostClient.bottom - hostClient.top);
-    const int newOffset  = std::clamp(_optionsScrollOffset + (pageDelta * pageHeight), 0, _optionsScrollMax);
-    if (newOffset == _optionsScrollOffset)
+    const int newOffset  = std::clamp(_optionsPanel.scrollOffset + (pageDelta * pageHeight), 0, _optionsPanel.scrollMax);
+    if (newOffset == _optionsPanel.scrollOffset)
     {
         return false;
     }
 
-    _optionsScrollOffset = newOffset;
+    _optionsPanel.scrollOffset = newOffset;
     LayoutOptionsControls();
     return true;
 }
@@ -3589,24 +2963,24 @@ bool CompareDirectoriesWindow::DebugGetOptionsTargetHostAndClientRect(const ::Co
     outHost = nullptr;
     outRect = {};
 
-    if (! _optionsDxUi)
+    if (! _optionsPanel.dxUi)
     {
         return false;
     }
 
     const auto assignBodyRect = [&](RedSalamander::DxUi::Control* control) noexcept
     {
-        if (! control || ! _optionsDxUi->body.hostHwnd || IsWindow(_optionsDxUi->body.hostHwnd.get()) == FALSE || ! control->IsVisible())
+        if (! control || ! _optionsPanel.dxUi->body.hostHwnd || IsWindow(_optionsPanel.dxUi->body.hostHwnd.get()) == FALSE || ! control->IsVisible())
         {
             return false;
         }
 
         const auto bounds = control->GetBounds();
-        outHost           = _optionsDxUi->body.hostHwnd.get();
-        outRect.left      = static_cast<LONG>(std::lround(_optionsDxUi->body.host.DipsToPixels(bounds.left)));
-        outRect.top       = static_cast<LONG>(std::lround(_optionsDxUi->body.host.DipsToPixels(bounds.top)));
-        outRect.right     = static_cast<LONG>(std::lround(_optionsDxUi->body.host.DipsToPixels(bounds.right)));
-        outRect.bottom    = static_cast<LONG>(std::lround(_optionsDxUi->body.host.DipsToPixels(bounds.bottom)));
+        outHost           = _optionsPanel.dxUi->body.hostHwnd.get();
+        outRect.left      = static_cast<LONG>(std::lround(_optionsPanel.dxUi->body.host.DipsToPixels(bounds.left)));
+        outRect.top       = static_cast<LONG>(std::lround(_optionsPanel.dxUi->body.host.DipsToPixels(bounds.top)));
+        outRect.right     = static_cast<LONG>(std::lround(_optionsPanel.dxUi->body.host.DipsToPixels(bounds.right)));
+        outRect.bottom    = static_cast<LONG>(std::lround(_optionsPanel.dxUi->body.host.DipsToPixels(bounds.bottom)));
         return true;
     };
 
@@ -3626,7 +3000,7 @@ bool CompareDirectoriesWindow::DebugGetOptionsTargetHostAndClientRect(const ::Co
         return true;
     };
 
-    const auto& body = _optionsDxUi->body;
+    const auto& body = _optionsPanel.dxUi->body;
     switch (target)
     {
         case CompareDirectoriesOptionsDebugFocusTarget::CompareSubdirectoriesToggle: return assignBodyRect(body.compareSubdirectories.toggle);
@@ -3641,8 +3015,8 @@ bool CompareDirectoriesWindow::DebugGetOptionsTargetHostAndClientRect(const ::Co
         case CompareDirectoriesOptionsDebugFocusTarget::IgnoreFilesEdit: return assignBodyRect(body.ignoreFiles.edit);
         case CompareDirectoriesOptionsDebugFocusTarget::IgnoreDirectoriesToggle: return assignBodyRect(body.ignoreDirectories.toggle);
         case CompareDirectoriesOptionsDebugFocusTarget::IgnoreDirectoriesEdit: return assignBodyRect(body.ignoreDirectories.edit);
-        case CompareDirectoriesOptionsDebugFocusTarget::OkButton: return assignButtonRect(_optionsDxUi->okButton);
-        case CompareDirectoriesOptionsDebugFocusTarget::CancelButton: return assignButtonRect(_optionsDxUi->cancelButton);
+        case CompareDirectoriesOptionsDebugFocusTarget::OkButton: return assignButtonRect(_optionsPanel.dxUi->okButton);
+        case CompareDirectoriesOptionsDebugFocusTarget::CancelButton: return assignButtonRect(_optionsPanel.dxUi->cancelButton);
         case CompareDirectoriesOptionsDebugFocusTarget::None:
         default: return false;
     }
@@ -3651,34 +3025,14 @@ bool CompareDirectoriesWindow::DebugGetOptionsTargetHostAndClientRect(const ::Co
 
 void CompareDirectoriesWindow::LoadOptionsControlsFromSettings() noexcept
 {
-    if (! _optionsDlg || ! _optionsUi.host)
+    if (! _optionsPanel.dlg || ! _optionsPanel.ui.host)
     {
         return;
     }
 
-    const Common::Settings::CompareDirectoriesSettings s = GetEffectiveCompareSettings();
-
-    SetTwoStateToggleState(_optionsUi.compareSize.toggle, _theme.highContrast, s.compareSize);
-    SetTwoStateToggleState(_optionsUi.compareDateTime.toggle, _theme.highContrast, s.compareDateTime);
-    SetTwoStateToggleState(_optionsUi.compareAttributes.toggle, _theme.highContrast, s.compareAttributes);
-    SetTwoStateToggleState(_optionsUi.compareContent.toggle, _theme.highContrast, s.compareContent);
-
-    SetTwoStateToggleState(_optionsUi.compareSubdirectories.toggle, _theme.highContrast, s.compareSubdirectories);
-
-    SetTwoStateToggleState(_optionsUi.compareSubdirAttributes.toggle, _theme.highContrast, s.compareSubdirectoryAttributes);
-    SetTwoStateToggleState(_optionsUi.selectSubdirsOnlyInOnePane.toggle, _theme.highContrast, s.selectSubdirsOnlyInOnePane);
-    SetTwoStateToggleState(_optionsUi.keepIdenticalItems.toggle, _theme.highContrast, s.keepIdenticalItems);
-
-    SetTwoStateToggleState(_optionsUi.ignoreFiles.toggle, _theme.highContrast, s.ignoreFiles);
-    SetTwoStateToggleState(_optionsUi.ignoreDirectories.toggle, _theme.highContrast, s.ignoreDirectories);
-    if (_optionsUi.ignoreFiles.edit)
-    {
-        SetWindowTextW(_optionsUi.ignoreFiles.edit, s.ignoreFilesPatterns.c_str());
-    }
-    if (_optionsUi.ignoreDirectories.edit)
-    {
-        SetWindowTextW(_optionsUi.ignoreDirectories.edit, s.ignoreDirectoriesPatterns.c_str());
-    }
+    _optionsPanel.draft       = GetEffectiveCompareSettings();
+    _optionsPanel.draftLoaded = true;
+    ApplyOptionsDraftInterlocks();
 
     SyncOptionsDxToggles();
     SyncOptionsDxEdits();
@@ -3686,18 +3040,18 @@ void CompareDirectoriesWindow::LoadOptionsControlsFromSettings() noexcept
 }
 void CompareDirectoriesWindow::SaveOptionsControlsToSettings() noexcept
 {
-    if (! _optionsDlg || ! _settings || ! _optionsUi.host)
+    if (! _optionsPanel.dlg || ! _settings || ! _optionsPanel.ui.host)
     {
         return;
     }
 
-    _settings->compareDirectories   = ReadOptionsControlsToSettings();
-    _optionsStaleFromExternalReload = false;
+    _settings->compareDirectories         = ReadOptionsControlsToSettings();
+    _optionsPanel.staleFromExternalReload = false;
 }
 
 bool CompareDirectoriesWindow::ResolveOptionsStaleSaveConflict(HWND dlg) noexcept
 {
-    if (! _optionsStaleFromExternalReload)
+    if (! _optionsPanel.staleFromExternalReload)
     {
         return true;
     }
@@ -3721,25 +3075,29 @@ bool CompareDirectoriesWindow::ResolveOptionsStaleSaveConflict(HWND dlg) noexcep
         return false;
     }
 
-    _optionsStaleFromExternalReload = false;
+    _optionsPanel.staleFromExternalReload = false;
     return true;
 }
 
 void CompareDirectoriesWindow::ReloadOptionsDialogFromDisk() noexcept
 {
-    _optionsStaleFromExternalReload = false;
+    _optionsPanel.staleFromExternalReload = false;
     LoadOptionsControlsFromSettings();
     UpdateViewMenuChecks();
 }
 void CompareDirectoriesWindow::UpdateOptionsVisibility() noexcept
 {
-    if (! _optionsDlg || ! _optionsUi.host)
+    if (! _optionsPanel.dlg || ! _optionsPanel.ui.host)
     {
         return;
     }
 
     LayoutOptionsControls();
-    RedrawWindow(_optionsUi.host, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
+    if (_optionsPanel.dxUi && _optionsPanel.dxUi->body.hostHwnd && IsWindow(_optionsPanel.dxUi->body.hostHwnd.get()) != FALSE)
+    {
+        _optionsPanel.dxUi->body.host.RefreshAccessibilitySnapshot();
+    }
+    RedrawWindow(_optionsPanel.ui.host, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
 }
 
 } // namespace CompareDirectoriesWindowInternal

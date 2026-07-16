@@ -5,7 +5,6 @@
 #include <windows.h>
 
 #include <atomic>
-#include <condition_variable>
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
@@ -24,6 +23,8 @@
 #include "PlugInterfaces/Host.h"
 #include "PlugInterfaces/Informations.h"
 #include "PlugInterfaces/NavigationMenu.h"
+#include "Helpers.h"
+#include "PackedFileInfoBuffer.h"
 
 class FilesInformationGoogleDrive final : public IFilesInformation
 {
@@ -61,14 +62,8 @@ public:
     HRESULT BuildFromEntries(std::vector<Entry> entries) noexcept;
 
 private:
-    static size_t AlignUp(size_t value, size_t alignment) noexcept;
-    static size_t ComputeEntrySizeBytes(std::wstring_view name) noexcept;
-    HRESULT LocateEntry(unsigned long index, FileInfo** ppEntry) const noexcept;
-
     std::atomic_ulong _refCount{1};
-    std::vector<std::byte> _buffer;
-    unsigned long _count     = 0;
-    unsigned long _usedBytes = 0;
+    Common::Plugins::PackedFileInfoBuffer _packedBuffer;
 };
 
 class FileSystemGoogleDrive final : public IFileSystem, public IInformations, public INavigationMenu, public IDriveInfo
@@ -191,12 +186,8 @@ private:
         unsigned int commandId = 0;
     };
 
-    struct NavigationMenuCallbackSnapshot
-    {
-        INavigationMenuCallback* callback = nullptr;
-        void* cookie                      = nullptr;
-        uint64_t generation               = 0;
-    };
+    using NavigationMenuCallbackState    = RegistrationCallbackState<INavigationMenuCallback>;
+    using NavigationMenuCallbackSnapshot = NavigationMenuCallbackState::Snapshot;
 
     HRESULT SetConfigurationImpl(const char* configurationJsonUtf8);
     HRESULT ReadDirectoryInfoImpl(const wchar_t* path, IFilesInformation** ppFilesInformation);
@@ -222,11 +213,7 @@ private:
     std::string _configurationJsonStorage[2] = {"{}", "{}"}; // Double-buffer to keep old pointer valid
     size_t _configurationJsonIndex           = 0;
 
-    INavigationMenuCallback* _navigationMenuCallback = nullptr;
-    void* _navigationMenuCallbackCookie              = nullptr;
-    uint64_t _navigationMenuCallbackGeneration       = 0;
-    size_t _navigationMenuCallbacksInFlight          = 0;
-    std::condition_variable _navigationMenuDrainCv;
+    NavigationMenuCallbackState _navigationMenuCallbackState;
     std::vector<MenuEntry> _menuEntries;
     std::vector<NavigationMenuItem> _menuEntryView;
 

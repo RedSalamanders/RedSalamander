@@ -1,6 +1,7 @@
 #include "ConnectionSecrets.h"
 
 #include <cwctype>
+#include <atomic>
 #include <format>
 #include <limits>
 #include <mutex>
@@ -27,6 +28,9 @@ namespace RedSalamander::Connections
 namespace
 {
 constexpr std::wstring_view kTargetPrefix = L"RedSalamander/Connections/";
+#ifdef ENABLE_TESTS
+std::atomic<CredentialPersistenceFault> g_credentialPersistenceFault{CredentialPersistenceFault::None};
+#endif
 
 [[nodiscard]] std::wstring_view SecretKindSuffix(SecretKind kind) noexcept
 {
@@ -61,6 +65,12 @@ HRESULT SaveGenericCredential(std::wstring_view targetName, std::wstring_view us
     {
         return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
+#ifdef ENABLE_TESTS
+    if (g_credentialPersistenceFault.exchange(CredentialPersistenceFault::None, std::memory_order_acq_rel) == CredentialPersistenceFault::SaveOnce)
+    {
+        return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+    }
+#endif
 
     std::wstring targetNameCopy;
     std::wstring userNameCopy;
@@ -123,7 +133,8 @@ HRESULT LoadGenericCredential(std::wstring_view targetName, std::wstring& userNa
     // The credential blob holds the plaintext secret; scrub it before CredFree releases the buffer so the
     // cleartext does not linger in the credential-manager heap block after this function returns. Declared
     // after cred so it runs first on scope exit (wipe, then free).
-    auto wipeBlob = wil::scope_exit([&cred]() noexcept {
+    auto wipeBlob = wil::scope_exit([&cred]() noexcept
+    {
         if (cred && cred.get()->CredentialBlob != nullptr && cred.get()->CredentialBlobSize != 0)
         {
             SecureZeroMemory(cred.get()->CredentialBlob, cred.get()->CredentialBlobSize);
@@ -171,6 +182,12 @@ HRESULT DeleteGenericCredential(std::wstring_view targetName) noexcept
     {
         return E_INVALIDARG;
     }
+#ifdef ENABLE_TESTS
+    if (g_credentialPersistenceFault.exchange(CredentialPersistenceFault::None, std::memory_order_acq_rel) == CredentialPersistenceFault::DeleteOnce)
+    {
+        return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+    }
+#endif
 
     std::wstring targetNameCopy;
     targetNameCopy.assign(targetName);
@@ -236,6 +253,13 @@ void ClearProfile(Common::Settings::ConnectionProfile& profile) noexcept
     return true;
 }
 } // namespace
+
+#ifdef ENABLE_TESTS
+void SetCredentialPersistenceFaultForTesting(CredentialPersistenceFault fault) noexcept
+{
+    g_credentialPersistenceFault.store(fault, std::memory_order_release);
+}
+#endif
 
 bool IsQuickConnectConnectionId(std::wstring_view connectionId) noexcept
 {

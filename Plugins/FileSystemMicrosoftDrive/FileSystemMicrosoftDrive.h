@@ -5,7 +5,6 @@
 #include <windows.h>
 
 #include <atomic>
-#include <condition_variable>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -28,6 +27,8 @@
 #include "PlugInterfaces/Host.h"
 #include "PlugInterfaces/Informations.h"
 #include "PlugInterfaces/NavigationMenu.h"
+#include "Helpers.h"
+#include "PackedFileInfoBuffer.h"
 
 enum class FileSystemMicrosoftDriveMode
 {
@@ -72,14 +73,8 @@ public:
     HRESULT BuildFromEntries(std::vector<Entry> entries) noexcept;
 
 private:
-    static size_t AlignUp(size_t value, size_t alignment) noexcept;
-    static size_t ComputeEntrySizeBytes(std::wstring_view name) noexcept;
-    HRESULT LocateEntry(unsigned long index, FileInfo** ppEntry) const noexcept;
-
     std::atomic_ulong _refCount{1};
-    std::vector<std::byte> _buffer;
-    unsigned long _count     = 0;
-    unsigned long _usedBytes = 0;
+    Common::Plugins::PackedFileInfoBuffer _packedBuffer;
 };
 
 class FileSystemMicrosoftDrive final : public IFileSystem,
@@ -229,14 +224,8 @@ private:
     [[nodiscard]] IHostAlerts* GetHostAlerts() const noexcept;
     void ShowMissingClientIdAlert() const noexcept;
 
-    // Drain-guard invoke pattern: capture callback snapshot under lock, then invoke outside the lock.
-    // Required for safe callback invocation with the generation/drain infrastructure in SetCallback.
-    struct NavigationMenuCallbackSnapshot
-    {
-        INavigationMenuCallback* callback = nullptr;
-        void* cookie                      = nullptr;
-        uint64_t generation               = 0;
-    };
+    using NavigationMenuCallbackState    = RegistrationCallbackState<INavigationMenuCallback>;
+    using NavigationMenuCallbackSnapshot = NavigationMenuCallbackState::Snapshot;
 
     [[nodiscard]] bool TryCaptureNavigationMenuCallback(NavigationMenuCallbackSnapshot& snapshot) noexcept;
     HRESULT InvokeNavigationMenuCallback(const NavigationMenuCallbackSnapshot& snapshot, const wchar_t* path) noexcept;
@@ -366,11 +355,7 @@ private:
     wil::com_ptr<IHostConnections> _hostConnections;
     std::unordered_map<std::wstring, CachedToken> _tokenCacheByConnectionName;
     std::unordered_map<std::wstring, CachedDrive> _driveCacheByConnectionName;
-    INavigationMenuCallback* _navigationMenuCallback = nullptr;
-    void* _navigationMenuCookie                      = nullptr;
-    uint64_t _navigationMenuCallbackGeneration       = 0;
-    size_t _navigationMenuCallbacksInFlight          = 0;
-    std::condition_variable _navigationMenuDrainCv;
+    NavigationMenuCallbackState _navigationMenuCallbackState;
 };
 
 [[nodiscard]] const char* GetFileSystemMicrosoftDriveStaticConfigurationSchema(FileSystemMicrosoftDriveMode mode) noexcept;

@@ -36,4 +36,8 @@ BEGIN
     IDS_VIEWERVLC_SNAPSHOT_FAILED_FMT "Snapshot failed (code {0})."
     IDS_VIEWERVLC_LOADING_TITLE "Starting VLC..."
     IDS_VIEWERVLC_LOADING_BODY "Loading the VLC engine. Playback will start automatically."
+    IDS_VIEWERVLC_DETAILS_CONFIGURATION_REJECTED "The VLC option configuration contains an unsafe or malformed value."
+    IDS_VIEWERVLC_DETAILS_ASYNC_SUBMIT_FAILED "The VLC loader could not be queued. Try opening the file again."
+    IDS_VIEWERVLC_DETAILS_ASYNC_RESULT_DELIVERY_FAILED "The VLC loader result could not be delivered. Try opening the file again."
+    IDS_VIEWERVLC_DETAILS_LOAD_DLL_FAILED_FMT "Failed to load '{0}' (Win32: {1})."
 END

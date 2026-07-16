@@ -74,8 +74,7 @@ constexpr std::array<UINT, 11> kMonitorToggleCommandIds = {{
 constexpr size_t kMonitorDisplayToggleCount = 5u;
 constexpr size_t kMonitorFilterToggleCount  = kMonitorToggleLabelStringIds.size() - kMonitorDisplayToggleCount;
 
-[[nodiscard]] bool ApplyMonitorFilterPresetSelection(Common::Settings::MonitorSettings& monitor,
-                                                     const Common::Settings::MonitorFilterPreset preset) noexcept
+[[nodiscard]] bool ApplyMonitorFilterPresetSelection(Common::Settings::MonitorSettings& monitor, const Common::Settings::MonitorFilterPreset preset) noexcept
 {
     bool changed          = monitor.filter.preset != preset;
     monitor.filter.preset = preset;
@@ -86,9 +85,8 @@ constexpr size_t kMonitorFilterToggleCount  = kMonitorToggleLabelStringIds.size(
         case Common::Settings::MonitorFilterPreset::ErrorsOnly: monitor.filter.mask = static_cast<uint32_t>(MonitorFilterBit::Error); break;
         case Common::Settings::MonitorFilterPreset::ErrorsWarnings: monitor.filter.mask = MonitorFilterBit::Error | MonitorFilterBit::Warning; break;
         case Common::Settings::MonitorFilterPreset::AllTypes:
-            monitor.filter.mask =
-                MonitorFilterBit::Text | MonitorFilterBit::Error | MonitorFilterBit::Warning | MonitorFilterBit::Info | MonitorFilterBit::Perf |
-                MonitorFilterBit::Debug;
+            monitor.filter.mask = MonitorFilterBit::Text | MonitorFilterBit::Error | MonitorFilterBit::Warning | MonitorFilterBit::Info |
+                                  MonitorFilterBit::Perf | MonitorFilterBit::Debug;
             break;
         case Common::Settings::MonitorFilterPreset::Custom:
         default: break;
@@ -110,10 +108,10 @@ struct MonitorToggleCardPageDx
 
 struct MonitorFilterCardPageDx
 {
-    CardPanel* card           = nullptr;
-    Label* presetLabel        = nullptr;
-    Label* presetDescription  = nullptr;
-    ComboBox* presetCombo     = nullptr;
+    CardPanel* card          = nullptr;
+    Label* presetLabel       = nullptr;
+    Label* presetDescription = nullptr;
+    ComboBox* presetCombo    = nullptr;
     std::array<Label*, kMonitorFilterToggleCount> toggleLabels{};
     std::array<Label*, kMonitorFilterToggleCount> toggleDescriptions{};
     std::array<Toggle*, kMonitorFilterToggleCount> toggles{};
@@ -234,7 +232,7 @@ bool MonitorPane::EnsureDxHosts(HWND parent, PreferencesDialogState& state) noex
                 return;
             }
 
-            bool changed = false;
+            bool changed               = false;
             const auto updateFilterBit = [&](uint32_t bit) noexcept
             {
                 monitor->filter.preset = Common::Settings::MonitorFilterPreset::Custom;
@@ -460,7 +458,7 @@ void MonitorPane::ApplyDxTheme(const PreferencesDialogState& state) noexcept
         return;
     }
 
-    const ThemePalette palette = PrefsUi::MakeDxPalette(state.theme);
+    const ThemePalette palette = MakeAppThemeDxPalette(state.theme);
     _pageHostDx->SetTheme(palette);
 }
 
@@ -471,7 +469,7 @@ void MonitorPane::SyncDxControlsFromState(const PreferencesDialogState& state) n
         return;
     }
 
-    const ThemePalette palette = PrefsUi::MakeDxPalette(state.theme);
+    const ThemePalette palette = MakeAppThemeDxPalette(state.theme);
     const auto& monitor        = GetMonitorSettingsOrDefault(state.workingMonitorSettings);
     const uint32_t mask        = monitor.filter.mask & 63u;
     const bool customFilter    = (monitor.filter.preset == Common::Settings::MonitorFilterPreset::Custom);
@@ -782,10 +780,8 @@ void MonitorPane::LayoutDxPage(
             {
                 dxCard.presetLabel->SetText(LoadStringResource(nullptr, IDS_PREFS_ADV_LABEL_FILTER_PRESET));
                 dxCard.presetLabel->SetMnemonicTarget(dxCard.presetCombo);
-                dxCard.presetLabel->SetBounds(D2D1::RectF(pxToDip(card.left + cardPaddingX),
-                                                          pxToDip(rowTop),
-                                                          pxToDip(card.left + cardPaddingX + textWidth),
-                                                          pxToDip(rowTop + titleHeight)));
+                dxCard.presetLabel->SetBounds(D2D1::RectF(
+                    pxToDip(card.left + cardPaddingX), pxToDip(rowTop), pxToDip(card.left + cardPaddingX + textWidth), pxToDip(rowTop + titleHeight)));
             }
             if (dxCard.presetDescription)
             {
@@ -798,31 +794,27 @@ void MonitorPane::LayoutDxPage(
             if (dxCard.presetCombo)
             {
                 const int comboTop = rowTop + ((presetRowHeight - rowHeight) / 2);
-                dxCard.presetCombo->SetBounds(D2D1::RectF(pxToDip(card.right - cardPaddingX - comboWidth),
-                                                          pxToDip(comboTop),
-                                                          pxToDip(card.right - cardPaddingX),
-                                                          pxToDip(comboTop + rowHeight)));
+                dxCard.presetCombo->SetBounds(D2D1::RectF(
+                    pxToDip(card.right - cardPaddingX - comboWidth), pxToDip(comboTop), pxToDip(card.right - cardPaddingX), pxToDip(comboTop + rowHeight)));
             }
         }
 
         rowTop += presetRowHeight + rowGapY;
         for (size_t i = 0; i < dxCard.toggles.size(); ++i)
         {
-            const size_t stringIndex  = kMonitorDisplayToggleCount + i;
-            const std::wstring label  = LoadStringResource(nullptr, kMonitorToggleLabelStringIds[stringIndex]);
-            const std::wstring desc   = LoadStringResource(nullptr, kMonitorToggleDescriptionStringIds[stringIndex]);
-            const int rowBlockHeight  = filterRowHeights[i];
-            const int textWidth       = std::max(0, width - 2 * cardPaddingX - cardGapX - toggleWidth);
-            const int descHeight      = PrefsUi::MeasureWrappedTextHeightPx(typography, typography.caption, textWidth, desc);
+            const size_t stringIndex = kMonitorDisplayToggleCount + i;
+            const std::wstring label = LoadStringResource(nullptr, kMonitorToggleLabelStringIds[stringIndex]);
+            const std::wstring desc  = LoadStringResource(nullptr, kMonitorToggleDescriptionStringIds[stringIndex]);
+            const int rowBlockHeight = filterRowHeights[i];
+            const int textWidth      = std::max(0, width - 2 * cardPaddingX - cardGapX - toggleWidth);
+            const int descHeight     = PrefsUi::MeasureWrappedTextHeightPx(typography, typography.caption, textWidth, desc);
 
             if (dxCard.toggleLabels[i])
             {
                 dxCard.toggleLabels[i]->SetText(label);
                 dxCard.toggleLabels[i]->SetMnemonicTarget(dxCard.toggles[i]);
-                dxCard.toggleLabels[i]->SetBounds(D2D1::RectF(pxToDip(card.left + cardPaddingX),
-                                                              pxToDip(rowTop),
-                                                              pxToDip(card.left + cardPaddingX + textWidth),
-                                                              pxToDip(rowTop + titleHeight)));
+                dxCard.toggleLabels[i]->SetBounds(D2D1::RectF(
+                    pxToDip(card.left + cardPaddingX), pxToDip(rowTop), pxToDip(card.left + cardPaddingX + textWidth), pxToDip(rowTop + titleHeight)));
             }
             if (dxCard.toggleDescriptions[i])
             {
@@ -835,10 +827,8 @@ void MonitorPane::LayoutDxPage(
             if (dxCard.toggles[i])
             {
                 const int toggleTop = rowTop + ((rowBlockHeight - rowHeight) / 2);
-                dxCard.toggles[i]->SetBounds(D2D1::RectF(pxToDip(card.right - cardPaddingX - toggleWidth),
-                                                         pxToDip(toggleTop),
-                                                         pxToDip(card.right - cardPaddingX),
-                                                         pxToDip(toggleTop + rowHeight)));
+                dxCard.toggles[i]->SetBounds(D2D1::RectF(
+                    pxToDip(card.right - cardPaddingX - toggleWidth), pxToDip(toggleTop), pxToDip(card.right - cardPaddingX), pxToDip(toggleTop + rowHeight)));
             }
 
             rowTop += rowBlockHeight + rowGapY;
@@ -855,13 +845,13 @@ void MonitorPane::LayoutDxPage(
                               Label* dxDescription,
                               Button* dxButton) noexcept
     {
-        const int textWidth       = std::max(0, width - 2 * cardPaddingX);
-        const int descHeight      = PrefsUi::MeasureWrappedTextHeightPx(typography, typography.caption, textWidth, descText);
-        const int measuredWidth   = PrefsUi::MeasureSingleLineTextWidthPx(typography, typography.strong, linkText) + UiMetrics::ScaleDip(dpi, 16);
-        const int linkWidth       = std::max(1, std::min(textWidth, measuredWidth));
-        const int contentHeight   = titleHeight + cardGapY + descHeight + cardGapY + rowHeight;
-        const int cardHeight      = std::max(rowHeight + 2 * cardPaddingY, contentHeight + 2 * cardPaddingY);
-        const int linkTop         = y + cardPaddingY + titleHeight + cardGapY + descHeight + cardGapY;
+        const int textWidth     = std::max(0, width - 2 * cardPaddingX);
+        const int descHeight    = PrefsUi::MeasureWrappedTextHeightPx(typography, typography.caption, textWidth, descText);
+        const int measuredWidth = PrefsUi::MeasureSingleLineTextWidthPx(typography, typography.strong, linkText) + UiMetrics::ScaleDip(dpi, 16);
+        const int linkWidth     = std::max(1, std::min(textWidth, measuredWidth));
+        const int contentHeight = titleHeight + cardGapY + descHeight + cardGapY + rowHeight;
+        const int cardHeight    = std::max(rowHeight + 2 * cardPaddingY, contentHeight + 2 * cardPaddingY);
+        const int linkTop       = y + cardPaddingY + titleHeight + cardGapY + descHeight + cardGapY;
 
         RECT card{};
         card.left   = x;
@@ -894,10 +884,8 @@ void MonitorPane::LayoutDxPage(
         if (dxButton)
         {
             dxButton->SetText(std::wstring(linkText));
-            dxButton->SetBounds(D2D1::RectF(pxToDip(card.left + cardPaddingX),
-                                            pxToDip(linkTop),
-                                            pxToDip(card.left + cardPaddingX + linkWidth),
-                                            pxToDip(linkTop + rowHeight)));
+            dxButton->SetBounds(
+                D2D1::RectF(pxToDip(card.left + cardPaddingX), pxToDip(linkTop), pxToDip(card.left + cardPaddingX + linkWidth), pxToDip(linkTop + rowHeight)));
         }
 
         y += cardHeight + cardSpacingY;
@@ -1082,7 +1070,7 @@ bool MonitorPane::DebugSettingsFileCardIsLast() const noexcept
         return false;
     }
 
-    const auto children = _pageContentRoot->GetChildren();
+    const auto children    = _pageContentRoot->GetChildren();
     size_t filterCardIndex = children.size();
     size_t linkIndex       = children.size();
     for (size_t i = 0; i < children.size(); ++i)

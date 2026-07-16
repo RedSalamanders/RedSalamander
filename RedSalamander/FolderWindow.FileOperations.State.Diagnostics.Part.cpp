@@ -123,7 +123,7 @@ bool FolderWindow::FileOperationState::ExportTaskIssuesReport(uint64_t taskId, s
 
     constexpr wchar_t bom = 0xFEFF;
     DWORD written         = 0;
-    if (! WriteFile(file.get(), &bom, sizeof(bom), &written, nullptr))
+    if (! WriteFile(file.get(), &bom, sizeof(bom), &written, nullptr) || written != sizeof(bom))
     {
         return false;
     }
@@ -147,7 +147,7 @@ bool FolderWindow::FileOperationState::ExportTaskIssuesReport(uint64_t taskId, s
     {
         return false;
     }
-    if (! WriteFile(file.get(), header.data(), static_cast<DWORD>(headerBytes), &written, nullptr))
+    if (! WriteFile(file.get(), header.data(), static_cast<DWORD>(headerBytes), &written, nullptr) || written != static_cast<DWORD>(headerBytes))
     {
         return false;
     }
@@ -177,7 +177,7 @@ bool FolderWindow::FileOperationState::ExportTaskIssuesReport(uint64_t taskId, s
             continue;
         }
 
-        if (! WriteFile(file.get(), line.data(), static_cast<DWORD>(bytesToWrite), &written, nullptr))
+        if (! WriteFile(file.get(), line.data(), static_cast<DWORD>(bytesToWrite), &written, nullptr) || written != static_cast<DWORD>(bytesToWrite))
         {
             return false;
         }
@@ -218,8 +218,7 @@ void FolderWindow::FileOperationState::ToggleIssuesPane() noexcept
     {
         if (IsWindowVisible(pane))
         {
-            SaveIssuesPanePlacement(pane);
-            ShowWindow(pane, SW_HIDE);
+            static_cast<void>(SendMessageW(pane, WM_CLOSE, 0, 0));
         }
         else
         {
@@ -364,19 +363,24 @@ void FolderWindow::FileOperationState::SaveIssuesPaneViewState(std::wstring_view
     fileOperations.issuesPaneGridLayout     = gridLayout;
 }
 
-bool FolderWindow::FileOperationState::TryGetPopupPlacement(RECT& outRect, bool& outMaximized, UINT currentDpi) const noexcept
+namespace
+{
+[[nodiscard]] bool TryGetFileOperationsWindowPlacement(const Common::Settings::Settings* settings,
+                                                       std::wstring_view windowId,
+                                                       RECT& outRect,
+                                                       bool& outMaximized,
+                                                       UINT currentDpi) noexcept
 {
     outRect      = RECT{};
     outMaximized = false;
 
-    if (! _owner._settings)
+    if (! settings)
     {
         return false;
     }
 
-    const std::wstring windowId(kFileOpsPopupWindowId);
-    const auto it = _owner._settings->windows.find(windowId);
-    if (it == _owner._settings->windows.end())
+    const auto it = settings->windows.find(std::wstring(windowId));
+    if (it == settings->windows.end())
     {
         return false;
     }
@@ -390,9 +394,9 @@ bool FolderWindow::FileOperationState::TryGetPopupPlacement(RECT& outRect, bool&
     return true;
 }
 
-void FolderWindow::FileOperationState::SavePopupPlacement(HWND hwnd) noexcept
+void SaveFileOperationsWindowPlacement(Common::Settings::Settings* settings, std::wstring_view windowId, HWND hwnd) noexcept
 {
-    if (! hwnd || ! _owner._settings || IsIconic(hwnd))
+    if (! settings || windowId.empty() || ! hwnd || IsIconic(hwnd))
     {
         return;
     }
@@ -412,7 +416,33 @@ void FolderWindow::FileOperationState::SavePopupPlacement(HWND hwnd) noexcept
     saved.bounds.height = std::max(1, static_cast<int>(placement.rcNormalPosition.bottom - placement.rcNormalPosition.top));
     saved.dpi           = GetDpiForWindow(hwnd);
 
-    _owner._settings->windows[std::wstring(kFileOpsPopupWindowId)] = std::move(saved);
+    settings->windows[std::wstring(windowId)] = std::move(saved);
+}
+} // namespace
+
+bool FolderWindow::FileOperationState::TryGetPopupPlacement(RECT& outRect, bool& outMaximized, UINT currentDpi) const noexcept
+{
+    return TryGetFileOperationsWindowPlacement(_owner._settings, kFileOpsPopupWindowId, outRect, outMaximized, currentDpi);
+}
+
+bool FolderWindow::FileOperationState::TryGetPopupExpandedPlacement(RECT& outRect, UINT currentDpi) const noexcept
+{
+    bool maximized = false;
+    return TryGetFileOperationsWindowPlacement(_owner._settings, kFileOpsPopupExpandedWindowId, outRect, maximized, currentDpi);
+}
+
+void FolderWindow::FileOperationState::SavePopupPlacement(HWND hwnd) noexcept
+{
+    SaveFileOperationsWindowPlacement(_owner._settings, kFileOpsPopupWindowId, hwnd);
+    if (! GetPopupFooterOnly())
+    {
+        SaveFileOperationsWindowPlacement(_owner._settings, kFileOpsPopupExpandedWindowId, hwnd);
+    }
+}
+
+void FolderWindow::FileOperationState::SavePopupExpandedPlacement(HWND hwnd) noexcept
+{
+    SaveFileOperationsWindowPlacement(_owner._settings, kFileOpsPopupExpandedWindowId, hwnd);
 }
 
 void FolderWindow::FileOperationState::OnPopupDestroyed(HWND hwnd) noexcept
@@ -420,13 +450,7 @@ void FolderWindow::FileOperationState::OnPopupDestroyed(HWND hwnd) noexcept
     if (hwnd && _owner._settings)
     {
         SavePopupPlacement(hwnd);
-
-        const HRESULT saveHr = SettingsHotReload::SaveSettingsAndSchema(kFileOpsAppId, *_owner._settings);
-        if (FAILED(saveHr))
-        {
-            const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(kFileOpsAppId);
-            Debug::Error(L"SaveSettings failed (hr=0x{:08X}) path={}", static_cast<unsigned long>(saveHr), settingsPath.wstring());
-        }
+        QueueSettingsSave(L"popup destroy");
     }
 
     std::scoped_lock lock(_mutex);
@@ -441,13 +465,7 @@ void FolderWindow::FileOperationState::OnIssuesPaneDestroyed(HWND hwnd) noexcept
     if (hwnd && _owner._settings)
     {
         SaveIssuesPanePlacement(hwnd);
-
-        const HRESULT saveHr = SettingsHotReload::SaveSettingsAndSchema(kFileOpsAppId, *_owner._settings);
-        if (FAILED(saveHr))
-        {
-            const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(kFileOpsAppId);
-            Debug::Error(L"SaveSettings failed (hr=0x{:08X}) path={}", static_cast<unsigned long>(saveHr), settingsPath.wstring());
-        }
+        QueueSettingsSave(L"issues pane destroy");
     }
 
     std::scoped_lock lock(_mutex);
@@ -900,6 +918,12 @@ void FolderWindow::FileOperationState::EnqueueTaskDiagnostic(TaskDiagnosticEntry
         }
 
         _diagnosticsPendingFlush.push_back(entry);
+        const size_t maxPendingFlush = std::max(diagnosticsSettings.maxDiagnosticsInMemory, diagnosticsSettings.maxDiagnosticsPerFlush);
+        if (_diagnosticsPendingFlush.size() > maxPendingFlush)
+        {
+            const size_t overflow = _diagnosticsPendingFlush.size() - maxPendingFlush;
+            _diagnosticsPendingFlush.erase(_diagnosticsPendingFlush.begin(), _diagnosticsPendingFlush.begin() + static_cast<std::ptrdiff_t>(overflow));
+        }
 
         if (entry.severity == DiagnosticSeverity::Warning || entry.severity == DiagnosticSeverity::Error)
         {
@@ -947,6 +971,9 @@ FolderWindow::FileOperationState::CompletedTaskSummary FolderWindow::FileOperati
     summary.operation                                = task._operation;
     summary.sourcePane                               = task._sourcePane;
     summary.destinationPane                          = task._destinationPane;
+    summary.destinationPluginId                      = task._destinationPluginId;
+    summary.destinationPluginShortId                 = task._destinationPluginShortId;
+    summary.destinationInstanceContext               = task._destinationInstanceContext;
     summary.destinationFolder                        = task.GetDestinationFolder();
     summary.diagnosticsLogPath                       = GetDiagnosticsLogPathForDate(localNow);
     summary.resultHr                                 = task.GetResult();
@@ -970,6 +997,24 @@ FolderWindow::FileOperationState::CompletedTaskSummary FolderWindow::FileOperati
         summary.lastProgressCallbackTick = task._lastProgressCallbackTick;
         summary.sourcePath               = task._progressSourcePath;
         summary.destinationPath          = task._progressDestinationPath;
+    }
+
+    if ((summary.operation == FILESYSTEM_COPY || summary.operation == FILESYSTEM_MOVE) && summary.destinationPane.has_value() &&
+        ! summary.destinationFolder.empty() && task._sourcePaths.size() == 1u)
+    {
+        const bool destinationPathOnlyNamesFolder =
+            summary.destinationPath.empty() || NavigationLocation::EqualsNoCase(summary.destinationPath, summary.destinationFolder.native());
+        if (destinationPathOnlyNamesFolder)
+        {
+            if (task._resolvedItems.size() == task._sourcePaths.size() && ! task._resolvedItems.front().destinationPath.empty())
+            {
+                summary.destinationPath = task._resolvedItems.front().destinationPath.native();
+            }
+            else
+            {
+                summary.destinationPath = JoinFolderAndLeaf(summary.destinationFolder.native(), GetPathLeaf(task._sourcePaths.front().native()));
+            }
+        }
     }
 
     {
@@ -1005,7 +1050,7 @@ FolderWindow::FileOperationState::CompletedTaskSummary FolderWindow::FileOperati
             summary.warningCount = 1;
             if (summary.lastDiagnosticMessage.empty())
             {
-                summary.lastDiagnosticMessage = L"Task completed with skipped items.";
+                summary.lastDiagnosticMessage = LoadStringResource(nullptr, IDS_FILEOPS_DIAG_SKIPPED_ITEMS);
             }
         }
         else if (! IsCancellationStatus(summary.resultHr))
@@ -1014,7 +1059,7 @@ FolderWindow::FileOperationState::CompletedTaskSummary FolderWindow::FileOperati
             if (summary.lastDiagnosticMessage.empty())
             {
                 summary.lastDiagnosticMessage =
-                    std::format(L"Task failed (0x{:08X}) without detailed diagnostics.", static_cast<unsigned long>(summary.resultHr));
+                    FormatStringResource(nullptr, IDS_FMT_FILEOPS_DIAG_FAILED_NO_DETAILS, static_cast<unsigned long>(summary.resultHr));
             }
         }
     }

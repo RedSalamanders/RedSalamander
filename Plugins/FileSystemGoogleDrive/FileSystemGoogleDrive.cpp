@@ -20,6 +20,8 @@
 
 #include "FileSystemGoogleDriveResources.h"
 #include "Helpers.h"
+#include "UriEncoding.h"
+#include "YyjsonHelpers.h"
 #include "resource.h"
 
 extern HINSTANCE g_hInstance;
@@ -155,7 +157,7 @@ struct CurlEasyDeleter
 };
 
 using unique_curl_easy  = std::unique_ptr<CURL, CurlEasyDeleter>;
-using unique_yyjson_doc = wil::unique_any<yyjson_doc*, decltype(&yyjson_doc_free), yyjson_doc_free>;
+using unique_yyjson_doc = Common::Json::UniqueDocument;
 
 struct HttpResponse
 {
@@ -173,58 +175,12 @@ struct LessNoCase
 
 [[nodiscard]] std::wstring Utf16FromUtf8(std::string_view text) noexcept
 {
-    if (text.empty())
-    {
-        return {};
-    }
-
-    if (text.size() > static_cast<size_t>((std::numeric_limits<int>::max)()))
-    {
-        return {};
-    }
-
-    const int required = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0);
-    if (required <= 0)
-    {
-        return {};
-    }
-
-    std::wstring out(static_cast<size_t>(required), L'\0');
-    const int written = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), out.data(), required);
-    if (written != required)
-    {
-        return {};
-    }
-
-    return out;
+    return Common::Strings::Utf16FromUtf8StrictOrEmpty(text);
 }
 
 [[nodiscard]] std::string Utf8FromUtf16(std::wstring_view text) noexcept
 {
-    if (text.empty())
-    {
-        return {};
-    }
-
-    if (text.size() > static_cast<size_t>((std::numeric_limits<int>::max)()))
-    {
-        return {};
-    }
-
-    const int required = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
-    if (required <= 0)
-    {
-        return {};
-    }
-
-    std::string out(static_cast<size_t>(required), '\0');
-    const int written = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), out.data(), required, nullptr, nullptr);
-    if (written != required)
-    {
-        return {};
-    }
-
-    return out;
+    return Common::Strings::Utf8FromUtf16StrictOrEmpty(text);
 }
 
 [[nodiscard]] std::wstring NormalizePluginPath(std::wstring_view rawPath) noexcept
@@ -288,164 +244,45 @@ struct LessNoCase
 
 [[nodiscard]] std::optional<std::wstring> TryGetJsonString(yyjson_val* root, const char* key) noexcept
 {
-    if (! root || ! yyjson_is_obj(root) || ! key)
-    {
-        return std::nullopt;
-    }
-
-    yyjson_val* value = yyjson_obj_get(root, key);
-    if (! value || ! yyjson_is_str(value))
-    {
-        return std::nullopt;
-    }
-
-    const char* text    = yyjson_get_str(value);
-    const size_t length = yyjson_get_len(value);
-    if (! text)
-    {
-        return std::nullopt;
-    }
-
-    return Utf16FromUtf8(std::string_view(text, length));
+    const Common::Json::MemberResult<std::string_view> value =
+        Common::Json::GetStringMember(root, key, Common::Json::MemberRequirement::Optional);
+    return value.HasValue() ? std::optional<std::wstring>{Utf16FromUtf8(value.value)} : std::nullopt;
 }
 
 [[nodiscard]] std::optional<std::string> TryGetJsonUtf8String(yyjson_val* root, const char* key) noexcept
 {
-    if (! root || ! yyjson_is_obj(root) || ! key)
-    {
-        return std::nullopt;
-    }
-
-    yyjson_val* value = yyjson_obj_get(root, key);
-    if (! value || ! yyjson_is_str(value))
-    {
-        return std::nullopt;
-    }
-
-    const char* text    = yyjson_get_str(value);
-    const size_t length = yyjson_get_len(value);
-    if (! text)
-    {
-        return std::nullopt;
-    }
-
-    return std::string(text, length);
+    const Common::Json::MemberResult<std::string_view> value =
+        Common::Json::GetStringMember(root, key, Common::Json::MemberRequirement::Optional);
+    return value.HasValue() ? std::optional<std::string>{value.value} : std::nullopt;
 }
 
 [[nodiscard]] std::optional<bool> TryGetJsonBool(yyjson_val* root, const char* key) noexcept
 {
-    if (! root || ! yyjson_is_obj(root) || ! key)
-    {
-        return std::nullopt;
-    }
-
-    yyjson_val* value = yyjson_obj_get(root, key);
-    if (! value || ! yyjson_is_bool(value))
-    {
-        return std::nullopt;
-    }
-
-    return yyjson_get_bool(value) != 0;
+    const Common::Json::MemberResult<bool> value =
+        Common::Json::GetBoolMember(root, key, Common::Json::MemberRequirement::Optional);
+    return value.HasValue() ? std::optional<bool>{value.value} : std::nullopt;
 }
 
 [[nodiscard]] std::optional<uint64_t> TryGetJsonUInt(yyjson_val* root, const char* key) noexcept
 {
-    if (! root || ! yyjson_is_obj(root) || ! key)
-    {
-        return std::nullopt;
-    }
-
-    yyjson_val* value = yyjson_obj_get(root, key);
-    if (! value || ! yyjson_is_uint(value))
-    {
-        return std::nullopt;
-    }
-
-    return yyjson_get_uint(value);
-}
-
-[[nodiscard]] bool TryParseUInt64(std::string_view text, uint64_t& value) noexcept
-{
-    value = 0;
-    if (text.empty())
-    {
-        return false;
-    }
-
-    const char* begin = text.data();
-    const char* end   = begin + text.size();
-    const auto result = std::from_chars(begin, end, value);
-    return result.ec == std::errc{} && result.ptr == end;
+    const Common::Json::MemberResult<uint64_t> value = Common::Json::GetUInt64Member(root,
+                                                                                     key,
+                                                                                     Common::Json::MemberRequirement::Optional,
+                                                                                     Common::Json::NumericStringPolicy::Reject,
+                                                                                     Common::Json::UnsignedIntegerPolicy::RequireUnsignedStorage);
+    return value.HasValue() ? std::optional<uint64_t>{value.value} : std::nullopt;
 }
 
 [[nodiscard]] std::optional<uint64_t> TryGetJsonUInt64Flexible(yyjson_val* root, const char* key) noexcept
 {
-    if (! root || ! yyjson_is_obj(root) || ! key)
-    {
-        return std::nullopt;
-    }
-
-    yyjson_val* value = yyjson_obj_get(root, key);
-    if (! value)
-    {
-        return std::nullopt;
-    }
-
-    if (yyjson_is_uint(value))
-    {
-        return yyjson_get_uint(value);
-    }
-
-    if (yyjson_is_sint(value))
-    {
-        const int64_t signedValue = yyjson_get_sint(value);
-        if (signedValue < 0)
-        {
-            return std::nullopt;
-        }
-        return static_cast<uint64_t>(signedValue);
-    }
-
-    if (yyjson_is_str(value))
-    {
-        const char* text    = yyjson_get_str(value);
-        const size_t length = yyjson_get_len(value);
-        uint64_t parsed     = 0;
-        if (text && TryParseUInt64(std::string_view(text, length), parsed))
-        {
-            return parsed;
-        }
-    }
-
-    return std::nullopt;
-}
-
-[[nodiscard]] bool IsUnreservedUrlByte(unsigned char ch) noexcept
-{
-    return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '-' || ch == '.' || ch == '_' || ch == '~';
+    const Common::Json::MemberResult<uint64_t> value = Common::Json::GetUInt64Member(
+        root, key, Common::Json::MemberRequirement::Optional, Common::Json::NumericStringPolicy::Allow);
+    return value.HasValue() ? std::optional<uint64_t>{value.value} : std::nullopt;
 }
 
 [[nodiscard]] std::string UrlEncodeUtf8(std::string_view text)
 {
-    std::string encoded;
-    encoded.reserve(text.size() * 3u);
-
-    constexpr char kHex[] = "0123456789ABCDEF";
-    for (const char chValue : text)
-    {
-        const unsigned char ch = static_cast<unsigned char>(chValue);
-        if (IsUnreservedUrlByte(ch))
-        {
-            encoded.push_back(static_cast<char>(ch));
-            continue;
-        }
-
-        encoded.push_back('%');
-        encoded.push_back(kHex[(ch >> 4u) & 0x0Fu]);
-        encoded.push_back(kHex[ch & 0x0Fu]);
-    }
-
-    return encoded;
+    return Common::Uri::PercentEncodeBytes(text);
 }
 
 void AppendQueryParam(std::string& url, std::string_view key, std::string_view value)
@@ -1165,56 +1002,26 @@ HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::ExecuteMenuCommand(unsigned int
 
 HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::SetCallback(INavigationMenuCallback* callback, void* cookie) noexcept
 {
-    std::unique_lock lock(_stateMutex);
-    ++_navigationMenuCallbackGeneration;
-    _navigationMenuCallback       = callback;
-    _navigationMenuCallbackCookie = callback ? cookie : nullptr;
-    if (! callback)
-    {
-        _navigationMenuDrainCv.wait(lock, [this]() noexcept { return _navigationMenuCallbacksInFlight == 0; });
-    }
+    _navigationMenuCallbackState.Set(callback, cookie);
     return S_OK;
 }
 
 bool FileSystemGoogleDrive::TryCaptureNavigationMenuCallback(NavigationMenuCallbackSnapshot& snapshot) noexcept
 {
-    std::scoped_lock lock(_stateMutex);
-    if (! _navigationMenuCallback)
-    {
-        snapshot = {};
-        return false;
-    }
-
-    snapshot.callback   = _navigationMenuCallback;
-    snapshot.cookie     = _navigationMenuCallbackCookie;
-    snapshot.generation = _navigationMenuCallbackGeneration;
-    return true;
+    return _navigationMenuCallbackState.TryCapture(snapshot);
 }
 
 HRESULT FileSystemGoogleDrive::InvokeNavigationMenuCallback(const NavigationMenuCallbackSnapshot& snapshot, const wchar_t* path) noexcept
 {
     INavigationMenuCallback* callback = nullptr;
     void* cookie                      = nullptr;
+    if (! _navigationMenuCallbackState.TryEnter(snapshot, callback, cookie))
     {
-        std::unique_lock lock(_stateMutex);
-        if (_navigationMenuCallbackGeneration != snapshot.generation || _navigationMenuCallback != snapshot.callback)
-        {
-            return HRESULT_FROM_WIN32(ERROR_CANCELLED);
-        }
-
-        ++_navigationMenuCallbacksInFlight;
-        callback = snapshot.callback;
-        cookie   = snapshot.cookie;
+        return HRESULT_FROM_WIN32(ERROR_CANCELLED);
     }
 
-    const HRESULT callbackHr = callback->NavigationMenuRequestNavigate(path, cookie);
-
-    {
-        std::scoped_lock lock(_stateMutex);
-        --_navigationMenuCallbacksInFlight;
-    }
-    _navigationMenuDrainCv.notify_all();
-    return callbackHr;
+    auto finishInvoke = wil::scope_exit([this]() noexcept { _navigationMenuCallbackState.FinishInvoke(); });
+    return callback->NavigationMenuRequestNavigate(path, cookie);
 }
 
 HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::GetDriveInfo(const wchar_t* path, DriveInfo* info) noexcept

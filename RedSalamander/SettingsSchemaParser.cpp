@@ -1,6 +1,8 @@
 #include "Framework.h"
 
 #include "SettingsSchemaParser.h"
+#include "Helpers.h"
+#include "YyjsonHelpers.h"
 
 #include <algorithm>
 #include <filesystem>
@@ -32,63 +34,21 @@ namespace
 // UTF-8 <-> UTF-16 conversion helpers
 [[nodiscard]] std::wstring Utf16FromUtf8(std::string_view text) noexcept
 {
-    if (text.empty())
-    {
-        return {};
-    }
-
-    const int required = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0);
-    if (required <= 0)
-    {
-        return {};
-    }
-
-    std::wstring result(static_cast<size_t>(required), L'\0');
-    const int written = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), result.data(), required);
-    if (written != required)
-    {
-        return {};
-    }
-
-    return result;
+    return Common::Strings::Utf16FromUtf8StrictOrEmpty(text);
 }
 
 [[nodiscard]] std::optional<std::string_view> TryGetUtf8String(yyjson_val* obj, const char* key) noexcept
 {
-    if (! obj || ! key)
-    {
-        return std::nullopt;
-    }
-
-    yyjson_val* val = yyjson_obj_get(obj, key);
-    if (! val || ! yyjson_is_str(val))
-    {
-        return std::nullopt;
-    }
-
-    const char* str = yyjson_get_str(val);
-    if (! str)
-    {
-        return std::nullopt;
-    }
-
-    return std::string_view(str);
+    const Common::Json::MemberResult<std::string_view> value =
+        Common::Json::GetStringMember(obj, key, Common::Json::MemberRequirement::Optional);
+    return value.HasValue() ? std::optional<std::string_view>{value.value} : std::nullopt;
 }
 
 [[nodiscard]] std::optional<int64_t> TryGetInt64(yyjson_val* obj, const char* key) noexcept
 {
-    if (! obj || ! key)
-    {
-        return std::nullopt;
-    }
-
-    yyjson_val* val = yyjson_obj_get(obj, key);
-    if (! val || ! yyjson_is_int(val))
-    {
-        return std::nullopt;
-    }
-
-    return yyjson_get_sint(val);
+    const Common::Json::MemberResult<int64_t> value =
+        Common::Json::GetInt64Member(obj, key, Common::Json::MemberRequirement::Optional);
+    return value.HasValue() ? std::optional<int64_t>{value.value} : std::nullopt;
 }
 
 // Recursively walk JSON schema properties and extract fields with x-ui-pane

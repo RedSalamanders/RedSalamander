@@ -7,6 +7,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ViewerWeb.h" />
+    <ClInclude Include="JsStringEscape.h" />
+    <ClInclude Include="ViewerWebCleanupTracker.h" />
+    <ClInclude Include="ViewerWebSecurity.h" />
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>

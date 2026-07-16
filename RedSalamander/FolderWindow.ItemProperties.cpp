@@ -96,30 +96,7 @@ inline std::atomic<uint64_t> g_nextItemPropertiesWindowToken{1u};
 
 [[nodiscard]] std::wstring Utf16FromUtf8(std::string_view text) noexcept
 {
-    if (text.empty())
-    {
-        return {};
-    }
-
-    if (text.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
-    {
-        return {};
-    }
-
-    const int required = ::MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0);
-    if (required <= 0)
-    {
-        return {};
-    }
-
-    std::wstring result(static_cast<size_t>(required), L'\0');
-    const int written = ::MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), result.data(), required);
-    if (written != required)
-    {
-        return {};
-    }
-
-    return result;
+    return Common::Strings::Utf16FromUtf8StrictOrEmpty(text);
 }
 
 [[nodiscard]] std::wstring NormalizeItemPropertiesTitle(std::wstring_view title);
@@ -1939,6 +1916,7 @@ private:
         _dxHost.SetFocusControl(_root);
         RebuildCards();
         LayoutControls();
+        _dxHost.RefreshAccessibilitySnapshot();
         return 0;
     }
 
@@ -1957,6 +1935,7 @@ private:
         _viewableStreamCount  = 0u;
         RebuildCards();
         LayoutControls();
+        _dxHost.RefreshAccessibilitySnapshot();
     }
 
 #ifdef ENABLE_TESTS
@@ -2071,6 +2050,7 @@ private:
         _dxHost.SetFocusControl(_root);
         RebuildCards();
         LayoutControls();
+        _dxHost.RefreshAccessibilitySnapshot();
         return S_OK;
     }
 
@@ -2139,6 +2119,7 @@ private:
             _dxHost.SetFocusControl(_root);
             RebuildCards();
             LayoutControls();
+            _dxHost.RefreshAccessibilitySnapshot();
             Debug::Warning(
                 L"ItemProperties: stream '{}' was removed but properties refresh failed (hr=0x{:08X}).", streamNameText, static_cast<unsigned long>(hrRefresh));
         }

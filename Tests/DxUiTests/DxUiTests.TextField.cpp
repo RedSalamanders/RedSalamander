@@ -1,5 +1,9 @@
 #include "DxUiTestHelpers.h"
 
+#include <array>
+#include <fstream>
+#include <iterator>
+
 namespace
 {
 
@@ -37,6 +41,23 @@ WindowHostBitmapCapture CaptureAttachedTextFieldHostWindowBitmap(AttachedHostWin
         {
             ++count;
         }
+    }
+    return count;
+}
+
+[[nodiscard]] size_t CountOccurrences(std::string_view text, std::string_view needle) noexcept
+{
+    if (needle.empty())
+    {
+        return 0u;
+    }
+
+    size_t count  = 0u;
+    size_t offset = 0u;
+    while ((offset = text.find(needle, offset)) != std::string_view::npos)
+    {
+        ++count;
+        offset += needle.size();
     }
     return count;
 }
@@ -877,6 +898,122 @@ void TestTextFieldSurrogatePairDeleteDeletesWholeCodePoint()
     Require(field.GetText() == L"AB", "text field delete removes the full surrogate pair instead of a single code unit");
 }
 
+void TestTextFieldUndoAfterSurrogatePairInsertionRemovesWholeCodePoint()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    TextField field;
+    field.SetBounds(D2D1::RectF(0.0f, 0.0f, 180.0f, 28.0f));
+
+    Require(field.OnChar(host, static_cast<wchar_t>(0xD83D), 0), "text field accepts the lead surrogate character");
+    Require(field.OnChar(host, static_cast<wchar_t>(0xDE00), 0), "text field accepts the trail surrogate character");
+    Require(field.GetText().size() == 2u, "text field contains the inserted surrogate pair before undo");
+
+    Require(field.OnKeyDown(host, 'Z', MK_CONTROL), "text field handles undo after surrogate-pair insertion");
+    Require(field.GetText().empty(), "text field undo removes the full surrogate pair instead of leaving a lone lead surrogate");
+}
+
+void TestTextFieldUndoCoalescesTypingRun()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    TextField field;
+    field.SetBounds(D2D1::RectF(0.0f, 0.0f, 180.0f, 28.0f));
+
+    Require(field.OnChar(host, L'a', 0), "text field accepts first typing-run character");
+    Require(field.OnChar(host, L'b', 0), "text field accepts second typing-run character");
+    Require(field.OnChar(host, L'c', 0), "text field accepts third typing-run character");
+    Require(field.GetText() == L"abc", "text field contains the typed run before undo");
+
+    Require(field.OnKeyDown(host, 'Z', MK_CONTROL), "text field handles undo after a typing run");
+    Require(field.GetText().empty(), "text field undo removes the full typing run");
+
+    Require(field.OnKeyDown(host, 'Y', MK_CONTROL), "text field handles redo after a typing-run undo");
+    Require(field.GetText() == L"abc", "text field redo restores the full typing run");
+}
+
+void TestTextFieldUndoSplitsTypingRunsAfterCaretMove()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    TextField field;
+    field.SetBounds(D2D1::RectF(0.0f, 0.0f, 180.0f, 28.0f));
+
+    Require(field.OnChar(host, L'a', 0), "text field accepts first pre-move character");
+    Require(field.OnChar(host, L'b', 0), "text field accepts second pre-move character");
+    Require(field.OnKeyDown(host, VK_LEFT, 0), "text field handles caret movement between typing runs");
+    Require(field.OnChar(host, L'c', 0), "text field accepts first post-move character");
+    Require(field.OnChar(host, L'd', 0), "text field accepts second post-move character");
+    Require(field.GetText() == L"acdb", "text field inserts the second typing run at the moved caret");
+
+    Require(field.OnKeyDown(host, 'Z', MK_CONTROL), "text field handles undo after the second typing run");
+    Require(field.GetText() == L"ab", "text field undo removes only the post-move typing run");
+
+    Require(field.OnKeyDown(host, 'Z', MK_CONTROL), "text field handles undo after the first typing run");
+    Require(field.GetText().empty(), "text field second undo removes the pre-move typing run");
+}
+
+void TestTextFieldUndoCoalescesBackspaceRun()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    TextField field(L"abcd");
+    field.SetBounds(D2D1::RectF(0.0f, 0.0f, 180.0f, 28.0f));
+
+    Require(field.OnKeyDown(host, VK_BACK, 0), "text field handles first backspace in a delete run");
+    Require(field.OnKeyDown(host, VK_BACK, 0), "text field handles second backspace in a delete run");
+    Require(field.GetText() == L"ab", "text field removes two characters before backspace-run undo");
+
+    Require(field.OnKeyDown(host, 'Z', MK_CONTROL), "text field handles undo after a backspace run");
+    Require(field.GetText() == L"abcd", "text field undo restores the full backspace run");
+}
+
+void TestTextFieldUndoCoalescesDeleteRun()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    TextField field(L"abcd");
+    field.SetBounds(D2D1::RectF(0.0f, 0.0f, 180.0f, 28.0f));
+
+    Require(field.OnKeyDown(host, VK_HOME, 0), "text field handles home before a delete run");
+    Require(field.OnKeyDown(host, VK_DELETE, 0), "text field handles first delete in a delete run");
+    Require(field.OnKeyDown(host, VK_DELETE, 0), "text field handles second delete in a delete run");
+    Require(field.GetText() == L"cd", "text field removes two characters before delete-run undo");
+
+    Require(field.OnKeyDown(host, 'Z', MK_CONTROL), "text field handles undo after a delete run");
+    Require(field.GetText() == L"abcd", "text field undo restores the full delete run");
+}
+
+void TestTextFieldCoalescedDirectEditsCaptureHistoryOnlyOnce()
+{
+    const std::filesystem::path sourcePath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.TextInput.cpp";
+    std::ifstream input(sourcePath);
+    Require(input.good(), "TextField source is readable for direct-edit history guard");
+    const std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+
+    const size_t functionStart = source.find("void TextField::RecordUndoStateForDirectEdit");
+    const size_t functionEnd   = source.find("\nbool TextField::TryUndoDirectEdit", functionStart);
+    Require(functionStart != std::string::npos && functionEnd != std::string::npos && functionStart < functionEnd,
+            "RecordUndoStateForDirectEdit source block is found");
+    const std::string_view functionBlock(source.data() + functionStart, functionEnd - functionStart);
+
+    const size_t coalescedCheck = functionBlock.find("const bool coalesced");
+    const size_t captureBranch  = functionBlock.find("if (! coalesced)", coalescedCheck);
+    const size_t pushSnapshot   = functionBlock.find("_undoHistory.push_back(CaptureEditHistoryState())", captureBranch);
+    const size_t branchClose    = functionBlock.find("\n    _directEditMergeKind", captureBranch);
+    Require(coalescedCheck != std::string_view::npos, "direct-edit history records whether the edit joined an existing run");
+    Require(captureBranch != std::string_view::npos, "direct-edit history has an explicit non-coalesced capture branch");
+    Require(pushSnapshot != std::string_view::npos && pushSnapshot < branchClose,
+            "direct-edit history captures the full text snapshot only when a new undo run starts");
+    Require(CountOccurrences(functionBlock, "CaptureEditHistoryState()") == 1u,
+            "coalesced direct edits do not capture additional full text snapshots per keystroke");
+}
+
 void TestTextFieldEmojiZwJBackspaceDeletesWholeTextElement()
 {
     using namespace RedSalamander::DxUi;
@@ -1227,6 +1364,266 @@ void TestMaskedTextFieldPreservesSecretValueAndSuppressesCopy()
     Require(! field.IsMasked(), "masked text field clears masked state");
 }
 
+void TestMaskedTextFieldExactMaskUsesTextElementCount()
+{
+    using namespace RedSalamander::DxUi;
+
+    std::wstring secret = L"A";
+    secret.push_back(static_cast<wchar_t>(0xD83D));
+    secret.push_back(static_cast<wchar_t>(0xDE00));
+
+    TextField field(secret);
+    field.SetMasked(true);
+    field.SetPasswordMaskLengthPolicy(PasswordMaskLengthPolicy::Exact);
+
+    Require(field.GetSecretVisibleDotCount() == 2u, "one BMP character plus one astral character renders exactly two password dots");
+}
+
+void TestTextFieldDoesNotExposeLiveSecureClearTeardownApi()
+{
+    const std::filesystem::path headerPath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.h";
+    std::ifstream headerInput(headerPath);
+    Require(headerInput.good(), "DxUi header is readable for TextField secure-clear API guard");
+    const std::string header((std::istreambuf_iterator<char>(headerInput)), std::istreambuf_iterator<char>());
+
+    const size_t classStart   = header.find("class TextField");
+    const size_t privateStart = header.find("private:", classStart);
+    Require(classStart != std::string::npos && privateStart != std::string::npos && classStart < privateStart, "TextField public API block is found");
+    const std::string publicBlock = header.substr(classStart, privateStart - classStart);
+    Require(publicBlock.find("SecureClear") == std::string::npos,
+            "TextField must not expose a live SecureClear() API that teardown code can call through retained raw child pointers");
+
+    const std::filesystem::path sourcePath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.TextInput.cpp";
+    std::ifstream sourceInput(sourcePath);
+    Require(sourceInput.good(), "TextField source is readable for secure-clear API guard");
+    const std::string source((std::istreambuf_iterator<char>(sourceInput)), std::istreambuf_iterator<char>());
+    Require(source.find("void TextField::SecureClear()") == std::string::npos,
+            "TextField live SecureClear() implementation must not exist outside owned destructor storage cleanup");
+}
+
+void TestTextFieldDestructorOwnsSecureStorageWipe()
+{
+    const std::filesystem::path sourcePath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.TextInput.cpp";
+    std::ifstream input(sourcePath);
+    Require(input.good(), "TextField source is readable for secure destructor guard");
+    const std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+
+    const size_t destructorStart = source.find("TextField::~TextField");
+    Require(destructorStart != std::string::npos, "TextField destructor is present for secure storage cleanup");
+    const size_t nextMethod = source.find("\nvoid TextField::", destructorStart + 1u);
+    Require(nextMethod != std::string::npos && destructorStart < nextMethod, "TextField destructor block is found");
+    const std::string destructorBlock = source.substr(destructorStart, nextMethod - destructorStart);
+    Require(destructorBlock.find("SecureClearStorage()") != std::string::npos, "TextField destructor delegates to owned secure storage cleanup");
+    Require(destructorBlock.find("RequestInvalidate") == std::string::npos,
+            "TextField destructor does not invalidate a host while the retained tree is tearing down");
+    Require(destructorBlock.find("SyncTextInput") == std::string::npos,
+            "TextField destructor does not sync native input while the retained tree is tearing down");
+
+    const size_t storageStart = source.find("void TextField::SecureClearStorage");
+    const size_t storageEnd   = source.find("\nvoid TextField::", storageStart + 1u);
+    Require(storageStart != std::string::npos && storageEnd != std::string::npos && storageStart < storageEnd,
+            "TextField secure storage helper block is found");
+    const std::string storageBlock = source.substr(storageStart, storageEnd - storageStart);
+    Require(storageBlock.find("SecureWipe::SecureClear(_text)") != std::string::npos, "TextField secure storage cleanup wipes the visible text buffer");
+    Require(storageBlock.find("_undoHistory") != std::string::npos, "TextField secure storage cleanup covers undo history");
+    Require(storageBlock.find("_redoHistory") != std::string::npos, "TextField secure storage cleanup covers redo history");
+    Require(storageBlock.find("SecureWipe::SecureClear(_cachedLayoutText)") != std::string::npos, "TextField secure storage cleanup wipes cached layout text");
+}
+
+void TestSingleLineSelectionPaintReusesOneTextLayout()
+{
+    const std::filesystem::path sourcePath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.SingleLineTextEditing.cpp";
+    std::ifstream input(sourcePath);
+    Require(input.good(), "Single-line text editing source is readable for selected-paint layout reuse guard");
+    const std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+
+    const size_t functionStart = source.find("void DrawSingleLineSelection");
+    const size_t functionEnd   = source.find("\n} // namespace RedSalamander::DxUi", functionStart);
+    Require(functionStart != std::string::npos && functionEnd != std::string::npos && functionStart < functionEnd,
+            "DrawSingleLineSelection source block is found");
+    const std::string_view functionBlock(source.data() + functionStart, functionEnd - functionStart);
+
+    const size_t selectionGuard = functionBlock.find("if (! selectionRange)");
+    const size_t fallbackDraw   = functionBlock.find("DrawSingleLineTextClipped(");
+    Require(selectionGuard != std::string_view::npos, "selected single-line paint keeps a no-selection fast path");
+    Require(fallbackDraw == std::string_view::npos || fallbackDraw > selectionGuard,
+            "selected single-line paint does not delegate to a second layout path before it has checked for selected text");
+    Require(functionBlock.find("ResolveSingleLineLayoutWidthDip(") == std::string_view::npos,
+            "selected single-line paint does not call the width resolver that creates a measurement layout before creating the paint layout");
+    Require(functionBlock.find("MeasureSingleLineTextWidthDip(") == std::string_view::npos,
+            "selected single-line paint does not measure text by creating another DirectWrite layout");
+    Require(CountOccurrences(functionBlock, "CreateSingleLineTextLayout(") <= 1u,
+            "selected single-line paint creates at most one DirectWrite layout for normal text, selection bounds, and selected text");
+}
+
+void TestSingleLineTextClippedReusesOneTextLayout()
+{
+    const std::filesystem::path sourcePath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.SingleLineTextEditing.cpp";
+    std::ifstream input(sourcePath);
+    Require(input.good(), "Single-line text editing source is readable for clipped-paint layout reuse guard");
+    const std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+
+    const size_t functionStart = source.find("void DrawSingleLineTextClipped");
+    const size_t functionEnd   = source.find("\nstd::optional<D2D1_RECT_F> ComputeSingleLineSelectionPaintRect", functionStart);
+    Require(functionStart != std::string::npos && functionEnd != std::string::npos && functionStart < functionEnd,
+            "DrawSingleLineTextClipped source block is found");
+    const std::string_view functionBlock(source.data() + functionStart, functionEnd - functionStart);
+
+    Require(functionBlock.find("ResolveSingleLineLayoutWidthDip(") == std::string_view::npos,
+            "unselected single-line paint does not call the width resolver that creates a measurement layout before creating the paint layout");
+    Require(functionBlock.find("MeasureSingleLineTextWidthDip(") == std::string_view::npos,
+            "unselected single-line paint does not measure text by creating another DirectWrite layout");
+    Require(CountOccurrences(functionBlock, "CreateSingleLineTextLayout(") <= 1u,
+            "unselected single-line paint creates at most one DirectWrite layout for metrics and drawing");
+}
+
+void TestTextFieldPaintEnsuresSingleLineCaretVisibleOncePerFrame()
+{
+    const std::filesystem::path sourcePath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.TextInput.cpp";
+    std::ifstream input(sourcePath);
+    Require(input.good(), "TextField source is readable for single-line caret visibility guard");
+    const std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+
+    const size_t paintStart = source.find("void TextField::Paint");
+    const size_t tickStart  = source.find("bool TextField::Tick", paintStart);
+    Require(paintStart != std::string::npos && tickStart != std::string::npos && paintStart < tickStart, "TextField::Paint source block is found");
+    const std::string_view paintBlock(source.data() + paintStart, tickStart - paintStart);
+
+    Require(CountOccurrences(paintBlock, "EnsureCaretVisible(&host") == 1u,
+            "focused single-line TextField paint adjusts horizontal scroll only once per frame");
+}
+
+void TestTextFieldSingleLineLayoutCacheInvalidatesAndFeedsHotPaths()
+{
+    const std::filesystem::path headerPath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.h";
+    std::ifstream headerInput(headerPath);
+    Require(headerInput.good(), "DxUi header is readable for single-line layout cache guard");
+    const std::string header((std::istreambuf_iterator<char>(headerInput)), std::istreambuf_iterator<char>());
+
+    const size_t classStart = header.find("class TextField");
+    const size_t classEnd   = header.find("\nclass ", classStart + 1u);
+    Require(classStart != std::string::npos && classEnd != std::string::npos && classStart < classEnd, "TextField class block is found");
+    const std::string_view classBlock(header.data() + classStart, classEnd - classStart);
+    Require(classBlock.find("SingleLineTextLayoutCache _singleLineLayoutCache") != std::string_view::npos,
+            "TextField owns a retained single-line DirectWrite layout cache");
+    Require(classBlock.find("GetOrCreateSingleLineLayout") != std::string_view::npos,
+            "TextField exposes a private single-line layout cache accessor for hot geometry paths");
+    Require(classBlock.find("InvalidateSingleLineLayoutCache") != std::string_view::npos,
+            "TextField has an explicit single-line layout cache invalidation hook");
+    Require(classBlock.find("OnFlowDirectionChanged() noexcept override") != std::string_view::npos,
+            "TextField invalidates cached single-line layouts when inherited reading direction changes");
+
+    const std::filesystem::path sourcePath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.TextInput.cpp";
+    std::ifstream sourceInput(sourcePath);
+    Require(sourceInput.good(), "TextField source is readable for single-line layout cache guard");
+    const std::string source((std::istreambuf_iterator<char>(sourceInput)), std::istreambuf_iterator<char>());
+
+    const auto findBlock = [&](std::string_view beginNeedle, std::string_view endNeedle) -> std::string_view
+    {
+        const size_t begin        = source.find(beginNeedle);
+        const size_t end          = source.find(endNeedle, begin == std::string::npos ? 0u : begin + 1u);
+        const std::string message = std::string(beginNeedle) + " block is found";
+        Require(begin != std::string::npos && end != std::string::npos && begin < end, message.c_str());
+        return std::string_view(source.data() + begin, end - begin);
+    };
+
+    const std::string_view storageBlock = findBlock("void TextField::SecureClearStorage", "\nvoid TextField::RefreshAccessibilitySnapshot");
+    Require(storageBlock.find("ClearSingleLineTextLayoutCache(_singleLineLayoutCache, true)") != std::string_view::npos,
+            "secure TextField teardown wipes cached single-line layout text");
+
+    const std::string_view accessorBlock = findBlock("TextField::GetOrCreateSingleLineLayout", "\nvoid TextField::InvalidateSingleLineLayoutCache");
+    Require(accessorBlock.find("GetOrCreateSingleLineTextLayout") != std::string_view::npos,
+            "TextField single-line accessor routes through the shared cache helper");
+    Require(accessorBlock.find("&_singleLineLayoutCache") != std::string_view::npos, "TextField single-line accessor passes the retained cache to the helper");
+    Require(accessorBlock.find("&_singleLineLayoutCache, text, FontRole::Body, minimumWidthDip, heightDip, readingDirection, true)") != std::string_view::npos,
+            "TextField single-line accessor asks the shared helper to securely clear cached text on layout failure");
+
+    const std::string_view invalidationBlock = findBlock("void TextField::InvalidateSingleLineLayoutCache", "\nvoid TextField::EnsureCaretVisible");
+    Require(invalidationBlock.find("ClearSingleLineTextLayoutCache(_singleLineLayoutCache, true)") != std::string_view::npos,
+            "single-line layout invalidation securely clears cached text retained for DirectWrite layout reuse");
+
+    const std::array<std::string_view, 11> requiredInvalidators = {{
+        "void TextField::SetText",
+        "void TextField::ReplaceSelectionAndNotify",
+        "void TextField::SetMasked",
+        "void TextField::SetPasswordRevealMode",
+        "void TextField::SetPasswordRevealState",
+        "void TextField::SetPasswordMaskLengthPolicy",
+        "void TextField::SetMultiline",
+        "void TextField::SetHorizontalTextPadding",
+        "void TextField::SetVerticalTextPadding",
+        "void TextField::OnBoundsChanged",
+        "void TextField::OnHostDpiChanged",
+    }};
+    for (const std::string_view method : requiredInvalidators)
+    {
+        const std::string_view block = findBlock(method, "\nvoid TextField::");
+        const std::string message    = std::string(method) + " invalidates the single-line layout cache";
+        Require(block.find("InvalidateSingleLineLayoutCache()") != std::string_view::npos, message.c_str());
+    }
+    const std::string_view densityBlock = findBlock("void TextField::OnDensityChanged", "\nvoid TextField::ResetCaretBlink");
+    Require(densityBlock.find("InvalidateSingleLineLayoutCache()") != std::string_view::npos,
+            "TextField density changes invalidate the single-line layout cache");
+    const std::string_view flowBlock = findBlock("void TextField::OnFlowDirectionChanged", "\nvoid TextField::OnHostDpiChanged");
+    Require(flowBlock.find("InvalidateSingleLineLayoutCache()") != std::string_view::npos,
+            "TextField flow direction changes invalidate the single-line layout cache");
+
+    const std::string_view ensureBlock = findBlock("void TextField::EnsureCaretVisible", "\nvoid TextField::EnsureMultilineCaretVisible");
+    Require(ensureBlock.find("GetOrCreateSingleLineLayout") != std::string_view::npos, "single-line caret visibility measures with the retained layout cache");
+    const std::string_view caretBlock =
+        findBlock("std::optional<D2D1_RECT_F> TextField::GetTextInputCaretRect", "\nstd::optional<std::vector<D2D1_RECT_F>> TextField::GetTextInputRangeRects");
+    Require(caretBlock.find("GetOrCreateSingleLineLayout") != std::string_view::npos, "single-line caret geometry uses the retained layout cache");
+    const std::string_view rangeBlock =
+        findBlock("std::optional<std::vector<D2D1_RECT_F>> TextField::GetTextInputRangeRects", "\nstd::optional<size_t> TextField::HitTestTextInputPoint");
+    Require(rangeBlock.find("GetOrCreateSingleLineLayout") != std::string_view::npos, "single-line range geometry uses the retained layout cache");
+    const std::string_view paintBlock = findBlock("void TextField::Paint", "\nbool TextField::Tick");
+    Require(paintBlock.find("GetOrCreateSingleLineLayout") != std::string_view::npos, "single-line paint uses the retained layout cache");
+
+    const std::filesystem::path helperPath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.SingleLineTextEditing.cpp";
+    std::ifstream helperInput(helperPath);
+    Require(helperInput.good(), "single-line text editing source is readable for layout counter guard");
+    const std::string helperSource((std::istreambuf_iterator<char>(helperInput)), std::istreambuf_iterator<char>());
+    const size_t helperStart = helperSource.find("GetOrCreateSingleLineTextLayout");
+    const size_t helperEnd   = helperSource.find("\n[[nodiscard]] float MeasureCaretOffsetDip", helperStart);
+    Require(helperStart != std::string::npos && helperEnd != std::string::npos && helperStart < helperEnd, "single-line layout cache helper block is found");
+    const std::string_view helperBlock(helperSource.data() + helperStart, helperEnd - helperStart);
+    Require(helperBlock.find("Debug::Perf::IsCaptureEnabled()") != std::string_view::npos,
+            "single-line layout creation metrics are gated on explicit perf capture");
+    Require(helperBlock.find("dxui.textinput.single_line_layout_create_count") != std::string_view::npos,
+            "single-line layout creation count metric is emitted for perf evidence");
+    Require(helperBlock.find("dxui.textinput.single_line_layout_create_us") != std::string_view::npos,
+            "single-line layout creation duration metric is emitted for perf evidence");
+    Require(helperBlock.find("SecureWipe::SecureClear(cache->text)") != std::string_view::npos,
+            "secure single-line cache replacement wipes the previous cached secret first");
+    Require(helperBlock.find("cache->text.swap(exactText)") != std::string_view::npos,
+            "secure single-line cache replacement installs a freshly sized buffer without reused capacity tails");
+}
+
+void TestTextFieldMaskedDotCountStaysBounded()
+{
+    const std::filesystem::path sourcePath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.TextInput.cpp";
+    std::ifstream input(sourcePath);
+    Require(input.good(), "TextField source is readable for masked dot-count guard");
+    const std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+
+    const size_t functionStart = source.find("size_t TextField::GetSecretVisibleDotCount");
+    const size_t functionEnd   = source.find("\nvoid TextField::SetPasswordRevealAccessibleName", functionStart);
+    Require(functionStart != std::string::npos && functionEnd != std::string::npos && functionStart < functionEnd, "TextField masked dot-count block is found");
+    const std::string_view functionBlock(source.data() + functionStart, functionEnd - functionStart);
+
+    Require(functionBlock.find("CountTextElements(_text)") != std::string_view::npos, "exact masked dot count follows Unicode text-element boundaries");
+    Require(functionBlock.find("GetConcealedMaskVisibleDotCount(exactCount)") != std::string_view::npos,
+            "concealed masked dot count uses the retained bucket cache helper");
+
+    const size_t concealedStart = source.find("size_t TextField::GetConcealedMaskVisibleDotCount");
+    const size_t concealedEnd   = source.find("\nvoid TextField::BreakDirectEditMerge", concealedStart);
+    Require(concealedStart != std::string::npos && concealedEnd != std::string::npos && concealedStart < concealedEnd,
+            "TextField concealed mask cache block is found");
+    const std::string_view concealedBlock(source.data() + concealedStart, concealedEnd - concealedStart);
+    Require(concealedBlock.find("_concealedMaskVisibleDotCountValid") != std::string_view::npos, "concealed masked dot count keeps a validity flag");
+    Require(concealedBlock.find("_concealedMaskVisibleDotCount") != std::string_view::npos, "concealed masked dot count stores the retained count");
+}
+
 void TestTextFieldCompactDensityShrinksDefaultVerticalPadding()
 {
     using namespace RedSalamander::DxUi;
@@ -1324,6 +1721,40 @@ void TestTextFieldBidiSelectionPaintStaysOutsideTrailingButtons()
         Require(FindTextInputBridgeEdit(window.Hwnd()) == nullptr, "native reveal-button clipping test does not create a bridge child");
         verify(*field, window.Host(), "mixed-BiDi reveal-button text field exposes paint debug state");
     }
+}
+
+void TestTextFieldBidiSelectionPaintUsesDirectWriteRangeBounds()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    window.Host().SetTextInputBackend(TextInputBackend::Native);
+
+    auto root = std::make_unique<Panel>();
+    root->SetFlowDirection(FlowDirection::RightToLeft);
+    auto* field = root->AddChild<TextField>(L"abc \x05D0\x05D1\x05D2 123 xyz");
+    field->SetBounds(D2D1::RectF(20.0f, 20.0f, 300.0f, 56.0f));
+    field->SetClearButtonEnabled(false);
+    field->SetSelectionRange(2u, 11u);
+    window.Host().SetRoot(std::move(root));
+    window.Host().SetFocusControl(field);
+
+    TextFieldDebugSingleLinePaintState paint{};
+    Require(field->DebugGetSingleLinePaintState(window.Host(), paint), "mixed-BiDi selected text exposes paint debug state");
+    Require(paint.hasSelectionPaintRect, "mixed-BiDi selected text exposes a selection paint rect");
+
+    const std::optional<std::vector<D2D1_RECT_F>> rangeRects = field->TryGetTextInputRangeRects(window.Host(), 2u, 11u);
+    Require(rangeRects.has_value() && ! rangeRects.value().empty(), "mixed-BiDi selection exposes DirectWrite range rects");
+
+    D2D1_RECT_F expectedBounds = rangeRects.value().front();
+    for (const D2D1_RECT_F& rangeRect : rangeRects.value())
+    {
+        expectedBounds.left  = std::min(expectedBounds.left, rangeRect.left);
+        expectedBounds.right = std::max(expectedBounds.right, rangeRect.right);
+    }
+
+    RequireFloatNear(paint.selectionPaintRect.left, expectedBounds.left, 0.75f, "mixed-BiDi selection paint left edge follows DirectWrite range bounds");
+    RequireFloatNear(paint.selectionPaintRect.right, expectedBounds.right, 0.75f, "mixed-BiDi selection paint right edge follows DirectWrite range bounds");
 }
 
 void TestTextFieldSelectedEmojiUsesColorFontRendering()
@@ -1605,6 +2036,12 @@ void RunTextFieldTests()
     runTest("TestTextFieldMouseDragSelectionReplacesDraggedRange", TestTextFieldMouseDragSelectionReplacesDraggedRange);
     runTest("TestTextFieldSurrogatePairBackspaceDeletesWholeCodePoint", TestTextFieldSurrogatePairBackspaceDeletesWholeCodePoint);
     runTest("TestTextFieldSurrogatePairDeleteDeletesWholeCodePoint", TestTextFieldSurrogatePairDeleteDeletesWholeCodePoint);
+    runTest("TestTextFieldUndoAfterSurrogatePairInsertionRemovesWholeCodePoint", TestTextFieldUndoAfterSurrogatePairInsertionRemovesWholeCodePoint);
+    runTest("TestTextFieldUndoCoalescesTypingRun", TestTextFieldUndoCoalescesTypingRun);
+    runTest("TestTextFieldUndoSplitsTypingRunsAfterCaretMove", TestTextFieldUndoSplitsTypingRunsAfterCaretMove);
+    runTest("TestTextFieldUndoCoalescesBackspaceRun", TestTextFieldUndoCoalescesBackspaceRun);
+    runTest("TestTextFieldUndoCoalescesDeleteRun", TestTextFieldUndoCoalescesDeleteRun);
+    runTest("TestTextFieldCoalescedDirectEditsCaptureHistoryOnlyOnce", TestTextFieldCoalescedDirectEditsCaptureHistoryOnlyOnce);
     runTest("TestTextFieldEmojiZwJBackspaceDeletesWholeTextElement", TestTextFieldEmojiZwJBackspaceDeletesWholeTextElement);
     runTest("TestTextFieldEmojiZwJDeleteDeletesWholeTextElement", TestTextFieldEmojiZwJDeleteDeletesWholeTextElement);
     runTest("TestTextFieldRegionalIndicatorFlagBackspaceDeletesWholeTextElement", TestTextFieldRegionalIndicatorFlagBackspaceDeletesWholeTextElement);
@@ -1623,9 +2060,18 @@ void RunTextFieldTests()
     runTest("TestTextFieldSubmit", TestTextFieldSubmit);
     runTest("TestSingleLineTextFieldTabDoesNotInsertCharacter", TestSingleLineTextFieldTabDoesNotInsertCharacter);
     runTest("TestMaskedTextFieldPreservesSecretValueAndSuppressesCopy", TestMaskedTextFieldPreservesSecretValueAndSuppressesCopy);
+    runTest("TestMaskedTextFieldExactMaskUsesTextElementCount", TestMaskedTextFieldExactMaskUsesTextElementCount);
+    runTest("TestTextFieldDoesNotExposeLiveSecureClearTeardownApi", TestTextFieldDoesNotExposeLiveSecureClearTeardownApi);
+    runTest("TestTextFieldDestructorOwnsSecureStorageWipe", TestTextFieldDestructorOwnsSecureStorageWipe);
+    runTest("TestSingleLineSelectionPaintReusesOneTextLayout", TestSingleLineSelectionPaintReusesOneTextLayout);
+    runTest("TestSingleLineTextClippedReusesOneTextLayout", TestSingleLineTextClippedReusesOneTextLayout);
+    runTest("TestTextFieldPaintEnsuresSingleLineCaretVisibleOncePerFrame", TestTextFieldPaintEnsuresSingleLineCaretVisibleOncePerFrame);
+    runTest("TestTextFieldSingleLineLayoutCacheInvalidatesAndFeedsHotPaths", TestTextFieldSingleLineLayoutCacheInvalidatesAndFeedsHotPaths);
+    runTest("TestTextFieldMaskedDotCountStaysBounded", TestTextFieldMaskedDotCountStaysBounded);
     runTest("TestTextFieldCompactDensityShrinksDefaultVerticalPadding", TestTextFieldCompactDensityShrinksDefaultVerticalPadding);
     runTest("TestTextFieldLongSelectionPaintStaysInsideTextViewport", TestTextFieldLongSelectionPaintStaysInsideTextViewport);
     runTest("TestTextFieldBidiSelectionPaintStaysOutsideTrailingButtons", TestTextFieldBidiSelectionPaintStaysOutsideTrailingButtons);
+    runTest("TestTextFieldBidiSelectionPaintUsesDirectWriteRangeBounds", TestTextFieldBidiSelectionPaintUsesDirectWriteRangeBounds);
     runTest("TestTextFieldSelectedEmojiUsesColorFontRendering", TestTextFieldSelectedEmojiUsesColorFontRendering);
     runTest("TestNativeTextFieldUnselectedEmojiUsesColorFontRendering", TestNativeTextFieldUnselectedEmojiUsesColorFontRendering);
     runTest("TestNativeTextFieldSelectedEmojiUsesColorFontRendering", TestNativeTextFieldSelectedEmojiUsesColorFontRendering);

@@ -5,6 +5,7 @@
 #include <Windows.h>
 
 #include "DxUi.h"
+#include "Helpers.h"
 #include "RedConfigureApp.h"
 #include "RedConfigureUiHelpers.h"
 #include "Themes/ThemePreviewModel.h"
@@ -91,6 +92,7 @@ public:
 
     void Paint(WindowHost& host) const override
     {
+        Debug::Perf::Scope previewPaintPerf(L"redconfigure.theme.preview_paint_us");
         auto* dc = host.GetDeviceContext();
         if (! dc || ! _model)
         {
@@ -102,28 +104,28 @@ public:
         const ThemePalette& palette = host.GetTheme();
 
         const D2D1_COLOR_F windowColor        = ColorFromArgb(ColorOrDefault(*_model, L"window.background", 0xFFFFFFFFu));
-        const D2D1_COLOR_F windowTextColor    = ColorFromArgb(ColorOrDefault(*_model, L"window.text", 0xFF111111u));
+        const D2D1_COLOR_F windowTextColor    = ColorFromArgb(ColorOrDefault(*_model, L"menu.text", 0xFF111111u));
         const D2D1_COLOR_F navColor           = ColorFromArgb(ColorOrDefault(*_model, L"navigation.background", 0xFFEAF2FEu));
         const D2D1_COLOR_F navTextColor       = ColorFromArgb(ColorOrDefault(*_model, L"navigation.text", 0xFF1F2937u));
         const D2D1_COLOR_F navAccentColor     = ColorFromArgb(ColorOrDefault(*_model, L"app.accent", 0xFF0F6CBDu));
         const D2D1_COLOR_F menuColor          = ColorFromArgb(ColorOrDefault(*_model, L"menu.background", 0xFFFFFFFFu));
         const D2D1_COLOR_F menuTextColor      = ColorFromArgb(ColorOrDefault(*_model, L"menu.text", 0xFF111111u));
-        const D2D1_COLOR_F menuSelectionColor = ColorFromArgb(ColorOrDefault(*_model, L"menu.selectionBackground", 0xFFE8F1FFu));
+        const D2D1_COLOR_F menuSelectionColor = ColorFromArgb(ColorOrDefault(*_model, L"menu.selectionBg", 0xFFE8F1FFu));
         const D2D1_COLOR_F menuBorderColor    = ColorFromArgb(ColorOrDefault(*_model, L"menu.border", 0xFFD8D8D8u));
         const D2D1_COLOR_F folderColor        = ColorFromArgb(ColorOrDefault(*_model, L"folderView.background", 0xFFFFFFFFu));
-        const D2D1_COLOR_F folderTextColor    = ColorFromArgb(ColorOrDefault(*_model, L"folderView.itemForeground", 0xFF111111u));
+        const D2D1_COLOR_F folderTextColor    = ColorFromArgb(ColorOrDefault(*_model, L"folderView.textNormal", 0xFF111111u));
         const D2D1_COLOR_F hoverColor         = ColorFromArgb(ColorOrDefault(*_model, L"folderView.itemBackgroundHovered", 0xFFF0F6FFu));
         const D2D1_COLOR_F selectedColor      = ColorFromArgb(ColorOrDefault(*_model, L"folderView.itemBackgroundSelected", 0xFFCFE8FFu));
-        const D2D1_COLOR_F selectedTextColor  = ColorFromArgb(ColorOrDefault(*_model, L"folderView.itemForegroundSelected", 0xFF0F172Au));
-        const D2D1_COLOR_F warningColor       = ColorFromArgb(ColorOrDefault(*_model, L"folderView.warningForeground", 0xFF8A4B00u));
-        const D2D1_COLOR_F dialogColor        = ColorFromArgb(ColorOrDefault(*_model, L"dialog.background", 0xFFF7F7F7u));
-        const D2D1_COLOR_F dialogTextColor    = ColorFromArgb(ColorOrDefault(*_model, L"dialog.text", 0xFF111111u));
-        const D2D1_COLOR_F buttonColor        = ColorFromArgb(ColorOrDefault(*_model, L"dialog.buttonBackground", 0xFFFFFFFFu));
-        const D2D1_COLOR_F buttonTextColor    = ColorFromArgb(ColorOrDefault(*_model, L"dialog.buttonText", 0xFF111111u));
-        const D2D1_COLOR_F progressBgColor    = ColorFromArgb(ColorOrDefault(*_model, L"progress.background", 0xFFE5E7EBu));
-        const D2D1_COLOR_F progressFillColor  = ColorFromArgb(ColorOrDefault(*_model, L"progress.fill", 0xFF2563EBu));
-        const D2D1_COLOR_F diffAddedColor     = ColorFromArgb(ColorOrDefault(*_model, L"diff.addedBackground", 0xFFEAF8EFu));
-        const D2D1_COLOR_F diffRemovedColor   = ColorFromArgb(ColorOrDefault(*_model, L"diff.removedBackground", 0xFFFFECEFu));
+        const D2D1_COLOR_F selectedTextColor  = ColorFromArgb(ColorOrDefault(*_model, L"folderView.textSelected", 0xFF0F172Au));
+        const D2D1_COLOR_F warningColor       = ColorFromArgb(ColorOrDefault(*_model, L"folderView.warningText", 0xFF8A4B00u));
+        const D2D1_COLOR_F dialogColor        = ColorFromArgb(ColorOrDefault(*_model, L"window.background", 0xFFF7F7F7u));
+        const D2D1_COLOR_F dialogTextColor    = ColorFromArgb(ColorOrDefault(*_model, L"menu.text", 0xFF111111u));
+        const D2D1_COLOR_F buttonColor        = ColorFromArgb(ColorOrDefault(*_model, L"menu.selectionBg", 0xFFFFFFFFu));
+        const D2D1_COLOR_F buttonTextColor    = ColorFromArgb(ColorOrDefault(*_model, L"menu.selectionText", 0xFF111111u));
+        const D2D1_COLOR_F progressBgColor    = ColorFromArgb(ColorOrDefault(*_model, L"navigation.progressBackground", 0xFFE5E7EBu));
+        const D2D1_COLOR_F progressFillColor  = ColorFromArgb(ColorOrDefault(*_model, L"navigation.progressOk", 0xFF2563EBu));
+        const D2D1_COLOR_F diffAddedColor     = ColorFromArgb(ColorOrDefault(*_model, L"viewer.diff.addedBackground", 0xFFEAF8EFu));
+        const D2D1_COLOR_F diffRemovedColor   = ColorFromArgb(ColorOrDefault(*_model, L"viewer.diff.removedBackground", 0xFFFFECEFu));
 
         if (auto* brush = host.GetSolidBrush(windowColor))
         {
@@ -280,17 +282,17 @@ private:
             {layout.navRect, L"navigation.background"},
             {layout.navAccentRect, L"app.accent"},
             {layout.menuRect, L"menu.background"},
-            {layout.menuSelectionRect, L"menu.selectionBackground"},
+            {layout.menuSelectionRect, L"menu.selectionBg"},
             {layout.folderRect, L"folderView.background"},
             {layout.hoverRowRect, L"folderView.itemBackgroundHovered"},
             {layout.selectedRowRect, L"folderView.itemBackgroundSelected"},
-            {layout.warningRowRect, L"folderView.warningForeground"},
-            {layout.dialogRect, L"dialog.background"},
-            {layout.buttonRect, L"dialog.buttonBackground"},
-            {layout.progressBgRect, L"progress.background"},
-            {layout.progressFillRect, L"progress.fill"},
-            {layout.diffAddedRect, L"diff.addedBackground"},
-            {layout.diffRemovedRect, L"diff.removedBackground"},
+            {layout.warningRowRect, L"folderView.warningText"},
+            {layout.dialogRect, L"window.background"},
+            {layout.buttonRect, L"menu.selectionBg"},
+            {layout.progressBgRect, L"navigation.progressBackground"},
+            {layout.progressFillRect, L"navigation.progressOk"},
+            {layout.diffAddedRect, L"viewer.diff.addedBackground"},
+            {layout.diffRemovedRect, L"viewer.diff.removedBackground"},
         }};
     }
 

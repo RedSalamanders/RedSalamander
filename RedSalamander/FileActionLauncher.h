@@ -58,6 +58,7 @@ struct LaunchResult
 };
 
 [[nodiscard]] HRESULT ExpandMacros(std::wstring_view templateText, const MacroContext& context, std::wstring& out) noexcept;
+[[nodiscard]] bool TemplateContainsSupportedMacro(std::wstring_view templateText) noexcept;
 [[nodiscard]] HRESULT BuildExternalLaunchPlan(const Common::Settings::FileActionDefinition& action, const MacroContext& context, LaunchPlan& out) noexcept;
 [[nodiscard]] HRESULT LaunchExternalPlan(const LaunchPlan& plan, const LaunchOptions& options = {}, LaunchResult* result = nullptr) noexcept;
 } // namespace FileActionLauncher

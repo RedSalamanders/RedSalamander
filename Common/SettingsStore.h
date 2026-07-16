@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ThemeExpression.h"
+
 #include <array>
 #include <cstdint>
 #include <filesystem>
@@ -56,20 +58,6 @@ struct WindowPlacement
     WindowState state = WindowState::Normal;
     WindowBounds bounds{};
     std::optional<unsigned int> dpi;
-};
-
-struct ThemeDefinition
-{
-    std::wstring id;
-    std::wstring name;
-    std::wstring baseThemeId;                          // builtin/*
-    std::unordered_map<std::wstring, uint32_t> colors; // key -> 0xAARRGGBB
-};
-
-struct ThemeSettings
-{
-    std::wstring currentThemeId = L"builtin/system";
-    std::vector<ThemeDefinition> themes;
 };
 
 enum class FolderDisplayMode : uint8_t
@@ -248,6 +236,24 @@ struct JsonObject
     std::vector<std::pair<std::string, JsonValue>> members;
 };
 
+struct ThemeDefinition
+{
+    uint32_t formatVersion = 2u;
+    std::wstring id;
+    std::wstring name;
+    std::wstring baseThemeId; // builtin/* or an inline forward-compatible fallback id
+    std::unordered_map<std::wstring, ThemeColorSource> palette;
+    std::unordered_map<std::wstring, ThemeColorSource> colors;
+};
+
+struct ThemeSettings
+{
+    std::wstring currentThemeId = L"builtin/system";
+    std::vector<ThemeDefinition> themes;
+    // Structurally unusable inline entries are retained verbatim at the JSON-value level for lossless-enough round trips.
+    std::vector<JsonValue> opaqueThemeEntries;
+};
+
 struct PluginsSettings
 {
     // The active IFileSystem plugin (by PluginMetaData.id, long id).
@@ -307,6 +313,8 @@ struct GridColumnLayoutEntry
 struct FileOperationsSettings
 {
     bool autoDismissSuccess                      = false;
+    bool popupFooterOnly                         = false;
+    bool popupCompactDensity                     = false;
     bool preCalcEnabled                          = true;
     uint32_t preCalcMaxWorkers                   = 4;
     uint32_t crossFsBridgeBufferSizeKB           = 4096;
@@ -329,6 +337,8 @@ struct FileOperationsSettings
     bool issuesPaneSortDescending = false;
     std::vector<GridColumnLayoutEntry> issuesPaneGridLayout;
 };
+
+[[nodiscard]] COMMON_API bool HasNonDefaultFileOperationsSettings(const FileOperationsSettings& fileOperations) noexcept;
 
 struct CompareDirectoriesSettings
 {
@@ -445,7 +455,7 @@ struct BatchRenameSettings
     bool replaceOnce           = false;
     bool excludeExtension      = false;
 
-    std::wstring flattenSeparator = L" - ";
+    std::wstring flattenSeparator           = L" - ";
     BatchRenameCaseStyle fileNameCaseStyle  = BatchRenameCaseStyle::None;
     BatchRenameCaseStyle extensionCaseStyle = BatchRenameCaseStyle::None;
 
@@ -760,6 +770,21 @@ struct ShortcutsSettings
     std::vector<GridColumnLayoutEntry> gridLayout;
 };
 
+enum class SettingsSavePermission : uint8_t
+{
+    Automatic,
+    ExplicitReplacementRequired,
+};
+
+struct SettingsPersistenceState
+{
+    // Unknown top-level members and malformed optional sections are copied out of the yyjson
+    // document so a later canonical save does not silently discard data this build cannot use.
+    std::vector<std::pair<std::string, JsonValue>> opaqueTopLevelMembers;
+    SettingsSavePermission savePermission = SettingsSavePermission::Automatic;
+    int64_t sourceSchemaVersion           = 16;
+};
+
 struct Settings
 {
     uint32_t schemaVersion = 16;
@@ -784,6 +809,7 @@ struct Settings
     std::optional<SelectionMasksSettings> selectionMasks;
     std::optional<SearchDialogSettings> search;
     std::optional<BatchRenameSettings> batchRename;
+    SettingsPersistenceState persistence;
 };
 
 struct SettingsFileStamp
@@ -812,6 +838,12 @@ enum class SettingsLoadRecoveryReason : uint8_t
     ShortcutsInvalid,
 };
 
+struct SettingsSectionRecoveryInfo
+{
+    SettingsLoadRecoveryReason reason = SettingsLoadRecoveryReason::None;
+    HRESULT hr                        = S_OK;
+};
+
 struct SettingsLoadRecoveryInfo
 {
     SettingsLoadRecoveryReason reason = SettingsLoadRecoveryReason::None;
@@ -821,6 +853,7 @@ struct SettingsLoadRecoveryInfo
     int64_t unsupportedSchemaVersion = 0;
     bool usedDefaults                = false;
     bool backedUp                    = false;
+    std::vector<SettingsSectionRecoveryInfo> sectionRecoveries;
 };
 
 COMMON_API std::filesystem::path GetSettingsPath(std::wstring_view appId) noexcept;
@@ -853,7 +886,21 @@ COMMON_API HRESULT TryLoadSettingsNoRecovery(std::wstring_view appId, Settings& 
 // - failure HRESULT: unexpected I/O error while querying the file
 COMMON_API HRESULT TryGetSettingsFileStamp(std::wstring_view appId, SettingsFileStamp& out) noexcept;
 
+// Moves the current settings file to the standard timestamped backup path. This is the required
+// first step for an explicit replacement of settings written by a newer schema version.
+COMMON_API HRESULT BackupSettingsForExplicitReplacement(std::wstring_view appId, std::filesystem::path& backupPath) noexcept;
+
 COMMON_API HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept;
+
+// Saves only the settings JSON. Use when an existing schema remains valid and must not be regenerated.
+COMMON_API HRESULT SaveSettingsValuesOnly(std::wstring_view appId, const Settings& settings) noexcept;
+
+// Saves only the settings JSON and returns the identity of the exact flushed temporary file moved
+// into place. Callers that watch the settings directory use this to distinguish their own atomic
+// replacement from a later external replacement without re-statting the path.
+COMMON_API HRESULT SaveSettingsValuesOnlyWithStamp(std::wstring_view appId,
+                                                   const Settings& settings,
+                                                   SettingsFileStamp& writtenStamp) noexcept;
 
 // Saves a JSON Schema file alongside the settings file (UTF-8 JSON, no BOM).
 // Path: `<AppId>.settings.schema.json` in the same directory as `GetSettingsPath(appId)`.
@@ -862,6 +909,15 @@ COMMON_API HRESULT SaveSettingsSchema(std::wstring_view appId, std::string_view 
 // Parses a JSON/JSON5 value from UTF-8 text.
 // Returns S_OK on success, otherwise an HRESULT error.
 COMMON_API HRESULT ParseJsonValue(std::string_view jsonText, JsonValue& out) noexcept;
+
+// Strict typed accessors for parsed JSON objects. Numeric reads reject negative and overflowing
+// values; UTF-16 member reads reject malformed UTF-8 instead of substituting replacement characters.
+COMMON_API const JsonValue* FindMember(const JsonValue& value, std::string_view key) noexcept;
+COMMON_API std::optional<std::string> GetString(const JsonValue& value, std::string_view key) noexcept;
+COMMON_API std::optional<std::wstring> GetWString(const JsonValue& value, std::string_view key) noexcept;
+COMMON_API std::optional<bool> GetBool(const JsonValue& value, std::string_view key) noexcept;
+COMMON_API std::optional<uint32_t> GetUInt32(const JsonValue& value, std::string_view key) noexcept;
+COMMON_API const JsonArray* GetArray(const JsonValue& value, std::string_view key) noexcept;
 
 // Serializes a JSON value to UTF-8 JSON text.
 // Returns S_OK on success, otherwise an HRESULT error.

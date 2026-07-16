@@ -62,7 +62,10 @@ struct ParsedArguments final
     std::wstring sqliteDatabasePath;
     std::wstring actionOption;
     std::wstring errorMessage;
-    bool storeBackendExplicit = false;
+    bool storeBackendExplicit                             = false;
+#if defined(RS_SEARCH_TEST_HOOKS)
+    SearchServiceBroker::ServerTestHook testHook = SearchServiceBroker::ServerTestHook::None;
+#endif
 };
 
 struct CommandResult final
@@ -725,6 +728,7 @@ template <size_t N> [[nodiscard]] std::wstring_view ViewFixedText(const std::arr
         case SearchServiceBroker::SEARCH_SERVICE_SERVER_REQUEST_QUERY: return L"Query";
         case SearchServiceBroker::SEARCH_SERVICE_SERVER_REQUEST_REBUILD: return L"Rebuild";
         case SearchServiceBroker::SEARCH_SERVICE_SERVER_REQUEST_COMPACT: return L"Compact";
+        case SearchServiceBroker::SEARCH_SERVICE_SERVER_REQUEST_SHUTDOWN: return L"Shutdown";
         case SearchServiceBroker::SEARCH_SERVICE_SERVER_REQUEST_NONE:
         default: return L"None";
     }
@@ -1950,8 +1954,11 @@ private:
         return L"Store not inspected yet";
     }
 
+    const std::wstring_view readiness = storeInfo.readyForQueryCutover
+                                            ? L"Ready for query cutover"
+                                            : (storeInfo.legacyImportVolumeCount != 0u ? L"Pending backfill/rebuild" : L"Currentness unproven");
     return std::format(L"{} | volumes={} entries={} legacy-imports={}",
-                       storeInfo.readyForQueryCutover ? L"Ready for query cutover" : L"Pending backfill/rebuild",
+                       readiness,
                        storeInfo.indexedVolumeCount,
                        storeInfo.indexedEntryCount,
                        storeInfo.legacyImportVolumeCount);
@@ -2144,6 +2151,7 @@ void InitializeForegroundConsole(ForegroundConsoleSession& session) noexcept
                                    requestSnapshot.candidateFiles,
                                    requestSnapshot.matchedEntries,
                                    requestSnapshot.batchesSent));
+        details.append(std::format(L" warnings=0x{:08X}", static_cast<unsigned long>(requestSnapshot.warningFlags)));
 
         if (eventType == SearchServiceBroker::SEARCH_SERVICE_SERVER_EVENT_QUERY_COMPLETED ||
             eventType == SearchServiceBroker::SEARCH_SERVICE_SERVER_EVENT_REQUEST_HANDLED || FAILED(hr))
@@ -2431,6 +2439,14 @@ void PrintHelpText() noexcept
                     L"  --protocol-version=N           Override the protocol version for foreground mode.\r\n"
                     L"  --max-requests=N               Exit after N handled requests in foreground mode (0 = unlimited).\r\n"
                     L"  --disconnect-after-batches=N   Disconnect after N candidate batches in foreground mode (0 = never).\r\n"
+#if defined(RS_SEARCH_TEST_HOOKS)
+                    L"  --test-fail-client-auth-impersonation-once\r\n"
+                    L"                                  Test-only: fail one candidate client-authorization impersonation.\r\n"
+                    L"  --test-reject-marked-root\r\n"
+                    L"                                  Test-only: reject query roots containing 'service-reject-root'.\r\n"
+                    L"  --test-fail-marked-client-directory-open-bad-netpath\r\n"
+                    L"                                  Test-only: fail authorization opens for paths containing 'transient-auth'.\r\n"
+#endif
                     L"\r\n"
                     L"Defaults for this build:\r\n"
                     L"  Service name: {1}\r\n"
@@ -2884,6 +2900,10 @@ CommandResult RunForegroundService(const ParsedArguments& parsed) noexcept
     options.protocolVersion        = parsed.protocolVersion;
     options.maxRequestsBeforeExit  = parsed.maxRequestsBeforeExit;
     options.disconnectAfterBatches = parsed.disconnectAfterBatches;
+    options.allowShutdownRequests  = true;
+#if defined(RS_SEARCH_TEST_HOOKS)
+    options.testHook = parsed.testHook;
+#endif
 
     const std::wstring pipeName    = parsed.pipeName.empty() ? SearchServiceBroker::GetDefaultPipeName() : parsed.pipeName;
     const std::wstring storageRoot = parsed.storageRootDirectory.empty() ? SearchServiceBroker::GetProgramDataSearchIndexRoot() : parsed.storageRootDirectory;
@@ -3166,6 +3186,24 @@ ParsedArguments ParseArguments() noexcept
             continue;
         }
 
+#if defined(RS_SEARCH_TEST_HOOKS)
+        if (arg == L"--test-fail-client-auth-impersonation-once")
+        {
+            parsed.testHook = SearchServiceBroker::ServerTestHook::FailClientAuthImpersonationOnce;
+            continue;
+        }
+        if (arg == L"--test-reject-marked-root")
+        {
+            parsed.testHook = SearchServiceBroker::ServerTestHook::RejectMarkedRoot;
+            continue;
+        }
+        if (arg == L"--test-fail-marked-client-directory-open-bad-netpath")
+        {
+            parsed.testHook = SearchServiceBroker::ServerTestHook::FailMarkedClientDirectoryOpenBadNetPath;
+            continue;
+        }
+#endif
+
         parsed.errorMessage = std::format(L"Unknown option '{}'.", arg);
         return parsed;
     }
@@ -3176,8 +3214,11 @@ ParsedArguments ParseArguments() noexcept
     }
 
     const bool hasPipeOverrideOnly = ! parsed.pipeName.empty();
-    const bool hasForegroundOnlyOptions =
+    bool hasForegroundOnlyOptions =
         parsed.protocolVersion != SearchServiceBroker::kProtocolVersion || parsed.maxRequestsBeforeExit != 0u || parsed.disconnectAfterBatches != 0u;
+#if defined(RS_SEARCH_TEST_HOOKS)
+    hasForegroundOnlyOptions = hasForegroundOnlyOptions || parsed.testHook != SearchServiceBroker::ServerTestHook::None;
+#endif
     if (parsed.action != StartupAction::ShowHelp && hasForegroundOnlyOptions && parsed.action != StartupAction::RunForeground)
     {
         parsed.errorMessage = L"--protocol-version, --max-requests, and --disconnect-after-batches require --run-foreground.";
@@ -3247,6 +3288,138 @@ void WINAPI ServiceMain(DWORD argc, wchar_t** argv) noexcept
     const HRESULT hr = SearchServiceBroker::RunServer(options, g_serviceStopEvent.get(), nullptr);
     UpdateServiceStatus(SERVICE_STOPPED, FAILED(hr) ? static_cast<DWORD>(HRESULT_CODE(hr)) : NO_ERROR, 0u);
 }
+
+#ifdef ENABLE_TESTS
+[[nodiscard]] bool WriteTestSupportProbeChunk(HANDLE destination, char value, size_t byteCount) noexcept
+{
+    std::array<char, 64u * 1024u> bytes{};
+    bytes.fill(value);
+    size_t writtenTotal = 0u;
+    while (writtenTotal < byteCount)
+    {
+        const DWORD requested = static_cast<DWORD>((std::min)(bytes.size(), byteCount - writtenTotal));
+        DWORD written = 0u;
+        if (WriteFile(destination, bytes.data(), requested, &written, nullptr) == FALSE || written == 0u)
+        {
+            return false;
+        }
+        writtenTotal += written;
+    }
+    return true;
+}
+
+[[nodiscard]] bool TryRunTestSupportChildProbe(int& outExitCode) noexcept
+{
+    int argc = 0;
+    wil::unique_hlocal_ptr<wchar_t*> argv(::CommandLineToArgvW(::GetCommandLineW(), &argc));
+    constexpr std::wstring_view kPrefix{L"--test-support-child-probe="};
+    if (! argv || argc < 2 || ! std::wstring_view(argv.get()[1]).starts_with(kPrefix))
+    {
+        return false;
+    }
+
+    const std::wstring_view mode = std::wstring_view(argv.get()[1]).substr(kPrefix.size());
+    if (mode == L"streams")
+    {
+        const HANDLE stdoutHandle = GetStdHandle(STD_OUTPUT_HANDLE);
+        const HANDLE stderrHandle = GetStdHandle(STD_ERROR_HANDLE);
+        constexpr size_t kStreamBytes = 2u * 1024u * 1024u;
+        outExitCode = WriteTestSupportProbeChunk(stdoutHandle, 'O', kStreamBytes) && WriteTestSupportProbeChunk(stderrHandle, 'E', kStreamBytes) ? 0 : 81;
+        return true;
+    }
+    if (mode == L"arguments")
+    {
+        const bool argumentsMatch = argc == 6 && std::wstring_view(argv.get()[2]) == L"space value" &&
+                                    std::wstring_view(argv.get()[3]) == L"quote\"value" &&
+                                    std::wstring_view(argv.get()[4]) == L"backslash\\tail\\" &&
+                                    std::wstring_view(argv.get()[5]) == L"Unicode-\u6E2C\u8A66-\U0001F642";
+        constexpr std::string_view kOk{"ARGUMENTS_OK"};
+        DWORD written = 0u;
+        static_cast<void>(WriteFile(GetStdHandle(STD_OUTPUT_HANDLE), kOk.data(), static_cast<DWORD>(kOk.size()), &written, nullptr));
+        outExitCode = argumentsMatch ? 0 : 82;
+        return true;
+    }
+    if (mode == L"exit")
+    {
+        constexpr std::string_view kStdout{"NONZERO_STDOUT"};
+        constexpr std::string_view kStderr{"NONZERO_STDERR"};
+        DWORD written = 0u;
+        static_cast<void>(WriteFile(GetStdHandle(STD_OUTPUT_HANDLE), kStdout.data(), static_cast<DWORD>(kStdout.size()), &written, nullptr));
+        static_cast<void>(WriteFile(GetStdHandle(STD_ERROR_HANDLE), kStderr.data(), static_cast<DWORD>(kStderr.size()), &written, nullptr));
+        outExitCode = 37;
+        return true;
+    }
+    if (mode == L"sleep")
+    {
+        Sleep(INFINITE);
+        outExitCode = 83;
+        return true;
+    }
+    if (mode == L"delayed-marker")
+    {
+        if (argc != 3)
+        {
+            outExitCode = 84;
+            return true;
+        }
+        Sleep(750u);
+        wil::unique_hfile marker(CreateFileW(argv.get()[2], GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
+        outExitCode = marker ? 0 : 85;
+        return true;
+    }
+    if (mode == L"spawn-tree")
+    {
+        if (argc != 3)
+        {
+            outExitCode = 86;
+            return true;
+        }
+        std::array<wchar_t, 32'768> modulePath{};
+        const DWORD moduleLength = GetModuleFileNameW(nullptr, modulePath.data(), static_cast<DWORD>(modulePath.size()));
+        if (moduleLength == 0u || moduleLength >= modulePath.size())
+        {
+            outExitCode = 87;
+            return true;
+        }
+        std::wstring commandLine =
+            std::format(L"\"{}\" --test-support-child-probe=delayed-marker \"{}\"", std::wstring_view(modulePath.data(), moduleLength), argv.get()[2]);
+        PROCESS_INFORMATION processInfo{};
+        STARTUPINFOW startupInfo{};
+        startupInfo.cb = sizeof(startupInfo);
+        if (CreateProcessW(modulePath.data(), commandLine.data(), nullptr, nullptr, FALSE, 0u, nullptr, nullptr, &startupInfo, &processInfo) == FALSE)
+        {
+            outExitCode = 88;
+            return true;
+        }
+        wil::unique_handle process(processInfo.hProcess);
+        wil::unique_handle thread(processInfo.hThread);
+        Sleep(INFINITE);
+        outExitCode = 89;
+        return true;
+    }
+    if (mode == L"inherited-handle")
+    {
+        if (argc != 3)
+        {
+            outExitCode = 90;
+            return true;
+        }
+        wchar_t* end = nullptr;
+        const uintptr_t rawHandle = static_cast<uintptr_t>(_wcstoui64(argv.get()[2], &end, 10));
+        const bool inherited = end && *end == L'\0' && SetEvent(reinterpret_cast<HANDLE>(rawHandle)) != FALSE;
+        constexpr std::string_view kClosed{"HANDLE_CLOSED"};
+        constexpr std::string_view kInherited{"HANDLE_INHERITED"};
+        const std::string_view output = inherited ? kInherited : kClosed;
+        DWORD written = 0u;
+        static_cast<void>(WriteFile(GetStdHandle(STD_OUTPUT_HANDLE), output.data(), static_cast<DWORD>(output.size()), &written, nullptr));
+        outExitCode = inherited ? 91 : 0;
+        return true;
+    }
+
+    outExitCode = 92;
+    return true;
+}
+#endif
 } // namespace
 
 int wmain()
@@ -3256,6 +3429,14 @@ int wmain()
         WriteConsoleText(std::format(L"{}\r\n", Common::MinimumOsVersion::kUnsupportedWindowsMessage), true);
         return 1;
     }
+
+#ifdef ENABLE_TESTS
+    int probeExitCode = 0;
+    if (TryRunTestSupportChildProbe(probeExitCode))
+    {
+        return probeExitCode;
+    }
+#endif
 
     const ParsedArguments parsed = ParseArguments();
     if (! parsed.errorMessage.empty())

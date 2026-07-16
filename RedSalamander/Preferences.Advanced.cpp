@@ -814,7 +814,7 @@ void AdvancedPane::ApplyDxTheme(const PreferencesDialogState& state) noexcept
         return;
     }
 
-    const ThemePalette palette = PrefsUi::MakeDxPalette(state.theme);
+    const ThemePalette palette = MakeAppThemeDxPalette(state.theme);
     _pageHostDx->SetTheme(palette);
 }
 
@@ -825,7 +825,7 @@ void AdvancedPane::SyncDxControlsFromState(const PreferencesDialogState& state) 
         return;
     }
 
-    const ThemePalette palette = PrefsUi::MakeDxPalette(state.theme);
+    const ThemePalette palette = MakeAppThemeDxPalette(state.theme);
     const auto& connections    = GetConnectionsSettingsOrDefault(state.workingSettings);
     const auto& cache          = GetCacheSettingsOrDefault(state.workingSettings);
     const auto& fileOperations = GetFileOperationsSettingsOrDefault(state.workingSettings);
@@ -1162,13 +1162,13 @@ void AdvancedPane::LayoutDxPage(
                               Label* dxDescription,
                               Button* dxButton) noexcept
     {
-        const int textWidth       = std::max(0, width - 2 * cardPaddingX);
-        const int descHeight      = PrefsUi::MeasureWrappedTextHeightPx(typography, typography.caption, textWidth, descText);
-        const int measuredWidth   = PrefsUi::MeasureSingleLineTextWidthPx(typography, typography.strong, linkText) + UiMetrics::ScaleDip(dpi, 24);
-        const int linkWidth       = std::max(1, std::min(textWidth, measuredWidth));
-        const int contentHeight   = titleHeight + cardGapY + descHeight + cardGapY + rowHeight;
-        const int cardHeight      = std::max(rowHeight + 2 * cardPaddingY, contentHeight + 2 * cardPaddingY);
-        const int linkTop         = y + cardPaddingY + titleHeight + cardGapY + descHeight + cardGapY;
+        const int textWidth     = std::max(0, width - 2 * cardPaddingX);
+        const int descHeight    = PrefsUi::MeasureWrappedTextHeightPx(typography, typography.caption, textWidth, descText);
+        const int measuredWidth = PrefsUi::MeasureSingleLineTextWidthPx(typography, typography.strong, linkText) + UiMetrics::ScaleDip(dpi, 24);
+        const int linkWidth     = std::max(1, std::min(textWidth, measuredWidth));
+        const int contentHeight = titleHeight + cardGapY + descHeight + cardGapY + rowHeight;
+        const int cardHeight    = std::max(rowHeight + 2 * cardPaddingY, contentHeight + 2 * cardPaddingY);
+        const int linkTop       = y + cardPaddingY + titleHeight + cardGapY + descHeight + cardGapY;
 
         RECT card{};
         card.left   = x;
@@ -1201,10 +1201,8 @@ void AdvancedPane::LayoutDxPage(
         if (dxButton)
         {
             dxButton->SetText(std::wstring(linkText));
-            dxButton->SetBounds(D2D1::RectF(pxToDip(card.left + cardPaddingX),
-                                            pxToDip(linkTop),
-                                            pxToDip(card.left + cardPaddingX + linkWidth),
-                                            pxToDip(linkTop + rowHeight)));
+            dxButton->SetBounds(
+                D2D1::RectF(pxToDip(card.left + cardPaddingX), pxToDip(linkTop), pxToDip(card.left + cardPaddingX + linkWidth), pxToDip(linkTop + rowHeight)));
         }
 
         y += cardHeight + cardSpacingY;

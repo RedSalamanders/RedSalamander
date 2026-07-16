@@ -40,20 +40,7 @@ namespace SettingsSave
 
     if (result.fileOperations.has_value())
     {
-        const Common::Settings::FileOperationsSettings defaults{};
-        const auto& fileOperations = result.fileOperations.value();
-        const bool hasNonDefault =
-            fileOperations.autoDismissSuccess != defaults.autoDismissSuccess || fileOperations.preCalcEnabled != defaults.preCalcEnabled ||
-            fileOperations.preCalcMaxWorkers != defaults.preCalcMaxWorkers || fileOperations.crossFsBridgeBufferSizeKB != defaults.crossFsBridgeBufferSizeKB ||
-            fileOperations.defaultBandwidthLimitBytesPerSecond != defaults.defaultBandwidthLimitBytesPerSecond ||
-            fileOperations.maxDiagnosticsLogFiles != defaults.maxDiagnosticsLogFiles ||
-            fileOperations.diagnosticsInfoEnabled != defaults.diagnosticsInfoEnabled ||
-            fileOperations.diagnosticsDebugEnabled != defaults.diagnosticsDebugEnabled || fileOperations.maxIssueReportFiles.has_value() ||
-            fileOperations.maxDiagnosticsInMemory.has_value() || fileOperations.maxDiagnosticsPerFlush.has_value() ||
-            fileOperations.diagnosticsFlushIntervalMs.has_value() || fileOperations.diagnosticsCleanupIntervalMs.has_value() ||
-            ! fileOperations.issuesPaneSortColumnId.empty() || fileOperations.issuesPaneSortDescending != defaults.issuesPaneSortDescending ||
-            ! fileOperations.issuesPaneGridLayout.empty();
-        if (! hasNonDefault)
+        if (! Common::Settings::HasNonDefaultFileOperationsSettings(result.fileOperations.value()))
         {
             result.fileOperations.reset();
         }
@@ -129,16 +116,13 @@ namespace SettingsSave
     {
         const Common::Settings::BatchRenameSettings defaults{};
         const auto& batchRename  = result.batchRename.value();
-        const bool hasNonDefault = ! batchRename.lastRoot.empty() || ! batchRename.recentMasks.empty() ||
-                                   ! batchRename.recentNameTemplates.empty() || ! batchRename.recentSearchPatterns.empty() ||
-                                   ! batchRename.recentReplacePatterns.empty() ||
-                                   batchRename.includeSubdirectories != defaults.includeSubdirectories ||
-                                   batchRename.includeFiles != defaults.includeFiles || batchRename.includeFolders != defaults.includeFolders ||
-                                   batchRename.regexEnabled != defaults.regexEnabled || batchRename.caseSensitive != defaults.caseSensitive ||
-                                   batchRename.wholeWords != defaults.wholeWords || batchRename.replaceOnce != defaults.replaceOnce ||
-                                   batchRename.excludeExtension != defaults.excludeExtension ||
-                                   batchRename.flattenSeparator != defaults.flattenSeparator ||
-                                   batchRename.fileNameCaseStyle != defaults.fileNameCaseStyle ||
+        const bool hasNonDefault = ! batchRename.lastRoot.empty() || ! batchRename.recentMasks.empty() || ! batchRename.recentNameTemplates.empty() ||
+                                   ! batchRename.recentSearchPatterns.empty() || ! batchRename.recentReplacePatterns.empty() ||
+                                   batchRename.includeSubdirectories != defaults.includeSubdirectories || batchRename.includeFiles != defaults.includeFiles ||
+                                   batchRename.includeFolders != defaults.includeFolders || batchRename.regexEnabled != defaults.regexEnabled ||
+                                   batchRename.caseSensitive != defaults.caseSensitive || batchRename.wholeWords != defaults.wholeWords ||
+                                   batchRename.replaceOnce != defaults.replaceOnce || batchRename.excludeExtension != defaults.excludeExtension ||
+                                   batchRename.flattenSeparator != defaults.flattenSeparator || batchRename.fileNameCaseStyle != defaults.fileNameCaseStyle ||
                                    batchRename.extensionCaseStyle != defaults.extensionCaseStyle || ! batchRename.previewSortColumnId.empty() ||
                                    batchRename.previewSortDescending != defaults.previewSortDescending || ! batchRename.previewGridLayout.empty();
         if (! hasNonDefault)

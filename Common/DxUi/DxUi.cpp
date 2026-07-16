@@ -1,7 +1,9 @@
 #include "DxUi.Internal.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <cwctype>
+#include <limits>
 
 #include "Helpers.h"
 
@@ -13,7 +15,118 @@ namespace
 {
     return static_cast<wchar_t>(std::towupper(static_cast<wint_t>(ch)));
 }
+
+[[nodiscard]] bool ContinueModalLoopByDefault(void*) noexcept
+{
+    return true;
+}
 } // namespace
+
+DxUiModalLoopResult RunDxUiModalLoop(HWND hwnd, const DxUiModalLoopOptions& options) noexcept
+{
+    const DxUiModalLoopContinueCallback shouldContinue = options.shouldContinue ? options.shouldContinue : ContinueModalLoopByDefault;
+    const std::wstring_view diagnosticName             = options.diagnosticName.empty() ? std::wstring_view(L"modal") : options.diagnosticName;
+
+    MSG msg{};
+    while (shouldContinue(options.context))
+    {
+        const BOOL getMessageResult = GetMessageW(&msg, nullptr, 0, 0);
+        if (getMessageResult == -1)
+        {
+            const DWORD lastError = GetLastError();
+            Debug::Warning(L"DxUi::RunDxUiModalLoop: GetMessageW failed for '{0}' (hwnd=0x{1:X}, lastError={2})",
+                           diagnosticName,
+                           reinterpret_cast<uintptr_t>(hwnd),
+                           lastError);
+            SetLastError(lastError);
+            return DxUiModalLoopResult::GetMessageFailed;
+        }
+
+        if (getMessageResult == 0)
+        {
+            if (options.onQuit)
+            {
+                options.onQuit(msg.wParam, options.context);
+            }
+            PostQuitMessage(static_cast<int>(msg.wParam));
+            return DxUiModalLoopResult::Quit;
+        }
+
+        TranslateMessage(&msg);
+        DispatchMessageW(&msg);
+    }
+
+    return DxUiModalLoopResult::Completed;
+}
+
+bool CaptureBackdropScreenRegion(const RECT& screenRect, WindowHostBitmapCapture& outCapture, std::wstring_view componentName) noexcept
+{
+    outCapture = {};
+
+    const LONG widthPx  = screenRect.right - screenRect.left;
+    const LONG heightPx = screenRect.bottom - screenRect.top;
+    if (widthPx <= 0 || heightPx <= 0)
+    {
+        return false;
+    }
+
+    const uint64_t pixelCount = static_cast<uint64_t>(widthPx) * static_cast<uint64_t>(heightPx);
+    if (pixelCount > static_cast<uint64_t>((std::numeric_limits<size_t>::max)() / 4u))
+    {
+        Debug::Warning(L"DxUi::{}: popup backdrop capture is too large (widthPx={} heightPx={})", componentName, widthPx, heightPx);
+        return false;
+    }
+
+    BITMAPINFO bmi{};
+    bmi.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
+    bmi.bmiHeader.biWidth       = widthPx;
+    bmi.bmiHeader.biHeight      = -heightPx;
+    bmi.bmiHeader.biPlanes      = 1;
+    bmi.bmiHeader.biBitCount    = 32;
+    bmi.bmiHeader.biCompression = BI_RGB;
+
+    void* bits = nullptr;
+    wil::unique_hdc_window screenDc{GetDC(nullptr)};
+    if (! screenDc)
+    {
+        Debug::Warning(L"DxUi::{}: unable to acquire screen DC for popup backdrop capture", componentName);
+        return false;
+    }
+
+    wil::unique_hdc memoryDc{CreateCompatibleDC(screenDc.get())};
+    if (! memoryDc)
+    {
+        Debug::Warning(L"DxUi::{}: unable to create memory DC for popup backdrop capture", componentName);
+        return false;
+    }
+
+    wil::unique_hbitmap bitmap{CreateDIBSection(screenDc.get(), &bmi, DIB_RGB_COLORS, &bits, nullptr, 0)};
+    if (! bitmap || ! bits)
+    {
+        Debug::Warning(L"DxUi::{}: unable to create DIB section for popup backdrop capture", componentName);
+        return false;
+    }
+
+    [[maybe_unused]] const auto oldBitmap = wil::SelectObject(memoryDc.get(), bitmap.get());
+    if (BitBlt(memoryDc.get(), 0, 0, widthPx, heightPx, screenDc.get(), screenRect.left, screenRect.top, SRCCOPY | CAPTUREBLT) == FALSE)
+    {
+        Debug::Warning(L"DxUi::{}: BitBlt failed for popup backdrop capture (lastError={})", componentName, GetLastError());
+        return false;
+    }
+
+    outCapture.widthPx  = static_cast<UINT>(widthPx);
+    outCapture.heightPx = static_cast<UINT>(heightPx);
+    outCapture.bgraPixels.resize(static_cast<size_t>(pixelCount) * 4u);
+
+    const auto* const sourceBytes = static_cast<const uint8_t*>(bits);
+    std::copy_n(sourceBytes, outCapture.bgraPixels.size(), outCapture.bgraPixels.data());
+    for (size_t offset = 3u; offset < outCapture.bgraPixels.size(); offset += 4u)
+    {
+        outCapture.bgraPixels[offset] = 0xFFu;
+    }
+
+    return true;
+}
 
 void Control::SetBounds(const D2D1_RECT_F& bounds) noexcept
 {
@@ -69,6 +182,10 @@ void Control::SetVisible(bool visible) noexcept
     {
         _visible = visible;
         RequestInvalidate();
+        if (WindowHost* const host = GetHost())
+        {
+            RefreshWindowHostAccessibilitySnapshot(host->GetHwnd(), host);
+        }
     }
 }
 
@@ -84,6 +201,10 @@ void Control::SetEnabled(bool enabled) noexcept
         _enabled = enabled;
         OnEnabledChanged(enabled);
         RequestInvalidate();
+        if (WindowHost* const host = GetHost())
+        {
+            RefreshWindowHostAccessibilitySnapshot(host->GetHwnd(), host);
+        }
     }
 }
 
@@ -94,7 +215,14 @@ bool Control::IsEnabled() const noexcept
 
 void Control::SetFocusable(bool focusable) noexcept
 {
-    _focusable = focusable;
+    if (_focusable != focusable)
+    {
+        _focusable = focusable;
+        if (WindowHost* const host = GetHost())
+        {
+            RefreshWindowHostAccessibilitySnapshot(host->GetHwnd(), host);
+        }
+    }
 }
 
 bool Control::IsFocusable() const noexcept
@@ -350,6 +478,10 @@ void Control::SetAccessibleName(std::wstring name)
     {
         _accessibleName = std::move(name);
         RequestInvalidate();
+        if (WindowHost* const host = GetHost())
+        {
+            RefreshWindowHostAccessibilitySnapshot(host->GetHwnd(), host);
+        }
     }
 }
 
@@ -364,6 +496,10 @@ void Control::SetAccessibleHelpText(std::wstring helpText)
     {
         _accessibleHelpText = std::move(helpText);
         RequestInvalidate();
+        if (WindowHost* const host = GetHost())
+        {
+            RefreshWindowHostAccessibilitySnapshot(host->GetHwnd(), host);
+        }
     }
 }
 
@@ -395,6 +531,25 @@ Control* Control::HitTestOverlay(D2D1_POINT_2F /*point*/)
 const Control* Control::HitTestOverlay(D2D1_POINT_2F /*point*/) const
 {
     return nullptr;
+}
+
+bool Control::DismissOverlayOnPointerDown(WindowHost& host, D2D1_POINT_2F point)
+{
+    if (! IsVisible() || ! IsEnabled())
+    {
+        return false;
+    }
+
+    for (size_t childIndex = GetLogicalChildCount(); childIndex > 0u; --childIndex)
+    {
+        Control* const child = GetLogicalChild(childIndex - 1u);
+        if (child && child->DismissOverlayOnPointerDown(host, point))
+        {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 POINT Control::ResolveContextMenuAnchor(WindowHost& host, bool keyboardInvocation, D2D1_POINT_2F pointDip) const noexcept

@@ -3,15 +3,17 @@
 #include "Helpers.h"
 #include "Localization/RcParser.h"
 #include "Localization/RcWriter.h"
+#include "RedConfigureBinaryFile.h"
 #include "ThemeDefinitionIo.h"
+#include "RedConfigureWorkflow.h"
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <cstring>
 #include <format>
 #include <fstream>
 #include <future>
-#include <iterator>
 #include <limits>
 #include <optional>
 #include <set>
@@ -115,19 +117,6 @@ namespace fs = std::filesystem;
 
     return options.searchText.empty() || ContainsIgnoreCase(entry.id, options.searchText) || ContainsIgnoreCase(entry.sourceText, options.searchText) ||
            ContainsIgnoreCase(entry.targetText, options.searchText);
-}
-
-[[nodiscard]] HRESULT ReadBinaryFile(const fs::path& path, std::vector<uint8_t>& outBytes)
-{
-    outBytes.clear();
-    std::ifstream input(path, std::ios::binary);
-    if (! input)
-    {
-        return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
-    }
-
-    outBytes.assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
-    return input.bad() ? HRESULT_FROM_WIN32(ERROR_READ_FAULT) : S_OK;
 }
 
 [[nodiscard]] bool DecodeBytes(UINT codePage, const uint8_t* bytes, size_t byteCount, std::wstring& outText) noexcept
@@ -241,7 +230,7 @@ enum class BomlessUtf16Guess : uint8_t
     outText.clear();
 
     std::vector<uint8_t> bytes;
-    if (const HRESULT hr = ReadBinaryFile(path, bytes); FAILED(hr))
+    if (const HRESULT hr = RedConfigure::ReadBinaryFile(path, bytes); FAILED(hr))
     {
         return hr;
     }
@@ -322,7 +311,9 @@ enum class BomlessUtf16Guess : uint8_t
         return hr;
     }
 
-    std::ofstream output(path, std::ios::binary);
+    fs::path tempPath = path;
+    tempPath += std::format(L".tmp.{}.{}", GetCurrentProcessId(), GetTickCount64());
+    std::ofstream output(tempPath, std::ios::binary);
     if (! output)
     {
         return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
@@ -334,7 +325,23 @@ enum class BomlessUtf16Guess : uint8_t
     {
         output.write(reinterpret_cast<const char*>(text.data()), static_cast<std::streamsize>(text.size() * sizeof(wchar_t)));
     }
-    return output.good() ? S_OK : HRESULT_FROM_WIN32(ERROR_WRITE_FAULT);
+    output.flush();
+    const bool writeSucceeded = output.good();
+    output.close();
+    if (! writeSucceeded || output.fail())
+    {
+        std::error_code ec;
+        fs::remove(tempPath, ec);
+        return HRESULT_FROM_WIN32(ERROR_WRITE_FAULT);
+    }
+    if (! MoveFileExW(tempPath.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+    {
+        const HRESULT hr = HRESULT_FROM_WIN32(GetLastError());
+        std::error_code ec;
+        fs::remove(tempPath, ec);
+        return hr;
+    }
+    return S_OK;
 }
 
 [[nodiscard]] HRESULT WriteBinaryFile(const fs::path& path, std::string_view bytes)
@@ -344,7 +351,9 @@ enum class BomlessUtf16Guess : uint8_t
         return hr;
     }
 
-    std::ofstream output(path, std::ios::binary);
+    fs::path tempPath = path;
+    tempPath += std::format(L".tmp.{}.{}", GetCurrentProcessId(), GetTickCount64());
+    std::ofstream output(tempPath, std::ios::binary);
     if (! output)
     {
         return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
@@ -354,7 +363,23 @@ enum class BomlessUtf16Guess : uint8_t
     {
         output.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
     }
-    return output.good() ? S_OK : HRESULT_FROM_WIN32(ERROR_WRITE_FAULT);
+    output.flush();
+    const bool writeSucceeded = output.good();
+    output.close();
+    if (! writeSucceeded || output.fail())
+    {
+        std::error_code ec;
+        fs::remove(tempPath, ec);
+        return HRESULT_FROM_WIN32(ERROR_WRITE_FAULT);
+    }
+    if (! MoveFileExW(tempPath.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+    {
+        const HRESULT hr = HRESULT_FROM_WIN32(GetLastError());
+        std::error_code ec;
+        fs::remove(tempPath, ec);
+        return hr;
+    }
+    return S_OK;
 }
 
 [[nodiscard]] std::optional<fs::path> FindSatelliteForCulture(const RedConfigure::Workspace::ResourceOwner& owner, std::wstring_view cultureName)
@@ -436,11 +461,7 @@ void AddWorkspaceError(std::vector<std::wstring>& errors, std::wstring error)
 
 void AddWorkspaceFileError(std::vector<std::wstring>& errors, const fs::path& path, std::wstring_view operation, HRESULT hr)
 {
-    AddWorkspaceError(errors,
-                      std::format(L"{} failed for '{}'. hr=0x{:08X}",
-                                  operation,
-                                  path.wstring(),
-                                  static_cast<unsigned long>(hr)));
+    AddWorkspaceError(errors, std::format(L"{} failed for '{}'. hr=0x{:08X}", operation, path.wstring(), static_cast<unsigned long>(hr)));
 }
 
 void AddWorkspaceParseErrors(std::vector<std::wstring>& errors, const fs::path& path, std::span<const std::wstring> parseErrors)
@@ -466,14 +487,18 @@ void AddWorkspaceParseErrors(std::vector<std::wstring>& errors, const fs::path& 
         return false;
     }
 
+    Debug::Perf::Scope parsePerf(L"redconfigure.localization.parse_us");
+    parsePerf.SetValue0(static_cast<uint64_t>(text.size()));
     if (const HRESULT hr = RedConfigure::Localization::ParseRcStringTables(text, outResult); FAILED(hr))
     {
+        parsePerf.SetHr(hr);
         AddWorkspaceFileError(errors, path, parseOperation, hr);
         outResult = {};
         return false;
     }
 
     AddWorkspaceParseErrors(errors, path, outResult.errors);
+    parsePerf.SetValue1(static_cast<uint64_t>(outResult.localizableEntries.size()));
     return true;
 }
 
@@ -496,15 +521,12 @@ struct LocalizationReviewOwnerLoadResult
     result.ownerIndex = ownerIndex;
 
     RedConfigure::Localization::RcParseResult source;
-    if (! ReadAndParseRcStringTables(owner.embeddedResourcePath,
-                                     L"Read localization source",
-                                     L"Parse localization source",
-                                     source,
-                                     result.errors))
+    if (! ReadAndParseRcStringTables(owner.embeddedResourcePath, L"Read localization source", L"Parse localization source", source, result.errors))
     {
         ownerPerf.SetHr(HRESULT_FROM_WIN32(ERROR_INVALID_DATA));
         return result;
     }
+    const StringTableById sourceStringsById = BuildStringTableById(source.strings);
 
     std::vector<StringTableById> targetStringsByCulture;
     targetStringsByCulture.reserve(cultures.size());
@@ -514,12 +536,18 @@ struct LocalizationReviewOwnerLoadResult
         if (const std::optional<fs::path> satellitePath = FindSatelliteForCulture(owner, culture))
         {
             RedConfigure::Localization::RcParseResult target;
-            if (ReadAndParseRcStringTables(satellitePath.value(),
-                                           L"Read localization target",
-                                           L"Parse localization target",
-                                           target,
-                                           result.errors))
+            if (ReadAndParseRcStringTables(satellitePath.value(), L"Read localization target", L"Parse localization target", target, result.errors))
             {
+                for (const RedConfigure::Localization::RcStringEntry& targetEntry : target.strings)
+                {
+                    if (! sourceStringsById.contains(targetEntry.id))
+                    {
+                        AddWorkspaceError(result.errors,
+                                          std::format(L"{}: target-only resource '{}' is not present in the English source and will not be exported.",
+                                                      satellitePath->wstring(),
+                                                      targetEntry.id));
+                    }
+                }
                 targetStrings = BuildStringTableById(target.strings);
             }
         }
@@ -554,11 +582,10 @@ struct LocalizationReviewOwnerLoadResult
     return result;
 }
 
-[[nodiscard]] std::vector<LocalizationReviewOwnerLoadResult> LoadLocalizationReviewOwnerRange(
-    std::span<const RedConfigure::Workspace::ResourceOwner> owners,
-    std::span<const std::wstring> cultures,
-    size_t beginIndex,
-    size_t endIndex)
+[[nodiscard]] std::vector<LocalizationReviewOwnerLoadResult> LoadLocalizationReviewOwnerRange(std::span<const RedConfigure::Workspace::ResourceOwner> owners,
+                                                                                              std::span<const std::wstring> cultures,
+                                                                                              size_t beginIndex,
+                                                                                              size_t endIndex)
 {
     std::vector<LocalizationReviewOwnerLoadResult> results;
     results.reserve(endIndex - beginIndex);
@@ -677,7 +704,8 @@ void AppendLocalizationReviewLoadResult(LocalizationReviewOwnerLoadResult& resul
 
     for (const RedConfigure::LocalizationTargetCell& cell : row.targets)
     {
-        if (IsReviewCultureVisible(visibleCultureNames, cell.cultureName) && ContainsIgnoreCase(cell.targetText, searchText))
+        if (IsReviewCultureVisible(visibleCultureNames, cell.cultureName) &&
+            (ContainsIgnoreCase(cell.cultureName, searchText) || ContainsIgnoreCase(cell.targetText, searchText)))
         {
             return true;
         }
@@ -872,17 +900,19 @@ std::vector<size_t> BuildLocalizationReviewView(std::span<const LocalizationRevi
 
 HRESULT RedConfigureSession::LoadWorkspace(const std::filesystem::path& root, std::wstring cultureName)
 {
-    _workspace                = {};
-    _themeCatalog             = {};
-    _themePreview             = {};
-    _translations             = {};
-    _localizationReviewRows   = {};
+    _workspace                  = {};
+    _themeCatalog               = {};
+    _themePreview               = {};
+    _translations               = {};
+    _localizationReviewRows     = {};
     _localizationReviewCultures = {};
-    _inventoryEntries         = {};
-    _activeResourceOwnerName  = {};
-    _activeResourceOwnerIndex = 0u;
-    _activeThemeIndex         = 0u;
-    _cultureName              = cultureName.empty() ? std::wstring(L"en-US") : std::move(cultureName);
+    _inventoryEntries           = {};
+    _activeResourceOwnerName    = {};
+    _activeResourceOwnerIndex   = 0u;
+    _activeThemeIndex           = 0u;
+    _undoHistory.clear();
+    _redoHistory.clear();
+    _cultureName                = cultureName.empty() ? std::wstring(L"en-US") : std::move(cultureName);
 
     {
         Debug::Perf::Scope discoverPerf(L"redconfigure.workspace.discover_us");
@@ -913,6 +943,7 @@ HRESULT RedConfigureSession::LoadWorkspace(const std::filesystem::path& root, st
     {
         _themePreview.SetTheme(_themeCatalog.themes.front().definition);
     }
+    _loadedThemeBaseline = _themePreview.GetTheme();
 
     {
         Debug::Perf::Scope reviewPerf(L"redconfigure.localization_review.load_us");
@@ -1013,6 +1044,7 @@ bool RedConfigureSession::SetActiveTheme(size_t themeIndex)
 
     _activeThemeIndex = themeIndex;
     _themePreview.SetTheme(_themeCatalog.themes[themeIndex].definition);
+    _loadedThemeBaseline = _themeCatalog.themes[themeIndex].definition;
     return true;
 }
 
@@ -1030,6 +1062,7 @@ bool RedConfigureSession::UpdateTranslation(size_t rowIndex, std::wstring_view t
         return false;
     }
 
+    RecordUndoSnapshot();
     entry.targetText.assign(targetText);
     entry.validation = validation;
     return true;
@@ -1077,7 +1110,7 @@ bool RedConfigureSession::UpdateLocalizationReviewTarget(size_t rowIndex, std::w
         return false;
     }
 
-    LocalizationReviewRow& row          = _localizationReviewRows[rowIndex];
+    LocalizationReviewRow& row         = _localizationReviewRows[rowIndex];
     LocalizationTargetCell* const cell = FindReviewTargetCell(row, cultureName);
     if (! cell)
     {
@@ -1090,6 +1123,12 @@ bool RedConfigureSession::UpdateLocalizationReviewTarget(size_t rowIndex, std::w
         return false;
     }
 
+    if (cell->targetText == targetText)
+    {
+        return true;
+    }
+
+    RecordUndoSnapshot();
     cell->targetText.assign(targetText);
     cell->validation             = validation;
     cell->hasExistingTranslation = true;
@@ -1099,7 +1138,226 @@ bool RedConfigureSession::UpdateLocalizationReviewTarget(size_t rowIndex, std::w
 
 bool RedConfigureSession::UpdateThemeColor(std::wstring_view colorKey, std::wstring_view colorText)
 {
-    return _themePreview.TryEditOverride(colorKey, colorText);
+    const Common::Settings::ThemeDefinition before = _themePreview.GetTheme();
+    if (! _themePreview.TryEditOverride(colorKey, colorText))
+    {
+        return false;
+    }
+    _undoHistory.push_back(EditSnapshot{.translations = {},
+                                        .localizationReviewRows = {},
+                                        .theme = before,
+                                        .themeCatalog = {},
+                                        .loadedThemeBaseline = _loadedThemeBaseline,
+                                        .activeThemeIndex = _activeThemeIndex,
+                                        .hasLocalization = false,
+                                        .hasThemeCatalog = false});
+    if (_undoHistory.size() > 64u) _undoHistory.erase(_undoHistory.begin());
+    _redoHistory.clear();
+    return true;
+}
+
+HRESULT RedConfigureSession::ImportTheme(const std::filesystem::path& path)
+{
+    const std::array<Workspace::ThemeFile, 1> files{{Workspace::ThemeFile{.path = path}}};
+    Themes::ThemeCatalog imported;
+    if (const HRESULT hr = Themes::LoadThemeCatalog(files, imported); FAILED(hr))
+    {
+        return hr;
+    }
+    if (imported.themes.size() != 1u)
+    {
+        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+    }
+    RecordUndoSnapshot();
+    _themeCatalog.themes.push_back(std::move(imported.themes.front()));
+    _activeThemeIndex = _themeCatalog.themes.size() - 1u;
+    _themePreview.SetTheme(_themeCatalog.themes.back().definition);
+    _loadedThemeBaseline = _themePreview.GetTheme();
+    return S_OK;
+}
+
+bool RedConfigureSession::DuplicateActiveTheme(std::wstring_view newId, std::wstring_view newName)
+{
+    if (! Common::Settings::IsValidUserThemeId(newId) || newName.empty() || newName.size() > 64u)
+    {
+        return false;
+    }
+    if (std::ranges::any_of(_themeCatalog.themes, [newId](const auto& entry) { return CompareTextIgnoreCase(entry.definition.id, newId) == 0; }))
+    {
+        return false;
+    }
+    RecordUndoSnapshot();
+    Common::Settings::ThemeDefinition duplicate = _themePreview.GetTheme();
+    duplicate.id = newId;
+    duplicate.name = newName;
+    const fs::path path = _workspace.root / L"RedConfigureOutput" / (SanitizePathPart(std::wstring(newId)) + L".theme.json5");
+    _themeCatalog.themes.push_back(Themes::ThemeCatalogEntry{.path = path, .definition = duplicate});
+    _activeThemeIndex = _themeCatalog.themes.size() - 1u;
+    _themePreview.SetTheme(duplicate);
+    _loadedThemeBaseline = duplicate;
+    return true;
+}
+
+bool RedConfigureSession::ResetActiveTheme()
+{
+    if (_activeThemeIndex >= _themeCatalog.themes.size())
+    {
+        return false;
+    }
+    RecordUndoSnapshot();
+    _themePreview.SetTheme(_themeCatalog.themes[_activeThemeIndex].definition);
+    _loadedThemeBaseline = _themeCatalog.themes[_activeThemeIndex].definition;
+    return true;
+}
+
+bool RedConfigureSession::IsThemeDirty() const noexcept
+{
+    return ! (_themePreview.GetTheme().id == _loadedThemeBaseline.id && _themePreview.GetTheme().name == _loadedThemeBaseline.name &&
+              _themePreview.GetTheme().baseThemeId == _loadedThemeBaseline.baseThemeId && _themePreview.GetTheme().palette == _loadedThemeBaseline.palette &&
+              _themePreview.GetTheme().colors == _loadedThemeBaseline.colors);
+}
+
+bool RedConfigureSession::ApplyLocalizationBatch(const Workflow::LocalizationBatchPreview& preview)
+{
+    if (preview.changes.empty())
+    {
+        return false;
+    }
+    RecordUndoSnapshot();
+    for (const Workflow::LocalizationBatchChange& change : preview.changes)
+    {
+        if (change.rowIndex >= _localizationReviewRows.size())
+        {
+            continue;
+        }
+        LocalizationReviewRow& row = _localizationReviewRows[change.rowIndex];
+        LocalizationTargetCell* cell = FindReviewTargetCell(row, change.cultureName);
+        if (! cell)
+        {
+            continue;
+        }
+        cell->targetText = change.after;
+        cell->validation = Localization::ValidatePlaceholders(row.sourceText, cell->targetText);
+        cell->dirty      = true;
+        cell->reviewed   = preview.request.kind == Workflow::LocalizationBatchKind::MarkReviewed || cell->reviewed;
+    }
+    return true;
+}
+
+bool RedConfigureSession::ApplyClipboardMatrix(size_t startRow, size_t startCultureIndex, std::wstring_view clipboardText)
+{
+    const Workflow::ClipboardMatrix matrix = Workflow::ParseClipboardMatrix(clipboardText);
+    if (matrix.rows.empty() || startRow >= _localizationReviewRows.size())
+    {
+        return false;
+    }
+    RecordUndoSnapshot();
+    bool changed = false;
+    for (size_t rowOffset = 0u; rowOffset < matrix.rows.size() && startRow + rowOffset < _localizationReviewRows.size(); ++rowOffset)
+    {
+        LocalizationReviewRow& row = _localizationReviewRows[startRow + rowOffset];
+        for (size_t columnOffset = 0u; columnOffset < matrix.rows[rowOffset].size() && startCultureIndex + columnOffset < row.targets.size(); ++columnOffset)
+        {
+            LocalizationTargetCell& cell = row.targets[startCultureIndex + columnOffset];
+            const std::wstring& text = matrix.rows[rowOffset][columnOffset];
+            const auto validation = Localization::ValidatePlaceholders(row.sourceText, text);
+            if (validation.status != Localization::PlaceholderStatus::Ok)
+            {
+                continue;
+            }
+            cell.targetText = text;
+            cell.validation = validation;
+            cell.dirty      = true;
+            changed         = true;
+        }
+    }
+    if (! changed && ! _undoHistory.empty())
+    {
+        _undoHistory.pop_back();
+    }
+    return changed;
+}
+
+bool RedConfigureSession::Undo()
+{
+    if (_undoHistory.empty()) return false;
+    EditSnapshot snapshot = std::move(_undoHistory.back());
+    _undoHistory.pop_back();
+    _redoHistory.push_back(EditSnapshot{.translations = _translations,
+                                        .localizationReviewRows = _localizationReviewRows,
+                                        .theme = _themePreview.GetTheme(),
+                                        .themeCatalog = _themeCatalog,
+                                        .loadedThemeBaseline = _loadedThemeBaseline,
+                                        .activeThemeIndex = _activeThemeIndex});
+    RestoreSnapshot(std::move(snapshot));
+    return true;
+}
+
+bool RedConfigureSession::Redo()
+{
+    if (_redoHistory.empty()) return false;
+    EditSnapshot snapshot = std::move(_redoHistory.back());
+    _redoHistory.pop_back();
+    _undoHistory.push_back(EditSnapshot{.translations = _translations,
+                                        .localizationReviewRows = _localizationReviewRows,
+                                        .theme = _themePreview.GetTheme(),
+                                        .themeCatalog = _themeCatalog,
+                                        .loadedThemeBaseline = _loadedThemeBaseline,
+                                        .activeThemeIndex = _activeThemeIndex});
+    RestoreSnapshot(std::move(snapshot));
+    return true;
+}
+
+bool RedConfigureSession::CanUndo() const noexcept
+{
+    return ! _undoHistory.empty();
+}
+
+bool RedConfigureSession::CanRedo() const noexcept
+{
+    return ! _redoHistory.empty();
+}
+
+size_t RedConfigureSession::GetDirtyLocalizationCellCount() const noexcept
+{
+    return Workflow::CountDirtyLocalizationCells(_localizationReviewRows);
+}
+
+Workflow::ValidationSummary RedConfigureSession::Validate() const
+{
+    Debug::Perf::Scope perf(L"redconfigure.validation.total_us");
+    Workflow::ValidationSummary summary = Workflow::ValidateWorkspace(*this, GetDefaultLocalizationExportPath().parent_path(), GetDefaultThemeExportPath());
+    perf.SetValue0(static_cast<uint64_t>(summary.errorCount));
+    perf.SetValue1(static_cast<uint64_t>(summary.warningCount));
+    return summary;
+}
+
+void RedConfigureSession::RecordUndoSnapshot()
+{
+    _undoHistory.push_back(EditSnapshot{.translations = _translations,
+                                        .localizationReviewRows = _localizationReviewRows,
+                                        .theme = _themePreview.GetTheme(),
+                                        .themeCatalog = _themeCatalog,
+                                        .loadedThemeBaseline = _loadedThemeBaseline,
+                                        .activeThemeIndex = _activeThemeIndex});
+    if (_undoHistory.size() > 64u) _undoHistory.erase(_undoHistory.begin());
+    _redoHistory.clear();
+}
+
+void RedConfigureSession::RestoreSnapshot(EditSnapshot snapshot)
+{
+    if (snapshot.hasLocalization)
+    {
+        _translations           = std::move(snapshot.translations);
+        _localizationReviewRows = std::move(snapshot.localizationReviewRows);
+    }
+    _themePreview.SetTheme(snapshot.theme);
+    if (snapshot.hasThemeCatalog)
+    {
+        _themeCatalog = std::move(snapshot.themeCatalog);
+    }
+    _loadedThemeBaseline = std::move(snapshot.loadedThemeBaseline);
+    _activeThemeIndex    = snapshot.activeThemeIndex;
 }
 
 std::filesystem::path RedConfigureSession::GetDefaultLocalizationExportPath() const
@@ -1127,7 +1385,14 @@ HRESULT RedConfigureSession::ExportLocalization(const std::filesystem::path& pat
         return hr;
     }
 
-    return WriteUtf16LeTextFile(path, rcText);
+    if (const HRESULT hr = WriteUtf16LeTextFile(path, rcText); FAILED(hr))
+    {
+        return hr;
+    }
+    std::wstring written;
+    Localization::RcParseResult parsed;
+    if (const HRESULT hr = ReadTextFile(path, written); FAILED(hr)) return hr;
+    return Localization::ParseRcStringTables(written, parsed);
 }
 
 HRESULT RedConfigureSession::ExportLocalizationReview(const std::filesystem::path& outputRoot, size_t* exportedFileCount) const
@@ -1150,6 +1415,10 @@ HRESULT RedConfigureSession::ExportLocalizationReview(const std::filesystem::pat
         {
             return hr;
         }
+        std::wstring written;
+        Localization::RcParseResult parsed;
+        if (const HRESULT hr = ReadTextFile(path, written); FAILED(hr)) return hr;
+        if (const HRESULT hr = Localization::ParseRcStringTables(written, parsed); FAILED(hr)) return hr;
     }
 
     if (exportedFileCount)
@@ -1224,7 +1493,7 @@ HRESULT RedConfigureSession::BuildLocalizationReviewExportPreviews(std::vector<L
 HRESULT RedConfigureSession::BuildThemeExportText(std::string& outJson) const
 {
     outJson.clear();
-    return Common::Settings::BuildThemeDefinitionJson5(_themePreview.BuildFlattenedTheme(), outJson);
+    return Common::Settings::BuildThemeDefinitionJson5(_themePreview.GetTheme(), outJson);
 }
 
 HRESULT RedConfigureSession::ExportTheme(const std::filesystem::path& path) const
@@ -1235,7 +1504,15 @@ HRESULT RedConfigureSession::ExportTheme(const std::filesystem::path& path) cons
         return hr;
     }
 
-    return WriteBinaryFile(path, jsonText);
+    if (const HRESULT hr = WriteBinaryFile(path, jsonText); FAILED(hr))
+    {
+        return hr;
+    }
+    std::vector<uint8_t> bytes;
+    if (const HRESULT hr = ReadBinaryFile(path, bytes); FAILED(hr)) return hr;
+    Common::Settings::ThemeDefinition parsed;
+    const std::string_view written(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+    return Common::Settings::ParseThemeDefinitionJson5(written, parsed, nullptr, nullptr);
 }
 
 HRESULT RedConfigureSession::LoadLocalizationReview()
@@ -1274,13 +1551,10 @@ HRESULT RedConfigureSession::LoadLocalizationReview()
         try
         {
             futures.push_back(std::async(std::launch::async,
-                                         [owners = std::span<const Workspace::ResourceOwner>(_workspace.resourceOwners),
+                                         [owners   = std::span<const Workspace::ResourceOwner>(_workspace.resourceOwners),
                                           cultures = std::span<const std::wstring>(_localizationReviewCultures),
                                           beginIndex,
-                                          endIndex]
-            {
-                return LoadLocalizationReviewOwnerRange(owners, cultures, beginIndex, endIndex);
-            }));
+                                          endIndex] { return LoadLocalizationReviewOwnerRange(owners, cultures, beginIndex, endIndex); }));
         }
         catch (const std::system_error&)
         {
@@ -1330,11 +1604,8 @@ HRESULT RedConfigureSession::LoadLocalizationForActiveOwner()
     _activeResourceOwnerName              = owner.name;
 
     Localization::RcParseResult source;
-    if (! ReadAndParseRcStringTables(owner.embeddedResourcePath,
-                                     L"Read active localization source",
-                                     L"Parse active localization source",
-                                     source,
-                                     _workspace.errors))
+    if (! ReadAndParseRcStringTables(
+            owner.embeddedResourcePath, L"Read active localization source", L"Parse active localization source", source, _workspace.errors))
     {
         return S_OK;
     }
@@ -1355,11 +1626,8 @@ HRESULT RedConfigureSession::LoadLocalizationForActiveOwner()
     Localization::RcParseResult target;
     if (const auto satellitePath = FindSatelliteForCulture(owner, _cultureName))
     {
-        static_cast<void>(ReadAndParseRcStringTables(satellitePath.value(),
-                                                     L"Read active localization target",
-                                                     L"Parse active localization target",
-                                                     target,
-                                                     _workspace.errors));
+        static_cast<void>(ReadAndParseRcStringTables(
+            satellitePath.value(), L"Read active localization target", L"Parse active localization target", target, _workspace.errors));
     }
 
     const std::vector<Localization::MergedStringEntry> merged = Localization::MergeStringTables(source.strings, target.strings);

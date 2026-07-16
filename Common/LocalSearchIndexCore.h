@@ -14,6 +14,8 @@
 
 namespace LocalSearchIndexCore
 {
+inline constexpr HRESULT kSkipCandidateHr = MAKE_HRESULT(SEVERITY_SUCCESS, FACILITY_ITF, 0x201u);
+
 struct VolumeIndex;
 
 enum class PersistentStoreKind : uint32_t
@@ -90,13 +92,15 @@ struct PersistentStoreInfo final
     std::wstring primaryPath;
     uint64_t primaryBytes = 0u;
     std::wstring writeAheadLogPath;
-    uint64_t writeAheadLogBytes = 0u;
-    uint64_t pageCount          = 0u;
-    uint64_t freelistPageCount  = 0u;
+    uint64_t writeAheadLogBytes       = 0u;
+    uint64_t pageCount                = 0u;
+    uint64_t freelistPageCount        = 0u;
+    bool incrementalAutoVacuumEnabled = false;
     std::wstring lastCheckpointUtc;
     std::wstring lastCompactionUtc;
     bool inspectionSucceeded                    = false;
     bool readyForQueryCutover                   = false;
+    uint64_t storeGeneration                    = 0u;
     uint64_t indexedVolumeCount                 = 0u;
     uint64_t indexedEntryCount                  = 0u;
     uint64_t legacyImportVolumeCount            = 0u;
@@ -169,6 +173,8 @@ struct QueryStats final
     bool rebuiltSnapshotCorruption        = false;
     bool usedNtfsEnumeration              = false;
     bool usedTraversalSeed                = false;
+    bool hardlinkAliasCoverageIncomplete  = false;
+    uint32_t warningFlags                 = FILESYSTEM_SEARCH_WARNING_NONE;
     uint64_t entryCount                   = 0u;
     uint64_t fileCount                    = 0u;
     uint64_t directoryCount               = 0u;
@@ -300,6 +306,8 @@ public:
     HRESULT PrimeRoot(std::wstring_view rootPath) noexcept;
     void CollectCachedRoots(std::vector<std::wstring>& outRoots) noexcept;
     void GetStatus(RepositoryStatus& outStatus) noexcept;
+    bool TryGetCachedPersistentStoreInfo(PersistentStoreInfo& outInfo) noexcept;
+    bool TryBuildInMemoryPersistentStoreInfo(PersistentStoreInfo& outInfo) noexcept;
     HRESULT EnsureReadyForRoot(std::wstring_view rootPath,
                                CancelCheckFn cancelCheck,
                                void* cancelCookie,
@@ -310,18 +318,31 @@ public:
 
 #ifdef ENABLE_TESTS
     HRESULT DropCachedVolumeForTests(std::wstring_view rootPath) noexcept;
+    HRESULT HydrateRootAndQueryForTests(const QueryPlan& plan, std::vector<Candidate>& outCandidates, QueryStats* outStats) noexcept;
     HRESULT CorruptSnapshotForTests(std::wstring_view rootPath, SnapshotCorruptionMode mode) noexcept;
-    HRESULT ApplySyntheticJournalForTests(std::wstring_view rootPath,
-                                          std::span<const SyntheticJournalRecordForTests> records,
-                                          QueryStats* outStats) noexcept;
+    HRESULT ApplySyntheticJournalForTests(std::wstring_view rootPath, std::span<const SyntheticJournalRecordForTests> records, QueryStats* outStats) noexcept;
     HRESULT QueryPersistedVolumeForTests(const QueryPlan& plan, std::vector<Candidate>& outCandidates, QueryStats* outStats) noexcept;
     void SetNextJournalStateForTests(uint64_t id, uint64_t firstUsn, uint64_t nextUsn) noexcept;
     void SetNextJournalReplayReadFailureForTests(DWORD error) noexcept;
 #endif
 
 private:
+    struct PersistentStoreFileStamp final
+    {
+        uint64_t databaseLastWriteTime = 0u;
+        uint64_t databaseBytes         = 0u;
+        uint64_t walLastWriteTime      = 0u;
+        uint64_t walBytes              = 0u;
+        bool databaseExists            = false;
+        bool walExists                 = false;
+
+        friend bool operator==(const PersistentStoreFileStamp&, const PersistentStoreFileStamp&) noexcept = default;
+    };
+
     HRESULT AcquireOrCreateVolume(const SupportInfo& support, std::shared_ptr<VolumeIndex>& outVolume) noexcept;
+    static bool TryCapturePersistentStoreFileStamp(const PersistentStoreInfo& storeInfo, PersistentStoreFileStamp& outStamp) noexcept;
     PersistentStoreInfo GetCachedPersistentStoreInfo() noexcept;
+    PersistentStoreInfo GetValidatedCachedPersistentStoreInfoForQuery() noexcept;
     void RefreshCachedPersistentStoreInfo() noexcept;
     void InvalidateCachedPersistentStoreInfo() noexcept;
 
@@ -329,7 +350,9 @@ private:
     std::mutex _mutex;
     std::unordered_map<std::wstring, std::shared_ptr<VolumeIndex>> _volumes;
     PersistentStoreInfo _cachedPersistentStoreInfo;
-    bool _cachedPersistentStoreInfoValid = false;
+    PersistentStoreFileStamp _cachedPersistentStoreFileStamp;
+    bool _cachedPersistentStoreInfoValid      = false;
+    bool _cachedPersistentStoreFileStampValid = false;
     std::mutex _statusMutex;
     RepositoryStatus _runtimeStatus;
 };

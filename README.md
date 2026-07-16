@@ -102,6 +102,12 @@ Use the `build.ps1` PowerShell script for easy building:
 - `-Msix` : Build an MSIX package after a successful Release build
 - `-Msi` : Build an MSI package after a successful Release build
 
+The build preflight closes an ordinary interactive instance only when it is
+running from the exact output path being rebuilt. If that process is running a
+self-test, or Windows cannot expose its command line safely, the build aborts
+with the blocking PID, path, and command line instead of terminating the test.
+Wait for self-tests to finish before rebuilding the same configuration.
+
 ### AddressSanitizer (`ASan Debug`)
 
 Build an ASan-instrumented binary from the console with:
@@ -201,10 +207,13 @@ Note: `RedSalamander.exe` is a GUI app, so PowerShell may return to the prompt i
 
 ### Run all tests with one command
 
-`Tools\Run-AllTests.ps1` is the canonical local test runner. It builds (unless `-SkipBuild`), runs the selected suite(s), prints a color pass/fail/skip summary, writes `run-all-tests-results.json`, and exits with code `0` when everything is green.
+`Tools\Run-AllTests.ps1` is the canonical local test runner. It builds (unless `-SkipBuild`), runs the selected suite(s), prints a color pass/fail/skip summary, writes `run-all-tests-results.json`, `run-all-tests-case-history.jsonl`, and `run-all-tests-dashboard.md`, and exits with code `0` when everything is green.
 
 ```powershell
-# Everything CI runs (and a bit more) — builds the whole solution with tests enabled:
+# The GitHub Actions PR gate, through the same unified runner CI uses:
+.\Tools\Run-AllTests.ps1 -Suite CI
+
+# Full local/closeout gate — builds the whole solution with tests enabled:
 .\Tools\Run-AllTests.ps1 -Suite Full
 
 # Just the three in-process selftest suites (default), reusing an existing Debug build:
@@ -212,35 +221,58 @@ Note: `RedSalamander.exe` is a GUI app, so PowerShell may return to the prompt i
 
 # One suite, one case, on a slow machine:
 .\Tools\Run-AllTests.ps1 -Suite Commands -SkipBuild -CaseFilter cmd_pane_batchRename_ -TimeoutMultiplier 2.0
+
+# Repeat one FileOps case twice and record a reproducible shuffle seed:
+.\Tools\Run-AllTests.ps1 -Suite FileOps -SkipBuild -CaseFilter FileOps_ProviderCapabilityMatrix -SelfTestRepeat 2 -SelfTestShuffleSeed 789 -TimeoutMultiplier 0.1
 ```
 
-`-Suite Full` builds the full solution (test projects included) and additionally runs the standalone test executables (DxUiTests, FileSystemCurlTests, ViewerPETests, ViewerSqliteTests, MonitorTest, LocalizationTests, RedConfigureTests, RedSalamanderMonitorEtwLatency), PerformanceTests2 (CppUnitTest DLL via vstest), the `Tools\Tests` Pester suite, and the vcpkg-merge synthetic test. Results land under `%LOCALAPPDATA%\RedSalamander\SelfTest\last_run\`.
+`-Suite CI` runs the PR gate through `Run-AllTests.ps1`: the three in-product self-test suites as separate processes, DxUiTests split per suite, FileSystemCurlTests, ViewerPETests plus the explicit prompt cases, ViewerSqliteTests, MonitorTest, LocalizationTests, RedConfigureTests, PerformanceTests2, the artifact-only `Tools\Tests` Pester pass, and the vcpkg-merge synthetic test.
+
+`-Suite CI` also enables failure classification automatically. A standalone pass-on-rerun is reported as blocking `FLAKY`, and fail-again is blocking `REGRESSION`. For broad in-product suite failures, failed cases first rerun through `--selftest-case`; if those pass, the runner performs shuffle triage across three seeds. Pass-all-shuffle evidence becomes blocking `FLAKY`, fail-any-shuffle evidence becomes blocking `REGRESSION`, and missing shuffle evidence remains blocking `ISOLATION_SUSPECT`. Use `-ClassifyFailures` to enable the same retry evidence on non-CI suites.
+
+Debug self-test builds expose `-SelfTestFlakyProofCase NAME` / `--selftest-flaky-proof-case=NAME` and `-SelfTestOrderProofCase NAME` / `--selftest-order-proof-case=NAME` only to prove the classifier path: flaky proof must classify as blocking `FLAKY`, and order-dependent proof must classify as blocking `REGRESSION` after shuffle triage.
+
+`-SelfTestRepeat N` forwards `--selftest-repeat=N` to in-product self-test suites and repeat result rows include `repeat_index`; Commands and CompareDirectories repeat through the shared case runner, and FileOperations expands its phase-state run plan per repeat attempt. `-SelfTestShuffleSeed SEED` forwards `--selftest-shuffle=SEED` to Commands, CompareDirectories, and FileOperations. FileOperations uses explicit seeded phase ordering when a shuffle seed is supplied, while preserving `Setup` and `Cleanup_RestorePluginConfig` rows in the aggregate result.
+
+The expensive repeat+shuffle lane lives in `.github\workflows\nightly-flake.yml`, not the PR gate. It runs `-Suite All -SelfTestRepeat 5 -SelfTestShuffleSeed <seed> -ClassifyFailures` on schedule or manual dispatch and uploads `selftest-artifacts-nightly-shuffle`.
+
+Known flaky tests are tracked only through `Tools\test-quarantine.jsonl`. Each JSONL entry must name the harness/case, owner, opened/expires dates, issue/spec link, root-cause hypothesis, and fix-or-replace plan. Active or invalid entries keep the runner red. Active entries that match a runner harness adapter execute again in a separate repair lane, and `run-all-tests-results.json` records the repair attempt evidence. In GitHub Actions, the runner also appends classification counts, active quarantine owner/expiry, and repair-lane results to `GITHUB_STEP_SUMMARY`.
+
+Self-test crashes remain failures, but they should not erase evidence: suite `results.json` is flushed after every case, and an in-flight crash is written as `status: "crashed"` in partial aggregate results for the runner to report. Debug self-test builds expose `--selftest-crash-case=NAME` only for proving that crash-signal path.
+
+`-Suite Full` builds the full solution (test projects included) and additionally runs the broader closeout surface, including PluginContractTests, SettingsSchemaTests, CrashHandlingTests, and RedSalamanderMonitorEtwLatency. Results land under `REDSALAMANDER_TEST_ROOT\runs\<runId>\artifacts\selftest\last_run\`; by default the runner sets `REDSALAMANDER_TEST_ROOT` to `.build\TestSandbox`, sets `REDSALAMANDER_TEST_RUN_ID`, and ignores/clears inherited `REDSALAMANDER_SELFTEST_ROOT` values for normal runs.
+
+Before launching child tests, the runner invokes `Tools\Clean-TestSandbox.ps1 -Apply -Confirm:$false` to remove known legacy self-test/temp roots that predate the unified sandbox. Run `Tools\Clean-TestSandbox.ps1` without `-Apply` for a dry-run listing, or pass `-SkipLegacySandboxCleanup` to the runner only for diagnosis.
 
 The runner defaults to Debug configuration; self-tests only run in Debug builds.
 
 ### Self-test artifacts and results
 
-All self-test output is written under:
+When launched through `Tools\Run-AllTests.ps1`, self-test output is written under:
 
 ```text
-%LOCALAPPDATA%\RedSalamander\SelfTest\
+<repoRoot>\.build\TestSandbox\runs\<runId>\artifacts\selftest\last_run\
 ```
 
-At the start of any self-test run, the current `last_run` is rotated to `previous_run` and a fresh `last_run` is created:
+The runner writes a per-invocation aggregate summary, and native self-tests resolve their `last_run` writer directly from `REDSALAMANDER_TEST_ROOT` plus `REDSALAMANDER_TEST_RUN_ID`:
 
-- `%LOCALAPPDATA%\RedSalamander\SelfTest\last_run\`
-- `%LOCALAPPDATA%\RedSalamander\SelfTest\previous_run\`
+- `<repoRoot>\.build\TestSandbox\runs\<runId>\artifacts\selftest\last_run\`
+- `<repoRoot>\.build\TestSandbox\runs\<runId>\artifacts\selftest\last_run\run-all-tests-results.json`
+- `<repoRoot>\.build\TestSandbox\runs\<runId>\artifacts\selftest\last_run\run-all-tests-case-history.jsonl`
+- `<repoRoot>\.build\TestSandbox\runs\<runId>\artifacts\selftest\last_run\run-all-tests-dashboard.md`
 
 Key files:
 
-- `%LOCALAPPDATA%\RedSalamander\SelfTest\last_run\trace.txt` (host trace)
-- `%LOCALAPPDATA%\RedSalamander\SelfTest\last_run\compare\trace.txt`
-- `%LOCALAPPDATA%\RedSalamander\SelfTest\last_run\compare\results.json`
-- `%LOCALAPPDATA%\RedSalamander\SelfTest\last_run\commands\trace.txt`
-- `%LOCALAPPDATA%\RedSalamander\SelfTest\last_run\commands\results.json`
-- `%LOCALAPPDATA%\RedSalamander\SelfTest\last_run\fileops\trace.txt`
-- `%LOCALAPPDATA%\RedSalamander\SelfTest\last_run\fileops\results.json`
-- `%LOCALAPPDATA%\RedSalamander\SelfTest\last_run\results.json` (aggregated run summary)
+- `trace.txt` (host trace)
+- `compare\trace.txt`
+- `compare\results.json`
+- `commands\trace.txt`
+- `commands\results.json`
+- `fileops\trace.txt`
+- `fileops\results.json`
+- `run-all-tests-results.json` (runner-owned aggregate summary)
+- `run-all-tests-case-history.jsonl` (per-case and retry history rows)
+- `run-all-tests-dashboard.md` (slow-case and failure/retry dashboard)
 
 ## Search Service (Developer)
 

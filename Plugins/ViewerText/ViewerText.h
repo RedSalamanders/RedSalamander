@@ -110,14 +110,51 @@ private:
 
     struct ByteSpan
     {
-        size_t start  = 0;
-        size_t length = 0;
+        size_t start        = 0u;
+        size_t length       = 0u;
+        size_t columnStart  = 0u;
+        size_t columnLength = 0u;
     };
 
     struct SaveAsResult
     {
         std::filesystem::path path;
         UINT encodingSelection = 0;
+    };
+
+    enum class SaveAsFault : uint8_t
+    {
+        None,
+        SourceOpen,
+        SourceRead,
+        Encode,
+        Write,
+        Flush,
+        Commit,
+    };
+
+    enum class AsyncOpenFault : uint8_t
+    {
+        None,
+        FileSystemIo,
+        OpenReader,
+        GetSize,
+        InitialSeek,
+        InitialRead,
+        DataSeek,
+        DataRead,
+        Decode,
+        PayloadPost,
+        Submit,
+    };
+
+    enum class AsyncTextStreamFault : uint8_t
+    {
+        None,
+        Allocation,
+        Submit,
+        Worker,
+        PayloadPost,
     };
 
     enum class ViewMode : uint8_t
@@ -249,6 +286,8 @@ public:
     };
 
 private:
+    struct TextVisualLineLayoutEntry;
+
     struct AsyncOpenResult
     {
         ViewerText* viewer = nullptr;
@@ -301,6 +340,23 @@ private:
         size_t hexCacheValid    = 0;
     };
 
+    struct AsyncTextStreamResult
+    {
+        ViewerText* viewer        = nullptr;
+        uint64_t requestId        = 0u;
+        uint64_t windowIdentity   = 0u;
+        HRESULT hr                = E_FAIL;
+        uint64_t startOffset      = 0u;
+        uint64_t endOffset        = 0u;
+        bool scrollToEnd          = false;
+        bool streamActive         = false;
+        uint64_t elapsedUs        = 0u;
+        std::wstring textBuffer;
+        std::vector<uint32_t> textLineStarts;
+        std::vector<uint32_t> textLineEnds;
+        uint32_t textMaxLineLength = 0u;
+    };
+
     enum class HexColumnMode : uint8_t
     {
         Byte,
@@ -350,6 +406,9 @@ private:
     void OnDestroy();
     void OnTimer(UINT_PTR timerId) noexcept;
     void OnAsyncOpenComplete(std::unique_ptr<AsyncOpenResult> result) noexcept;
+    void OnAsyncOpenFailure(uint64_t requestId, HRESULT hr) noexcept;
+    void OnAsyncTextStreamComplete(std::unique_ptr<AsyncTextStreamResult> result) noexcept;
+    void OnAsyncTextStreamFailure(uint64_t requestId, uint64_t windowIdentity, HRESULT hr) noexcept;
     void OnSize(UINT width, UINT height);
     void OnDpiChanged(HWND hwnd, UINT newDpi, const RECT* suggested) noexcept;
     void OnPaint();
@@ -359,7 +418,7 @@ private:
     LRESULT OnTextViewHScroll(HWND hwnd, UINT scrollCode) noexcept;
     LRESULT OnTextViewMouseWheel(HWND hwnd, int delta) noexcept;
     LRESULT OnTextViewLButtonDown(HWND hwnd, POINT pt) noexcept;
-    LRESULT OnTextViewMouseMove(HWND hwnd, POINT pt) noexcept;
+    LRESULT OnTextViewMouseMove(HWND hwnd, POINT pt, WPARAM keyState) noexcept;
     LRESULT OnTextViewLButtonUp(HWND hwnd) noexcept;
     LRESULT OnTextViewSetCursor(HWND hwnd, LPARAM lParam) noexcept;
     LRESULT OnTextViewKeyDown(HWND hwnd, WPARAM vk, LPARAM lParam) noexcept;
@@ -409,8 +468,8 @@ private:
     [[nodiscard]] const DiffTextVariant* CurrentDiffVariant() const noexcept;
     [[nodiscard]] bool UseDiffSectionFileCombo() const noexcept;
     [[nodiscard]] size_t ActiveFileComboEntryCount() const noexcept;
-    [[nodiscard]] size_t CurrentDiffSectionIndex() const noexcept;
-    [[nodiscard]] size_t CurrentDiffHunkIndex() const noexcept;
+    [[nodiscard]] size_t CurrentDiffSectionIndex() noexcept;
+    [[nodiscard]] size_t CurrentDiffHunkIndex() noexcept;
     [[nodiscard]] std::optional<std::pair<uint32_t, uint32_t>> ComputeVisibleDiffHydrationLogicalRange(HWND hwnd) const noexcept;
     [[nodiscard]] bool EnsureVisibleDiffViewportHydrated(HWND hwnd) noexcept;
     void ScrollTextViewportToLogicalLine(HWND hwnd, uint32_t targetLogicalLine) noexcept;
@@ -424,6 +483,9 @@ private:
 
     void CommandOpen(HWND hwnd);
     void CommandSaveAs(HWND hwnd);
+    [[nodiscard]] HRESULT SaveAsToPath(const std::filesystem::path& destinationPath,
+                                       UINT encodingSelection,
+                                       SaveAsFault injectedFault = SaveAsFault::None) noexcept;
     void CommandRefresh(HWND hwnd);
     void CommandExit(HWND hwnd) noexcept;
 
@@ -442,7 +504,11 @@ private:
     void CommandGoToOffsetValue(HWND hwnd, uint64_t offset);
 
     HRESULT OpenPath(HWND hwnd, const std::filesystem::path& path, bool updateOtherFiles) noexcept;
-    void StartAsyncOpen(HWND hwnd, const std::filesystem::path& path, bool updateOtherFiles, UINT displayEncodingMenuSelection) noexcept;
+    void StartAsyncOpen(HWND hwnd,
+                        const std::filesystem::path& path,
+                        bool updateOtherFiles,
+                        UINT displayEncodingMenuSelection,
+                        AsyncOpenFault injectedFault = AsyncOpenFault::None) noexcept;
     void BeginLoadingUi() noexcept;
     void EndLoadingUi() noexcept;
     void UpdateLoadingSpinner() noexcept;
@@ -461,18 +527,21 @@ private:
     std::optional<std::filesystem::path> ShowOpenDialog(HWND hwnd) noexcept;
     std::optional<SaveAsResult> ShowSaveAsDialog(HWND hwnd) noexcept;
 
-    HRESULT DetectEncodingAndSize(const std::filesystem::path& path, FileEncoding& encoding, uint64_t& bomBytes, uint64_t& fileSize) noexcept;
     std::wstring EncodingLabel() const;
 
     HRESULT LoadTextToEdit(HWND hwnd, uint64_t startOffset, bool scrollToEnd) noexcept;
+    bool StartAsyncTextStreamLoad(HWND hwnd, uint64_t startOffset, bool scrollToEnd) noexcept;
     void UpdateTextStreamTotalLineCountAfterLoad() noexcept;
     void RebuildTextLineIndex() noexcept;
     void RebuildTextVisualLines(HWND hwnd) noexcept;
     void RefreshTextHorizontalViewport(HWND hwnd) noexcept;
     void UpdateTextViewScrollBars(HWND hwnd) noexcept;
     [[nodiscard]] bool FindTextVisualLineForIndex(size_t index, uint32_t& visualLineOut) const noexcept;
+    [[nodiscard]] uint64_t TextVisualLineCount() const noexcept;
+    [[nodiscard]] bool TryGetTextVisualLineLayout(uint64_t visualLine, TextVisualLineLayoutEntry& layoutOut) noexcept;
+    [[nodiscard]] bool FindFirstTextVisualLineForLogical(uint32_t logicalLine, uint32_t& visualLineOut) const noexcept;
     [[nodiscard]] bool GetTextVisualLineSegment(
-        uint32_t visualLine, uint32_t& logicalLineOut, uint32_t& segmentStartOut, uint32_t& segmentEndOut, bool preferRightPane) const noexcept;
+        uint32_t visualLine, uint32_t& logicalLineOut, uint32_t& segmentStartOut, uint32_t& segmentEndOut, bool preferRightPane) noexcept;
     bool TryNavigateTextStream(HWND hwnd, bool backward) noexcept;
     uint64_t TextStreamChunkBytes() const noexcept;
     uint64_t AlignTextStreamOffset(uint64_t offset) const noexcept;
@@ -494,7 +563,7 @@ private:
     size_t ReadHexBytes(uint64_t offset, uint8_t* dest, size_t destSize) noexcept;
     HRESULT RefillHexCache(uint64_t offset) noexcept;
     std::wstring FormatFileOffset(uint64_t offset) const;
-    std::wstring BuildStatusText() const;
+    std::wstring BuildStatusText();
     void UpdateHexTextColumnHeader() noexcept;
     void UpdateHexColumnHeader() noexcept;
     size_t HexGroupSize() const noexcept;
@@ -548,8 +617,6 @@ private:
     bool _allowEraseBkgnd         = true;
     bool _allowEraseBkgndTextView = true;
     bool _allowEraseBkgndHexView  = true;
-
-    wil::unique_hmodule _msftEditModule;
 
     wil::unique_hmenu _menuHandle;
     RedSalamander::DxUi::NativeMenuBarHost _menuBarHost;
@@ -668,18 +735,90 @@ private:
         uint32_t rightPaneColumns    = 0u;
         uint32_t separatorColumns    = 0u;
     };
+    struct SparseTextVisualLineSummary
+    {
+        uint32_t logicalLine      = 0u;
+        uint32_t lineStartIndex   = 0u;
+        uint32_t lineEndIndex     = 0u;
+        uint64_t firstVisualLine  = 0u;
+        uint32_t visualLineCount  = 1u;
+        bool splitPanes           = false;
+        uint32_t leftStartIndex   = 0u;
+        uint32_t leftEndIndex     = 0u;
+        uint32_t rightStartIndex  = 0u;
+        uint32_t rightEndIndex    = 0u;
+        uint32_t separatorStartIndex = 0u;
+        uint32_t separatorEndIndex   = 0u;
+        uint32_t leftPaneColumns     = 0u;
+        uint32_t rightPaneColumns    = 0u;
+        uint32_t separatorColumns    = 0u;
+    };
+    struct SparseTextViewportCheckpoint
+    {
+        uint64_t visualLine = 0u;
+        size_t summaryIndex = 0u;
+        uint64_t rowOrdinal = 0u;
+        uint32_t plainCursor = 0u;
+        uint32_t leftCursor  = 0u;
+        uint32_t rightCursor = 0u;
+    };
+    struct TextVerticalCaretHistoryEntry
+    {
+        size_t fromCaret = 0u;
+        size_t toCaret   = 0u;
+        bool pageMove    = false;
+        bool movingDown  = false;
+    };
+    struct TextLayoutCacheEntry
+    {
+        uint32_t startIndex    = 0u;
+        uint32_t endIndex      = 0u;
+        uint32_t widthMilliDip = 0u;
+        uint64_t generation    = 0u;
+        uint64_t lastUse       = 0u;
+        size_t estimatedBytes  = 0u;
+        wil::com_ptr<IDWriteTextLayout> layout;
+    };
     std::vector<uint32_t> _textLineStarts;
     std::vector<uint32_t> _textLineEnds;
     std::vector<uint32_t> _textVisualLineStarts;
     std::vector<uint32_t> _textVisualLineLogical;
     std::vector<TextVisualLineLayoutEntry> _textVisualLineLayouts;
-    [[nodiscard]] std::optional<TextViewHitTestResult> HitTestTextView(HWND hwnd, POINT pt) const noexcept;
+    std::vector<SparseTextVisualLineSummary> _textSparseVisualLines;
+    std::vector<TextVisualLineLayoutEntry> _textSparseViewportLayouts;
+    std::vector<uint64_t> _textSparseViewportAnchors;
+    std::vector<SparseTextViewportCheckpoint> _textSparseViewportCheckpoints;
+    std::vector<SparseTextViewportCheckpoint> _textSparseCheckpointCache;
+    std::vector<uint32_t> _textSparseTopHistory;
+    uint64_t _textSparseVisualLineCount = 0u;
+    bool _textSparseWrapActive          = false;
+    uint64_t _textSparseViewportTop     = 0u;
+    size_t _textSparseViewportRequestedRows = 0u;
+    bool _textSparseViewportComplete         = false;
+    std::vector<TextLayoutCacheEntry> _textLayoutCache;
+    wil::com_ptr<IDWriteTextLayout> _textUncachedLayout;
+    size_t _textLayoutCacheBytes       = 0u;
+    size_t _textLayoutCacheMaxBytes    = 2u * 1024u * 1024u;
+    size_t _textLayoutCacheMaxEntries  = 64u;
+    uint64_t _textLayoutGeneration     = 1u;
+    uint64_t _textLayoutUseCounter     = 0u;
+    uint64_t _textLayoutCacheEvictions = 0u;
+    [[nodiscard]] IDWriteTextLayout* GetTextSegmentLayout(size_t startIndex, size_t endIndex, float widthDip) noexcept;
+    [[nodiscard]] size_t NormalizeTextSegmentStart(size_t index) const noexcept;
+    [[nodiscard]] size_t FindTextSegmentEnd(size_t startIndex, size_t lineEndIndex, float widthDip) noexcept;
+    void RebuildSparseTextViewportLayouts(HWND hwnd, size_t minimumRows) noexcept;
+    void ClearTextLayoutCache() noexcept;
+    [[nodiscard]] size_t NormalizeTextPosition(size_t index) const noexcept;
+    [[nodiscard]] size_t PreviousTextPosition(size_t index) const noexcept;
+    [[nodiscard]] size_t NextTextPosition(size_t index) const noexcept;
+    [[nodiscard]] std::optional<TextViewHitTestResult> HitTestTextView(HWND hwnd, POINT pt) noexcept;
     [[nodiscard]] bool IsClickableHiddenDiffBannerLogicalLine(uint32_t logicalLine) const noexcept;
     [[nodiscard]] bool DebugClickTextLogicalLine(HWND hwnd, uint32_t logicalLine) noexcept;
     uint32_t _textTopVisualLine              = 0;
     uint32_t _textLeftColumn                 = 0;
     uint32_t _textMaxLineLength              = 0;
     uint32_t _textWrapColumns                = 0;
+    float _textWrapWidthDip                  = 0.0f;
     uint32_t _textSideBySideLeftPaneColumns  = 0u;
     uint32_t _textSideBySideRightPaneColumns = 0u;
     uint32_t _textSideBySideSeparatorColumns = 0u;
@@ -687,6 +826,9 @@ private:
     size_t _textSelAnchor                    = 0;
     size_t _textSelActive                    = 0;
     size_t _textPreferredColumn              = 0;
+    float _textPreferredXDip                 = 0.0f;
+    bool _textPreferredXValid                = false;
+    std::vector<TextVerticalCaretHistoryEntry> _textVerticalCaretHistory;
     bool _textSelecting                      = false;
 
     bool _textStreamActive          = false;
@@ -697,6 +839,12 @@ private:
     uint64_t _textStreamLineCountedEndOffset = 0;
     uint64_t _textStreamLineCountedNewlines  = 0;
     bool _textStreamLineCountLastWasCR       = false;
+    std::atomic_uint64_t _asyncTextStreamRequestId{0u};
+    uint64_t _activeAsyncTextStreamRequestId = 0u;
+    uint64_t _pendingTextStreamStartOffset   = 0u;
+    bool _textStreamLoadPending              = false;
+    std::atomic_uint64_t _windowIdentity{0u};
+    inline static std::atomic_uint64_t s_nextWindowIdentity{0u};
 
     UINT _displayEncodingMenuSelection = 0;
     UINT _saveEncodingMenuSelection    = 0;
@@ -747,6 +895,15 @@ private:
     size_t _debugTextVisibleBannerRowCount   = 0u;
     size_t _debugTextVisibleGapHatchCount    = 0u;
     size_t _debugTextVisibleSplitRowCount    = 0u;
+    uint64_t _debugTextLayoutCacheHits       = 0u;
+    uint64_t _debugTextLayoutCacheMisses     = 0u;
+    uint64_t _debugTextStreamAcceptedCount   = 0u;
+    uint64_t _debugTextStreamRejectedCount   = 0u;
+    uint64_t _debugTextStreamStaleCount      = 0u;
+    uint64_t _debugTextStreamTerminalCount   = 0u;
+    HRESULT _debugTextStreamLastTerminalHr   = E_PENDING;
+    uint64_t _debugTextStreamLastElapsedUs   = 0u;
+    uint64_t _debugTextStreamLastUiApplyUs   = 0u;
     uint32_t _debugDiffMarkerArgb            = 0u;
     uint32_t _debugDiffGapHatchArgb          = 0u;
     bool _debugDiffContextUsesBaseBackground = false;
@@ -758,12 +915,15 @@ private:
     bool _debugHexHighContrastFallback       = false;
     uint64_t _debugDiffParseCount            = 0u;
 #if defined(ENABLE_TESTS)
-    bool _debugHasLastContextMenuScreenPoint       = false;
+    AsyncTextStreamFault _debugNextAsyncTextStreamFault = AsyncTextStreamFault::None;
+    bool _debugHasLastContextMenuScreenPoint = false;
     POINT _debugLastContextMenuScreenPoint{};
     bool _debugHasLastTextViewMouseMoveClientPoint = false;
     POINT _debugLastTextViewMouseMoveClientPoint{};
     bool _debugLastTextViewMouseMoveHit           = false;
     size_t _debugLastTextViewMouseMoveLogicalLine = static_cast<size_t>(-1);
+    uint64_t _debugAsyncOpenTerminalCount         = 0u;
+    HRESULT _debugAsyncOpenLastTerminalHr         = E_PENDING;
 #endif
 #endif
 };

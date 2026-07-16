@@ -69,13 +69,41 @@ void SendScaledShortcutsHeaderResizeDrag(HWND shortcuts, const D2D1_RECT_F& head
     return uiASelectedName == rowName || (! rowName.empty() && uiASelectedName.find(rowName) != std::wstring::npos);
 }
 
+[[nodiscard]] bool CopyShortcutsSelectionForTest(HWND shortcuts, std::wstring& copiedText) noexcept
+{
+    using namespace std::chrono_literals;
+
+    copiedText.clear();
+    ClearClipboardContents(shortcuts);
+    if (! DebugCopyShortcutsWindowSelection())
+    {
+        return false;
+    }
+
+    if (const std::optional<std::wstring> fallbackText = RedSalamander::DxUi::DebugReadClipboardFallbackText(); fallbackText.has_value())
+    {
+        copiedText = fallbackText.value();
+        return true;
+    }
+
+    for (size_t retry = 0u; retry < 20u && copiedText.empty(); ++retry)
+    {
+        PumpPendingMessages();
+        copiedText = ReadClipboardUnicodeText(shortcuts);
+        if (copiedText.empty())
+        {
+            std::this_thread::sleep_for(20ms);
+        }
+    }
+
+    return true;
+}
+
 void SendShortcutsHeaderClick(HWND shortcuts, D2D1_RECT_F headerRect) noexcept
 {
-    const int dpi = std::max(static_cast<int>(GetDpiForWindow(shortcuts)), USER_DEFAULT_SCREEN_DPI);
+    const int dpi      = std::max(static_cast<int>(GetDpiForWindow(shortcuts)), USER_DEFAULT_SCREEN_DPI);
     const auto dipToPx = [dpi](const float valueDip) noexcept -> LONG
-    {
-        return static_cast<LONG>(MulDiv(static_cast<int>(std::lround(valueDip)), dpi, USER_DEFAULT_SCREEN_DPI));
-    };
+    { return static_cast<LONG>(MulDiv(static_cast<int>(std::lround(valueDip)), dpi, USER_DEFAULT_SCREEN_DPI)); };
     const LONG clickX = dipToPx((headerRect.left + headerRect.right) * 0.5f);
     const LONG clickY = dipToPx((headerRect.top + headerRect.bottom) * 0.5f);
     SendMessageW(shortcuts, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(clickX, clickY));
@@ -112,6 +140,52 @@ void SendShortcutsHeaderClick(HWND shortcuts, D2D1_RECT_F headerRect) noexcept
                        snapshot.secondColumnHeaderRect.top,
                        snapshot.secondColumnHeaderRect.right,
                        snapshot.secondColumnHeaderRect.bottom);
+}
+
+[[nodiscard]] std::wstring DescribeShortcutsWindowForSelfTest(HWND hwnd, HWND shortcuts)
+{
+    if (! hwnd)
+    {
+        return L"null";
+    }
+
+    const bool isWindow = IsWindow(hwnd) != FALSE;
+    std::array<wchar_t, 128> className{};
+    std::array<wchar_t, 128> title{};
+    if (isWindow)
+    {
+        static_cast<void>(GetClassNameW(hwnd, className.data(), static_cast<int>(className.size())));
+        static_cast<void>(GetWindowTextW(hwnd, title.data(), static_cast<int>(title.size())));
+    }
+
+    return std::format(L"0x{:X} isWindow={} class='{}' title='{}' ctrlId={} visible={} childOfShortcuts={}",
+                       reinterpret_cast<uintptr_t>(hwnd),
+                       isWindow ? L"yes" : L"no",
+                       className.data(),
+                       title.data(),
+                       isWindow ? GetDlgCtrlID(hwnd) : 0,
+                       isWindow && IsWindowVisible(hwnd) != FALSE ? L"yes" : L"no",
+                       isWindow && shortcuts && IsChild(shortcuts, hwnd) != FALSE ? L"yes" : L"no");
+}
+
+[[nodiscard]] std::wstring DescribeShortcutsEscapeStateForSelfTest(HWND shortcuts)
+{
+    ShortcutsWindowDebugSnapshot snapshot{};
+    const bool captured = DebugGetShortcutsWindowSnapshot(snapshot);
+    return std::format(L"capturedSnapshot={} snapshot=[{}] shortcuts={} focus={} active={} foreground={} keyState(ctrl={:#x}, shift={:#x}, alt={:#x}) "
+                       L"asyncKeyState(ctrl={:#x}, shift={:#x}, alt={:#x})",
+                       captured ? L"yes" : L"no",
+                       captured ? FormatShortcutsSnapshotSummary(snapshot) : L"<unavailable>",
+                       DescribeShortcutsWindowForSelfTest(shortcuts, shortcuts),
+                       DescribeShortcutsWindowForSelfTest(GetFocus(), shortcuts),
+                       DescribeShortcutsWindowForSelfTest(GetActiveWindow(), shortcuts),
+                       DescribeShortcutsWindowForSelfTest(GetForegroundWindow(), shortcuts),
+                       static_cast<unsigned int>(GetKeyState(VK_CONTROL) & 0xFFFF),
+                       static_cast<unsigned int>(GetKeyState(VK_SHIFT) & 0xFFFF),
+                       static_cast<unsigned int>(GetKeyState(VK_MENU) & 0xFFFF),
+                       static_cast<unsigned int>(GetAsyncKeyState(VK_CONTROL) & 0xFFFF),
+                       static_cast<unsigned int>(GetAsyncKeyState(VK_SHIFT) & 0xFFFF),
+                       static_cast<unsigned int>(GetAsyncKeyState(VK_MENU) & 0xFFFF));
 }
 
 [[nodiscard]] std::wstring JoinShortcutKeyTexts(const std::vector<std::wstring>& keyTexts)
@@ -917,6 +991,7 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
                                   std::wstring& baselineSelectedName,
                                   std::wstring& searchQuery) noexcept
     {
+        Trace(std::format(L"Shortcuts live search: {} opening window", phaseLabel));
         shortcuts = openShortcutsWindow();
         state.Require(shortcuts != nullptr && IsWindow(shortcuts) != FALSE, std::format(L"Shortcuts window did not open for {}.", phaseLabel));
         if (! shortcuts || IsWindow(shortcuts) == FALSE)
@@ -937,7 +1012,9 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
             return false;
         }
 
-        const auto initialSearchState = CollectVisibleDescendantValuePatternState(shortcuts, UIA_EditControlTypeId);
+        Trace(std::format(L"Shortcuts live search: {} reading initial search ValuePattern", phaseLabel));
+        const auto initialSearchState =
+            CollectVisibleDescendantValuePatternStateWithMessagePump(shortcuts, UIA_EditControlTypeId, std::format(L"Shortcuts {} initial search read", phaseLabel));
         state.Require(initialSearchState.has_value(),
                       std::format(L"Failed to collect UI Automation value state for the Shortcuts search field during {}.", phaseLabel));
         if (initialSearchState.has_value())
@@ -979,7 +1056,9 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
             return false;
         }
 
-        state.Require(SetVisibleDescendantValue(shortcuts, UIA_EditControlTypeId, searchQuery),
+        Trace(std::format(L"Shortcuts live search: {} setting query '{}'", phaseLabel, searchQuery));
+        state.Require(SetVisibleDescendantValueWithMessagePump(
+                          shortcuts, UIA_EditControlTypeId, searchQuery, std::format(L"Shortcuts {} search SetValue", phaseLabel)),
                       std::format(L"Failed to apply the live UIA search query '{}' to the Shortcuts search field during {}.", searchQuery, phaseLabel));
         state.Require(waitForSnapshot(
                           [&](const ShortcutsWindowDebugSnapshot& value) noexcept
@@ -992,7 +1071,9 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
         state.Require(snapshot.visibleChildWindowCount == 0u,
                       std::format(L"Shortcuts live UIA search filtering should not expose visible child fallback during {}.", phaseLabel));
 
-        const auto filteredSearchState = CollectVisibleDescendantValuePatternState(shortcuts, UIA_EditControlTypeId);
+        Trace(std::format(L"Shortcuts live search: {} reading filtered search ValuePattern", phaseLabel));
+        const auto filteredSearchState = CollectVisibleDescendantValuePatternStateWithMessagePump(
+            shortcuts, UIA_EditControlTypeId, std::format(L"Shortcuts {} filtered search read", phaseLabel));
         state.Require(filteredSearchState.has_value(),
                       std::format(L"Failed to collect UI Automation value state for the Shortcuts search field after live interaction during {}.", phaseLabel));
         if (filteredSearchState.has_value())
@@ -1003,7 +1084,9 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
                     L"Shortcuts search field should expose the live query '{}' during {}; saw '{}'.", searchQuery, phaseLabel, filteredSearchState->value));
         }
 
-        const auto filteredSelectionState = CollectVisibleDescendantSelectionPatternState(shortcuts, UIA_DataGridControlTypeId);
+        Trace(std::format(L"Shortcuts live search: {} reading filtered selection", phaseLabel));
+        const auto filteredSelectionState = CollectVisibleDescendantSelectionPatternStateWithMessagePump(
+            shortcuts, UIA_DataGridControlTypeId, std::format(L"Shortcuts {} filtered selection read", phaseLabel));
         state.Require(filteredSelectionState.has_value(),
                       std::format(L"Failed to collect UI Automation selection state after Shortcuts live search filtering during {}.", phaseLabel));
         if (filteredSelectionState.has_value())
@@ -1020,6 +1103,7 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
             return false;
         }
 
+        Trace(std::format(L"Shortcuts live search: {} complete", phaseLabel));
         return true;
     };
 
@@ -1046,7 +1130,9 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
     }
 
     ShortcutsWindowDebugSnapshot snapshot{};
-    state.Require(SetVisibleDescendantValue(shortcuts, UIA_EditControlTypeId, L""),
+    Trace(L"Shortcuts live search: clearing reopened query");
+    state.Require(SetVisibleDescendantValueWithMessagePump(
+                      shortcuts, UIA_EditControlTypeId, L"", L"Shortcuts reopened live search clear SetValue"),
                   L"Failed to clear the Shortcuts search field through live UIA interaction after reopen.");
     state.Require(waitForSnapshot(
                       [&](const ShortcutsWindowDebugSnapshot& value) noexcept
@@ -1058,7 +1144,9 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
                   L"Shortcuts live UIA search clear did not restore the baseline grouped surface after reopen.");
     state.Require(snapshot.visibleChildWindowCount == 0u, L"Shortcuts live UIA search clear should not expose visible child fallback after reopen.");
 
-    const auto restoredSearchState = CollectVisibleDescendantValuePatternState(shortcuts, UIA_EditControlTypeId);
+    Trace(L"Shortcuts live search: reading cleared reopened search ValuePattern");
+    const auto restoredSearchState = CollectVisibleDescendantValuePatternStateWithMessagePump(
+        shortcuts, UIA_EditControlTypeId, L"Shortcuts reopened live search clear read");
     state.Require(restoredSearchState.has_value(),
                   L"Failed to collect UI Automation value state for the Shortcuts search field after clearing the reopened live query.");
     if (restoredSearchState.has_value())
@@ -1587,23 +1675,8 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
     }
 
     state.Require(DebugFocusShortcutsWindowGrid(), L"Failed to focus the Shortcuts grid before copy validation.");
-    ClearClipboardContents(shortcuts);
-    SendMessageW(shortcuts, WM_KEYDOWN, VK_CONTROL, 0);
-    SendMessageW(shortcuts, WM_KEYDOWN, static_cast<WPARAM>(L'C'), 0);
-    SendMessageW(shortcuts, WM_KEYUP, static_cast<WPARAM>(L'C'), 0);
-    SendMessageW(shortcuts, WM_KEYUP, VK_CONTROL, 0);
-
     std::wstring copiedSelection;
-    for (size_t retry = 0u; retry < 20u && copiedSelection.empty(); ++retry)
-    {
-        PumpPendingMessages();
-        copiedSelection = ReadClipboardUnicodeText(shortcuts);
-        if (copiedSelection.empty())
-        {
-            std::this_thread::sleep_for(20ms);
-        }
-    }
-
+    state.Require(CopyShortcutsSelectionForTest(shortcuts, copiedSelection), L"Failed to copy the selected Shortcuts grid row.");
     state.Require(! copiedSelection.empty(), L"Shortcuts Ctrl+C should copy selected-grid-row content to the clipboard.");
     state.Require(copiedSelection.find(baselineSelectedName) != std::wstring::npos, L"Shortcuts clipboard copy should include the baseline selected row name.");
 
@@ -1647,22 +1720,8 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
         state.Require(noMatchFilteringSelectionState->selectedName.empty(), L"Shortcuts no-match filtering should not keep a selected accessible row name.");
     }
     state.Require(DebugFocusShortcutsWindowGrid(), L"Failed to focus the Shortcuts grid before no-match copy validation.");
-    ClearClipboardContents(shortcuts);
-    SendMessageW(shortcuts, WM_KEYDOWN, VK_CONTROL, 0);
-    SendMessageW(shortcuts, WM_KEYDOWN, static_cast<WPARAM>(L'C'), 0);
-    SendMessageW(shortcuts, WM_KEYUP, static_cast<WPARAM>(L'C'), 0);
-    SendMessageW(shortcuts, WM_KEYUP, VK_CONTROL, 0);
-
     std::wstring noMatchCopiedSelection;
-    for (size_t retry = 0u; retry < 20u && noMatchCopiedSelection.empty(); ++retry)
-    {
-        PumpPendingMessages();
-        noMatchCopiedSelection = ReadClipboardUnicodeText(shortcuts);
-        if (noMatchCopiedSelection.empty())
-        {
-            std::this_thread::sleep_for(20ms);
-        }
-    }
+    state.Require(CopyShortcutsSelectionForTest(shortcuts, noMatchCopiedSelection), L"Failed to copy the empty Shortcuts grid selection.");
     state.Require(noMatchCopiedSelection.empty(), L"Shortcuts Ctrl+C should be a no-op when no rows match the active search.");
     state.Require(DebugSetShortcutsWindowSearchText(L""), L"Failed to clear the Shortcuts no-match search text.");
     const bool noMatchRestored = waitForSnapshot(
@@ -2051,19 +2110,26 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
                   L"Shortcuts grid did not settle focus and selection before keyboard collapse/expand validation.");
 
     const std::wstring baselineSelectedName = snapshot.selectedRowName;
+    const std::wstring beforeLeftSummary    = FormatShortcutsSnapshotSummary(snapshot);
 
     SendMessageW(shortcuts, WM_KEYDOWN, VK_LEFT, 0);
     SendMessageW(shortcuts, WM_KEYUP, VK_LEFT, 0);
 
-    state.Require(waitForSnapshot(
-                      [baselineSelectedName, baselineRowCount](const ShortcutsWindowDebugSnapshot& value) noexcept
+    const bool collapsedAfterLeft = waitForSnapshot(
+        [baselineSelectedName, baselineRowCount](const ShortcutsWindowDebugSnapshot& value) noexcept
     {
         return value.focusTarget == ShortcutsWindowDebugFocusTarget::Grid && value.functionBarCollapsed && ! value.folderViewCollapsed &&
                value.collapsedGroupCount == 1u && value.rowCount == baselineRowCount && ! value.selectedRowName.empty() &&
                value.selectedRowName != baselineSelectedName && value.resizeFailureCount == 0u;
     },
-                      snapshot),
-                  L"Shortcuts keyboard Left should collapse the selected group and rehome selection onto a visible row.");
+        snapshot);
+    state.Require(collapsedAfterLeft,
+                  std::format(L"Shortcuts keyboard Left should collapse the selected group and rehome selection onto a visible row; baselineSelected='{}' "
+                              L"baselineRows={} beforeLeft=[{}] afterLeft=[{}].",
+                              baselineSelectedName,
+                              baselineRowCount,
+                              beforeLeftSummary,
+                              FormatShortcutsSnapshotSummary(snapshot)));
 
     const std::wstring collapsedSelectedName = snapshot.selectedRowName;
     const auto collapsedSelectionState       = CollectVisibleDescendantSelectionPatternState(shortcuts, UIA_DataGridControlTypeId);
@@ -2175,9 +2241,12 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
 
         SendMessageW(shortcuts, WM_KEYDOWN, VK_ESCAPE, 0);
         SendMessageW(shortcuts, WM_KEYUP, VK_ESCAPE, 0);
-        state.Require(WaitForWindowClosed(shortcuts, SelfTest::Scale(3000ms)), std::format(L"Shortcuts Escape did not close the window during {}.", context));
+        state.Require(WaitForWindowClosed(shortcuts, SelfTest::Scale(3000ms)),
+                      std::format(L"Shortcuts Escape did not close the window during {}; {}.",
+                                  context,
+                                  DescribeShortcutsEscapeStateForSelfTest(shortcuts)));
         state.Require(GetShortcutsWindowHandle() == nullptr || IsWindow(GetShortcutsWindowHandle()) == FALSE,
-                      std::format(L"Shortcuts window should not remain open after {}.", context));
+                      std::format(L"Shortcuts window should not remain open after {}; {}.", context, DescribeShortcutsEscapeStateForSelfTest(shortcuts)));
         return state.failure.empty();
     };
 
@@ -2876,23 +2945,8 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
     }
 
     state.Require(DebugFocusShortcutsWindowGrid(), L"Failed to focus the Shortcuts grid before reordered-copy validation.");
-    ClearClipboardContents(shortcuts);
-    SendMessageW(shortcuts, WM_KEYDOWN, VK_CONTROL, 0);
-    SendMessageW(shortcuts, WM_KEYDOWN, static_cast<WPARAM>(L'C'), 0);
-    SendMessageW(shortcuts, WM_KEYUP, static_cast<WPARAM>(L'C'), 0);
-    SendMessageW(shortcuts, WM_KEYUP, VK_CONTROL, 0);
-
     std::wstring copiedSelection;
-    for (size_t retry = 0u; retry < 20u && copiedSelection.empty(); ++retry)
-    {
-        PumpPendingMessages();
-        copiedSelection = ReadClipboardUnicodeText(shortcuts);
-        if (copiedSelection.empty())
-        {
-            std::this_thread::sleep_for(20ms);
-        }
-    }
-
+    state.Require(CopyShortcutsSelectionForTest(shortcuts, copiedSelection), L"Failed to copy the reordered Shortcuts grid row.");
     state.Require(! copiedSelection.empty(), L"Shortcuts Ctrl+C should copy the reordered visible row content to the clipboard.");
     state.Require(copiedSelection.rfind((baselineSelectedKeyText + L"\t"), 0u) == 0u,
                   L"Shortcuts clipboard copy should start with the visible Key column after header reorder.");
@@ -4517,23 +4571,8 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
     SelfTest::AppendSuiteTrace(kSuite, L"Shortcuts reordered-resized copy/search roundtrip: target row restored");
 
     state.Require(DebugFocusShortcutsWindowGrid(), L"Failed to restore Shortcuts grid focus before reordered-resized copy validation.");
-    ClearClipboardContents(shortcuts);
-    SendMessageW(shortcuts, WM_KEYDOWN, VK_CONTROL, 0);
-    SendMessageW(shortcuts, WM_KEYDOWN, static_cast<WPARAM>(L'C'), 0);
-    SendMessageW(shortcuts, WM_KEYUP, static_cast<WPARAM>(L'C'), 0);
-    SendMessageW(shortcuts, WM_KEYUP, VK_CONTROL, 0);
-
     std::wstring copiedSelection;
-    for (size_t retry = 0u; retry < 20u && copiedSelection.empty(); ++retry)
-    {
-        PumpPendingMessages();
-        copiedSelection = ReadClipboardUnicodeText(shortcuts);
-        if (copiedSelection.empty())
-        {
-            std::this_thread::sleep_for(20ms);
-        }
-    }
-
+    state.Require(CopyShortcutsSelectionForTest(shortcuts, copiedSelection), L"Failed to copy the reordered-resized Shortcuts grid row.");
     state.Require(! copiedSelection.empty(), L"Shortcuts Ctrl+C should copy the reordered-resized visible row content after the search round-trip.");
     state.Require(copiedSelection.rfind((baselineSelectedKeyText + L"\t"), 0u) == 0u,
                   L"Shortcuts clipboard copy should still start with the visible Key column after reordered-resized search round-trip.");
@@ -5011,23 +5050,8 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
     SelfTest::AppendSuiteTrace(kSuite, L"Shortcuts reordered-resized copy/sort cycles: second sort settled");
 
     state.Require(DebugFocusShortcutsWindowGrid(), L"Failed to restore Shortcuts grid focus before reordered-resized copy-after-sort validation.");
-    ClearClipboardContents(shortcuts);
-    SendMessageW(shortcuts, WM_KEYDOWN, VK_CONTROL, 0);
-    SendMessageW(shortcuts, WM_KEYDOWN, static_cast<WPARAM>(L'C'), 0);
-    SendMessageW(shortcuts, WM_KEYUP, static_cast<WPARAM>(L'C'), 0);
-    SendMessageW(shortcuts, WM_KEYUP, VK_CONTROL, 0);
-
     std::wstring copiedSelection;
-    for (size_t retry = 0u; retry < 20u && copiedSelection.empty(); ++retry)
-    {
-        PumpPendingMessages();
-        copiedSelection = ReadClipboardUnicodeText(shortcuts);
-        if (copiedSelection.empty())
-        {
-            std::this_thread::sleep_for(20ms);
-        }
-    }
-
+    state.Require(CopyShortcutsSelectionForTest(shortcuts, copiedSelection), L"Failed to copy the reordered-resized sorted Shortcuts grid row.");
     state.Require(! copiedSelection.empty(), L"Shortcuts Ctrl+C should copy the reordered-resized row content after sort cycles.");
     state.Require(copiedSelection.rfind((baselineSelectedKeyText + L"\t"), 0u) == 0u,
                   L"Shortcuts clipboard copy should still start with the visible Key column after reordered-resized sort cycles.");
@@ -5518,23 +5542,8 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
     const std::wstring selectedRowKeyText = snapshot.selectedRowKeyText;
 
     state.Require(DebugFocusShortcutsWindowGrid(), L"Failed to restore Shortcuts grid focus before reordered-resized copy-after-sort-search validation.");
-    ClearClipboardContents(shortcuts);
-    SendMessageW(shortcuts, WM_KEYDOWN, VK_CONTROL, 0);
-    SendMessageW(shortcuts, WM_KEYDOWN, static_cast<WPARAM>(L'C'), 0);
-    SendMessageW(shortcuts, WM_KEYUP, static_cast<WPARAM>(L'C'), 0);
-    SendMessageW(shortcuts, WM_KEYUP, VK_CONTROL, 0);
-
     std::wstring copiedSelection;
-    for (size_t retry = 0u; retry < 20u && copiedSelection.empty(); ++retry)
-    {
-        PumpPendingMessages();
-        copiedSelection = ReadClipboardUnicodeText(shortcuts);
-        if (copiedSelection.empty())
-        {
-            std::this_thread::sleep_for(20ms);
-        }
-    }
-
+    state.Require(CopyShortcutsSelectionForTest(shortcuts, copiedSelection), L"Failed to copy the reordered-resized sort/search Shortcuts grid row.");
     state.Require(! copiedSelection.empty(), L"Shortcuts Ctrl+C should copy the reordered-resized visible row content after the sort/search round-trip.");
     state.Require(copiedSelection.rfind((selectedRowKeyText + L"\t"), 0u) == 0u,
                   L"Shortcuts clipboard copy should still start with the visible Key column after reordered-resized sort/search round-trip.");

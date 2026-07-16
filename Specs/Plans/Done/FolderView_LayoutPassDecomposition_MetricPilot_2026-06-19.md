@@ -15,7 +15,7 @@ Decomposition landed and measured; the apparent dominance of `UpdateItemTextLayo
 was a perf-sink artifact, fixed in the follow-up. The phase metrics
 (`folder.layout.*_us`) are retained and now accurate.
 **Created:** 2026-06-19.
-**Parent backlog:** `Specs/Plans/WIP/DxUi_FolderView_Monitor_FuturePerformanceIdeas_2026-05-20.md`.
+**Parent backlog:** `Specs/Plans/WIP/Operation_FolderView_WarpDrive_AnyCircumstancePerformance_2026-06-28.md`.
 **Predecessor:** `Specs/Plans/Done/FolderView_TextLayout_MetricPilot_2026-06-19.md`
 (closed as measured no-op; it surfaced this lead).
 **Scope:** Decompose the dominant `render.layout_items_us` cost (p95 ≈ 200ms on

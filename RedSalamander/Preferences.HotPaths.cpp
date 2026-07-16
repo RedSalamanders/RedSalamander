@@ -411,7 +411,7 @@ void HotPathsPane::ApplyDxTheme(const PreferencesDialogState& state) noexcept
         return;
     }
 
-    _pageHostDx->SetTheme(PrefsUi::MakeDxPalette(state.theme));
+    _pageHostDx->SetTheme(MakeAppThemeDxPalette(state.theme));
 }
 
 void HotPathsPane::SyncDxControlsFromState(const PreferencesDialogState& state) noexcept
@@ -422,7 +422,7 @@ void HotPathsPane::SyncDxControlsFromState(const PreferencesDialogState& state) 
     }
 
     HotPathsDxPage& page       = _dxState->page;
-    const ThemePalette palette = PrefsUi::MakeDxPalette(state.theme);
+    const ThemePalette palette = MakeAppThemeDxPalette(state.theme);
     const auto& hp             = GetHotPathsSettingsOrDefault(state.workingSettings);
 
     const std::wstring pathLabelText        = LoadStringResource(nullptr, IDS_PREFS_HOT_PATHS_PATH_LABEL);
@@ -877,6 +877,42 @@ PreferencesHotPathsDebugFocusTarget HotPathsPane::DebugGetFocusTarget() const no
     }
 
     return PreferencesHotPathsDebugFocusTarget::None;
+}
+
+void HotPathsPane::DebugPopulateSnapshot(PreferencesDebugSnapshot& out) const noexcept
+{
+    out.hotPathsContentRootVisible = _pageContentRoot && _pageContentRoot->IsVisible();
+    out.hotPathsContentRootEnabled = _pageContentRoot && _pageContentRoot->IsEnabled();
+
+    if (! _dxState)
+    {
+        return;
+    }
+
+    const auto accumulate = [&](const RedSalamander::DxUi::Control* control) noexcept
+    {
+        if (! control)
+        {
+            return false;
+        }
+
+        ++out.hotPathsKnownControlCount;
+        if (control->IsFocusable())
+        {
+            ++out.hotPathsKnownFocusableCount;
+            return true;
+        }
+
+        return false;
+    };
+
+    const auto& page                     = _dxState->page;
+    out.hotPathsFirstPathFocusable       = accumulate(page.slots[0].pathEdit);
+    out.hotPathsFirstBrowseFocusable     = accumulate(page.slots[0].browseButton);
+    out.hotPathsFirstLabelFocusable      = accumulate(page.slots[0].labelEdit);
+    out.hotPathsFirstShowInMenuFocusable = accumulate(page.slots[0].showInMenuToggle);
+    out.hotPathsSecondPathFocusable      = accumulate(page.slots[1].pathEdit);
+    out.hotPathsOpenPrefsFocusable       = accumulate(page.openPrefsToggle);
 }
 
 bool HotPathsPane::DebugFocusFirstPathField() noexcept

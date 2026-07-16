@@ -591,26 +591,7 @@ using ShellNewTemplateKind       = FolderWindow::ShellNewTemplateKind;
 
 [[nodiscard]] std::wstring Utf16FromUtf8ForChangeAttributes(std::string_view text) noexcept
 {
-    if (text.empty() || text.size() > static_cast<size_t>((std::numeric_limits<int>::max)()))
-    {
-        return {};
-    }
-
-    const int inputLength = static_cast<int>(text.size());
-    const int needed      = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), inputLength, nullptr, 0);
-    if (needed <= 0)
-    {
-        return {};
-    }
-
-    std::wstring result(static_cast<size_t>(needed), L'\0');
-    const int written = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), inputLength, result.data(), needed);
-    if (written != needed)
-    {
-        return {};
-    }
-
-    return result;
+    return Common::Strings::Utf16FromUtf8StrictOrEmpty(text);
 }
 
 [[nodiscard]] bool IsSafeChangeAttributesStreamName(std::wstring_view streamName) noexcept
@@ -1112,7 +1093,7 @@ public:
             _hWnd.reset(hwnd);
         }
 
-        CenterWindowOnOwner(_hWnd.get(), _ownerWindow);
+        static_cast<void>(Common::WindowSizing::CenterExistingWindowOnOwner(_hWnd.get(), _ownerWindow));
         static_cast<void>(_dxHost.PrimeForShow());
         ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
         UpdateWindow(_hWnd.get());
@@ -2108,6 +2089,7 @@ struct ChangeAttributesProgressState final
                                                             const std::vector<std::filesystem::path>& roots,
                                                             const std::stop_token& stopToken,
                                                             ChangeAttributesProgressState& progress,
+                                                            FolderWindow::ChangeAttributesReport& report,
                                                             std::vector<std::filesystem::path>& outPaths) noexcept
 {
     if (! fileSystem || ! fileIo)
@@ -2159,14 +2141,16 @@ struct ChangeAttributesProgressState final
         const HRESULT readHr = fileSystem->ReadDirectoryInfo(folder.c_str(), filesInformation.put());
         if (FAILED(readHr))
         {
-            return readHr;
+            RecordChangeAttributesFailure(report, readHr);
+            continue;
         }
 
         FileInfo* entry        = nullptr;
         const HRESULT bufferHr = filesInformation ? filesInformation->GetBuffer(&entry) : E_POINTER;
         if (FAILED(bufferHr))
         {
-            return bufferHr;
+            RecordChangeAttributesFailure(report, bufferHr);
+            continue;
         }
 
         while (entry != nullptr)
@@ -2281,55 +2265,12 @@ struct MakeFileListEntry final
 
 [[nodiscard]] std::string Utf8FromUtf16ForMakeFileList(std::wstring_view text) noexcept
 {
-    if (text.empty())
-    {
-        return {};
-    }
-
-    if (text.size() > static_cast<size_t>((std::numeric_limits<int>::max)()))
-    {
-        return {};
-    }
-
-    const int inputChars = static_cast<int>(text.size());
-    const int required   = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), inputChars, nullptr, 0, nullptr, nullptr);
-    if (required <= 0)
-    {
-        return {};
-    }
-
-    std::string result(static_cast<size_t>(required), '\0');
-    const int written = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), inputChars, result.data(), required, nullptr, nullptr);
-    if (written != required)
-    {
-        return {};
-    }
-
-    return result;
+    return Common::Strings::Utf8FromUtf16StrictOrEmpty(text);
 }
 
 [[nodiscard]] std::wstring Utf16FromUtf8ForMakeFileList(std::string_view text) noexcept
 {
-    if (text.empty() || text.size() > static_cast<size_t>((std::numeric_limits<int>::max)()))
-    {
-        return {};
-    }
-
-    const int inputBytes = static_cast<int>(text.size());
-    const int required   = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), inputBytes, nullptr, 0);
-    if (required <= 0)
-    {
-        return {};
-    }
-
-    std::wstring result(static_cast<size_t>(required), L'\0');
-    const int written = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), inputBytes, result.data(), required);
-    if (written != required)
-    {
-        return {};
-    }
-
-    return result;
+    return Common::Strings::Utf16FromUtf8StrictOrEmpty(text);
 }
 
 [[nodiscard]] std::wstring LowerAsciiMacroToken(std::wstring_view text)
@@ -3172,7 +3113,7 @@ public:
             _hWnd.reset(hwnd);
         }
 
-        CenterWindowOnOwner(_hWnd.get(), _ownerWindow);
+        static_cast<void>(Common::WindowSizing::CenterExistingWindowOnOwner(_hWnd.get(), _ownerWindow));
         static_cast<void>(_dxHost.PrimeForShow());
         ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
         UpdateWindow(_hWnd.get());
@@ -3856,6 +3797,7 @@ struct ArchiveUnpackPromptTextPayload final
     static const UINT message = RegisterWindowMessageW(L"RedSalamander.ArchiveUnpackPrompt.Debug");
     return message;
 }
+
 #endif
 
 [[nodiscard]] std::wstring ToLowerInvariant(std::wstring text)
@@ -4604,28 +4546,23 @@ public:
             _hWnd.reset(hwnd);
         }
 
-        CenterWindowOnOwner(_hWnd.get(), _ownerWindow);
+        static_cast<void>(Common::WindowSizing::CenterExistingWindowOnOwner(_hWnd.get(), _ownerWindow));
         static_cast<void>(_dxHost.PrimeForShow());
         ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
         UpdateWindow(_hWnd.get());
         SetForegroundWindow(_hWnd.get());
 
-        MSG msg{};
-        while (! _done)
+        const RedSalamander::DxUi::DxUiModalLoopResult loopResult =
+            RedSalamander::DxUi::RunDxUiModalLoop(_hWnd.get(),
+                                                  RedSalamander::DxUi::DxUiModalLoopOptions{
+                                                      .diagnosticName = L"ArchivePackPrompt",
+                                                      .shouldContinue = ShouldContinueModalLoop,
+                                                      .context        = this,
+                                                      .onQuit         = OnModalLoopQuit,
+                                                  });
+        if (loopResult == RedSalamander::DxUi::DxUiModalLoopResult::GetMessageFailed)
         {
-            const BOOL getMessageResult = GetMessageW(&msg, nullptr, 0, 0);
-            if (getMessageResult == -1)
-            {
-                return std::nullopt;
-            }
-            if (getMessageResult == 0)
-            {
-                _done = true;
-                break;
-            }
-
-            TranslateMessage(&msg);
-            DispatchMessageW(&msg);
+            return std::nullopt;
         }
 
         return _result;
@@ -4713,7 +4650,9 @@ public:
             }
             case WM_ERASEBKGND: return 1;
             case WM_NCACTIVATE: ApplyTitleBarTheme(hwnd, self->_theme, wParam != FALSE); return DefWindowProcW(hwnd, message, wParam, lParam);
-            case WM_CLOSE: self->Cancel(); return 0;
+            case WM_CLOSE:
+                self->Cancel();
+                return 0;
             case WM_NCDESTROY:
 #ifdef ENABLE_TESTS
                 g_archivePackPromptWindow.store(nullptr);
@@ -5086,7 +5025,9 @@ private:
                 snapshot->commandButtonsFitInClient           = _lastButtonsBottomDip <= client.bottom;
                 return TRUE;
             }
-            case ArchivePackPromptDebugCommand::SetPackerIndex: SetPackerIndex(static_cast<size_t>(lParam)); return TRUE;
+            case ArchivePackPromptDebugCommand::SetPackerIndex:
+                SetPackerIndex(static_cast<size_t>(lParam));
+                return TRUE;
             case ArchivePackPromptDebugCommand::SetArchivePath:
             {
                 const auto* payload = reinterpret_cast<const ArchivePackPromptArchivePathPayload*>(lParam);
@@ -5103,13 +5044,32 @@ private:
                     _deleteAfterCheckbox->SetChecked(lParam != 0);
                 }
                 return TRUE;
-            case ArchivePackPromptDebugCommand::Confirm: Confirm(); return TRUE;
-            case ArchivePackPromptDebugCommand::Cancel: Cancel(); return TRUE;
+            case ArchivePackPromptDebugCommand::Confirm:
+                Confirm();
+                return TRUE;
+            case ArchivePackPromptDebugCommand::Cancel:
+                Cancel();
+                return TRUE;
         }
 
         return FALSE;
     }
 #endif
+
+    [[nodiscard]] static bool ShouldContinueModalLoop(void* context) noexcept
+    {
+        const auto* self = static_cast<const ArchivePackPromptWindow*>(context);
+        return self && ! self->_done;
+    }
+
+    static void OnModalLoopQuit(WPARAM, void* context) noexcept
+    {
+        auto* self = static_cast<ArchivePackPromptWindow*>(context);
+        if (self)
+        {
+            self->_done = true;
+        }
+    }
 
 private:
     HWND _ownerWindow        = nullptr;
@@ -5252,28 +5212,23 @@ public:
             _hWnd.reset(hwnd);
         }
 
-        CenterWindowOnOwner(_hWnd.get(), _ownerWindow);
+        static_cast<void>(Common::WindowSizing::CenterExistingWindowOnOwner(_hWnd.get(), _ownerWindow));
         static_cast<void>(_dxHost.PrimeForShow());
         ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
         UpdateWindow(_hWnd.get());
         SetForegroundWindow(_hWnd.get());
 
-        MSG msg{};
-        while (! _done)
+        const RedSalamander::DxUi::DxUiModalLoopResult loopResult =
+            RedSalamander::DxUi::RunDxUiModalLoop(_hWnd.get(),
+                                                  RedSalamander::DxUi::DxUiModalLoopOptions{
+                                                      .diagnosticName = L"ArchiveUnpackPrompt",
+                                                      .shouldContinue = ShouldContinueModalLoop,
+                                                      .context        = this,
+                                                      .onQuit         = OnModalLoopQuit,
+                                                  });
+        if (loopResult == RedSalamander::DxUi::DxUiModalLoopResult::GetMessageFailed)
         {
-            const BOOL getMessageResult = GetMessageW(&msg, nullptr, 0, 0);
-            if (getMessageResult == -1)
-            {
-                return std::nullopt;
-            }
-            if (getMessageResult == 0)
-            {
-                _done = true;
-                break;
-            }
-
-            TranslateMessage(&msg);
-            DispatchMessageW(&msg);
+            return std::nullopt;
         }
 
         return _result;
@@ -5787,6 +5742,21 @@ private:
         return FALSE;
     }
 #endif
+
+    [[nodiscard]] static bool ShouldContinueModalLoop(void* context) noexcept
+    {
+        const auto* self = static_cast<const ArchiveUnpackPromptWindow*>(context);
+        return self && ! self->_done;
+    }
+
+    static void OnModalLoopQuit(WPARAM, void* context) noexcept
+    {
+        auto* self = static_cast<ArchiveUnpackPromptWindow*>(context);
+        if (self)
+        {
+            self->_done = true;
+        }
+    }
 
 private:
     HWND _ownerWindow        = nullptr;
@@ -7352,6 +7322,7 @@ private:
         return hr;
     }
 
+    bool sawUnsupportedCandidate = false;
     for (size_t offset = tail.size() - kZipEndOfCentralDirMinSize + 1u; offset > 0u; --offset)
     {
         const size_t index = offset - 1u;
@@ -7372,20 +7343,21 @@ private:
             ! TryReadLe16(tail, index + 10u, totalEntryCount) || ! TryReadLe32(tail, index + 12u, centralSize) ||
             ! TryReadLe32(tail, index + 16u, centralOffset) || ! TryReadLe16(tail, index + 20u, commentLength))
         {
-            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+            continue;
         }
 
         if (diskNumber != 0u || centralDisk != 0u || diskEntryCount != totalEntryCount)
         {
-            return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+            sawUnsupportedCandidate = true;
+            continue;
         }
         if (index + kZipEndOfCentralDirMinSize + commentLength > tail.size())
         {
-            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+            continue;
         }
         if (static_cast<uint64_t>(centralOffset) + centralSize > fileSize)
         {
-            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+            continue;
         }
 
         outEocd.entryCount             = totalEntryCount;
@@ -7394,7 +7366,7 @@ private:
         return S_OK;
     }
 
-    return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+    return sawUnsupportedCandidate ? HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) : HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
 }
 
 [[nodiscard]] std::wstring Utf16FromArchiveCodePage(std::string_view text, UINT codePage, DWORD flags) noexcept
@@ -9821,14 +9793,14 @@ bool DebugConfirmChangeAttributesOptionsPrompt() noexcept
 {
     const HWND hwnd    = GetChangeAttributesOptionsPromptHandle();
     const UINT message = GetChangeAttributesOptionsPromptDebugMessage();
-    return hwnd && message != 0u && SendMessageW(hwnd, message, static_cast<WPARAM>(ChangeAttributesOptionsPromptDebugCommand::Confirm), 0) != FALSE;
+    return PostDxUiPromptCloseDebugCommand(hwnd, message, static_cast<WPARAM>(ChangeAttributesOptionsPromptDebugCommand::Confirm));
 }
 
 bool DebugCancelChangeAttributesOptionsPrompt() noexcept
 {
     const HWND hwnd    = GetChangeAttributesOptionsPromptHandle();
     const UINT message = GetChangeAttributesOptionsPromptDebugMessage();
-    return hwnd && message != 0u && SendMessageW(hwnd, message, static_cast<WPARAM>(ChangeAttributesOptionsPromptDebugCommand::Cancel), 0) != FALSE;
+    return PostDxUiPromptCloseDebugCommand(hwnd, message, static_cast<WPARAM>(ChangeAttributesOptionsPromptDebugCommand::Cancel));
 }
 
 HWND GetMakeFileListOptionsPromptHandle() noexcept
@@ -9889,14 +9861,14 @@ bool DebugConfirmMakeFileListOptionsPrompt() noexcept
 {
     const HWND hwnd    = GetMakeFileListOptionsPromptHandle();
     const UINT message = GetMakeFileListOptionsPromptDebugMessage();
-    return hwnd && message != 0u && SendMessageW(hwnd, message, static_cast<WPARAM>(MakeFileListOptionsPromptDebugCommand::Confirm), 0) != FALSE;
+    return PostDxUiPromptCloseDebugCommand(hwnd, message, static_cast<WPARAM>(MakeFileListOptionsPromptDebugCommand::Confirm));
 }
 
 bool DebugCancelMakeFileListOptionsPrompt() noexcept
 {
     const HWND hwnd    = GetMakeFileListOptionsPromptHandle();
     const UINT message = GetMakeFileListOptionsPromptDebugMessage();
-    return hwnd && message != 0u && SendMessageW(hwnd, message, static_cast<WPARAM>(MakeFileListOptionsPromptDebugCommand::Cancel), 0) != FALSE;
+    return PostDxUiPromptCloseDebugCommand(hwnd, message, static_cast<WPARAM>(MakeFileListOptionsPromptDebugCommand::Cancel));
 }
 
 HWND GetArchivePackPromptHandle() noexcept
@@ -9947,14 +9919,14 @@ bool DebugConfirmArchivePackPrompt() noexcept
 {
     const HWND hwnd    = GetArchivePackPromptHandle();
     const UINT message = GetArchivePackPromptDebugMessage();
-    return hwnd && message != 0u && SendMessageW(hwnd, message, static_cast<WPARAM>(ArchivePackPromptDebugCommand::Confirm), 0) != FALSE;
+    return PostDxUiPromptCloseDebugCommand(hwnd, message, static_cast<WPARAM>(ArchivePackPromptDebugCommand::Confirm));
 }
 
 bool DebugCancelArchivePackPrompt() noexcept
 {
     const HWND hwnd    = GetArchivePackPromptHandle();
     const UINT message = GetArchivePackPromptDebugMessage();
-    return hwnd && message != 0u && SendMessageW(hwnd, message, static_cast<WPARAM>(ArchivePackPromptDebugCommand::Cancel), 0) != FALSE;
+    return PostDxUiPromptCloseDebugCommand(hwnd, message, static_cast<WPARAM>(ArchivePackPromptDebugCommand::Cancel));
 }
 
 HWND GetArchiveUnpackPromptHandle() noexcept
@@ -10011,14 +9983,14 @@ bool DebugConfirmArchiveUnpackPrompt() noexcept
 {
     const HWND hwnd    = GetArchiveUnpackPromptHandle();
     const UINT message = GetArchiveUnpackPromptDebugMessage();
-    return hwnd && message != 0u && SendMessageW(hwnd, message, static_cast<WPARAM>(ArchiveUnpackPromptDebugCommand::Confirm), 0) != FALSE;
+    return PostDxUiPromptCloseDebugCommand(hwnd, message, static_cast<WPARAM>(ArchiveUnpackPromptDebugCommand::Confirm));
 }
 
 bool DebugCancelArchiveUnpackPrompt() noexcept
 {
     const HWND hwnd    = GetArchiveUnpackPromptHandle();
     const UINT message = GetArchiveUnpackPromptDebugMessage();
-    return hwnd && message != 0u && SendMessageW(hwnd, message, static_cast<WPARAM>(ArchiveUnpackPromptDebugCommand::Cancel), 0) != FALSE;
+    return PostDxUiPromptCloseDebugCommand(hwnd, message, static_cast<WPARAM>(ArchiveUnpackPromptDebugCommand::Cancel));
 }
 #endif
 
@@ -10047,6 +10019,16 @@ void FolderWindow::CommandCreateDirectory(Pane pane)
     }
 
     const std::filesystem::path base = folder.value();
+
+    const HWND folderViewToRestore    = state.hFolderView.get();
+    const auto restoreFolderViewFocus = wil::scope_exit([this, pane, folderViewToRestore]() noexcept
+    {
+        if (folderViewToRestore && IsWindow(folderViewToRestore) != FALSE)
+        {
+            SetActivePane(pane);
+            FocusPaneFolderView(pane);
+        }
+    });
 
     wil::com_ptr<IFileSystemDirectoryOperations> dirOps;
     state.fileSystem->QueryInterface(__uuidof(IFileSystemDirectoryOperations), dirOps.put_void());
@@ -10555,6 +10537,10 @@ bool FolderWindow::DebugGetPaneViewOptionsSnapshot(Pane pane, PaneViewOptionsDeb
     out.thumbnailPendingCount                           = thumbnails.pendingCount;
     out.thumbnailCacheHitCount                          = thumbnails.cacheHitCount;
     out.thumbnailShellSuccessCount                      = thumbnails.shellSuccessCount;
+    out.thumbnailShellCacheHitCount                     = thumbnails.shellCacheHitCount;
+    out.thumbnailShellCacheMissCount                    = thumbnails.shellCacheMissCount;
+    out.thumbnailShellProviderAllowedCount              = thumbnails.shellProviderAllowedCount;
+    out.thumbnailShellProviderTimeoutCount              = thumbnails.shellProviderTimeoutCount;
     out.thumbnailWicSuccessCount                        = thumbnails.wicSuccessCount;
     out.thumbnailWicFactoryCreateCount                  = thumbnails.wicFactoryCreateCount;
     out.thumbnailDecodeFailureCount                     = thumbnails.decodeFailureCount;
@@ -10609,6 +10595,17 @@ void FolderWindow::DebugSetThumbnailProviderMode(Pane pane, FolderView::DebugThu
     state.folderView.DebugSetThumbnailProviderMode(mode);
 }
 
+bool FolderWindow::DebugSeedThumbnailPendingAndPostThumbnailBitmapMessagesForTest(Pane pane,
+                                                                                  uint64_t pendingCount,
+                                                                                  uint64_t staleBatchMessageCount,
+                                                                                  uint64_t staleGenerationMessageCount,
+                                                                                  uint64_t unaccountedCurrentMessageCount)
+{
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    return state.folderView.DebugSeedThumbnailPendingAndPostThumbnailBitmapMessagesForTest(
+        pendingCount, staleBatchMessageCount, staleGenerationMessageCount, unaccountedCurrentMessageCount);
+}
+
 bool FolderWindow::DebugGetPreviewPaneSnapshot(PreviewPaneDebugSnapshot& out) const noexcept
 {
     out                 = {};
@@ -10648,8 +10645,35 @@ bool FolderWindow::DebugGetPreviewPaneSnapshot(PreviewPaneDebugSnapshot& out) co
     out.folderViewVisible  = hostState.hFolderView && IsWindowVisible(hostState.hFolderView.get()) != FALSE;
     out.previewTabsHwnd    = hostState.hPreviewTabs.get();
     out.previewContentHwnd = hostState.hPreviewContent.get();
-    out.previewEmbeddedViewerHwnd =
-        (hostState.previewViewerInstance && hostState.hPreviewContent) ? GetWindow(hostState.hPreviewContent.get(), GW_CHILD) : nullptr;
+    const HWND embeddedHwnd = hostState.previewViewerInstance ? hostState.previewViewerInstance->embeddedHwnd : nullptr;
+    if (IsOwnedPreviewEmbeddedHwnd(hostState, hostState.previewViewerInstance, embeddedHwnd))
+    {
+        out.previewEmbeddedViewerHwnd = embeddedHwnd;
+    }
+    if (hostState.hPreviewContent)
+    {
+        for (HWND child = GetWindow(hostState.hPreviewContent.get(), GW_CHILD); child != nullptr; child = GetWindow(child, GW_HWNDNEXT))
+        {
+            if (GetParent(child) != hostState.hPreviewContent.get())
+            {
+                continue;
+            }
+            ++out.previewDirectChildCount;
+            if (IsWindowVisible(child) != FALSE)
+            {
+                ++out.previewVisibleDirectChildCount;
+            }
+            if ((GetWindowLongPtrW(child, GWL_STYLE) & WS_VISIBLE) != 0)
+            {
+                ++out.previewOwnVisibleDirectChildCount;
+            }
+        }
+    }
+    out.previewLastOpenCreatedChildCount        = _debugPreviewLastOpenCreatedChildCount;
+    out.previewLastOpenDetectedChildCount       = _debugPreviewLastOpenDetectedChildCount;
+    out.previewLastOpenHiddenRejectedChildCount = _debugPreviewLastOpenHiddenRejectedChildCount;
+    out.previewLastOpenRejectedChildCardinality = _debugPreviewLastOpenRejectedChildCardinality;
+    out.previewLastReopenRejectedChildSet       = _debugPreviewLastReopenRejectedChildSet;
     out.previewViewerInstanceId = reinterpret_cast<uintptr_t>(hostState.previewViewerInstance);
     out.tabRect                 = hostPane == Pane::Left ? _leftPreviewTabsRect : _rightPreviewTabsRect;
     out.contentRect             = hostPane == Pane::Left ? _leftPreviewContentRect : _rightPreviewContentRect;
@@ -10952,6 +10976,12 @@ bool FolderWindow::DebugIsEmptyFolderStateActive(Pane pane) const noexcept
 {
     const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
     return state.folderView.DebugIsEmptyFolderStateActive();
+}
+
+std::wstring_view FolderWindow::DebugGetPaneEmptyStateMessage(Pane pane) const noexcept
+{
+    const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    return state.folderView.DebugGetEmptyStateMessage();
 }
 
 std::wstring_view FolderWindow::DebugGetEmptyFolderFunMessage(Pane pane) const noexcept
@@ -11784,7 +11814,12 @@ void FolderWindow::CommandUnpack(Pane pane)
         }
         if (FAILED(currentResult.hr))
         {
-            result = std::move(currentResult);
+            const std::filesystem::path failedArchivePath = currentResult.archivePath;
+            result.hr                                     = currentResult.hr;
+            result.destinationPath                        = destinationPath.value();
+            result.entryCount += currentResult.entryCount;
+            result.bytesProcessed += currentResult.bytesProcessed;
+            result.entries.insert(result.entries.end(), currentResult.entries.begin(), currentResult.entries.end());
 #ifdef ENABLE_TESTS
             recordDebugResult(result);
 #endif
@@ -11793,7 +11828,7 @@ void FolderWindow::CommandUnpack(Pane pane)
             const UINT messageId = result.hr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) ? IDS_MSG_ARCHIVE_UNSUPPORTED_FORMAT : IDS_FMT_ARCHIVE_UNPACK_FAILED;
             const std::wstring message = messageId == IDS_MSG_ARCHIVE_UNSUPPORTED_FORMAT
                                              ? LoadStringResource(nullptr, IDS_MSG_ARCHIVE_UNSUPPORTED_FORMAT)
-                                             : ArchiveFailureMessage(IDS_FMT_ARCHIVE_UNPACK_FAILED, result.archivePath, result.hr);
+                                             : ArchiveFailureMessage(IDS_FMT_ARCHIVE_UNPACK_FAILED, failedArchivePath, result.hr);
             ShowArchiveOverlay(*this, pane, IDS_CMD_UNPACK, FolderView::OverlaySeverity::Warning, message, result.hr);
             return;
         }
@@ -11841,7 +11876,9 @@ void FolderWindow::CommandUnpack(Pane pane)
                        pane,
                        IDS_CMD_UNPACK,
                        FolderView::OverlaySeverity::Information,
-                       FormatStringResource(nullptr, IDS_FMT_ARCHIVE_UNPACK_COMPLETED, result.entryCount, result.archivePath.wstring()),
+                       selectedPaths.size() == 1u
+                           ? FormatStringResource(nullptr, IDS_FMT_ARCHIVE_UNPACK_COMPLETED, result.entryCount, result.archivePath.wstring())
+                           : FormatStringResource(nullptr, IDS_FMT_ARCHIVE_UNPACK_COMPLETED_MULTIPLE, result.entryCount, selectedPaths.size()),
                        S_OK);
 }
 
@@ -12198,7 +12235,7 @@ void FolderWindow::CommandListOpenedFiles(Pane pane)
     }
     perf.SetValue0(static_cast<uint64_t>(state->rows.size()));
     _openedFilesDialog = std::move(state);
-    CenterWindowOnOwner(dialog, ownerWindow);
+    static_cast<void>(Common::WindowSizing::CenterExistingWindowOnOwner(dialog, ownerWindow));
     static_cast<void>(_openedFilesDialog->dxHost.PrimeForShow());
     ShowWindow(dialog, SW_SHOWNORMAL);
     UpdateWindow(dialog);
@@ -12423,10 +12460,11 @@ void FolderWindow::OpenSharedDirectoriesManagement() noexcept
         return;
     }
 
-    const Pane pane        = _sharedDirectoriesDialog ? _sharedDirectoriesDialog->pane : _activePane;
-    std::wstring title     = LoadStringResource(nullptr, IDS_CAPTION_WARNING);
-    std::wstring message   = LoadStringOrFallback(IDS_SHARED_DIRECTORIES_MANAGE_FAILED, L"Windows shared folders management could not be opened.");
-    const HRESULT resultHr = HRESULT_FROM_WIN32(static_cast<DWORD>(reinterpret_cast<INT_PTR>(result)));
+    const Pane pane          = _sharedDirectoriesDialog ? _sharedDirectoriesDialog->pane : _activePane;
+    std::wstring title       = LoadStringResource(nullptr, IDS_CAPTION_WARNING);
+    std::wstring message     = LoadStringOrFallback(IDS_SHARED_DIRECTORIES_MANAGE_FAILED, L"Windows shared folders management could not be opened.");
+    const INT_PTR shellError = reinterpret_cast<INT_PTR>(result);
+    const HRESULT resultHr   = shellError == 0 ? E_OUTOFMEMORY : HRESULT_FROM_WIN32(static_cast<DWORD>(shellError));
     ShowPaneAlertOverlay(
         pane, FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Warning, std::move(title), std::move(message), resultHr, true, false);
 }
@@ -12512,7 +12550,7 @@ void FolderWindow::CommandSharedDirectories(Pane pane)
     perf.SetValue0(static_cast<uint64_t>(state->rows.size()));
     perf.SetHr(state->lastError);
     _sharedDirectoriesDialog = std::move(state);
-    CenterWindowOnOwner(dialog, ownerWindow);
+    static_cast<void>(Common::WindowSizing::CenterExistingWindowOnOwner(dialog, ownerWindow));
     static_cast<void>(_sharedDirectoriesDialog->dxHost.PrimeForShow());
     ShowWindow(dialog, SW_SHOWNORMAL);
     UpdateWindow(dialog);
@@ -12833,7 +12871,7 @@ void FolderWindow::CommandChangeAttributes(Pane pane)
             std::vector<std::filesystem::path> workItems;
             if (SUCCEEDED(operationHr))
             {
-                hr = CollectRecursiveChangeAttributesPaths(fileSystem.get(), workerFileIo.get(), paths, stopToken, progress, workItems);
+                hr = CollectRecursiveChangeAttributesPaths(fileSystem.get(), workerFileIo.get(), paths, stopToken, progress, report, workItems);
                 if (FAILED(hr))
                 {
                     operationHr = hr;

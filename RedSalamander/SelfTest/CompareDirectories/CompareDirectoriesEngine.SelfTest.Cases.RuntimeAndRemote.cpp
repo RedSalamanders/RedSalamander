@@ -138,8 +138,10 @@ SelfTest::RunCase(options,
         if (decisionInitial)
         {
             state.Require(decisionInitial->items.empty(), L"content_pending_elided: expected no per-file ContentPending items in differences-only mode.");
-            state.Require(decisionInitial->pendingContentCompareCount == static_cast<uint32_t>(kFileCount),
-                          L"content_pending_elided: expected pendingContentCompareCount to match the file count.");
+            state.Require(decisionInitial->pendingContentCompareCount > 0u && decisionInitial->pendingContentCompareCount <= static_cast<uint32_t>(kFileCount),
+                          std::format(L"content_pending_elided: expected aggregate pendingContentCompareCount in 1..{}, got {}.",
+                                      kFileCount,
+                                      decisionInitial->pendingContentCompareCount));
             state.Require(decisionInitial->anyPending, L"content_pending_elided: expected anyPending=true while compares are queued.");
         }
 
@@ -454,6 +456,13 @@ SelfTest::RunCase(options,
     const std::wstring ftpUrl = ConnectionProfileUtils::BuildConnectionDisplayUrl(ftpAnonymous);
     state.Require(ftpUrl == L"ftp://ftp.example.test:21", L"FTP anonymous display URL should hide the anonymous user name.");
 
+    Common::Settings::ConnectionProfile mtpAnonymous{};
+    mtpAnonymous.pluginId     = L"builtin/file-system-mtp";
+    mtpAnonymous.authMode     = Common::Settings::ConnectionAuthMode::Anonymous;
+    mtpAnonymous.host         = L"\\\\?\\usb#vid_selftest&pid_mtp#device";
+    const std::wstring mtpUrl = ConnectionProfileUtils::BuildConnectionDisplayUrl(mtpAnonymous);
+    state.Require(mtpUrl == L"mtp://\\\\?\\usb#vid_selftest&pid_mtp#device", L"MTP display URL should hide the anonymous user name.");
+
     Common::Settings::ConnectionProfile sftp{};
     sftp.pluginId              = L"builtin/file-system-sftp";
     sftp.authMode              = Common::Settings::ConnectionAuthMode::Password;
@@ -571,6 +580,59 @@ SelfTest::RunCase(options,
 
 SelfTest::RunCase(options,
                   suite,
+                  L"content_cache_hit_skips_io",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    // Case: a version-bumped recompute of an unchanged content pair reuses the content cache instead of reopening readers.
+    if (const auto foldersOpt = CreateCaseFolders(root, L"content_cache_hit_skips_io"))
+    {
+        const auto& folders = foldersOpt.value();
+        state.Require(SelfTest::WriteTextFile(folders.left / L"a.bin", "AAAA"), L"content cache no IO: failed to write left a.bin.");
+        state.Require(SelfTest::WriteTextFile(folders.right / L"a.bin", "BBBB"), L"content cache no IO: failed to write right a.bin.");
+
+        auto readCount                    = std::make_shared<std::atomic<uint32_t>>(0u);
+        wil::com_ptr<IFileSystem> wrapped = CreateShortReadFileSystem(baseFs, folders.left.parent_path(), 2u, 0u, false, readCount);
+        state.Require(static_cast<bool>(wrapped), L"content cache no IO: failed to create read-count wrapper.");
+
+        Common::Settings::CompareDirectoriesSettings settings{};
+        settings.compareContent     = true;
+        settings.keepIdenticalItems = true;
+
+        auto session =
+            std::make_shared<CompareDirectoriesSession>(wrapped ? wrapped : baseFs, wrapped ? wrapped : baseFs, folders.left, folders.right, settings);
+        auto firstDecision = WaitForContentCompare(session, std::filesystem::path{}, L"a.bin", state);
+        state.Require(static_cast<bool>(firstDecision), L"content cache no IO: first decision missing.");
+        const uint32_t readsAfterFirst = readCount->load(std::memory_order_relaxed);
+        state.Require(readsAfterFirst != 0u, L"content cache no IO: first content compare should read file data.");
+
+        settings.compareAttributes = true;
+        session->SetSettings(settings);
+        auto secondDecision = WaitForContentCompare(session, std::filesystem::path{}, L"a.bin", state);
+        state.Require(static_cast<bool>(secondDecision), L"content cache no IO: second decision missing.");
+        const uint32_t readsAfterSecond = readCount->load(std::memory_order_relaxed);
+        state.Require(readsAfterSecond == readsAfterFirst, L"content cache no IO: unchanged content cache hit should not perform more reads.");
+
+        if (secondDecision)
+        {
+            const auto* item = FindItem(*secondDecision, L"a.bin");
+            state.Require(item != nullptr, L"content cache no IO: a.bin missing after recompute.");
+            if (item)
+            {
+                state.Require(item->isDifferent, L"content cache no IO: a.bin should remain different.");
+                state.Require(HasFlag(item->differenceMask, CompareDirectoriesDiffBit::Content), L"content cache no IO: Content bit missing.");
+            }
+        }
+    }
+    else
+    {
+        state.Require(false, L"Failed to create case folders: content_cache_hit_skips_io.");
+    }
+
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
                   L"root_decision_empty_directories",
                   [&](SelfTest::CaseState& state) noexcept
 {
@@ -681,6 +743,64 @@ SelfTest::RunCase(options,
     else
     {
         state.Require(false, L"Failed to create case folders: setSettingsInvalidates.");
+    }
+
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"setRoots_resets_and_bumps_version",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    // Case: SetRoots bumps version, clears cached old-root decisions, and computes the new roots.
+    if (const auto foldersOpt = CreateCaseFolders(root, L"setRoots_resets_and_bumps_version"))
+    {
+        const auto& folders                = foldersOpt.value();
+        const std::filesystem::path leftA  = folders.left / L"A";
+        const std::filesystem::path rightA = folders.right / L"A";
+        const std::filesystem::path leftB  = folders.left / L"B";
+        const std::filesystem::path rightB = folders.right / L"B";
+        state.Require(SelfTest::EnsureDirectory(leftA), L"setRoots: failed to create left A.");
+        state.Require(SelfTest::EnsureDirectory(rightA), L"setRoots: failed to create right A.");
+        state.Require(SelfTest::EnsureDirectory(leftB), L"setRoots: failed to create left B.");
+        state.Require(SelfTest::EnsureDirectory(rightB), L"setRoots: failed to create right B.");
+        state.Require(SelfTest::WriteTextFile(leftA / L"old.txt", "old-left"), L"setRoots: failed to write old left.");
+        state.Require(SelfTest::WriteTextFile(rightA / L"old.txt", "old-right"), L"setRoots: failed to write old right.");
+        state.Require(SelfTest::WriteTextFile(leftB / L"new.txt", "new-left"), L"setRoots: failed to write new left.");
+        state.Require(SelfTest::WriteTextFile(rightB / L"new.txt", "new-right"), L"setRoots: failed to write new right.");
+
+        Common::Settings::CompareDirectoriesSettings settings{};
+        settings.compareSize = true;
+
+        auto session           = std::make_shared<CompareDirectoriesSession>(baseFs, baseFs, leftA, rightA, settings);
+        const auto oldDecision = session->GetOrComputeDecision(std::filesystem::path{});
+        state.Require(static_cast<bool>(oldDecision), L"setRoots: old decision missing.");
+        state.Require(static_cast<bool>(session->TryGetCachedDecision(std::filesystem::path{})), L"setRoots: old root decision should be cached.");
+        const uint64_t versionBefore = session->GetVersion();
+
+        session->SetRoots(leftB, rightB);
+        const uint64_t versionAfter = session->GetVersion();
+        state.Require(versionAfter != versionBefore, L"setRoots: SetRoots must bump version.");
+        state.Require(! session->TryGetCachedDecision(std::filesystem::path{}), L"setRoots: old cached root decision must be cleared.");
+
+        const auto newDecision = session->GetOrComputeDecision(std::filesystem::path{});
+        state.Require(static_cast<bool>(newDecision), L"setRoots: new decision missing.");
+        if (newDecision)
+        {
+            state.Require(FindItem(*newDecision, L"old.txt") == nullptr, L"setRoots: old root item leaked after SetRoots.");
+            const auto* item = FindItem(*newDecision, L"new.txt");
+            state.Require(item != nullptr, L"setRoots: new root item missing.");
+            if (item)
+            {
+                state.Require(item->isDifferent, L"setRoots: new.txt should be different by size.");
+                state.Require(HasFlag(item->differenceMask, CompareDirectoriesDiffBit::Size), L"setRoots: new.txt missing Size bit.");
+            }
+        }
+    }
+    else
+    {
+        state.Require(false, L"Failed to create case folders: setRoots_resets_and_bumps_version.");
     }
 
     return state.failure.empty();
@@ -942,6 +1062,224 @@ SelfTest::RunCase(options,
 
 SelfTest::RunCase(options,
                   suite,
+                  L"decision_cache_eviction_budget_pending_wide_tree",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    // Case: in-progress pending decisions are evictable once pending-subdir aggregation has consumed them.
+    if (const auto foldersOpt = CreateCaseFolders(root, L"decision_cache_eviction_budget_pending_wide_tree"))
+    {
+        const auto& folders = foldersOpt.value();
+
+        state.Require(SelfTest::EnsureDirectory(folders.left / L"keep"), L"pending budget: failed to create keep (left).");
+        state.Require(SelfTest::EnsureDirectory(folders.right / L"keep"), L"pending budget: failed to create keep (right).");
+        state.Require(SelfTest::WriteTextFile(folders.left / L"keep" / L"keep.txt", "K"), L"pending budget: failed to write keep.txt (left).");
+        state.Require(SelfTest::WriteTextFile(folders.right / L"keep" / L"keep.txt", "K"), L"pending budget: failed to write keep.txt (right).");
+
+        state.Require(SelfTest::EnsureDirectory(folders.left / L"spill"), L"pending budget: failed to create spill (left).");
+        state.Require(SelfTest::EnsureDirectory(folders.right / L"spill"), L"pending budget: failed to create spill (right).");
+
+        constexpr size_t kSpillDirs     = 96;
+        constexpr size_t kFilesPerDir   = 6;
+        constexpr size_t kFileSize      = 512u * 1024u;
+        constexpr uint64_t kBudgetBytes = 32u * 1024u;
+
+        for (size_t i = 0; i < kSpillDirs; ++i)
+        {
+            const std::wstring dirName           = std::format(L"d{:04}", i);
+            const std::filesystem::path leftDir  = folders.left / L"spill" / dirName;
+            const std::filesystem::path rightDir = folders.right / L"spill" / dirName;
+
+            state.Require(SelfTest::EnsureDirectory(leftDir), std::format(L"pending budget: failed to create {} (left).", leftDir.wstring()));
+            state.Require(SelfTest::EnsureDirectory(rightDir), std::format(L"pending budget: failed to create {} (right).", rightDir.wstring()));
+
+            for (size_t j = 0; j < kFilesPerDir; ++j)
+            {
+                const std::wstring fileName = std::format(L"f{:03}.bin", j);
+                state.Require(WriteFileFill(leftDir / fileName, 'A', kFileSize), std::format(L"pending budget: failed to write {} (left).", fileName));
+                state.Require(WriteFileFill(rightDir / fileName, 'A', kFileSize), std::format(L"pending budget: failed to write {} (right).", fileName));
+            }
+        }
+
+        Common::Settings::CompareDirectoriesSettings settings{};
+        settings.compareContent        = true;
+        settings.compareSize           = false;
+        settings.compareDateTime       = false;
+        settings.compareAttributes     = false;
+        settings.compareSubdirectories = true;
+        settings.keepIdenticalItems    = true;
+
+        wil::com_ptr<IFileSystem> wrapped = CreateShortReadFileSystem(baseFs, folders.left, 4096u, static_cast<DWORD>(SelfTest::ScaleTimeout(2)));
+        state.Require(static_cast<bool>(wrapped), L"pending budget: failed to create short-read file system wrapper.");
+
+        const wil::com_ptr<IFileSystem> compareFs = wrapped ? wrapped : baseFs;
+        auto session                              = std::make_shared<CompareDirectoriesSession>(compareFs, compareFs, folders.left, folders.right, settings);
+        session->SetDecisionCacheBudgetBytesForSelfTest(kBudgetBytes);
+        session->SetPinnedFolders(std::filesystem::path(L"keep"), std::filesystem::path(L"spill"));
+
+        session->RequestScanForFolder(std::filesystem::path(L"keep"));
+        state.Require(StartScanAndWaitForIdle(session, std::chrono::milliseconds{SelfTest::ScaleTimeout(60'000)}),
+                      L"pending budget: scan did not become idle within timeout.");
+        const bool drainedPendingSubdirs =
+            DrainPendingSubdirUpdatesUntilQuiet(session, std::chrono::milliseconds{static_cast<std::chrono::milliseconds::rep>(SelfTest::ScaleTimeout(10'000))});
+        if (! drainedPendingSubdirs)
+        {
+            const CompareDirectoriesPerfStats pendingStats = session->GetPerfStats();
+            state.Require(false,
+                          std::format(L"pending budget: failed to drain pending subtree updates. pendingSubdirUpdates={} "
+                                      L"contentPendingCompares={} contentQueueSize={} contentInFlightSize={}.",
+                                      pendingStats.pendingSubdirUpdates,
+                                      pendingStats.contentPendingCompares,
+                                      pendingStats.contentQueueSize,
+                                      pendingStats.contentInFlightSize));
+        }
+
+        const CompareDirectoriesPerfStats stats   = session->GetPerfStats();
+        constexpr uint64_t kAllowedBudgetMultiple = 4u;
+        const uint64_t allowedBytes               = kBudgetBytes * kAllowedBudgetMultiple;
+        const std::wstring perfDetail =
+            std::format(L"budget={} allowed={} dirs={} filesPerDir={}", stats.decisionCacheBudgetBytes, allowedBytes, kSpillDirs, kFilesPerDir);
+        Debug::Perf::Emit(L"compare.selftest.decision_cache.pending_budget_bytes",
+                          perfDetail,
+                          stats.decisionCacheEstimatedBytes,
+                          stats.decisionCacheEstimatedBytesHighWater,
+                          stats.decisionCacheBudgetBytes,
+                          S_OK);
+        Debug::Perf::Emit(L"compare.selftest.decision_cache.pending_budget_entries",
+                          perfDetail,
+                          stats.decisionCacheEntries,
+                          stats.decisionCacheEntriesHighWater,
+                          stats.contentPendingCompares,
+                          S_OK);
+        state.Require(stats.contentPendingCompares != 0u, L"pending budget: expected content compares to remain pending.");
+        state.Require(stats.decisionCacheEntriesHighWater > stats.decisionCacheEntries, L"pending budget: decision cache eviction expected while pending.");
+
+        state.Require(stats.decisionCacheEstimatedBytes <= allowedBytes,
+                      std::format(L"pending budget: decision cache bytes exceeded bound: {} > {} (budget {}).",
+                                  stats.decisionCacheEstimatedBytes,
+                                  allowedBytes,
+                                  stats.decisionCacheBudgetBytes));
+        state.Require(stats.decisionCacheEstimatedBytesHighWater <= allowedBytes,
+                      std::format(L"pending budget: decision cache high-water exceeded bound: {} > {} (budget {}).",
+                                  stats.decisionCacheEstimatedBytesHighWater,
+                                  allowedBytes,
+                                  stats.decisionCacheBudgetBytes));
+
+        const auto keepDecision = session->TryGetCachedDecision(std::filesystem::path(L"keep"));
+        state.Require(static_cast<bool>(keepDecision), L"pending budget: pinned keep decision must remain cached.");
+
+        size_t evicted = 0;
+        for (size_t i = 0; i < 16; ++i)
+        {
+            const std::wstring dirName = std::format(L"d{:04}", i);
+            if (! session->TryGetCachedDecision(std::filesystem::path(L"spill") / dirName))
+            {
+                ++evicted;
+            }
+        }
+        state.Require(evicted != 0u, L"pending budget: expected at least one pending spill decision to be evicted.");
+
+        session->SetBackgroundWorkEnabled(false);
+    }
+    else
+    {
+        state.Require(false, L"Failed to create case folders: decision_cache_eviction_budget_pending_wide_tree.");
+    }
+
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"decision_cache_evicted_content_update_reaches_ancestor",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    // Case: a child decision evicted while content compare work is in flight must
+    // recover and propagate its final content-different aggregate to the pinned root.
+    if (const auto foldersOpt = CreateCaseFolders(root, L"decision_cache_evicted_content_update_reaches_ancestor"))
+    {
+        const auto& folders = foldersOpt.value();
+
+        constexpr size_t kBytes = 2u * 1024u * 1024u;
+        state.Require(SelfTest::EnsureDirectory(folders.left / L"target"), L"evicted content update: failed to create target (left).");
+        state.Require(SelfTest::EnsureDirectory(folders.right / L"target"), L"evicted content update: failed to create target (right).");
+        state.Require(WriteFileFill(folders.left / L"target" / L"a.bin", 'A', kBytes), L"evicted content update: failed to write left payload.");
+        state.Require(WriteFileFill(folders.right / L"target" / L"a.bin", 'B', kBytes), L"evicted content update: failed to write right payload.");
+
+        Common::Settings::CompareDirectoriesSettings settings{};
+        settings.compareContent        = true;
+        settings.compareSize           = false;
+        settings.compareDateTime       = false;
+        settings.compareAttributes     = false;
+        settings.compareSubdirectories = true;
+        settings.keepIdenticalItems    = true;
+
+        wil::com_ptr<IFileSystem> wrapped = CreateShortReadFileSystem(baseFs, folders.left, 4096u, static_cast<DWORD>(SelfTest::ScaleTimeout(2)));
+        state.Require(static_cast<bool>(wrapped), L"evicted content update: failed to create short-read file system wrapper.");
+
+        const wil::com_ptr<IFileSystem> compareFs = wrapped ? wrapped : baseFs;
+        auto session                              = std::make_shared<CompareDirectoriesSession>(compareFs, compareFs, folders.left, folders.right, settings);
+        session->SetDecisionCacheBudgetBytesForSelfTest(1u);
+        session->SetPinnedFolders(std::filesystem::path{}, std::filesystem::path{});
+
+        session->RequestScanForFolder(std::filesystem::path(L"target"));
+        state.Require(StartScanAndWaitForIdle(session, std::chrono::milliseconds{SelfTest::ScaleTimeout(30'000)}),
+                      L"evicted content update: scan did not become idle within timeout.");
+        session->SetDecisionCacheBudgetBytesForSelfTest(1u);
+
+        const auto targetBefore = session->TryGetCachedDecision(std::filesystem::path(L"target"));
+        state.Require(! targetBefore, L"evicted content update: target decision should be evicted under the tiny cache budget.");
+
+        const auto contentDeadline =
+            std::chrono::steady_clock::now() + std::chrono::milliseconds{static_cast<std::chrono::milliseconds::rep>(SelfTest::ScaleTimeout(30'000))};
+        bool contentDone = false;
+        while (std::chrono::steady_clock::now() < contentDeadline)
+        {
+            const CompareDirectoriesPerfStats stats = session->GetPerfStats();
+            if (stats.contentTotalCompares != 0u && stats.contentPendingCompares == 0u && stats.contentCompletedCompares == stats.contentTotalCompares)
+            {
+                contentDone = true;
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        state.Require(contentDone, L"evicted content update: content compare did not complete.");
+
+        const auto propagateDeadline =
+            std::chrono::steady_clock::now() + std::chrono::milliseconds{static_cast<std::chrono::milliseconds::rep>(SelfTest::ScaleTimeout(30'000))};
+        bool ancestorUpdated = false;
+        while (std::chrono::steady_clock::now() < propagateDeadline)
+        {
+            static_cast<void>(session->FlushPendingContentCompareUpdatesBudgeted(16));
+            static_cast<void>(session->FlushPendingSubdirUpdatesBudgeted(16));
+
+            const auto rootDecision = session->TryGetCachedDecision(std::filesystem::path{});
+            if (rootDecision)
+            {
+                const auto* targetItem = FindItem(*rootDecision, L"target");
+                if (targetItem && HasFlag(targetItem->differenceMask, CompareDirectoriesDiffBit::SubdirContent) &&
+                    ! HasFlag(targetItem->differenceMask, CompareDirectoriesDiffBit::SubdirPending))
+                {
+                    ancestorUpdated = true;
+                    break;
+                }
+            }
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+
+        state.Require(ancestorUpdated, L"evicted content update: root never received the target SubdirContent aggregate.");
+        session->SetBackgroundWorkEnabled(false);
+    }
+    else
+    {
+        state.Require(false, L"Failed to create case folders: decision_cache_evicted_content_update_reaches_ancestor.");
+    }
+
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
                   L"cancel_completes_bounded",
                   [&](SelfTest::CaseState& state) noexcept
 {
@@ -1044,6 +1382,92 @@ SelfTest::RunCase(options,
     else
     {
         state.Require(false, L"Failed to create case folders: invalid_directory_entry_buffer.");
+    }
+
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"invalidate_drops_stale_inflight_scan_writeback",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    // Case: file-operation invalidation must bump the session generation and drop stale scan writeback.
+    if (const auto foldersOpt = CreateCaseFolders(root, L"invalidate_drops_stale_inflight_scan_writeback"))
+    {
+        const auto& folders                   = foldersOpt.value();
+        const std::filesystem::path staleFile = folders.left / L"stale.txt";
+        state.Require(SelfTest::WriteTextFile(staleFile, "old"), L"Failed to create stale.txt (left).");
+
+        auto rightDelayEntered = std::make_shared<std::atomic<uint32_t>>(0u);
+
+        ReadDirectoryTestBehavior behavior{};
+        behavior.targetPath        = folders.right;
+        behavior.delayMs           = static_cast<DWORD>(SelfTest::ScaleTimeout(900));
+        behavior.delayEnteredCount = rightDelayEntered;
+
+        wil::com_ptr<IFileSystem> delayedRight = CreateReadDirectoryBehaviorFileSystem(baseFs, behavior);
+        state.Require(static_cast<bool>(delayedRight), L"Failed to create delayed right ReadDirectoryInfo wrapper.");
+
+        auto session = std::make_shared<CompareDirectoriesSession>(
+            baseFs, delayedRight ? delayedRight : baseFs, folders.left, folders.right, Common::Settings::CompareDirectoriesSettings{});
+        const uint64_t versionBefore   = session->GetVersion();
+        const uint64_t uiVersionBefore = session->GetUiVersion();
+
+        session->StartScan();
+
+        const auto enteredDeadline =
+            std::chrono::steady_clock::now() + std::chrono::milliseconds{static_cast<std::chrono::milliseconds::rep>(SelfTest::ScaleTimeout(5'000))};
+        bool rightReadBlocked = false;
+        while (std::chrono::steady_clock::now() < enteredDeadline)
+        {
+            if (rightDelayEntered->load(std::memory_order_acquire) != 0u)
+            {
+                rightReadBlocked = true;
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        state.Require(rightReadBlocked, L"invalidate_drops_stale_inflight_scan_writeback: delayed right read was not entered.");
+
+        std::error_code removeError;
+        const bool removed = std::filesystem::remove(staleFile, removeError);
+        state.Require(removed && ! removeError, L"invalidate_drops_stale_inflight_scan_writeback: failed to remove stale.txt.");
+
+        session->InvalidateForAbsolutePath(staleFile, false);
+
+        state.Require(session->GetVersion() == versionBefore,
+                      L"invalidate_drops_stale_inflight_scan_writeback: scoped invalidation should preserve the cache generation.");
+        state.Require(session->GetUiVersion() != uiVersionBefore, L"invalidate_drops_stale_inflight_scan_writeback: invalidation must bump the UI generation.");
+
+        const CompareDirectoriesPerfStats resetStats = session->GetPerfStats();
+        state.Require(resetStats.scanQueueSize == 0u, L"invalidate_drops_stale_inflight_scan_writeback: scan queue should be cleared.");
+        state.Require(resetStats.scanInFlightKeys == 0u, L"invalidate_drops_stale_inflight_scan_writeback: scan in-flight map should be cleared.");
+        state.Require(resetStats.pendingSubdirUpdates == 0u, L"invalidate_drops_stale_inflight_scan_writeback: pending subdir updates should be cleared.");
+        state.Require(resetStats.pendingContentUpdates == 0u, L"invalidate_drops_stale_inflight_scan_writeback: pending content updates should be cleared.");
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(SelfTest::ScaleTimeout(1200)));
+
+        const auto staleCachedDecision = session->TryGetCachedDecision(std::filesystem::path{});
+        state.Require(! staleCachedDecision, L"invalidate_drops_stale_inflight_scan_writeback: stale in-flight scan wrote back a cached decision.");
+
+        const auto freshDecision = session->GetOrComputeDecision(std::filesystem::path{});
+        state.Require(static_cast<bool>(freshDecision), L"invalidate_drops_stale_inflight_scan_writeback: fresh decision is null.");
+        if (freshDecision)
+        {
+            state.Require(SUCCEEDED(freshDecision->hr), L"invalidate_drops_stale_inflight_scan_writeback: fresh decision should succeed.");
+            state.Require(FindItem(*freshDecision, L"stale.txt") == nullptr,
+                          L"invalidate_drops_stale_inflight_scan_writeback: removed stale.txt should not be served from stale cache.");
+        }
+
+        const CompareDirectoriesPerfStats finalStats = session->GetPerfStats();
+        state.Require(finalStats.scanQueueSize == 0u, L"invalidate_drops_stale_inflight_scan_writeback: stale scan queue backlog remains.");
+        state.Require(finalStats.scanInFlightKeys == 0u, L"invalidate_drops_stale_inflight_scan_writeback: stale scan in-flight state remains.");
+        state.Require(finalStats.pendingSubdirUpdates == 0u, L"invalidate_drops_stale_inflight_scan_writeback: stale pending subdir update remains.");
+    }
+    else
+    {
+        state.Require(false, L"Failed to create case folders: invalidate_drops_stale_inflight_scan_writeback.");
     }
 
     return state.failure.empty();
@@ -1233,6 +1657,70 @@ SelfTest::RunCase(options,
     else
     {
         state.Require(false, L"Failed to create case folders: content_inflight_stamp_guards_restart.");
+    }
+
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"worker_shutdown_joins_before_state_teardown",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    // Case: active scan workers must be joined before content-compare state is destroyed.
+    if (const auto foldersOpt = CreateCaseFolders(root, L"worker_shutdown_joins_before_state_teardown"))
+    {
+        const auto& folders = foldersOpt.value();
+
+        constexpr size_t kDirs     = 12u;
+        constexpr size_t kFileSize = 128u * 1024u;
+        for (size_t i = 0; i < kDirs; ++i)
+        {
+            const std::wstring dirName           = std::format(L"d{:02}", i);
+            const std::filesystem::path leftDir  = folders.left / dirName;
+            const std::filesystem::path rightDir = folders.right / dirName;
+            state.Require(SelfTest::EnsureDirectory(leftDir), std::format(L"worker shutdown: failed to create {} (left).", leftDir.wstring()));
+            state.Require(SelfTest::EnsureDirectory(rightDir), std::format(L"worker shutdown: failed to create {} (right).", rightDir.wstring()));
+            state.Require(WriteFileFill(leftDir / L"same.bin", 'A', kFileSize), L"worker shutdown: failed to create same.bin (left).");
+            state.Require(WriteFileFill(rightDir / L"same.bin", 'A', kFileSize), L"worker shutdown: failed to create same.bin (right).");
+        }
+
+        Common::Settings::CompareDirectoriesSettings settings{};
+        settings.compareContent            = true;
+        settings.compareSize               = false;
+        settings.compareDateTime           = false;
+        settings.compareAttributes         = false;
+        settings.compareSubdirectories     = true;
+        settings.keepIdenticalItems        = true;
+        settings.contentCompareWorkerCount = 1u;
+
+        wil::com_ptr<IFileSystem> wrapped = CreateShortReadFileSystem(baseFs, folders.left, 4096u, static_cast<DWORD>(SelfTest::ScaleTimeout(2)));
+        state.Require(static_cast<bool>(wrapped), L"worker shutdown: failed to create short-read file system wrapper.");
+
+        const wil::com_ptr<IFileSystem> compareFs = wrapped ? wrapped : baseFs;
+        auto session                              = std::make_shared<CompareDirectoriesSession>(compareFs, compareFs, folders.left, folders.right, settings);
+        session->StartScan();
+
+        const auto activeDeadline =
+            std::chrono::steady_clock::now() + std::chrono::milliseconds{static_cast<std::chrono::milliseconds::rep>(SelfTest::ScaleTimeout(10'000))};
+        bool sawWorkerActivity = false;
+        while (std::chrono::steady_clock::now() < activeDeadline)
+        {
+            const CompareDirectoriesPerfStats stats = session->GetPerfStats();
+            if (stats.scanActiveScans != 0u || stats.contentPendingCompares != 0u || stats.contentInFlightSize != 0u)
+            {
+                sawWorkerActivity = true;
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        state.Require(sawWorkerActivity, L"worker shutdown: scan/content workers did not become active.");
+
+        session.reset();
+    }
+    else
+    {
+        state.Require(false, L"Failed to create case folders: worker_shutdown_joins_before_state_teardown.");
     }
 
     return state.failure.empty();

@@ -59,7 +59,7 @@ private:
     void SyncDxControlsFromState(const PreferencesDialogState& state) noexcept;
     void SyncDxSwatchFromState(const PreferencesDialogState& state) noexcept;
     void LayoutDxPage(HWND host,
-                      const PreferencesDialogState& state,
+                      PreferencesDialogState& state,
                       int x,
                       int& y,
                       int width,

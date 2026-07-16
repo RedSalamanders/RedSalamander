@@ -594,7 +594,7 @@
         },
         "executablePath": {
           "type": "string",
-          "description": "External program path. Macro tokens {Path}, {FullPath}, {PathAndFilename}, {Filename}, {SelectedPathsFile}, {OppositePanePath}, and {ComputerName} are allowed and expand as raw text."
+          "description": "Explicit absolute drive, UNC, or Win32 extended path to an external program, or a supported macro template whose expanded value is explicit and absolute. Relative, drive-relative, rooted-without-drive, device, and bare program paths are preserved but forced disabled; launch planning validates the expanded value again."
         },
         "arguments": {
           "type": "string",
@@ -702,6 +702,20 @@
       "title": "Color",
       "description": "Hex color string (#RRGGBB or #AARRGGBB)."
     },
+    "themeColorSource": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "title": "Theme Color Source",
+      "description": "A direct hex color or a version 2 theme expression.",
+      "anyOf": [
+        { "$ref": "#/$defs/colorHex" },
+        {
+          "pattern": "^(ref|lighten|darken|alpha|blend|contrast|perceptualTone|ensureContrast|harmonize|systemColor|tone|seededRainbow|seededChoice)\\(.*\\)$"
+        },
+        { "enum": ["systemAccent()"] }
+      ]
+    },
     "windowBounds": {
       "type": "object",
       "title": "Window Bounds",
@@ -742,9 +756,10 @@
     "themeDefinition": {
       "type": "object",
       "title": "Theme Definition",
-      "description": "A user-defined theme that overrides color keys on top of a builtin base theme.",
-      "required": ["id", "name", "baseThemeId", "colors"],
+      "description": "A version 2 user-defined theme with authored palette entries and semantic color sources.",
+      "required": ["formatVersion", "id", "name", "baseThemeId", "colors"],
       "properties": {
+        "formatVersion": { "const": 2, "title": "Theme Format Version", "description": "Required version of the expressive theme format." },
         "id": {
           "type": "string",
           "pattern": "^user/[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$",
@@ -753,86 +768,98 @@
         },
         "name": { "type": "string", "minLength": 1, "maxLength": 64, "title": "Name", "description": "Display name for the theme." },
         "baseThemeId": { "$ref": "#/$defs/builtinThemeId", "title": "Base Theme", "description": "Builtin theme used as a base for this theme." },
+        "palette": {
+          "type": "object",
+          "default": {},
+          "maxProperties": 128,
+          "title": "Palette",
+          "description": "Reusable authored color sources. Palette names are case-sensitive and cannot contain a dot.",
+          "patternProperties": {
+            "^[A-Za-z0-9_-]{1,64}$": { "$ref": "#/$defs/themeColorSource" }
+          },
+          "additionalProperties": false
+        },
         "colors": {
           "type": "object",
           "default": {},
+          "maxProperties": 512,
           "title": "Color Overrides",
-          "description": "Map of color keys to hex color values (#RRGGBB or #AARRGGBB).",
+          "description": "Map of semantic color keys to direct colors or version 2 expressions.",
           "properties": {
-            "app.accent": { "$ref": "#/$defs/colorHex" },
-            "window.background": { "$ref": "#/$defs/colorHex" },
+            "app.accent": { "$ref": "#/$defs/themeColorSource" },
+            "window.background": { "$ref": "#/$defs/themeColorSource" },
 
-            "menu.background": { "$ref": "#/$defs/colorHex" },
-            "menu.text": { "$ref": "#/$defs/colorHex" },
-            "menu.disabledText": { "$ref": "#/$defs/colorHex" },
-            "menu.selectionBg": { "$ref": "#/$defs/colorHex" },
-            "menu.selectionText": { "$ref": "#/$defs/colorHex" },
-            "menu.separator": { "$ref": "#/$defs/colorHex" },
-            "menu.border": { "$ref": "#/$defs/colorHex" },
+            "menu.background": { "$ref": "#/$defs/themeColorSource" },
+            "menu.text": { "$ref": "#/$defs/themeColorSource" },
+            "menu.disabledText": { "$ref": "#/$defs/themeColorSource" },
+            "menu.selectionBg": { "$ref": "#/$defs/themeColorSource" },
+            "menu.selectionText": { "$ref": "#/$defs/themeColorSource" },
+            "menu.separator": { "$ref": "#/$defs/themeColorSource" },
+            "menu.border": { "$ref": "#/$defs/themeColorSource" },
 
-            "navigation.background": { "$ref": "#/$defs/colorHex" },
-            "navigation.backgroundHover": { "$ref": "#/$defs/colorHex" },
-            "navigation.backgroundPressed": { "$ref": "#/$defs/colorHex" },
-            "navigation.text": { "$ref": "#/$defs/colorHex" },
-            "navigation.separator": { "$ref": "#/$defs/colorHex" },
-            "navigation.accent": { "$ref": "#/$defs/colorHex" },
-            "navigation.progressOk": { "$ref": "#/$defs/colorHex" },
-            "navigation.progressWarn": { "$ref": "#/$defs/colorHex" },
-            "navigation.progressBackground": { "$ref": "#/$defs/colorHex" },
+            "navigation.background": { "$ref": "#/$defs/themeColorSource" },
+            "navigation.backgroundHover": { "$ref": "#/$defs/themeColorSource" },
+            "navigation.backgroundPressed": { "$ref": "#/$defs/themeColorSource" },
+            "navigation.text": { "$ref": "#/$defs/themeColorSource" },
+            "navigation.separator": { "$ref": "#/$defs/themeColorSource" },
+            "navigation.accent": { "$ref": "#/$defs/themeColorSource" },
+            "navigation.progressOk": { "$ref": "#/$defs/themeColorSource" },
+            "navigation.progressWarn": { "$ref": "#/$defs/themeColorSource" },
+            "navigation.progressBackground": { "$ref": "#/$defs/themeColorSource" },
 
-            "folderView.background": { "$ref": "#/$defs/colorHex" },
-            "folderView.itemBackgroundNormal": { "$ref": "#/$defs/colorHex" },
-            "folderView.itemBackgroundHovered": { "$ref": "#/$defs/colorHex" },
-            "folderView.itemBackgroundSelected": { "$ref": "#/$defs/colorHex" },
-            "folderView.itemBackgroundSelectedInactive": { "$ref": "#/$defs/colorHex" },
-            "folderView.itemBackgroundFocused": { "$ref": "#/$defs/colorHex" },
-            "folderView.textNormal": { "$ref": "#/$defs/colorHex" },
-            "folderView.textSelected": { "$ref": "#/$defs/colorHex" },
-            "folderView.textSelectedInactive": { "$ref": "#/$defs/colorHex" },
-            "folderView.textDisabled": { "$ref": "#/$defs/colorHex" },
-            "folderView.focusBorder": { "$ref": "#/$defs/colorHex" },
-            "folderView.gridLines": { "$ref": "#/$defs/colorHex" },
-            "folderView.errorBackground": { "$ref": "#/$defs/colorHex" },
-            "folderView.errorText": { "$ref": "#/$defs/colorHex" },
-            "folderView.warningBackground": { "$ref": "#/$defs/colorHex" },
-            "folderView.warningText": { "$ref": "#/$defs/colorHex" },
-            "folderView.infoBackground": { "$ref": "#/$defs/colorHex" },
-            "folderView.infoText": { "$ref": "#/$defs/colorHex" },
+            "folderView.background": { "$ref": "#/$defs/themeColorSource" },
+            "folderView.itemBackgroundNormal": { "$ref": "#/$defs/themeColorSource" },
+            "folderView.itemBackgroundHovered": { "$ref": "#/$defs/themeColorSource" },
+            "folderView.itemBackgroundSelected": { "$ref": "#/$defs/themeColorSource" },
+            "folderView.itemBackgroundSelectedInactive": { "$ref": "#/$defs/themeColorSource" },
+            "folderView.itemBackgroundFocused": { "$ref": "#/$defs/themeColorSource" },
+            "folderView.textNormal": { "$ref": "#/$defs/themeColorSource" },
+            "folderView.textSelected": { "$ref": "#/$defs/themeColorSource" },
+            "folderView.textSelectedInactive": { "$ref": "#/$defs/themeColorSource" },
+            "folderView.textDisabled": { "$ref": "#/$defs/themeColorSource" },
+            "folderView.focusBorder": { "$ref": "#/$defs/themeColorSource" },
+            "folderView.gridLines": { "$ref": "#/$defs/themeColorSource" },
+            "folderView.errorBackground": { "$ref": "#/$defs/themeColorSource" },
+            "folderView.errorText": { "$ref": "#/$defs/themeColorSource" },
+            "folderView.warningBackground": { "$ref": "#/$defs/themeColorSource" },
+            "folderView.warningText": { "$ref": "#/$defs/themeColorSource" },
+            "folderView.infoBackground": { "$ref": "#/$defs/themeColorSource" },
+            "folderView.infoText": { "$ref": "#/$defs/themeColorSource" },
 
-            "monitor.textView.bg": { "$ref": "#/$defs/colorHex" },
-            "monitor.textView.fg": { "$ref": "#/$defs/colorHex" },
-            "monitor.textView.caret": { "$ref": "#/$defs/colorHex" },
-            "monitor.textView.selection": { "$ref": "#/$defs/colorHex" },
-            "monitor.textView.searchHighlight": { "$ref": "#/$defs/colorHex" },
-            "monitor.textView.gutterBg": { "$ref": "#/$defs/colorHex" },
-            "monitor.textView.gutterFg": { "$ref": "#/$defs/colorHex" },
-            "monitor.textView.metaText": { "$ref": "#/$defs/colorHex" },
-            "monitor.textView.metaError": { "$ref": "#/$defs/colorHex" },
-            "monitor.textView.metaWarning": { "$ref": "#/$defs/colorHex" },
-            "monitor.textView.metaInfo": { "$ref": "#/$defs/colorHex" },
-            "monitor.textView.metaPerf": { "$ref": "#/$defs/colorHex" },
-            "monitor.textView.metaDebug": { "$ref": "#/$defs/colorHex" },
+            "monitor.textView.bg": { "$ref": "#/$defs/themeColorSource" },
+            "monitor.textView.fg": { "$ref": "#/$defs/themeColorSource" },
+            "monitor.textView.caret": { "$ref": "#/$defs/themeColorSource" },
+            "monitor.textView.selection": { "$ref": "#/$defs/themeColorSource" },
+            "monitor.textView.searchHighlight": { "$ref": "#/$defs/themeColorSource" },
+            "monitor.textView.gutterBg": { "$ref": "#/$defs/themeColorSource" },
+            "monitor.textView.gutterFg": { "$ref": "#/$defs/themeColorSource" },
+            "monitor.textView.metaText": { "$ref": "#/$defs/themeColorSource" },
+            "monitor.textView.metaError": { "$ref": "#/$defs/themeColorSource" },
+            "monitor.textView.metaWarning": { "$ref": "#/$defs/themeColorSource" },
+            "monitor.textView.metaInfo": { "$ref": "#/$defs/themeColorSource" },
+            "monitor.textView.metaPerf": { "$ref": "#/$defs/themeColorSource" },
+            "monitor.textView.metaDebug": { "$ref": "#/$defs/themeColorSource" },
 
-            "fileOps.progressBackground": { "$ref": "#/$defs/colorHex" },
-            "fileOps.progressTotal": { "$ref": "#/$defs/colorHex" },
-            "fileOps.progressItem": { "$ref": "#/$defs/colorHex" },
-            "fileOps.graphBackground": { "$ref": "#/$defs/colorHex" },
-            "fileOps.graphGrid": { "$ref": "#/$defs/colorHex" },
-            "fileOps.graphLimit": { "$ref": "#/$defs/colorHex" },
-            "fileOps.graphLine": { "$ref": "#/$defs/colorHex" },
-            "fileOps.scrollbarTrack": { "$ref": "#/$defs/colorHex" },
-            "fileOps.scrollbarThumb": { "$ref": "#/$defs/colorHex" },
+            "fileOps.progressBackground": { "$ref": "#/$defs/themeColorSource" },
+            "fileOps.progressTotal": { "$ref": "#/$defs/themeColorSource" },
+            "fileOps.progressItem": { "$ref": "#/$defs/themeColorSource" },
+            "fileOps.graphBackground": { "$ref": "#/$defs/themeColorSource" },
+            "fileOps.graphGrid": { "$ref": "#/$defs/themeColorSource" },
+            "fileOps.graphLimit": { "$ref": "#/$defs/themeColorSource" },
+            "fileOps.graphLine": { "$ref": "#/$defs/themeColorSource" },
+            "fileOps.scrollbarTrack": { "$ref": "#/$defs/themeColorSource" },
+            "fileOps.scrollbarThumb": { "$ref": "#/$defs/themeColorSource" },
 
-            "viewer.diff.addedBackground": { "$ref": "#/$defs/colorHex" },
-            "viewer.diff.removedBackground": { "$ref": "#/$defs/colorHex" },
-            "viewer.diff.contextBackground": { "$ref": "#/$defs/colorHex" },
-            "viewer.diff.headerBackground": { "$ref": "#/$defs/colorHex" },
-            "viewer.diff.bannerBackground": { "$ref": "#/$defs/colorHex" },
-            "viewer.diff.placeholderBackground": { "$ref": "#/$defs/colorHex" },
-            "viewer.diff.divider": { "$ref": "#/$defs/colorHex" }
+            "viewer.diff.addedBackground": { "$ref": "#/$defs/themeColorSource" },
+            "viewer.diff.removedBackground": { "$ref": "#/$defs/themeColorSource" },
+            "viewer.diff.contextBackground": { "$ref": "#/$defs/themeColorSource" },
+            "viewer.diff.headerBackground": { "$ref": "#/$defs/themeColorSource" },
+            "viewer.diff.bannerBackground": { "$ref": "#/$defs/themeColorSource" },
+            "viewer.diff.placeholderBackground": { "$ref": "#/$defs/themeColorSource" },
+            "viewer.diff.divider": { "$ref": "#/$defs/themeColorSource" }
           },
           "patternProperties": {
-            "^[A-Za-z0-9_.-]{1,64}$": { "$ref": "#/$defs/colorHex" }
+            "^[A-Za-z0-9_.-]{1,64}$": { "$ref": "#/$defs/themeColorSource" }
           },
           "additionalProperties": false
         }
@@ -1046,6 +1073,18 @@
           "default": false,
           "title": "Auto-dismiss Success",
           "description": "Automatically dismiss completed successful file-operation tasks."
+        },
+        "popupFooterOnly": {
+          "type": "boolean",
+          "default": false,
+          "title": "Footer-only Popup",
+          "description": "Collapse the file-operations popup to the aggregate footer until details are shown again."
+        },
+        "popupCompactDensity": {
+          "type": "boolean",
+          "default": false,
+          "title": "Compact Popup Density",
+          "description": "Render file-operation popup cards as compact one-line rows until expanded density is restored."
         },
         "preCalcEnabled": {
           "type": "boolean",

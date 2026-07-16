@@ -129,6 +129,9 @@
     <ResourceCompile Include="ViewerVLCResources.rc" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\Common\Common\Common.vcxproj">
+      <Project>{87fb9a11-83cc-44d8-9fec-9aa9d72667ef}</Project>
+    </ProjectReference>
     <ProjectReference Include="Lang\ja-JP\ViewerVLC-ja-JP.vcxproj" Condition="'$(CurrentSolutionConfigurationContents)' == ''">
       <Project>{d860dfd2-fe55-5b8d-86e0-1b874470e845}</Project>
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>

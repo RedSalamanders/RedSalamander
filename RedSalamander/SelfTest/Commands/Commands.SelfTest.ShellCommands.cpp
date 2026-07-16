@@ -36,6 +36,45 @@ struct ShellActionProbeState final
     return result;
 }
 
+[[nodiscard]] std::wstring DescribeWindowForShellCommandTest(HWND hwnd)
+{
+    if (! hwnd)
+    {
+        return L"0x0";
+    }
+
+    wchar_t className[128]{};
+    static_cast<void>(GetClassNameW(hwnd, className, static_cast<int>(std::size(className))));
+    return std::format(L"0x{:X} class='{}' visible={} enabled={}",
+                       reinterpret_cast<UINT_PTR>(hwnd),
+                       className,
+                       IsWindowVisible(hwnd) != FALSE ? 1 : 0,
+                       IsWindowEnabled(hwnd) != FALSE ? 1 : 0);
+}
+
+[[nodiscard]] std::wstring DescribeFolderFocusForShellCommandTest(FolderWindow::Pane pane, HWND expectedFolderView)
+{
+    NavigationViewDebugSnapshot navSnapshot{};
+    const bool haveNavSnapshot = g_folderWindow.DebugGetNavigationViewSnapshot(pane, navSnapshot);
+    return std::format(L"focus=({}); focusedPane={}; focusedFolderView=0x{:X}; expectedFolderView=0x{:X}; activePane={}; "
+                       L"navSnapshot={}; navEditMode={}; navFocusTarget={}; navEditHost=0x{:X}; navEditInput=0x{:X}; "
+                       L"navEnterAttempts={}; navEnterSuccess={}; navExitCount={}; navLastExitReason={}",
+                       DescribeWindowForShellCommandTest(GetFocus()),
+                       static_cast<int>(g_folderWindow.GetFocusedPane()),
+                       reinterpret_cast<UINT_PTR>(g_folderWindow.GetFocusedFolderViewHwnd()),
+                       reinterpret_cast<UINT_PTR>(expectedFolderView),
+                       static_cast<int>(g_folderWindow.GetActivePane()),
+                       haveNavSnapshot ? 1 : 0,
+                       haveNavSnapshot && navSnapshot.editMode ? 1 : 0,
+                       haveNavSnapshot ? static_cast<int>(navSnapshot.focusTarget) : -1,
+                       haveNavSnapshot ? reinterpret_cast<UINT_PTR>(navSnapshot.currentEditHostHwnd) : 0,
+                       haveNavSnapshot ? reinterpret_cast<UINT_PTR>(navSnapshot.currentEditInputHwnd) : 0,
+                       haveNavSnapshot ? navSnapshot.debugEnterEditAttemptCount : 0,
+                       haveNavSnapshot ? navSnapshot.debugEnterEditSuccessCount : 0,
+                       haveNavSnapshot ? navSnapshot.debugExitEditCount : 0,
+                       haveNavSnapshot ? navSnapshot.debugLastExitEditReason : std::wstring());
+}
+
 [[nodiscard]] std::unordered_set<uint64_t> CollectFileOperationTaskIdsForShellCommandTest(FolderWindow::FileOperationState* fileOps) noexcept
 {
     std::unordered_set<uint64_t> ids;
@@ -90,11 +129,10 @@ struct ShellActionProbeState final
         return false;
     }
 
-    state.Require(task->GetOperation() == expectedOperation,
-                  std::format(L"{} should queue operation {} but queued {}.",
-                              context,
-                              static_cast<unsigned>(expectedOperation),
-                              static_cast<unsigned>(task->GetOperation())));
+    state.Require(
+        task->GetOperation() == expectedOperation,
+        std::format(
+            L"{} should queue operation {} but queued {}.", context, static_cast<unsigned>(expectedOperation), static_cast<unsigned>(task->GetOperation())));
     state.Require(task->GetDestinationFolder() == expectedDestination,
                   std::format(L"{} should target destination '{}', got '{}'.",
                               context,
@@ -102,15 +140,11 @@ struct ShellActionProbeState final
                               DescribePathForShellCommandTest(task->GetDestinationFolder())));
 
     const uint32_t flags           = static_cast<uint32_t>(task->_flags);
-    const uint32_t destructiveMask = static_cast<uint32_t>(FILESYSTEM_FLAG_ALLOW_OVERWRITE) |
-                                     static_cast<uint32_t>(FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY) |
+    const uint32_t destructiveMask = static_cast<uint32_t>(FILESYSTEM_FLAG_ALLOW_OVERWRITE) | static_cast<uint32_t>(FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY) |
                                      static_cast<uint32_t>(FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
-    state.Require((flags & static_cast<uint32_t>(FILESYSTEM_FLAG_RECURSIVE)) != 0u,
-                  std::format(L"{} should preserve recursive operation coverage.", context));
+    state.Require((flags & static_cast<uint32_t>(FILESYSTEM_FLAG_RECURSIVE)) != 0u, std::format(L"{} should preserve recursive operation coverage.", context));
     state.Require((flags & destructiveMask) == 0u,
-                  std::format(L"{} should not grant overwrite, replace-readonly, or continue-on-error flags by default (flags=0x{:X}).",
-                              context,
-                              flags));
+                  std::format(L"{} should not grant overwrite, replace-readonly, or continue-on-error flags by default (flags=0x{:X}).", context, flags));
 
     return state.failure.empty();
 }
@@ -588,6 +622,168 @@ struct ShellActionProbeState final
     return std::string("[InternetShortcut]\r\nURL=") + narrow + "\r\n";
 }
 
+[[nodiscard]] std::wstring BuildShellPathForShellCommandTest(const std::filesystem::path& path)
+{
+    std::wstring normalized = path.wstring();
+    std::ranges::replace(normalized, L'/', L'\\');
+
+    if (normalized.size() < MAX_PATH || normalized.rfind(L"\\\\?\\", 0) == 0 || normalized.rfind(L"\\\\.\\", 0) == 0)
+    {
+        return normalized;
+    }
+
+    DWORD required = GetFullPathNameW(normalized.c_str(), 0, nullptr, nullptr);
+    if (required != 0)
+    {
+        std::wstring absolute(static_cast<size_t>(required) + 1u, L'\0');
+        const DWORD written = GetFullPathNameW(normalized.c_str(), static_cast<DWORD>(absolute.size()), absolute.data(), nullptr);
+        if (written != 0)
+        {
+            absolute.resize(static_cast<size_t>(written));
+            normalized = std::move(absolute);
+        }
+    }
+
+    if (normalized.rfind(L"\\\\?\\", 0) == 0 || normalized.rfind(L"\\\\.\\", 0) == 0)
+    {
+        return normalized;
+    }
+    if (normalized.rfind(L"\\\\", 0) == 0)
+    {
+        return L"\\\\?\\UNC\\" + normalized.substr(2);
+    }
+    return L"\\\\?\\" + normalized;
+}
+
+[[nodiscard]] bool WriteTextFileShellPathForShellCommandTest(const std::filesystem::path& path, std::string_view text) noexcept
+{
+    if (path.empty())
+    {
+        return false;
+    }
+
+    if (path.has_parent_path())
+    {
+        std::error_code ec;
+        std::filesystem::create_directories(path.parent_path(), ec);
+        if (ec)
+        {
+            return false;
+        }
+    }
+
+    const std::wstring shellPath = BuildShellPathForShellCommandTest(path);
+    wil::unique_handle file(CreateFileW(shellPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
+    if (! file)
+    {
+        return false;
+    }
+
+    size_t offset = 0u;
+    while (offset < text.size())
+    {
+        const size_t remaining = text.size() - offset;
+        const DWORD chunkSize  = static_cast<DWORD>(std::min<size_t>(remaining, 16ull * 1024ull * 1024ull));
+        DWORD written          = 0u;
+        if (WriteFile(file.get(), text.data() + offset, chunkSize, &written, nullptr) == 0 || written == 0u)
+        {
+            return false;
+        }
+        offset += static_cast<size_t>(written);
+    }
+
+    static_cast<void>(FlushFileBuffers(file.get()));
+    return true;
+}
+
+[[nodiscard]] HRESULT QueryShellShortcutPathForShellCommandTest(const std::filesystem::path& linkPath, bool& exists) noexcept
+{
+    exists = false;
+
+    const std::wstring shellPath = BuildShellPathForShellCommandTest(linkPath);
+    const DWORD attributes       = GetFileAttributesW(shellPath.c_str());
+    if (attributes != INVALID_FILE_ATTRIBUTES)
+    {
+        exists = true;
+        return S_OK;
+    }
+
+    const DWORD error = GetLastError();
+    if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND)
+    {
+        return S_OK;
+    }
+
+    return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_ACCESS_DENIED);
+}
+
+[[nodiscard]] HRESULT VerifyShellShortcutPathForShellCommandTest(const std::filesystem::path& linkPath) noexcept
+{
+    bool exists      = false;
+    const HRESULT hr = QueryShellShortcutPathForShellCommandTest(linkPath, exists);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    return exists ? S_OK : HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
+}
+
+[[nodiscard]] HRESULT SaveShellLinkForShellCommandTest(IPersistFile* persistFile, const std::filesystem::path& linkPath) noexcept
+{
+    if (! persistFile)
+    {
+        return E_POINTER;
+    }
+
+    const std::wstring linkPathText = linkPath.wstring();
+    if (linkPathText.size() < MAX_PATH)
+    {
+        const HRESULT saveHr = persistFile->Save(linkPathText.c_str(), TRUE);
+        return FAILED(saveHr) ? saveHr : VerifyShellShortcutPathForShellCommandTest(linkPath);
+    }
+
+    SelfTest::TestSandbox sandbox = SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::Commands, L"shell_shortcut_save_temp");
+    if (! sandbox.IsValid())
+    {
+        return HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND);
+    }
+
+    const std::filesystem::path tempPath = sandbox.root / std::format(L"rsl_{}.lnk", NewGuidText());
+    const std::wstring tempPathText      = tempPath.wstring();
+    if (tempPathText.size() >= MAX_PATH)
+    {
+        return HRESULT_FROM_WIN32(ERROR_FILENAME_EXCED_RANGE);
+    }
+
+    auto cleanupTemp = wil::scope_exit([&]() noexcept
+    {
+        static_cast<void>(DeleteFileW(tempPath.c_str()));
+    });
+
+    HRESULT hr = persistFile->Save(tempPathText.c_str(), TRUE);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    hr = VerifyShellShortcutPathForShellCommandTest(tempPath);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    const std::wstring tempSavePath = BuildShellPathForShellCommandTest(tempPath);
+    const std::wstring linkSavePath = BuildShellPathForShellCommandTest(linkPath);
+    if (MoveFileExW(tempSavePath.c_str(), linkSavePath.c_str(), MOVEFILE_COPY_ALLOWED | MOVEFILE_WRITE_THROUGH) == 0)
+    {
+        return HRESULT_FROM_WIN32(GetLastError());
+    }
+
+    static_cast<void>(cleanupTemp.release());
+    return VerifyShellShortcutPathForShellCommandTest(linkPath);
+}
+
 [[nodiscard]] HRESULT CreateShellLinkForShellCommandTest(const std::filesystem::path& linkPath, const std::filesystem::path& targetPath) noexcept
 {
     const HRESULT coHr      = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
@@ -611,7 +807,8 @@ struct ShellActionProbeState final
         return FAILED(hr) ? hr : E_POINTER;
     }
 
-    hr = shellLink->SetPath(targetPath.c_str());
+    const std::wstring shellTargetPath = BuildShellPathForShellCommandTest(targetPath);
+    hr                                 = shellLink->SetPath(shellTargetPath.c_str());
     if (FAILED(hr))
     {
         return hr;
@@ -624,7 +821,7 @@ struct ShellActionProbeState final
         return FAILED(hr) ? hr : E_NOINTERFACE;
     }
 
-    return persistFile->Save(linkPath.c_str(), TRUE);
+    return SaveShellLinkForShellCommandTest(persistFile.get(), linkPath);
 }
 
 struct MountPointReparseDataBufferForShellCommandTest final
@@ -1647,34 +1844,88 @@ struct MountPointReparseDataBufferForShellCommandTest final
 }
 #pragma warning(pop)
 
+struct ClipboardDropPathsWriteStatus
+{
+    std::wstring step;
+    DWORD error                = ERROR_SUCCESS;
+    HWND openClipboardWindow   = nullptr;
+    UINT preferredEffectFormat = 0u;
+};
+
 [[nodiscard]] bool SetClipboardDropPathsForShellCommandTest(HWND ownerWindow,
                                                             const std::vector<std::filesystem::path>& paths,
-                                                            DWORD preferredDropEffect = DROPEFFECT_COPY) noexcept
+                                                            DWORD preferredDropEffect             = DROPEFFECT_COPY,
+                                                            ClipboardDropPathsWriteStatus* status = nullptr) noexcept
 {
+    using namespace std::chrono_literals;
+
     wil::unique_hglobal hdrop = BuildHDropForShellCommandTest(paths);
     if (! hdrop)
     {
+        if (status)
+        {
+            status->step  = L"BuildHDrop";
+            status->error = GetLastError();
+        }
         return false;
     }
 
     wil::unique_hglobal effect = BuildPreferredDropEffectForShellCommandTest(preferredDropEffect);
     if (! effect)
     {
+        if (status)
+        {
+            status->step  = L"BuildPreferredDropEffect";
+            status->error = GetLastError();
+        }
         return false;
     }
 
-    if (OpenClipboard(ownerWindow) == 0)
+    bool opened = false;
+    for (uint32_t attempt = 0; attempt < 20u; ++attempt)
+    {
+        if (OpenClipboard(ownerWindow) != 0)
+        {
+            opened = true;
+            break;
+        }
+
+        if (status)
+        {
+            status->step                = L"OpenClipboard";
+            status->error               = GetLastError();
+            status->openClipboardWindow = GetOpenClipboardWindow();
+        }
+        std::this_thread::sleep_for(10ms);
+    }
+    if (! opened)
     {
         return false;
+    }
+    if (status)
+    {
+        status->step                = L"OpenClipboard";
+        status->error               = ERROR_SUCCESS;
+        status->openClipboardWindow = nullptr;
     }
     const auto closeClipboard = wil::scope_exit([] { CloseClipboard(); });
 
     if (EmptyClipboard() == 0)
     {
+        if (status)
+        {
+            status->step  = L"EmptyClipboard";
+            status->error = GetLastError();
+        }
         return false;
     }
     if (SetClipboardData(CF_HDROP, hdrop.get()) == nullptr)
     {
+        if (status)
+        {
+            status->step  = L"SetClipboardData(CF_HDROP)";
+            status->error = GetLastError();
+        }
         return false;
     }
     hdrop.release();
@@ -1682,15 +1933,26 @@ struct MountPointReparseDataBufferForShellCommandTest final
     const UINT preferredDropEffectFormat = RegisterClipboardFormatW(CFSTR_PREFERREDDROPEFFECT);
     if (preferredDropEffectFormat == 0u || SetClipboardData(preferredDropEffectFormat, effect.get()) == nullptr)
     {
+        if (status)
+        {
+            status->step  = preferredDropEffectFormat == 0u ? L"RegisterClipboardFormat(Preferred DropEffect)" : L"SetClipboardData(Preferred DropEffect)";
+            status->error = GetLastError();
+            status->preferredEffectFormat = preferredDropEffectFormat;
+        }
         return false;
     }
     effect.release();
 
+    if (status)
+    {
+        status->step                  = L"ok";
+        status->error                 = ERROR_SUCCESS;
+        status->preferredEffectFormat = preferredDropEffectFormat;
+    }
     return true;
 }
 
-template <typename Duration>
-[[nodiscard]] bool WaitForHostPromptRequestCountAtLeast(size_t expectedCount, Duration timeout) noexcept
+template <typename Duration> [[nodiscard]] bool WaitForHostPromptRequestCountAtLeast(size_t expectedCount, Duration timeout) noexcept
 {
     using namespace std::chrono_literals;
 
@@ -1708,6 +1970,48 @@ template <typename Duration>
 
     PumpPendingMessages();
     return HostGetTestPromptRequestCount() >= expectedCount;
+}
+
+[[nodiscard]] bool WaitForShellCommandLatencyConsume(SelfTestLatency::Point point, uint64_t minimumCount, std::chrono::milliseconds timeout) noexcept
+{
+    using namespace std::chrono_literals;
+
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        PumpPendingMessages();
+        if (SelfTestLatency::ConsumeCount(point) >= minimumCount)
+        {
+            return true;
+        }
+
+        std::this_thread::sleep_for(20ms);
+    }
+
+    PumpPendingMessages();
+    return SelfTestLatency::ConsumeCount(point) >= minimumCount;
+}
+
+[[nodiscard]] bool WaitForPathExistsForShellCommandTest(const std::filesystem::path& path, std::chrono::milliseconds timeout) noexcept
+{
+    using namespace std::chrono_literals;
+
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    std::error_code ec;
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        PumpPendingMessages();
+        if (std::filesystem::exists(path, ec))
+        {
+            return true;
+        }
+        ec.clear();
+
+        std::this_thread::sleep_for(20ms);
+    }
+
+    PumpPendingMessages();
+    return std::filesystem::exists(path, ec);
 }
 
 struct ClipboardDropPathsReadStatus
@@ -1902,7 +2206,8 @@ struct ClipboardDropEffectReadStatus
         return hr;
     }
 
-    hr = persist->Load(linkPath.c_str(), STGM_READ);
+    const std::wstring shellLinkPath = BuildShellPathForShellCommandTest(linkPath);
+    hr                               = persist->Load(shellLinkPath.c_str(), STGM_READ);
     if (FAILED(hr))
     {
         return hr;
@@ -1984,7 +2289,7 @@ struct ClipboardDropEffectReadStatus
 
     ClearClipboardContents(mainWindow);
     const auto clearClipboard = wil::scope_exit([&]() noexcept { ClearClipboardContents(mainWindow); });
-    const HWND leftView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
+    const HWND leftView       = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
     state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, leftView, SelfTest::Scale(1000ms)),
                   L"Failed to stabilize left folder-view focus before Clipboard Cut.");
     if (! state.failure.empty())
@@ -2096,8 +2401,7 @@ struct ClipboardDropEffectReadStatus
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
                   L"Failed to activate builtin file-system for clipboard paste-move test.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, destRoot);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, destRoot, SelfTest::Scale(3000ms)),
-                  L"Failed to set left pane path for clipboard paste-move test.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, destRoot, SelfTest::Scale(3000ms)), L"Failed to set left pane path for clipboard paste-move test.");
     if (! state.failure.empty())
     {
         return false;
@@ -2130,8 +2434,7 @@ struct ClipboardDropEffectReadStatus
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_CLIPBOARD_PASTE, 0), 0);
     static_cast<void>(WaitForHostPromptRequestCountAtLeast(1u, SelfTest::Scale(1000ms)));
     state.Require(HostGetTestPromptRequestCount() == 1u,
-                  std::format(L"Paste after Ctrl+X should show exactly one move confirmation prompt; saw {}.",
-                              HostGetTestPromptRequestCount()));
+                  std::format(L"Paste after Ctrl+X should show exactly one move confirmation prompt; saw {}.", HostGetTestPromptRequestCount()));
 
     const bool refreshed = WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.txt", L"beta.txt"}, SelfTest::Scale(3000ms));
     state.Require(refreshed,
@@ -2202,8 +2505,7 @@ struct ClipboardDropEffectReadStatus
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
                   L"Failed to activate builtin file-system for stale-overlay clipboard test.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, staleRoot);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, staleRoot, SelfTest::Scale(3000ms)),
-                  L"Failed to set stale-overlay initial pane path.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, staleRoot, SelfTest::Scale(3000ms)), L"Failed to set stale-overlay initial pane path.");
     if (! state.failure.empty())
     {
         return false;
@@ -2223,8 +2525,7 @@ struct ClipboardDropEffectReadStatus
                   L"Stale-overlay fixture should expose a blocking pane alert before navigation.");
 
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, destRoot);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, destRoot, SelfTest::Scale(3000ms)),
-                  L"Failed to set stale-overlay destination pane path.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, destRoot, SelfTest::Scale(3000ms)), L"Failed to set stale-overlay destination pane path.");
 
     FolderView::AlertOverlayDebugSnapshot clearedAlert{};
     state.Require(g_folderWindow.DebugGetPaneAlertSnapshot(FolderWindow::Pane::Left, clearedAlert) && ! clearedAlert.visible,
@@ -2236,8 +2537,7 @@ struct ClipboardDropEffectReadStatus
 
     ClearClipboardContents(mainWindow);
     const auto clearClipboard = wil::scope_exit([&]() noexcept { ClearClipboardContents(mainWindow); });
-    state.Require(SetClipboardDropPathsForShellCommandTest(mainWindow, {source}, DROPEFFECT_COPY),
-                  L"Failed to seed stale-overlay clipboard CF_HDROP source.");
+    state.Require(SetClipboardDropPathsForShellCommandTest(mainWindow, {source}, DROPEFFECT_COPY), L"Failed to seed stale-overlay clipboard CF_HDROP source.");
 
     HostResetTestPromptRequestCount();
     HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_OK);
@@ -2254,8 +2554,7 @@ struct ClipboardDropEffectReadStatus
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_CLIPBOARD_PASTE, 0), 0);
     static_cast<void>(WaitForHostPromptRequestCountAtLeast(1u, SelfTest::Scale(1000ms)));
     state.Require(HostGetTestPromptRequestCount() == 1u,
-                  std::format(L"Paste after a path-cleared stale overlay should show one confirmation prompt; saw {}.",
-                              HostGetTestPromptRequestCount()));
+                  std::format(L"Paste after a path-cleared stale overlay should show one confirmation prompt; saw {}.", HostGetTestPromptRequestCount()));
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.txt"}, SelfTest::Scale(3000ms)),
                   std::format(L"Paste after a path-cleared stale overlay should refresh the destination; destEntries='{}'.",
                               DescribeDirectoryEntriesForShellCommandTest(destRoot)));
@@ -2332,9 +2631,47 @@ struct ClipboardDropEffectReadStatus
     g_folderWindow.CommandChangeDirectory(FolderWindow::Pane::Left);
     PumpPendingMessages();
 
+    NavigationViewDebugSnapshot editSnapshot{};
+    const auto navigationEditTimeout = (std::max)(SelfTest::Scale(1000ms), 750ms);
+    state.Require(WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
+                                                [](const NavigationViewDebugSnapshot& value) noexcept
+    {
+        return value.editMode && value.currentEditHostHwnd != nullptr && IsWindow(value.currentEditHostHwnd) != FALSE &&
+               value.currentEditInputHwnd != nullptr && IsWindow(value.currentEditInputHwnd) != FALSE;
+    },
+                                                navigationEditTimeout,
+                                                &editSnapshot),
+                  std::format(L"Navigation edit host did not open before stale-navigation clipboard paste test. {}",
+                              DescribeFolderFocusForShellCommandTest(FolderWindow::Pane::Left, g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left))));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
     const HWND leftView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
-    state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, leftView, SelfTest::Scale(1000ms)),
-                  L"Failed to refocus left folder view after opening the navigation edit field.");
+    SendMessageW(editSnapshot.currentEditHostHwnd, WM_KEYDOWN, VK_ESCAPE, 0);
+    SendMessageW(editSnapshot.currentEditHostHwnd, WM_KEYUP, VK_ESCAPE, 0);
+    PumpPendingMessages();
+
+    state.Require(WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
+                                                [&](const NavigationViewDebugSnapshot& value) noexcept
+    {
+        return ! value.editMode && value.debugExitEditCount > editSnapshot.debugExitEditCount &&
+               value.debugLastExitEditReason == L"escape";
+    },
+                                                navigationEditTimeout),
+                  std::format(L"Navigation edit did not cancel before stale-navigation clipboard paste test. {}",
+                              DescribeFolderFocusForShellCommandTest(FolderWindow::Pane::Left, leftView)));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    // Entering the navigation edit intentionally suppresses blur for 250 ms of wall-clock time.
+    // Keep this refocus wait above that product guard even when selftest timeout scaling is reduced.
+    state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, leftView, navigationEditTimeout),
+                  std::format(L"Failed to refocus left folder view after opening the navigation edit field. {}",
+                              DescribeFolderFocusForShellCommandTest(FolderWindow::Pane::Left, leftView)));
     if (! state.failure.empty())
     {
         return false;
@@ -2347,9 +2684,9 @@ struct ClipboardDropEffectReadStatus
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_CLIPBOARD_PASTE, 0), 0);
     static_cast<void>(WaitForHostPromptRequestCountAtLeast(1u, SelfTest::Scale(1000ms)));
 
-    state.Require(HostGetTestPromptRequestCount() == 1u,
-                  std::format(L"Pane Paste should bypass an unfocused navigation edit session and show one move prompt; saw {}.",
-                              HostGetTestPromptRequestCount()));
+    state.Require(
+        HostGetTestPromptRequestCount() == 1u,
+        std::format(L"Pane Paste should bypass an unfocused navigation edit session and show one move prompt; saw {}.", HostGetTestPromptRequestCount()));
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.txt"}, SelfTest::Scale(3000ms)),
                   std::format(L"Pane Paste should refresh destination after bypassing stale navigation edit; destEntries='{}'.",
                               DescribeDirectoryEntriesForShellCommandTest(destRoot)));
@@ -2430,8 +2767,7 @@ struct ClipboardDropEffectReadStatus
 
     ClearClipboardContents(mainWindow);
     const auto clearClipboard = wil::scope_exit([&]() noexcept { ClearClipboardContents(mainWindow); });
-    state.Require(SetClipboardDropPathsForShellCommandTest(mainWindow, {source}, DROPEFFECT_COPY),
-                  L"Failed to seed clipboard paste queue CF_HDROP source.");
+    state.Require(SetClipboardDropPathsForShellCommandTest(mainWindow, {source}, DROPEFFECT_COPY), L"Failed to seed clipboard paste queue CF_HDROP source.");
     const auto existingTaskIds = CollectFileOperationTaskIdsForShellCommandTest(fileOps);
 
     HostResetTestPromptRequestCount();
@@ -2450,8 +2786,7 @@ struct ClipboardDropEffectReadStatus
     static_cast<void>(WaitForHostPromptRequestCountAtLeast(1u, SelfTest::Scale(1000ms)));
 
     state.Require(HostGetTestPromptRequestCount() == 1u,
-                  std::format(L"Clipboard paste queue route should show one File Operations confirmation prompt; saw {}.",
-                              HostGetTestPromptRequestCount()));
+                  std::format(L"Clipboard paste queue route should show one File Operations confirmation prompt; saw {}.", HostGetTestPromptRequestCount()));
     return RequireQueuedShellFileOperationTask(state, fileOps, existingTaskIds, FILESYSTEM_COPY, destRoot, L"Clipboard paste");
 }
 
@@ -2473,7 +2808,7 @@ struct ClipboardDropEffectReadStatus
     }
 
     static_cast<void>(CloseFileOperationsPopupForSelfTest(fileOps));
-    const auto closeFileOps = wil::scope_exit([&] { static_cast<void>(CloseFileOperationsPopupForSelfTest(fileOps)); });
+    const auto closeFileOps        = wil::scope_exit([&] { static_cast<void>(CloseFileOperationsPopupForSelfTest(fileOps)); });
     const auto clearPickerOverride = wil::scope_exit([]() noexcept { FolderView::DebugSetNextMoveSelectedItemsDestinationForSelfTest(std::nullopt); });
 
     const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
@@ -2519,11 +2854,8 @@ struct ClipboardDropEffectReadStatus
                   L"Failed to set left pane path for folder-picker move queue test.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.txt"}, SelfTest::Scale(3000ms)),
                   L"Pane contents not ready for folder-picker move queue test.");
-    g_folderWindow.SetPaneSelectionByDisplayNamePredicate(FolderWindow::Pane::Left,
-                                                          [](std::wstring_view name) noexcept { return name == L"alpha.txt"; },
-                                                          true);
-    state.Require(g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 1u,
-                  L"Expected one selected file before folder-picker move queue test.");
+    g_folderWindow.SetPaneSelectionByDisplayNamePredicate(FolderWindow::Pane::Left, [](std::wstring_view name) noexcept { return name == L"alpha.txt"; }, true);
+    state.Require(g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 1u, L"Expected one selected file before folder-picker move queue test.");
     if (! state.failure.empty())
     {
         return false;
@@ -2548,8 +2880,7 @@ struct ClipboardDropEffectReadStatus
     static_cast<void>(WaitForHostPromptRequestCountAtLeast(1u, SelfTest::Scale(1000ms)));
 
     state.Require(HostGetTestPromptRequestCount() == 1u,
-                  std::format(L"Folder-picker move queue route should show one File Operations confirmation prompt; saw {}.",
-                              HostGetTestPromptRequestCount()));
+                  std::format(L"Folder-picker move queue route should show one File Operations confirmation prompt; saw {}.", HostGetTestPromptRequestCount()));
     return RequireQueuedShellFileOperationTask(state, fileOps, existingTaskIds, FILESYSTEM_MOVE, destRoot, L"Folder-picker move");
 }
 
@@ -2746,19 +3077,19 @@ struct ClipboardDropEffectReadStatus
         return false;
     }
 
-    DWORD performed = DROPEFFECT_COPY;
+    DWORD performed      = DROPEFFECT_COPY;
     const HRESULT dropHr = folderView->DebugPerformFileDropForSelfTest({source}, DROPEFFECT_COPY, &performed);
     PumpPendingMessages();
 
     const std::optional<uint64_t> taskId = ResolveNewFileOperationsTaskIdForSelfTest(fileOps, existingTaskIds, SelfTest::Scale(250ms));
     state.Require(dropHr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED),
-                  std::format(L"Missing drag/drop callback should fail visibly with ERROR_NOT_SUPPORTED; got 0x{:08X}.",
-                              static_cast<unsigned long>(dropHr)));
+                  std::format(L"Missing drag/drop callback should fail visibly with ERROR_NOT_SUPPORTED; got 0x{:08X}.", static_cast<unsigned long>(dropHr)));
     state.Require(performed == DROPEFFECT_NONE,
                   std::format(L"Missing drag/drop callback should report no performed drop effect; got {}.", static_cast<unsigned long>(performed)));
     state.Require(! taskId.has_value(), L"Missing drag/drop callback should not create a host task or silently use the direct plugin fallback.");
-    state.Require(HostGetTestPromptRequestCount() == 0u,
-                  std::format(L"Missing drag/drop callback should fail before any local confirmation prompt; saw {} prompts.", HostGetTestPromptRequestCount()));
+    state.Require(
+        HostGetTestPromptRequestCount() == 0u,
+        std::format(L"Missing drag/drop callback should fail before any local confirmation prompt; saw {} prompts.", HostGetTestPromptRequestCount()));
     state.Require(! std::filesystem::exists(copied, ec), L"Missing drag/drop callback should not copy via direct fallback by default.");
     ec.clear();
     state.Require(std::filesystem::exists(source, ec), L"Missing drag/drop callback should leave the source file untouched.");
@@ -2790,7 +3121,13 @@ struct ClipboardDropEffectReadStatus
         return false;
     }
 
-    const std::filesystem::path root       = suiteRoot / L"work" / (L"clipboard_paste_shortcut_" + NewGuidText());
+    std::filesystem::path root        = suiteRoot / L"work" / (L"clipboard_paste_shortcut_" + NewGuidText());
+    constexpr size_t kProbeRootLength = MAX_PATH - std::wstring_view(L"\\dest\\alpha - Shortcut (2).lnk").size() + 6u;
+    const size_t rootLength           = root.native().size();
+    if (rootLength + 1u < kProbeRootLength)
+    {
+        root /= std::wstring(kProbeRootLength - rootLength - 1u, L'p');
+    }
     const std::filesystem::path sourceRoot = root / L"sources";
     const std::filesystem::path destRoot   = root / L"dest";
     const std::filesystem::path alphaPath  = sourceRoot / L"alpha.txt";
@@ -2805,7 +3142,8 @@ struct ClipboardDropEffectReadStatus
     state.Require(SelfTest::EnsureDirectory(destRoot), L"Failed to create clipboard shortcut destination root.");
     state.Require(SelfTest::WriteTextFile(alphaPath, "alpha"), L"Failed to create alpha.txt source.");
     state.Require(SelfTest::WriteTextFile(betaPath, "beta"), L"Failed to create beta.txt source.");
-    state.Require(SelfTest::WriteTextFile(destRoot / L"alpha - Shortcut.lnk", "occupied"), L"Failed to create existing shortcut-name slot.");
+    state.Require(WriteTextFileShellPathForShellCommandTest(destRoot / L"alpha - Shortcut.lnk", "occupied"),
+                  L"Failed to create existing shortcut-name slot.");
     if (! state.failure.empty())
     {
         return false;
@@ -2835,7 +3173,14 @@ struct ClipboardDropEffectReadStatus
     }
 
     ClearClipboardContents(mainWindow);
-    state.Require(SetClipboardDropPathsForShellCommandTest(mainWindow, {alphaPath, betaPath}), L"Failed to seed CF_HDROP clipboard paths.");
+    ClipboardDropPathsWriteStatus writeStatus{};
+    const bool seededClipboard = SetClipboardDropPathsForShellCommandTest(mainWindow, {alphaPath, betaPath}, DROPEFFECT_COPY, &writeStatus);
+    state.Require(seededClipboard,
+                  std::format(L"Failed to seed CF_HDROP clipboard paths; step='{}' error={} openOwner=0x{:X} preferredFormat={}.",
+                              writeStatus.step,
+                              writeStatus.error,
+                              reinterpret_cast<UINT_PTR>(writeStatus.openClipboardWindow),
+                              writeStatus.preferredEffectFormat));
     const std::vector<std::filesystem::path> seededDropPaths = ReadClipboardDropPathsForShellCommandTest(mainWindow);
     const std::optional<DWORD> seededDropEffect              = ReadClipboardPreferredDropEffectForShellCommandTest(mainWindow);
     state.Require(seededDropPaths.size() == 2u,
@@ -2869,10 +3214,14 @@ struct ClipboardDropEffectReadStatus
                               reinterpret_cast<UINT_PTR>(g_folderWindow.GetFocusedFolderViewHwnd()),
                               reinterpret_cast<UINT_PTR>(leftView),
                               DescribeDirectoryEntriesForShellCommandTest(destRoot)));
-    state.Require(std::filesystem::exists(alphaLink, ec), L"Paste Shortcut should create a unique alpha shortcut.");
-    ec.clear();
-    state.Require(std::filesystem::exists(betaLink, ec), L"Paste Shortcut should create the beta shortcut.");
-    ec.clear();
+    bool alphaLinkExists      = false;
+    const HRESULT alphaExists = QueryShellShortcutPathForShellCommandTest(alphaLink, alphaLinkExists);
+    state.Require(SUCCEEDED(alphaExists) && alphaLinkExists,
+                  std::format(L"Paste Shortcut should create a unique alpha shortcut; existsHr=0x{:08X}.", static_cast<unsigned long>(alphaExists)));
+    bool betaLinkExists      = false;
+    const HRESULT betaExists = QueryShellShortcutPathForShellCommandTest(betaLink, betaLinkExists);
+    state.Require(SUCCEEDED(betaExists) && betaLinkExists,
+                  std::format(L"Paste Shortcut should create the beta shortcut; existsHr=0x{:08X}.", static_cast<unsigned long>(betaExists)));
 
     std::filesystem::path alphaTarget;
     HRESULT hrAlpha = ReadShortcutTargetForShellCommandTest(alphaLink, alphaTarget);
@@ -2886,6 +3235,456 @@ struct ClipboardDropEffectReadStatus
 
     state.Require(g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left) == std::wstring_view(L"beta - Shortcut.lnk"),
                   L"Paste Shortcut should focus the last created shortcut.");
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestPaneClipboardPasteShortcutConcurrentInvocationsCreateDistinctLinks(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root       = suiteRoot / L"work" / (L"clipboard_paste_shortcut_concurrent_" + NewGuidText());
+    const std::filesystem::path sourceRoot = root / L"sources";
+    const std::filesystem::path destRoot   = root / L"dest";
+    const std::filesystem::path alphaPath  = sourceRoot / L"alpha.txt";
+    const std::filesystem::path alphaLink  = destRoot / L"alpha - Shortcut.lnk";
+    const std::filesystem::path alphaLink2 = destRoot / L"alpha - Shortcut (2).lnk";
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    ec.clear();
+
+    state.Require(SelfTest::EnsureDirectory(sourceRoot), L"Failed to create concurrent shortcut source root.");
+    state.Require(SelfTest::EnsureDirectory(destRoot), L"Failed to create concurrent shortcut destination root.");
+    state.Require(SelfTest::WriteTextFile(alphaPath, "alpha"), L"Failed to create concurrent alpha.txt source.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring leftPluginBefore                       = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftPathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const auto restorePane                                    = wil::scope_exit([&]
+    {
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+        if (leftPathBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftPathBefore.value());
+        }
+    });
+
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to activate builtin file-system for concurrent clipboard paste-shortcut test.");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, destRoot);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, destRoot, SelfTest::Scale(3000ms)),
+                  L"Failed to set left pane path for concurrent clipboard paste-shortcut test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    ClearClipboardContents(mainWindow);
+    const auto clearClipboard = wil::scope_exit([&]() noexcept { ClearClipboardContents(mainWindow); });
+    state.Require(SetClipboardDropPathsForShellCommandTest(mainWindow, {alphaPath}), L"Failed to seed concurrent shortcut clipboard path.");
+    const HWND leftView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
+    state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, leftView, SelfTest::Scale(1000ms)),
+                  L"Failed to stabilize left folder-view focus before concurrent Paste Shortcut.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    SelfTestLatency::ClearAll();
+    const auto clearLatency = wil::scope_exit([]() noexcept { SelfTestLatency::ClearAll(); });
+    SelfTestLatency::SetNextDelay(SelfTestLatency::Point::PasteShortcutAfterSlotProbe, SelfTest::Scale(1200ms));
+    constexpr const wchar_t* kFailCompletionPostEnv = L"REDSALAMANDER_PASTE_SHORTCUT_FAIL_COMPLETION_POST";
+    static_cast<void>(::SetEnvironmentVariableW(kFailCompletionPostEnv, L"1"));
+    const auto clearCompletionPostHook = wil::scope_exit([&]() noexcept
+    {
+        static_cast<void>(::SetEnvironmentVariableW(kFailCompletionPostEnv, nullptr));
+    });
+
+    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_CLIPBOARD_PASTE_SHORTCUT, 0), 0);
+    PumpPendingMessages();
+    state.Require(WaitForShellCommandLatencyConsume(SelfTestLatency::Point::PasteShortcutAfterSlotProbe, 1u, SelfTest::Scale(2000ms)),
+                  L"First Paste Shortcut worker should stop after probing the initial shortcut slot.");
+
+    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_CLIPBOARD_PASTE_SHORTCUT, 0), 0);
+    PumpPendingMessages();
+
+    state.Require(WaitForPathExistsForShellCommandTest(alphaLink, SelfTest::Scale(5000ms)),
+                  L"Concurrent Paste Shortcut should create the first alpha shortcut.");
+    state.Require(WaitForPathExistsForShellCommandTest(alphaLink2, SelfTest::Scale(5000ms)),
+                  std::format(L"Concurrent Paste Shortcut should preserve both invocations with distinct .lnk names; destEntries='{}'.",
+                              DescribeDirectoryEntriesForShellCommandTest(destRoot)));
+
+    std::filesystem::path alphaTarget;
+    const HRESULT hrAlpha = ReadShortcutTargetForShellCommandTest(alphaLink, alphaTarget);
+    state.Require(SUCCEEDED(hrAlpha), std::format(L"Failed to read concurrent first shortcut target, hr=0x{:08X}.", static_cast<unsigned long>(hrAlpha)));
+    state.Require(OrdinalString::EqualsNoCasePath(alphaTarget, alphaPath), L"Concurrent first shortcut should target alpha.txt.");
+
+    std::filesystem::path alphaTarget2;
+    const HRESULT hrAlpha2 = ReadShortcutTargetForShellCommandTest(alphaLink2, alphaTarget2);
+    state.Require(SUCCEEDED(hrAlpha2),
+                  std::format(L"Failed to read concurrent second shortcut target, hr=0x{:08X}.", static_cast<unsigned long>(hrAlpha2)));
+    state.Require(OrdinalString::EqualsNoCasePath(alphaTarget2, alphaPath), L"Concurrent second shortcut should target alpha.txt.");
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestPaneClipboardPasteShortcutReturnsBeforeWorkerComplete(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root       = suiteRoot / L"work" / (L"clipboard_paste_shortcut_async_" + NewGuidText());
+    const std::filesystem::path sourceRoot = root / L"sources";
+    const std::filesystem::path destRoot   = root / L"dest";
+    const std::filesystem::path alphaPath  = sourceRoot / L"alpha.txt";
+    const std::filesystem::path alphaLink  = destRoot / L"alpha - Shortcut.lnk";
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    ec.clear();
+
+    state.Require(SelfTest::EnsureDirectory(sourceRoot), L"Failed to create async clipboard shortcut source root.");
+    state.Require(SelfTest::EnsureDirectory(destRoot), L"Failed to create async clipboard shortcut destination root.");
+    state.Require(SelfTest::WriteTextFile(alphaPath, "alpha"), L"Failed to create async alpha.txt source.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring leftPluginBefore                       = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftPathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const auto restorePane                                    = wil::scope_exit([&]
+    {
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+        if (leftPathBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftPathBefore.value());
+        }
+    });
+
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to activate builtin file-system for async clipboard paste-shortcut test.");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, destRoot);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, destRoot, SelfTest::Scale(3000ms)),
+                  L"Failed to set left pane path for async clipboard paste-shortcut test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    ClearClipboardContents(mainWindow);
+    const auto clearClipboard = wil::scope_exit([&]() noexcept { ClearClipboardContents(mainWindow); });
+    state.Require(SetClipboardDropPathsForShellCommandTest(mainWindow, {alphaPath}), L"Failed to seed async shortcut clipboard path.");
+    const HWND leftView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
+    state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, leftView, SelfTest::Scale(1000ms)),
+                  L"Failed to stabilize left folder-view focus before async Paste Shortcut.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    SelfTestLatency::ClearAll();
+    const auto clearLatency = wil::scope_exit([]() noexcept { SelfTestLatency::ClearAll(); });
+    SelfTestLatency::SetNextDelay(SelfTestLatency::Point::PasteShortcutSave, SelfTest::Scale(500ms));
+
+    const auto commandStartedAt = std::chrono::steady_clock::now();
+    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_CLIPBOARD_PASTE_SHORTCUT, 0), 0);
+    const uint64_t commandReturnUs = Debug::Perf::ElapsedUs(commandStartedAt);
+    PumpPendingMessages();
+    Debug::Perf::Emit(L"clipboard.paste_shortcut_command_return_us", L"async", commandReturnUs, 1u, 0u, S_OK);
+
+    const uint64_t maxCommandUs = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(SelfTest::Scale(250ms)).count());
+    state.Require(commandReturnUs < maxCommandUs,
+                  std::format(L"Paste Shortcut command should return before delayed worker completion; commandReturnUs={} maxUs={}.",
+                              commandReturnUs,
+                              maxCommandUs));
+    state.Require(WaitForShellCommandLatencyConsume(SelfTestLatency::Point::PasteShortcutSave, 1u, SelfTest::Scale(1000ms)),
+                  L"Paste Shortcut worker should consume the shared PasteShortcutSave latency hook.");
+    bool alphaLinkExistsAfterReturn      = false;
+    const HRESULT alphaExistsAfterReturn = QueryShellShortcutPathForShellCommandTest(alphaLink, alphaLinkExistsAfterReturn);
+    state.Require(SUCCEEDED(alphaExistsAfterReturn) && ! alphaLinkExistsAfterReturn,
+                  std::format(L"Delayed Paste Shortcut worker should not have completed immediately after command return; existsHr=0x{:08X}.",
+                              static_cast<unsigned long>(alphaExistsAfterReturn)));
+
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha - Shortcut.lnk"}, SelfTest::Scale(4000ms)),
+                  std::format(L"Async Paste Shortcut should eventually refresh the destination; destEntries='{}'.",
+                              DescribeDirectoryEntriesForShellCommandTest(destRoot)));
+    bool alphaLinkExistsAfterWorker      = false;
+    const HRESULT alphaExistsAfterWorker = QueryShellShortcutPathForShellCommandTest(alphaLink, alphaLinkExistsAfterWorker);
+    state.Require(SUCCEEDED(alphaExistsAfterWorker) && alphaLinkExistsAfterWorker,
+                  std::format(L"Async Paste Shortcut should eventually create the shortcut; existsHr=0x{:08X}.",
+                              static_cast<unsigned long>(alphaExistsAfterWorker)));
+
+    std::filesystem::path alphaTarget;
+    const HRESULT hrAlpha = ReadShortcutTargetForShellCommandTest(alphaLink, alphaTarget);
+    state.Require(SUCCEEDED(hrAlpha), std::format(L"Failed to read async shortcut target, hr=0x{:08X}.", static_cast<unsigned long>(hrAlpha)));
+    state.Require(OrdinalString::EqualsNoCasePath(alphaTarget, alphaPath), L"Async shortcut should target alpha.txt.");
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestPaneClipboardPasteShortcutCloseDoesNotWaitForWorker(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root       = suiteRoot / L"work" / (L"clipboard_paste_shortcut_close_" + NewGuidText());
+    const std::filesystem::path sourceRoot = root / L"sources";
+    const std::filesystem::path staleRoot  = root / L"stale-dest";
+    const std::filesystem::path nextRoot   = root / L"next-dest";
+    const std::filesystem::path alphaPath  = sourceRoot / L"alpha.txt";
+    const std::filesystem::path staleLink  = staleRoot / L"alpha - Shortcut.lnk";
+    const std::filesystem::path markerPath = nextRoot / L"marker.txt";
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    ec.clear();
+
+    state.Require(SelfTest::EnsureDirectory(sourceRoot), L"Failed to create close-safe shortcut source root.");
+    state.Require(SelfTest::EnsureDirectory(staleRoot), L"Failed to create close-safe stale destination root.");
+    state.Require(SelfTest::EnsureDirectory(nextRoot), L"Failed to create close-safe next destination root.");
+    state.Require(SelfTest::WriteTextFile(alphaPath, "alpha"), L"Failed to create close-safe alpha.txt source.");
+    state.Require(SelfTest::WriteTextFile(markerPath, "marker"), L"Failed to create close-safe marker file.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring leftPluginBefore                       = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftPathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const auto restorePane                                    = wil::scope_exit([&]
+    {
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+        if (leftPathBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftPathBefore.value());
+        }
+    });
+
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to activate builtin file-system for close-safe clipboard paste-shortcut test.");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, staleRoot);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, staleRoot, SelfTest::Scale(3000ms)),
+                  L"Failed to set left pane path for close-safe clipboard paste-shortcut test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    ClearClipboardContents(mainWindow);
+    const auto clearClipboard = wil::scope_exit([&]() noexcept { ClearClipboardContents(mainWindow); });
+    state.Require(SetClipboardDropPathsForShellCommandTest(mainWindow, {alphaPath}), L"Failed to seed close-safe shortcut clipboard path.");
+    const HWND leftView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
+    state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, leftView, SelfTest::Scale(1000ms)),
+                  L"Failed to stabilize left folder-view focus before close-safe Paste Shortcut.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    SelfTestLatency::ClearAll();
+    const auto clearLatency = wil::scope_exit([]() noexcept { SelfTestLatency::ClearAll(); });
+    SelfTestLatency::SetNextDelay(SelfTestLatency::Point::PasteShortcutSave, SelfTest::Scale(1500ms));
+
+    const auto commandStartedAt = std::chrono::steady_clock::now();
+    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_CLIPBOARD_PASTE_SHORTCUT, 0), 0);
+    const uint64_t commandReturnUs = Debug::Perf::ElapsedUs(commandStartedAt);
+    PumpPendingMessages();
+    Debug::Perf::Emit(L"clipboard.paste_shortcut_command_return_us", L"navigate-away", commandReturnUs, 1u, 0u, S_OK);
+
+    const uint64_t maxCommandUs = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(SelfTest::Scale(300ms)).count());
+    state.Require(commandReturnUs < maxCommandUs,
+                  std::format(L"Paste Shortcut command should not wait for delayed shortcut save; commandReturnUs={} maxUs={}.",
+                              commandReturnUs,
+                              maxCommandUs));
+    state.Require(WaitForShellCommandLatencyConsume(SelfTestLatency::Point::PasteShortcutSave, 1u, SelfTest::Scale(1000ms)),
+                  L"Close-safe Paste Shortcut worker should consume the shared PasteShortcutSave latency hook.");
+
+    const auto navigateStartedAt = std::chrono::steady_clock::now();
+    const HRESULT switchProviderHr = g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system-dummy");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, std::filesystem::path(L"/"));
+    const uint64_t navigateReturnUs = Debug::Perf::ElapsedUs(navigateStartedAt);
+    Debug::Perf::Emit(L"clipboard.paste_shortcut_navigate_away_us", L"provider-switch", navigateReturnUs, 1u, 0u, switchProviderHr);
+    const uint64_t maxNavigateUs = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(SelfTest::Scale(500ms)).count());
+    state.Require(SUCCEEDED(switchProviderHr), L"Paste Shortcut provider-context test should switch to the dummy provider while work is delayed.");
+    state.Require(navigateReturnUs < maxNavigateUs,
+                  std::format(L"Provider switch during delayed Paste Shortcut should return quickly; navigateReturnUs={} maxUs={}.",
+                              navigateReturnUs,
+                              maxNavigateUs));
+    state.Require(std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left)) == L"builtin/file-system-dummy",
+                  L"Pane should retain the dummy provider while Paste Shortcut worker is still delayed.");
+
+    state.Require(WaitForPathExistsForShellCommandTest(staleLink, SelfTest::Scale(5000ms)),
+                  L"Delayed Paste Shortcut worker should eventually finish creating the old-folder shortcut for stale-result validation.");
+    PumpPendingMessages();
+    state.Require(std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left)) == L"builtin/file-system-dummy",
+                  L"Late Paste Shortcut completion should retain the provider selected after the command started.");
+    state.Require(g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left) != std::wstring_view(L"alpha - Shortcut.lnk"),
+                  L"Late Paste Shortcut completion should not focus the stale shortcut in the previous folder.");
+
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Paste Shortcut provider-context test should restore the local provider before revisiting the target.");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, staleRoot);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, staleRoot, SelfTest::Scale(3000ms)),
+                  L"Pane should be able to navigate back to the stale Paste Shortcut destination.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha - Shortcut.lnk"}, SelfTest::Scale(3000ms)),
+                  std::format(L"Paste Shortcut completion should invalidate the old folder cache so revisiting shows the new shortcut; staleEntries='{}'.",
+                              DescribeDirectoryEntriesForShellCommandTest(staleRoot)));
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestPaneClipboardPasteShortcutFailureAfterNavigateShowsAlert(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root       = suiteRoot / L"work" / (L"clipboard_paste_shortcut_failure_after_navigate_" + NewGuidText());
+    const std::filesystem::path sourceRoot = root / L"sources";
+    const std::filesystem::path staleRoot  = root / L"stale-dest";
+    const std::filesystem::path nextRoot   = root / L"next-dest";
+    const std::filesystem::path alphaPath  = sourceRoot / L"alpha.txt";
+    const std::filesystem::path staleLink  = staleRoot / L"alpha - Shortcut.lnk";
+    const std::filesystem::path markerPath = nextRoot / L"marker.txt";
+    constexpr HRESULT kForcedCreateFailure = HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    ec.clear();
+
+    state.Require(SelfTest::EnsureDirectory(sourceRoot), L"Failed to create failure shortcut source root.");
+    state.Require(SelfTest::EnsureDirectory(staleRoot), L"Failed to create failure stale destination root.");
+    state.Require(SelfTest::EnsureDirectory(nextRoot), L"Failed to create failure next destination root.");
+    state.Require(SelfTest::WriteTextFile(alphaPath, "alpha"), L"Failed to create failure alpha.txt source.");
+    state.Require(SelfTest::WriteTextFile(markerPath, "marker"), L"Failed to create failure marker file.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring leftPluginBefore                       = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftPathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const auto restorePane                                    = wil::scope_exit([&]
+    {
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+        if (leftPathBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftPathBefore.value());
+        }
+    });
+
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to activate builtin file-system for failure clipboard paste-shortcut test.");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, staleRoot);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, staleRoot, SelfTest::Scale(3000ms)),
+                  L"Failed to set left pane path for failure clipboard paste-shortcut test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    ClearClipboardContents(mainWindow);
+    const auto clearClipboard = wil::scope_exit([&]() noexcept { ClearClipboardContents(mainWindow); });
+    state.Require(SetClipboardDropPathsForShellCommandTest(mainWindow, {alphaPath}), L"Failed to seed failure shortcut clipboard path.");
+    const HWND leftView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
+    state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, leftView, SelfTest::Scale(1000ms)),
+                  L"Failed to stabilize left folder-view focus before failure Paste Shortcut.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    SelfTestLatency::ClearAll();
+    const auto clearLatency = wil::scope_exit([]() noexcept { SelfTestLatency::ClearAll(); });
+    SelfTestLatency::SetNextDelay(SelfTestLatency::Point::PasteShortcutSave, SelfTest::Scale(1500ms));
+    SelfTestLatency::SetNextFailure(SelfTestLatency::Point::PasteShortcutSave, kForcedCreateFailure);
+
+    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_CLIPBOARD_PASTE_SHORTCUT, 0), 0);
+    PumpPendingMessages();
+    state.Require(WaitForShellCommandLatencyConsume(SelfTestLatency::Point::PasteShortcutSave, 1u, SelfTest::Scale(1000ms)),
+                  L"Failure Paste Shortcut worker should consume the shared PasteShortcutSave latency hook.");
+
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, nextRoot);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, nextRoot, SelfTest::Scale(3000ms)),
+                  L"Pane should navigate to the next folder while failed Paste Shortcut worker is delayed.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"marker.txt"}, SelfTest::Scale(3000ms)),
+                  L"Pane should show the next folder before the failed stale Paste Shortcut completion.");
+
+    FolderView::AlertOverlayDebugSnapshot alert{};
+    const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        PumpPendingMessages();
+        if (g_folderWindow.DebugGetPaneAlertSnapshot(FolderWindow::Pane::Left, alert) && alert.visible)
+        {
+            break;
+        }
+        std::this_thread::sleep_for(SelfTest::Scale(10ms));
+    }
+
+    state.Require(g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left).value_or(std::filesystem::path{}) == nextRoot,
+                  L"Failed stale Paste Shortcut completion should not navigate back to the stale destination.");
+    bool staleLinkExists      = false;
+    const HRESULT staleLinkHr = QueryShellShortcutPathForShellCommandTest(staleLink, staleLinkExists);
+    state.Require(SUCCEEDED(staleLinkHr) && ! staleLinkExists,
+                  std::format(L"Forced Paste Shortcut failure should not leave a shortcut in the stale destination; existsHr=0x{:08X}.",
+                              static_cast<unsigned long>(staleLinkHr)));
+    state.Require(alert.visible, L"Failed stale Paste Shortcut completion should show a pane alert after navigation away.");
+    state.Require(alert.severity == FolderView::OverlaySeverity::Error, L"Failed stale Paste Shortcut alert should be an error.");
+    state.Require(alert.hr == kForcedCreateFailure,
+                  std::format(L"Failed stale Paste Shortcut alert should carry the CreateShellShortcut HRESULT; hr=0x{:08X}.",
+                              static_cast<unsigned long>(alert.hr)));
+    state.Require(alert.title == LoadStringResource(nullptr, IDS_CMD_CLIPBOARD_PASTE_SHORTCUT),
+                  L"Failed stale Paste Shortcut alert should use the localized command title.");
 
     return state.failure.empty();
 }
@@ -3010,6 +3809,14 @@ void RunShellCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestOpti
     { return TestFileOpsDragDropMissingCallbackRejectsDirectFallback(mainWindow, state); });
     SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPasteShortcut_creates_unique_links", [=](CaseState& state) noexcept
     { return TestPaneClipboardPasteShortcutCreatesLinks(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPasteShortcut_concurrent_invocations_create_distinct_links", [=](CaseState& state) noexcept
+    { return TestPaneClipboardPasteShortcutConcurrentInvocationsCreateDistinctLinks(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPasteShortcut_returns_before_worker_complete", [=](CaseState& state) noexcept
+    { return TestPaneClipboardPasteShortcutReturnsBeforeWorkerComplete(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPasteShortcut_close_does_not_wait_for_worker", [=](CaseState& state) noexcept
+    { return TestPaneClipboardPasteShortcutCloseDoesNotWaitForWorker(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPasteShortcut_failure_after_navigate_shows_alert", [=](CaseState& state) noexcept
+    { return TestPaneClipboardPasteShortcutFailureAfterNavigateShowsAlert(mainWindow, state); });
     SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPasteShortcut_rejects_missing_clipboard_paths", [=](CaseState& state) noexcept
     { return TestPaneClipboardPasteShortcutRejectsMissingClipboardPaths(mainWindow, state); });
 }

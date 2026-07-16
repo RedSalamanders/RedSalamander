@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <limits>
 #include <optional>
+#include <string>
 #include <string_view>
 
 #include "Helpers.h"
@@ -30,6 +31,16 @@ namespace FolderViewIncrementalSearch
     }
 
     return OrdinalString::StartsWithFoldedInvariant(text, prefix);
+}
+
+[[nodiscard]] inline bool StartsWithPreFoldedNoCase(std::wstring_view text, std::wstring_view foldedPrefix) noexcept
+{
+    if (foldedPrefix.empty() || text.size() < foldedPrefix.size())
+    {
+        return false;
+    }
+
+    return OrdinalString::StartsWithPreFoldedInvariant(text, foldedPrefix);
 }
 
 [[nodiscard]] inline std::optional<UINT32> FindContainsOffsetNoCase(std::wstring_view text, std::wstring_view query) noexcept
@@ -61,10 +72,11 @@ template <typename DisplayNameAt>
         return std::nullopt;
     }
 
+    const std::wstring foldedQuery = OrdinalString::FoldCaseInvariant(query);
     for (size_t offset = 0u; offset < itemCount; ++offset)
     {
         const size_t index = forward ? ((startIndex + offset) % itemCount) : ((startIndex + itemCount - offset) % itemCount);
-        if (StartsWithNoCase(displayNameAt(index), query))
+        if (StartsWithPreFoldedNoCase(displayNameAt(index), foldedQuery))
         {
             return index;
         }

@@ -12,6 +12,25 @@ void CloseBatchRenameWindowIfOpen() noexcept;
                                            std::initializer_list<std::wstring_view> expectedAbsent,
                                            std::chrono::milliseconds timeout) noexcept;
 
+void SettleBatchRenameWindowBeforeFilesystemExecution() noexcept
+{
+    static_cast<void>(DebugFlushBatchRenameWindowPendingPreview());
+
+    const auto settleDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(std::chrono::milliseconds{500});
+    while (std::chrono::steady_clock::now() < settleDeadline)
+    {
+        PumpPendingMessages();
+        std::this_thread::sleep_for(std::chrono::milliseconds{10});
+    }
+}
+
+[[nodiscard]] bool AcquireBatchRenameCommandsSandboxRoot(CaseState& state, std::wstring_view caseName, std::filesystem::path& root) noexcept
+{
+    const SelfTest::TestSandbox sandbox = SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::Commands, caseName);
+    root = sandbox.root;
+    return state.Require(sandbox.IsValid(), L"Batch Rename TestSandbox root should be available.");
+}
+
 [[nodiscard]] uint64_t CountBatchRenamePerfRowsWithMetric(std::string_view metricText) noexcept
 {
     const std::filesystem::path path = SelfTest::GetPerfArtifactPath(L"perf_metrics.jsonl");
@@ -82,12 +101,12 @@ void CloseBatchRenameWindowIfOpen() noexcept;
             continue;
         }
 
-        size_t cursor = durationPos + kDurationNeedle.size();
+        size_t cursor  = durationPos + kDurationNeedle.size();
         uint64_t value = 0u;
-        bool sawDigit = false;
+        bool sawDigit  = false;
         while (cursor < line.size() && line[cursor] >= '0' && line[cursor] <= '9')
         {
-            sawDigit = true;
+            sawDigit             = true;
             const uint64_t digit = static_cast<uint64_t>(line[cursor] - '0');
             if (value > ((std::numeric_limits<uint64_t>::max)() - digit) / 10u)
             {
@@ -153,12 +172,12 @@ void CloseBatchRenameWindowIfOpen() noexcept;
             continue;
         }
 
-        size_t cursor = fieldPos + fieldNeedle.size();
+        size_t cursor  = fieldPos + fieldNeedle.size();
         uint64_t value = 0u;
-        bool sawDigit = false;
+        bool sawDigit  = false;
         while (cursor < line.size() && line[cursor] >= '0' && line[cursor] <= '9')
         {
-            sawDigit = true;
+            sawDigit             = true;
             const uint64_t digit = static_cast<uint64_t>(line[cursor] - '0');
             if (value > ((std::numeric_limits<uint64_t>::max)() - digit) / 10u)
             {
@@ -184,12 +203,12 @@ class BatchRenameCountingReadDirectoryFileSystem final : public IFileSystem
 public:
     BatchRenameCountingReadDirectoryFileSystem(wil::com_ptr<IFileSystem> base,
                                                std::atomic_uint32_t* readDirectoryInfoCounter,
-                                               std::atomic_uint32_t* renameItemCounter = nullptr,
-                                               std::atomic_uint32_t* renameItemsCounter = nullptr,
-                                               bool failRenameItemsAsUnsupported = false,
+                                               std::atomic_uint32_t* renameItemCounter   = nullptr,
+                                               std::atomic_uint32_t* renameItemsCounter  = nullptr,
+                                               bool failRenameItemsAsUnsupported         = false,
                                                std::atomic_uint32_t* shouldCancelCounter = nullptr,
-                                               bool cancelRenameItemsAfterShouldCancel = false,
-                                               uint32_t cancelReadDirectoryInfoAtCall = 0u) noexcept
+                                               bool cancelRenameItemsAfterShouldCancel   = false,
+                                               uint32_t cancelReadDirectoryInfoAtCall    = 0u) noexcept
         : _base(std::move(base)),
           _readDirectoryInfoCounter(readDirectoryInfoCounter),
           _renameItemCounter(renameItemCounter),
@@ -227,10 +246,10 @@ public:
 
     void SetReportedFailureWithOverallSuccess(std::wstring leaf, const HRESULT status) noexcept
     {
-        _scriptedPerItemRenameItems      = true;
-        _reportedFailureLeaf             = std::move(leaf);
-        _reportedFailureHr               = status;
-        _forceRenameItemsOverallSuccess  = true;
+        _scriptedPerItemRenameItems     = true;
+        _reportedFailureLeaf            = std::move(leaf);
+        _reportedFailureHr              = status;
+        _forceRenameItemsOverallSuccess = true;
     }
 
     void SetNoOpRenameItems() noexcept
@@ -247,8 +266,8 @@ public:
 
     void SetCapabilitiesResponse(std::string capabilitiesJson, const HRESULT hr = S_OK) noexcept
     {
-        _capabilitiesJson = std::move(capabilitiesJson);
-        _capabilitiesHr   = hr;
+        _capabilitiesJson     = std::move(capabilitiesJson);
+        _capabilitiesHr       = hr;
         _overrideCapabilities = true;
     }
 
@@ -256,6 +275,11 @@ public:
     {
         _readDirectoryInfoFailureHr = hr;
         _failReadDirectoryInfo      = true;
+    }
+
+    void SetReadDirectoryInfoGate(const HANDLE gate) noexcept
+    {
+        _readDirectoryInfoGate = gate;
     }
 
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppvObject) noexcept override
@@ -312,6 +336,12 @@ public:
         if (_failReadDirectoryInfo)
         {
             return _readDirectoryInfoFailureHr;
+        }
+
+        if (_readDirectoryInfoGate != nullptr &&
+            WaitForSingleObject(_readDirectoryInfoGate, static_cast<DWORD>(SelfTest::ScaleTimeout(5000u))) != WAIT_OBJECT_0)
+        {
+            return HRESULT_FROM_WIN32(ERROR_TIMEOUT);
         }
 
         return _base->ReadDirectoryInfo(path, ppFilesInformation);
@@ -410,7 +440,7 @@ public:
             {
                 return E_POINTER;
             }
-            BOOL cancel = FALSE;
+            BOOL cancel            = FALSE;
             const HRESULT cancelHr = callback->FileSystemShouldCancel(&cancel, cookie);
             if (_shouldCancelCounter)
             {
@@ -424,7 +454,7 @@ public:
         }
         if (_renameItemsGate)
         {
-            const DWORD waitResult = WaitForSingleObject(_renameItemsGate, 30000u);
+            const DWORD waitResult = WaitForSingleObject(_renameItemsGate, static_cast<DWORD>(SelfTest::ScaleTimeout(30'000u)));
             if (waitResult != WAIT_OBJECT_0)
             {
                 return HRESULT_FROM_WIN32(WAIT_TIMEOUT);
@@ -441,12 +471,11 @@ public:
             for (unsigned long index = 0u; index < count; ++index)
             {
                 const std::filesystem::path sourcePath{items[index].sourcePath ? items[index].sourcePath : L""};
-                const std::filesystem::path destinationPath =
-                    sourcePath.parent_path() / (items[index].newName ? items[index].newName : L"");
+                const std::filesystem::path destinationPath = sourcePath.parent_path() / (items[index].newName ? items[index].newName : L"");
                 if (callback)
                 {
-                    static_cast<void>(callback->FileSystemItemCompleted(
-                        FILESYSTEM_RENAME, index, sourcePath.c_str(), destinationPath.c_str(), S_OK, nullptr, cookie));
+                    static_cast<void>(
+                        callback->FileSystemItemCompleted(FILESYSTEM_RENAME, index, sourcePath.c_str(), destinationPath.c_str(), S_OK, nullptr, cookie));
                 }
             }
             return S_OK;
@@ -462,8 +491,7 @@ public:
             for (unsigned long index = 0u; index < count; ++index)
             {
                 const std::filesystem::path sourcePath{items[index].sourcePath ? items[index].sourcePath : L""};
-                const std::filesystem::path destinationPath =
-                    sourcePath.parent_path() / (items[index].newName ? items[index].newName : L"");
+                const std::filesystem::path destinationPath = sourcePath.parent_path() / (items[index].newName ? items[index].newName : L"");
 
                 HRESULT itemHr = S_OK;
                 if (! _failRenameItemLeaf.empty() && sourcePath.filename().native() == _failRenameItemLeaf)
@@ -481,8 +509,8 @@ public:
 
                 if (callback && (_omitCompletionLeaf.empty() || sourcePath.filename().native() != _omitCompletionLeaf))
                 {
-                    static_cast<void>(callback->FileSystemItemCompleted(
-                        FILESYSTEM_RENAME, index, sourcePath.c_str(), destinationPath.c_str(), itemHr, nullptr, cookie));
+                    static_cast<void>(
+                        callback->FileSystemItemCompleted(FILESYSTEM_RENAME, index, sourcePath.c_str(), destinationPath.c_str(), itemHr, nullptr, cookie));
                 }
                 if (FAILED(itemHr) && SUCCEEDED(firstFailure))
                 {
@@ -531,32 +559,33 @@ private:
     std::atomic_ulong _refCount{1};
     wil::com_ptr<IFileSystem> _base;
     std::atomic_uint32_t* _readDirectoryInfoCounter = nullptr;
-    std::atomic_uint32_t* _renameItemCounter = nullptr;
-    std::atomic_uint32_t* _renameItemsCounter = nullptr;
-    bool _failRenameItemsAsUnsupported = false;
-    std::atomic_uint32_t* _shouldCancelCounter = nullptr;
-    bool _cancelRenameItemsAfterShouldCancel = false;
-    uint32_t _cancelReadDirectoryInfoAtCall = 0u;
-    bool _scriptedPerItemRenameItems = false;
+    std::atomic_uint32_t* _renameItemCounter        = nullptr;
+    std::atomic_uint32_t* _renameItemsCounter       = nullptr;
+    bool _failRenameItemsAsUnsupported              = false;
+    std::atomic_uint32_t* _shouldCancelCounter      = nullptr;
+    bool _cancelRenameItemsAfterShouldCancel        = false;
+    uint32_t _cancelReadDirectoryInfoAtCall         = 0u;
+    bool _scriptedPerItemRenameItems                = false;
     std::wstring _failRenameItemLeaf;
     HRESULT _failRenameItemHr = S_OK;
     std::wstring _omitCompletionLeaf;
     std::wstring _reportedFailureLeaf;
-    HRESULT _reportedFailureHr = S_OK;
+    HRESULT _reportedFailureHr           = S_OK;
     bool _forceRenameItemsOverallSuccess = false;
-    bool _cancelAfterFirstRenameItem = false;
-    HANDLE _renameItemsGate = nullptr;
-    bool _noOpRenameItems = false;
-    bool _overrideCapabilities = false;
-    HRESULT _capabilitiesHr = S_OK;
+    bool _cancelAfterFirstRenameItem     = false;
+    HANDLE _renameItemsGate              = nullptr;
+    bool _noOpRenameItems                = false;
+    bool _overrideCapabilities           = false;
+    HRESULT _capabilitiesHr              = S_OK;
     std::string _capabilitiesJson;
-    bool _failReadDirectoryInfo = false;
+    bool _failReadDirectoryInfo         = false;
     HRESULT _readDirectoryInfoFailureHr = E_FAIL;
+    HANDLE _readDirectoryInfoGate       = nullptr;
     std::atomic_uint32_t _readDirectoryInfoCalls{0u};
 };
 
 [[nodiscard]] wil::com_ptr<IFileSystem> CreateBatchRenameCountingReadDirectoryFileSystem(const wil::com_ptr<IFileSystem>& base,
-                                                                                        std::atomic_uint32_t* counter) noexcept
+                                                                                         std::atomic_uint32_t* counter) noexcept
 {
     wil::com_ptr<IFileSystem> wrapped;
     auto* wrapper = new (std::nothrow) BatchRenameCountingReadDirectoryFileSystem(base, counter);
@@ -573,8 +602,7 @@ private:
                                                                                           uint32_t cancelAtCall) noexcept
 {
     wil::com_ptr<IFileSystem> wrapped;
-    auto* wrapper = new (std::nothrow) BatchRenameCountingReadDirectoryFileSystem(
-        base, counter, nullptr, nullptr, false, nullptr, false, cancelAtCall);
+    auto* wrapper = new (std::nothrow) BatchRenameCountingReadDirectoryFileSystem(base, counter, nullptr, nullptr, false, nullptr, false, cancelAtCall);
     if (! wrapper)
     {
         return {};
@@ -598,6 +626,21 @@ private:
     return wrapped;
 }
 
+[[nodiscard]] wil::com_ptr<IFileSystem> CreateBatchRenameGatedReadDirectoryFileSystem(const wil::com_ptr<IFileSystem>& base,
+                                                                                       std::atomic_uint32_t* counter,
+                                                                                       const HANDLE gate) noexcept
+{
+    wil::com_ptr<IFileSystem> wrapped;
+    auto* wrapper = new (std::nothrow) BatchRenameCountingReadDirectoryFileSystem(base, counter);
+    if (! wrapper)
+    {
+        return {};
+    }
+    wrapper->SetReadDirectoryInfoGate(gate);
+    wrapped.attach(wrapper);
+    return wrapped;
+}
+
 [[nodiscard]] wil::com_ptr<IFileSystem> CreateBatchRenameBulkUnsupportedFileSystem(const wil::com_ptr<IFileSystem>& base,
                                                                                    std::atomic_uint32_t* renameItemCounter,
                                                                                    std::atomic_uint32_t* renameItemsCounter) noexcept
@@ -617,8 +660,7 @@ private:
                                                                                         std::atomic_uint32_t* shouldCancelCounter) noexcept
 {
     wil::com_ptr<IFileSystem> wrapped;
-    auto* wrapper = new (std::nothrow) BatchRenameCountingReadDirectoryFileSystem(
-        base, nullptr, nullptr, renameItemsCounter, false, shouldCancelCounter, true);
+    auto* wrapper = new (std::nothrow) BatchRenameCountingReadDirectoryFileSystem(base, nullptr, nullptr, renameItemsCounter, false, shouldCancelCounter, true);
     if (! wrapper)
     {
         return {};
@@ -688,8 +730,7 @@ private:
     return wrapped;
 }
 
-[[nodiscard]] wil::com_ptr<IFileSystem> CreateBatchRenameGatedRenameItemsFileSystem(const wil::com_ptr<IFileSystem>& base,
-                                                                                    const HANDLE gate) noexcept
+[[nodiscard]] wil::com_ptr<IFileSystem> CreateBatchRenameGatedRenameItemsFileSystem(const wil::com_ptr<IFileSystem>& base, const HANDLE gate) noexcept
 {
     wil::com_ptr<IFileSystem> wrapped;
     auto* wrapper = new (std::nothrow) BatchRenameCountingReadDirectoryFileSystem(base, nullptr);
@@ -742,8 +783,7 @@ private:
     {
         const HRESULT enableHr = FileSystemPluginManager::GetInstance().EnablePlugin(L"builtin/file-system", g_settings);
         state.Require(SUCCEEDED(enableHr),
-                      std::format(L"Failed to enable local file-system plugin for Batch Rename selftest: 0x{:08X}.",
-                                  static_cast<unsigned long>(enableHr)));
+                      std::format(L"Failed to enable local file-system plugin for Batch Rename selftest: 0x{:08X}.", static_cast<unsigned long>(enableHr)));
         fileSystem = SelfTest::GetFileSystem(L"builtin/file-system");
     }
     state.Require(fileSystem != nullptr, L"Local file-system plugin should be available for Batch Rename selftest.");
@@ -810,13 +850,10 @@ constexpr std::string_view kBatchRenameNoOpProviderCapabilities = R"json({
     return leaves;
 }
 
-[[nodiscard]] bool HasBatchRenameIssue(const BatchRename::PreviewRow& row,
-                                       const BatchRename::IssueSeverity severity,
-                                       const std::wstring_view message) noexcept
+[[nodiscard]] bool HasBatchRenameIssue(const BatchRename::PreviewRow& row, const BatchRename::IssueSeverity severity, const std::wstring_view message) noexcept
 {
-    return std::ranges::any_of(row.issues,
-                               [severity, message](const BatchRename::Issue& issue) noexcept
-    { return issue.severity == severity && issue.message == message; });
+    return std::ranges::any_of(
+        row.issues, [severity, message](const BatchRename::Issue& issue) noexcept { return issue.severity == severity && issue.message == message; });
 }
 
 struct BatchRenameLocalStampParts final
@@ -862,7 +899,7 @@ struct BatchRenameLocalStampParts final
 {
     constexpr int64_t kWindowsToUnixEpoch100Ns = 116444736000000000LL;
     constexpr int64_t kFileTimeTicksPerSecond  = 10000000LL;
-    const int64_t ticks = kWindowsToUnixEpoch100Ns + (timestamp.time_since_epoch().count() * kFileTimeTicksPerSecond);
+    const int64_t ticks                        = kWindowsToUnixEpoch100Ns + (timestamp.time_since_epoch().count() * kFileTimeTicksPerSecond);
 
     ULARGE_INTEGER value{};
     value.QuadPart = static_cast<ULONGLONG>(ticks);
@@ -876,13 +913,8 @@ struct BatchRenameLocalStampParts final
 [[nodiscard]] bool SetBatchRenameFileCreationTime(const std::filesystem::path& path, const std::chrono::sys_seconds timestamp) noexcept
 {
     const FILETIME creationTime = BatchRenameFileTimeFromSysSeconds(timestamp);
-    wil::unique_handle file(::CreateFileW(path.c_str(),
-                                          FILE_WRITE_ATTRIBUTES,
-                                          FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                                          nullptr,
-                                          OPEN_EXISTING,
-                                          FILE_ATTRIBUTE_NORMAL,
-                                          nullptr));
+    wil::unique_handle file(::CreateFileW(
+        path.c_str(), FILE_WRITE_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
     if (! file)
     {
         return false;
@@ -899,7 +931,7 @@ struct BatchRenameLocalStampParts final
                                                         const std::filesystem::path& targetPath,
                                                         DWORD& outLastError) noexcept
 {
-    outLastError = ERROR_SUCCESS;
+    outLastError      = ERROR_SUCCESS;
     const DWORD flags = SYMBOLIC_LINK_FLAG_DIRECTORY;
     if (::CreateSymbolicLinkW(linkPath.c_str(), targetPath.c_str(), flags | SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE) != FALSE)
     {
@@ -940,15 +972,18 @@ struct BatchRenameLocalStampParts final
     state.Require(WndMsg::kBatchRenameWindowDebug == WM_APP + 0x546, L"Batch Rename debug message should use the reserved central ID.");
 
     const std::optional<unsigned int> wmCommandId = TryGetWmCommandId(L"cmd/pane/batchRename");
-    state.Require(wmCommandId.has_value() && wmCommandId.value() == IDM_PANE_BATCH_RENAME,
-                  L"Batch Rename command should resolve through TryGetWmCommandId.");
+    state.Require(wmCommandId.has_value() && wmCommandId.value() == IDM_PANE_BATCH_RENAME, L"Batch Rename command should resolve through TryGetWmCommandId.");
 
     return state.failure.empty();
 }
 
 [[nodiscard]] bool TestBatchRenameWindowOpensFromPaneContext(HWND mainWindow, CaseState& state) noexcept
 {
-    const std::filesystem::path root = L"C:\\BatchRenameSelfTest";
+    std::filesystem::path root;
+    if (! AcquireBatchRenameCommandsSandboxRoot(state, L"batch_rename_window_open", root))
+    {
+        return false;
+    }
 
     BatchRenamePaneContext context{};
     context.pluginId        = L"builtin/file-system";
@@ -958,11 +993,9 @@ struct BatchRenameLocalStampParts final
     context.initialPaths    = {root / L"one.txt", root / L"two.md"};
 
     const AppTheme theme = ResolveAppTheme(ThemeMode::Dark, L"batch-rename-window-selftest");
-    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
-                  L"Batch Rename window should open from a pane context.");
+    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)), L"Batch Rename window should open from a pane context.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename window handle should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -980,8 +1013,7 @@ struct BatchRenameLocalStampParts final
     state.Require(snapshot.rootText == root.native(), L"Batch Rename root text should be seeded from the pane context.");
     state.Require(snapshot.rootNavigationVisible, L"Batch Rename root navigation header should be visible.");
     state.Require(snapshot.rootNavigationUsesNavigationView, L"Batch Rename root header should use the shared NavigationView control.");
-    state.Require(snapshot.rootNavigationPathText == root.native(),
-                  L"Batch Rename NavigationView header should be populated with the pane context root.");
+    state.Require(snapshot.rootNavigationPathText == root.native(), L"Batch Rename NavigationView header should be populated with the pane context root.");
     state.Require(snapshot.visibleChildWindowCount >= 1u, L"Batch Rename window should expose the NavigationView child window.");
     state.Require(snapshot.previewRowCount == 2u, L"Batch Rename preview should seed one row per initial path.");
     state.Require(snapshot.previewColumnIds == std::vector<std::wstring>{L"original", L"new", L"size", L"date", L"time", L"path"},
@@ -990,12 +1022,10 @@ struct BatchRenameLocalStampParts final
                   L"Batch Rename preview should render one icon-enabled Original Name cell per row.");
     state.Require(snapshot.originalIconIndices.size() == snapshot.previewRowCount,
                   L"Batch Rename preview should expose one resolved shell icon index per row.");
-    state.Require(std::all_of(snapshot.originalIconIndices.begin(),
-                              snapshot.originalIconIndices.end(),
-                              [](const int iconIndex) noexcept { return iconIndex >= 0; }),
-                  L"Batch Rename preview Original Name icons should resolve through the system icon cache.");
-    state.Require(snapshot.originalNames == std::vector<std::wstring>{L"one.txt", L"two.md"},
-                  L"Batch Rename preview should show original leaf names.");
+    state.Require(
+        std::all_of(snapshot.originalIconIndices.begin(), snapshot.originalIconIndices.end(), [](const int iconIndex) noexcept { return iconIndex >= 0; }),
+        L"Batch Rename preview Original Name icons should resolve through the system icon cache.");
+    state.Require(snapshot.originalNames == std::vector<std::wstring>{L"one.txt", L"two.md"}, L"Batch Rename preview should show original leaf names.");
     state.Require(snapshot.newNames == snapshot.originalNames, L"Batch Rename initial preview should keep names unchanged.");
     state.Require(snapshot.fullPaths == std::vector<std::wstring>{(root / L"one.txt").native(), (root / L"two.md").native()},
                   L"Batch Rename preview should retain full source paths.");
@@ -1038,8 +1068,9 @@ struct BatchRenameLocalStampParts final
     if (! fileSystem)
     {
         const HRESULT enableHr = FileSystemPluginManager::GetInstance().EnablePlugin(L"builtin/file-system", g_settings);
-        state.Require(SUCCEEDED(enableHr), std::format(L"Failed to enable local file-system plugin for Batch Rename folder-scope collection: 0x{:08X}.",
-                                                       static_cast<unsigned long>(enableHr)));
+        state.Require(SUCCEEDED(enableHr),
+                      std::format(L"Failed to enable local file-system plugin for Batch Rename folder-scope collection: 0x{:08X}.",
+                                  static_cast<unsigned long>(enableHr)));
         fileSystem = SelfTest::GetFileSystem(L"builtin/file-system");
     }
     state.Require(fileSystem != nullptr, L"Local file-system plugin should be available for Batch Rename folder-scope collection.");
@@ -1058,6 +1089,7 @@ struct BatchRenameLocalStampParts final
 
     const uint64_t collectDurationBefore = CountBatchRenamePerfRowsWithMetric("batchrename.collect.us");
     const uint64_t collectTargetsBefore  = CountBatchRenamePerfRowsWithMetric("batchrename.collect.targets");
+    const uint64_t destinationListingRowsBefore = CountBatchRenamePerfRowsWithMetric("batchrename.preview.destination_directory_listings");
 
     context.fileSystem      = countingFileSystem;
     context.pluginId        = L"builtin/file-system";
@@ -1069,8 +1101,7 @@ struct BatchRenameLocalStampParts final
     state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
                   L"Batch Rename window should open for folder-scope collection testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename folder-scope test window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -1090,10 +1121,8 @@ struct BatchRenameLocalStampParts final
                   L"Folder-scope collection should retain full source paths.");
     state.Require(snapshot.sizeTexts.size() == 2u && snapshot.sizeTexts[0] == L"7" && snapshot.sizeTexts[1] == L"8",
                   L"Folder-scope metadata should expose file byte sizes.");
-    state.Require(snapshot.dateTexts.size() == 2u && ! snapshot.dateTexts[0].empty(),
-                  L"Folder-scope metadata should expose a date for collected local files.");
-    state.Require(snapshot.timeTexts.size() == 2u && ! snapshot.timeTexts[0].empty(),
-                  L"Folder-scope metadata should expose a time for collected local files.");
+    state.Require(snapshot.dateTexts.size() == 2u && ! snapshot.dateTexts[0].empty(), L"Folder-scope metadata should expose a date for collected local files.");
+    state.Require(snapshot.timeTexts.size() == 2u && ! snapshot.timeTexts[0].empty(), L"Folder-scope metadata should expose a time for collected local files.");
 
     state.Require(DebugSetBatchRenameWindowScope(L"*.txt", true, true, false),
                   L"Batch Rename folder-scope debug hook should update mask and recursive file options.");
@@ -1108,12 +1137,10 @@ struct BatchRenameLocalStampParts final
     BatchRename::Rules relativeRules{};
     relativeRules.nameTemplate     = L"rel-{relativeFolderFlat}-{name}";
     relativeRules.flattenSeparator = L"__";
-    state.Require(DebugSetBatchRenameWindowRules(relativeRules),
-                  L"Batch Rename folder-scope debug hook should update root-relative folder macro rules.");
+    state.Require(DebugSetBatchRenameWindowRules(relativeRules), L"Batch Rename folder-scope debug hook should update root-relative folder macro rules.");
 
     BatchRenameDebugSnapshot recursiveRelativeSnapshot{};
-    state.Require(DebugGetBatchRenameWindowSnapshot(recursiveRelativeSnapshot),
-                  L"Batch Rename recursive relative-folder macro snapshot should be available.");
+    state.Require(DebugGetBatchRenameWindowSnapshot(recursiveRelativeSnapshot), L"Batch Rename recursive relative-folder macro snapshot should be available.");
     state.Require(recursiveRelativeSnapshot.newNames == std::vector<std::wstring>{L"rel--alpha.txt", L"rel-scope-sub-nested.txt"},
                   L"Recursive folder-scope previews should expand relative-folder macros from the active pane root.");
 
@@ -1131,6 +1158,7 @@ struct BatchRenameLocalStampParts final
 
     const uint64_t collectDurationAfter = CountBatchRenamePerfRowsWithMetric("batchrename.collect.us");
     const uint64_t collectTargetsAfter  = CountBatchRenamePerfRowsWithMetric("batchrename.collect.targets");
+    const uint64_t destinationListingRowsAfter = CountBatchRenamePerfRowsWithMetric("batchrename.preview.destination_directory_listings");
     state.Require(collectDurationAfter > collectDurationBefore,
                   std::format(L"Batch Rename folder-scope collection should emit batchrename.collect.us; before={} after={}.",
                               collectDurationBefore,
@@ -1139,7 +1167,118 @@ struct BatchRenameLocalStampParts final
                   std::format(L"Batch Rename folder-scope collection should emit batchrename.collect.targets; before={} after={}.",
                               collectTargetsBefore,
                               collectTargetsAfter));
+    state.Require(destinationListingRowsAfter > destinationListingRowsBefore,
+                  L"Batch Rename preview should emit cached destination-directory listing metrics.");
+    const std::optional<uint64_t> maxDirectoryListings = TryReadMaxBatchRenamePerfUintField(
+        "batchrename.preview.destination_directory_listings", "value0", destinationListingRowsBefore);
+    state.Require(maxDirectoryListings.has_value() && maxDirectoryListings.value() <= 2u,
+                  std::format(L"Each preview refresh should enumerate at most once for each of the fixture's two distinct parent directories; listings={}.",
+                              maxDirectoryListings.value_or((std::numeric_limits<uint64_t>::max)())));
 
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestBatchRenameWindowDoesNotBlockOnProviderCollection(HWND mainWindow, CaseState& state) noexcept
+{
+    std::filesystem::path root;
+    if (! AcquireBatchRenameCommandsSandboxRoot(state, L"batch_rename_async_provider_collection", root))
+    {
+        return false;
+    }
+    state.Require(SelfTest::WriteTextFile(root / L"slow.txt", "payload"), L"Failed to create async collection fixture.");
+
+    const wil::com_ptr<IFileSystem> fileSystem = GetBatchRenameLocalFileSystem(state);
+    wil::unique_handle gate{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
+    state.Require(fileSystem != nullptr && static_cast<bool>(gate), L"Async collection fixture should create its provider and gate.");
+    if (! fileSystem || ! gate)
+    {
+        return false;
+    }
+
+    std::atomic_uint32_t readDirectoryInfoCalls{0u};
+    wil::com_ptr<IFileSystem> gatedFileSystem = CreateBatchRenameGatedReadDirectoryFileSystem(fileSystem, &readDirectoryInfoCalls, gate.get());
+    state.Require(gatedFileSystem != nullptr, L"Async collection fixture should create a gated provider wrapper.");
+    if (! gatedFileSystem)
+    {
+        return false;
+    }
+
+    const auto releaseGate = wil::scope_exit([&]() noexcept { static_cast<void>(SetEvent(gate.get())); });
+    BatchRenamePaneContext context{};
+    context.fileSystem      = gatedFileSystem;
+    context.pluginId        = L"builtin/file-system";
+    context.pluginShortId   = L"local";
+    context.instanceContext = L"batch-rename-async-provider-collection";
+    context.rootPluginPath  = root;
+
+    const AppTheme theme = ResolveAppTheme(ThemeMode::Dark, L"batch-rename-async-provider-collection");
+    const ULONGLONG started = GetTickCount64();
+    const bool shown = ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context));
+    const ULONGLONG showElapsedMs = GetTickCount64() - started;
+    state.Require(shown, L"Batch Rename should open while provider enumeration is blocked.");
+    state.Require(showElapsedMs < SelfTest::ScaleTimeout(1000u),
+                  std::format(L"ShowBatchRenameWindow must not wait for provider enumeration; elapsedMs={}.", showElapsedMs));
+
+    const ULONGLONG enteredDeadline = GetTickCount64() + SelfTest::ScaleTimeout(2000u);
+    while (readDirectoryInfoCalls.load(std::memory_order_acquire) == 0u && GetTickCount64() < enteredDeadline)
+    {
+        PumpPendingMessages();
+        std::this_thread::yield();
+    }
+    state.Require(readDirectoryInfoCalls.load(std::memory_order_acquire) > 0u,
+                  L"The provider collection worker should enter ReadDirectoryInfo off-thread.");
+    state.Require(GetBatchRenameWindowHandle() != nullptr,
+                  L"The Batch Rename window should remain available while provider collection is blocked.");
+
+    static_cast<void>(SetEvent(gate.get()));
+    BatchRenameDebugSnapshot snapshot{};
+    state.Require(DebugGetBatchRenameWindowSnapshot(snapshot), L"Async collection snapshot should become available after releasing the provider.");
+    state.Require(snapshot.previewRowCount == 1u && snapshot.originalNames == std::vector<std::wstring>{L"slow.txt"},
+                  L"Background provider collection should populate the preview after completion.");
+    CloseBatchRenameWindowIfOpen();
+
+    state.Require(ResetEvent(gate.get()) != FALSE, L"Async collection teardown fixture should reset its provider gate.");
+    const uint32_t callsBeforeBlockedClose = readDirectoryInfoCalls.load(std::memory_order_acquire);
+    const uint64_t collectRowsBeforeBlockedClose = CountBatchRenamePerfRowsWithMetric("batchrename.collect.us");
+
+    BatchRenamePaneContext blockedCloseContext{};
+    blockedCloseContext.fileSystem      = gatedFileSystem;
+    blockedCloseContext.pluginId        = L"builtin/file-system";
+    blockedCloseContext.pluginShortId   = L"local";
+    blockedCloseContext.instanceContext = L"batch-rename-async-provider-collection-blocked-close";
+    blockedCloseContext.rootPluginPath  = root;
+    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(blockedCloseContext)),
+                  L"Batch Rename should reopen for blocked-provider teardown testing.");
+
+    const ULONGLONG blockedCloseEnteredDeadline = GetTickCount64() + SelfTest::ScaleTimeout(2000u);
+    while (readDirectoryInfoCalls.load(std::memory_order_acquire) == callsBeforeBlockedClose &&
+           GetTickCount64() < blockedCloseEnteredDeadline)
+    {
+        PumpPendingMessages();
+        std::this_thread::yield();
+    }
+    state.Require(readDirectoryInfoCalls.load(std::memory_order_acquire) > callsBeforeBlockedClose,
+                  L"The teardown collection worker should enter ReadDirectoryInfo before the window closes.");
+
+    const ULONGLONG closeStarted = GetTickCount64();
+    CloseBatchRenameWindowIfOpen();
+    const ULONGLONG closeElapsedMs = GetTickCount64() - closeStarted;
+    state.Require(closeElapsedMs < SelfTest::ScaleTimeout(1000u),
+                  std::format(L"Closing Batch Rename must not wait for a blocked provider worker; elapsedMs={}.", closeElapsedMs));
+    state.Require(GetBatchRenameWindowHandle() == nullptr,
+                  L"Batch Rename should be destroyed while its provider collection worker remains blocked.");
+
+    static_cast<void>(SetEvent(gate.get()));
+    const ULONGLONG workerCompletionDeadline = GetTickCount64() + SelfTest::ScaleTimeout(3000u);
+    while (CountBatchRenamePerfRowsWithMetric("batchrename.collect.us") == collectRowsBeforeBlockedClose &&
+           GetTickCount64() < workerCompletionDeadline)
+    {
+        PumpPendingMessages();
+        std::this_thread::yield();
+    }
+    state.Require(CountBatchRenamePerfRowsWithMetric("batchrename.collect.us") > collectRowsBeforeBlockedClose,
+                  L"The blocked provider worker should finish safely after the closed window releases it.");
+    PumpPendingMessages();
     return state.failure.empty();
 }
 
@@ -1157,8 +1296,7 @@ struct BatchRenameLocalStampParts final
     std::filesystem::remove_all(root, ec);
     state.Require(SelfTest::EnsureDirectory(root / L"nested"), L"Failed to create Batch Rename cancelable collection subfolder.");
     state.Require(SelfTest::WriteTextFile(root / L"root.txt", "root"), L"Failed to create Batch Rename cancelable collection root file.");
-    state.Require(SelfTest::WriteTextFile(root / L"nested" / L"child.txt", "child"),
-                  L"Failed to create Batch Rename cancelable collection nested file.");
+    state.Require(SelfTest::WriteTextFile(root / L"nested" / L"child.txt", "child"), L"Failed to create Batch Rename cancelable collection nested file.");
     if (! state.failure.empty())
     {
         return false;
@@ -1174,9 +1312,9 @@ struct BatchRenameLocalStampParts final
     if (! fileSystem)
     {
         const HRESULT enableHr = FileSystemPluginManager::GetInstance().EnablePlugin(L"builtin/file-system", g_settings);
-        state.Require(SUCCEEDED(enableHr),
-                      std::format(L"Failed to enable local file-system plugin for Batch Rename cancelable collection: 0x{:08X}.",
-                                  static_cast<unsigned long>(enableHr)));
+        state.Require(
+            SUCCEEDED(enableHr),
+            std::format(L"Failed to enable local file-system plugin for Batch Rename cancelable collection: 0x{:08X}.", static_cast<unsigned long>(enableHr)));
         fileSystem = SelfTest::GetFileSystem(L"builtin/file-system");
     }
     state.Require(fileSystem != nullptr, L"Local file-system plugin should be available for Batch Rename cancelable collection.");
@@ -1186,8 +1324,7 @@ struct BatchRenameLocalStampParts final
     }
 
     std::atomic_uint32_t readDirectoryInfoCalls{0u};
-    wil::com_ptr<IFileSystem> cancelingFileSystem =
-        CreateBatchRenameCancelingReadDirectoryFileSystem(fileSystem, &readDirectoryInfoCalls, 2u);
+    wil::com_ptr<IFileSystem> cancelingFileSystem = CreateBatchRenameCancelingReadDirectoryFileSystem(fileSystem, &readDirectoryInfoCalls, 2u);
     state.Require(cancelingFileSystem != nullptr, L"Batch Rename cancelable collection test should create a canceling file-system wrapper.");
     if (! cancelingFileSystem)
     {
@@ -1202,7 +1339,7 @@ struct BatchRenameLocalStampParts final
     context.rootPluginPath  = root;
 
     BatchRenameDebugCollectionResult result{};
-    bool collectReturned = false;
+    bool collectReturned   = false;
     HRESULT workerCoInitHr = S_OK;
     std::jthread worker([&](std::stop_token) noexcept
     {
@@ -1217,8 +1354,7 @@ struct BatchRenameLocalStampParts final
     worker = std::jthread{};
 
     state.Require(SUCCEEDED(workerCoInitHr),
-                  std::format(L"Batch Rename collection worker should initialize COM MTA, hr=0x{:08X}.",
-                              static_cast<unsigned long>(workerCoInitHr)));
+                  std::format(L"Batch Rename collection worker should initialize COM MTA, hr=0x{:08X}.", static_cast<unsigned long>(workerCoInitHr)));
     state.Require(collectReturned, L"Batch Rename debug collection helper should run on the worker thread.");
     state.Require(result.hr == HRESULT_FROM_WIN32(ERROR_CANCELLED),
                   std::format(L"Provider cancellation during Batch Rename collection should return ERROR_CANCELLED; saw 0x{:08X}.",
@@ -1259,7 +1395,7 @@ struct BatchRenameLocalStampParts final
     });
 
     const std::filesystem::path loopPath = root / L"loop";
-    DWORD symlinkError = ERROR_SUCCESS;
+    DWORD symlinkError                   = ERROR_SUCCESS;
     if (! TryCreateBatchRenameDirectorySymlink(loopPath, root, symlinkError))
     {
         if (symlinkError == ERROR_PRIVILEGE_NOT_HELD || symlinkError == ERROR_ACCESS_DENIED || symlinkError == ERROR_INVALID_PARAMETER)
@@ -1269,9 +1405,8 @@ struct BatchRenameLocalStampParts final
             return true;
         }
 
-        state.Require(false,
-                      std::format(L"CreateSymbolicLinkW failed unexpectedly for Batch Rename symlink-loop guard: {}.",
-                                  static_cast<unsigned long>(symlinkError)));
+        state.Require(
+            false, std::format(L"CreateSymbolicLinkW failed unexpectedly for Batch Rename symlink-loop guard: {}.", static_cast<unsigned long>(symlinkError)));
         return false;
     }
 
@@ -1289,7 +1424,7 @@ struct BatchRenameLocalStampParts final
     context.rootPluginPath  = root;
 
     BatchRenameDebugCollectionResult result{};
-    bool collectReturned = false;
+    bool collectReturned   = false;
     HRESULT workerCoInitHr = S_OK;
     std::jthread worker([&](std::stop_token) noexcept
     {
@@ -1303,13 +1438,12 @@ struct BatchRenameLocalStampParts final
     });
     worker = std::jthread{};
 
-    state.Require(SUCCEEDED(workerCoInitHr),
-                  std::format(L"Batch Rename symlink-loop collection worker should initialize COM MTA, hr=0x{:08X}.",
-                              static_cast<unsigned long>(workerCoInitHr)));
+    state.Require(
+        SUCCEEDED(workerCoInitHr),
+        std::format(L"Batch Rename symlink-loop collection worker should initialize COM MTA, hr=0x{:08X}.", static_cast<unsigned long>(workerCoInitHr)));
     state.Require(collectReturned, L"Batch Rename symlink-loop debug collection helper should return.");
     state.Require(SUCCEEDED(result.hr),
-                  std::format(L"Recursive Batch Rename collection with a symlink loop should succeed, hr=0x{:08X}.",
-                              static_cast<unsigned long>(result.hr)));
+                  std::format(L"Recursive Batch Rename collection with a symlink loop should succeed, hr=0x{:08X}.", static_cast<unsigned long>(result.hr)));
     state.Require(result.fullPaths == std::vector<std::wstring>{(root / L"needle.txt").native(), (root / L"real" / L"child.txt").native()},
                   L"Recursive Batch Rename collection should collect real files once and skip the symlink loop.");
 
@@ -1367,19 +1501,16 @@ struct BatchRenameLocalStampParts final
     BatchRenameDebugCollectionResult result{};
     const bool collectReturned = DebugCollectBatchRenameTargetsForTests(std::move(context), L"*.*", false, true, false, result);
     state.Require(collectReturned, L"Batch Rename non-local selection debug collection should return.");
-    state.Require(SUCCEEDED(result.hr),
-                  std::format(L"Non-local undescribed selection fallback should keep collection successful, hr=0x{:08X}.",
-                              static_cast<unsigned long>(result.hr)));
+    state.Require(
+        SUCCEEDED(result.hr),
+        std::format(L"Non-local undescribed selection fallback should keep collection successful, hr=0x{:08X}.", static_cast<unsigned long>(result.hr)));
     state.Require(readDirectoryInfoCalls.load(std::memory_order_relaxed) == 1u,
                   std::format(L"Non-local selection should ask the provider to describe the parent once; saw {} calls.",
                               readDirectoryInfoCalls.load(std::memory_order_relaxed)));
-    state.Require(result.originalNames == std::vector<std::wstring>{L"ghost.remote"} &&
-                      result.fullPaths == std::vector<std::wstring>{selectedPath.native()},
+    state.Require(result.originalNames == std::vector<std::wstring>{L"ghost.remote"} && result.fullPaths == std::vector<std::wstring>{selectedPath.native()},
                   L"Non-local undescribed selection should preserve the selected path identity.");
-    state.Require(result.isDirectories == std::vector<bool>{false},
-                  L"Undescribed non-local selection should not invent a directory classification.");
-    state.Require(result.sizeBytes == std::vector<uint64_t>{0u},
-                  L"Undescribed non-local selection should keep size bytes at the neutral value.");
+    state.Require(result.isDirectories == std::vector<bool>{false}, L"Undescribed non-local selection should not invent a directory classification.");
+    state.Require(result.sizeBytes == std::vector<uint64_t>{0u}, L"Undescribed non-local selection should keep size bytes at the neutral value.");
     state.Require(result.metadataUnknowns == std::vector<bool>{true},
                   L"Undescribed non-local selection should be marked metadata-unknown instead of fabricated as a local 0-byte file.");
 
@@ -1388,7 +1519,11 @@ struct BatchRenameLocalStampParts final
 
 [[nodiscard]] bool TestBatchRenameWindowRulesRecomputePreview(HWND mainWindow, CaseState& state) noexcept
 {
-    const std::filesystem::path root = L"C:\\BatchRenameRulesSelfTest";
+    std::filesystem::path root;
+    if (! AcquireBatchRenameCommandsSandboxRoot(state, L"batch_rename_rules_preview", root))
+    {
+        return false;
+    }
 
     BatchRenamePaneContext context{};
     context.pluginId        = L"builtin/file-system";
@@ -1398,11 +1533,9 @@ struct BatchRenameLocalStampParts final
     context.initialPaths    = {root / L"Alpha File.TXT", root / L"beta file.md"};
 
     const AppTheme theme = ResolveAppTheme(ThemeMode::Dark, L"batch-rename-rules-window-selftest");
-    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
-                  L"Batch Rename window should open for rules recompute testing.");
+    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)), L"Batch Rename window should open for rules recompute testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename rules test window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -1412,23 +1545,22 @@ struct BatchRenameLocalStampParts final
     const auto cleanupBatchWindow = wil::scope_exit([]() noexcept { CloseBatchRenameWindowIfOpen(); });
 
     BatchRename::Rules rules{};
-    rules.nameTemplate        = L"{counter:000}_{stem}{ext}";
-    rules.searchFor           = L"file";
-    rules.replaceWith         = L"clip";
-    rules.caseSensitive       = false;
-    rules.excludeExtension    = true;
-    rules.fileNameCaseStyle   = BatchRename::CaseTransform::Upper;
-    rules.extensionCaseStyle  = BatchRename::CaseTransform::Lower;
+    rules.nameTemplate       = L"{counter:000}_{stem}{ext}";
+    rules.searchFor          = L"file";
+    rules.replaceWith        = L"clip";
+    rules.caseSensitive      = false;
+    rules.excludeExtension   = true;
+    rules.fileNameCaseStyle  = BatchRename::CaseTransform::Upper;
+    rules.extensionCaseStyle = BatchRename::CaseTransform::Lower;
 
     const uint64_t recomputeRowsBefore      = CountBatchRenamePerfRowsWithMetric("batchrename.preview.recompute.us");
     const uint64_t visibleRefreshRowsBefore = CountBatchRenamePerfRowsWithMetric("batchrename.preview.visible_refresh.us");
     state.Require(DebugSetBatchRenameWindowRules(rules), L"Batch Rename debug rules hook should update the active window.");
     const uint64_t recomputeRowsAfter      = CountBatchRenamePerfRowsWithMetric("batchrename.preview.recompute.us");
     const uint64_t visibleRefreshRowsAfter = CountBatchRenamePerfRowsWithMetric("batchrename.preview.visible_refresh.us");
-    state.Require(recomputeRowsAfter > recomputeRowsBefore,
-                  std::format(L"Batch Rename rule recompute should emit batchrename.preview.recompute.us; before={} after={}.",
-                              recomputeRowsBefore,
-                              recomputeRowsAfter));
+    state.Require(
+        recomputeRowsAfter > recomputeRowsBefore,
+        std::format(L"Batch Rename rule recompute should emit batchrename.preview.recompute.us; before={} after={}.", recomputeRowsBefore, recomputeRowsAfter));
     state.Require(visibleRefreshRowsAfter > visibleRefreshRowsBefore,
                   std::format(L"Batch Rename rule recompute should emit batchrename.preview.visible_refresh.us; before={} after={}.",
                               visibleRefreshRowsBefore,
@@ -1437,8 +1569,7 @@ struct BatchRenameLocalStampParts final
     BatchRenameDebugSnapshot snapshot{};
     state.Require(DebugGetBatchRenameWindowSnapshot(snapshot), L"Batch Rename rules snapshot should be available.");
     state.Require(snapshot.previewRowCount == 2u, L"Rules recompute should keep the original target count.");
-    state.Require(snapshot.originalNames == std::vector<std::wstring>{L"Alpha File.TXT", L"beta file.md"},
-                  L"Rules recompute should preserve original names.");
+    state.Require(snapshot.originalNames == std::vector<std::wstring>{L"Alpha File.TXT", L"beta file.md"}, L"Rules recompute should preserve original names.");
     state.Require(snapshot.newNames == std::vector<std::wstring>{L"001_ALPHA CLIP.txt", L"002_BETA CLIP.md"},
                   L"Rules recompute should apply macros, search/replace, and case transforms through the preview engine.");
     state.Require(snapshot.changedRowCount == 2u, L"Rules recompute should report changed preview rows.");
@@ -1456,19 +1587,15 @@ struct BatchRenameLocalStampParts final
                       std::ranges::all_of(warningSnapshot.newNameStatusIconTexts, [](const std::wstring& iconText) noexcept { return ! iconText.empty(); }),
                   L"Warning preview rows should show a status glyph in the New Name column.");
     const std::wstring warningStatusIcon = warningSnapshot.newNameStatusIconTexts.empty() ? std::wstring{} : warningSnapshot.newNameStatusIconTexts.front();
-    state.Require(std::ranges::all_of(warningSnapshot.newNameStatusIconTexts, [&warningStatusIcon](const std::wstring& iconText) noexcept {
-                      return iconText == warningStatusIcon;
-                  }),
+    state.Require(std::ranges::all_of(warningSnapshot.newNameStatusIconTexts,
+                                      [&warningStatusIcon](const std::wstring& iconText) noexcept { return iconText == warningStatusIcon; }),
                   L"Warning preview rows should use a stable warning status glyph.");
     state.Require(warningSnapshot.newNameTooltips.size() == 2u &&
-                      std::ranges::all_of(warningSnapshot.newNameTooltips, [](const std::wstring& tooltip) noexcept {
-                          return tooltip.find(L"name_unchanged") != std::wstring::npos;
-                      }),
+                      std::ranges::all_of(warningSnapshot.newNameTooltips,
+                                          [](const std::wstring& tooltip) noexcept { return tooltip.find(L"name_unchanged") != std::wstring::npos; }),
                   L"Warning preview row tooltips should include the stable warning issue id.");
-    state.Require(warningSnapshot.statusText.find(L"2 warnings") != std::wstring::npos,
-                  L"Batch Rename footer status should include warning counts.");
-    state.Require(warningSnapshot.statusText.find(L"0 changed") != std::wstring::npos &&
-                      warningSnapshot.statusText.find(L"2 unchanged") != std::wstring::npos,
+    state.Require(warningSnapshot.statusText.find(L"2 warnings") != std::wstring::npos, L"Batch Rename footer status should include warning counts.");
+    state.Require(warningSnapshot.statusText.find(L"0 changed") != std::wstring::npos && warningSnapshot.statusText.find(L"2 unchanged") != std::wstring::npos,
                   L"Batch Rename footer status should include changed and unchanged counts.");
 
     BatchRename::Rules mixedNoOpRules{};
@@ -1517,14 +1644,12 @@ struct BatchRenameLocalStampParts final
     state.Require(invalidSnapshot.newNameStatusIconTexts.size() == 2u &&
                       std::ranges::all_of(invalidSnapshot.newNameStatusIconTexts, [](const std::wstring& iconText) noexcept { return ! iconText.empty(); }),
                   L"Blocking preview rows should show a status glyph in the New Name column.");
-    state.Require(std::ranges::all_of(invalidSnapshot.newNameStatusIconTexts, [&warningStatusIcon](const std::wstring& iconText) noexcept {
-                      return iconText != warningStatusIcon;
-                  }),
+    state.Require(std::ranges::all_of(invalidSnapshot.newNameStatusIconTexts,
+                                      [&warningStatusIcon](const std::wstring& iconText) noexcept { return iconText != warningStatusIcon; }),
                   L"Blocking preview rows should use an error status glyph distinct from the warning glyph.");
     state.Require(invalidSnapshot.newNameTooltips.size() == 2u &&
-                      std::ranges::all_of(invalidSnapshot.newNameTooltips, [](const std::wstring& tooltip) noexcept {
-                          return tooltip.find(L"macro_unknown") != std::wstring::npos;
-                      }),
+                      std::ranges::all_of(invalidSnapshot.newNameTooltips,
+                                          [](const std::wstring& tooltip) noexcept { return tooltip.find(L"macro_unknown") != std::wstring::npos; }),
                   L"Blocking preview row tooltips should include the stable error issue id.");
     state.Require(! invalidSnapshot.renameButtonEnabled, L"Rename should be disabled while blocking preview errors are present.");
 
@@ -1533,7 +1658,11 @@ struct BatchRenameLocalStampParts final
 
 [[nodiscard]] bool TestBatchRenameWindowPreviewContextMenuCopiesRows(HWND mainWindow, CaseState& state) noexcept
 {
-    const std::filesystem::path root = L"C:\\BatchRenameContextMenuSelfTest";
+    std::filesystem::path root;
+    if (! AcquireBatchRenameCommandsSandboxRoot(state, L"batch_rename_context_menu", root))
+    {
+        return false;
+    }
 
     uint32_t revealCalls = 0u;
     std::filesystem::path revealedPath;
@@ -1555,8 +1684,7 @@ struct BatchRenameLocalStampParts final
     state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
                   L"Batch Rename window should open for preview context-menu copy testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename context-menu copy test window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -1564,7 +1692,7 @@ struct BatchRenameLocalStampParts final
     }
 
     const auto cleanupBatchWindow = wil::scope_exit([]() noexcept { CloseBatchRenameWindowIfOpen(); });
-    const auto clearClipboard = wil::scope_exit([batchWindow]() noexcept { ClearClipboardContents(batchWindow); });
+    const auto clearClipboard     = wil::scope_exit([batchWindow]() noexcept { ClearClipboardContents(batchWindow); });
 
     BatchRename::Rules rules{};
     rules.nameTemplate = L"{stem}_renamed{ext}";
@@ -1580,21 +1708,19 @@ struct BatchRenameLocalStampParts final
         ClearClipboardContents(batchWindow);
         state.Require(DebugCopyBatchRenameWindowPreview(kind, rowIndex), std::format(L"{} copy command should succeed.", label));
         const std::wstring copied = ReadClipboardUnicodeText(batchWindow);
-        state.Require(copied == expected,
-                      std::format(L"{} copy command wrote unexpected text. Expected '{}', saw '{}'.", label, expected, copied));
+        state.Require(copied == expected, std::format(L"{} copy command wrote unexpected text. Expected '{}', saw '{}'.", label, expected, copied));
     };
 
     expectCopy(BatchRenameDebugPreviewCopyKind::OriginalName, 0u, L"Alpha.txt", L"Batch Rename original-name");
     expectCopy(BatchRenameDebugPreviewCopyKind::NewName, 1u, L"Beta_renamed.md", L"Batch Rename new-name");
     expectCopy(BatchRenameDebugPreviewCopyKind::SourcePath, 0u, (root / L"Alpha.txt").native(), L"Batch Rename source-path");
 
-    const std::wstring expectedPreviewRows =
-        L"Original Name\tNew Name\tSize\tDate\tTime\tPath\r\n"
-        L"Alpha.txt\tAlpha_renamed.txt\t0\t\t\t" +
-        (root / L"Alpha.txt").native() +
-        L"\r\n"
-        L"Beta.md\tBeta_renamed.md\t0\t\t\t" +
-        (root / L"Beta.md").native();
+    const std::wstring expectedPreviewRows = L"Original Name\tNew Name\tSize\tDate\tTime\tPath\r\n"
+                                             L"Alpha.txt\tAlpha_renamed.txt\t0\t\t\t" +
+                                             (root / L"Alpha.txt").native() +
+                                             L"\r\n"
+                                             L"Beta.md\tBeta_renamed.md\t0\t\t\t" +
+                                             (root / L"Beta.md").native();
     expectCopy(BatchRenameDebugPreviewCopyKind::PreviewRows, 0u, expectedPreviewRows, L"Batch Rename preview-rows");
 
     state.Require(DebugRevealBatchRenameWindowPreview(1u), L"Batch Rename reveal command should invoke the preview-row reveal callback.");
@@ -1612,7 +1738,11 @@ struct BatchRenameLocalStampParts final
 
 [[nodiscard]] bool TestBatchRenameWindowPreviewClipboardHonorsDisplayOrder(HWND mainWindow, CaseState& state) noexcept
 {
-    const std::filesystem::path root = L"C:\\BatchRenameClipboardOrderSelfTest";
+    std::filesystem::path root;
+    if (! AcquireBatchRenameCommandsSandboxRoot(state, L"batch_rename_clipboard_order", root))
+    {
+        return false;
+    }
 
     BatchRenamePaneContext context{};
     context.pluginId        = L"builtin/file-system";
@@ -1625,8 +1755,7 @@ struct BatchRenameLocalStampParts final
     state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
                   L"Batch Rename window should open for preview clipboard column-order testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename clipboard order test window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -1634,7 +1763,7 @@ struct BatchRenameLocalStampParts final
     }
 
     const auto cleanupBatchWindow = wil::scope_exit([]() noexcept { CloseBatchRenameWindowIfOpen(); });
-    const auto clearClipboard = wil::scope_exit([batchWindow]() noexcept { ClearClipboardContents(batchWindow); });
+    const auto clearClipboard     = wil::scope_exit([batchWindow]() noexcept { ClearClipboardContents(batchWindow); });
 
     BatchRename::Rules rules{};
     rules.nameTemplate = L"{stem}_renamed{ext}";
@@ -1647,39 +1776,35 @@ struct BatchRenameLocalStampParts final
                   L"Batch Rename preview row copy should succeed after column reordering.");
 
     const std::wstring expected =
-        L"Path\tNew Name\tOriginal Name\tSize\tDate\tTime\r\n" +
-        (root / L"Alpha.txt").native() +
-        L"\tAlpha_renamed.txt\tAlpha.txt\t0\t\t";
+        L"Path\tNew Name\tOriginal Name\tSize\tDate\tTime\r\n" + (root / L"Alpha.txt").native() + L"\tAlpha_renamed.txt\tAlpha.txt\t0\t\t";
     const std::wstring copied = ReadClipboardUnicodeText(batchWindow);
-    state.Require(copied == expected,
-                  std::format(L"Preview-row TSV should follow display column order. Expected '{}', saw '{}'.", expected, copied));
+    state.Require(copied == expected, std::format(L"Preview-row TSV should follow display column order. Expected '{}', saw '{}'.", expected, copied));
 
     return state.failure.empty();
 }
 
 [[nodiscard]] bool TestBatchRenameWindowIgnoresStaleGenerationPayloads(HWND mainWindow, CaseState& state) noexcept
 {
-    const std::filesystem::path root = L"C:\\BatchRenameStaleGenerationSelfTest";
-    size_t successCallbackCount      = 0u;
+    std::filesystem::path root;
+    if (! AcquireBatchRenameCommandsSandboxRoot(state, L"batch_rename_stale_generation", root))
+    {
+        return false;
+    }
+    size_t successCallbackCount = 0u;
 
     BatchRenamePaneContext context{};
-    context.pluginId        = L"builtin/file-system";
-    context.pluginShortId   = L"local";
-    context.instanceContext = L"batch-rename-stale-generation-selftest";
-    context.rootPluginPath  = root;
-    context.initialPaths    = {root / L"Alpha.txt"};
-    context.onSuccessfulRename =
-        [&](std::span<const std::filesystem::path> sourcePaths, std::span<const std::filesystem::path> targetPaths) noexcept
-    {
-        successCallbackCount += std::min(sourcePaths.size(), targetPaths.size());
-    };
+    context.pluginId           = L"builtin/file-system";
+    context.pluginShortId      = L"local";
+    context.instanceContext    = L"batch-rename-stale-generation-selftest";
+    context.rootPluginPath     = root;
+    context.initialPaths       = {root / L"Alpha.txt"};
+    context.onSuccessfulRename = [&](std::span<const std::filesystem::path> sourcePaths, std::span<const std::filesystem::path> targetPaths) noexcept
+    { successCallbackCount += std::min(sourcePaths.size(), targetPaths.size()); };
 
     const AppTheme theme = ResolveAppTheme(ThemeMode::Dark, L"batch-rename-stale-generation-window-selftest");
-    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
-                  L"Batch Rename window should open for stale-generation testing.");
+    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)), L"Batch Rename window should open for stale-generation testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename stale-generation test window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -1697,8 +1822,7 @@ struct BatchRenameLocalStampParts final
     state.Require(before.originalNames == std::vector<std::wstring>{L"Alpha.txt"},
                   L"Batch Rename stale-generation test should start with the original target row.");
 
-    state.Require(DebugInjectStaleBatchRenameWindowCollectionPayload(root / L"Injected.txt"),
-                  L"Stale collection payload injection should run.");
+    state.Require(DebugInjectStaleBatchRenameWindowCollectionPayload(root / L"Injected.txt"), L"Stale collection payload injection should run.");
     BatchRenameDebugSnapshot afterCollection{};
     state.Require(DebugGetBatchRenameWindowSnapshot(afterCollection), L"Batch Rename stale collection snapshot should be available.");
     state.Require(afterCollection.originalNames == before.originalNames && afterCollection.newNames == before.newNames,
@@ -1711,15 +1835,18 @@ struct BatchRenameLocalStampParts final
     state.Require(afterExecution.originalNames == before.originalNames && afterExecution.newNames == before.newNames,
                   L"Stale execution payload should not refresh targets or preview rows.");
     state.Require(! afterExecution.hasExecutionReport, L"Stale execution payload should not store an execution report.");
-    state.Require(successCallbackCount == 0u,
-                  std::format(L"Stale execution payload should not invoke success callbacks; saw {}.", successCallbackCount));
+    state.Require(successCallbackCount == 0u, std::format(L"Stale execution payload should not invoke success callbacks; saw {}.", successCallbackCount));
 
     return state.failure.empty();
 }
 
 [[nodiscard]] bool TestBatchRenameWindowThemeAccessibilitySnapshot(HWND mainWindow, CaseState& state) noexcept
 {
-    const std::filesystem::path root = L"C:\\BatchRenameAccessibilitySelfTest";
+    std::filesystem::path root;
+    if (! AcquireBatchRenameCommandsSandboxRoot(state, L"batch_rename_accessibility", root))
+    {
+        return false;
+    }
 
     BatchRenamePaneContext context{};
     context.pluginId        = L"builtin/file-system";
@@ -1732,8 +1859,7 @@ struct BatchRenameLocalStampParts final
     state.Require(ShowBatchRenameWindow(mainWindow, g_settings, darkTheme, std::move(context)),
                   L"Batch Rename window should open for accessibility snapshot testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename accessibility test window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -1798,7 +1924,11 @@ struct BatchRenameLocalStampParts final
 
 [[nodiscard]] bool TestBatchRenameWindowRuleControlsDrivePreview(HWND mainWindow, CaseState& state) noexcept
 {
-    const std::filesystem::path root = L"C:\\BatchRenameControlsSelfTest";
+    std::filesystem::path root;
+    if (! AcquireBatchRenameCommandsSandboxRoot(state, L"batch_rename_rule_controls", root))
+    {
+        return false;
+    }
 
     BatchRenamePaneContext context{};
     context.pluginId        = L"builtin/file-system";
@@ -1808,11 +1938,9 @@ struct BatchRenameLocalStampParts final
     context.initialPaths    = {root / L"Movie SAMPLE.MKV", root / L"Other SAMPLE.SRT"};
 
     const AppTheme theme = ResolveAppTheme(ThemeMode::Dark, L"batch-rename-controls-window-selftest");
-    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
-                  L"Batch Rename window should open for rule-control testing.");
+    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)), L"Batch Rename window should open for rule-control testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename controls test window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -1830,17 +1958,16 @@ struct BatchRenameLocalStampParts final
     state.Require(initialSnapshot.extensionCaseText == L"Do not change", L"Extension case dropdown should show the default option.");
 
     BatchRename::Rules rules{};
-    rules.nameTemplate        = L"{stem}{ext}";
-    rules.searchFor           = L"sample";
-    rules.replaceWith         = L"archive";
-    rules.caseSensitive       = false;
-    rules.replaceOnce         = true;
-    rules.excludeExtension    = true;
-    rules.fileNameCaseStyle   = BatchRename::CaseTransform::Mixed;
-    rules.extensionCaseStyle  = BatchRename::CaseTransform::Lower;
+    rules.nameTemplate       = L"{stem}{ext}";
+    rules.searchFor          = L"sample";
+    rules.replaceWith        = L"archive";
+    rules.caseSensitive      = false;
+    rules.replaceOnce        = true;
+    rules.excludeExtension   = true;
+    rules.fileNameCaseStyle  = BatchRename::CaseTransform::Mixed;
+    rules.extensionCaseStyle = BatchRename::CaseTransform::Lower;
 
-    state.Require(DebugSetBatchRenameWindowRuleControls(rules),
-                  L"Batch Rename debug helper should drive visible rule controls like user edits.");
+    state.Require(DebugSetBatchRenameWindowRuleControls(rules), L"Batch Rename debug helper should drive visible rule controls like user edits.");
 
     BatchRenameDebugSnapshot editedSnapshot{};
     state.Require(DebugGetBatchRenameWindowSnapshot(editedSnapshot), L"Batch Rename edited controls snapshot should be available.");
@@ -1862,7 +1989,11 @@ struct BatchRenameLocalStampParts final
 
 [[nodiscard]] bool TestBatchRenameWindowDebouncesTextPreview(HWND mainWindow, CaseState& state) noexcept
 {
-    const std::filesystem::path root = L"C:\\BatchRenameDebounceSelfTest";
+    std::filesystem::path root;
+    if (! AcquireBatchRenameCommandsSandboxRoot(state, L"batch_rename_debounce", root))
+    {
+        return false;
+    }
 
     BatchRenamePaneContext context{};
     context.pluginId        = L"builtin/file-system";
@@ -1872,11 +2003,9 @@ struct BatchRenameLocalStampParts final
     context.initialPaths    = {root / L"alpha.txt", root / L"beta.md"};
 
     const AppTheme theme = ResolveAppTheme(ThemeMode::Dark, L"batch-rename-debounce-window-selftest");
-    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
-                  L"Batch Rename window should open for debounce testing.");
+    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)), L"Batch Rename window should open for debounce testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename debounce test window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -1896,8 +2025,7 @@ struct BatchRenameLocalStampParts final
 
     BatchRenameDebugSnapshot pendingSnapshot{};
     state.Require(DebugGetBatchRenameWindowSnapshot(pendingSnapshot), L"Batch Rename debounce pending snapshot should be available.");
-    state.Require(pendingSnapshot.nameTemplateText == L"renamed_{counter:000}{ext}",
-                  L"Debounced field text should update immediately.");
+    state.Require(pendingSnapshot.nameTemplateText == L"renamed_{counter:000}{ext}", L"Debounced field text should update immediately.");
     state.Require(pendingSnapshot.previewRebuildPending, L"Text edits should schedule a debounced preview rebuild.");
     state.Require(pendingSnapshot.newNames == std::vector<std::wstring>{L"alpha.txt", L"beta.md"},
                   L"Debounced preview should remain unchanged until the pending rebuild is flushed.");
@@ -1916,15 +2044,18 @@ struct BatchRenameLocalStampParts final
 
 [[nodiscard]] bool TestBatchRenameWindowUsesAndPersistsSettings(HWND mainWindow, CaseState& state) noexcept
 {
-    const std::filesystem::path root = L"C:\\BatchRenameSettingsSelfTest";
+    std::filesystem::path root;
+    if (! AcquireBatchRenameCommandsSandboxRoot(state, L"batch_rename_settings", root))
+    {
+        return false;
+    }
 
     const std::optional<Common::Settings::BatchRenameSettings> previousBatchRename = g_settings.batchRename;
-    const auto previousPlacementIt = g_settings.windows.find(L"BatchRenameWindow");
+    const auto previousPlacementIt                                                 = g_settings.windows.find(L"BatchRenameWindow");
     const std::optional<Common::Settings::WindowPlacement> previousPlacement =
-        previousPlacementIt == g_settings.windows.end()
-            ? std::nullopt
-            : std::optional<Common::Settings::WindowPlacement>{previousPlacementIt->second};
-    const auto restoreSettings = wil::scope_exit([previousBatchRename, previousPlacement]() {
+        previousPlacementIt == g_settings.windows.end() ? std::nullopt : std::optional<Common::Settings::WindowPlacement>{previousPlacementIt->second};
+    const auto restoreSettings = wil::scope_exit([previousBatchRename, previousPlacement]()
+    {
         CloseBatchRenameWindowIfOpen();
         g_settings.batchRename = previousBatchRename;
         if (previousPlacement.has_value())
@@ -1970,8 +2101,7 @@ struct BatchRenameLocalStampParts final
     state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
                   L"Batch Rename window should open for settings persistence testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename settings test window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -1980,8 +2110,7 @@ struct BatchRenameLocalStampParts final
 
     BatchRenameDebugSnapshot initialSnapshot{};
     state.Require(DebugGetBatchRenameWindowSnapshot(initialSnapshot), L"Batch Rename settings snapshot should be available.");
-    state.Require(initialSnapshot.nameTemplateText == L"{stem}_persisted{ext}",
-                  L"Batch Rename should seed the name-template control from persisted history.");
+    state.Require(initialSnapshot.nameTemplateText == L"{stem}_persisted{ext}", L"Batch Rename should seed the name-template control from persisted history.");
     state.Require(initialSnapshot.scopeMaskText == L"*.mkv", L"Batch Rename should seed the mask control from persisted history.");
     state.Require(initialSnapshot.includeSubdirectories, L"Batch Rename should restore the include-subdirectories scope option.");
     state.Require(initialSnapshot.includeFiles, L"Batch Rename should restore the include-files scope option.");
@@ -2008,14 +2137,10 @@ struct BatchRenameLocalStampParts final
     editedRules.flattenSeparator   = L"--";
     editedRules.fileNameCaseStyle  = BatchRename::CaseTransform::Upper;
     editedRules.extensionCaseStyle = BatchRename::CaseTransform::Lower;
-    state.Require(DebugSetBatchRenameWindowRuleControls(editedRules),
-                  L"Batch Rename settings test should edit the visible rule controls.");
-    state.Require(DebugSetBatchRenameWindowScope(L"*.saved", false, true, false),
-                  L"Batch Rename settings test should edit the visible scope controls.");
-    state.Require(DebugSwitchBatchRenameWindowMode(BatchRename::Mode::Manual),
-                  L"Batch Rename settings test should switch to manual mode before close.");
-    state.Require(DebugSetBatchRenameWindowManualText(L"manual-one.txt\nmanual-two.txt"),
-                  L"Batch Rename settings test should edit manual names before close.");
+    state.Require(DebugSetBatchRenameWindowRuleControls(editedRules), L"Batch Rename settings test should edit the visible rule controls.");
+    state.Require(DebugSetBatchRenameWindowScope(L"*.saved", false, true, false), L"Batch Rename settings test should edit the visible scope controls.");
+    state.Require(DebugSwitchBatchRenameWindowMode(BatchRename::Mode::Manual), L"Batch Rename settings test should switch to manual mode before close.");
+    state.Require(DebugSetBatchRenameWindowManualText(L"manual-one.txt\nmanual-two.txt"), L"Batch Rename settings test should edit manual names before close.");
 
     CloseBatchRenameWindowIfOpen();
     state.Require(GetBatchRenameWindowHandle() == nullptr, L"Batch Rename settings test window should close.");
@@ -2029,18 +2154,15 @@ struct BatchRenameLocalStampParts final
     state.Require(saved.lastRoot == root.native(), L"Batch Rename should persist the current root path.");
     state.Require(! saved.recentNameTemplates.empty() && saved.recentNameTemplates.front() == L"{stem}_saved{ext}",
                   L"Batch Rename should MRU-persist the edited name template.");
-    state.Require(! saved.recentMasks.empty() && saved.recentMasks.front() == L"*.saved",
-                  L"Batch Rename should MRU-persist the edited mask.");
+    state.Require(! saved.recentMasks.empty() && saved.recentMasks.front() == L"*.saved", L"Batch Rename should MRU-persist the edited mask.");
     state.Require(! saved.recentSearchPatterns.empty() && saved.recentSearchPatterns.front() == L"movie",
                   L"Batch Rename should MRU-persist the edited search pattern.");
     state.Require(! saved.recentReplacePatterns.empty() && saved.recentReplacePatterns.front() == L"clip",
                   L"Batch Rename should MRU-persist the edited replacement pattern.");
     state.Require(saved.recentNameTemplates.size() < 2u || saved.recentNameTemplates[1] == L"{stem}_persisted{ext}",
                   L"Batch Rename should preserve older template history behind the newest entry.");
-    state.Require(! std::ranges::contains(saved.recentNameTemplates, L"manual-one.txt"),
-                  L"Batch Rename must not persist manual multiline names as history.");
-    state.Require(! std::ranges::contains(saved.recentNameTemplates, L"manual-two.txt"),
-                  L"Batch Rename must not persist manual multiline names as history.");
+    state.Require(! std::ranges::contains(saved.recentNameTemplates, L"manual-one.txt"), L"Batch Rename must not persist manual multiline names as history.");
+    state.Require(! std::ranges::contains(saved.recentNameTemplates, L"manual-two.txt"), L"Batch Rename must not persist manual multiline names as history.");
     state.Require(! saved.includeSubdirectories, L"Batch Rename should persist the edited include-subdirectories option.");
     state.Require(saved.includeFiles, L"Batch Rename should persist the edited include-files option.");
     state.Require(! saved.includeFolders, L"Batch Rename should persist the edited include-folders option.");
@@ -2050,19 +2172,20 @@ struct BatchRenameLocalStampParts final
     state.Require(saved.replaceOnce, L"Batch Rename should persist the edited replace-once option.");
     state.Require(saved.excludeExtension, L"Batch Rename should persist the edited exclude-extension option.");
     state.Require(saved.flattenSeparator == L"--", L"Batch Rename should persist the flatten separator.");
-    state.Require(saved.fileNameCaseStyle == Common::Settings::BatchRenameCaseStyle::Upper,
-                  L"Batch Rename should persist the edited file-name case style.");
-    state.Require(saved.extensionCaseStyle == Common::Settings::BatchRenameCaseStyle::Lower,
-                  L"Batch Rename should persist the edited extension case style.");
-    state.Require(g_settings.windows.contains(L"BatchRenameWindow"),
-                  L"Batch Rename should persist window placement under settings.windows.BatchRenameWindow.");
+    state.Require(saved.fileNameCaseStyle == Common::Settings::BatchRenameCaseStyle::Upper, L"Batch Rename should persist the edited file-name case style.");
+    state.Require(saved.extensionCaseStyle == Common::Settings::BatchRenameCaseStyle::Lower, L"Batch Rename should persist the edited extension case style.");
+    state.Require(g_settings.windows.contains(L"BatchRenameWindow"), L"Batch Rename should persist window placement under settings.windows.BatchRenameWindow.");
 
     return state.failure.empty();
 }
 
 [[nodiscard]] bool TestBatchRenameWindowManualModeControlsDrivePreview(HWND mainWindow, CaseState& state) noexcept
 {
-    const std::filesystem::path root = L"C:\\BatchRenameManualControlsSelfTest";
+    std::filesystem::path root;
+    if (! AcquireBatchRenameCommandsSandboxRoot(state, L"batch_rename_manual_controls", root))
+    {
+        return false;
+    }
 
     BatchRenamePaneContext context{};
     context.pluginId        = L"builtin/file-system";
@@ -2075,8 +2198,7 @@ struct BatchRenameLocalStampParts final
     state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
                   L"Batch Rename window should open for manual-mode control testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename manual controls test window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -2085,34 +2207,29 @@ struct BatchRenameLocalStampParts final
 
     const auto cleanupBatchWindow = wil::scope_exit([]() noexcept { CloseBatchRenameWindowIfOpen(); });
 
-    state.Require(DebugSwitchBatchRenameWindowMode(BatchRename::Mode::Manual),
-                  L"Batch Rename debug helper should switch the visible window into manual mode.");
+    state.Require(DebugSwitchBatchRenameWindowMode(BatchRename::Mode::Manual), L"Batch Rename debug helper should switch the visible window into manual mode.");
 
     BatchRenameDebugSnapshot manualSnapshot{};
     state.Require(DebugGetBatchRenameWindowSnapshot(manualSnapshot), L"Batch Rename manual snapshot should be available.");
     state.Require(manualSnapshot.manualModeSelected, L"Manual mode selector should be selected after switching modes.");
     state.Require(! manualSnapshot.ruleControlsVisible, L"Rule controls should hide while manual mode is active.");
     state.Require(manualSnapshot.manualControlsVisible, L"Manual mode should expose the multiline manual names editor.");
-    state.Require(manualSnapshot.manualText == L"two.md\none.txt",
-                  L"Switching to manual mode should seed the editor from current preview names.");
+    state.Require(manualSnapshot.manualText == L"two.md\none.txt", L"Switching to manual mode should seed the editor from current preview names.");
     state.Require(manualSnapshot.newNames == std::vector<std::wstring>{L"two.md", L"one.txt"},
                   L"Seeded manual names should keep the initial preview unchanged.");
     state.Require(! manualSnapshot.renameButtonEnabled, L"Unchanged seeded manual names should not enable Rename.");
 
-    state.Require(DebugSetBatchRenameWindowManualText(L"dos.md\nuno.txt"),
-                  L"Batch Rename debug helper should edit the visible manual multiline field.");
+    state.Require(DebugSetBatchRenameWindowManualText(L"dos.md\nuno.txt"), L"Batch Rename debug helper should edit the visible manual multiline field.");
 
     BatchRenameDebugSnapshot editedSnapshot{};
     state.Require(DebugGetBatchRenameWindowSnapshot(editedSnapshot), L"Batch Rename edited manual snapshot should be available.");
     state.Require(editedSnapshot.manualText == L"dos.md\nuno.txt", L"Manual editor text should reflect debug/user edits.");
-    state.Require(editedSnapshot.newNames == std::vector<std::wstring>{L"dos.md", L"uno.txt"},
-                  L"Manual editor lines should map one-for-one to preview rows.");
+    state.Require(editedSnapshot.newNames == std::vector<std::wstring>{L"dos.md", L"uno.txt"}, L"Manual editor lines should map one-for-one to preview rows.");
     state.Require(editedSnapshot.changedRowCount == 2u, L"Manual editor edits should update changed-row stats.");
     state.Require(editedSnapshot.errorRowCount == 0u, L"Valid manual editor lines should report no blocking errors.");
     state.Require(editedSnapshot.renameButtonEnabled, L"Valid changed manual names should enable Rename.");
 
-    state.Require(DebugSetBatchRenameWindowPreviewSort(L"original", false),
-                  L"Batch Rename debug helper should sort the preview grid by original name.");
+    state.Require(DebugSetBatchRenameWindowPreviewSort(L"original", false), L"Batch Rename debug helper should sort the preview grid by original name.");
 
     BatchRenameDebugSnapshot sortedPreviewSnapshot{};
     state.Require(DebugGetBatchRenameWindowSnapshot(sortedPreviewSnapshot), L"Batch Rename sorted manual preview snapshot should be available.");
@@ -2123,8 +2240,7 @@ struct BatchRenameLocalStampParts final
     state.Require(sortedPreviewSnapshot.manualText == L"dos.md\nuno.txt",
                   L"Preview sorting should not rewrite the manual editor until Sort like preview is pressed.");
 
-    state.Require(DebugClickBatchRenameWindowManualSortLikePreview(),
-                  L"Batch Rename Manual Sort like preview command should be invokable from selftests.");
+    state.Require(DebugClickBatchRenameWindowManualSortLikePreview(), L"Batch Rename Manual Sort like preview command should be invokable from selftests.");
 
     BatchRenameDebugSnapshot sortedManualSnapshot{};
     state.Require(DebugGetBatchRenameWindowSnapshot(sortedManualSnapshot), L"Batch Rename sorted manual snapshot should be available.");
@@ -2174,13 +2290,11 @@ struct BatchRenameLocalStampParts final
     RedSalamander::DxUi::DebugClearClipboardFallbackText();
     state.Require(RedSalamander::DxUi::DebugWriteClipboardUnicodeText(batchWindow, L"paste-one.txt\r\npaste-two.md"),
                   L"Batch Rename manual paste test should seed multiline Unicode clipboard text.");
-    state.Require(DebugClickBatchRenameWindowManualPaste(),
-                  L"Batch Rename manual Paste command should be invokable from selftests.");
+    state.Require(DebugClickBatchRenameWindowManualPaste(), L"Batch Rename manual Paste command should be invokable from selftests.");
 
     BatchRenameDebugSnapshot pastedSnapshot{};
     state.Require(DebugGetBatchRenameWindowSnapshot(pastedSnapshot), L"Batch Rename pasted manual snapshot should be available.");
-    state.Require(pastedSnapshot.manualText == L"paste-one.txt\r\npaste-two.md",
-                  L"Manual Paste should preserve clipboard line breaks in the editor text.");
+    state.Require(pastedSnapshot.manualText == L"paste-one.txt\r\npaste-two.md", L"Manual Paste should preserve clipboard line breaks in the editor text.");
     state.Require(pastedSnapshot.newNames == std::vector<std::wstring>{L"paste-one.txt", L"paste-two.md"},
                   L"Manual Paste should map multiline clipboard text to one preview row per pasted line.");
     state.Require(pastedSnapshot.errorRowCount == 0u, L"Manual Paste with matching lines should clear manual validation errors.");
@@ -2220,8 +2334,7 @@ struct BatchRenameLocalStampParts final
     state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
                   L"Batch Rename window should open for manual target-change testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename manual target-change test window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -2235,12 +2348,9 @@ struct BatchRenameLocalStampParts final
         std::filesystem::remove_all(root, removeEc);
     });
 
-    state.Require(DebugSetBatchRenameWindowScope(L"*.txt", false, true, false),
-                  L"Batch Rename manual target-change test should start from a two-file scope.");
-    state.Require(DebugSwitchBatchRenameWindowMode(BatchRename::Mode::Manual),
-                  L"Batch Rename manual target-change test should switch to Manual mode.");
-    state.Require(DebugSetBatchRenameWindowManualText(L"uno.txt\ndos.txt"),
-                  L"Batch Rename manual target-change test should set valid two-line manual text.");
+    state.Require(DebugSetBatchRenameWindowScope(L"*.txt", false, true, false), L"Batch Rename manual target-change test should start from a two-file scope.");
+    state.Require(DebugSwitchBatchRenameWindowMode(BatchRename::Mode::Manual), L"Batch Rename manual target-change test should switch to Manual mode.");
+    state.Require(DebugSetBatchRenameWindowManualText(L"uno.txt\ndos.txt"), L"Batch Rename manual target-change test should set valid two-line manual text.");
 
     BatchRenameDebugSnapshot twoTargetSnapshot{};
     state.Require(DebugGetBatchRenameWindowSnapshot(twoTargetSnapshot), L"Batch Rename two-target manual snapshot should be available.");
@@ -2254,12 +2364,9 @@ struct BatchRenameLocalStampParts final
     BatchRenameDebugSnapshot expandedSnapshot{};
     state.Require(DebugGetBatchRenameWindowSnapshot(expandedSnapshot), L"Batch Rename expanded manual snapshot should be available.");
     state.Require(expandedSnapshot.previewRowCount == 3u, L"Expanded folder scope should contain three preview rows.");
-    state.Require(expandedSnapshot.manualText == L"uno.txt\ndos.txt",
-                  L"Manual text should be preserved when target collection changes underneath it.");
-    state.Require(expandedSnapshot.errorRowCount == 3u,
-                  L"Manual target-set changes should block every preview row until line count is reconciled.");
-    state.Require(! expandedSnapshot.renameButtonEnabled,
-                  L"Manual target-set mismatch should disable Rename until the user reconciles the line count.");
+    state.Require(expandedSnapshot.manualText == L"uno.txt\ndos.txt", L"Manual text should be preserved when target collection changes underneath it.");
+    state.Require(expandedSnapshot.errorRowCount == 3u, L"Manual target-set changes should block every preview row until line count is reconciled.");
+    state.Require(! expandedSnapshot.renameButtonEnabled, L"Manual target-set mismatch should disable Rename until the user reconciles the line count.");
 
     state.Require(DebugSetBatchRenameWindowManualText(L"uno.txt\ndos.txt\ntres.md"),
                   L"Batch Rename manual target-change test should accept reconciled three-line manual text.");
@@ -2315,11 +2422,9 @@ struct BatchRenameLocalStampParts final
     context.initialPaths    = {root / L"alpha.txt", root / L"beta.txt"};
 
     const AppTheme theme = ResolveAppTheme(ThemeMode::Dark, L"batch-rename-execute-window-selftest");
-    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
-                  L"Batch Rename window should open for local execution testing.");
+    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)), L"Batch Rename window should open for local execution testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename execution test window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -2404,9 +2509,7 @@ struct BatchRenameLocalStampParts final
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"pane-alpha.batch"),
                   L"Failed to focus first file for pane refresh Batch Rename test.");
     g_folderWindow.SetPaneSelectionByDisplayNamePredicate(
-        FolderWindow::Pane::Left,
-        [](std::wstring_view name) noexcept { return name == L"pane-alpha.batch" || name == L"pane-beta.batch"; },
-        true);
+        FolderWindow::Pane::Left, [](std::wstring_view name) noexcept { return name == L"pane-alpha.batch" || name == L"pane-beta.batch"; }, true);
     state.Require(g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 2u,
                   L"Batch Rename pane refresh fixture should have exactly two selected files.");
     if (! state.failure.empty())
@@ -2416,8 +2519,7 @@ struct BatchRenameLocalStampParts final
 
     const uint64_t refreshBefore = g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left);
     g_folderWindow.CommandBatchRename(FolderWindow::Pane::Left);
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds{5000}));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds{5000}));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Pane command should open Batch Rename for refresh testing.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -2433,8 +2535,7 @@ struct BatchRenameLocalStampParts final
     state.Require(before.renameButtonEnabled, L"Batch Rename pane refresh preview should enable Rename.");
 
     const HRESULT executeHr = DebugExecuteBatchRenameWindow();
-    state.Require(SUCCEEDED(executeHr),
-                  std::format(L"Batch Rename pane refresh execution should succeed: 0x{:08X}.", static_cast<unsigned long>(executeHr)));
+    state.Require(SUCCEEDED(executeHr), std::format(L"Batch Rename pane refresh execution should succeed: 0x{:08X}.", static_cast<unsigned long>(executeHr)));
     if (FAILED(executeHr))
     {
         return false;
@@ -2475,9 +2576,9 @@ struct BatchRenameLocalStampParts final
     if (! fileSystem)
     {
         const HRESULT enableHr = FileSystemPluginManager::GetInstance().EnablePlugin(L"builtin/file-system", g_settings);
-        state.Require(SUCCEEDED(enableHr),
-                      std::format(L"Failed to enable local file-system plugin for Batch Rename success-callback: 0x{:08X}.",
-                                  static_cast<unsigned long>(enableHr)));
+        state.Require(
+            SUCCEEDED(enableHr),
+            std::format(L"Failed to enable local file-system plugin for Batch Rename success-callback: 0x{:08X}.", static_cast<unsigned long>(enableHr)));
         fileSystem = SelfTest::GetFileSystem(L"builtin/file-system");
     }
     state.Require(fileSystem != nullptr, L"Local file-system plugin should be available for Batch Rename success-callback execution.");
@@ -2491,14 +2592,13 @@ struct BatchRenameLocalStampParts final
     std::vector<std::filesystem::path> callbackTargets;
 
     BatchRenamePaneContext context{};
-    context.fileSystem      = fileSystem;
-    context.pluginId        = L"builtin/file-system";
-    context.pluginShortId   = L"local";
-    context.instanceContext = L"batch-rename-success-callback-selftest";
-    context.rootPluginPath  = root;
-    context.initialPaths    = {root / L"callback-alpha.txt", root / L"callback-beta.txt"};
-    context.onSuccessfulRename = [&](std::span<const std::filesystem::path> sourcePaths,
-                                     std::span<const std::filesystem::path> targetPaths)
+    context.fileSystem         = fileSystem;
+    context.pluginId           = L"builtin/file-system";
+    context.pluginShortId      = L"local";
+    context.instanceContext    = L"batch-rename-success-callback-selftest";
+    context.rootPluginPath     = root;
+    context.initialPaths       = {root / L"callback-alpha.txt", root / L"callback-beta.txt"};
+    context.onSuccessfulRename = [&](std::span<const std::filesystem::path> sourcePaths, std::span<const std::filesystem::path> targetPaths)
     {
         ++callbackCalls;
         callbackSources.assign(sourcePaths.begin(), sourcePaths.end());
@@ -2506,11 +2606,9 @@ struct BatchRenameLocalStampParts final
     };
 
     const AppTheme theme = ResolveAppTheme(ThemeMode::Dark, L"batch-rename-success-callback-window-selftest");
-    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
-                  L"Batch Rename window should open for success-callback testing.");
+    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)), L"Batch Rename window should open for success-callback testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename success-callback test window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -2530,8 +2628,7 @@ struct BatchRenameLocalStampParts final
 
     const HRESULT executeHr = DebugExecuteBatchRenameWindow();
     state.Require(SUCCEEDED(executeHr),
-                  std::format(L"Batch Rename success-callback execution should succeed: 0x{:08X}.",
-                              static_cast<unsigned long>(executeHr)));
+                  std::format(L"Batch Rename success-callback execution should succeed: 0x{:08X}.", static_cast<unsigned long>(executeHr)));
     if (FAILED(executeHr))
     {
         return false;
@@ -2585,14 +2682,13 @@ struct BatchRenameLocalStampParts final
     std::vector<std::filesystem::path> callbackTargets;
 
     BatchRenamePaneContext context{};
-    context.fileSystem      = fileSystem;
-    context.pluginId        = L"builtin/file-system";
-    context.pluginShortId   = L"local";
-    context.instanceContext = L"batch-rename-parent-child-callback-selftest";
-    context.rootPluginPath  = root;
-    context.initialPaths    = {sourceDir, sourceChild};
-    context.onSuccessfulRename = [&](std::span<const std::filesystem::path> sourcePaths,
-                                     std::span<const std::filesystem::path> targetPaths)
+    context.fileSystem         = fileSystem;
+    context.pluginId           = L"builtin/file-system";
+    context.pluginShortId      = L"local";
+    context.instanceContext    = L"batch-rename-parent-child-callback-selftest";
+    context.rootPluginPath     = root;
+    context.initialPaths       = {sourceDir, sourceChild};
+    context.onSuccessfulRename = [&](std::span<const std::filesystem::path> sourcePaths, std::span<const std::filesystem::path> targetPaths)
     {
         ++callbackCalls;
         callbackSources.assign(sourcePaths.begin(), sourcePaths.end());
@@ -2603,8 +2699,7 @@ struct BatchRenameLocalStampParts final
     state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
                   L"Batch Rename window should open for parent/child callback testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename parent/child callback test window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -2622,6 +2717,7 @@ struct BatchRenameLocalStampParts final
     rules.nameTemplate = L"renamed_{index}{ext}";
     state.Require(DebugSetBatchRenameWindowRules(rules), L"Batch Rename parent/child callback test should set valid rename rules.");
 
+    SettleBatchRenameWindowBeforeFilesystemExecution();
     const HRESULT executeHr = DebugExecuteBatchRenameWindow();
     state.Require(SUCCEEDED(executeHr),
                   std::format(L"Batch Rename parent/child callback execution should succeed: 0x{:08X}.", static_cast<unsigned long>(executeHr)));
@@ -2658,15 +2754,14 @@ struct BatchRenameLocalStampParts final
         return false;
     }
 
-    const std::filesystem::path root            = suiteRoot / L"work" / (L"batch_rename_cache_parent_child_" + NewGuidText());
-    const std::filesystem::path sourceParent    = root / L"scope";
-    const std::filesystem::path sourceChild     = sourceParent / L"child";
+    const std::filesystem::path root             = suiteRoot / L"work" / (L"brpc_" + NewGuidText());
+    const std::filesystem::path sourceParent     = root / L"scope";
+    const std::filesystem::path sourceChild      = sourceParent / L"child";
     const std::filesystem::path pinnedDescendant = sourceChild / L"pinned";
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
     state.Require(SelfTest::EnsureDirectory(pinnedDescendant), L"Failed to create Batch Rename cache-notify descendant directory.");
-    state.Require(SelfTest::WriteTextFile(pinnedDescendant / L"inside.txt", "inside"),
-                  L"Failed to create Batch Rename cache-notify descendant file.");
+    state.Require(SelfTest::WriteTextFile(pinnedDescendant / L"inside.txt", "inside"), L"Failed to create Batch Rename cache-notify descendant file.");
     if (! state.failure.empty())
     {
         return false;
@@ -2690,7 +2785,7 @@ struct BatchRenameLocalStampParts final
         }
         DirectoryInfoCache::GetInstance().SetLimits(cacheStatsBefore.maxBytes, cacheStatsBefore.maxWatchers, cacheStatsBefore.mruWatched);
     });
-    const auto cleanupBatchWindow = wil::scope_exit([]() noexcept { CloseBatchRenameWindowIfOpen(); });
+    const auto cleanupBatchWindow                          = wil::scope_exit([]() noexcept { CloseBatchRenameWindowIfOpen(); });
 
     DirectoryInfoCache::GetInstance().SetLimits(cacheStatsBefore.maxBytes, 0u, 0u);
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Right, L"builtin/file-system")),
@@ -2698,15 +2793,14 @@ struct BatchRenameLocalStampParts final
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, pinnedDescendant);
     state.Require(WaitForPanePath(FolderWindow::Pane::Right, pinnedDescendant, SelfTest::Scale(std::chrono::milliseconds{3000})),
                   L"Right pane did not pin the Batch Rename descendant directory.");
-    state.Require(WaitForPaneDisplayNames(FolderWindow::Pane::Right,
-                                          {L"inside.txt"},
-                                          {},
-                                          SelfTest::Scale(std::chrono::milliseconds{3000})),
+    state.Require(WaitForPaneDisplayNames(FolderWindow::Pane::Right, {L"inside.txt"}, {}, SelfTest::Scale(std::chrono::milliseconds{3000})),
                   L"Right pane did not enumerate the pinned descendant directory.");
     if (! state.failure.empty())
     {
         return false;
     }
+
+    SettleBatchRenameWindowBeforeFilesystemExecution();
 
     wil::com_ptr<IFileSystem> fileSystem = g_folderWindow.GetFileSystem(FolderWindow::Pane::Right);
     state.Require(static_cast<bool>(fileSystem), L"Local file-system plugin should be available for Batch Rename cache-notify test.");
@@ -2720,14 +2814,13 @@ struct BatchRenameLocalStampParts final
     std::vector<std::filesystem::path> callbackTargets;
 
     BatchRenamePaneContext context{};
-    context.fileSystem      = fileSystem;
-    context.pluginId        = L"builtin/file-system";
-    context.pluginShortId   = L"local";
-    context.instanceContext = L"batch-rename-cache-parent-child-selftest";
-    context.rootPluginPath  = root;
-    context.initialPaths    = {sourceParent, sourceChild};
-    context.onSuccessfulRename = [&](std::span<const std::filesystem::path> sourcePaths,
-                                     std::span<const std::filesystem::path> targetPaths)
+    context.fileSystem         = fileSystem;
+    context.pluginId           = L"builtin/file-system";
+    context.pluginShortId      = L"local";
+    context.instanceContext    = L"batch-rename-cache-parent-child-selftest";
+    context.rootPluginPath     = root;
+    context.initialPaths       = {sourceParent, sourceChild};
+    context.onSuccessfulRename = [&](std::span<const std::filesystem::path> sourcePaths, std::span<const std::filesystem::path> targetPaths)
     {
         ++callbackCalls;
         callbackSources.assign(sourcePaths.begin(), sourcePaths.end());
@@ -2738,8 +2831,7 @@ struct BatchRenameLocalStampParts final
     state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
                   L"Batch Rename window should open for parent/child cache-notify testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds{5000}));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds{5000}));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename cache-notify test window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -2750,10 +2842,10 @@ struct BatchRenameLocalStampParts final
     rules.nameTemplate = L"renamed_{index}{ext}";
     state.Require(DebugSetBatchRenameWindowRules(rules), L"Batch Rename cache-notify test should set valid rename rules.");
 
+    SettleBatchRenameWindowBeforeFilesystemExecution();
     const HRESULT executeHr = DebugExecuteBatchRenameWindow();
     state.Require(SUCCEEDED(executeHr),
-                  std::format(L"Batch Rename parent/child cache-notify execution should succeed: 0x{:08X}.",
-                              static_cast<unsigned long>(executeHr)));
+                  std::format(L"Batch Rename parent/child cache-notify execution should succeed: 0x{:08X}.", static_cast<unsigned long>(executeHr)));
     if (FAILED(executeHr))
     {
         return false;
@@ -2764,8 +2856,7 @@ struct BatchRenameLocalStampParts final
     const std::filesystem::path renamedDescendant = renamedChild / L"pinned";
     state.Require(SelfTest::PathExists(renamedDescendant / L"inside.txt"),
                   L"Parent/child directory Batch Rename should preserve the descendant file under the final path.");
-    state.Require(! SelfTest::PathExists(pinnedDescendant),
-                  L"Parent/child directory Batch Rename should remove the original descendant path.");
+    state.Require(! SelfTest::PathExists(pinnedDescendant), L"Parent/child directory Batch Rename should remove the original descendant path.");
 
     state.Require(callbackCalls == 1u, std::format(L"Batch Rename cache-notify test should invoke the success callback once; saw {}.", callbackCalls));
     state.Require(callbackSources == std::vector<std::filesystem::path>{sourceChild, sourceParent},
@@ -2777,10 +2868,7 @@ struct BatchRenameLocalStampParts final
                   std::format(L"DirectoryInfoCache should retarget the pinned descendant pane to '{}'; current '{}'.",
                               renamedDescendant.wstring(),
                               g_folderWindow.GetCurrentPath(FolderWindow::Pane::Right).value_or(std::filesystem::path{}).wstring()));
-    state.Require(WaitForPaneDisplayNames(FolderWindow::Pane::Right,
-                                          {L"inside.txt"},
-                                          {},
-                                          SelfTest::Scale(std::chrono::milliseconds{3000})),
+    state.Require(WaitForPaneDisplayNames(FolderWindow::Pane::Right, {L"inside.txt"}, {}, SelfTest::Scale(std::chrono::milliseconds{3000})),
                   L"Retargeted descendant pane should enumerate the final directory contents.");
 
     return state.failure.empty();
@@ -2812,8 +2900,7 @@ struct BatchRenameLocalStampParts final
     {
         const HRESULT enableHr = FileSystemPluginManager::GetInstance().EnablePlugin(L"builtin/file-system", g_settings);
         state.Require(SUCCEEDED(enableHr),
-                      std::format(L"Failed to enable local file-system plugin for Batch Rename report: 0x{:08X}.",
-                                  static_cast<unsigned long>(enableHr)));
+                      std::format(L"Failed to enable local file-system plugin for Batch Rename report: 0x{:08X}.", static_cast<unsigned long>(enableHr)));
         fileSystem = SelfTest::GetFileSystem(L"builtin/file-system");
     }
     state.Require(fileSystem != nullptr, L"Local file-system plugin should be available for Batch Rename report execution.");
@@ -2831,11 +2918,9 @@ struct BatchRenameLocalStampParts final
     context.initialPaths    = {root / L"alpha.txt", root / L"beta.txt", root / L"gamma.txt"};
 
     const AppTheme theme = ResolveAppTheme(ThemeMode::Dark, L"batch-rename-report-window-selftest");
-    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
-                  L"Batch Rename window should open for execution report testing.");
+    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)), L"Batch Rename window should open for execution report testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename report test window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -2849,8 +2934,7 @@ struct BatchRenameLocalStampParts final
         std::filesystem::remove_all(root, removeEc);
     });
 
-    state.Require(DebugSwitchBatchRenameWindowMode(BatchRename::Mode::Manual),
-                  L"Batch Rename report test should switch to Manual mode.");
+    state.Require(DebugSwitchBatchRenameWindowMode(BatchRename::Mode::Manual), L"Batch Rename report test should switch to Manual mode.");
     state.Require(DebugSetBatchRenameWindowManualText(L"renamed-alpha.txt\nbeta.txt\nrenamed-gamma.txt"),
                   L"Batch Rename report test should set manual names with one unchanged row.");
 
@@ -2936,8 +3020,7 @@ struct BatchRenameLocalStampParts final
     {
         const HRESULT enableHr = FileSystemPluginManager::GetInstance().EnablePlugin(L"builtin/file-system", g_settings);
         state.Require(SUCCEEDED(enableHr),
-                      std::format(L"Failed to enable local file-system plugin for Batch Rename collision: 0x{:08X}.",
-                                  static_cast<unsigned long>(enableHr)));
+                      std::format(L"Failed to enable local file-system plugin for Batch Rename collision: 0x{:08X}.", static_cast<unsigned long>(enableHr)));
         fileSystem = SelfTest::GetFileSystem(L"builtin/file-system");
     }
     state.Require(fileSystem != nullptr, L"Local file-system plugin should be available for Batch Rename collision validation.");
@@ -2958,8 +3041,7 @@ struct BatchRenameLocalStampParts final
     state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
                   L"Batch Rename window should open for collision validation testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename collision test window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -2980,8 +3062,7 @@ struct BatchRenameLocalStampParts final
     BatchRenameDebugSnapshot duplicateSnapshot{};
     state.Require(DebugGetBatchRenameWindowSnapshot(duplicateSnapshot), L"Batch Rename duplicate collision snapshot should be available.");
     state.Require(duplicateSnapshot.errorRowCount == 2u,
-                  std::format(L"Duplicate proposed names should block both preview rows; saw {} errors.",
-                              duplicateSnapshot.errorRowCount));
+                  std::format(L"Duplicate proposed names should block both preview rows; saw {} errors.", duplicateSnapshot.errorRowCount));
     state.Require(! duplicateSnapshot.renameButtonEnabled, L"Duplicate proposed names should disable Rename.");
 
     BatchRename::Rules existingRules{};
@@ -2993,11 +3074,9 @@ struct BatchRenameLocalStampParts final
     state.Require(existingSnapshot.newNames == std::vector<std::wstring>{L"occupied_001.txt", L"occupied_002.txt"},
                   L"Existing-destination collision test should propose deterministic occupied names.");
     state.Require(existingSnapshot.errorRowCount == 1u,
-                  std::format(L"Existing unselected local destination should block the colliding preview row; saw {} errors.",
-                              existingSnapshot.errorRowCount));
+                  std::format(L"Existing unselected local destination should block the colliding preview row; saw {} errors.", existingSnapshot.errorRowCount));
     state.Require(! existingSnapshot.renameButtonEnabled, L"Existing unselected local destination should disable Rename before execution.");
-    state.Require(existingSnapshot.newNameTooltips.size() == 2u &&
-                      existingSnapshot.newNameTooltips[0].contains(L"name_destination_exists") &&
+    state.Require(existingSnapshot.newNameTooltips.size() == 2u && existingSnapshot.newNameTooltips[0].contains(L"name_destination_exists") &&
                       ! existingSnapshot.newNameTooltips[1].contains(L"name_destination_exists"),
                   L"Existing-destination collision should expose the stable name_destination_exists issue ID only on the colliding row.");
 
@@ -3046,8 +3125,7 @@ struct BatchRenameLocalStampParts final
     state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
                   L"Batch Rename window should open for destination-probe failure testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename probe-failure test window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -3073,8 +3151,7 @@ struct BatchRenameLocalStampParts final
     state.Require(DebugGetBatchRenameWindowSnapshot(snapshot), L"Batch Rename probe-failure snapshot should be available.");
     state.Require(snapshot.newNames == std::vector<std::wstring>{L"probe_001.txt"},
                   L"Destination-probe failure test should propose the injected destination path.");
-    state.Require(snapshot.errorRowCount == 1u,
-                  std::format(L"Destination-probe failure should block the row; saw {} errors.", snapshot.errorRowCount));
+    state.Require(snapshot.errorRowCount == 1u, std::format(L"Destination-probe failure should block the row; saw {} errors.", snapshot.errorRowCount));
     state.Require(! snapshot.renameButtonEnabled, L"Destination-probe failure should disable Rename.");
     state.Require(snapshot.newNameTooltips.size() == 1u && snapshot.newNameTooltips[0].contains(L"name_destination_probe_failed"),
                   L"Destination-probe failure should expose the stable name_destination_probe_failed issue ID.");
@@ -3110,8 +3187,7 @@ struct BatchRenameLocalStampParts final
     {
         const HRESULT enableHr = FileSystemPluginManager::GetInstance().EnablePlugin(L"builtin/file-system", g_settings);
         state.Require(SUCCEEDED(enableHr),
-                      std::format(L"Failed to enable local file-system plugin for Batch Rename cancel: 0x{:08X}.",
-                                  static_cast<unsigned long>(enableHr)));
+                      std::format(L"Failed to enable local file-system plugin for Batch Rename cancel: 0x{:08X}.", static_cast<unsigned long>(enableHr)));
         fileSystem = SelfTest::GetFileSystem(L"builtin/file-system");
     }
     state.Require(fileSystem != nullptr, L"Local file-system plugin should be available for Batch Rename cancel validation.");
@@ -3122,8 +3198,7 @@ struct BatchRenameLocalStampParts final
 
     std::atomic_uint32_t renameItemsCalls{0u};
     std::atomic_uint32_t shouldCancelCalls{0u};
-    wil::com_ptr<IFileSystem> cancelFileSystem =
-        CreateBatchRenameCancelOnShouldCancelFileSystem(fileSystem, &renameItemsCalls, &shouldCancelCalls);
+    wil::com_ptr<IFileSystem> cancelFileSystem = CreateBatchRenameCancelOnShouldCancelFileSystem(fileSystem, &renameItemsCalls, &shouldCancelCalls);
     state.Require(cancelFileSystem != nullptr, L"Batch Rename cancel selftest should create a cancel-aware file-system wrapper.");
     if (! cancelFileSystem)
     {
@@ -3139,11 +3214,9 @@ struct BatchRenameLocalStampParts final
     context.initialPaths    = {root / L"alpha.txt", root / L"beta.txt"};
 
     const AppTheme theme = ResolveAppTheme(ThemeMode::Dark, L"batch-rename-cancel-window-selftest");
-    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
-                  L"Batch Rename window should open for cancel validation testing.");
+    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)), L"Batch Rename window should open for cancel validation testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename cancel test window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -3167,10 +3240,8 @@ struct BatchRenameLocalStampParts final
 
     const HRESULT executeHr = DebugExecuteBatchRenameWindow();
     state.Require(executeHr == HRESULT_FROM_WIN32(ERROR_CANCELLED),
-                  std::format(L"Batch Rename cancel execution should return ERROR_CANCELLED; saw 0x{:08X}.",
-                              static_cast<unsigned long>(executeHr)));
-    state.Require(renameItemsCalls.load(std::memory_order_relaxed) == 1u,
-                  L"Batch Rename cancel test should call provider RenameItems exactly once.");
+                  std::format(L"Batch Rename cancel execution should return ERROR_CANCELLED; saw 0x{:08X}.", static_cast<unsigned long>(executeHr)));
+    state.Require(renameItemsCalls.load(std::memory_order_relaxed) == 1u, L"Batch Rename cancel test should call provider RenameItems exactly once.");
     state.Require(shouldCancelCalls.load(std::memory_order_relaxed) == 1u,
                   L"Batch Rename execution should provide a FileSystemShouldCancel callback to the provider.");
 
@@ -3231,8 +3302,8 @@ struct BatchRenameLocalStampParts final
     if (! fileSystem)
     {
         const HRESULT enableHr = FileSystemPluginManager::GetInstance().EnablePlugin(L"builtin/file-system", g_settings);
-        state.Require(SUCCEEDED(enableHr), std::format(L"Failed to enable local file-system plugin for Batch Rename fallback: 0x{:08X}.",
-                                                       static_cast<unsigned long>(enableHr)));
+        state.Require(SUCCEEDED(enableHr),
+                      std::format(L"Failed to enable local file-system plugin for Batch Rename fallback: 0x{:08X}.", static_cast<unsigned long>(enableHr)));
         fileSystem = SelfTest::GetFileSystem(L"builtin/file-system");
     }
     state.Require(fileSystem != nullptr, L"Local file-system plugin should be available for Batch Rename fallback execution.");
@@ -3262,8 +3333,7 @@ struct BatchRenameLocalStampParts final
     state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
                   L"Batch Rename window should open for RenameItem fallback testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename fallback test window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -3282,8 +3352,7 @@ struct BatchRenameLocalStampParts final
 
     const HRESULT executeHr = DebugExecuteBatchRenameWindow();
     state.Require(SUCCEEDED(executeHr), std::format(L"Batch Rename fallback execution should succeed, hr=0x{:08X}.", static_cast<unsigned long>(executeHr)));
-    state.Require(renameItemsCalls.load(std::memory_order_relaxed) == 1u,
-                  L"Batch Rename fallback should try provider bulk RenameItems exactly once.");
+    state.Require(renameItemsCalls.load(std::memory_order_relaxed) == 1u, L"Batch Rename fallback should try provider bulk RenameItems exactly once.");
     state.Require(renameItemCalls.load(std::memory_order_relaxed) == 2u,
                   L"Batch Rename fallback should execute one RenameItem call per changed row after unsupported bulk rename.");
 
@@ -3345,8 +3414,7 @@ struct BatchRenameLocalStampParts final
     state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
                   L"Batch Rename window should open for case-only execution testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename case-only execution test window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -3390,8 +3458,7 @@ struct BatchRenameLocalStampParts final
 
     BatchRenameDebugSnapshot after{};
     state.Require(DebugGetBatchRenameWindowSnapshot(after), L"Batch Rename case-only preview should refresh after executing.");
-    state.Require(after.originalNames == std::vector<std::wstring>{L"MIXED.TXT"},
-                  L"Case-only execution should refresh the preview to the new leaf casing.");
+    state.Require(after.originalNames == std::vector<std::wstring>{L"MIXED.TXT"}, L"Case-only execution should refresh the preview to the new leaf casing.");
     state.Require(after.changedRowCount == 0u, L"Case-only execution should leave no pending changed rows after refresh.");
     state.Require(! after.renameButtonEnabled, L"Case-only execution should disable Rename after refreshing changed rows.");
 
@@ -3445,8 +3512,7 @@ struct BatchRenameLocalStampParts final
     state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
                   L"Batch Rename window should open for invalid-preview execution testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename invalid-preview execution window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -3516,8 +3582,7 @@ struct BatchRenameLocalStampParts final
 })json";
     wil::com_ptr<IFileSystem> missingIdentityFileSystem =
         CreateBatchRenameCapabilitiesOverrideFileSystem(fileSystem, &renameItemsCalls, std::string(kMissingPathIdentityCapabilities));
-    state.Require(missingIdentityFileSystem != nullptr,
-                  L"Batch Rename missing-identity selftest should create a capabilities override filesystem.");
+    state.Require(missingIdentityFileSystem != nullptr, L"Batch Rename missing-identity selftest should create a capabilities override filesystem.");
     if (! missingIdentityFileSystem)
     {
         return false;
@@ -3535,8 +3600,7 @@ struct BatchRenameLocalStampParts final
     state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
                   L"Batch Rename window should open for missing provider path identity testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename missing-identity window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -3550,10 +3614,8 @@ struct BatchRenameLocalStampParts final
         std::filesystem::remove_all(root, removeEc);
     });
 
-    state.Require(DebugSwitchBatchRenameWindowMode(BatchRename::Mode::Manual),
-                  L"Batch Rename missing-identity test should switch to Manual mode.");
-    state.Require(DebugSetBatchRenameWindowManualText(L"provider-renamed.txt"),
-                  L"Batch Rename missing-identity test should set a changed manual name.");
+    state.Require(DebugSwitchBatchRenameWindowMode(BatchRename::Mode::Manual), L"Batch Rename missing-identity test should switch to Manual mode.");
+    state.Require(DebugSetBatchRenameWindowManualText(L"provider-renamed.txt"), L"Batch Rename missing-identity test should set a changed manual name.");
 
     BatchRenameDebugSnapshot preview{};
     state.Require(DebugGetBatchRenameWindowSnapshot(preview), L"Batch Rename missing-identity preview should be available.");
@@ -3564,18 +3626,15 @@ struct BatchRenameLocalStampParts final
     if (! preview.newNameTooltips.empty())
     {
         state.Require(preview.newNameTooltips[0].contains(L"provider_path_identity_unknown"),
-                      std::format(L"Missing provider path identity should surface provider_path_identity_unknown; saw '{}'.",
-                                  preview.newNameTooltips[0]));
+                      std::format(L"Missing provider path identity should surface provider_path_identity_unknown; saw '{}'.", preview.newNameTooltips[0]));
     }
 
     const HRESULT executeHr = DebugExecuteBatchRenameWindow();
     state.Require(FAILED(executeHr), L"Missing provider path identity should reject execution before provider dispatch.");
     state.Require(renameItemsCalls.load(std::memory_order_relaxed) == 0u,
-                  std::format(L"Missing provider path identity should not call RenameItems; saw {} calls.",
-                              renameItemsCalls.load(std::memory_order_relaxed)));
+                  std::format(L"Missing provider path identity should not call RenameItems; saw {} calls.", renameItemsCalls.load(std::memory_order_relaxed)));
     state.Require(SelfTest::PathExists(source), L"Missing provider path identity should leave the source untouched.");
-    state.Require(! SelfTest::PathExists(root / L"provider-renamed.txt"),
-                  L"Missing provider path identity should not create the requested destination.");
+    state.Require(! SelfTest::PathExists(root / L"provider-renamed.txt"), L"Missing provider path identity should not create the requested destination.");
 
     return state.failure.empty();
 }
@@ -3626,8 +3685,7 @@ struct BatchRenameLocalStampParts final
     state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
                   L"Batch Rename window should open for parent/child execution testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename parent/child execution window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -3648,9 +3706,9 @@ struct BatchRenameLocalStampParts final
     BatchRenameDebugSnapshot before{};
     state.Require(DebugGetBatchRenameWindowSnapshot(before), L"Batch Rename parent/child preview should be available before executing.");
     state.Require(before.renameButtonEnabled, L"Valid parent/child preview should enable execution.");
-    state.Require(before.newNames == std::vector<std::wstring>{L"renamed_0", L"renamed_1.txt"},
-                  L"Parent/child preview should propose expected new names.");
+    state.Require(before.newNames == std::vector<std::wstring>{L"renamed_0", L"renamed_1.txt"}, L"Parent/child preview should propose expected new names.");
 
+    SettleBatchRenameWindowBeforeFilesystemExecution();
     const HRESULT executeHr = DebugExecuteBatchRenameWindow();
     state.Require(SUCCEEDED(executeHr), std::format(L"Batch Rename parent/child execution should succeed: 0x{:08X}.", static_cast<unsigned long>(executeHr)));
     if (FAILED(executeHr))
@@ -3723,8 +3781,7 @@ struct BatchRenameLocalStampParts final
     state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
                   L"Batch Rename window should open for destination revalidation testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename destination revalidation test window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -3748,8 +3805,7 @@ struct BatchRenameLocalStampParts final
     state.Require(before.newNames == std::vector<std::wstring>{L"renamed_001.txt", L"renamed_002.txt"},
                   L"Destination revalidation preview should propose expected new names.");
 
-    state.Require(SelfTest::WriteTextFile(root / L"renamed_002.txt", "conflict"),
-                  L"Failed to create conflicting destination after Batch Rename preview.");
+    state.Require(SelfTest::WriteTextFile(root / L"renamed_002.txt", "conflict"), L"Failed to create conflicting destination after Batch Rename preview.");
 
     const HRESULT executeHr = DebugExecuteBatchRenameWindow();
     state.Require(FAILED(executeHr), L"Batch Rename should fail pre-dispatch revalidation when a destination appears after preview.");
@@ -3808,8 +3864,7 @@ struct BatchRenameLocalStampParts final
     state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
                   L"Batch Rename window should open for source revalidation testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename source revalidation test window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -3912,13 +3967,11 @@ struct BatchRenameLocalStampParts final
     {
         state.Require(escapedLiteral->insertionText == L"file \\(1\\)\\.txt\\+\\[ok\\]\\\\end",
                       L"Regex escaped-literal helper should escape ECMAScript metacharacters.");
-        state.Require(escapedLiteral->selectionStart == escapedLiteral->selectionEnd &&
-                          escapedLiteral->selectionStart == escapedLiteral->insertionText.size(),
+        state.Require(escapedLiteral->selectionStart == escapedLiteral->selectionEnd && escapedLiteral->selectionStart == escapedLiteral->insertionText.size(),
                       L"Regex escaped-literal helper should leave the caret after the escaped literal.");
     }
 
-    const std::optional<HelperCommandInsertion> emptyEscapedLiteral =
-        TryBuildDynamicHelperInsertion(RegexEscapedLiteralHelperCommandId(), L"");
+    const std::optional<HelperCommandInsertion> emptyEscapedLiteral = TryBuildDynamicHelperInsertion(RegexEscapedLiteralHelperCommandId(), L"");
     state.Require(emptyEscapedLiteral.has_value(), L"Regex escaped-literal helper should have an empty-selection insertion.");
     if (emptyEscapedLiteral.has_value())
     {
@@ -3928,8 +3981,7 @@ struct BatchRenameLocalStampParts final
                       L"Regex escaped-literal helper should select the editable escape target for quick overwrite.");
     }
 
-    const std::optional<HelperCommandInsertion> customDefault =
-        TryBuildDynamicHelperInsertion(ReplacementCustomSubexpressionHelperCommandId(), L"");
+    const std::optional<HelperCommandInsertion> customDefault = TryBuildDynamicHelperInsertion(ReplacementCustomSubexpressionHelperCommandId(), L"");
     state.Require(customDefault.has_value(), L"Custom matched-subexpression helper should build a default token.");
     if (customDefault.has_value())
     {
@@ -3938,8 +3990,7 @@ struct BatchRenameLocalStampParts final
                       L"Custom matched-subexpression helper should select the default capture number for quick overwrite.");
     }
 
-    const std::optional<HelperCommandInsertion> customDigits =
-        TryBuildDynamicHelperInsertion(ReplacementCustomSubexpressionHelperCommandId(), L"12");
+    const std::optional<HelperCommandInsertion> customDigits = TryBuildDynamicHelperInsertion(ReplacementCustomSubexpressionHelperCommandId(), L"12");
     state.Require(customDigits.has_value(), L"Custom matched-subexpression helper should accept selected digits.");
     if (customDigits.has_value())
     {
@@ -3992,7 +4043,11 @@ struct BatchRenameLocalStampParts final
 
 [[nodiscard]] bool TestBatchRenameWindowHelperButtonsInsertIntoRuleFields(HWND mainWindow, CaseState& state) noexcept
 {
-    const std::filesystem::path root = L"C:\\BatchRenameHelperButtonsSelfTest";
+    std::filesystem::path root;
+    if (! AcquireBatchRenameCommandsSandboxRoot(state, L"batch_rename_helper_buttons", root))
+    {
+        return false;
+    }
 
     BatchRenamePaneContext context{};
     context.pluginId        = L"builtin/file-system";
@@ -4005,8 +4060,7 @@ struct BatchRenameLocalStampParts final
     state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
                   L"Batch Rename window should open for helper-button insertion testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename helper-buttons test window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -4015,8 +4069,7 @@ struct BatchRenameLocalStampParts final
 
     const auto cleanupBatchWindow = wil::scope_exit([]() noexcept { CloseBatchRenameWindowIfOpen(); });
 
-    const std::optional<int> counterCommand =
-        FindBatchRenameHelperCommandId(BatchRenameMenus::BuildTemplateHelperMenuItems(), L"{counter:000}");
+    const std::optional<int> counterCommand = FindBatchRenameHelperCommandId(BatchRenameMenus::BuildTemplateHelperMenuItems(), L"{counter:000}");
     state.Require(counterCommand.has_value(), L"Template helper menu should expose a padded-counter command id.");
     const std::optional<int> digitCommand = FindBatchRenameHelperCommandId(BatchRenameMenus::BuildRegexSearchHelperMenuItems(), L"\\d");
     state.Require(digitCommand.has_value(), L"Regex helper menu should expose a digit command id.");
@@ -4041,8 +4094,7 @@ struct BatchRenameLocalStampParts final
 
     BatchRenameDebugSnapshot templateSnapshot{};
     state.Require(DebugGetBatchRenameWindowSnapshot(templateSnapshot), L"Batch Rename helper template snapshot should be available.");
-    state.Require(templateSnapshot.nameTemplateText == L"{counter:000}",
-                  L"Template helper insertion should replace the selected template text.");
+    state.Require(templateSnapshot.nameTemplateText == L"{counter:000}", L"Template helper insertion should replace the selected template text.");
     state.Require(templateSnapshot.newNames == std::vector<std::wstring>{L"001"},
                   L"Template helper insertion should recompute preview through the window controls.");
     state.Require(templateSnapshot.changedRowCount == 1u, L"Template helper insertion should update changed-row stats.");
@@ -4063,15 +4115,14 @@ struct BatchRenameLocalStampParts final
     state.Require(regexSnapshot.replaceWithText == L"$1", L"Replacement helper insertion should update the replacement field text.");
 
     BatchRename::Rules selectedTextRules{};
-    selectedTextRules.nameTemplate   = L"{name}";
-    selectedTextRules.searchFor      = L"file (1).txt";
-    selectedTextRules.replaceWith    = L"12";
-    selectedTextRules.regexEnabled   = true;
-    selectedTextRules.caseSensitive  = true;
-    selectedTextRules.replaceOnce    = false;
+    selectedTextRules.nameTemplate     = L"{name}";
+    selectedTextRules.searchFor        = L"file (1).txt";
+    selectedTextRules.replaceWith      = L"12";
+    selectedTextRules.regexEnabled     = true;
+    selectedTextRules.caseSensitive    = true;
+    selectedTextRules.replaceOnce      = false;
     selectedTextRules.excludeExtension = false;
-    state.Require(DebugSetBatchRenameWindowRuleControls(selectedTextRules),
-                  L"Batch Rename helper-buttons test should set selected-text rule fields.");
+    state.Require(DebugSetBatchRenameWindowRuleControls(selectedTextRules), L"Batch Rename helper-buttons test should set selected-text rule fields.");
     state.Require(DebugSetBatchRenameWindowRuleFieldSelection(BatchRenameDebugRuleField::SearchFor, 0u, selectedTextRules.searchFor.size()),
                   L"Debug helper should select regex text before escaped-literal insertion.");
     state.Require(DebugInsertBatchRenameWindowHelperCommand(BatchRenameDebugRuleField::SearchFor, escapedLiteralCommand),
@@ -4150,8 +4201,8 @@ struct BatchRenameLocalStampParts final
     while (std::chrono::steady_clock::now() < itemsDeadline)
     {
         PumpPendingMessages();
-        itemsReady = std::ranges::all_of(expectedNames, [](const std::wstring& name) noexcept
-        { return g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, name); });
+        itemsReady = std::ranges::all_of(
+            expectedNames, [](const std::wstring& name) noexcept { return g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, name); });
         if (itemsReady)
         {
             break;
@@ -4172,10 +4223,10 @@ struct BatchRenameLocalStampParts final
     while (std::chrono::steady_clock::now() < deadline)
     {
         PumpPendingMessages();
-        const bool presentReady = std::ranges::all_of(expectedPresent, [pane](std::wstring_view name) noexcept
-        { return g_folderWindow.DebugHasItemDisplayName(pane, name); });
-        const bool absentReady = std::ranges::none_of(expectedAbsent, [pane](std::wstring_view name) noexcept
-        { return g_folderWindow.DebugHasItemDisplayName(pane, name); });
+        const bool presentReady =
+            std::ranges::all_of(expectedPresent, [pane](std::wstring_view name) noexcept { return g_folderWindow.DebugHasItemDisplayName(pane, name); });
+        const bool absentReady =
+            std::ranges::none_of(expectedAbsent, [pane](std::wstring_view name) noexcept { return g_folderWindow.DebugHasItemDisplayName(pane, name); });
         if (presentReady && absentReady)
         {
             return true;
@@ -4207,8 +4258,7 @@ void CloseRenamePromptIfOpen() noexcept
 class BatchRenameSettingsTestScope final
 {
 public:
-    BatchRenameSettingsTestScope()
-        : _previousBatchRename(g_settings.batchRename)
+    BatchRenameSettingsTestScope() : _previousBatchRename(g_settings.batchRename)
     {
         const auto placementIt = g_settings.windows.find(L"BatchRenameWindow");
         if (placementIt != g_settings.windows.end())
@@ -4278,8 +4328,7 @@ private:
     }
 
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_RENAME, 0), 0);
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds{5000}));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds{5000}));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Multi-selection Rename should open Batch Rename.");
     state.Require(GetFolderViewRenamePromptHandle() == nullptr, L"Multi-selection Rename should bypass the standard rename prompt.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
@@ -4337,9 +4386,8 @@ private:
 
     std::jthread worker([&](std::stop_token) noexcept
     {
-        const HWND prompt =
-            WaitForWindow([]() noexcept { return GetFolderViewRenamePromptHandle(); }, SelfTest::Scale(std::chrono::milliseconds{5000}));
-        probe.sawPrompt = prompt != nullptr && IsWindow(prompt) != FALSE;
+        const HWND prompt = WaitForWindow([]() noexcept { return GetFolderViewRenamePromptHandle(); }, SelfTest::Scale(std::chrono::milliseconds{5000}));
+        probe.sawPrompt   = prompt != nullptr && IsWindow(prompt) != FALSE;
         if (! probe.sawPrompt)
         {
             return;
@@ -4402,9 +4450,8 @@ private:
 
     std::jthread worker([&](std::stop_token) noexcept
     {
-        const HWND prompt =
-            WaitForWindow([]() noexcept { return GetFolderViewRenamePromptHandle(); }, SelfTest::Scale(std::chrono::milliseconds{5000}));
-        probe.sawPrompt = prompt != nullptr && IsWindow(prompt) != FALSE;
+        const HWND prompt = WaitForWindow([]() noexcept { return GetFolderViewRenamePromptHandle(); }, SelfTest::Scale(std::chrono::milliseconds{5000}));
+        probe.sawPrompt   = prompt != nullptr && IsWindow(prompt) != FALSE;
         if (! probe.sawPrompt)
         {
             return;
@@ -4413,34 +4460,34 @@ private:
         static_cast<void>(DebugGetFolderViewRenamePromptSnapshot(probe.promptSnapshot));
         probe.invokedBatch = DebugInvokeFolderViewRenamePromptBatch();
         probe.promptClosed = WaitForWindowClosed(prompt, SelfTest::Scale(std::chrono::milliseconds{3000}));
-        probe.batchWindow =
-            WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds{5000}));
-        if (probe.batchWindow && IsWindow(probe.batchWindow) != FALSE)
-        {
-            // The window handle is published before SetContext seeds the explicit selection,
-            // so poll until the seeded row is observable rather than racing the main thread.
-            const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(std::chrono::milliseconds{5000});
-            do
-            {
-                probe.batchSnapshot = DebugGetBatchRenameWindowSnapshot(probe.batchRenameSnapshot);
-                if (probe.batchSnapshot && probe.batchRenameSnapshot.previewRowCount > 0u)
-                {
-                    break;
-                }
-                std::this_thread::sleep_for(std::chrono::milliseconds{20});
-            } while (std::chrono::steady_clock::now() < deadline);
-        }
+        probe.batchWindow  = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds{5000}));
     });
 
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_RENAME, 0), 0);
     worker.join();
 
+    if (probe.batchWindow && IsWindow(probe.batchWindow) != FALSE)
+    {
+        // The window handle is published before SetContext seeds the explicit selection,
+        // so poll until the seeded row is observable after the prompt worker has finished.
+        const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(std::chrono::milliseconds{5000});
+        do
+        {
+            PumpPendingMessages();
+            probe.batchSnapshot = DebugGetBatchRenameWindowSnapshot(probe.batchRenameSnapshot);
+            if (probe.batchSnapshot && probe.batchRenameSnapshot.previewRowCount > 0u)
+            {
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds{20});
+        } while (std::chrono::steady_clock::now() < deadline);
+    }
+
     state.Require(probe.sawPrompt, L"File Rename should open the standard rename prompt first.");
     state.Require(probe.promptSnapshot.batchButtonVisible, L"File rename prompt should expose the Batch action.");
     state.Require(probe.invokedBatch, L"File rename prompt Batch debug action should be invokable.");
     state.Require(probe.promptClosed, L"File rename prompt should close after invoking Batch.");
-    state.Require(probe.batchWindow != nullptr && IsWindow(probe.batchWindow) != FALSE,
-                  L"File rename prompt Batch action should open Batch Rename.");
+    state.Require(probe.batchWindow != nullptr && IsWindow(probe.batchWindow) != FALSE, L"File rename prompt Batch action should open Batch Rename.");
     state.Require(probe.batchSnapshot, L"File Batch Rename snapshot should be available.");
     state.Require(probe.batchRenameSnapshot.rootText == root.native(), L"File Batch Rename should use the active pane root.");
     std::wstring previewNames;
@@ -4492,20 +4539,19 @@ private:
 
     struct FolderBatchProbe final
     {
-        bool sawPrompt      = false;
-        bool invokedBatch   = false;
-        bool promptClosed   = false;
-        HWND batchWindow    = nullptr;
-        bool batchSnapshot  = false;
+        bool sawPrompt     = false;
+        bool invokedBatch  = false;
+        bool promptClosed  = false;
+        HWND batchWindow   = nullptr;
+        bool batchSnapshot = false;
         FolderViewRenamePromptDebugSnapshot promptSnapshot{};
         BatchRenameDebugSnapshot batchRenameSnapshot{};
     } probe;
 
     std::jthread worker([&](std::stop_token) noexcept
     {
-        const HWND prompt =
-            WaitForWindow([]() noexcept { return GetFolderViewRenamePromptHandle(); }, SelfTest::Scale(std::chrono::milliseconds{5000}));
-        probe.sawPrompt = prompt != nullptr && IsWindow(prompt) != FALSE;
+        const HWND prompt = WaitForWindow([]() noexcept { return GetFolderViewRenamePromptHandle(); }, SelfTest::Scale(std::chrono::milliseconds{5000}));
+        probe.sawPrompt   = prompt != nullptr && IsWindow(prompt) != FALSE;
         if (! probe.sawPrompt)
         {
             return;
@@ -4514,8 +4560,7 @@ private:
         static_cast<void>(DebugGetFolderViewRenamePromptSnapshot(probe.promptSnapshot));
         probe.invokedBatch = DebugInvokeFolderViewRenamePromptBatch();
         probe.promptClosed = WaitForWindowClosed(prompt, SelfTest::Scale(std::chrono::milliseconds{3000}));
-        probe.batchWindow =
-            WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds{5000}));
+        probe.batchWindow  = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds{5000}));
         if (probe.batchWindow && IsWindow(probe.batchWindow) != FALSE)
         {
             probe.batchSnapshot = DebugGetBatchRenameWindowSnapshot(probe.batchRenameSnapshot);
@@ -4529,8 +4574,7 @@ private:
     state.Require(probe.promptSnapshot.batchButtonVisible, L"Folder rename prompt should expose the Batch action.");
     state.Require(probe.invokedBatch, L"Folder rename prompt Batch debug action should be invokable.");
     state.Require(probe.promptClosed, L"Folder rename prompt should close after invoking Batch.");
-    state.Require(probe.batchWindow != nullptr && IsWindow(probe.batchWindow) != FALSE,
-                  L"Folder rename prompt Batch action should open Batch Rename.");
+    state.Require(probe.batchWindow != nullptr && IsWindow(probe.batchWindow) != FALSE, L"Folder rename prompt Batch action should open Batch Rename.");
     state.Require(probe.batchSnapshot, L"Folder Batch Rename snapshot should be available.");
     state.Require(probe.batchRenameSnapshot.rootText == folderRoot.native(), L"Folder Batch Rename should be rooted at the chosen folder.");
     state.Require(probe.batchRenameSnapshot.previewRowCount == 0u,
@@ -4544,27 +4588,27 @@ private:
     using namespace BatchRename;
 
     Target alpha{};
-    alpha.sourcePath = L"C:\\root\\Alpha File.txt";
+    alpha.sourcePath  = L"C:\\root\\Alpha File.txt";
     alpha.isDirectory = false;
-    alpha.sizeBytes = 1234;
+    alpha.sizeBytes   = 1234;
 
     Target duplicate{};
-    duplicate.sourcePath = L"C:\\root\\duplicate.txt";
+    duplicate.sourcePath  = L"C:\\root\\duplicate.txt";
     duplicate.isDirectory = false;
-    duplicate.sizeBytes = 10;
+    duplicate.sizeBytes   = 10;
 
     Target duplicateCase{};
-    duplicateCase.sourcePath = L"C:\\root\\Duplicate.TXT";
+    duplicateCase.sourcePath  = L"C:\\root\\Duplicate.TXT";
     duplicateCase.isDirectory = false;
-    duplicateCase.sizeBytes = 20;
+    duplicateCase.sizeBytes   = 20;
 
     Rules rules{};
-    rules.nameTemplate = L"{counter:000}_{stem}{ext}";
-    rules.searchFor = L"file";
-    rules.replaceWith = L"clip";
-    rules.caseSensitive = false;
-    rules.excludeExtension = true;
-    rules.fileNameCaseStyle = CaseTransform::Upper;
+    rules.nameTemplate       = L"{counter:000}_{stem}{ext}";
+    rules.searchFor          = L"file";
+    rules.replaceWith        = L"clip";
+    rules.caseSensitive      = false;
+    rules.excludeExtension   = true;
+    rules.fileNameCaseStyle  = CaseTransform::Upper;
     rules.extensionCaseStyle = CaseTransform::Lower;
 
     const std::vector<Target> targets{alpha, duplicate, duplicateCase};
@@ -4586,18 +4630,18 @@ private:
     state.Require(plan.stats.changedRows == 3u, L"Stats should count changed rows.");
     state.Require(plan.stats.errorRows == 0u, L"Distinct generated names should not produce duplicate errors.");
 
-    rules.nameTemplate = L"same{ext}";
+    rules.nameTemplate       = L"same{ext}";
     const Plan duplicatePlan = BuildPlan({duplicate, duplicateCase}, rules);
     state.Require(duplicatePlan.stats.errorRows == 2u,
                   L"Rows targeting names that differ only by case in the same parent should be blocking duplicate errors.");
 
-    rules.nameTemplate = L"{unknown}";
+    rules.nameTemplate          = L"{unknown}";
     const Plan unknownMacroPlan = BuildPlan({alpha}, rules);
     state.Require(unknownMacroPlan.stats.errorRows == 1u, L"Unknown macros should be blocking validation errors.");
 
-    rules.nameTemplate = L"literal.txt";
-    rules.searchFor = L"(";
-    rules.regexEnabled = true;
+    rules.nameTemplate          = L"literal.txt";
+    rules.searchFor             = L"(";
+    rules.regexEnabled          = true;
     const Plan invalidRegexPlan = BuildPlan({alpha}, rules);
     state.Require(invalidRegexPlan.stats.errorRows == 1u, L"Invalid regular expressions should be reported as validation errors.");
 
@@ -4618,9 +4662,8 @@ private:
     rules.nameTemplate = L"{name}";
 
     const FileSystemPathIdentity caseInsensitive = FileSystemPathIdentity::OrdinalIgnoreCaseForLocalFileSystem();
-    const Plan caseInsensitivePlan              = BuildPlan({first, second}, rules, caseInsensitive);
-    state.Require(caseInsensitivePlan.stats.errorRows == 2u,
-                  L"Case-insensitive provider identity should reject sibling targets that differ only by case.");
+    const Plan caseInsensitivePlan               = BuildPlan({first, second}, rules, caseInsensitive);
+    state.Require(caseInsensitivePlan.stats.errorRows == 2u, L"Case-insensitive provider identity should reject sibling targets that differ only by case.");
     if (caseInsensitivePlan.rows.size() == 2u)
     {
         state.Require(HasBatchRenameIssue(caseInsensitivePlan.rows[0], IssueSeverity::Error, L"name_duplicate") &&
@@ -4631,24 +4674,20 @@ private:
     FileSystemPathIdentity caseSensitive = caseInsensitive;
     caseSensitive.componentComparison    = FileSystemPathComponentComparison::OrdinalCaseSensitive;
     const Plan caseSensitivePlan         = BuildPlan({first, second}, rules, caseSensitive);
-    state.Require(caseSensitivePlan.stats.errorRows == 0u,
-                  L"Case-sensitive provider identity should allow sibling targets that differ only by case.");
-    state.Require(caseSensitivePlan.stats.warningRows == 2u,
-                  L"Case-sensitive provider identity should treat exact no-op rows as warnings only.");
+    state.Require(caseSensitivePlan.stats.errorRows == 0u, L"Case-sensitive provider identity should allow sibling targets that differ only by case.");
+    state.Require(caseSensitivePlan.stats.warningRows == 2u, L"Case-sensitive provider identity should treat exact no-op rows as warnings only.");
 
     Target mixed{};
-    mixed.sourcePath = L"C:\\root\\Readme.txt";
+    mixed.sourcePath         = L"C:\\root\\Readme.txt";
     rules.fileNameCaseStyle  = CaseTransform::Upper;
     rules.extensionCaseStyle = CaseTransform::Upper;
 
     const Plan caseOnlyInsensitivePlan = BuildPlan({mixed}, rules, caseInsensitive);
-    state.Require(caseOnlyInsensitivePlan.rows.size() == 1u &&
-                      HasBatchRenameIssue(caseOnlyInsensitivePlan.rows[0], IssueSeverity::Warning, L"name_case_only"),
+    state.Require(caseOnlyInsensitivePlan.rows.size() == 1u && HasBatchRenameIssue(caseOnlyInsensitivePlan.rows[0], IssueSeverity::Warning, L"name_case_only"),
                   L"Case-insensitive provider identity should flag text-only case changes as case-only renames.");
 
     const Plan caseOnlySensitivePlan = BuildPlan({mixed}, rules, caseSensitive);
-    state.Require(caseOnlySensitivePlan.rows.size() == 1u &&
-                      ! HasBatchRenameIssue(caseOnlySensitivePlan.rows[0], IssueSeverity::Warning, L"name_case_only"),
+    state.Require(caseOnlySensitivePlan.rows.size() == 1u && ! HasBatchRenameIssue(caseOnlySensitivePlan.rows[0], IssueSeverity::Warning, L"name_case_only"),
                   L"Case-sensitive provider identity should not flag case-only text changes as same-item renames.");
 
     return state.failure.empty();
@@ -4690,8 +4729,12 @@ private:
         state.Require(lhsComponentKey.has_value() && rhsComponentKey.has_value() && lhsComponentKey.value() == rhsComponentKey.value(),
                       L"ordinalIgnoreCase component keys should normalize ASCII case.");
 
-        state.Require(! TryMakePathKey(ignoreCase.value(), L"Root\\R\u00E9sum\u00E9.txt").has_value(),
-                      L"ordinalIgnoreCase path keys should decline non-ASCII text so callers verify collisions with EquivalentPath.");
+        const std::optional<std::wstring> nonAsciiLhsKey = TryMakePathKey(ignoreCase.value(), L"Root\\R\u00C9SUM\u00C9.txt");
+        const std::optional<std::wstring> nonAsciiRhsKey = TryMakePathKey(ignoreCase.value(), L"root/r\u00E9sum\u00E9.TXT");
+        state.Require(nonAsciiLhsKey.has_value() && nonAsciiRhsKey.has_value() && nonAsciiLhsKey == nonAsciiRhsKey,
+                      L"ordinalIgnoreCase keys should retain hashed duplicate detection for ordinary non-ASCII case pairs.");
+        state.Require(EquivalentPath(ignoreCase.value(), L"Root\\R\u00C9SUM\u00C9.txt", L"root/r\u00E9sum\u00E9.TXT"),
+                      L"the non-ASCII key fixture must agree with CompareStringOrdinal identity.");
     }
 
     constexpr std::string_view kRenameJson = R"json(
@@ -4762,11 +4805,10 @@ private:
         state.Require(! EquivalentPath(caseSensitive.value(), L"Root\\Alpha\\Leaf.txt", L"Root/Alpha/Leaf.txt"),
                       L"ordinalCaseSensitive profile should not accept separators the provider did not advertise.");
 
-        const std::optional<std::wstring> exactPathKey = TryMakePathKey(caseSensitive.value(), L"Root/Alpha/Leaf.txt");
+        const std::optional<std::wstring> exactPathKey           = TryMakePathKey(caseSensitive.value(), L"Root/Alpha/Leaf.txt");
         const std::optional<std::wstring> mismatchedSeparatorKey = TryMakePathKey(caseSensitive.value(), L"Root\\Alpha\\Leaf.txt");
         state.Require(exactPathKey.has_value(), L"ordinalCaseSensitive path keys should build for accepted provider separators.");
-        state.Require(! mismatchedSeparatorKey.has_value(),
-                      L"ordinalCaseSensitive path keys should reject separators the provider did not advertise.");
+        state.Require(! mismatchedSeparatorKey.has_value(), L"ordinalCaseSensitive path keys should reject separators the provider did not advertise.");
     }
 
     constexpr std::string_view kMissingSeparatorJson = R"json(
@@ -4844,26 +4886,25 @@ private:
 
     const BatchRenameLocalStampParts aliasParts = GetBatchRenameExpectedLocalParts(alpha.lastWriteTime.value());
     const std::wstring expectedAliasName        = std::format(L"Alpha File.txt__{{literal}}__{:04}-{:02}-{:02}_{:02}-{:02}-{:02}",
-                                                       aliasParts.year,
-                                                       aliasParts.month,
-                                                       aliasParts.day,
-                                                       aliasParts.hour,
-                                                       aliasParts.minute,
-                                                       aliasParts.second);
-    state.Require(macroPlan.rows[0].newName == expectedAliasName,
-                  L"Alias macros, escaped braces, and local-time date/time macros should expand together.");
+                                                              aliasParts.year,
+                                                              aliasParts.month,
+                                                              aliasParts.day,
+                                                              aliasParts.hour,
+                                                              aliasParts.minute,
+                                                              aliasParts.second);
+    state.Require(macroPlan.rows[0].newName == expectedAliasName, L"Alias macros, escaped braces, and local-time date/time macros should expand together.");
     state.Require(macroPlan.stats.errorRows == 0u, L"Supported alias/date-time macros should not report validation errors.");
 
     Target numbered{};
     numbered.sourcePath = L"C:\\root\\Alpha 42.txt";
 
     Rules regexRules{};
-    regexRules.nameTemplate   = L"{name}";
-    regexRules.searchFor      = L"^([A-Za-z]+) (\\d+)(\\.txt)$";
-    regexRules.replaceWith    = L"$2-$1$$$&";
-    regexRules.regexEnabled   = true;
-    regexRules.caseSensitive  = true;
-    regexRules.replaceOnce    = true;
+    regexRules.nameTemplate  = L"{name}";
+    regexRules.searchFor     = L"^([A-Za-z]+) (\\d+)(\\.txt)$";
+    regexRules.replaceWith   = L"$2-$1$$$&";
+    regexRules.regexEnabled  = true;
+    regexRules.caseSensitive = true;
+    regexRules.replaceOnce   = true;
 
     const Plan regexPlan = BuildPlan({numbered}, regexRules);
     state.Require(regexPlan.rows.size() == 1u, L"Regex replacement token plan should contain one preview row.");
@@ -4872,8 +4913,7 @@ private:
         return false;
     }
 
-    state.Require(regexPlan.rows[0].newName == L"42-Alpha$Alpha 42.txt",
-                  L"Regex replacement should honor $1, $&, and $$ ECMAScript replacement tokens.");
+    state.Require(regexPlan.rows[0].newName == L"42-Alpha$Alpha 42.txt", L"Regex replacement should honor $1, $&, and $$ ECMAScript replacement tokens.");
     state.Require(regexPlan.stats.errorRows == 0u, L"Valid regex replacement tokens should not report validation errors.");
 
     Target nested{};
@@ -4891,10 +4931,8 @@ private:
     if (relativePlan.rows.size() == 1u)
     {
         const BatchRenameLocalStampParts createdParts = GetBatchRenameExpectedLocalParts(nested.createdTime.value());
-        const std::wstring expectedRelativeName       = std::format(L"Series__Season 01_Episode 01.mkv_mkv_42_{:04}{:02}{:02}_1_0",
-                                                              createdParts.year,
-                                                              createdParts.month,
-                                                              createdParts.day);
+        const std::wstring expectedRelativeName =
+            std::format(L"Series__Season 01_Episode 01.mkv_mkv_42_{:04}{:02}{:02}_1_0", createdParts.year, createdParts.month, createdParts.day);
         state.Require(relativePlan.rows[0].newName == expectedRelativeName,
                       L"Relative-folder flat, filename, extNoDot, size, created, counter, and index macros should expand from target metadata.");
         state.Require(relativePlan.stats.errorRows == 0u, L"Flattened relative-folder macros should be valid leaf names.");
@@ -4902,7 +4940,7 @@ private:
 
     Rules rawRelativeRules{};
     rawRelativeRules.nameTemplate = L"{relativeFolder}_{name}";
-    const Plan rawRelativePlan = BuildPlan({nested}, rawRelativeRules);
+    const Plan rawRelativePlan    = BuildPlan({nested}, rawRelativeRules);
     state.Require(rawRelativePlan.rows.size() == 1u, L"Raw relative-folder macro plan should contain one preview row.");
     if (rawRelativePlan.rows.size() == 1u)
     {
@@ -4961,11 +4999,9 @@ private:
             extensionNoDot.erase(extensionNoDot.begin());
         }
         const std::wstring expected = leafPath.stem().wstring() + L"__" + extension + L"__" + extensionNoDot;
-        state.Require(plan.rows[index].newName == expected,
-                      std::format(L"Leaf splitter should match std::filesystem for '{}': expected '{}', saw '{}'.",
-                                  leaves[index],
-                                  expected,
-                                  plan.rows[index].newName));
+        state.Require(
+            plan.rows[index].newName == expected,
+            std::format(L"Leaf splitter should match std::filesystem for '{}': expected '{}', saw '{}'.", leaves[index], expected, plan.rows[index].newName));
     }
 
     return state.failure.empty();
@@ -4981,7 +5017,7 @@ private:
     second.sourcePath = L"C:\\root\\two.txt";
 
     Rules rules{};
-    rules.mode = Mode::Manual;
+    rules.mode        = Mode::Manual;
     rules.manualNames = {L"uno.txt", L"dos.txt"};
 
     const Plan plan = BuildPlan({first, second}, rules);
@@ -5005,7 +5041,7 @@ private:
                       L"Too-few manual names should carry the stable manual_line_count error on every row.");
     }
 
-    rules.manualNames = {L"uno.txt", L"dos.txt", L"tres.txt"};
+    rules.manualNames  = {L"uno.txt", L"dos.txt", L"tres.txt"};
     const Plan tooMany = BuildPlan({first, second}, rules);
     state.Require(tooMany.stats.errorRows == 2u, L"Manual mode should block every row when the manual line count is too large.");
     if (tooMany.rows.size() == 2u)
@@ -5015,7 +5051,7 @@ private:
                       L"Too-many manual names should carry the stable manual_line_count error on every row.");
     }
 
-    rules.manualNames = {L"uno.txt", L""};
+    rules.manualNames    = {L"uno.txt", L""};
     const Plan emptyLine = BuildPlan({first, second}, rules);
     state.Require(emptyLine.stats.errorRows == 1u, L"Manual mode should block empty target names.");
 
@@ -5038,8 +5074,7 @@ private:
     {
         return false;
     }
-    state.Require(plan.stats.changedRows == 1u && plan.stats.errorRows == 0u,
-                  L"Initial stats should report one changed row and no errors.");
+    state.Require(plan.stats.changedRows == 1u && plan.stats.errorRows == 0u, L"Initial stats should report one changed row and no errors.");
 
     AddIssue(plan.rows[0], IssueSeverity::Error, L"name_destination_exists");
     RecomputeStats(plan);
@@ -5049,8 +5084,7 @@ private:
     state.Require(plan.stats.unchangedRows == 0u, L"Recomputed stats should preserve unchanged-row count.");
     state.Require(plan.stats.errorRows == 1u, L"Recomputed stats should count the contextual destination error.");
     state.Require(plan.stats.warningRows == 0u, L"Error rows should not also count as warning rows.");
-    state.Require(HasIssueSeverity(plan.rows[0], IssueSeverity::Error),
-                  L"Shared issue helper should detect the contextual error issue.");
+    state.Require(HasIssueSeverity(plan.rows[0], IssueSeverity::Error), L"Shared issue helper should detect the contextual error issue.");
 
     return state.failure.empty();
 }
@@ -5083,13 +5117,10 @@ private:
         std::filesystem::remove_all(root, removeEc);
     });
 
-    const std::chrono::sys_seconds desiredStamp =
-        std::chrono::sys_days{std::chrono::year{2026} / std::chrono::January / 1} + 23h + 30min + 5s;
-    const auto nowFile = std::filesystem::file_time_type::clock::now();
-    const auto nowSys =
-        std::chrono::time_point_cast<std::filesystem::file_time_type::duration>(std::chrono::system_clock::now());
-    const auto desiredSys =
-        std::chrono::time_point_cast<std::filesystem::file_time_type::duration>(desiredStamp);
+    const std::chrono::sys_seconds desiredStamp = std::chrono::sys_days{std::chrono::year{2026} / std::chrono::January / 1} + 23h + 30min + 5s;
+    const auto nowFile                          = std::filesystem::file_time_type::clock::now();
+    const auto nowSys                           = std::chrono::time_point_cast<std::filesystem::file_time_type::duration>(std::chrono::system_clock::now());
+    const auto desiredSys                       = std::chrono::time_point_cast<std::filesystem::file_time_type::duration>(desiredStamp);
     std::filesystem::last_write_time(source, nowFile + (desiredSys - nowSys), ec);
     state.Require(! ec, L"Failed to set Batch Rename date/time input timestamp.");
     if (! state.failure.empty())
@@ -5105,11 +5136,9 @@ private:
     context.initialPaths    = {source};
 
     const AppTheme theme = ResolveAppTheme(ThemeMode::Dark, L"batch-rename-datetime-grid-window-selftest");
-    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
-                  L"Batch Rename window should open for date/time grid testing.");
+    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)), L"Batch Rename window should open for date/time grid testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename date/time grid test window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -5141,13 +5170,9 @@ private:
         std::wstring macroTime       = macroName.substr(11u, 8u);
         std::ranges::replace(macroTime, L'-', L':');
         state.Require(snapshot.dateTexts[0] == macroDate,
-                      std::format(L"Date column should match {{date}} macro output; grid='{}' macro='{}'.",
-                                  snapshot.dateTexts[0],
-                                  macroDate));
+                      std::format(L"Date column should match {{date}} macro output; grid='{}' macro='{}'.", snapshot.dateTexts[0], macroDate));
         state.Require(snapshot.timeTexts[0] == macroTime,
-                      std::format(L"Time column should match {{time}} macro output; grid='{}' macro='{}'.",
-                                  snapshot.timeTexts[0],
-                                  macroTime));
+                      std::format(L"Time column should match {{time}} macro output; grid='{}' macro='{}'.", snapshot.timeTexts[0], macroTime));
     }
 
     return state.failure.empty();
@@ -5181,10 +5206,8 @@ private:
         std::filesystem::remove_all(root, removeEc);
     });
 
-    const std::chrono::sys_seconds creationStamp =
-        std::chrono::sys_days{std::chrono::year{2026} / std::chrono::March / 15} + 12h + 0min + 0s;
-    state.Require(SetBatchRenameFileCreationTime(source, creationStamp),
-                  L"Failed to set Batch Rename created-macro file creation time.");
+    const std::chrono::sys_seconds creationStamp = std::chrono::sys_days{std::chrono::year{2026} / std::chrono::March / 15} + 12h + 0min + 0s;
+    state.Require(SetBatchRenameFileCreationTime(source, creationStamp), L"Failed to set Batch Rename created-macro file creation time.");
     if (! state.failure.empty())
     {
         return false;
@@ -5204,11 +5227,9 @@ private:
     context.rootPluginPath  = root;
 
     const AppTheme theme = ResolveAppTheme(ThemeMode::Dark, L"batch-rename-created-macro-window-selftest");
-    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
-                  L"Batch Rename window should open for created-macro testing.");
+    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)), L"Batch Rename window should open for created-macro testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename created-macro test window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -5231,12 +5252,9 @@ private:
     }
 
     const BatchRenameLocalStampParts parts = GetBatchRenameExpectedLocalParts(creationStamp);
-    const std::wstring expectedName =
-        std::format(L"created_{:04}{:02}{:02}.txt", parts.year, parts.month, parts.day);
+    const std::wstring expectedName        = std::format(L"created_{:04}{:02}{:02}.txt", parts.year, parts.month, parts.day);
     state.Require(snapshot.newNames[0] == expectedName,
-                  std::format(L"{{created}} macro should use collected creation time. Expected '{}', saw '{}'.",
-                              expectedName,
-                              snapshot.newNames[0]));
+                  std::format(L"{{created}} macro should use collected creation time. Expected '{}', saw '{}'.", expectedName, snapshot.newNames[0]));
 
     return state.failure.empty();
 }
@@ -5262,8 +5280,8 @@ private:
                   L"No-op rows should carry a stable unchanged-name warning.");
 
     Target caseOnly{};
-    caseOnly.sourcePath = L"C:\\root\\MiXeD.TXT";
-    rules.fileNameCaseStyle = CaseTransform::Lower;
+    caseOnly.sourcePath      = L"C:\\root\\MiXeD.TXT";
+    rules.fileNameCaseStyle  = CaseTransform::Lower;
     rules.extensionCaseStyle = CaseTransform::Lower;
 
     const Plan caseOnlyPlan = BuildPlan({caseOnly}, rules);
@@ -5274,13 +5292,12 @@ private:
     }
     state.Require(caseOnlyPlan.rows[0].newName == L"mixed.txt", L"Lower-case transform should apply to stem and extension.");
     state.Require(caseOnlyPlan.stats.warningRows == 1u, L"Case-only renames should be warning rows.");
-    state.Require(HasBatchRenameIssue(caseOnlyPlan.rows[0], IssueSeverity::Warning, L"name_case_only"),
-                  L"Case-only renames should carry a stable warning.");
+    state.Require(HasBatchRenameIssue(caseOnlyPlan.rows[0], IssueSeverity::Warning, L"name_case_only"), L"Case-only renames should carry a stable warning.");
 
     Target spaced{};
     spaced.sourcePath = L"C:\\root\\spaced.txt";
-    rules = {};
-    rules.mode = Mode::Manual;
+    rules             = {};
+    rules.mode        = Mode::Manual;
     rules.manualNames = {L" leading.txt"};
 
     const Plan spacedPlan = BuildPlan({spaced}, rules);
@@ -5294,8 +5311,8 @@ private:
                   L"Names with leading spaces should carry an edge-space warning.");
 
     Target trailingDot{};
-    trailingDot.sourcePath = L"C:\\root\\trailing.txt";
-    rules.manualNames = {L"trailing."};
+    trailingDot.sourcePath     = L"C:\\root\\trailing.txt";
+    rules.manualNames          = {L"trailing."};
     const Plan trailingDotPlan = BuildPlan({trailingDot}, rules);
     state.Require(trailingDotPlan.rows.size() == 1u, L"Trailing-dot warning plan should contain one row.");
     if (trailingDotPlan.rows.size() != 1u)
@@ -5307,32 +5324,31 @@ private:
                   L"Names with trailing dots should carry an edge-space warning.");
 
     Target title{};
-    title.sourcePath = L"C:\\root\\alpha-beta_gamma.txt";
-    rules = {};
-    rules.nameTemplate = L"{stem}{ext}";
+    title.sourcePath        = L"C:\\root\\alpha-beta_gamma.txt";
+    rules                   = {};
+    rules.nameTemplate      = L"{stem}{ext}";
     rules.fileNameCaseStyle = CaseTransform::Mixed;
-    const Plan mixedPlan = BuildPlan({title}, rules);
+    const Plan mixedPlan    = BuildPlan({title}, rules);
     state.Require(mixedPlan.rows.size() == 1u, L"Mixed-case transform plan should contain one row.");
     if (mixedPlan.rows.size() != 1u)
     {
         return false;
     }
-    state.Require(mixedPlan.rows[0].newName == L"Alpha-Beta_Gamma.txt",
-                  L"Mixed-case transform should title-case words separated by punctuation.");
+    state.Require(mixedPlan.rows[0].newName == L"Alpha-Beta_Gamma.txt", L"Mixed-case transform should title-case words separated by punctuation.");
 
     Target replace{};
-    replace.sourcePath = L"C:\\root\\cat cat scatter.txt";
-    rules = {};
-    rules.nameTemplate = L"{name}";
-    rules.searchFor = L"cat";
-    rules.replaceWith = L"dog";
-    rules.replaceOnce = true;
+    replace.sourcePath         = L"C:\\root\\cat cat scatter.txt";
+    rules                      = {};
+    rules.nameTemplate         = L"{name}";
+    rules.searchFor            = L"cat";
+    rules.replaceWith          = L"dog";
+    rules.replaceOnce          = true;
     const Plan replaceOncePlan = BuildPlan({replace}, rules);
     state.Require(replaceOncePlan.rows.size() == 1u && replaceOncePlan.rows[0].newName == L"dog cat scatter.txt",
                   L"Replace-once should update only the first literal match.");
 
-    rules.replaceOnce = false;
-    rules.wholeWords = true;
+    rules.replaceOnce        = false;
+    rules.wholeWords         = true;
     const Plan wholeWordPlan = BuildPlan({replace}, rules);
     state.Require(wholeWordPlan.rows.size() == 1u && wholeWordPlan.rows[0].newName == L"dog dog scatter.txt",
                   L"Whole-word literal replacement should skip embedded word fragments.");
@@ -5341,12 +5357,12 @@ private:
     emoji.push_back(static_cast<wchar_t>(0xD83D));
     emoji.push_back(static_cast<wchar_t>(0xDE00));
     Target emojiTarget{};
-    emojiTarget.sourcePath = std::filesystem::path(L"C:\\root") / (emoji + L".txt");
-    rules = {};
-    rules.nameTemplate = L"{name}";
-    rules.searchFor = std::wstring(1u, emoji.front());
-    rules.replaceWith = L"X";
-    rules.wholeWords = true;
+    emojiTarget.sourcePath           = std::filesystem::path(L"C:\\root") / (emoji + L".txt");
+    rules                            = {};
+    rules.nameTemplate               = L"{name}";
+    rules.searchFor                  = std::wstring(1u, emoji.front());
+    rules.replaceWith                = L"X";
+    rules.wholeWords                 = true;
     const Plan surrogateBoundaryPlan = BuildPlan({emojiTarget}, rules);
     state.Require(surrogateBoundaryPlan.rows.size() == 1u && surrogateBoundaryPlan.rows[0].newName == emoji + L".txt",
                   L"Whole-word literal replacement must not split a supplementary-plane surrogate pair.");
@@ -5362,11 +5378,11 @@ private:
     regexTarget.sourcePath = L"C:\\root\\cat scatter cat.txt";
 
     Rules regexRules{};
-    regexRules.nameTemplate = L"{name}";
-    regexRules.searchFor = L"cat";
-    regexRules.replaceWith = L"dog";
-    regexRules.regexEnabled = true;
-    regexRules.wholeWords = true;
+    regexRules.nameTemplate     = L"{name}";
+    regexRules.searchFor        = L"cat";
+    regexRules.replaceWith      = L"dog";
+    regexRules.regexEnabled     = true;
+    regexRules.wholeWords       = true;
     regexRules.excludeExtension = true;
 
     const Plan wholeWordRegexPlan = BuildPlan({regexTarget}, regexRules);
@@ -5378,7 +5394,7 @@ private:
     stemOnly.sourcePath = L"C:\\root\\MiXeD.TXT";
 
     Rules stemCaseRules{};
-    stemCaseRules.nameTemplate = L"{name}";
+    stemCaseRules.nameTemplate      = L"{name}";
     stemCaseRules.fileNameCaseStyle = CaseTransform::Lower;
 
     const Plan lowerStemPlan = BuildPlan({stemOnly}, stemCaseRules);
@@ -5390,7 +5406,7 @@ private:
     noExtension.sourcePath = L"C:\\root\\README";
 
     Rules extensionNoOpRules{};
-    extensionNoOpRules.nameTemplate = L"{name}";
+    extensionNoOpRules.nameTemplate       = L"{name}";
     extensionNoOpRules.extensionCaseStyle = CaseTransform::Lower;
 
     const Plan noExtensionPlan = BuildPlan({noExtension}, extensionNoOpRules);
@@ -5407,7 +5423,7 @@ private:
     invalidManual.sourcePath = L"C:\\root\\source.txt";
 
     Rules invalidRules{};
-    invalidRules.mode = Mode::Manual;
+    invalidRules.mode        = Mode::Manual;
     invalidRules.manualNames = {L"bad\\leaf.txt"};
 
     const Plan invalidSeparatorPlan = BuildPlan({invalidManual}, invalidRules);
@@ -5419,7 +5435,7 @@ private:
                       L"Manual target leaves containing path separators should carry the stable name_separator error.");
     }
 
-    invalidRules.manualNames = {L"bad:name.txt"};
+    invalidRules.manualNames        = {L"bad:name.txt"};
     const Plan invalidCharacterPlan = BuildPlan({invalidManual}, invalidRules);
     state.Require(invalidCharacterPlan.rows.size() == 1u, L"Invalid-character validation plan should contain one row.");
     state.Require(invalidCharacterPlan.stats.errorRows == 1u, L"Manual target leaves containing Windows-invalid characters should be blocking errors.");
@@ -5440,7 +5456,7 @@ private:
     }
 
     invalidRules.manualNames = {std::wstring(256u, L'a')};
-    const Plan tooLongPlan = BuildPlan({invalidManual}, invalidRules);
+    const Plan tooLongPlan   = BuildPlan({invalidManual}, invalidRules);
     state.Require(tooLongPlan.rows.size() == 1u, L"Overlong target leaf validation plan should contain one row.");
     state.Require(tooLongPlan.stats.errorRows == 1u, L"Manual target leaves with 256 UTF-16 code units should be blocking errors.");
     if (tooLongPlan.rows.size() == 1u)
@@ -5453,22 +5469,20 @@ private:
     surrogatePair.push_back(static_cast<wchar_t>(0xD83D));
     surrogatePair.push_back(static_cast<wchar_t>(0xDE00));
 
-    invalidRules.manualNames = {std::wstring(253u, L'a') + surrogatePair};
+    invalidRules.manualNames          = {std::wstring(253u, L'a') + surrogatePair};
     const Plan maxLengthSurrogatePlan = BuildPlan({invalidManual}, invalidRules);
     state.Require(maxLengthSurrogatePlan.rows.size() == 1u, L"Max-length surrogate target leaf plan should contain one row.");
-    state.Require(maxLengthSurrogatePlan.stats.errorRows == 0u,
-                  L"A 255-code-unit leaf ending in a surrogate pair should remain valid.");
+    state.Require(maxLengthSurrogatePlan.stats.errorRows == 0u, L"A 255-code-unit leaf ending in a surrogate pair should remain valid.");
     if (maxLengthSurrogatePlan.rows.size() == 1u)
     {
         state.Require(! HasBatchRenameIssue(maxLengthSurrogatePlan.rows[0], IssueSeverity::Error, L"name_too_long"),
                       L"A 255-code-unit leaf ending in a surrogate pair should not carry name_too_long.");
     }
 
-    invalidRules.manualNames = {std::wstring(254u, L'a') + surrogatePair};
+    invalidRules.manualNames        = {std::wstring(254u, L'a') + surrogatePair};
     const Plan tooLongSurrogatePlan = BuildPlan({invalidManual}, invalidRules);
     state.Require(tooLongSurrogatePlan.rows.size() == 1u, L"Overlong surrogate target leaf plan should contain one row.");
-    state.Require(tooLongSurrogatePlan.stats.errorRows == 1u,
-                  L"A 256-code-unit leaf ending in a surrogate pair should be a blocking error.");
+    state.Require(tooLongSurrogatePlan.stats.errorRows == 1u, L"A 256-code-unit leaf ending in a surrogate pair should be a blocking error.");
     if (tooLongSurrogatePlan.rows.size() == 1u)
     {
         state.Require(HasBatchRenameIssue(tooLongSurrogatePlan.rows[0], IssueSeverity::Error, L"name_too_long"),
@@ -5499,8 +5513,9 @@ private:
         return false;
     }
 
-    state.Require(HasBatchRenameIssue(pathologicalPlan.rows[0], IssueSeverity::Error, L"regex_match_failed"),
-                  L"Backtracking-heavy regex patterns that fail at match time should report the stable regex_match_failed error instead of crashing the preview.");
+    state.Require(
+        HasBatchRenameIssue(pathologicalPlan.rows[0], IssueSeverity::Error, L"regex_match_failed"),
+        L"Backtracking-heavy regex patterns that fail at match time should report the stable regex_match_failed error instead of crashing the preview.");
     state.Require(pathologicalPlan.rows[0].newName == pathologicalPlan.rows[0].originalName,
                   L"Rows with match-time regex failures should keep the original leaf name.");
     state.Require(pathologicalPlan.stats.errorRows == 1u, L"Match-time regex failures should be blocking validation errors.");
@@ -5539,32 +5554,32 @@ private:
     manualRules.mode = Mode::Manual;
 
     manualRules.manualNames = {L"CON.txt"};
-    const Plan conPlan = BuildPlan({source}, manualRules);
+    const Plan conPlan      = BuildPlan({source}, manualRules);
     state.Require(conPlan.rows.size() == 1u && HasBatchRenameIssue(conPlan.rows[0], IssueSeverity::Error, L"name_reserved_device"),
                   L"CON with an extension should carry the stable name_reserved_device blocking error.");
 
     manualRules.manualNames = {L"NUL"};
-    const Plan nulPlan = BuildPlan({source}, manualRules);
+    const Plan nulPlan      = BuildPlan({source}, manualRules);
     state.Require(nulPlan.rows.size() == 1u && HasBatchRenameIssue(nulPlan.rows[0], IssueSeverity::Error, L"name_reserved_device"),
                   L"Bare NUL should carry the stable name_reserved_device blocking error.");
 
     manualRules.manualNames = {L"com1.log"};
-    const Plan comPlan = BuildPlan({source}, manualRules);
+    const Plan comPlan      = BuildPlan({source}, manualRules);
     state.Require(comPlan.rows.size() == 1u && HasBatchRenameIssue(comPlan.rows[0], IssueSeverity::Error, L"name_reserved_device"),
                   L"Lower-case COM1 with an extension should carry the stable name_reserved_device blocking error.");
 
     manualRules.manualNames = {L"CONIN$.txt"};
-    const Plan coninPlan = BuildPlan({source}, manualRules);
+    const Plan coninPlan    = BuildPlan({source}, manualRules);
     state.Require(coninPlan.rows.size() == 1u && HasBatchRenameIssue(coninPlan.rows[0], IssueSeverity::Error, L"name_reserved_device"),
                   L"CONIN$ with an extension should carry the stable name_reserved_device blocking error.");
 
     manualRules.manualNames = {L"conout$"};
-    const Plan conoutPlan = BuildPlan({source}, manualRules);
+    const Plan conoutPlan   = BuildPlan({source}, manualRules);
     state.Require(conoutPlan.rows.size() == 1u && HasBatchRenameIssue(conoutPlan.rows[0], IssueSeverity::Error, L"name_reserved_device"),
                   L"Lower-case CONOUT$ should carry the stable name_reserved_device blocking error.");
 
     manualRules.manualNames = {L"CONSOLE.txt"};
-    const Plan consolePlan = BuildPlan({source}, manualRules);
+    const Plan consolePlan  = BuildPlan({source}, manualRules);
     state.Require(consolePlan.rows.size() == 1u && ! HasBatchRenameIssue(consolePlan.rows[0], IssueSeverity::Error, L"name_reserved_device"),
                   L"Names that merely start with a reserved token should not be blocked.");
     state.Require(consolePlan.stats.errorRows == 0u, L"CONSOLE.txt should remain a valid leaf name.");
@@ -5586,7 +5601,7 @@ private:
     }
     state.Require(counterPlan.stats.errorRows == 0u, L"Counter-width macros should not report validation errors.");
 
-    counterRules.nameTemplate = L"bad-{counter:abc}_{index:x}_{name}";
+    counterRules.nameTemplate    = L"bad-{counter:abc}_{index:x}_{name}";
     const Plan invalidFormatPlan = BuildPlan({first, second}, counterRules);
     state.Require(invalidFormatPlan.rows.size() == 2u, L"Invalid counter/index format plan should contain one row per target.");
     if (invalidFormatPlan.rows.size() == 2u)
@@ -5605,7 +5620,7 @@ private:
     using namespace BatchRename;
     using namespace std::chrono_literals;
 
-    constexpr size_t kTargetCount = 10'000u;
+    constexpr size_t kTargetCount                      = 10'000u;
     constexpr uint64_t kMaxLargePreviewBuildPlanBaseMs = 5'000u;
 
     std::vector<Target> targets;
@@ -5613,7 +5628,7 @@ private:
     for (size_t i = 0; i < kTargetCount; ++i)
     {
         Target target{};
-        target.sourcePath    = std::filesystem::path(L"C:\\batch-preview") / std::format(L"Episode {:05}.RAW", i);
+        target.sourcePath    = std::filesystem::path(L"C:\\batch-preview") / std::format(L"\u00C9pisode {:05}.RAW", i);
         target.sizeBytes     = 1024u + i;
         target.lastWriteTime = std::chrono::sys_days{std::chrono::year{2026} / std::chrono::June / 10} + std::chrono::seconds{i};
         targets.push_back(std::move(target));
@@ -5623,10 +5638,11 @@ private:
     const uint64_t countPerfRowsBefore   = CountBatchRenamePerfRowsWithMetric("batchrename.preview.rows");
     const uint64_t changedPerfRowsBefore = CountBatchRenamePerfRowsWithMetric("batchrename.preview.changed");
     const uint64_t errorPerfRowsBefore   = CountBatchRenamePerfRowsWithMetric("batchrename.preview.errors");
+    const uint64_t fallbackPerfRowsBefore = CountBatchRenamePerfRowsWithMetric("batchrename.preview.duplicate_fallback_rows");
 
     Rules rules{};
-    rules.nameTemplate       = L"{counter:00000}_{stem}_{date:yyyyMMdd}_{time:HHmmss}{ext}";
-    rules.searchFor          = L"episode";
+    rules.nameTemplate       = L"R\u00E9sum\u00E9_{counter:00000}_{stem}_{date:yyyyMMdd}_{time:HHmmss}{ext}";
+    rules.searchFor          = L"\u00E9pisode";
     rules.replaceWith        = L"clip";
     rules.caseSensitive      = false;
     rules.excludeExtension   = true;
@@ -5643,10 +5659,9 @@ private:
     {
         const auto expectedRowName = [](const size_t index)
         {
-            const std::chrono::sys_seconds stamp =
-                std::chrono::sys_days{std::chrono::year{2026} / std::chrono::June / 10} + std::chrono::seconds{index};
+            const std::chrono::sys_seconds stamp   = std::chrono::sys_days{std::chrono::year{2026} / std::chrono::June / 10} + std::chrono::seconds{index};
             const BatchRenameLocalStampParts parts = GetBatchRenameExpectedLocalParts(stamp);
-            return std::format(L"{:05}_Clip {:05}_{:04}{:02}{:02}_{:02}{:02}{:02}.raw",
+            return std::format(L"R\u00E9sum\u00E9_{:05}_Clip {:05}_{:04}{:02}{:02}_{:02}{:02}{:02}.raw",
                                index + 1u,
                                index,
                                parts.year,
@@ -5666,6 +5681,7 @@ private:
     const uint64_t countPerfRowsAfter   = CountBatchRenamePerfRowsWithMetric("batchrename.preview.rows");
     const uint64_t changedPerfRowsAfter = CountBatchRenamePerfRowsWithMetric("batchrename.preview.changed");
     const uint64_t errorPerfRowsAfter   = CountBatchRenamePerfRowsWithMetric("batchrename.preview.errors");
+    const uint64_t fallbackPerfRowsAfter = CountBatchRenamePerfRowsWithMetric("batchrename.preview.duplicate_fallback_rows");
     state.Require(buildPerfRowsAfter > buildPerfRowsBefore,
                   std::format(L"Large Batch Rename preview should emit batchrename.preview.build_plan_us perf metrics; before={} after={}.",
                               buildPerfRowsBefore,
@@ -5682,11 +5698,17 @@ private:
                   std::format(L"Large Batch Rename preview should emit batchrename.preview.errors perf metrics; before={} after={}.",
                               errorPerfRowsBefore,
                               errorPerfRowsAfter));
+    state.Require(fallbackPerfRowsAfter > fallbackPerfRowsBefore,
+                  L"Large non-ASCII Batch Rename preview should report its duplicate-detection fallback count.");
+    const std::optional<uint64_t> maxFallbackRows =
+        TryReadMaxBatchRenamePerfUintField("batchrename.preview.duplicate_fallback_rows", "value0", fallbackPerfRowsBefore);
+    state.Require(maxFallbackRows.has_value() && maxFallbackRows.value() == 0u,
+                  std::format(L"Large non-ASCII preview should stay on O(n) hashed duplicate detection; fallbackRows={}.",
+                              maxFallbackRows.value_or((std::numeric_limits<uint64_t>::max)())));
     // Consider only the build_plan_us rows emitted by this test (skip rows that existed before),
     // and scale the threshold with the suite timeout scale used for other timing-sensitive waits.
-    const uint64_t maxBuildPlanThresholdUs = SelfTest::ScaleTimeout(kMaxLargePreviewBuildPlanBaseMs) * 1'000u;
-    const std::optional<uint64_t> maxBuildPlanUs =
-        TryReadMaxBatchRenamePerfDurationUs("batchrename.preview.build_plan_us", buildPerfRowsBefore);
+    const uint64_t maxBuildPlanThresholdUs       = SelfTest::ScaleTimeout(kMaxLargePreviewBuildPlanBaseMs) * 1'000u;
+    const std::optional<uint64_t> maxBuildPlanUs = TryReadMaxBatchRenamePerfDurationUs("batchrename.preview.build_plan_us", buildPerfRowsBefore);
     state.Require(maxBuildPlanUs.has_value() && maxBuildPlanUs.value() <= maxBuildPlanThresholdUs,
                   std::format(L"Large Batch Rename preview should stay within the bounded preview metric threshold; maxUs={} thresholdUs={}.",
                               maxBuildPlanUs.value_or(0u),
@@ -5712,8 +5734,8 @@ private:
     rules.caseSensitive = true;
 
     const uint64_t regexCompileRowsBefore = CountBatchRenamePerfRowsWithMetric("batchrename.regex.compile.us");
-    const Plan plan = BuildPlan({first, second}, rules);
-    const uint64_t regexCompileRowsAfter = CountBatchRenamePerfRowsWithMetric("batchrename.regex.compile.us");
+    const Plan plan                       = BuildPlan({first, second}, rules);
+    const uint64_t regexCompileRowsAfter  = CountBatchRenamePerfRowsWithMetric("batchrename.regex.compile.us");
 
     state.Require(plan.rows.size() == 2u, L"Regex compile perf test should keep one row per target.");
     if (plan.rows.size() == 2u)
@@ -5743,15 +5765,14 @@ private:
     rules.nameTemplate = L"same.txt";
 
     const uint64_t validationRowsBefore = CountBatchRenamePerfRowsWithMetric("batchrename.validation.us");
-    const Plan plan = BuildPlan({first, second}, rules);
-    const uint64_t validationRowsAfter = CountBatchRenamePerfRowsWithMetric("batchrename.validation.us");
+    const Plan plan                     = BuildPlan({first, second}, rules);
+    const uint64_t validationRowsAfter  = CountBatchRenamePerfRowsWithMetric("batchrename.validation.us");
 
     state.Require(plan.rows.size() == 2u, L"Validation perf test should keep one row per target.");
     state.Require(plan.stats.errorRows == 2u, L"Validation perf test should still mark duplicate target names as errors.");
-    state.Require(validationRowsAfter > validationRowsBefore,
-                  std::format(L"Batch Rename preview validation should emit batchrename.validation.us; before={} after={}.",
-                              validationRowsBefore,
-                              validationRowsAfter));
+    state.Require(
+        validationRowsAfter > validationRowsBefore,
+        std::format(L"Batch Rename preview validation should emit batchrename.validation.us; before={} after={}.", validationRowsBefore, validationRowsAfter));
 
     return state.failure.empty();
 }
@@ -5822,7 +5843,9 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     };
     const auto sortOps = [](std::vector<BatchRenameExecutionOp>& ops) noexcept
     {
-        std::sort(ops.begin(), ops.end(), [](const BatchRenameExecutionOp& lhs, const BatchRenameExecutionOp& rhs) noexcept
+        std::sort(ops.begin(),
+                  ops.end(),
+                  [](const BatchRenameExecutionOp& lhs, const BatchRenameExecutionOp& rhs) noexcept
         {
             if (lhs.depth != rhs.depth)
             {
@@ -5835,9 +5858,7 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
             return lhs.currentSource.native() > rhs.currentSource.native();
         });
     };
-    const auto runEngine = [&](wil::com_ptr<IFileSystem> fs,
-                               std::vector<BatchRenameExecutionOp> ops,
-                               BatchRenameExecutionOptions options = {}) noexcept
+    const auto runEngine = [&](wil::com_ptr<IFileSystem> fs, std::vector<BatchRenameExecutionOp> ops, BatchRenameExecutionOptions options = {}) noexcept
     {
         sortOps(ops);
         cancelRequested.store(false, std::memory_order_release);
@@ -5870,19 +5891,17 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     state.Require(swapRenameItemsCalls.load(std::memory_order_relaxed) == 3u,
                   std::format(L"Direct engine swap should use one temp hop plus two layers; saw {} RenameItems calls.",
                               swapRenameItemsCalls.load(std::memory_order_relaxed)));
-    state.Require(ReadBatchRenameFileText(swapRoot / L"swap-a.txt") == "beta-content",
-                  L"Direct engine swap should move beta content to swap-a.");
-    state.Require(ReadBatchRenameFileText(swapRoot / L"swap-b.txt") == "alpha-content",
-                  L"Direct engine swap should move alpha content to swap-b.");
+    state.Require(ReadBatchRenameFileText(swapRoot / L"swap-a.txt") == "beta-content", L"Direct engine swap should move beta content to swap-a.");
+    state.Require(ReadBatchRenameFileText(swapRoot / L"swap-b.txt") == "alpha-content", L"Direct engine swap should move alpha content to swap-b.");
     state.Require(! DirectoryHasBatchRenameTempLeftovers(swapRoot), L"Direct engine swap must not leave temp-hop leaves.");
     state.Require(! swapProgress.events.empty(), L"Direct engine swap should report execution progress.");
-    state.Require(std::ranges::all_of(swapProgress.events, [](const BatchRenameExecutionProgressEvent& event) noexcept {
-                      return event.completed <= event.total && event.total == 2u;
-                  }),
+    state.Require(std::ranges::all_of(swapProgress.events,
+                                      [](const BatchRenameExecutionProgressEvent& event) noexcept
+    { return event.completed <= event.total && event.total == 2u; }),
                   L"Direct engine swap progress should clamp temp-hop progress to the visible row total.");
-    state.Require(std::ranges::any_of(swapProgress.events, [](const BatchRenameExecutionProgressEvent& event) noexcept {
-                      return event.completed == 2u && event.total == 2u && event.forcePost;
-                  }),
+    state.Require(std::ranges::any_of(swapProgress.events,
+                                      [](const BatchRenameExecutionProgressEvent& event) noexcept
+    { return event.completed == 2u && event.total == 2u && event.forcePost; }),
                   L"Direct engine swap progress should post a terminal completed/total update.");
 
     const std::filesystem::path cycleRoot = root / L"cycle";
@@ -5902,8 +5921,7 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
                                                        {makeOp(cycleRoot / L"cycle-a.txt", L"cycle-b.txt"),
                                                         makeOp(cycleRoot / L"cycle-b.txt", L"cycle-c.txt"),
                                                         makeOp(cycleRoot / L"cycle-c.txt", L"cycle-a.txt")});
-    state.Require(SUCCEEDED(cycleResult.hr), std::format(L"Direct engine three-cycle should succeed: 0x{:08X}.",
-                                                         static_cast<unsigned long>(cycleResult.hr)));
+    state.Require(SUCCEEDED(cycleResult.hr), std::format(L"Direct engine three-cycle should succeed: 0x{:08X}.", static_cast<unsigned long>(cycleResult.hr)));
     state.Require(cycleResult.report.completedRows == 3u && cycleResult.report.failedRows == 0u,
                   L"Direct engine three-cycle should report three completed rows and no failures.");
     state.Require(cycleRenameItemsCalls.load(std::memory_order_relaxed) == 4u,
@@ -5918,31 +5936,26 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     state.Require(SelfTest::WriteTextFile(partialRoot / L"ok.txt", "ok"), L"Failed to create direct engine partial ok input.");
     state.Require(SelfTest::WriteTextFile(partialRoot / L"fail.txt", "fail"), L"Failed to create direct engine partial fail input.");
     std::atomic_uint32_t partialRenameItemsCalls{0u};
-    const HRESULT failHr = HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
-    wil::com_ptr<IFileSystem> partialFs =
-        CreateBatchRenameScriptedPerItemFileSystem(fileSystem, &partialRenameItemsCalls, L"fail.txt", failHr, false);
+    const HRESULT failHr                = HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+    wil::com_ptr<IFileSystem> partialFs = CreateBatchRenameScriptedPerItemFileSystem(fileSystem, &partialRenameItemsCalls, L"fail.txt", failHr, false);
     state.Require(partialFs != nullptr, L"Direct engine partial failure should create a scripted provider.");
     if (! state.failure.empty())
     {
         return false;
     }
 
-    BatchRenameExecutionResult partialResult = runEngine(partialFs,
-                                                         {makeOp(partialRoot / L"ok.txt", L"ok-renamed.txt"),
-                                                          makeOp(partialRoot / L"fail.txt", L"fail-renamed.txt")});
+    BatchRenameExecutionResult partialResult =
+        runEngine(partialFs, {makeOp(partialRoot / L"ok.txt", L"ok-renamed.txt"), makeOp(partialRoot / L"fail.txt", L"fail-renamed.txt")});
     state.Require(partialResult.hr == failHr,
-                  std::format(L"Direct engine partial failure should surface access denied; saw 0x{:08X}.",
-                              static_cast<unsigned long>(partialResult.hr)));
+                  std::format(L"Direct engine partial failure should surface access denied; saw 0x{:08X}.", static_cast<unsigned long>(partialResult.hr)));
     state.Require(partialResult.report.completedRows == 1u && partialResult.report.failedRows == 1u,
                   L"Direct engine partial failure should report one completed row and one failed row.");
     state.Require(partialResult.report.undoEntries.size() == 1u, L"Direct engine partial failure should record undo only for completed rows.");
-    state.Require(ReadBatchRenameFileText(partialRoot / L"ok-renamed.txt") == "ok",
-                  L"Direct engine partial failure should keep the successful rename.");
-    state.Require(ReadBatchRenameFileText(partialRoot / L"fail.txt") == "fail",
-                  L"Direct engine partial failure should leave the failed source in place.");
+    state.Require(ReadBatchRenameFileText(partialRoot / L"ok-renamed.txt") == "ok", L"Direct engine partial failure should keep the successful rename.");
+    state.Require(ReadBatchRenameFileText(partialRoot / L"fail.txt") == "fail", L"Direct engine partial failure should leave the failed source in place.");
 
     const std::filesystem::path directoryRoot = root / L"directory";
-    const std::filesystem::path parentSource = directoryRoot / L"parent";
+    const std::filesystem::path parentSource  = directoryRoot / L"parent";
     state.Require(SelfTest::EnsureDirectory(parentSource), L"Failed to create direct engine parent directory.");
     state.Require(SelfTest::WriteTextFile(parentSource / L"child.txt", "child"), L"Failed to create direct engine child input.");
     std::atomic_uint32_t directoryRenameItemsCalls{0u};
@@ -5957,14 +5970,11 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
         runEngine(directoryFs, {makeOp(parentSource / L"child.txt", L"grandchild.txt"), makeOp(parentSource, L"renamed-parent", true)});
     const std::filesystem::path finalChild = directoryRoot / L"renamed-parent" / L"grandchild.txt";
     state.Require(SUCCEEDED(directoryResult.hr),
-                  std::format(L"Direct engine parent/child rename should succeed: 0x{:08X}.",
-                              static_cast<unsigned long>(directoryResult.hr)));
+                  std::format(L"Direct engine parent/child rename should succeed: 0x{:08X}.", static_cast<unsigned long>(directoryResult.hr)));
     state.Require(ReadBatchRenameFileText(finalChild) == "child", L"Direct engine parent/child rename should move the child under the final parent.");
     state.Require(directoryResult.executedDirectoryMoves.size() == 1u, L"Direct engine should record the parent directory move.");
     state.Require(directoryResult.report.undoEntries.size() == 2u, L"Direct engine parent/child rename should record two undo entries.");
-    const bool childUndoRewritten = std::ranges::any_of(directoryResult.report.undoEntries,
-                                                        [&finalChild](const BatchRenameUndoEntry& entry) noexcept
-    {
+    const bool childUndoRewritten = std::ranges::any_of(directoryResult.report.undoEntries, [&finalChild](const BatchRenameUndoEntry& entry) noexcept {
         return entry.originalPath.filename().native() == L"child.txt" && entry.currentPath == finalChild;
     });
     state.Require(childUndoRewritten, L"Direct engine should rewrite child undo currentPath after the parent directory move.");
@@ -6011,14 +6021,13 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     std::vector<std::filesystem::path> callbackTargets;
 
     BatchRenamePaneContext context{};
-    context.fileSystem      = countingFileSystem;
-    context.pluginId        = L"builtin/file-system";
-    context.pluginShortId   = L"local";
-    context.instanceContext = L"batch-rename-swap-selftest";
-    context.rootPluginPath  = root;
-    context.initialPaths    = {root / L"swap-a.txt", root / L"swap-b.txt"};
-    context.onSuccessfulRename = [&](std::span<const std::filesystem::path> sourcePaths,
-                                     std::span<const std::filesystem::path> targetPaths)
+    context.fileSystem         = countingFileSystem;
+    context.pluginId           = L"builtin/file-system";
+    context.pluginShortId      = L"local";
+    context.instanceContext    = L"batch-rename-swap-selftest";
+    context.rootPluginPath     = root;
+    context.initialPaths       = {root / L"swap-a.txt", root / L"swap-b.txt"};
+    context.onSuccessfulRename = [&](std::span<const std::filesystem::path> sourcePaths, std::span<const std::filesystem::path> targetPaths)
     {
         ++callbackCalls;
         callbackSources.assign(sourcePaths.begin(), sourcePaths.end());
@@ -6026,11 +6035,9 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     };
 
     const AppTheme theme = ResolveAppTheme(ThemeMode::Dark, L"batch-rename-swap-window-selftest");
-    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
-                  L"Batch Rename window should open for swap execution testing.");
+    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)), L"Batch Rename window should open for swap execution testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename swap test window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -6045,8 +6052,7 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     });
 
     state.Require(DebugSwitchBatchRenameWindowMode(BatchRename::Mode::Manual), L"Batch Rename swap test should switch to Manual mode.");
-    state.Require(DebugSetBatchRenameWindowManualText(L"swap-b.txt\nswap-a.txt"),
-                  L"Batch Rename swap test should set crossed manual names.");
+    state.Require(DebugSetBatchRenameWindowManualText(L"swap-b.txt\nswap-a.txt"), L"Batch Rename swap test should set crossed manual names.");
 
     BatchRenameDebugSnapshot before{};
     state.Require(DebugGetBatchRenameWindowSnapshot(before), L"Batch Rename swap preview should be available before executing.");
@@ -6090,8 +6096,7 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     state.Require(! undoReport.contains(L".rsren-"), L"Swap undo plan must not leak temp hop names.");
 
     state.Require(callbackCalls == 1u, std::format(L"Swap execution should invoke the success callback once; saw {}.", callbackCalls));
-    state.Require(callbackSources.size() == 2u && callbackTargets.size() == 2u,
-                  L"Swap success callback should report both renamed rows.");
+    state.Require(callbackSources.size() == 2u && callbackTargets.size() == 2u, L"Swap success callback should report both renamed rows.");
     const auto hasPair = [&](const std::filesystem::path& source, const std::filesystem::path& target) noexcept
     {
         for (size_t index = 0u; index < callbackSources.size() && index < callbackTargets.size(); ++index)
@@ -6103,10 +6108,8 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
         }
         return false;
     };
-    state.Require(hasPair(root / L"swap-a.txt", root / L"swap-b.txt"),
-                  L"Swap success callback should pair the first original with its swapped target.");
-    state.Require(hasPair(root / L"swap-b.txt", root / L"swap-a.txt"),
-                  L"Swap success callback should pair the second original with its swapped target.");
+    state.Require(hasPair(root / L"swap-a.txt", root / L"swap-b.txt"), L"Swap success callback should pair the first original with its swapped target.");
+    state.Require(hasPair(root / L"swap-b.txt", root / L"swap-a.txt"), L"Swap success callback should pair the second original with its swapped target.");
 
     return state.failure.empty();
 }
@@ -6154,11 +6157,9 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     context.initialPaths    = {root / L"chain-a.txt", root / L"chain-b.txt"};
 
     const AppTheme theme = ResolveAppTheme(ThemeMode::Dark, L"batch-rename-chain-window-selftest");
-    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
-                  L"Batch Rename window should open for chain execution testing.");
+    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)), L"Batch Rename window should open for chain execution testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename chain test window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -6173,8 +6174,7 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     });
 
     state.Require(DebugSwitchBatchRenameWindowMode(BatchRename::Mode::Manual), L"Batch Rename chain test should switch to Manual mode.");
-    state.Require(DebugSetBatchRenameWindowManualText(L"chain-b.txt\nchain-c.txt"),
-                  L"Batch Rename chain test should set chained manual names.");
+    state.Require(DebugSetBatchRenameWindowManualText(L"chain-b.txt\nchain-c.txt"), L"Batch Rename chain test should set chained manual names.");
 
     BatchRenameDebugSnapshot before{};
     state.Require(DebugGetBatchRenameWindowSnapshot(before), L"Batch Rename chain preview should be available before executing.");
@@ -6229,10 +6229,8 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     std::filesystem::remove_all(root, ec);
     state.Require(SelfTest::EnsureDirectory(root / L"chain-a"), L"Failed to create first Batch Rename directory-chain input.");
     state.Require(SelfTest::EnsureDirectory(root / L"chain-b"), L"Failed to create second Batch Rename directory-chain input.");
-    state.Require(SelfTest::WriteTextFile(root / L"chain-a" / L"marker-a.txt", "marker-a"),
-                  L"Failed to create first Batch Rename directory-chain marker.");
-    state.Require(SelfTest::WriteTextFile(root / L"chain-b" / L"marker-b.txt", "marker-b"),
-                  L"Failed to create second Batch Rename directory-chain marker.");
+    state.Require(SelfTest::WriteTextFile(root / L"chain-a" / L"marker-a.txt", "marker-a"), L"Failed to create first Batch Rename directory-chain marker.");
+    state.Require(SelfTest::WriteTextFile(root / L"chain-b" / L"marker-b.txt", "marker-b"), L"Failed to create second Batch Rename directory-chain marker.");
     if (! state.failure.empty())
     {
         return false;
@@ -6256,8 +6254,7 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
                   L"Batch Rename window should open for directory-chain undo testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename directory-chain undo test window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -6272,8 +6269,7 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     });
 
     state.Require(DebugSwitchBatchRenameWindowMode(BatchRename::Mode::Manual), L"Batch Rename directory-chain undo test should switch to Manual mode.");
-    state.Require(DebugSetBatchRenameWindowManualText(L"chain-b\nchain-c"),
-                  L"Batch Rename directory-chain undo test should set chained manual names.");
+    state.Require(DebugSetBatchRenameWindowManualText(L"chain-b\nchain-c"), L"Batch Rename directory-chain undo test should set chained manual names.");
 
     BatchRenameDebugSnapshot before{};
     state.Require(DebugGetBatchRenameWindowSnapshot(before), L"Batch Rename directory-chain preview should be available before executing.");
@@ -6291,8 +6287,7 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     state.Require(! SelfTest::PathExists(root / L"chain-a"), L"Directory-chain execution should vacate the chain head name.");
     state.Require(SelfTest::PathExists(root / L"chain-b" / L"marker-a.txt"),
                   L"Directory-chain execution should move the first directory to the vacated middle name.");
-    state.Require(SelfTest::PathExists(root / L"chain-c" / L"marker-b.txt"),
-                  L"Directory-chain execution should move the second directory to the tail name.");
+    state.Require(SelfTest::PathExists(root / L"chain-c" / L"marker-b.txt"), L"Directory-chain execution should move the second directory to the tail name.");
 
     BatchRenameDebugSnapshot after{};
     state.Require(DebugGetBatchRenameWindowSnapshot(after), L"Batch Rename directory-chain snapshot should be available after executing.");
@@ -6361,8 +6356,7 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
                   L"Batch Rename window should open for case-only dependency testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename case-only dependency test window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -6376,8 +6370,7 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
         std::filesystem::remove_all(root, removeEc);
     });
 
-    state.Require(DebugSwitchBatchRenameWindowMode(BatchRename::Mode::Manual),
-                  L"Batch Rename case-only dependency test should switch to Manual mode.");
+    state.Require(DebugSwitchBatchRenameWindowMode(BatchRename::Mode::Manual), L"Batch Rename case-only dependency test should switch to Manual mode.");
     state.Require(DebugSetBatchRenameWindowManualText(L"caseswap.txt\nplain-renamed.txt"),
                   L"Batch Rename case-only dependency test should set a case-only name beside a normal rename.");
 
@@ -6401,8 +6394,7 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     state.Require(! DirectoryHasBatchRenameTempLeftovers(root), L"Case-only dependency execution must not leave .rsren- temp files behind.");
     state.Require(ListBatchRenameDirectoryLeaves(root) == std::vector<std::wstring>{L"caseswap.txt", L"plain-renamed.txt"},
                   L"Case-only dependency execution should apply the exact requested casing and the sibling rename.");
-    state.Require(ReadBatchRenameFileText(root / L"caseswap.txt") == "case-content",
-                  L"Case-only rename should preserve the file content.");
+    state.Require(ReadBatchRenameFileText(root / L"caseswap.txt") == "case-content", L"Case-only rename should preserve the file content.");
 
     BatchRenameDebugSnapshot after{};
     state.Require(DebugGetBatchRenameWindowSnapshot(after), L"Batch Rename case-only dependency snapshot should be available after executing.");
@@ -6441,8 +6433,7 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
 
     const HRESULT failHr = HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
     std::atomic_uint32_t renameItemsCalls{0u};
-    wil::com_ptr<IFileSystem> partialFileSystem =
-        CreateBatchRenameScriptedPerItemFileSystem(fileSystem, &renameItemsCalls, L"part-b.txt", failHr, false);
+    wil::com_ptr<IFileSystem> partialFileSystem = CreateBatchRenameScriptedPerItemFileSystem(fileSystem, &renameItemsCalls, L"part-b.txt", failHr, false);
     state.Require(partialFileSystem != nullptr, L"Batch Rename partial-failure selftest should create a scripted per-item file-system wrapper.");
     if (! partialFileSystem)
     {
@@ -6454,14 +6445,13 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     std::vector<std::filesystem::path> callbackTargets;
 
     BatchRenamePaneContext context{};
-    context.fileSystem      = partialFileSystem;
-    context.pluginId        = L"builtin/file-system";
-    context.pluginShortId   = L"local";
-    context.instanceContext = L"batch-rename-partial-selftest";
-    context.rootPluginPath  = root;
-    context.initialPaths    = {root / L"part-a.txt", root / L"part-b.txt", root / L"part-c.txt"};
-    context.onSuccessfulRename = [&](std::span<const std::filesystem::path> sourcePaths,
-                                     std::span<const std::filesystem::path> targetPaths)
+    context.fileSystem         = partialFileSystem;
+    context.pluginId           = L"builtin/file-system";
+    context.pluginShortId      = L"local";
+    context.instanceContext    = L"batch-rename-partial-selftest";
+    context.rootPluginPath     = root;
+    context.initialPaths       = {root / L"part-a.txt", root / L"part-b.txt", root / L"part-c.txt"};
+    context.onSuccessfulRename = [&](std::span<const std::filesystem::path> sourcePaths, std::span<const std::filesystem::path> targetPaths)
     {
         ++callbackCalls;
         callbackSources.assign(sourcePaths.begin(), sourcePaths.end());
@@ -6469,11 +6459,9 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     };
 
     const AppTheme theme = ResolveAppTheme(ThemeMode::Dark, L"batch-rename-partial-window-selftest");
-    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
-                  L"Batch Rename window should open for partial-failure testing.");
+    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)), L"Batch Rename window should open for partial-failure testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename partial-failure test window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -6497,8 +6485,7 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
 
     const HRESULT executeHr = DebugExecuteBatchRenameWindow();
     state.Require(executeHr == failHr,
-                  std::format(L"Partial batch failure should surface the per-item failure; saw 0x{:08X}.",
-                              static_cast<unsigned long>(executeHr)));
+                  std::format(L"Partial batch failure should surface the per-item failure; saw 0x{:08X}.", static_cast<unsigned long>(executeHr)));
 
     state.Require(SelfTest::PathExists(root / L"partial-001.txt"), L"Partial failure should keep the first successful rename.");
     state.Require(SelfTest::PathExists(root / L"partial-003.txt"), L"Partial failure should keep the third successful rename.");
@@ -6536,10 +6523,8 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
         }
         return false;
     };
-    state.Require(hasPair(root / L"part-a.txt", root / L"partial-001.txt"),
-                  L"Partial-failure success callback should pair the first completed row.");
-    state.Require(hasPair(root / L"part-c.txt", root / L"partial-003.txt"),
-                  L"Partial-failure success callback should pair the third completed row.");
+    state.Require(hasPair(root / L"part-a.txt", root / L"partial-001.txt"), L"Partial-failure success callback should pair the first completed row.");
+    state.Require(hasPair(root / L"part-c.txt", root / L"partial-003.txt"), L"Partial-failure success callback should pair the third completed row.");
     state.Require(std::ranges::find(callbackSources, root / L"part-b.txt") == callbackSources.end(),
                   L"Partial-failure success callback must not report the failed row.");
 
@@ -6581,8 +6566,7 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     }
 
     std::atomic_uint32_t renameItemsCalls{0u};
-    wil::com_ptr<IFileSystem> omittedFileSystem =
-        CreateBatchRenameOmittedCompletionFileSystem(fileSystem, &renameItemsCalls, L"omit-b.txt");
+    wil::com_ptr<IFileSystem> omittedFileSystem = CreateBatchRenameOmittedCompletionFileSystem(fileSystem, &renameItemsCalls, L"omit-b.txt");
     state.Require(omittedFileSystem != nullptr, L"Batch Rename omitted-completion selftest should create a scripted file-system wrapper.");
     if (! omittedFileSystem)
     {
@@ -6594,14 +6578,13 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     std::vector<std::filesystem::path> callbackTargets;
 
     BatchRenamePaneContext context{};
-    context.fileSystem      = omittedFileSystem;
-    context.pluginId        = L"builtin/file-system";
-    context.pluginShortId   = L"local";
-    context.instanceContext = L"batch-rename-omitted-completion-selftest";
-    context.rootPluginPath  = root;
-    context.initialPaths    = {root / L"omit-a.txt", root / L"omit-b.txt", root / L"omit-c.txt"};
-    context.onSuccessfulRename = [&](std::span<const std::filesystem::path> sourcePaths,
-                                     std::span<const std::filesystem::path> targetPaths)
+    context.fileSystem         = omittedFileSystem;
+    context.pluginId           = L"builtin/file-system";
+    context.pluginShortId      = L"local";
+    context.instanceContext    = L"batch-rename-omitted-completion-selftest";
+    context.rootPluginPath     = root;
+    context.initialPaths       = {root / L"omit-a.txt", root / L"omit-b.txt", root / L"omit-c.txt"};
+    context.onSuccessfulRename = [&](std::span<const std::filesystem::path> sourcePaths, std::span<const std::filesystem::path> targetPaths)
     {
         ++callbackCalls;
         callbackSources.assign(sourcePaths.begin(), sourcePaths.end());
@@ -6609,11 +6592,9 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     };
 
     const AppTheme theme = ResolveAppTheme(ThemeMode::Dark, L"batch-rename-omitted-completion-window-selftest");
-    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
-                  L"Batch Rename window should open for omitted-completion testing.");
+    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)), L"Batch Rename window should open for omitted-completion testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename omitted-completion test window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -6638,30 +6619,26 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     const HRESULT expectedFailure = HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     const HRESULT executeHr       = DebugExecuteBatchRenameWindow();
     state.Require(executeHr == expectedFailure,
-                  std::format(L"Omitted item completion should surface ERROR_INVALID_DATA; saw 0x{:08X}.",
-                              static_cast<unsigned long>(executeHr)));
+                  std::format(L"Omitted item completion should surface ERROR_INVALID_DATA; saw 0x{:08X}.", static_cast<unsigned long>(executeHr)));
     state.Require(renameItemsCalls.load(std::memory_order_relaxed) == 1u,
-                  std::format(L"Omitted-completion test should use one bulk RenameItems call; saw {}.",
-                              renameItemsCalls.load(std::memory_order_relaxed)));
+                  std::format(L"Omitted-completion test should use one bulk RenameItems call; saw {}.", renameItemsCalls.load(std::memory_order_relaxed)));
 
     BatchRenameDebugSnapshot after{};
     state.Require(DebugGetBatchRenameWindowSnapshot(after), L"Batch Rename omitted-completion snapshot should be available after executing.");
     state.Require(after.hasExecutionReport, L"Omitted item completion should retain an execution report.");
-    state.Require(after.lastExecutionCompletedRows == 2u,
-                  std::format(L"Omitted item completion should report only the two callback-confirmed rows as completed; saw {}.",
-                              after.lastExecutionCompletedRows));
+    state.Require(
+        after.lastExecutionCompletedRows == 2u,
+        std::format(L"Omitted item completion should report only the two callback-confirmed rows as completed; saw {}.", after.lastExecutionCompletedRows));
     state.Require(after.lastExecutionFailedRows == 1u,
                   std::format(L"Omitted item completion should count the unreported row as failed; saw {}.", after.lastExecutionFailedRows));
     state.Require(after.lastExecutionUndoRowCount == 2u,
-                  std::format(L"Omitted item completion should record undo only for callback-confirmed rows; saw {}.",
-                              after.lastExecutionUndoRowCount));
-    state.Require(after.lastExecutionFirstFailure == expectedFailure,
-                  std::format(L"Omitted item completion should retain ERROR_INVALID_DATA; saw 0x{:08X}.",
-                              static_cast<unsigned long>(after.lastExecutionFirstFailure)));
+                  std::format(L"Omitted item completion should record undo only for callback-confirmed rows; saw {}.", after.lastExecutionUndoRowCount));
+    state.Require(
+        after.lastExecutionFirstFailure == expectedFailure,
+        std::format(L"Omitted item completion should retain ERROR_INVALID_DATA; saw 0x{:08X}.", static_cast<unsigned long>(after.lastExecutionFirstFailure)));
 
     state.Require(callbackCalls == 1u,
-                  std::format(L"Omitted item completion should still invoke the success callback for confirmed rows; saw {} calls.",
-                              callbackCalls));
+                  std::format(L"Omitted item completion should still invoke the success callback for confirmed rows; saw {} calls.", callbackCalls));
     state.Require(callbackSources.size() == 2u && callbackTargets.size() == 2u,
                   L"Omitted item completion should report exactly the two callback-confirmed rows.");
     state.Require(std::ranges::find(callbackSources, root / L"omit-b.txt") == callbackSources.end(),
@@ -6709,8 +6686,7 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     std::atomic_uint32_t renameItemsCalls{0u};
     wil::com_ptr<IFileSystem> reportedFailureFileSystem =
         CreateBatchRenameReportedFailureOverallSuccessFileSystem(fileSystem, &renameItemsCalls, L"swap-aaaa.txt", reportedFailure);
-    state.Require(reportedFailureFileSystem != nullptr,
-                  L"Batch Rename temp-hop reported-failure selftest should create a scripted file-system wrapper.");
+    state.Require(reportedFailureFileSystem != nullptr, L"Batch Rename temp-hop reported-failure selftest should create a scripted file-system wrapper.");
     if (! reportedFailureFileSystem)
     {
         return false;
@@ -6728,8 +6704,7 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
                   L"Batch Rename window should open for temp-hop reported-failure testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename temp-hop reported-failure window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -6743,8 +6718,7 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
         std::filesystem::remove_all(root, removeEc);
     });
 
-    state.Require(DebugSwitchBatchRenameWindowMode(BatchRename::Mode::Manual),
-                  L"Batch Rename temp-hop reported-failure test should switch to Manual mode.");
+    state.Require(DebugSwitchBatchRenameWindowMode(BatchRename::Mode::Manual), L"Batch Rename temp-hop reported-failure test should switch to Manual mode.");
     state.Require(DebugSetBatchRenameWindowManualText(L"b.txt\nswap-aaaa.txt"),
                   L"Batch Rename temp-hop reported-failure test should set crossed manual names.");
 
@@ -6753,11 +6727,10 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     state.Require(before.renameButtonEnabled, L"Valid swap preview should enable execution before the provider reports temp-hop failure.");
 
     const HRESULT executeHr = DebugExecuteBatchRenameWindow();
-    state.Require(executeHr == reportedFailure,
-                  std::format(L"Temp-hop reported failure should surface the item failure despite overall S_OK; saw 0x{:08X}.",
-                              static_cast<unsigned long>(executeHr)));
-    state.Require(renameItemsCalls.load(std::memory_order_relaxed) >= 1u,
-                  L"Temp-hop reported failure should attempt at least the temp-hop RenameItems call.");
+    state.Require(
+        executeHr == reportedFailure,
+        std::format(L"Temp-hop reported failure should surface the item failure despite overall S_OK; saw 0x{:08X}.", static_cast<unsigned long>(executeHr)));
+    state.Require(renameItemsCalls.load(std::memory_order_relaxed) >= 1u, L"Temp-hop reported failure should attempt at least the temp-hop RenameItems call.");
 
     state.Require(SelfTest::PathExists(longSource), L"Temp-hop reported failure should leave the original long source in place.");
     state.Require(SelfTest::PathExists(shortSource), L"Temp-hop reported failure should leave the short source in place after the blocked swap.");
@@ -6811,8 +6784,7 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
 
     const HRESULT failHr = HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
     std::atomic_uint32_t renameItemsCalls{0u};
-    wil::com_ptr<IFileSystem> partialFileSystem =
-        CreateBatchRenameScriptedPerItemFileSystem(fileSystem, &renameItemsCalls, L"b.txt", failHr, false);
+    wil::com_ptr<IFileSystem> partialFileSystem = CreateBatchRenameScriptedPerItemFileSystem(fileSystem, &renameItemsCalls, L"b.txt", failHr, false);
     state.Require(partialFileSystem != nullptr, L"Batch Rename swap-rollback selftest should create a scripted file-system wrapper.");
     if (! partialFileSystem)
     {
@@ -6828,11 +6800,9 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     context.initialPaths    = {longSource, shortSource};
 
     const AppTheme theme = ResolveAppTheme(ThemeMode::Dark, L"batch-rename-swap-rollback-window-selftest");
-    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
-                  L"Batch Rename window should open for swap rollback testing.");
+    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)), L"Batch Rename window should open for swap rollback testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename swap rollback window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -6847,8 +6817,7 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     });
 
     state.Require(DebugSwitchBatchRenameWindowMode(BatchRename::Mode::Manual), L"Batch Rename swap-rollback test should switch to Manual mode.");
-    state.Require(DebugSetBatchRenameWindowManualText(L"b.txt\nswap-aaaa.txt"),
-                  L"Batch Rename swap-rollback test should set crossed manual names.");
+    state.Require(DebugSetBatchRenameWindowManualText(L"b.txt\nswap-aaaa.txt"), L"Batch Rename swap-rollback test should set crossed manual names.");
 
     BatchRenameDebugSnapshot before{};
     state.Require(DebugGetBatchRenameWindowSnapshot(before), L"Batch Rename swap-rollback preview should be available.");
@@ -6856,11 +6825,10 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
 
     const HRESULT executeHr = DebugExecuteBatchRenameWindow();
     state.Require(executeHr == failHr,
-                  std::format(L"Swap rollback should surface the failing non-temp row; saw 0x{:08X}.",
-                              static_cast<unsigned long>(executeHr)));
-    state.Require(renameItemsCalls.load(std::memory_order_relaxed) == 2u,
-                  std::format(L"Swap rollback should execute temp hop plus failing layer; saw {} RenameItems calls.",
-                              renameItemsCalls.load(std::memory_order_relaxed)));
+                  std::format(L"Swap rollback should surface the failing non-temp row; saw 0x{:08X}.", static_cast<unsigned long>(executeHr)));
+    state.Require(
+        renameItemsCalls.load(std::memory_order_relaxed) == 2u,
+        std::format(L"Swap rollback should execute temp hop plus failing layer; saw {} RenameItems calls.", renameItemsCalls.load(std::memory_order_relaxed)));
 
     state.Require(SelfTest::PathExists(longSource), L"Swap rollback should restore the temp-hop source leaf.");
     state.Require(SelfTest::PathExists(shortSource), L"Swap rollback should preserve the failed non-temp source leaf.");
@@ -6906,8 +6874,7 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     }
 
     std::atomic_uint32_t renameItemsCalls{0u};
-    wil::com_ptr<IFileSystem> cancelFileSystem =
-        CreateBatchRenameScriptedPerItemFileSystem(fileSystem, &renameItemsCalls, {}, S_OK, true);
+    wil::com_ptr<IFileSystem> cancelFileSystem = CreateBatchRenameScriptedPerItemFileSystem(fileSystem, &renameItemsCalls, {}, S_OK, true);
     state.Require(cancelFileSystem != nullptr, L"Batch Rename swap cancel selftest should create a scripted file-system wrapper.");
     if (! cancelFileSystem)
     {
@@ -6926,8 +6893,7 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
                   L"Batch Rename window should open for swap cancel rollback testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename swap cancel rollback window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -6941,20 +6907,17 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
         std::filesystem::remove_all(root, removeEc);
     });
 
-    state.Require(DebugSwitchBatchRenameWindowMode(BatchRename::Mode::Manual),
-                  L"Batch Rename swap cancel rollback test should switch to Manual mode.");
-    state.Require(DebugSetBatchRenameWindowManualText(L"b.txt\nswap-aaaa.txt"),
-                  L"Batch Rename swap cancel rollback test should set crossed manual names.");
+    state.Require(DebugSwitchBatchRenameWindowMode(BatchRename::Mode::Manual), L"Batch Rename swap cancel rollback test should switch to Manual mode.");
+    state.Require(DebugSetBatchRenameWindowManualText(L"b.txt\nswap-aaaa.txt"), L"Batch Rename swap cancel rollback test should set crossed manual names.");
 
     BatchRenameDebugSnapshot before{};
     state.Require(DebugGetBatchRenameWindowSnapshot(before), L"Batch Rename swap cancel rollback preview should be available.");
     state.Require(before.renameButtonEnabled, L"Valid swap preview should enable execution.");
 
-    const HRESULT cancelHr = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+    const HRESULT cancelHr  = HRESULT_FROM_WIN32(ERROR_CANCELLED);
     const HRESULT executeHr = DebugExecuteBatchRenameWindow();
     state.Require(executeHr == cancelHr,
-                  std::format(L"Swap cancel rollback should surface cancellation after temp hop; saw 0x{:08X}.",
-                              static_cast<unsigned long>(executeHr)));
+                  std::format(L"Swap cancel rollback should surface cancellation after temp hop; saw 0x{:08X}.", static_cast<unsigned long>(executeHr)));
 
     state.Require(SelfTest::PathExists(longSource), L"Swap cancel rollback should restore the temp-hop source leaf.");
     state.Require(SelfTest::PathExists(shortSource), L"Swap cancel rollback should preserve the untouched short source leaf.");
@@ -7016,11 +6979,9 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     context.initialPaths    = {root / L"cycle-a.txt", root / L"cycle-b.txt", root / L"cycle-c.txt"};
 
     const AppTheme theme = ResolveAppTheme(ThemeMode::Dark, L"batch-rename-three-cycle-window-selftest");
-    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
-                  L"Batch Rename window should open for three-cycle testing.");
+    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)), L"Batch Rename window should open for three-cycle testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename three-cycle window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -7043,8 +7004,7 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     state.Require(before.renameButtonEnabled, L"Valid three-cycle preview should enable execution.");
 
     const HRESULT executeHr = DebugExecuteBatchRenameWindow();
-    state.Require(SUCCEEDED(executeHr),
-                  std::format(L"Three-member cycle execution should succeed: 0x{:08X}.", static_cast<unsigned long>(executeHr)));
+    state.Require(SUCCEEDED(executeHr), std::format(L"Three-member cycle execution should succeed: 0x{:08X}.", static_cast<unsigned long>(executeHr)));
     if (FAILED(executeHr))
     {
         return false;
@@ -7098,8 +7058,7 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     }
 
     std::atomic_uint32_t renameItemsCalls{0u};
-    wil::com_ptr<IFileSystem> cancelFileSystem =
-        CreateBatchRenameScriptedPerItemFileSystem(fileSystem, &renameItemsCalls, {}, S_OK, true);
+    wil::com_ptr<IFileSystem> cancelFileSystem = CreateBatchRenameScriptedPerItemFileSystem(fileSystem, &renameItemsCalls, {}, S_OK, true);
     state.Require(cancelFileSystem != nullptr, L"Batch Rename mid-cancel selftest should create a cancel-after-first file-system wrapper.");
     if (! cancelFileSystem)
     {
@@ -7111,14 +7070,13 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     std::vector<std::filesystem::path> callbackTargets;
 
     BatchRenamePaneContext context{};
-    context.fileSystem      = cancelFileSystem;
-    context.pluginId        = L"builtin/file-system";
-    context.pluginShortId   = L"local";
-    context.instanceContext = L"batch-rename-midcancel-selftest";
-    context.rootPluginPath  = root;
-    context.initialPaths    = {firstSource, secondSource};
-    context.onSuccessfulRename = [&](std::span<const std::filesystem::path> sourcePaths,
-                                     std::span<const std::filesystem::path> targetPaths)
+    context.fileSystem         = cancelFileSystem;
+    context.pluginId           = L"builtin/file-system";
+    context.pluginShortId      = L"local";
+    context.instanceContext    = L"batch-rename-midcancel-selftest";
+    context.rootPluginPath     = root;
+    context.initialPaths       = {firstSource, secondSource};
+    context.onSuccessfulRename = [&](std::span<const std::filesystem::path> sourcePaths, std::span<const std::filesystem::path> targetPaths)
     {
         ++callbackCalls;
         callbackSources.assign(sourcePaths.begin(), sourcePaths.end());
@@ -7126,11 +7084,9 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     };
 
     const AppTheme theme = ResolveAppTheme(ThemeMode::Dark, L"batch-rename-midcancel-window-selftest");
-    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
-                  L"Batch Rename window should open for mid-batch cancel testing.");
+    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)), L"Batch Rename window should open for mid-batch cancel testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename mid-batch cancel test window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -7150,13 +7106,10 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
 
     const HRESULT executeHr = DebugExecuteBatchRenameWindow();
     state.Require(executeHr == HRESULT_FROM_WIN32(ERROR_CANCELLED),
-                  std::format(L"Mid-batch cancel execution should return ERROR_CANCELLED; saw 0x{:08X}.",
-                              static_cast<unsigned long>(executeHr)));
-    state.Require(renameItemsCalls.load(std::memory_order_relaxed) == 1u,
-                  L"Mid-batch cancel test should reach the provider exactly once.");
+                  std::format(L"Mid-batch cancel execution should return ERROR_CANCELLED; saw 0x{:08X}.", static_cast<unsigned long>(executeHr)));
+    state.Require(renameItemsCalls.load(std::memory_order_relaxed) == 1u, L"Mid-batch cancel test should reach the provider exactly once.");
 
-    state.Require(SelfTest::PathExists(root / L"midcancel-001.txt"),
-                  L"Mid-batch cancel should keep the row completed before the cancellation.");
+    state.Require(SelfTest::PathExists(root / L"midcancel-001.txt"), L"Mid-batch cancel should keep the row completed before the cancellation.");
     state.Require(! SelfTest::PathExists(firstSource), L"Mid-batch cancel should remove the completed row's source.");
     state.Require(SelfTest::PathExists(secondSource), L"Mid-batch cancel should preserve the remaining row's source.");
     state.Require(! SelfTest::PathExists(root / L"midcancel-002.txt"), L"Mid-batch cancel should not apply the remaining row.");
@@ -7172,8 +7125,7 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     state.Require(after.lastExecutionUndoRowCount == 1u,
                   std::format(L"Mid-batch cancel should record an undo entry for the completed row only; saw {}.", after.lastExecutionUndoRowCount));
 
-    state.Require(callbackCalls == 1u,
-                  std::format(L"Mid-batch cancel should invoke the success callback for the completed row; saw {} calls.", callbackCalls));
+    state.Require(callbackCalls == 1u, std::format(L"Mid-batch cancel should invoke the success callback for the completed row; saw {} calls.", callbackCalls));
     state.Require(callbackSources == std::vector<std::filesystem::path>{firstSource} &&
                       callbackTargets == std::vector<std::filesystem::path>{root / L"midcancel-001.txt"},
                   L"Mid-batch cancel success callback should report exactly the completed pre-cancel row.");
@@ -7230,11 +7182,9 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     context.initialPaths    = {root / L"busy-a.txt", root / L"busy-b.txt"};
 
     const AppTheme theme = ResolveAppTheme(ThemeMode::Dark, L"batch-rename-busy-window-selftest");
-    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
-                  L"Batch Rename window should open for busy-state testing.");
+    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)), L"Batch Rename window should open for busy-state testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename busy test window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -7244,8 +7194,8 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     const auto cleanupBatchWindow = wil::scope_exit([]() noexcept { CloseBatchRenameWindowIfOpen(); });
     // Declared after the window cleanup so the gate opens before the window
     // joins its worker on close, even when an assertion fails mid-test.
-    const auto releaseGate    = wil::scope_exit([&gate]() noexcept { static_cast<void>(SetEvent(gate.get())); });
-    const auto cleanupFiles   = wil::scope_exit([root]() noexcept
+    const auto releaseGate  = wil::scope_exit([&gate]() noexcept { static_cast<void>(SetEvent(gate.get())); });
+    const auto cleanupFiles = wil::scope_exit([root]() noexcept
     {
         std::error_code removeEc;
         std::filesystem::remove_all(root, removeEc);
@@ -7256,8 +7206,7 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     state.Require(DebugSetBatchRenameWindowRules(rules), L"Batch Rename busy test should set valid rules.");
 
     const HRESULT startHr = DebugStartBatchRenameWindowExecution();
-    state.Require(startHr == S_OK,
-                  std::format(L"Batch Rename busy test should start the gated execution; saw 0x{:08X}.", static_cast<unsigned long>(startHr)));
+    state.Require(startHr == S_OK, std::format(L"Batch Rename busy test should start the gated execution; saw 0x{:08X}.", static_cast<unsigned long>(startHr)));
     if (FAILED(startHr))
     {
         return false;
@@ -7265,15 +7214,13 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
 
     const HRESULT busyHr = DebugStartBatchRenameWindowExecution();
     state.Require(busyHr == HRESULT_FROM_WIN32(ERROR_BUSY),
-                  std::format(L"ExecuteRename while an execution is in flight should return ERROR_BUSY; saw 0x{:08X}.",
-                              static_cast<unsigned long>(busyHr)));
+                  std::format(L"ExecuteRename while an execution is in flight should return ERROR_BUSY; saw 0x{:08X}.", static_cast<unsigned long>(busyHr)));
 
     state.Require(SetEvent(gate.get()) != FALSE, L"Batch Rename busy test should release the provider gate.");
 
     const HRESULT terminalHr = DebugWaitBatchRenameWindowExecutionIdle();
     state.Require(SUCCEEDED(terminalHr),
-                  std::format(L"Gated Batch Rename execution should finish successfully after release; saw 0x{:08X}.",
-                              static_cast<unsigned long>(terminalHr)));
+                  std::format(L"Gated Batch Rename execution should finish successfully after release; saw 0x{:08X}.", static_cast<unsigned long>(terminalHr)));
 
     state.Require(SelfTest::PathExists(root / L"busy-renamed-001.txt"), L"Gated execution should create the first renamed path.");
     state.Require(SelfTest::PathExists(root / L"busy-renamed-002.txt"), L"Gated execution should create the second renamed path.");
@@ -7335,18 +7282,16 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     context.initialPaths    = {root / L"close-a.txt", root / L"close-b.txt"};
 
     const AppTheme theme = ResolveAppTheme(ThemeMode::Dark, L"batch-rename-close-inflight-window-selftest");
-    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
-                  L"Batch Rename window should open for close-in-flight testing.");
+    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)), L"Batch Rename window should open for close-in-flight testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename close-in-flight test window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
         return false;
     }
 
-    const auto cleanupFiles = wil::scope_exit([root]() noexcept
+    const auto cleanupFiles       = wil::scope_exit([root]() noexcept
     {
         std::error_code removeEc;
         std::filesystem::remove_all(root, removeEc);
@@ -7364,8 +7309,7 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
 
     const HRESULT startHr = DebugStartBatchRenameWindowExecution();
     state.Require(startHr == S_OK,
-                  std::format(L"Batch Rename close-in-flight test should start the gated execution; saw 0x{:08X}.",
-                              static_cast<unsigned long>(startHr)));
+                  std::format(L"Batch Rename close-in-flight test should start the gated execution; saw 0x{:08X}.", static_cast<unsigned long>(startHr)));
     if (FAILED(startHr))
     {
         return false;
@@ -7385,9 +7329,9 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     state.Require(DebugGetBatchRenameWindowCount() == 0u, L"Batch Rename close-in-flight teardown should leave no live window.");
 
     const bool originalsOnly = SelfTest::PathExists(root / L"close-a.txt") && SelfTest::PathExists(root / L"close-b.txt") &&
-        ! SelfTest::PathExists(root / L"close-renamed-001.txt") && ! SelfTest::PathExists(root / L"close-renamed-002.txt");
-    const bool renamedOnly = ! SelfTest::PathExists(root / L"close-a.txt") && ! SelfTest::PathExists(root / L"close-b.txt") &&
-        SelfTest::PathExists(root / L"close-renamed-001.txt") && SelfTest::PathExists(root / L"close-renamed-002.txt");
+                               ! SelfTest::PathExists(root / L"close-renamed-001.txt") && ! SelfTest::PathExists(root / L"close-renamed-002.txt");
+    const bool renamedOnly   = ! SelfTest::PathExists(root / L"close-a.txt") && ! SelfTest::PathExists(root / L"close-b.txt") &&
+                               SelfTest::PathExists(root / L"close-renamed-001.txt") && SelfTest::PathExists(root / L"close-renamed-002.txt");
     state.Require(originalsOnly || renamedOnly,
                   L"Closing during in-flight execution should leave either both originals or both destinations, never a half state.");
     state.Require(! DirectoryHasBatchRenameTempLeftovers(root), L"Closing during in-flight execution must not leave .rsren- temp files behind.");
@@ -7401,10 +7345,8 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     }
     else if (originalsOnly)
     {
-        state.Require(ReadBatchRenameFileText(root / L"close-a.txt") == "a",
-                      L"Close-in-flight cancellation should preserve first source content.");
-        state.Require(ReadBatchRenameFileText(root / L"close-b.txt") == "b",
-                      L"Close-in-flight cancellation should preserve second source content.");
+        state.Require(ReadBatchRenameFileText(root / L"close-a.txt") == "a", L"Close-in-flight cancellation should preserve first source content.");
+        state.Require(ReadBatchRenameFileText(root / L"close-b.txt") == "b", L"Close-in-flight cancellation should preserve second source content.");
     }
 
     return state.failure.empty();
@@ -7445,11 +7387,9 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     context.initialPaths    = {root / L"keep-a.txt", root / L"keep-b.txt"};
 
     const AppTheme theme = ResolveAppTheme(ThemeMode::Dark, L"batch-rename-report-keep-window-selftest");
-    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
-                  L"Batch Rename window should open for report-retention testing.");
+    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)), L"Batch Rename window should open for report-retention testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename report-retention test window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -7481,13 +7421,10 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     state.Require(afterExecute.lastExecutionCompletedRows == 2u && afterExecute.lastExecutionUndoRowCount == 2u,
                   L"Execution report should record both completed rows and undo entries.");
 
-    const auto requireSamePreviewStatsAndGate = [&](const BatchRenameDebugSnapshot& snapshot,
-                                                    const BatchRenameDebugSnapshot& baseline,
-                                                    const wchar_t* label)
+    const auto requireSamePreviewStatsAndGate = [&](const BatchRenameDebugSnapshot& snapshot, const BatchRenameDebugSnapshot& baseline, const wchar_t* label)
     {
         state.Require(snapshot.changedRowCount == baseline.changedRowCount && snapshot.errorRowCount == baseline.errorRowCount &&
-                          snapshot.warningRowCount == baseline.warningRowCount &&
-                          snapshot.renameButtonEnabled == baseline.renameButtonEnabled,
+                          snapshot.warningRowCount == baseline.warningRowCount && snapshot.renameButtonEnabled == baseline.renameButtonEnabled,
                       std::format(L"{} should preserve full-plan stats and Rename gating; before changed/errors/warnings/enabled={}/{}/{}/{}, "
                                   L"after={}/{}/{}/{}.",
                                   label,
@@ -7504,8 +7441,7 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     const uint64_t sortBuildPlanRowsBefore      = CountBatchRenamePerfRowsWithMetric("batchrename.preview.build_plan_us");
     const uint64_t sortRecomputeRowsBefore      = CountBatchRenamePerfRowsWithMetric("batchrename.preview.recompute.us");
     const uint64_t sortVisibleRefreshRowsBefore = CountBatchRenamePerfRowsWithMetric("batchrename.preview.visible_refresh.us");
-    state.Require(DebugSetBatchRenameWindowPreviewSort(L"original", true),
-                  L"Batch Rename report-retention test should sort the preview by original name.");
+    state.Require(DebugSetBatchRenameWindowPreviewSort(L"original", true), L"Batch Rename report-retention test should sort the preview by original name.");
     const uint64_t sortBuildPlanRowsAfter      = CountBatchRenamePerfRowsWithMetric("batchrename.preview.build_plan_us");
     const uint64_t sortRecomputeRowsAfter      = CountBatchRenamePerfRowsWithMetric("batchrename.preview.recompute.us");
     const uint64_t sortVisibleRefreshRowsAfter = CountBatchRenamePerfRowsWithMetric("batchrename.preview.visible_refresh.us");
@@ -7533,8 +7469,7 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     const uint64_t hideBuildPlanRowsBefore      = CountBatchRenamePerfRowsWithMetric("batchrename.preview.build_plan_us");
     const uint64_t hideRecomputeRowsBefore      = CountBatchRenamePerfRowsWithMetric("batchrename.preview.recompute.us");
     const uint64_t hideVisibleRefreshRowsBefore = CountBatchRenamePerfRowsWithMetric("batchrename.preview.visible_refresh.us");
-    state.Require(DebugSetBatchRenameWindowHideUnchanged(true),
-                  L"Batch Rename report-retention test should enable Hide unchanged.");
+    state.Require(DebugSetBatchRenameWindowHideUnchanged(true), L"Batch Rename report-retention test should enable Hide unchanged.");
     const uint64_t hideBuildPlanRowsAfter      = CountBatchRenamePerfRowsWithMetric("batchrename.preview.build_plan_us");
     const uint64_t hideRecomputeRowsAfter      = CountBatchRenamePerfRowsWithMetric("batchrename.preview.recompute.us");
     const uint64_t hideVisibleRefreshRowsAfter = CountBatchRenamePerfRowsWithMetric("batchrename.preview.visible_refresh.us");
@@ -7558,8 +7493,7 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
                               hideVisibleRefreshRowsBefore,
                               hideVisibleRefreshRowsAfter));
 
-    state.Require(DebugSetBatchRenameWindowHideUnchanged(false),
-                  L"Batch Rename report-retention test should restore unchanged rows.");
+    state.Require(DebugSetBatchRenameWindowHideUnchanged(false), L"Batch Rename report-retention test should restore unchanged rows.");
 
     BatchRenameDebugSnapshot afterRestore{};
     state.Require(DebugGetBatchRenameWindowSnapshot(afterRestore), L"Batch Rename post-restore snapshot should be available.");
@@ -7575,8 +7509,7 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
 
     BatchRename::Rules changedRules{};
     changedRules.nameTemplate = L"{stem}_changed{ext}";
-    state.Require(DebugSetBatchRenameWindowRules(changedRules),
-                  L"Batch Rename report-retention test should apply an actual rule change.");
+    state.Require(DebugSetBatchRenameWindowRules(changedRules), L"Batch Rename report-retention test should apply an actual rule change.");
 
     BatchRenameDebugSnapshot afterRuleChange{};
     state.Require(DebugGetBatchRenameWindowSnapshot(afterRuleChange), L"Batch Rename post-rule-change snapshot should be available.");
@@ -7631,10 +7564,9 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
         successfulTargets.push_back(target);
     }
 
-    const uint64_t targetRefreshMetricRowsBefore =
-        CountBatchRenamePerfRowsWithMetric("batchrename.execute.target_refresh_match.us");
-    size_t refreshedRows = 0u;
-    uint64_t identityComparisons = 0u;
+    const uint64_t targetRefreshMetricRowsBefore = CountBatchRenamePerfRowsWithMetric("batchrename.execute.target_refresh_match.us");
+    size_t refreshedRows                         = 0u;
+    uint64_t identityComparisons                 = 0u;
     state.Require(DebugRefreshBatchRenameTargetsAfterExecutionForTests(FileSystemPathIdentity::OrdinalIgnoreCaseForLocalFileSystem(),
                                                                        targets,
                                                                        successfulSources,
@@ -7643,21 +7575,18 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
                                                                        refreshedRows,
                                                                        identityComparisons),
                   L"Linear target-refresh helper should refresh every successful source.");
-    state.Require(refreshedRows == kTargetCount,
-                  std::format(L"Linear target refresh should refresh {} rows; saw {}.", kTargetCount, refreshedRows));
-    state.Require(identityComparisons == kTargetCount,
-                  std::format(L"Linear target refresh should verify exactly one identity candidate per row; saw {} for {} rows.",
-                              identityComparisons,
-                              kTargetCount));
+    state.Require(refreshedRows == kTargetCount, std::format(L"Linear target refresh should refresh {} rows; saw {}.", kTargetCount, refreshedRows));
+    state.Require(
+        identityComparisons == kTargetCount,
+        std::format(L"Linear target refresh should verify exactly one identity candidate per row; saw {} for {} rows.", identityComparisons, kTargetCount));
 
-    const uint64_t targetRefreshMetricRowsAfter =
-        CountBatchRenamePerfRowsWithMetric("batchrename.execute.target_refresh_match.us");
+    const uint64_t targetRefreshMetricRowsAfter = CountBatchRenamePerfRowsWithMetric("batchrename.execute.target_refresh_match.us");
     state.Require(targetRefreshMetricRowsAfter > targetRefreshMetricRowsBefore,
                   std::format(L"Post-execution target refresh should emit batchrename.execute.target_refresh_match.us; before={} after={}.",
                               targetRefreshMetricRowsBefore,
                               targetRefreshMetricRowsAfter));
-    const std::optional<uint64_t> maxIdentityComparisons = TryReadMaxBatchRenamePerfUintField(
-        "batchrename.execute.target_refresh_match.us", "value1", targetRefreshMetricRowsBefore);
+    const std::optional<uint64_t> maxIdentityComparisons =
+        TryReadMaxBatchRenamePerfUintField("batchrename.execute.target_refresh_match.us", "value1", targetRefreshMetricRowsBefore);
     state.Require(maxIdentityComparisons.has_value() && maxIdentityComparisons.value() <= static_cast<uint64_t>(kTargetCount),
                   std::format(L"Post-execution target refresh should verify at most one target candidate per success; max comparisons={} targetCount={}.",
                               maxIdentityComparisons.value_or(0u),
@@ -7666,11 +7595,9 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     if (targets.size() == kTargetCount)
     {
         state.Require(targets.front().sourcePath.filename().native() == L"linear-00000_renamed.txt",
-                      std::format(L"First refreshed target should use its renamed path; saw '{}'.",
-                                  targets.front().sourcePath.filename().native()));
+                      std::format(L"First refreshed target should use its renamed path; saw '{}'.", targets.front().sourcePath.filename().native()));
         state.Require(targets.back().sourcePath.filename().native() == L"linear-09999_renamed.txt",
-                      std::format(L"Last refreshed target should use its renamed path; saw '{}'.",
-                                  targets.back().sourcePath.filename().native()));
+                      std::format(L"Last refreshed target should use its renamed path; saw '{}'.", targets.back().sourcePath.filename().native()));
     }
 
     return state.failure.empty();
@@ -7685,15 +7612,19 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     }
 
     std::atomic_uint32_t renameItemsCalls{0u};
-    wil::com_ptr<IFileSystem> noOpFileSystem = CreateBatchRenameNoOpRenameItemsFileSystem(
-        baseFileSystem, &renameItemsCalls, std::string(kBatchRenameNoOpProviderCapabilities));
+    wil::com_ptr<IFileSystem> noOpFileSystem =
+        CreateBatchRenameNoOpRenameItemsFileSystem(baseFileSystem, &renameItemsCalls, std::string(kBatchRenameNoOpProviderCapabilities));
     state.Require(noOpFileSystem != nullptr, L"Batch Rename duplicate-source selftest should create a no-op provider wrapper.");
     if (! noOpFileSystem)
     {
         return false;
     }
 
-    const std::filesystem::path root   = L"C:\\BatchRenameDuplicateSourceTargetRefreshSelfTest";
+    std::filesystem::path root;
+    if (! AcquireBatchRenameCommandsSandboxRoot(state, L"batch_rename_duplicate_source_target_refresh", root))
+    {
+        return false;
+    }
     const std::filesystem::path source = root / L"duplicate-source.txt";
 
     BatchRenamePaneContext context{};
@@ -7708,10 +7639,8 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
                   L"Batch Rename window should open for duplicate-source target-refresh testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
-    state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE,
-                  L"Batch Rename duplicate-source target-refresh test window should become visible.");
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename duplicate-source target-refresh test window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
         return false;
@@ -7719,8 +7648,7 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
 
     const auto cleanupBatchWindow = wil::scope_exit([]() noexcept { CloseBatchRenameWindowIfOpen(); });
 
-    state.Require(DebugSwitchBatchRenameWindowMode(BatchRename::Mode::Manual),
-                  L"Batch Rename duplicate-source test should switch to Manual mode.");
+    state.Require(DebugSwitchBatchRenameWindowMode(BatchRename::Mode::Manual), L"Batch Rename duplicate-source test should switch to Manual mode.");
     state.Require(DebugSetBatchRenameWindowManualText(L"duplicate-one.txt\nduplicate-two.txt"),
                   L"Batch Rename duplicate-source test should set distinct manual names.");
 
@@ -7733,8 +7661,7 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
 
     const HRESULT executeHr = DebugExecuteBatchRenameWindow();
     state.Require(SUCCEEDED(executeHr),
-                  std::format(L"Batch Rename duplicate-source target-refresh execution should succeed: 0x{:08X}.",
-                              static_cast<unsigned long>(executeHr)));
+                  std::format(L"Batch Rename duplicate-source target-refresh execution should succeed: 0x{:08X}.", static_cast<unsigned long>(executeHr)));
     state.Require(renameItemsCalls.load(std::memory_order_relaxed) == 1u,
                   std::format(L"Duplicate-source target-refresh test should dispatch one bulk RenameItems call; saw {}.",
                               renameItemsCalls.load(std::memory_order_relaxed)));
@@ -7751,7 +7678,11 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
 
 [[nodiscard]] bool TestBatchRenameManualSortLikePreviewWithHideUnchanged(HWND mainWindow, CaseState& state) noexcept
 {
-    const std::filesystem::path root = L"C:\\BatchRenameSortHideSelfTest";
+    std::filesystem::path root;
+    if (! AcquireBatchRenameCommandsSandboxRoot(state, L"batch_rename_sort_hide", root))
+    {
+        return false;
+    }
 
     BatchRenamePaneContext context{};
     context.pluginId        = L"builtin/file-system";
@@ -7764,10 +7695,8 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
                   L"Batch Rename window should open for sort-like-preview with Hide unchanged testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
-    state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE,
-                  L"Batch Rename sort-like-preview test window should become visible.");
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename sort-like-preview test window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
         return false;
@@ -7775,41 +7704,36 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
 
     const auto cleanupBatchWindow = wil::scope_exit([]() noexcept { CloseBatchRenameWindowIfOpen(); });
 
-    state.Require(DebugSwitchBatchRenameWindowMode(BatchRename::Mode::Manual),
-                  L"Batch Rename sort-like-preview test should switch to Manual mode.");
+    state.Require(DebugSwitchBatchRenameWindowMode(BatchRename::Mode::Manual), L"Batch Rename sort-like-preview test should switch to Manual mode.");
     state.Require(DebugSetBatchRenameWindowManualText(L"sortp-a.txt\nz-renamed.txt\ny-renamed.txt"),
                   L"Batch Rename sort-like-preview test should set manual names with one unchanged row.");
-    state.Require(DebugSetBatchRenameWindowHideUnchanged(true),
-                  L"Batch Rename sort-like-preview test should enable Hide unchanged.");
+    state.Require(DebugSetBatchRenameWindowHideUnchanged(true), L"Batch Rename sort-like-preview test should enable Hide unchanged.");
 
     BatchRenameDebugSnapshot hiddenSnapshot{};
     state.Require(DebugGetBatchRenameWindowSnapshot(hiddenSnapshot), L"Batch Rename hidden-row snapshot should be available.");
     state.Require(hiddenSnapshot.previewRowCount == 2u, L"Hide unchanged should leave only the two changed rows visible.");
 
-    state.Require(DebugSetBatchRenameWindowPreviewSort(L"new", true),
-                  L"Batch Rename sort-like-preview test should sort by new name descending.");
+    state.Require(DebugSetBatchRenameWindowPreviewSort(L"new", true), L"Batch Rename sort-like-preview test should sort by new name descending.");
 
     BatchRenameDebugSnapshot sortedSnapshot{};
     state.Require(DebugGetBatchRenameWindowSnapshot(sortedSnapshot), L"Batch Rename sorted hidden snapshot should be available.");
     state.Require(sortedSnapshot.newNames == std::vector<std::wstring>{L"z-renamed.txt", L"y-renamed.txt"},
                   L"Sorting with Hide unchanged should reorder the visible changed rows.");
 
-    state.Require(DebugClickBatchRenameWindowManualSortLikePreview(),
-                  L"Sort like preview must succeed while Hide unchanged filters the visible rows.");
+    state.Require(DebugClickBatchRenameWindowManualSortLikePreview(), L"Sort like preview must succeed while Hide unchanged filters the visible rows.");
 
     BatchRenameDebugSnapshot afterSnapshot{};
     state.Require(DebugGetBatchRenameWindowSnapshot(afterSnapshot), L"Batch Rename post-sort-like-preview snapshot should be available.");
-    state.Require(afterSnapshot.manualText == L"z-renamed.txt\ny-renamed.txt\nsortp-a.txt",
-                  std::format(L"Sort like preview should rewrite all manual lines (including hidden rows) into full preview order; saw '{}'.",
-                              afterSnapshot.manualText));
+    state.Require(
+        afterSnapshot.manualText == L"z-renamed.txt\ny-renamed.txt\nsortp-a.txt",
+        std::format(L"Sort like preview should rewrite all manual lines (including hidden rows) into full preview order; saw '{}'.", afterSnapshot.manualText));
     state.Require(afterSnapshot.originalNames == std::vector<std::wstring>{L"sortp-b.txt", L"sortp-c.txt"},
                   L"Sort like preview should keep the visible changed rows sorted.");
     state.Require(afterSnapshot.newNames == std::vector<std::wstring>{L"z-renamed.txt", L"y-renamed.txt"},
                   L"Sort like preview should keep each visible target paired with its manual line.");
     state.Require(afterSnapshot.errorRowCount == 0u, L"Sort like preview with Hide unchanged should not introduce validation errors.");
 
-    state.Require(DebugSetBatchRenameWindowHideUnchanged(false),
-                  L"Batch Rename sort-like-preview test should restore unchanged rows.");
+    state.Require(DebugSetBatchRenameWindowHideUnchanged(false), L"Batch Rename sort-like-preview test should restore unchanged rows.");
 
     BatchRenameDebugSnapshot restoredSnapshot{};
     state.Require(DebugGetBatchRenameWindowSnapshot(restoredSnapshot), L"Batch Rename restored snapshot should be available.");
@@ -7820,7 +7744,11 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
 
 [[nodiscard]] bool TestBatchRenamePathSortUsesDisplayedPathAndStableTies(HWND mainWindow, CaseState& state) noexcept
 {
-    const std::filesystem::path root = L"C:\\BatchRenamePathSortSelfTest";
+    std::filesystem::path root;
+    if (! AcquireBatchRenameCommandsSandboxRoot(state, L"batch_rename_path_sort", root))
+    {
+        return false;
+    }
 
     BatchRenamePaneContext context{};
     context.pluginId        = L"builtin/file-system";
@@ -7830,11 +7758,9 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
     context.initialPaths    = {root / L"z.txt", root / L"same-b.txt", root / L"same-a.txt", root / L"a" / L"a.txt"};
 
     const AppTheme theme = ResolveAppTheme(ThemeMode::Dark, L"batch-rename-path-sort-window-selftest");
-    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
-                  L"Batch Rename window should open for path-sort testing.");
+    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)), L"Batch Rename window should open for path-sort testing.");
 
-    const HWND batchWindow =
-        WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
+    const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename path-sort test window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
@@ -7862,231 +7788,163 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
 
 void RunBatchRenameCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestOptions& options, SelfTest::SelfTestSuiteResult& suite) noexcept
 {
-    const auto runCase = [&](std::wstring_view name, auto&& func) noexcept {
-        SelfTest::RunCase(options, suite, name, [&](CaseState& state) noexcept {
+    const auto runCase = [&](std::wstring_view name, auto&& func) noexcept
+    {
+        SelfTest::RunCase(options,
+                          suite,
+                          name,
+                          [&](CaseState& state) noexcept
+        {
             BatchRenameSettingsTestScope settingsScope;
             settingsScope.ResetForDefaultWindow();
             return func(state);
         });
     };
 
-    runCase(L"cmd_pane_batchRename_command_registered", [](CaseState& state) noexcept {
-        return TestBatchRenameCommandRegistered(state);
-    });
-    runCase(L"cmd_pane_batchRename_opens_from_active_pane", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameWindowOpensFromPaneContext(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_folder_scope_collects_local_children_metadata", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameWindowFolderScopeCollectsLocalChildrenMetadata(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_recursive_collection_skips_symlink_loops", [](CaseState& state) noexcept {
-        return TestBatchRenameRecursiveCollectionSkipsSymlinkLoops(state);
-    });
-    runCase(L"cmd_pane_batchRename_nonlocal_selection_fallback_metadata_unknown", [](CaseState& state) noexcept {
-        return TestBatchRenameProviderSelectionFallbackMarksMetadataUnknown(state);
-    });
-    runCase(L"cmd_pane_batchRename_window_rules_recompute_preview", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameWindowRulesRecomputePreview(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_window_datetime_columns_match_macro_expansion", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameWindowDateTimeColumnsMatchMacroExpansion(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_window_created_macro_uses_collected_creation_time", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameWindowCreatedMacroUsesCollectedCreationTime(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_window_preview_context_menu_copies_rows", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameWindowPreviewContextMenuCopiesRows(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_preview_clipboard_honors_display_order", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameWindowPreviewClipboardHonorsDisplayOrder(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_stale_generation_payloads_are_ignored", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameWindowIgnoresStaleGenerationPayloads(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_theme_accessibility_snapshot", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameWindowThemeAccessibilitySnapshot(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_window_rule_controls_drive_preview", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameWindowRuleControlsDrivePreview(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_window_debounces_text_preview", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameWindowDebouncesTextPreview(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_window_uses_and_persists_settings", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameWindowUsesAndPersistsSettings(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_window_manual_mode_controls_drive_preview", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameWindowManualModeControlsDrivePreview(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_window_manual_mode_target_change_blocks_until_reconciled", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameWindowManualModeTargetChangeBlocksUntilReconciled(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_path_sort_uses_displayed_path_and_stable_ties", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenamePathSortUsesDisplayedPathAndStableTies(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_window_executes_local_rename", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameWindowExecutesLocalRename(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_window_refreshes_pane_after_success", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameWindowRefreshesPaneAfterSuccess(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_window_invokes_success_callback", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameWindowInvokesSuccessCallback(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_window_success_callback_parent_child_execution_order", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameWindowSuccessCallbackParentChildExecutionOrder(mainWindow, state);
-    });
+    runCase(L"cmd_pane_batchRename_command_registered", [](CaseState& state) noexcept { return TestBatchRenameCommandRegistered(state); });
+    runCase(L"cmd_pane_batchRename_opens_from_active_pane",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameWindowOpensFromPaneContext(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_folder_scope_collects_local_children_metadata",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameWindowFolderScopeCollectsLocalChildrenMetadata(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_provider_collection_does_not_block_window",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameWindowDoesNotBlockOnProviderCollection(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_recursive_collection_skips_symlink_loops",
+            [](CaseState& state) noexcept { return TestBatchRenameRecursiveCollectionSkipsSymlinkLoops(state); });
+    runCase(L"cmd_pane_batchRename_nonlocal_selection_fallback_metadata_unknown",
+            [](CaseState& state) noexcept { return TestBatchRenameProviderSelectionFallbackMarksMetadataUnknown(state); });
+    runCase(L"cmd_pane_batchRename_window_rules_recompute_preview",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameWindowRulesRecomputePreview(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_window_datetime_columns_match_macro_expansion",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameWindowDateTimeColumnsMatchMacroExpansion(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_window_created_macro_uses_collected_creation_time",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameWindowCreatedMacroUsesCollectedCreationTime(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_window_preview_context_menu_copies_rows",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameWindowPreviewContextMenuCopiesRows(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_preview_clipboard_honors_display_order",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameWindowPreviewClipboardHonorsDisplayOrder(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_stale_generation_payloads_are_ignored",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameWindowIgnoresStaleGenerationPayloads(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_theme_accessibility_snapshot",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameWindowThemeAccessibilitySnapshot(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_window_rule_controls_drive_preview",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameWindowRuleControlsDrivePreview(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_window_debounces_text_preview",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameWindowDebouncesTextPreview(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_window_uses_and_persists_settings",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameWindowUsesAndPersistsSettings(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_window_manual_mode_controls_drive_preview",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameWindowManualModeControlsDrivePreview(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_window_manual_mode_target_change_blocks_until_reconciled",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameWindowManualModeTargetChangeBlocksUntilReconciled(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_path_sort_uses_displayed_path_and_stable_ties",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenamePathSortUsesDisplayedPathAndStableTies(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_window_executes_local_rename",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameWindowExecutesLocalRename(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_window_refreshes_pane_after_success",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameWindowRefreshesPaneAfterSuccess(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_window_invokes_success_callback",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameWindowInvokesSuccessCallback(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_window_success_callback_parent_child_execution_order",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameWindowSuccessCallbackParentChildExecutionOrder(mainWindow, state); });
     runCase(L"cmd_pane_batchRename_parent_child_directory_cache_notify_retargets_pinned_descendant", [mainWindow](CaseState& state) noexcept {
         return TestBatchRenameWindowParentChildDirectoryCacheNotifyRetargetsPinnedDescendant(mainWindow, state);
     });
-    runCase(L"cmd_pane_batchRename_target_collection_respects_provider_cancellation", [](CaseState& state) noexcept {
-        return TestBatchRenameTargetCollectionRespectsProviderCancellation(state);
-    });
-    runCase(L"cmd_pane_batchRename_window_reports_execution_summary", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameWindowReportsExecutionSummary(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_collision_existing_and_duplicate_names", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameCollisionExistingAndDuplicateNames(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_destination_probe_failure_issue_id", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameDestinationProbeFailureIssueId(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_cancel_does_not_apply_remaining_rows", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameCancelDoesNotApplyRemainingRows(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_window_falls_back_to_rename_item_when_bulk_unsupported", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameWindowFallsBackToRenameItemWhenBulkUnsupported(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_window_executes_swap_rename", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameWindowExecutesSwapRename(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_window_executes_chain_rename", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameWindowExecutesChainRename(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_window_directory_chain_undo_plan", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameWindowDirectoryChainUndoPlan(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_case_only_rename_not_treated_as_dependency", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameCaseOnlyRenameNotTreatedAsDependency(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_partial_batch_failure_tracks_completed_rows", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenamePartialBatchFailureTracksCompletedRows(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_omitted_item_completion_counts_row_failed", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameOmittedItemCompletionCountsRowFailed(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_temp_hop_reported_failure_counts_row_failed", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameTempHopReportedFailureCountsRowFailed(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_swap_failure_rolls_back_orphan_temp", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameSwapFailureRollsBackOrphanTemp(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_swap_cancel_after_temp_hop_rolls_back", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameSwapCancelAfterTempHopRollsBack(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_window_executes_three_member_cycle", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameWindowExecutesThreeMemberCycle(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_cancel_mid_batch_tracks_completed_rows", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameCancelMidBatchTracksCompletedRows(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_execute_while_busy_returns_busy", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameExecuteWhileBusyReturnsBusy(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_close_while_execution_inflight_is_bounded", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameCloseWhileExecutionInFlightIsBounded(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_report_survives_view_only_refreshes", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameReportSurvivesViewOnlyRefreshes(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_post_execution_target_refresh_is_linear", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenamePostExecutionTargetRefreshIsLinear(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_duplicate_source_target_refresh_consumes_distinct_rows", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameDuplicateSourceTargetRefreshConsumesDistinctRows(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_manual_sort_like_preview_with_hide_unchanged", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameManualSortLikePreviewWithHideUnchanged(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_window_executes_case_only_local_rename", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameWindowExecutesCaseOnlyLocalRename(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_window_blocks_invalid_preview_execution", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameWindowBlocksInvalidPreviewExecution(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_window_blocks_missing_provider_path_identity", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameWindowBlocksProviderWithoutPathIdentity(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_window_executes_parent_child_deepest_first", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameWindowExecutesParentChildDeepestFirst(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_window_blocks_destination_created_after_preview", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameWindowBlocksDestinationCreatedAfterPreview(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_window_blocks_source_missing_after_preview", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameWindowBlocksSourceMissingAfterPreview(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_helper_menus_expose_canonical_insertions", [](CaseState& state) noexcept {
-        return TestBatchRenameHelperMenusExposeCanonicalInsertions(state);
-    });
-    runCase(L"cmd_pane_batchRename_window_helper_buttons_insert_into_rule_fields", [mainWindow](CaseState& state) noexcept {
-        return TestBatchRenameWindowHelperButtonsInsertIntoRuleFields(mainWindow, state);
-    });
-    runCase(L"cmd_pane_rename_multi_selection_opens_batch_rename", [mainWindow](CaseState& state) noexcept {
-        return TestPaneRenameMultiSelectionOpensBatchRename(mainWindow, state);
-    });
-    runCase(L"cmd_pane_rename_single_file_uses_standard_prompt", [mainWindow](CaseState& state) noexcept {
-        return TestPaneRenameSingleFileUsesStandardPrompt(mainWindow, state);
-    });
-    runCase(L"cmd_pane_rename_file_prompt_batch_button_opens_batch_rename", [mainWindow](CaseState& state) noexcept {
-        return TestPaneRenameFilePromptBatchButtonOpensBatchRename(mainWindow, state);
-    });
-    runCase(L"cmd_pane_rename_folder_prompt_batch_button_opens_batch_rename", [mainWindow](CaseState& state) noexcept {
-        return TestPaneRenameFolderPromptBatchButtonOpensBatchRename(mainWindow, state);
-    });
-    runCase(L"cmd_pane_batchRename_preview_macro_regex_case_validation", [](CaseState& state) noexcept {
-        return TestBatchRenameEngineMacroRegexCaseAndValidation(state);
-    });
-    runCase(L"cmd_pane_batchRename_engine_provider_path_identity", [](CaseState& state) noexcept {
-        return TestBatchRenameEngineUsesProviderPathIdentity(state);
-    });
-    runCase(L"cmd_pane_batchRename_path_identity_parser", [](CaseState& state) noexcept {
-        return TestBatchRenamePathIdentityParserRejectsUnplannableProfiles(state);
-    });
-    runCase(L"cmd_pane_batchRename_engine_macro_alias_datetime_regex_tokens", [](CaseState& state) noexcept {
-        return TestBatchRenameEngineMacroAliasDateTimeAndRegexReplacementTokens(state);
-    });
-    runCase(L"cmd_pane_batchRename_engine_leaf_splitter_matches_filesystem", [](CaseState& state) noexcept {
-        return TestBatchRenameEngineLeafSplitterMatchesFilesystem(state);
-    });
-    runCase(L"cmd_pane_batchRename_engine_recompute_stats_after_contextual_issue", [](CaseState& state) noexcept {
-        return TestBatchRenameEngineRecomputeStatsAfterContextualIssue(state);
-    });
-    runCase(L"cmd_pane_batchRename_manual_mode_line_count_validation", [](CaseState& state) noexcept {
-        return TestBatchRenameEngineManualModeLineValidation(state);
-    });
-    runCase(L"cmd_pane_batchRename_engine_warnings_and_remaining_transforms", [](CaseState& state) noexcept {
-        return TestBatchRenameEngineWarningsAndRemainingTransforms(state);
-    });
-    runCase(L"cmd_pane_batchRename_engine_remaining_validation_transform_coverage", [](CaseState& state) noexcept {
-        return TestBatchRenameEngineRemainingValidationAndTransformCoverage(state);
-    });
-    runCase(L"cmd_pane_batchRename_engine_regex_match_failure_and_whole_word_captures", [](CaseState& state) noexcept {
-        return TestBatchRenameEngineRegexMatchFailureAndWholeWordCaptures(state);
-    });
-    runCase(L"cmd_pane_batchRename_engine_reserved_device_names_and_counter_width", [](CaseState& state) noexcept {
-        return TestBatchRenameEngineReservedDeviceNamesAndCounterWidth(state);
-    });
-    runCase(L"cmd_pane_batchRename_engine_large_preview_perf", [](CaseState& state) noexcept {
-        return TestBatchRenameEngineLargePreviewEmitsPerfMetrics(state);
-    });
-    runCase(L"cmd_pane_batchRename_engine_regex_compile_perf", [](CaseState& state) noexcept {
-        return TestBatchRenameEngineRegexCompileEmitsPerfMetric(state);
-    });
-    runCase(L"cmd_pane_batchRename_engine_validation_perf", [](CaseState& state) noexcept {
-        return TestBatchRenameEngineValidationEmitsPerfMetric(state);
-    });
-    runCase(L"cmd_pane_batchRename_execution_engine_direct", [](CaseState& state) noexcept {
-        return TestBatchRenameExecutionEngineDirectScenarios(state);
-    });
+    runCase(L"cmd_pane_batchRename_target_collection_respects_provider_cancellation",
+            [](CaseState& state) noexcept { return TestBatchRenameTargetCollectionRespectsProviderCancellation(state); });
+    runCase(L"cmd_pane_batchRename_window_reports_execution_summary",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameWindowReportsExecutionSummary(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_collision_existing_and_duplicate_names",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameCollisionExistingAndDuplicateNames(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_destination_probe_failure_issue_id",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameDestinationProbeFailureIssueId(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_cancel_does_not_apply_remaining_rows",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameCancelDoesNotApplyRemainingRows(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_window_falls_back_to_rename_item_when_bulk_unsupported",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameWindowFallsBackToRenameItemWhenBulkUnsupported(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_window_executes_swap_rename",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameWindowExecutesSwapRename(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_window_executes_chain_rename",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameWindowExecutesChainRename(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_window_directory_chain_undo_plan",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameWindowDirectoryChainUndoPlan(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_case_only_rename_not_treated_as_dependency",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameCaseOnlyRenameNotTreatedAsDependency(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_partial_batch_failure_tracks_completed_rows",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenamePartialBatchFailureTracksCompletedRows(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_omitted_item_completion_counts_row_failed",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameOmittedItemCompletionCountsRowFailed(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_temp_hop_reported_failure_counts_row_failed",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameTempHopReportedFailureCountsRowFailed(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_swap_failure_rolls_back_orphan_temp",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameSwapFailureRollsBackOrphanTemp(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_swap_cancel_after_temp_hop_rolls_back",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameSwapCancelAfterTempHopRollsBack(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_window_executes_three_member_cycle",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameWindowExecutesThreeMemberCycle(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_cancel_mid_batch_tracks_completed_rows",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameCancelMidBatchTracksCompletedRows(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_execute_while_busy_returns_busy",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameExecuteWhileBusyReturnsBusy(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_close_while_execution_inflight_is_bounded",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameCloseWhileExecutionInFlightIsBounded(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_report_survives_view_only_refreshes",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameReportSurvivesViewOnlyRefreshes(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_post_execution_target_refresh_is_linear",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenamePostExecutionTargetRefreshIsLinear(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_duplicate_source_target_refresh_consumes_distinct_rows",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameDuplicateSourceTargetRefreshConsumesDistinctRows(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_manual_sort_like_preview_with_hide_unchanged",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameManualSortLikePreviewWithHideUnchanged(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_window_executes_case_only_local_rename",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameWindowExecutesCaseOnlyLocalRename(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_window_blocks_invalid_preview_execution",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameWindowBlocksInvalidPreviewExecution(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_window_blocks_missing_provider_path_identity",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameWindowBlocksProviderWithoutPathIdentity(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_window_executes_parent_child_deepest_first",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameWindowExecutesParentChildDeepestFirst(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_window_blocks_destination_created_after_preview",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameWindowBlocksDestinationCreatedAfterPreview(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_window_blocks_source_missing_after_preview",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameWindowBlocksSourceMissingAfterPreview(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_helper_menus_expose_canonical_insertions",
+            [](CaseState& state) noexcept { return TestBatchRenameHelperMenusExposeCanonicalInsertions(state); });
+    runCase(L"cmd_pane_batchRename_window_helper_buttons_insert_into_rule_fields",
+            [mainWindow](CaseState& state) noexcept { return TestBatchRenameWindowHelperButtonsInsertIntoRuleFields(mainWindow, state); });
+    runCase(L"cmd_pane_rename_multi_selection_opens_batch_rename",
+            [mainWindow](CaseState& state) noexcept { return TestPaneRenameMultiSelectionOpensBatchRename(mainWindow, state); });
+    runCase(L"cmd_pane_rename_single_file_uses_standard_prompt",
+            [mainWindow](CaseState& state) noexcept { return TestPaneRenameSingleFileUsesStandardPrompt(mainWindow, state); });
+    runCase(L"cmd_pane_rename_file_prompt_batch_button_opens_batch_rename",
+            [mainWindow](CaseState& state) noexcept { return TestPaneRenameFilePromptBatchButtonOpensBatchRename(mainWindow, state); });
+    runCase(L"cmd_pane_rename_folder_prompt_batch_button_opens_batch_rename",
+            [mainWindow](CaseState& state) noexcept { return TestPaneRenameFolderPromptBatchButtonOpensBatchRename(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_preview_macro_regex_case_validation",
+            [](CaseState& state) noexcept { return TestBatchRenameEngineMacroRegexCaseAndValidation(state); });
+    runCase(L"cmd_pane_batchRename_engine_provider_path_identity",
+            [](CaseState& state) noexcept { return TestBatchRenameEngineUsesProviderPathIdentity(state); });
+    runCase(L"cmd_pane_batchRename_path_identity_parser",
+            [](CaseState& state) noexcept { return TestBatchRenamePathIdentityParserRejectsUnplannableProfiles(state); });
+    runCase(L"cmd_pane_batchRename_engine_macro_alias_datetime_regex_tokens",
+            [](CaseState& state) noexcept { return TestBatchRenameEngineMacroAliasDateTimeAndRegexReplacementTokens(state); });
+    runCase(L"cmd_pane_batchRename_engine_leaf_splitter_matches_filesystem",
+            [](CaseState& state) noexcept { return TestBatchRenameEngineLeafSplitterMatchesFilesystem(state); });
+    runCase(L"cmd_pane_batchRename_engine_recompute_stats_after_contextual_issue",
+            [](CaseState& state) noexcept { return TestBatchRenameEngineRecomputeStatsAfterContextualIssue(state); });
+    runCase(L"cmd_pane_batchRename_manual_mode_line_count_validation",
+            [](CaseState& state) noexcept { return TestBatchRenameEngineManualModeLineValidation(state); });
+    runCase(L"cmd_pane_batchRename_engine_warnings_and_remaining_transforms",
+            [](CaseState& state) noexcept { return TestBatchRenameEngineWarningsAndRemainingTransforms(state); });
+    runCase(L"cmd_pane_batchRename_engine_remaining_validation_transform_coverage",
+            [](CaseState& state) noexcept { return TestBatchRenameEngineRemainingValidationAndTransformCoverage(state); });
+    runCase(L"cmd_pane_batchRename_engine_regex_match_failure_and_whole_word_captures",
+            [](CaseState& state) noexcept { return TestBatchRenameEngineRegexMatchFailureAndWholeWordCaptures(state); });
+    runCase(L"cmd_pane_batchRename_engine_reserved_device_names_and_counter_width",
+            [](CaseState& state) noexcept { return TestBatchRenameEngineReservedDeviceNamesAndCounterWidth(state); });
+    runCase(L"cmd_pane_batchRename_engine_large_preview_perf",
+            [](CaseState& state) noexcept { return TestBatchRenameEngineLargePreviewEmitsPerfMetrics(state); });
+    runCase(L"cmd_pane_batchRename_engine_regex_compile_perf",
+            [](CaseState& state) noexcept { return TestBatchRenameEngineRegexCompileEmitsPerfMetric(state); });
+    runCase(L"cmd_pane_batchRename_engine_validation_perf", [](CaseState& state) noexcept { return TestBatchRenameEngineValidationEmitsPerfMetric(state); });
+    runCase(L"cmd_pane_batchRename_execution_engine_direct", [](CaseState& state) noexcept { return TestBatchRenameExecutionEngineDirectScenarios(state); });
 }

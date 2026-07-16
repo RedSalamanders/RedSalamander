@@ -164,6 +164,7 @@
     <ClCompile Include="ViewerText.Hex.cpp" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="ViewerText.h" />
+    <ClInclude Include="ViewerText.SafetyHelpers.h" />
     <ClInclude Include="ViewerText.ThemeHelpers.h" />
     <ResourceCompile Include="ViewerTextResources.rc" />
   </ItemGroup>

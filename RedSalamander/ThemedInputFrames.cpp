@@ -541,10 +541,10 @@ LRESULT HandleInputFrameMessage(HWND hwnd, UINT msg, [[maybe_unused]] WPARAM wp,
             const bool isCombo = IsComboBoxWindow(input);
 
             const COLORREF surface = UiMetrics::GetControlSurfaceColor(*style->theme);
-            COLORREF border        = UiMetrics::BlendColor(surface, style->theme->menu.text, style->theme->dark ? 60 : 40, 255);
+            COLORREF border        = UiMetrics::BlendColorRefWeightedTruncate(surface, style->theme->menu.text, style->theme->dark ? 60 : 40, 255);
             if (isCombo && hasFocus && enabled && ! style->theme->highContrast)
             {
-                border = UiMetrics::BlendColor(surface, style->theme->menu.text, style->theme->dark ? 110 : 80, 255);
+                border = UiMetrics::BlendColorRefWeightedTruncate(surface, style->theme->menu.text, style->theme->dark ? 110 : 80, 255);
             }
 
             COLORREF fill = enabled ? style->inputBackgroundColor : style->inputDisabledBackgroundColor;

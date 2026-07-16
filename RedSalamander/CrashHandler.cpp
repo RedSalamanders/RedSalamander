@@ -530,4 +530,26 @@ void TriggerCrashTest() noexcept
     // Non-continuable exception to validate the crash pipeline.
     RaiseException(0xE000CAFEu, EXCEPTION_NONCONTINUABLE, 0, nullptr);
 }
+
+#ifdef ENABLE_TESTS
+std::filesystem::path GetCrashMarkerPathForTest() noexcept
+{
+    return GetCrashMarkerPath();
+}
+
+std::filesystem::path BuildDumpPathForTest(const std::filesystem::path& dir) noexcept
+{
+    return BuildDumpPath(dir);
+}
+
+HRESULT WriteMarkerFileForTest(const std::filesystem::path& markerPath, std::wstring_view dumpPath) noexcept
+{
+    return WriteMarkerFile(markerPath, dumpPath);
+}
+
+std::wstring ReadMarkerDumpPathForTest(const std::filesystem::path& markerPath) noexcept
+{
+    return ReadMarkerDumpPath(markerPath);
+}
+#endif
 } // namespace CrashHandler

@@ -321,6 +321,8 @@ BEGIN
     IDS_VIEWERTEXT_CAPTION_ERROR "Visionneuse"
     IDS_VIEWERTEXT_ERR_OPEN_FAILED "Impossible d’ouvrir le fichier."
     IDS_VIEWERTEXT_ERR_SAVE_FAILED "Impossible d’enregistrer le fichier."
+    IDS_VIEWERTEXT_ERR_SAVE_LOADING "Attendez la fin du chargement du fichier avant de l’enregistrer."
+    IDS_VIEWERTEXT_ERR_SAVE_STREAM_CONVERT "Ce fichier n’est chargé que partiellement. Choisissez Conserver l’encodage d’origine pour l’enregistrer sans conversion."
 
     IDS_VIEWERTEXT_DIALOG_OPEN_TITLE "Ouvrir fichier"
     IDS_VIEWERTEXT_DIALOG_SAVE_TITLE "Enregistrer le fichier sous"
@@ -371,4 +373,5 @@ IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_ADDED_FILE "[aucun fichier côté gauche : le 
 IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_DELETED_FILE "[aucun fichier côté droit : le patch supprime ce fichier]"
 IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_TOO_LARGE "[lignes inchangées masquées : le fichier référencé est trop volumineux pour être développé]"
 IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_BINARY "[lignes inchangées masquées : le fichier référencé est binaire]"
+IDS_VIEWERTEXT_MSG_HEX_COPY_TRUNCATED "La sélection était trop volumineuse. Seuls les 256 premiers Kio ont été copiés."
 END

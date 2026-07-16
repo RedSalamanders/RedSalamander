@@ -2,10 +2,1173 @@
 
 #include <atomic>
 #include <chrono>
+#include <fstream>
+#include <iterator>
+#include <numeric>
 #include <thread>
 
 namespace
 {
+
+void TestAccessibilityTargetPublishesImmutableSnapshotBeforeTreeTeardown()
+{
+    const std::filesystem::path sourcePath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.Accessibility.cpp";
+    std::ifstream input(sourcePath);
+    Require(input.good(), "Accessibility source is readable for snapshot-publication guard");
+    const std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+
+    Require(source.find("struct AccessibilitySnapshot") != std::string::npos, "accessibility provider defines an immutable snapshot payload");
+    Require(source.find("std::shared_ptr<const AccessibilitySnapshot>") != std::string::npos,
+            "accessibility target/provider publish immutable snapshot instances");
+    Require(source.find("CaptureAccessibilitySnapshot(target, hwnd)") != std::string::npos,
+            "accessibility providers capture a snapshot instead of relying only on a live target");
+
+    const size_t unregisterFunction = source.find("void UnregisterWindowHostAccessibilityTarget");
+    const size_t returnProvider     = source.find("LRESULT ReturnWindowHostAccessibilityProvider", unregisterFunction);
+    Require(unregisterFunction != std::string::npos && returnProvider != std::string::npos && unregisterFunction < returnProvider,
+            "accessibility unregister source block is found");
+    const std::string unregisterBlock = source.substr(unregisterFunction, returnProvider - unregisterFunction);
+
+    const size_t publishEmpty = unregisterBlock.find("PublishEmptyAccessibilitySnapshot(*target)");
+    const size_t clearHost    = unregisterBlock.find("target->host.store(nullptr");
+    const size_t retireProviderMap = unregisterBlock.find("UiaReturnRawElementProvider(hwnd, 0, 0, nullptr)");
+    Require(publishEmpty != std::string::npos, "accessibility unregister publishes an empty snapshot");
+    Require(clearHost != std::string::npos && publishEmpty < clearHost,
+            "accessibility unregister publishes the empty snapshot before clearing the live host pointer");
+    Require(retireProviderMap != std::string::npos && clearHost < retireProviderMap,
+            "accessibility unregister retires the HWND provider map after clearing the live host pointer");
+
+    const std::filesystem::path windowHostSourcePath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.WindowHost.cpp";
+    std::ifstream windowHostInput(windowHostSourcePath);
+    Require(windowHostInput.good(), "WindowHost source is readable for provider-destruction guard");
+    const std::string windowHostSource((std::istreambuf_iterator<char>(windowHostInput)), std::istreambuf_iterator<char>());
+    const size_t destroyCase          = windowHostSource.find("case WM_DESTROY:");
+    const size_t destroyNotification  = windowHostSource.find("NotifyWindowHostAccessibilityDestroyed(hwnd)", destroyCase);
+    const size_t nonClientDestroyCase = windowHostSource.find("case WM_NCDESTROY:", destroyCase);
+    Require(destroyCase != std::string::npos && destroyNotification != std::string::npos && nonClientDestroyCase != std::string::npos &&
+                destroyCase < destroyNotification && destroyNotification < nonClientDestroyCase,
+            "WindowHost retires the UIA HWND provider map during WM_DESTROY before final non-client teardown");
+
+    Require(source.find("focusedFragment") != std::string::npos, "accessibility snapshot captures focused-fragment identity");
+    const size_t getFocusFunction = source.find("HRESULT AccessibilityProvider::GetFocus");
+    const size_t invokeFunction   = source.find("HRESULT AccessibilityProvider::Invoke", getFocusFunction);
+    Require(getFocusFunction != std::string::npos && invokeFunction != std::string::npos && getFocusFunction < invokeFunction,
+            "accessibility GetFocus source block is found");
+    const std::string getFocusBlock = source.substr(getFocusFunction, invokeFunction - getFocusFunction);
+    Require(getFocusBlock.find("CaptureAccessibilitySnapshot(_target, _hwnd)") != std::string::npos,
+            "accessibility GetFocus reads an immutable published snapshot");
+    Require(getFocusBlock.find("ResolveHost(") == std::string::npos, "accessibility GetFocus does not resolve the live host");
+    Require(getFocusBlock.find("ResolveRootControl(") == std::string::npos, "accessibility GetFocus does not resolve the live root");
+    Require(getFocusBlock.find("GetFocusControl(") == std::string::npos, "accessibility GetFocus does not read live focus state");
+    Require(getFocusBlock.find("FindPathForTarget(") == std::string::npos, "accessibility GetFocus does not walk the live tree");
+}
+
+void TestAccessibilityLiveHostResolutionIsWindowThreadOnly()
+{
+    const std::filesystem::path sourcePath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.Accessibility.cpp";
+    std::ifstream input(sourcePath);
+    Require(input.good(), "Accessibility source is readable for live-host threading guard");
+    const std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+
+    const size_t resolveHostFunction = source.find("[[nodiscard]] WindowHost* ResolveHost() const noexcept");
+    const size_t targetMutexFunction = source.find("[[nodiscard]] std::recursive_mutex& GetAccessibilityTargetMutex", resolveHostFunction);
+    Require(resolveHostFunction != std::string::npos && targetMutexFunction != std::string::npos && resolveHostFunction < targetMutexFunction,
+            "accessibility target ResolveHost source block is found");
+    const std::string resolveHostBlock = source.substr(resolveHostFunction, targetMutexFunction - resolveHostFunction);
+
+    Require(resolveHostBlock.find("GetWindowThreadProcessId(hwnd") != std::string::npos,
+            "accessibility target ResolveHost checks the owning window thread before returning a live host");
+    Require(resolveHostBlock.find("GetCurrentThreadId()") != std::string::npos,
+            "accessibility target ResolveHost compares live access against the current thread");
+    Require(resolveHostBlock.find("return nullptr;") != std::string::npos,
+            "accessibility target ResolveHost refuses live host access when the thread/window check fails");
+}
+
+void TestAccessibilityProviderTraversalSurvivesConcurrentRootReplacement()
+{
+    using namespace RedSalamander::DxUi;
+
+    struct StressRoot
+    {
+        StressRoot() = default;
+        StressRoot(std::unique_ptr<Panel> rootValue, Control* focusValue) noexcept : root(std::move(rootValue)), focusTarget(focusValue)
+        {
+        }
+        StressRoot(const StressRoot&)                = delete;
+        StressRoot& operator=(const StressRoot&)     = delete;
+        StressRoot(StressRoot&&) noexcept            = default;
+        StressRoot& operator=(StressRoot&&) noexcept = default;
+
+        std::unique_ptr<Panel> root;
+        Control* focusTarget = nullptr;
+    };
+
+    auto buildRoot = [](MutableTreeModel& treeModel, MultiRowGridModel& gridModel)
+    {
+        auto root = std::make_unique<Panel>();
+
+        auto* field = root->AddChild<TextField>(L"alpha beta gamma");
+        field->SetBounds(D2D1::RectF(0.0f, 0.0f, 180.0f, 32.0f));
+
+        auto* button = root->AddChild<Button>(L"Run");
+        button->SetBounds(D2D1::RectF(188.0f, 0.0f, 260.0f, 32.0f));
+
+        auto* tree = root->AddChild<Tree>();
+        tree->SetBounds(D2D1::RectF(0.0f, 40.0f, 140.0f, 112.0f));
+        tree->SetModel(&treeModel);
+        tree->SetSelectedItemId(2u);
+
+        auto* grid = root->AddChild<Grid>();
+        grid->SetBounds(D2D1::RectF(148.0f, 40.0f, 300.0f, 132.0f));
+        grid->SetModel(&gridModel);
+
+        StressRoot result;
+        result.focusTarget = field;
+        result.root        = std::move(root);
+        return result;
+    };
+
+    AttachedHostWindow window;
+    MutableTreeModel treeModel;
+    MultiRowGridModel gridModel(8u);
+    treeModel.SetVisibleItems({
+        TreeItemData{.id = 1u, .text = L"General"},
+        TreeItemData{.id = 2u, .text = L"Panes"},
+        TreeItemData{.id = 3u, .text = L"Viewers"},
+    });
+
+    StressRoot firstRoot = buildRoot(treeModel, gridModel);
+    Control* firstFocus  = firstRoot.focusTarget;
+    window.Host().SetRoot(std::move(firstRoot.root));
+    window.Host().SetFocusControl(firstFocus);
+
+    wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> rootProvider;
+    rootProvider.attach(window.Host().DebugCreateAccessibilityProvider());
+    Require(rootProvider != nullptr, "concurrent accessibility traversal creates a root provider");
+    wil::com_ptr_nothrow<IRawElementProviderFragment> rootFragment;
+    RequireSucceeded(rootProvider.query_to(rootFragment.put()), "concurrent accessibility traversal root supports fragment navigation");
+
+    POINT hitPoint{24, 20};
+    Require(ClientToScreen(window.Hwnd(), &hitPoint) != FALSE, "concurrent accessibility traversal computes a screen point");
+
+    std::atomic<bool> stopWorker{false};
+    std::atomic<HRESULT> workerFailure{S_OK};
+    std::atomic<int> workerStep{0};
+    std::atomic<uint32_t> traversalCount{0u};
+    std::thread worker([&]
+    {
+        while (! stopWorker.load(std::memory_order_acquire))
+        {
+            wil::com_ptr_nothrow<IRawElementProviderFragment> focusedProvider;
+            HRESULT hr = rootProvider->GetFocus(focusedProvider.put());
+            if (FAILED(hr))
+            {
+                workerStep.store(1, std::memory_order_release);
+                workerFailure.store(hr, std::memory_order_release);
+                break;
+            }
+
+            wil::com_ptr_nothrow<IRawElementProviderFragment> hitProvider;
+            hr = rootProvider->ElementProviderFromPoint(static_cast<double>(hitPoint.x), static_cast<double>(hitPoint.y), hitProvider.put());
+            if (FAILED(hr))
+            {
+                workerStep.store(2, std::memory_order_release);
+                workerFailure.store(hr, std::memory_order_release);
+                break;
+            }
+
+            wil::com_ptr_nothrow<IRawElementProviderFragment> childProvider;
+            hr = rootFragment->Navigate(NavigateDirection_FirstChild, childProvider.put());
+            if (FAILED(hr))
+            {
+                workerStep.store(3, std::memory_order_release);
+                workerFailure.store(hr, std::memory_order_release);
+                break;
+            }
+
+            for (int depth = 0; childProvider && depth < 4; ++depth)
+            {
+                wil::com_ptr_nothrow<IRawElementProviderSimple> childSimple;
+                hr = childProvider.query_to(childSimple.put());
+                if (FAILED(hr))
+                {
+                    workerStep.store(4, std::memory_order_release);
+                    workerFailure.store(hr, std::memory_order_release);
+                    break;
+                }
+
+                VARIANT propertyValue;
+                VariantInit(&propertyValue);
+                hr = childSimple->GetPropertyValue(UIA_NamePropertyId, &propertyValue);
+                VariantClear(&propertyValue);
+                if (FAILED(hr))
+                {
+                    workerStep.store(5, std::memory_order_release);
+                    workerFailure.store(hr, std::memory_order_release);
+                    break;
+                }
+
+                wil::com_ptr_nothrow<IRawElementProviderFragment> nextProvider;
+                hr = childProvider->Navigate(NavigateDirection_NextSibling, nextProvider.put());
+                if (FAILED(hr))
+                {
+                    workerStep.store(6, std::memory_order_release);
+                    workerFailure.store(hr, std::memory_order_release);
+                    break;
+                }
+
+                childProvider = std::move(nextProvider);
+            }
+
+            if (FAILED(workerFailure.load(std::memory_order_acquire)))
+            {
+                break;
+            }
+            traversalCount.fetch_add(1u, std::memory_order_acq_rel);
+        }
+    });
+
+    for (uint32_t iteration = 0u; iteration < 80u && SUCCEEDED(workerFailure.load(std::memory_order_acquire)); ++iteration)
+    {
+        treeModel.SetVisibleItems({
+            TreeItemData{.id = 1u, .text = L"General"},
+            TreeItemData{.id = 2u, .text = (iteration % 2u == 0u) ? L"Panes" : L"Layout"},
+            TreeItemData{.id = 3u, .text = L"Viewers"},
+            TreeItemData{.id = 4u, .text = L"Network"},
+        });
+
+        StressRoot replacement = buildRoot(treeModel, gridModel);
+        Control* focusTarget   = replacement.focusTarget;
+        window.Host().SetRoot(std::move(replacement.root));
+        window.Host().SetFocusControl(focusTarget);
+        window.PumpMessages();
+
+        if ((iteration % 5u) == 0u)
+        {
+            window.Host().SetRoot(nullptr);
+            window.PumpMessages();
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+
+    stopWorker.store(true, std::memory_order_release);
+    worker.join();
+
+    RequireSucceeded(workerFailure.load(std::memory_order_acquire), "concurrent accessibility traversal survives root replacement");
+    Require(workerStep.load(std::memory_order_acquire) == 0, "concurrent accessibility traversal reports no failed provider read step");
+    Require(traversalCount.load(std::memory_order_acquire) > 0u, "concurrent accessibility traversal performs provider reads while roots churn");
+}
+
+void TestAccessibilityTreeHitTestUsesCheapVisibleIndexLookup()
+{
+    const std::filesystem::path sourcePath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.Tree.cpp";
+    std::ifstream input(sourcePath);
+    Require(input.good(), "Tree source is readable for tree hit-test hot-path guard");
+    const std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+
+    const size_t helperFunction = source.find("std::optional<size_t> Tree::FindVisibleItemAtPoint");
+    const size_t nextFunction   = source.find("float Tree::GetVerticalScrollableExtent", helperFunction);
+    Require(helperFunction != std::string::npos && nextFunction != std::string::npos && helperFunction < nextFunction,
+            "Tree visible-index point helper source block is found");
+
+    const std::string helperBlock = source.substr(helperFunction, nextFunction - helperFunction);
+    Require(helperBlock.find("offsetDip / _rowHeightDip") != std::string::npos, "Tree point lookup computes the visible index from row-height geometry");
+    Require(helperBlock.find("GetItemLayoutMetrics(") == std::string::npos, "Tree point lookup does not materialize per-row layout metrics");
+    Require(helperBlock.find("GetVisibleItem(") == std::string::npos, "Tree point lookup does not materialize TreeItemData while hit testing");
+}
+
+void TestAccessibilityProviderFactoriesUseSharedMakeProviderHelper()
+{
+    const std::filesystem::path sourcePath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.Accessibility.cpp";
+    std::ifstream input(sourcePath);
+    Require(input.good(), "Accessibility source is readable for provider factory RAII guard");
+    const std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+
+    Require(source.find("MakeProvider(") != std::string::npos, "accessibility provider defines a shared provider factory helper");
+
+    const size_t rootFactory = source.find("IRawElementProviderFragmentRoot* AccessibilityProvider::CreateRootProvider");
+    const size_t pathHelper  = source.find("[[nodiscard]] bool FindAccessibilityPathForTarget", rootFactory);
+    Require(rootFactory != std::string::npos && pathHelper != std::string::npos && rootFactory < pathHelper, "Accessibility provider factory block is found");
+    const std::string factoryBlock = source.substr(rootFactory, pathHelper - rootFactory);
+    Require(factoryBlock.find("new (std::nothrow)") == std::string::npos, "Accessibility provider factory methods do not duplicate nothrow allocation");
+    Require(factoryBlock.find("target->Release()") == std::string::npos,
+            "Accessibility provider factory methods do not duplicate target release-on-allocation-failure");
+    Require(factoryBlock.find("MakeProvider<IRawElementProviderFragmentRoot, AccessibilityProvider>") != std::string::npos,
+            "Accessibility root provider factory uses the shared helper");
+    Require(factoryBlock.find("MakeProvider<ITextRangeProvider, AccessibilityTextRangeProvider>") != std::string::npos,
+            "Accessibility text-range provider factory uses the shared helper");
+}
+
+void TestAccessibilityRuntimeIdsUseSharedBuilder()
+{
+    const std::filesystem::path sourcePath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.Accessibility.cpp";
+    std::ifstream input(sourcePath);
+    Require(input.good(), "Accessibility source is readable for runtime-id RAII guard");
+    const std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+
+    Require(source.find("HRESULT BuildRuntimeId(SAFEARRAY** outArray, std::span<const LONG> values)") != std::string::npos,
+            "Accessibility runtime-id code defines a shared SAFEARRAY builder");
+    Require(source.find("AppendControlPathRuntimeIdPrefix") != std::string::npos, "Accessibility runtime-id code defines one control-path prefix helper");
+    Require(source.find("kAccessibilityRuntimeIdTreeItem") != std::string::npos, "Tree item runtime-id discriminator is named");
+    Require(source.find("kAccessibilityRuntimeIdGridRow") != std::string::npos, "Grid row runtime-id discriminator is named");
+    Require(source.find("kAccessibilityRuntimeIdGridCell") != std::string::npos, "Grid cell runtime-id discriminator is named");
+    Require(source.find("kAccessibilityRuntimeIdGridHeader") != std::string::npos, "Grid header runtime-id discriminator is named");
+    Require(source.find("kAccessibilityRuntimeIdPasswordRevealButton") != std::string::npos, "Password reveal runtime-id discriminator is named");
+
+    const size_t runtimeIdBlockStart = source.find("HRESULT BuildRuntimeId");
+    const size_t providerArrayStart  = source.find("HRESULT SetProviderArray", runtimeIdBlockStart);
+    Require(runtimeIdBlockStart != std::string::npos && providerArrayStart != std::string::npos && runtimeIdBlockStart < providerArrayStart,
+            "Accessibility runtime-id helper block is found");
+    const std::string runtimeIdBlock = source.substr(runtimeIdBlockStart, providerArrayStart - runtimeIdBlockStart);
+
+    const size_t firstCreate = runtimeIdBlock.find("SafeArrayCreateVector(VT_I4");
+    Require(firstCreate != std::string::npos, "Accessibility runtime-id helper owns VT_I4 SAFEARRAY creation");
+    Require(runtimeIdBlock.find("SafeArrayCreateVector(VT_I4", firstCreate + 1u) == std::string::npos,
+            "Accessibility runtime-id wrappers do not duplicate VT_I4 SAFEARRAY creation");
+
+    const size_t firstPut = runtimeIdBlock.find("SafeArrayPutElement(");
+    Require(firstPut != std::string::npos, "Accessibility runtime-id helper owns SAFEARRAY population");
+    Require(runtimeIdBlock.find("SafeArrayPutElement(", firstPut + 1u) == std::string::npos,
+            "Accessibility runtime-id wrappers do not duplicate SAFEARRAY population loops");
+}
+
+void TestAccessibilityPatternDispatchUsesSharedQueryPattern()
+{
+    const std::filesystem::path sourcePath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.Accessibility.cpp";
+    std::ifstream input(sourcePath);
+    Require(input.good(), "Accessibility source is readable for pattern-dispatch guard");
+    const std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+
+    Require(source.find("enum class AccessibilityPatternKind") != std::string::npos, "Accessibility pattern dispatch names one internal pattern kind enum");
+    Require(source.find("AccessibilityPatternQueryResult AccessibilityProvider::QueryPattern") != std::string::npos,
+            "Accessibility provider defines one shared QueryPattern implementation");
+
+    const size_t queryFunction   = source.find("HRESULT AccessibilityProvider::QueryInterface");
+    const size_t optionsFunction = source.find("HRESULT AccessibilityProvider::get_ProviderOptions", queryFunction);
+    Require(queryFunction != std::string::npos && optionsFunction != std::string::npos && queryFunction < optionsFunction,
+            "Accessibility QueryInterface source block is found for pattern-dispatch guard");
+    const std::string queryBlock = source.substr(queryFunction, optionsFunction - queryFunction);
+    Require(queryBlock.find("PatternKindFromInterfaceId(riid)") != std::string::npos,
+            "Accessibility QueryInterface maps interface ids into the shared pattern dispatch");
+    Require(queryBlock.find("QueryPattern(patternKind.value())") != std::string::npos,
+            "Accessibility QueryInterface uses the shared QueryPattern implementation");
+    Require(queryBlock.find("SupportsInvokePattern(") == std::string::npos, "Accessibility QueryInterface no longer owns invoke-pattern eligibility");
+    Require(queryBlock.find("SnapshotGridCellSupports") == std::string::npos, "Accessibility QueryInterface no longer owns grid-cell pattern eligibility");
+
+    const size_t patternFunction  = source.find("HRESULT AccessibilityProvider::GetPatternProvider");
+    const size_t propertyFunction = source.find("HRESULT AccessibilityProvider::GetPropertyValue", patternFunction);
+    Require(patternFunction != std::string::npos && propertyFunction != std::string::npos && patternFunction < propertyFunction,
+            "Accessibility GetPatternProvider source block is found for pattern-dispatch guard");
+    const std::string patternBlock = source.substr(patternFunction, propertyFunction - patternFunction);
+    Require(patternBlock.find("PatternKindFromPatternId(patternId)") != std::string::npos,
+            "Accessibility GetPatternProvider maps pattern ids into the shared pattern dispatch");
+    Require(patternBlock.find("QueryPattern(patternKind.value())") != std::string::npos,
+            "Accessibility GetPatternProvider uses the shared QueryPattern implementation");
+    Require(patternBlock.find("SupportsInvokePattern(") == std::string::npos, "Accessibility GetPatternProvider no longer owns invoke-pattern eligibility");
+    Require(patternBlock.find("SnapshotGridCellSupports") == std::string::npos,
+            "Accessibility GetPatternProvider no longer owns grid-cell pattern eligibility");
+}
+
+void TestAccessibilityElementProviderFromPointUsesSnapshot()
+{
+    const std::filesystem::path sourcePath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.Accessibility.cpp";
+    std::ifstream input(sourcePath);
+    Require(input.good(), "Accessibility source is readable for point-provider snapshot guard");
+    const std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+
+    const size_t pointFunction = source.find("HRESULT AccessibilityProvider::ElementProviderFromPoint");
+    const size_t focusFunction = source.find("HRESULT AccessibilityProvider::GetFocus", pointFunction);
+    Require(pointFunction != std::string::npos && focusFunction != std::string::npos && pointFunction < focusFunction,
+            "Accessibility ElementProviderFromPoint source block is found");
+
+    const std::string pointBlock = source.substr(pointFunction, focusFunction - pointFunction);
+    Require(pointBlock.find("CaptureAccessibilitySnapshot(_target, _hwnd)") != std::string::npos,
+            "Accessibility ElementProviderFromPoint reads an immutable published snapshot");
+    Require(pointBlock.find("FindSnapshotPointHit") != std::string::npos,
+            "Accessibility ElementProviderFromPoint resolves providers from snapshot hit records");
+    Require(pointBlock.find("ResolveHost(") == std::string::npos, "Accessibility ElementProviderFromPoint does not resolve the live host");
+    Require(pointBlock.find("ResolveRootControl(") == std::string::npos, "Accessibility ElementProviderFromPoint does not resolve the live root");
+    Require(pointBlock.find("ResolveControlAtPath(") == std::string::npos, "Accessibility ElementProviderFromPoint does not walk live controls");
+    Require(pointBlock.find("FindSemanticControlAtPoint(") == std::string::npos, "Accessibility ElementProviderFromPoint does not live-hit-test controls");
+    Require(pointBlock.find("GetModel(") == std::string::npos, "Accessibility ElementProviderFromPoint does not read Tree/Grid models");
+}
+
+void TestAccessibilityBoundingRectangleUsesSnapshot()
+{
+    const std::filesystem::path sourcePath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.Accessibility.cpp";
+    std::ifstream input(sourcePath);
+    Require(input.good(), "Accessibility source is readable for bounding-rectangle snapshot guard");
+    const std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+
+    const size_t boundsFunction   = source.find("HRESULT AccessibilityProvider::get_BoundingRectangle");
+    const size_t embeddedFunction = source.find("HRESULT AccessibilityProvider::GetEmbeddedFragmentRoots", boundsFunction);
+    Require(boundsFunction != std::string::npos && embeddedFunction != std::string::npos && boundsFunction < embeddedFunction,
+            "Accessibility get_BoundingRectangle source block is found");
+
+    const std::string boundsBlock = source.substr(boundsFunction, embeddedFunction - boundsFunction);
+    Require(boundsBlock.find("CaptureAccessibilitySnapshot(_target, _hwnd)") != std::string::npos,
+            "Accessibility get_BoundingRectangle reads an immutable published snapshot");
+    Require(boundsBlock.find("FindSnapshotFragmentBounds") != std::string::npos,
+            "Accessibility get_BoundingRectangle resolves fragment bounds from snapshot records");
+    Require(boundsBlock.find("ResolveHost(") == std::string::npos, "Accessibility get_BoundingRectangle does not resolve the live host");
+    Require(boundsBlock.find("ResolveControl(") == std::string::npos, "Accessibility get_BoundingRectangle does not resolve live controls");
+    Require(boundsBlock.find("ResolveTreeControl(") == std::string::npos, "Accessibility get_BoundingRectangle does not resolve live trees");
+    Require(boundsBlock.find("ResolveGridControl(") == std::string::npos, "Accessibility get_BoundingRectangle does not resolve live grids");
+    Require(boundsBlock.find("ResolveGridCellData(") == std::string::npos, "Accessibility get_BoundingRectangle does not read Grid cell data");
+    Require(boundsBlock.find("ResolveTreeItemData(") == std::string::npos, "Accessibility get_BoundingRectangle does not read Tree item data");
+    Require(boundsBlock.find("GetItemLayoutMetrics(") == std::string::npos, "Accessibility get_BoundingRectangle does not build Tree layout metrics");
+    Require(boundsBlock.find("GetModel(") == std::string::npos, "Accessibility get_BoundingRectangle does not read Tree/Grid models");
+}
+
+void TestAccessibilityGridPatternReadsUseSnapshots()
+{
+    const std::filesystem::path sourcePath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.Accessibility.cpp";
+    std::ifstream input(sourcePath);
+    Require(input.good(), "Accessibility source is readable for grid-pattern snapshot guard");
+    const std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+
+    const size_t tableHeadersFunction = source.find("HRESULT AccessibilityProvider::GetColumnHeaders");
+    const size_t rowOrColumnFunction  = source.find("HRESULT AccessibilityProvider::get_RowOrColumnMajor", tableHeadersFunction);
+    Require(tableHeadersFunction != std::string::npos && rowOrColumnFunction != std::string::npos && tableHeadersFunction < rowOrColumnFunction,
+            "Accessibility table column-header source block is found");
+    const std::string tableHeadersBlock = source.substr(tableHeadersFunction, rowOrColumnFunction - tableHeadersFunction);
+    Require(tableHeadersBlock.find("CaptureAccessibilitySnapshot(_target, _hwnd)") != std::string::npos,
+            "Accessibility GetColumnHeaders reads an immutable published snapshot");
+    Require(tableHeadersBlock.find("ResolveSnapshotControlRecord") != std::string::npos,
+            "Accessibility GetColumnHeaders reads visible grid columns from snapshot records");
+    Require(tableHeadersBlock.find("ResolveControlPath(") == std::string::npos, "Accessibility GetColumnHeaders does not resolve live control paths");
+    Require(tableHeadersBlock.find("ResolveGridControl(") == std::string::npos, "Accessibility GetColumnHeaders does not resolve live grids");
+    Require(tableHeadersBlock.find("GetVisibleColumnAt(") == std::string::npos, "Accessibility GetColumnHeaders does not read live visible columns");
+
+    const size_t rowHeadersFunction    = source.find("HRESULT AccessibilityProvider::GetRowHeaders");
+    const size_t columnHeadersFunction = source.find("HRESULT AccessibilityProvider::GetColumnHeaders", rowHeadersFunction);
+    Require(rowHeadersFunction != std::string::npos && columnHeadersFunction != std::string::npos && rowHeadersFunction < columnHeadersFunction,
+            "Accessibility table row-header source block is found");
+    const std::string rowHeadersBlock = source.substr(rowHeadersFunction, columnHeadersFunction - rowHeadersFunction);
+    Require(rowHeadersBlock.find("CaptureAccessibilitySnapshot(_target, _hwnd)") != std::string::npos,
+            "Accessibility GetRowHeaders reads an immutable published snapshot");
+    Require(rowHeadersBlock.find("ResolveSnapshotControlRecord") != std::string::npos,
+            "Accessibility GetRowHeaders validates the grid from snapshot records");
+    Require(rowHeadersBlock.find("ResolveControlPath(") == std::string::npos, "Accessibility GetRowHeaders does not resolve live control paths");
+    Require(rowHeadersBlock.find("SupportsGridTablePattern(") == std::string::npos, "Accessibility GetRowHeaders does not re-resolve live table support");
+
+    const size_t rowFunction        = source.find("HRESULT AccessibilityProvider::get_Row(int*");
+    const size_t containingFunction = source.find("HRESULT AccessibilityProvider::get_ContainingGrid", rowFunction);
+    Require(rowFunction != std::string::npos && containingFunction != std::string::npos && rowFunction < containingFunction,
+            "Accessibility grid item row/column source block is found");
+    const std::string gridItemBlock = source.substr(rowFunction, containingFunction - rowFunction);
+    Require(gridItemBlock.find("CaptureAccessibilitySnapshot(_target, _hwnd)") != std::string::npos,
+            "Accessibility grid item row/column reads immutable published snapshots");
+    Require(gridItemBlock.find("FindSnapshotGridCellRecord") != std::string::npos,
+            "Accessibility grid item row/column resolves cell metadata from snapshot records");
+    Require(gridItemBlock.find("ResolveGridCellData(") == std::string::npos, "Accessibility grid item row/column does not read live Grid cell data");
+    Require(gridItemBlock.find("SupportsGridCellPattern(") == std::string::npos,
+            "Accessibility grid item row/column does not re-resolve live Grid pattern support");
+
+    const size_t containingGridFunction = source.find("HRESULT AccessibilityProvider::get_ContainingGrid");
+    const size_t nextFunction           = source.find("HRESULT AccessibilityProvider::GetRowHeaderItems", containingGridFunction);
+    Require(containingGridFunction != std::string::npos && nextFunction != std::string::npos && containingGridFunction < nextFunction,
+            "Accessibility containing-grid source block is found");
+    const std::string containingGridBlock = source.substr(containingGridFunction, nextFunction - containingGridFunction);
+    Require(containingGridBlock.find("CaptureAccessibilitySnapshot(_target, _hwnd)") != std::string::npos,
+            "Accessibility containing-grid reads an immutable published snapshot");
+    Require(containingGridBlock.find("FindSnapshotGridCellRecord") != std::string::npos,
+            "Accessibility containing-grid validates the cell from snapshot records");
+    Require(containingGridBlock.find("SupportsGridCellPattern(") == std::string::npos,
+            "Accessibility containing-grid does not re-resolve live Grid pattern support");
+
+    const size_t tableItemFunction = source.find("HRESULT AccessibilityProvider::GetColumnHeaderItems");
+    const size_t helperFunction    = source.find("WindowHost* AccessibilityProvider::ResolveHost", tableItemFunction);
+    Require(tableItemFunction != std::string::npos && helperFunction != std::string::npos && tableItemFunction < helperFunction,
+            "Accessibility table-item column-header source block is found");
+    const std::string tableItemBlock = source.substr(tableItemFunction, helperFunction - tableItemFunction);
+    Require(tableItemBlock.find("CaptureAccessibilitySnapshot(_target, _hwnd)") != std::string::npos,
+            "Accessibility table item header reads immutable published snapshots");
+    Require(tableItemBlock.find("FindSnapshotGridCellRecord") != std::string::npos,
+            "Accessibility table item header resolves cell metadata from snapshot records");
+    Require(tableItemBlock.find("ResolveGridCellData(") == std::string::npos, "Accessibility table item header does not read live Grid cell data");
+    Require(tableItemBlock.find("SupportsGridCellTableItemPattern(") == std::string::npos,
+            "Accessibility table item header does not re-resolve live table-item support");
+
+    const size_t propertyValueFunction = source.find("HRESULT AccessibilityProvider::GetPropertyValue");
+    const size_t hostProviderFunction  = source.find("HRESULT AccessibilityProvider::get_HostRawElementProvider", propertyValueFunction);
+    Require(propertyValueFunction != std::string::npos && hostProviderFunction != std::string::npos && propertyValueFunction < hostProviderFunction,
+            "Accessibility GetPropertyValue source block is found for grid count properties");
+    const std::string propertyValueBlock = source.substr(propertyValueFunction, hostProviderFunction - propertyValueFunction);
+    const size_t gridRowCountProperty    = propertyValueBlock.find("UIA_GridRowCountPropertyId");
+    const size_t propertyLiveRootResolve = propertyValueBlock.find("ResolveRootControl(");
+    Require(gridRowCountProperty != std::string::npos && (propertyLiveRootResolve == std::string::npos || gridRowCountProperty < propertyLiveRootResolve),
+            "Accessibility GetPropertyValue handles Grid row/column counts before any live root resolve");
+    const std::string gridCountPropertyBlock = propertyValueBlock.substr(0u, propertyLiveRootResolve);
+    Require(gridCountPropertyBlock.find("CaptureAccessibilitySnapshot(_target, _hwnd)") != std::string::npos,
+            "Accessibility GetPropertyValue Grid counts read an immutable published snapshot");
+    Require(gridCountPropertyBlock.find("gridRowCount") != std::string::npos, "Accessibility GetPropertyValue Grid row count reads snapshot records");
+    Require(gridCountPropertyBlock.find("gridColumnCount") != std::string::npos, "Accessibility GetPropertyValue Grid column count reads snapshot records");
+    Require(gridCountPropertyBlock.find("GetModel(") == std::string::npos, "Accessibility GetPropertyValue Grid counts do not read live Grid models");
+
+    const size_t gridHeaderBranch = propertyValueBlock.find("if (_kind == AccessibilityFragmentKind::GridHeader)");
+    Require(gridHeaderBranch != std::string::npos && (propertyLiveRootResolve == std::string::npos || gridHeaderBranch < propertyLiveRootResolve),
+            "Accessibility GetPropertyValue handles GridHeader state before any live root resolve");
+    const std::string gridHeaderPropertyBlock = propertyValueBlock.substr(gridHeaderBranch, propertyLiveRootResolve - gridHeaderBranch);
+    Require(gridHeaderPropertyBlock.find("CaptureAccessibilitySnapshot(_target, _hwnd)") != std::string::npos,
+            "Accessibility GetPropertyValue GridHeader state reads an immutable published snapshot");
+    Require(gridHeaderPropertyBlock.find("FindSnapshotGridHeaderRecord") != std::string::npos,
+            "Accessibility GetPropertyValue GridHeader state resolves metadata from snapshot records");
+    Require(gridHeaderPropertyBlock.find("gridHeaderName") != std::string::npos, "Accessibility GetPropertyValue GridHeader name reads snapshot records");
+    Require(gridHeaderPropertyBlock.find("ResolveGridControl(") == std::string::npos,
+            "Accessibility GetPropertyValue GridHeader state does not resolve live grids");
+    Require(gridHeaderPropertyBlock.find("ResolveGridHeaderColumn(") == std::string::npos,
+            "Accessibility GetPropertyValue GridHeader state does not read live Grid columns");
+
+    const std::string legacyFallbackBlock = propertyLiveRootResolve == std::string::npos ? std::string{} : propertyValueBlock.substr(propertyLiveRootResolve);
+    Require(legacyFallbackBlock.find("AccessibilityFragmentKind::TreeItem") == std::string::npos,
+            "Accessibility GetPropertyValue has no legacy live TreeItem property fallback after snapshot handling");
+    Require(legacyFallbackBlock.find("AccessibilityFragmentKind::GridHeader") == std::string::npos,
+            "Accessibility GetPropertyValue has no legacy live GridHeader property fallback after snapshot handling");
+    Require(legacyFallbackBlock.find("UIA_GridRowCountPropertyId") == std::string::npos,
+            "Accessibility GetPropertyValue has no legacy live Grid row-count fallback after snapshot handling");
+    Require(legacyFallbackBlock.find("UIA_GridColumnCountPropertyId") == std::string::npos,
+            "Accessibility GetPropertyValue has no legacy live Grid column-count fallback after snapshot handling");
+}
+
+void TestAccessibilityControlStateReadsUseSnapshots()
+{
+    const std::filesystem::path sourcePath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.Accessibility.cpp";
+    std::ifstream input(sourcePath);
+    Require(input.good(), "Accessibility source is readable for control snapshot guard");
+    const std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+
+    const size_t queryPatternFunction = source.find("AccessibilityPatternQueryResult AccessibilityProvider::QueryPattern");
+    const size_t queryFunction        = source.find("HRESULT AccessibilityProvider::QueryInterface", queryPatternFunction);
+    Require(queryPatternFunction != std::string::npos && queryFunction != std::string::npos && queryPatternFunction < queryFunction,
+            "Accessibility shared QueryPattern source block is found for control snapshot guard");
+    const std::string queryPatternBlock = source.substr(queryPatternFunction, queryFunction - queryPatternFunction);
+    const size_t queryLiveRoot          = queryPatternBlock.find("ResolveRootControl(");
+    const size_t querySnapshotRecord    = queryPatternBlock.find("ResolveSnapshotControlRecord");
+    Require(querySnapshotRecord != std::string::npos && (queryLiveRoot == std::string::npos || querySnapshotRecord < queryLiveRoot),
+            "Accessibility shared QueryPattern resolves ordinary control pattern support from snapshots before any live root resolve");
+    const std::string queryLegacyBlock = queryLiveRoot == std::string::npos ? std::string{} : queryPatternBlock.substr(queryLiveRoot);
+    Require(queryLegacyBlock.find("SupportsValuePattern(control)") == std::string::npos,
+            "Accessibility shared QueryPattern has no legacy live ValuePattern support fallback");
+    Require(queryLegacyBlock.find("SupportsTextPattern(control)") == std::string::npos,
+            "Accessibility shared QueryPattern has no legacy live TextPattern support fallback");
+    Require(queryLegacyBlock.find("SupportsRangeValuePattern(control)") == std::string::npos,
+            "Accessibility shared QueryPattern has no legacy live RangeValue support fallback");
+
+    const size_t propertyValueFunction = source.find("HRESULT AccessibilityProvider::GetPropertyValue");
+    const size_t hostProviderFunction  = source.find("HRESULT AccessibilityProvider::get_HostRawElementProvider", propertyValueFunction);
+    Require(propertyValueFunction != std::string::npos && hostProviderFunction != std::string::npos && propertyValueFunction < hostProviderFunction,
+            "Accessibility GetPropertyValue source block is found for control snapshot guard");
+    const std::string propertyValueBlock = source.substr(propertyValueFunction, hostProviderFunction - propertyValueFunction);
+    const size_t propertyLiveRoot        = propertyValueBlock.find("ResolveRootControl(");
+    const size_t propertySnapshotRecord  = propertyValueBlock.find("ResolveSnapshotControlRecord");
+    Require(propertySnapshotRecord != std::string::npos && (propertyLiveRoot == std::string::npos || propertySnapshotRecord < propertyLiveRoot),
+            "Accessibility GetPropertyValue resolves ordinary control properties from snapshots before any live root resolve");
+    const std::string propertyLegacyBlock = propertyLiveRoot == std::string::npos ? std::string{} : propertyValueBlock.substr(propertyLiveRoot);
+    Require(propertyLegacyBlock.find("GetControlAccessibleName(") == std::string::npos,
+            "Accessibility GetPropertyValue has no legacy live accessible-name fallback");
+    Require(propertyLegacyBlock.find("GetControlAccessibleValue(") == std::string::npos,
+            "Accessibility GetPropertyValue has no legacy live text value fallback");
+    Require(propertyLegacyBlock.find("dynamic_cast<const TextField*>") == std::string::npos,
+            "Accessibility GetPropertyValue has no legacy live TextField password-state fallback");
+    Require(propertyLegacyBlock.find("IsValueReadOnly(control)") == std::string::npos, "Accessibility GetPropertyValue has no legacy live read-only fallback");
+
+    const size_t stringValueFunction = source.find("HRESULT AccessibilityProvider::get_Value(BSTR*");
+    const size_t doubleValueFunction = source.find("HRESULT AccessibilityProvider::get_Value(double*", stringValueFunction);
+    Require(stringValueFunction != std::string::npos && doubleValueFunction != std::string::npos && stringValueFunction < doubleValueFunction,
+            "Accessibility string ValuePattern source block is found");
+    const std::string stringValueBlock = source.substr(stringValueFunction, doubleValueFunction - stringValueFunction);
+    Require(stringValueBlock.find("ResolveSnapshotControlRecord") != std::string::npos,
+            "Accessibility string ValuePattern reads ordinary control values from snapshots");
+    Require(stringValueBlock.find("GetControlAccessibleValue(control)") == std::string::npos,
+            "Accessibility string ValuePattern has no legacy live text value fallback");
+
+    const size_t readOnlyFunction = source.find("HRESULT AccessibilityProvider::get_IsReadOnly");
+    const size_t maximumFunction  = source.find("HRESULT AccessibilityProvider::get_Maximum", readOnlyFunction);
+    Require(readOnlyFunction != std::string::npos && maximumFunction != std::string::npos && readOnlyFunction < maximumFunction,
+            "Accessibility ValuePattern read-only source block is found");
+    const std::string readOnlyBlock = source.substr(readOnlyFunction, maximumFunction - readOnlyFunction);
+    Require(readOnlyBlock.find("ResolveSnapshotControlRecord") != std::string::npos,
+            "Accessibility ValuePattern read-only state reads ordinary control state from snapshots");
+    Require(readOnlyBlock.find("IsValueReadOnly(control)") == std::string::npos,
+            "Accessibility ValuePattern read-only state has no legacy live control fallback");
+}
+
+void TestAccessibilityGridCellValueReadsUseSnapshots()
+{
+    const std::filesystem::path sourcePath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.Accessibility.cpp";
+    std::ifstream input(sourcePath);
+    Require(input.good(), "Accessibility source is readable for grid-cell snapshot guard");
+    const std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+
+    const size_t queryPatternFunction = source.find("AccessibilityPatternQueryResult AccessibilityProvider::QueryPattern");
+    const size_t queryFunction        = source.find("HRESULT AccessibilityProvider::QueryInterface", queryPatternFunction);
+    Require(queryPatternFunction != std::string::npos && queryFunction != std::string::npos && queryPatternFunction < queryFunction,
+            "Accessibility shared QueryPattern source block is found for grid-cell guard");
+    const std::string queryPatternBlock = source.substr(queryPatternFunction, queryFunction - queryPatternFunction);
+    const size_t queryGridCellBranch    = queryPatternBlock.find("if (_kind == AccessibilityFragmentKind::GridCell)");
+    const size_t queryLiveRootResolve   = queryPatternBlock.find("ResolveRootControl(");
+    Require(queryGridCellBranch != std::string::npos && (queryLiveRootResolve == std::string::npos || queryGridCellBranch < queryLiveRootResolve),
+            "Accessibility shared QueryPattern handles GridCell patterns before any live root resolve");
+    const std::string queryGridCellBlock = queryPatternBlock.substr(
+        queryGridCellBranch, queryLiveRootResolve == std::string::npos ? std::string::npos : queryLiveRootResolve - queryGridCellBranch);
+    Require(queryGridCellBlock.find("CaptureAccessibilitySnapshot(_target, _hwnd)") != std::string::npos,
+            "Accessibility shared QueryPattern GridCell patterns read an immutable published snapshot");
+    Require(queryGridCellBlock.find("FindSnapshotGridCellRecord") != std::string::npos,
+            "Accessibility shared QueryPattern GridCell patterns validate snapshot cell records");
+    Require(queryGridCellBlock.find("SnapshotGridCellSupportsTogglePattern") != std::string::npos,
+            "Accessibility shared QueryPattern GridCell toggle pattern support comes from snapshot records");
+    Require(queryGridCellBlock.find("SnapshotGridCellSupportsValuePattern") != std::string::npos,
+            "Accessibility shared QueryPattern GridCell value pattern support comes from snapshot records");
+    Require(queryGridCellBlock.find("SnapshotGridCellSupportsRangeValuePattern") != std::string::npos,
+            "Accessibility shared QueryPattern GridCell range pattern support comes from snapshot records");
+    Require(queryGridCellBlock.find("SupportsGridCell") == std::string::npos,
+            "Accessibility shared QueryPattern GridCell patterns do not re-resolve live Grid cell support");
+    Require(queryGridCellBlock.find("ResolveGridCellData(") == std::string::npos,
+            "Accessibility shared QueryPattern GridCell patterns do not read live Grid cell data");
+
+    const size_t propertyValueFunction = source.find("HRESULT AccessibilityProvider::GetPropertyValue");
+    const size_t hostProviderFunction  = source.find("HRESULT AccessibilityProvider::get_HostRawElementProvider", propertyValueFunction);
+    Require(propertyValueFunction != std::string::npos && hostProviderFunction != std::string::npos && propertyValueFunction < hostProviderFunction,
+            "Accessibility GetPropertyValue source block is found for grid-cell guard");
+    const std::string propertyValueBlock = source.substr(propertyValueFunction, hostProviderFunction - propertyValueFunction);
+    const size_t propertyGridCellBranch  = propertyValueBlock.find("if (_kind == AccessibilityFragmentKind::GridCell)");
+    const size_t propertyLiveRootResolve = propertyValueBlock.find("ResolveRootControl(");
+    Require(propertyGridCellBranch != std::string::npos && (propertyLiveRootResolve == std::string::npos || propertyGridCellBranch < propertyLiveRootResolve),
+            "Accessibility GetPropertyValue handles GridCell state before any live root resolve");
+    const std::string propertyGridCellBlock = propertyValueBlock.substr(
+        propertyGridCellBranch, propertyLiveRootResolve == std::string::npos ? std::string::npos : propertyLiveRootResolve - propertyGridCellBranch);
+    Require(propertyGridCellBlock.find("CaptureAccessibilitySnapshot(_target, _hwnd)") != std::string::npos,
+            "Accessibility GetPropertyValue GridCell state reads an immutable published snapshot");
+    Require(propertyGridCellBlock.find("FindSnapshotGridCellRecord") != std::string::npos,
+            "Accessibility GetPropertyValue GridCell state resolves metadata from snapshot records");
+    Require(propertyGridCellBlock.find("gridCellAccessibleText") != std::string::npos, "Accessibility GetPropertyValue GridCell text reads snapshot records");
+    Require(propertyGridCellBlock.find("SnapshotGridCellSupportsTogglePattern") != std::string::npos,
+            "Accessibility GetPropertyValue GridCell toggle support comes from snapshot records");
+    Require(propertyGridCellBlock.find("SnapshotGridCellSupportsValuePattern") != std::string::npos,
+            "Accessibility GetPropertyValue GridCell value support comes from snapshot records");
+    Require(propertyGridCellBlock.find("SnapshotGridCellSupportsRangeValuePattern") != std::string::npos,
+            "Accessibility GetPropertyValue GridCell range support comes from snapshot records");
+    Require(propertyGridCellBlock.find("ResolveGridControl(") == std::string::npos,
+            "Accessibility GetPropertyValue GridCell state does not resolve live grids");
+    Require(propertyGridCellBlock.find("ResolveGridCellData(") == std::string::npos,
+            "Accessibility GetPropertyValue GridCell state does not read live Grid cell data");
+    Require(propertyGridCellBlock.find("SupportsGridCell") == std::string::npos,
+            "Accessibility GetPropertyValue GridCell state does not re-resolve live Grid cell support");
+
+    const size_t toggleFunction   = source.find("HRESULT AccessibilityProvider::get_ToggleState");
+    const size_t setValueFunction = source.find("HRESULT AccessibilityProvider::SetValue(LPCWSTR", toggleFunction);
+    Require(toggleFunction != std::string::npos && setValueFunction != std::string::npos && toggleFunction < setValueFunction,
+            "Accessibility get_ToggleState source block is found");
+    const std::string toggleBlock = source.substr(toggleFunction, setValueFunction - toggleFunction);
+    Require(toggleBlock.find("FindSnapshotGridCellRecord") != std::string::npos, "Accessibility get_ToggleState GridCell read uses snapshot cell records");
+    Require(toggleBlock.find("SnapshotGridCellSupportsTogglePattern") != std::string::npos,
+            "Accessibility get_ToggleState GridCell support comes from snapshot records");
+    Require(toggleBlock.find("ResolveGridCellData(") == std::string::npos, "Accessibility get_ToggleState does not read live Grid cell data");
+
+    const size_t stringValueFunction = source.find("HRESULT AccessibilityProvider::get_Value(BSTR* outValue)");
+    const size_t rangeValueFunction  = source.find("HRESULT AccessibilityProvider::get_Value(double* outValue)", stringValueFunction);
+    Require(stringValueFunction != std::string::npos && rangeValueFunction != std::string::npos && stringValueFunction < rangeValueFunction,
+            "Accessibility string get_Value source block is found");
+    const std::string stringValueBlock = source.substr(stringValueFunction, rangeValueFunction - stringValueFunction);
+    Require(stringValueBlock.find("FindSnapshotGridCellRecord") != std::string::npos,
+            "Accessibility string get_Value GridCell read uses snapshot cell records");
+    Require(stringValueBlock.find("SnapshotGridCellSupportsValuePattern") != std::string::npos,
+            "Accessibility string get_Value GridCell support comes from snapshot records");
+    Require(stringValueBlock.find("ResolveGridCellData(") == std::string::npos, "Accessibility string get_Value does not read live Grid cell data");
+
+    const size_t isReadOnlyFunction = source.find("HRESULT AccessibilityProvider::get_IsReadOnly", rangeValueFunction);
+    Require(rangeValueFunction != std::string::npos && isReadOnlyFunction != std::string::npos && rangeValueFunction < isReadOnlyFunction,
+            "Accessibility range get_Value source block is found");
+    const std::string rangeValueBlock = source.substr(rangeValueFunction, isReadOnlyFunction - rangeValueFunction);
+    Require(rangeValueBlock.find("FindSnapshotGridCellRecord") != std::string::npos, "Accessibility range get_Value GridCell read uses snapshot cell records");
+    Require(rangeValueBlock.find("SnapshotGridCellSupportsRangeValuePattern") != std::string::npos,
+            "Accessibility range get_Value GridCell support comes from snapshot records");
+    Require(rangeValueBlock.find("ResolveGridCellData(") == std::string::npos, "Accessibility range get_Value does not read live Grid cell data");
+
+    const size_t maximumFunction = source.find("HRESULT AccessibilityProvider::get_Maximum", isReadOnlyFunction);
+    Require(isReadOnlyFunction != std::string::npos && maximumFunction != std::string::npos && isReadOnlyFunction < maximumFunction,
+            "Accessibility get_IsReadOnly source block is found");
+    const std::string readOnlyBlock = source.substr(isReadOnlyFunction, maximumFunction - isReadOnlyFunction);
+    Require(readOnlyBlock.find("FindSnapshotGridCellRecord") != std::string::npos, "Accessibility get_IsReadOnly GridCell read uses snapshot cell records");
+    Require(readOnlyBlock.find("SnapshotGridCellSupportsValuePattern") != std::string::npos,
+            "Accessibility get_IsReadOnly GridCell value support comes from snapshot records");
+    Require(readOnlyBlock.find("SnapshotGridCellSupportsRangeValuePattern") != std::string::npos,
+            "Accessibility get_IsReadOnly GridCell range support comes from snapshot records");
+    Require(readOnlyBlock.find("ResolveGridCellData(") == std::string::npos, "Accessibility get_IsReadOnly does not read live Grid cell data");
+
+    const size_t selectionFunction = source.find("HRESULT AccessibilityProvider::GetSelection", maximumFunction);
+    Require(maximumFunction != std::string::npos && selectionFunction != std::string::npos && maximumFunction < selectionFunction,
+            "Accessibility range metadata source block is found");
+    const std::string rangeMetadataBlock = source.substr(maximumFunction, selectionFunction - maximumFunction);
+    Require(rangeMetadataBlock.find("FindSnapshotGridCellRecord") != std::string::npos,
+            "Accessibility range metadata GridCell reads use snapshot cell records");
+    Require(rangeMetadataBlock.find("SnapshotGridCellSupportsRangeValuePattern") != std::string::npos,
+            "Accessibility range metadata GridCell support comes from snapshot records");
+    Require(rangeMetadataBlock.find("SupportsGridCellRangeValuePattern()") == std::string::npos,
+            "Accessibility range metadata does not re-resolve live Grid cell range support");
+    Require(rangeMetadataBlock.find("ResolveGridCellData(") == std::string::npos, "Accessibility range metadata does not read live Grid cell data");
+}
+
+void TestAccessibilityGridRowPropertyReadsUseSnapshots()
+{
+    const std::filesystem::path sourcePath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.Accessibility.cpp";
+    std::ifstream input(sourcePath);
+    Require(input.good(), "Accessibility source is readable for grid-row snapshot guard");
+    const std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+
+    const size_t propertyValueFunction = source.find("HRESULT AccessibilityProvider::GetPropertyValue");
+    const size_t hostProviderFunction  = source.find("HRESULT AccessibilityProvider::get_HostRawElementProvider", propertyValueFunction);
+    Require(propertyValueFunction != std::string::npos && hostProviderFunction != std::string::npos && propertyValueFunction < hostProviderFunction,
+            "Accessibility GetPropertyValue source block is found for grid-row guard");
+    const std::string propertyValueBlock = source.substr(propertyValueFunction, hostProviderFunction - propertyValueFunction);
+
+    const size_t propertyGridRowBranch   = propertyValueBlock.find("if (_kind == AccessibilityFragmentKind::GridRow)");
+    const size_t propertyLiveRootResolve = propertyValueBlock.find("ResolveRootControl(");
+    Require(propertyGridRowBranch != std::string::npos && (propertyLiveRootResolve == std::string::npos || propertyGridRowBranch < propertyLiveRootResolve),
+            "Accessibility GetPropertyValue handles GridRow state before any live root resolve");
+    const std::string propertyGridRowBlock = propertyValueBlock.substr(
+        propertyGridRowBranch, propertyLiveRootResolve == std::string::npos ? std::string::npos : propertyLiveRootResolve - propertyGridRowBranch);
+    Require(propertyGridRowBlock.find("CaptureAccessibilitySnapshot(_target, _hwnd)") != std::string::npos,
+            "Accessibility GetPropertyValue GridRow state reads an immutable published snapshot");
+    Require(propertyGridRowBlock.find("FindSnapshotGridRowRecord") != std::string::npos,
+            "Accessibility GetPropertyValue GridRow state resolves row data from snapshot records");
+    Require(propertyGridRowBlock.find("gridRowAccessibleName") != std::string::npos, "Accessibility GetPropertyValue GridRow name reads snapshot records");
+    Require(propertyGridRowBlock.find("SnapshotGridRowIsSelected") != std::string::npos,
+            "Accessibility GetPropertyValue GridRow selection reads snapshot records");
+    Require(propertyGridRowBlock.find("ResolveGridControl(") == std::string::npos, "Accessibility GetPropertyValue GridRow state does not resolve live grids");
+    Require(propertyGridRowBlock.find("ResolveGridRowIndex(") == std::string::npos,
+            "Accessibility GetPropertyValue GridRow state does not query live Grid rows");
+    Require(propertyGridRowBlock.find("BuildGridRowAccessibleName(") == std::string::npos,
+            "Accessibility GetPropertyValue GridRow state does not build names from live Grid models");
+}
+
+void TestAccessibilityTreeGridSelectionReadsUseSnapshots()
+{
+    const std::filesystem::path sourcePath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.Accessibility.cpp";
+    std::ifstream input(sourcePath);
+    Require(input.good(), "Accessibility source is readable for selection snapshot guard");
+    const std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+
+    const size_t getSelectionFunction = source.find("HRESULT AccessibilityProvider::GetSelection");
+    const size_t canSelectFunction    = source.find("HRESULT AccessibilityProvider::get_CanSelectMultiple", getSelectionFunction);
+    Require(getSelectionFunction != std::string::npos && canSelectFunction != std::string::npos && getSelectionFunction < canSelectFunction,
+            "Accessibility GetSelection source block is found");
+    const std::string getSelectionBlock = source.substr(getSelectionFunction, canSelectFunction - getSelectionFunction);
+    Require(getSelectionBlock.find("CaptureAccessibilitySnapshot(_target, _hwnd)") != std::string::npos,
+            "Accessibility GetSelection reads an immutable published snapshot");
+    const size_t getSelectionSnapshotRead = getSelectionBlock.find("CaptureAccessibilitySnapshot(_target, _hwnd)");
+    const size_t getSelectionLiveResolve  = getSelectionBlock.find("ResolveControl(");
+    Require(getSelectionLiveResolve == std::string::npos || getSelectionSnapshotRead < getSelectionLiveResolve,
+            "Accessibility GetSelection handles snapshot selection before any live control resolve");
+    Require(getSelectionBlock.find("selectedGridRowIds") != std::string::npos, "Accessibility GetSelection reads selected Grid rows from snapshot records");
+    Require(getSelectionBlock.find("selectedTreeVisibleIndex") != std::string::npos,
+            "Accessibility GetSelection reads selected Tree item identity from snapshot records");
+    Require(getSelectionBlock.find("GetSelectionModel(") == std::string::npos, "Accessibility GetSelection does not read live Grid selection");
+    Require(getSelectionBlock.find("GetSelectedItemId(") == std::string::npos, "Accessibility GetSelection does not read live Tree selection");
+    Require(getSelectionBlock.find("FindVisibleItemById(") == std::string::npos, "Accessibility GetSelection does not query live Tree model selection");
+    Require(getSelectionBlock.find("FindRowByStableId(") == std::string::npos, "Accessibility GetSelection does not query live Grid model rows");
+
+    const size_t isSelectedFunction = source.find("HRESULT AccessibilityProvider::get_IsSelected");
+    const size_t containerFunction  = source.find("HRESULT AccessibilityProvider::get_SelectionContainer", isSelectedFunction);
+    Require(isSelectedFunction != std::string::npos && containerFunction != std::string::npos && isSelectedFunction < containerFunction,
+            "Accessibility get_IsSelected source block is found");
+    const std::string isSelectedBlock = source.substr(isSelectedFunction, containerFunction - isSelectedFunction);
+    Require(isSelectedBlock.find("CaptureAccessibilitySnapshot(_target, _hwnd)") != std::string::npos,
+            "Accessibility get_IsSelected reads an immutable published snapshot");
+    Require(isSelectedBlock.find("SnapshotGridRowIsSelected") != std::string::npos,
+            "Accessibility get_IsSelected resolves Grid selected state from snapshot records");
+    Require(isSelectedBlock.find("SnapshotTreeItemIsSelected") != std::string::npos,
+            "Accessibility get_IsSelected resolves Tree selected state from snapshot records");
+    Require(isSelectedBlock.find("ResolveTreeControl(") == std::string::npos, "Accessibility get_IsSelected does not resolve live trees");
+    Require(isSelectedBlock.find("ResolveTreeItemData(") == std::string::npos, "Accessibility get_IsSelected does not read Tree item data");
+    Require(isSelectedBlock.find("ResolveGridControl(") == std::string::npos, "Accessibility get_IsSelected does not resolve live grids");
+    Require(isSelectedBlock.find("ResolveGridRowIndex(") == std::string::npos, "Accessibility get_IsSelected does not query live Grid rows");
+
+    const size_t canSelectNextFunction = source.find("HRESULT AccessibilityProvider::get_IsSelectionRequired", canSelectFunction);
+    Require(canSelectNextFunction != std::string::npos && canSelectFunction < canSelectNextFunction,
+            "Accessibility get_CanSelectMultiple source block is found");
+    const std::string canSelectBlock = source.substr(canSelectFunction, canSelectNextFunction - canSelectFunction);
+    Require(canSelectBlock.find("CaptureAccessibilitySnapshot(_target, _hwnd)") != std::string::npos,
+            "Accessibility get_CanSelectMultiple reads an immutable published snapshot");
+    Require(canSelectBlock.find("ResolveControl(") == std::string::npos, "Accessibility get_CanSelectMultiple does not resolve live controls");
+    Require(canSelectBlock.find("GetSelectionMode(") == std::string::npos, "Accessibility get_CanSelectMultiple does not read live Grid selection mode");
+
+    const size_t selectionRequiredNextFunction = source.find("HRESULT AccessibilityProvider::GetRowHeaders", canSelectNextFunction);
+    Require(selectionRequiredNextFunction != std::string::npos && canSelectNextFunction < selectionRequiredNextFunction,
+            "Accessibility get_IsSelectionRequired source block is found");
+    const std::string selectionRequiredBlock = source.substr(canSelectNextFunction, selectionRequiredNextFunction - canSelectNextFunction);
+    Require(selectionRequiredBlock.find("CaptureAccessibilitySnapshot(_target, _hwnd)") != std::string::npos,
+            "Accessibility get_IsSelectionRequired reads an immutable published snapshot");
+    Require(selectionRequiredBlock.find("ResolveControl(") == std::string::npos, "Accessibility get_IsSelectionRequired does not resolve live controls");
+
+    const size_t containerNextFunction = source.find("HRESULT AccessibilityProvider::Expand", containerFunction);
+    Require(containerNextFunction != std::string::npos && containerFunction < containerNextFunction,
+            "Accessibility get_SelectionContainer source block is found");
+    const std::string containerBlock = source.substr(containerFunction, containerNextFunction - containerFunction);
+    Require(containerBlock.find("CaptureAccessibilitySnapshot(_target, _hwnd)") != std::string::npos,
+            "Accessibility get_SelectionContainer reads an immutable published snapshot");
+    Require(containerBlock.find("SupportsTreeItemSelectionPattern(") == std::string::npos,
+            "Accessibility get_SelectionContainer does not re-resolve live Tree selection support");
+    Require(containerBlock.find("SupportsGridRowSelectionPattern(") == std::string::npos,
+            "Accessibility get_SelectionContainer does not re-resolve live Grid selection support");
+
+    const size_t queryPatternFunction = source.find("AccessibilityPatternQueryResult AccessibilityProvider::QueryPattern");
+    const size_t queryFunction        = source.find("HRESULT AccessibilityProvider::QueryInterface", queryPatternFunction);
+    Require(queryPatternFunction != std::string::npos && queryFunction != std::string::npos && queryPatternFunction < queryFunction,
+            "Accessibility shared QueryPattern source block is found");
+    const std::string queryPatternBlock = source.substr(queryPatternFunction, queryFunction - queryPatternFunction);
+    const size_t liveRootResolve        = queryPatternBlock.find("ResolveRootControl(");
+    const size_t treeSelectionBranch =
+        queryPatternBlock.find("_kind == AccessibilityFragmentKind::TreeItem && patternKind == AccessibilityPatternKind::SelectionItem");
+    Require(treeSelectionBranch != std::string::npos && (liveRootResolve == std::string::npos || treeSelectionBranch < liveRootResolve),
+            "Accessibility shared QueryPattern handles TreeItem selection before any live root resolve");
+    const size_t gridRowBranch = queryPatternBlock.find("if (_kind == AccessibilityFragmentKind::GridRow)");
+    Require(gridRowBranch != std::string::npos && (liveRootResolve == std::string::npos || gridRowBranch < liveRootResolve),
+            "Accessibility shared QueryPattern handles GridRow selection before any live root resolve");
+    const std::string treeSelectionPatternBlock = queryPatternBlock.substr(treeSelectionBranch, gridRowBranch - treeSelectionBranch);
+    Require(treeSelectionPatternBlock.find("CaptureAccessibilitySnapshot(_target, _hwnd)") != std::string::npos,
+            "Accessibility shared QueryPattern TreeItem selection reads an immutable published snapshot");
+    Require(treeSelectionPatternBlock.find("SnapshotContainsTreeItem") != std::string::npos,
+            "Accessibility shared QueryPattern TreeItem selection validates tree items from snapshot records");
+    Require(treeSelectionPatternBlock.find("SupportsTreeItemSelectionPattern(") == std::string::npos,
+            "Accessibility shared QueryPattern TreeItem selection does not re-resolve live Tree item support");
+    Require(treeSelectionPatternBlock.find("ResolveTreeItemData(") == std::string::npos,
+            "Accessibility shared QueryPattern TreeItem selection does not read Tree item data");
+    const size_t controlSelectionResolver = queryPatternBlock.find("ResolveSnapshotControlRecord", gridRowBranch);
+    const size_t controlSelectionBranch =
+        controlSelectionResolver == std::string::npos
+            ? std::string::npos
+            : queryPatternBlock.rfind("const std::shared_ptr<const AccessibilitySnapshot> snapshot", controlSelectionResolver);
+    Require(controlSelectionBranch != std::string::npos && (liveRootResolve == std::string::npos || controlSelectionBranch < liveRootResolve),
+            "Accessibility shared QueryPattern handles Tree/Grid container patterns before any live root resolve");
+    const std::string gridRowPatternBlock = queryPatternBlock.substr(gridRowBranch, controlSelectionBranch - gridRowBranch);
+    Require(gridRowPatternBlock.find("CaptureAccessibilitySnapshot(_target, _hwnd)") != std::string::npos,
+            "Accessibility shared QueryPattern GridRow selection reads an immutable published snapshot");
+    Require(gridRowPatternBlock.find("SnapshotContainsGridRow") != std::string::npos,
+            "Accessibility shared QueryPattern GridRow selection validates visible rows from snapshot records");
+    Require(gridRowPatternBlock.find("SnapshotGridRowIsSelected") != std::string::npos,
+            "Accessibility shared QueryPattern GridRow selection validates selected rows from snapshot records");
+    Require(gridRowPatternBlock.find("SupportsGridRowSelectionPattern(") == std::string::npos,
+            "Accessibility shared QueryPattern GridRow selection does not re-resolve live Grid row support");
+    Require(gridRowPatternBlock.find("ResolveGridRowIndex(") == std::string::npos,
+            "Accessibility shared QueryPattern GridRow selection does not query live Grid rows");
+    const std::string controlPatternBlock = queryPatternBlock.substr(controlSelectionBranch, liveRootResolve - controlSelectionBranch);
+    Require(controlPatternBlock.find("CaptureAccessibilitySnapshot(_target, _hwnd)") != std::string::npos,
+            "Accessibility shared QueryPattern Tree/Grid container patterns read an immutable published snapshot");
+    Require(controlPatternBlock.find("controlSupportsSelection") != std::string::npos,
+            "Accessibility shared QueryPattern Tree/Grid SelectionPattern validates snapshot records");
+    Require(controlPatternBlock.find("controlSupportsTable") != std::string::npos,
+            "Accessibility shared QueryPattern Grid TablePattern validates snapshot column count");
+    Require(controlPatternBlock.find("SupportsSelectionProviderPattern(") == std::string::npos,
+            "Accessibility shared QueryPattern Tree/Grid container patterns do not re-resolve live selection support");
+    Require(controlPatternBlock.find("SupportsGridTablePattern(") == std::string::npos,
+            "Accessibility shared QueryPattern Grid TablePattern does not re-resolve live table support");
+
+    const size_t propertyValueFunction = source.find("HRESULT AccessibilityProvider::GetPropertyValue");
+    const size_t hostProviderFunction  = source.find("HRESULT AccessibilityProvider::get_HostRawElementProvider", propertyValueFunction);
+    Require(propertyValueFunction != std::string::npos && hostProviderFunction != std::string::npos && propertyValueFunction < hostProviderFunction,
+            "Accessibility GetPropertyValue source block is found");
+    const std::string propertyValueBlock = source.substr(propertyValueFunction, hostProviderFunction - propertyValueFunction);
+    const size_t selectedProperty        = propertyValueBlock.find("UIA_SelectionItemIsSelectedPropertyId");
+    const size_t propertyLiveRootResolve = propertyValueBlock.find("ResolveRootControl(");
+    Require(selectedProperty != std::string::npos && (propertyLiveRootResolve == std::string::npos || selectedProperty < propertyLiveRootResolve),
+            "Accessibility GetPropertyValue handles Tree/Grid selected state before any live root resolve");
+    const std::string selectedPropertyBlock = propertyValueBlock.substr(0u, propertyLiveRootResolve);
+    Require(selectedPropertyBlock.find("CaptureAccessibilitySnapshot(_target, _hwnd)") != std::string::npos,
+            "Accessibility GetPropertyValue selected state reads an immutable published snapshot");
+    Require(selectedPropertyBlock.find("SnapshotTreeItemIsSelected") != std::string::npos,
+            "Accessibility GetPropertyValue selected state resolves Tree state from snapshot records");
+    Require(selectedPropertyBlock.find("SnapshotGridRowIsSelected") != std::string::npos,
+            "Accessibility GetPropertyValue selected state resolves Grid state from snapshot records");
+    Require(selectedPropertyBlock.find("ResolveTreeControl(") == std::string::npos,
+            "Accessibility GetPropertyValue selected state does not resolve live trees");
+    Require(selectedPropertyBlock.find("ResolveGridControl(") == std::string::npos,
+            "Accessibility GetPropertyValue selected state does not resolve live grids");
+}
+
+void TestAccessibilityTreeItemStateReadsUseSnapshots()
+{
+    const std::filesystem::path sourcePath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.Accessibility.cpp";
+    std::ifstream input(sourcePath);
+    Require(input.good(), "Accessibility source is readable for TreeItem state snapshot guard");
+    const std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+
+    const size_t propertyFunction = source.find("HRESULT AccessibilityProvider::GetPropertyValue");
+    const size_t hostFunction     = source.find("HRESULT AccessibilityProvider::get_HostRawElementProvider", propertyFunction);
+    Require(propertyFunction != std::string::npos && hostFunction != std::string::npos && propertyFunction < hostFunction,
+            "Accessibility GetPropertyValue source block is found for TreeItem state");
+    const std::string propertyBlock = source.substr(propertyFunction, hostFunction - propertyFunction);
+    const size_t propertyLiveRoot   = propertyBlock.find("ResolveRootControl(");
+    const size_t treeItemBranch     = propertyBlock.find("if (_kind == AccessibilityFragmentKind::TreeItem)");
+    Require(treeItemBranch != std::string::npos && (propertyLiveRoot == std::string::npos || treeItemBranch < propertyLiveRoot),
+            "Accessibility GetPropertyValue handles TreeItem state before any live root resolve");
+    const std::string treeItemPropertyBlock = propertyBlock.substr(treeItemBranch, propertyLiveRoot - treeItemBranch);
+    Require(treeItemPropertyBlock.find("CaptureAccessibilitySnapshot(_target, _hwnd)") != std::string::npos,
+            "Accessibility GetPropertyValue TreeItem state reads an immutable published snapshot");
+    Require(treeItemPropertyBlock.find("FindSnapshotTreeItemRecord") != std::string::npos,
+            "Accessibility GetPropertyValue TreeItem state resolves item data from snapshot records");
+    Require(treeItemPropertyBlock.find("UIA_NamePropertyId") != std::string::npos, "Accessibility GetPropertyValue TreeItem name is snapshot-backed");
+    Require(treeItemPropertyBlock.find("UIA_LevelPropertyId") != std::string::npos, "Accessibility GetPropertyValue TreeItem level is snapshot-backed");
+    Require(treeItemPropertyBlock.find("UIA_ExpandCollapseExpandCollapseStatePropertyId") != std::string::npos,
+            "Accessibility GetPropertyValue TreeItem expand-collapse state is snapshot-backed");
+    Require(treeItemPropertyBlock.find("ResolveTreeControl(") == std::string::npos,
+            "Accessibility GetPropertyValue TreeItem state does not resolve live trees");
+    Require(treeItemPropertyBlock.find("ResolveTreeItemData(") == std::string::npos,
+            "Accessibility GetPropertyValue TreeItem state does not read Tree item data");
+    Require(treeItemPropertyBlock.find("GetSelectedItemId(") == std::string::npos,
+            "Accessibility GetPropertyValue TreeItem state does not read live Tree selection");
+
+    const size_t queryPatternFunction = source.find("AccessibilityPatternQueryResult AccessibilityProvider::QueryPattern");
+    const size_t queryFunction        = source.find("HRESULT AccessibilityProvider::QueryInterface", queryPatternFunction);
+    Require(queryPatternFunction != std::string::npos && queryFunction != std::string::npos && queryPatternFunction < queryFunction,
+            "Accessibility shared QueryPattern source block is found for TreeItem expand-collapse");
+    const std::string queryPatternBlock = source.substr(queryPatternFunction, queryFunction - queryPatternFunction);
+    const size_t patternLiveRoot        = queryPatternBlock.find("ResolveRootControl(");
+    const size_t expandPatternBranch =
+        queryPatternBlock.find("_kind == AccessibilityFragmentKind::TreeItem && patternKind == AccessibilityPatternKind::ExpandCollapse");
+    Require(expandPatternBranch != std::string::npos && (patternLiveRoot == std::string::npos || expandPatternBranch < patternLiveRoot),
+            "Accessibility shared QueryPattern handles TreeItem expand-collapse before any live root resolve");
+    const std::string expandPatternBlock = queryPatternBlock.substr(expandPatternBranch, patternLiveRoot - expandPatternBranch);
+    Require(expandPatternBlock.find("CaptureAccessibilitySnapshot(_target, _hwnd)") != std::string::npos,
+            "Accessibility shared QueryPattern TreeItem expand-collapse reads an immutable published snapshot");
+    Require(expandPatternBlock.find("FindSnapshotTreeItemRecord") != std::string::npos,
+            "Accessibility shared QueryPattern TreeItem expand-collapse validates snapshot records");
+    Require(expandPatternBlock.find("SupportsTreeItemExpandCollapsePattern(") == std::string::npos,
+            "Accessibility shared QueryPattern TreeItem expand-collapse does not re-resolve live Tree item support");
+
+    const size_t stateFunction = source.find("HRESULT AccessibilityProvider::get_ExpandCollapseState");
+    const size_t rowFunction   = source.find("HRESULT AccessibilityProvider::get_Row(int*", stateFunction);
+    Require(stateFunction != std::string::npos && rowFunction != std::string::npos && stateFunction < rowFunction,
+            "Accessibility get_ExpandCollapseState source block is found");
+    const std::string stateBlock = source.substr(stateFunction, rowFunction - stateFunction);
+    Require(stateBlock.find("CaptureAccessibilitySnapshot(_target, _hwnd)") != std::string::npos,
+            "Accessibility get_ExpandCollapseState reads an immutable published snapshot");
+    Require(stateBlock.find("FindSnapshotTreeItemRecord") != std::string::npos, "Accessibility get_ExpandCollapseState resolves state from snapshot records");
+    Require(stateBlock.find("ResolveTreeItemData(") == std::string::npos, "Accessibility get_ExpandCollapseState does not read Tree item data");
+}
+
+void TestAccessibilityTextPatternDocumentAndSelectionReadsUseSnapshots()
+{
+    const std::filesystem::path sourcePath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.Accessibility.cpp";
+    std::ifstream input(sourcePath);
+    Require(input.good(), "Accessibility source is readable for TextPattern snapshot guard");
+    const std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+
+    Require(source.find("controlTextSelectionStart") != std::string::npos, "Accessibility snapshots capture TextPattern selection start");
+    Require(source.find("controlTextSelectionEnd") != std::string::npos, "Accessibility snapshots capture TextPattern selection end");
+    Require(source.find("controlTextSelectionBoundsDip") != std::string::npos, "Accessibility snapshots capture TextPattern selection bounding rectangles");
+
+    const size_t getSelectionFunction = source.find("HRESULT AccessibilityProvider::GetSelection");
+    const size_t canSelectFunction    = source.find("HRESULT AccessibilityProvider::get_CanSelectMultiple", getSelectionFunction);
+    Require(getSelectionFunction != std::string::npos && canSelectFunction != std::string::npos && getSelectionFunction < canSelectFunction,
+            "Accessibility GetSelection source block is found for TextPattern snapshot guard");
+    const std::string getSelectionBlock = source.substr(getSelectionFunction, canSelectFunction - getSelectionFunction);
+    Require(getSelectionBlock.find("ResolveSnapshotControlRecord") != std::string::npos,
+            "Accessibility GetSelection resolves TextPattern selection from snapshot records");
+    Require(getSelectionBlock.find("ResolveControl()") == std::string::npos,
+            "Accessibility GetSelection does not resolve live controls for TextPattern selection");
+    Require(getSelectionBlock.find("SupportsTextPattern(control)") == std::string::npos,
+            "Accessibility GetSelection does not re-check live TextPattern support");
+    Require(getSelectionBlock.find("GetControlAccessibleSelectionRange(") == std::string::npos,
+            "Accessibility GetSelection does not read live selection state");
+    Require(getSelectionBlock.find("GetControlAccessibleTextRangeText(control)") == std::string::npos, "Accessibility GetSelection does not read live text");
+    Require(getSelectionBlock.find("controlTextSelectionBoundsDip") != std::string::npos,
+            "Accessibility GetSelection gives selection ranges snapshot bounding rectangles");
+
+    const size_t boundingRectanglesFunction = source.find("HRESULT AccessibilityTextRangeProvider::GetBoundingRectangles");
+    const size_t enclosingElementFunction   = source.find("HRESULT AccessibilityTextRangeProvider::GetEnclosingElement", boundingRectanglesFunction);
+    Require(boundingRectanglesFunction != std::string::npos && enclosingElementFunction != std::string::npos &&
+                boundingRectanglesFunction < enclosingElementFunction,
+            "AccessibilityTextRangeProvider GetBoundingRectangles source block is found");
+    const std::string boundingRectanglesBlock = source.substr(boundingRectanglesFunction, enclosingElementFunction - boundingRectanglesFunction);
+    const size_t snapshotBoundsRead           = boundingRectanglesBlock.find("_boundsOverrideDip");
+    const size_t liveHostRead                 = boundingRectanglesBlock.find("ResolveHost()");
+    const size_t liveControlRead              = boundingRectanglesBlock.find("ResolveControl()");
+    Require(snapshotBoundsRead != std::string::npos, "AccessibilityTextRangeProvider GetBoundingRectangles checks snapshot selection bounds");
+    Require(liveHostRead == std::string::npos || snapshotBoundsRead < liveHostRead,
+            "AccessibilityTextRangeProvider GetBoundingRectangles uses snapshot bounds before live host fallback");
+    Require(liveControlRead == std::string::npos || snapshotBoundsRead < liveControlRead,
+            "AccessibilityTextRangeProvider GetBoundingRectangles uses snapshot bounds before live control fallback");
+
+    const size_t getEnclosingElementFunction = source.find("HRESULT AccessibilityTextRangeProvider::GetEnclosingElement");
+    const size_t getTextFunction             = source.find("HRESULT AccessibilityTextRangeProvider::GetText", getEnclosingElementFunction);
+    Require(getEnclosingElementFunction != std::string::npos && getTextFunction != std::string::npos && getEnclosingElementFunction < getTextFunction,
+            "AccessibilityTextRangeProvider GetEnclosingElement source block is found");
+    const std::string enclosingElementBlock = source.substr(getEnclosingElementFunction, getTextFunction - getEnclosingElementFunction);
+    Require(enclosingElementBlock.find("FindControlNavigationRecord") != std::string::npos,
+            "AccessibilityTextRangeProvider GetEnclosingElement validates the enclosing element from the snapshot");
+    Require(enclosingElementBlock.find("ResolveControl()") == std::string::npos,
+            "AccessibilityTextRangeProvider GetEnclosingElement does not resolve live controls");
+
+    const size_t visibleRangesFunction  = source.find("HRESULT AccessibilityProvider::GetVisibleRanges");
+    const size_t rangeFromChildFunction = source.find("HRESULT AccessibilityProvider::RangeFromChild", visibleRangesFunction);
+    Require(visibleRangesFunction != std::string::npos && rangeFromChildFunction != std::string::npos && visibleRangesFunction < rangeFromChildFunction,
+            "Accessibility GetVisibleRanges source block is found");
+    const std::string visibleRangesBlock = source.substr(visibleRangesFunction, rangeFromChildFunction - visibleRangesFunction);
+    Require(visibleRangesBlock.find("ResolveSnapshotControlRecord") != std::string::npos,
+            "Accessibility GetVisibleRanges resolves text length from snapshot records");
+    Require(visibleRangesBlock.find("ResolveControl()") == std::string::npos, "Accessibility GetVisibleRanges does not resolve live controls");
+    Require(visibleRangesBlock.find("SupportsTextPattern(control)") == std::string::npos,
+            "Accessibility GetVisibleRanges does not re-check live TextPattern support");
+    Require(visibleRangesBlock.find("GetControlAccessibleTextRangeText(control)") == std::string::npos,
+            "Accessibility GetVisibleRanges does not read live text");
+
+    const size_t rangeFromPointFunction = source.find("HRESULT AccessibilityProvider::RangeFromPoint");
+    const size_t rangeFromPointHelper   = source.find("HRESULT AccessibilityProvider::ExecuteResolveTextRangeFromPointOnWindowThread", rangeFromPointFunction);
+    Require(rangeFromPointFunction != std::string::npos && rangeFromPointHelper != std::string::npos && rangeFromPointFunction < rangeFromPointHelper,
+            "Accessibility RangeFromPoint source block is found");
+    const std::string rangeFromPointBlock = source.substr(rangeFromPointFunction, rangeFromPointHelper - rangeFromPointFunction);
+    Require(rangeFromPointBlock.find("DispatchActionToWindowThread") != std::string::npos,
+            "Accessibility RangeFromPoint dispatches exact hit testing to the window thread");
+    Require(rangeFromPointBlock.find("ResolveHost()") == std::string::npos,
+            "Accessibility RangeFromPoint public provider method does not resolve the live host");
+    Require(rangeFromPointBlock.find("ResolveControl()") == std::string::npos,
+            "Accessibility RangeFromPoint public provider method does not resolve live controls");
+    Require(rangeFromPointBlock.find("GetControlAccessibleTextRangeText(control)") == std::string::npos,
+            "Accessibility RangeFromPoint public provider method does not read live text");
+
+    const size_t documentRangeFunction      = source.find("HRESULT AccessibilityProvider::get_DocumentRange", rangeFromPointHelper);
+    const size_t supportedSelectionFunction = source.find("HRESULT AccessibilityProvider::get_SupportedTextSelection", documentRangeFunction);
+    Require(documentRangeFunction != std::string::npos && supportedSelectionFunction != std::string::npos && documentRangeFunction < supportedSelectionFunction,
+            "Accessibility get_DocumentRange source block is found");
+    const std::string documentRangeBlock = source.substr(documentRangeFunction, supportedSelectionFunction - documentRangeFunction);
+    Require(documentRangeBlock.find("ResolveSnapshotControlRecord") != std::string::npos,
+            "Accessibility get_DocumentRange resolves text length from snapshot records");
+    Require(documentRangeBlock.find("ResolveControl()") == std::string::npos, "Accessibility get_DocumentRange does not resolve live controls");
+    Require(documentRangeBlock.find("SupportsTextPattern(control)") == std::string::npos,
+            "Accessibility get_DocumentRange does not re-check live TextPattern support");
+    Require(documentRangeBlock.find("GetControlAccessibleTextRangeText(control)") == std::string::npos,
+            "Accessibility get_DocumentRange does not read live text");
+
+    const size_t supportedSelectionEnd = source.find("HRESULT AccessibilityProvider::GetActiveComposition", supportedSelectionFunction);
+    Require(supportedSelectionEnd != std::string::npos && supportedSelectionFunction < supportedSelectionEnd,
+            "Accessibility get_SupportedTextSelection source block is found");
+    const std::string supportedSelectionBlock = source.substr(supportedSelectionFunction, supportedSelectionEnd - supportedSelectionFunction);
+    Require(supportedSelectionBlock.find("ResolveSnapshotControlRecord") != std::string::npos,
+            "Accessibility get_SupportedTextSelection resolves support from snapshot records");
+    Require(supportedSelectionBlock.find("ResolveControl()") == std::string::npos, "Accessibility get_SupportedTextSelection does not resolve live controls");
+    Require(supportedSelectionBlock.find("SupportsTextPattern(control)") == std::string::npos,
+            "Accessibility get_SupportedTextSelection does not re-check live TextPattern support");
+
+    const size_t resolveTextFunction = source.find("std::wstring AccessibilityTextRangeProvider::ResolveText");
+    const size_t clampFunction       = source.find("TextRangeSpan AccessibilityTextRangeProvider::ClampCurrentRange", resolveTextFunction);
+    Require(resolveTextFunction != std::string::npos && clampFunction != std::string::npos && resolveTextFunction < clampFunction,
+            "AccessibilityTextRangeProvider ResolveText source block is found");
+    const std::string resolveTextBlock = source.substr(resolveTextFunction, clampFunction - resolveTextFunction);
+    Require(resolveTextBlock.find("FindControlNavigationRecord") != std::string::npos, "AccessibilityTextRangeProvider resolves text from snapshot records");
+    Require(resolveTextBlock.find("ResolveControl()") == std::string::npos, "AccessibilityTextRangeProvider does not resolve live controls to read text");
+    Require(resolveTextBlock.find("GetControlAccessibleTextRangeText(control)") == std::string::npos,
+            "AccessibilityTextRangeProvider does not read live control text");
+}
+
+void TestAccessibilityTextEditCompositionReadsUseSnapshots()
+{
+    const std::filesystem::path repoRoot   = FindRepoRootForDxUiTests();
+    const std::filesystem::path sourcePath = repoRoot / L"Common" / L"DxUi" / L"DxUi.Accessibility.cpp";
+    std::ifstream input(sourcePath);
+    Require(input.good(), "Accessibility source is readable for TextEdit composition snapshot guard");
+    const std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+
+    Require(source.find("controlTextCompositionStart") != std::string::npos, "Accessibility snapshots capture TextEdit active-composition start");
+    Require(source.find("controlTextCompositionEnd") != std::string::npos, "Accessibility snapshots capture TextEdit active-composition end");
+    Require(source.find("controlTextConversionTargetStart") != std::string::npos, "Accessibility snapshots capture TextEdit conversion-target start");
+    Require(source.find("controlTextConversionTargetEnd") != std::string::npos, "Accessibility snapshots capture TextEdit conversion-target end");
+
+    const size_t activeCompositionFunction = source.find("HRESULT AccessibilityProvider::GetActiveComposition");
+    const size_t conversionTargetFunction  = source.find("HRESULT AccessibilityProvider::GetConversionTarget", activeCompositionFunction);
+    Require(activeCompositionFunction != std::string::npos && conversionTargetFunction != std::string::npos &&
+                activeCompositionFunction < conversionTargetFunction,
+            "Accessibility GetActiveComposition source block is found");
+    const std::string activeCompositionBlock = source.substr(activeCompositionFunction, conversionTargetFunction - activeCompositionFunction);
+    Require(activeCompositionBlock.find("ResolveSnapshotControlRecord") != std::string::npos,
+            "Accessibility GetActiveComposition resolves native IME state from snapshot records");
+    Require(activeCompositionBlock.find("controlTextCompositionStart") != std::string::npos &&
+                activeCompositionBlock.find("controlTextCompositionEnd") != std::string::npos,
+            "Accessibility GetActiveComposition reads snapshot active-composition endpoints");
+    Require(activeCompositionBlock.find("ResolveControl()") == std::string::npos, "Accessibility GetActiveComposition does not resolve live controls");
+    Require(activeCompositionBlock.find("ResolveHost()") == std::string::npos, "Accessibility GetActiveComposition does not resolve the live host");
+    Require(activeCompositionBlock.find("TryReadNativeTextInputState(") == std::string::npos,
+            "Accessibility GetActiveComposition does not read live native text-input state");
+
+    const size_t setValueFunction = source.find("HRESULT AccessibilityProvider::SetValue(LPCWSTR", conversionTargetFunction);
+    Require(setValueFunction != std::string::npos && conversionTargetFunction < setValueFunction, "Accessibility GetConversionTarget source block is found");
+    const std::string conversionTargetBlock = source.substr(conversionTargetFunction, setValueFunction - conversionTargetFunction);
+    Require(conversionTargetBlock.find("ResolveSnapshotControlRecord") != std::string::npos,
+            "Accessibility GetConversionTarget resolves native IME state from snapshot records");
+    Require(conversionTargetBlock.find("controlTextConversionTargetStart") != std::string::npos &&
+                conversionTargetBlock.find("controlTextConversionTargetEnd") != std::string::npos,
+            "Accessibility GetConversionTarget reads snapshot conversion-target endpoints");
+    Require(conversionTargetBlock.find("ResolveControl()") == std::string::npos, "Accessibility GetConversionTarget does not resolve live controls");
+    Require(conversionTargetBlock.find("ResolveHost()") == std::string::npos, "Accessibility GetConversionTarget does not resolve the live host");
+    Require(conversionTargetBlock.find("TryReadNativeTextInputState(") == std::string::npos,
+            "Accessibility GetConversionTarget does not read live native text-input state");
+
+    const std::filesystem::path nativeInputPath = repoRoot / L"Common" / L"DxUi" / L"DxUi.NativeTextInput.cpp";
+    std::ifstream nativeInput(nativeInputPath);
+    Require(nativeInput.good(), "NativeTextInput source is readable for TextEdit snapshot publication guard");
+    const std::string nativeSource((std::istreambuf_iterator<char>(nativeInput)), std::istreambuf_iterator<char>());
+
+    const size_t raiseEventsFunction = nativeSource.find("void WindowHost::RaiseNativeTextInputAccessibilityEvents");
+    const size_t nextFunction        = nativeSource.find("void WindowHost::ApplyNativeTextInputCompositionStateToCache", raiseEventsFunction);
+    Require(raiseEventsFunction != std::string::npos && nextFunction != std::string::npos && raiseEventsFunction < nextFunction,
+            "native text-input accessibility event source block is found");
+    const std::string raiseEventsBlock = nativeSource.substr(raiseEventsFunction, nextFunction - raiseEventsFunction);
+    const size_t snapshotRefresh       = raiseEventsBlock.find("RefreshWindowHostAccessibilitySnapshot(_hwnd, this)");
+    const size_t compositionEvent = raiseEventsBlock.find("RaiseNativeTextInputAccessibilityEvent(TextInputAutomationEventKind::TextEditCompositionChanged)");
+    const size_t conversionEvent =
+        raiseEventsBlock.find("RaiseNativeTextInputAccessibilityEvent(TextInputAutomationEventKind::TextEditConversionTargetChanged)");
+    Require(snapshotRefresh != std::string::npos, "native text-input accessibility events publish a fresh snapshot");
+    Require(compositionEvent != std::string::npos && snapshotRefresh < compositionEvent,
+            "TextEdit composition-changed events are raised after snapshot publication");
+    Require(conversionEvent != std::string::npos && snapshotRefresh < conversionEvent,
+            "TextEdit conversion-target events are raised after snapshot publication");
+}
+
+void TestAccessibilityNavigateUsesSnapshot()
+{
+    const std::filesystem::path sourcePath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.Accessibility.cpp";
+    std::ifstream input(sourcePath);
+    Require(input.good(), "Accessibility source is readable for Navigate snapshot guard");
+    const std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+
+    const size_t navigateFunction = source.find("HRESULT AccessibilityProvider::Navigate");
+    const size_t runtimeFunction  = source.find("HRESULT AccessibilityProvider::GetRuntimeId", navigateFunction);
+    Require(navigateFunction != std::string::npos && runtimeFunction != std::string::npos && navigateFunction < runtimeFunction,
+            "Accessibility Navigate source block is found");
+
+    const std::string navigateBlock = source.substr(navigateFunction, runtimeFunction - navigateFunction);
+    Require(navigateBlock.find("CaptureAccessibilitySnapshot(_target, _hwnd)") != std::string::npos,
+            "Accessibility Navigate reads an immutable published snapshot");
+    Require(navigateBlock.find("ResolveSnapshotNavigationTarget") != std::string::npos,
+            "Accessibility Navigate resolves provider identity from snapshot navigation records");
+    Require(navigateBlock.find("ResolveRootControl(") == std::string::npos, "Accessibility Navigate does not resolve the live root");
+    Require(navigateBlock.find("ResolveControl(") == std::string::npos, "Accessibility Navigate does not resolve live controls");
+    Require(navigateBlock.find("FindFirstSemanticControl(") == std::string::npos, "Accessibility Navigate does not walk live first semantic controls");
+    Require(navigateBlock.find("FindNextSemanticControl(") == std::string::npos, "Accessibility Navigate does not walk live next semantic controls");
+    Require(navigateBlock.find("FindPreviousSemanticControl(") == std::string::npos, "Accessibility Navigate does not walk live previous semantic controls");
+    Require(navigateBlock.find("GetModel(") == std::string::npos, "Accessibility Navigate does not read Tree/Grid models");
+}
+
+void TestAccessibilityTreeSnapshotHitRecordsUseVisibleGeometryOnly()
+{
+    const std::filesystem::path sourcePath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.Accessibility.cpp";
+    std::ifstream input(sourcePath);
+    Require(input.good(), "Accessibility source is readable for tree snapshot hot-path guard");
+    const std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+
+    const size_t treeFunction = source.find("void AppendTreeAccessibilityPointHits");
+    const size_t gridFunction = source.find("void AppendGridAccessibilityPointHits", treeFunction);
+    Require(treeFunction != std::string::npos && gridFunction != std::string::npos && treeFunction < gridFunction,
+            "Accessibility Tree snapshot hit-record source block is found");
+
+    const std::string treeBlock = source.substr(treeFunction, gridFunction - treeFunction);
+    Require(treeBlock.find("GetFirstVisibleItemIndex()") != std::string::npos, "Tree snapshot hit records start at the first visible row");
+    Require(treeBlock.find("GetVisibleItemHitRect(") != std::string::npos, "Tree snapshot hit records use geometry-only row rects");
+    Require(treeBlock.find("GetItemLayoutMetrics(") == std::string::npos, "Tree snapshot hit records do not build full layout metrics");
+    Require(treeBlock.find("GetVisibleItem(") == std::string::npos, "Tree snapshot hit records do not materialize TreeItemData");
+}
 
 void TestAttachedWindowHostWmGetObjectReturnsAccessibilityProvider()
 {
@@ -156,6 +1319,57 @@ std::vector<size_t> ResolveVisualLineStarts(const RedSalamander::DxUi::WindowHos
         (std::min)(first.left, second.left), (std::min)(first.top, second.top), (std::max)(first.right, second.right), (std::max)(first.bottom, second.bottom));
 }
 
+void TestAccessibilityPasswordRevealButtonReadsUseSnapshots()
+{
+    const std::filesystem::path sourcePath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.Accessibility.cpp";
+    std::ifstream input(sourcePath);
+    Require(input.good(), "Accessibility source is readable for password reveal snapshot guard");
+    const std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+
+    const size_t queryPatternFunction = source.find("AccessibilityPatternQueryResult AccessibilityProvider::QueryPattern");
+    const size_t queryFunction        = source.find("HRESULT AccessibilityProvider::QueryInterface", queryPatternFunction);
+    Require(queryPatternFunction != std::string::npos && queryFunction != std::string::npos && queryPatternFunction < queryFunction,
+            "Accessibility shared QueryPattern source block is found for password reveal guard");
+    const std::string queryPatternBlock = source.substr(queryPatternFunction, queryFunction - queryPatternFunction);
+    const size_t queryRevealBranch      = queryPatternBlock.find("if (_kind == AccessibilityFragmentKind::TextFieldPasswordRevealButton)");
+    const size_t queryLiveRoot          = queryPatternBlock.find("ResolveRootControl(");
+    Require(queryRevealBranch != std::string::npos && (queryLiveRoot == std::string::npos || queryRevealBranch < queryLiveRoot),
+            "Accessibility shared QueryPattern handles password reveal Invoke before any live root resolve");
+    const std::string queryRevealBlock = queryPatternBlock.substr(queryRevealBranch, queryLiveRoot - queryRevealBranch);
+    Require(queryRevealBlock.find("patternKind != AccessibilityPatternKind::Invoke") != std::string::npos,
+            "Accessibility shared QueryPattern restricts password reveal to Invoke");
+    Require(queryRevealBlock.find("CaptureAccessibilitySnapshot(_target, _hwnd)") != std::string::npos,
+            "Accessibility shared QueryPattern password reveal Invoke reads an immutable published snapshot");
+    Require(queryRevealBlock.find("hasPasswordRevealButton") != std::string::npos,
+            "Accessibility shared QueryPattern password reveal Invoke validates snapshot visibility");
+    Require(queryRevealBlock.find("IsTextFieldPasswordRevealButtonVisible(") == std::string::npos,
+            "Accessibility shared QueryPattern password reveal Invoke does not read live TextField reveal state");
+    Require(queryRevealBlock.find("ResolveControl(") == std::string::npos,
+            "Accessibility shared QueryPattern password reveal Invoke does not resolve live controls");
+
+    const size_t propertyValueFunction = source.find("HRESULT AccessibilityProvider::GetPropertyValue");
+    const size_t hostProviderFunction  = source.find("HRESULT AccessibilityProvider::get_HostRawElementProvider", propertyValueFunction);
+    Require(propertyValueFunction != std::string::npos && hostProviderFunction != std::string::npos && propertyValueFunction < hostProviderFunction,
+            "Accessibility GetPropertyValue source block is found for password reveal guard");
+    const std::string propertyValueBlock = source.substr(propertyValueFunction, hostProviderFunction - propertyValueFunction);
+    const size_t propertyRevealBranch    = propertyValueBlock.find("if (_kind == AccessibilityFragmentKind::TextFieldPasswordRevealButton)");
+    const size_t propertyLiveRoot        = propertyValueBlock.find("ResolveRootControl(");
+    Require(propertyRevealBranch != std::string::npos && (propertyLiveRoot == std::string::npos || propertyRevealBranch < propertyLiveRoot),
+            "Accessibility GetPropertyValue handles password reveal state before any live root resolve");
+    const std::string propertyRevealBlock = propertyValueBlock.substr(propertyRevealBranch, propertyLiveRoot - propertyRevealBranch);
+    Require(propertyRevealBlock.find("CaptureAccessibilitySnapshot(_target, _hwnd)") != std::string::npos,
+            "Accessibility GetPropertyValue password reveal state reads an immutable published snapshot");
+    Require(propertyRevealBlock.find("passwordRevealButtonAccessibleName") != std::string::npos,
+            "Accessibility GetPropertyValue password reveal name reads snapshot records");
+    Require(propertyRevealBlock.find("passwordRevealButtonEnabled") != std::string::npos,
+            "Accessibility GetPropertyValue password reveal enabled state reads snapshot records");
+    Require(propertyRevealBlock.find("GetPasswordRevealAccessibleName(") == std::string::npos,
+            "Accessibility GetPropertyValue password reveal state does not read live TextField name");
+    Require(propertyRevealBlock.find("IsPasswordRevealButtonVisibleForAccessibility(") == std::string::npos,
+            "Accessibility GetPropertyValue password reveal state does not read live TextField visibility");
+    Require(propertyRevealBlock.find("dynamic_cast") == std::string::npos, "Accessibility GetPropertyValue password reveal state does not cast live controls");
+}
+
 void TestAccessibilityProviderExposesInvokeToggleAndLabeledValuePatterns()
 {
     using namespace RedSalamander::DxUi;
@@ -239,6 +1453,8 @@ void TestAccessibilityProviderExposesInvokeToggleAndLabeledValuePatterns()
     RequireSucceeded(valuePatternUnknown.query_to(valuePattern.put()), "text field value pattern supports IValueProvider");
     RequireSucceeded(valuePattern->SetValue(L"beta"), "text field accessibility provider can set the value");
     Require(field->GetText() == L"beta", "text field accessibility SetValue updates the underlying DX control");
+    Require(ReadProviderStringProperty(*fieldSimple.get(), UIA_ValueValuePropertyId, "text field exposes value after SetValue") == L"beta",
+            "text field accessibility provider reports the updated value after SetValue");
 
     wil::com_ptr_nothrow<IRawElementProviderFragment> comboLabelProvider;
     RequireSucceeded(fieldProvider->Navigate(NavigateDirection_NextSibling, comboLabelProvider.put()),
@@ -265,6 +1481,77 @@ void TestAccessibilityProviderExposesInvokeToggleAndLabeledValuePatterns()
     RequireSucceeded(comboValuePatternUnknown.query_to(comboValuePattern.put()), "combo value pattern supports IValueProvider");
     RequireSucceeded(comboValuePattern->SetValue(L"updated"), "editable combo accessibility provider can set the value");
     Require(combo->GetText() == L"updated", "editable combo accessibility SetValue updates the underlying DX control");
+    Require(ReadProviderStringProperty(*comboSimple.get(), UIA_ValueValuePropertyId, "combo exposes value after SetValue") == L"updated",
+            "editable combo accessibility provider reports the updated value after SetValue");
+}
+
+void TestAccessibilityProviderRefreshesButtonSemanticProperties()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    auto root    = std::make_unique<Panel>();
+    auto* button = root->AddChild<Button>();
+    button->SetBounds(D2D1::RectF(0.0f, 0.0f, 140.0f, 32.0f));
+    window.Host().SetRoot(std::move(root));
+
+    wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> rootProvider;
+    rootProvider.attach(window.Host().DebugCreateAccessibilityProvider());
+    Require(rootProvider != nullptr, "button semantic refresh test creates an accessibility provider");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> buttonProvider =
+        GetProviderAtDipPoint(window.Hwnd(), window.Host(), *rootProvider.get(), 24.0f, 16.0f, "button semantic refresh provider is resolved by point");
+    wil::com_ptr_nothrow<IRawElementProviderSimple> buttonSimple;
+    RequireSucceeded(buttonProvider.query_to(buttonSimple.put()), "button semantic refresh provider exposes IRawElementProviderSimple");
+    Require(ReadProviderStringProperty(*buttonSimple.get(), UIA_NamePropertyId, "empty button exposes initial accessibility name").empty(),
+            "button accessibility provider starts with an empty name");
+
+    button->SetText(L"Cancel");
+    Require(ReadProviderStringProperty(*buttonSimple.get(), UIA_NamePropertyId, "button text refresh updates accessibility name") == L"Cancel",
+            "button accessibility provider refreshes its name after SetText");
+
+    button->SetEnabled(false);
+    Require(! ReadProviderBoolProperty(*buttonSimple.get(), UIA_IsEnabledPropertyId, "button enabled refresh updates accessibility state"),
+            "button accessibility provider refreshes its enabled state after SetEnabled");
+
+    button->SetAccessibleName(L"Dismiss");
+    Require(ReadProviderStringProperty(*buttonSimple.get(), UIA_NamePropertyId, "explicit button accessible name refreshes") == L"Dismiss",
+            "button accessibility provider refreshes explicit accessible name changes");
+}
+
+void TestAccessibilityProviderRefreshesLabelAssociations()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    auto root     = std::make_unique<Panel>();
+    auto* label   = root->AddChild<Label>(L"Ignore files");
+    auto* toggle  = root->AddChild<Toggle>(L"Off");
+    auto* pattern = root->AddChild<TextField>(L"*.tmp");
+    label->SetBounds(D2D1::RectF(0.0f, 0.0f, 160.0f, 24.0f));
+    toggle->SetBounds(D2D1::RectF(0.0f, 32.0f, 160.0f, 64.0f));
+    pattern->SetBounds(D2D1::RectF(0.0f, 72.0f, 220.0f, 104.0f));
+    label->SetMnemonicTarget(toggle);
+    window.Host().SetRoot(std::move(root));
+
+    wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> rootProvider;
+    rootProvider.attach(window.Host().DebugCreateAccessibilityProvider());
+    Require(rootProvider != nullptr, "label association refresh test creates an accessibility provider");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> fieldProvider =
+        GetProviderAtDipPoint(window.Hwnd(), window.Host(), *rootProvider.get(), 40.0f, 88.0f, "label association field provider is resolved by point");
+    wil::com_ptr_nothrow<IRawElementProviderSimple> fieldSimple;
+    RequireSucceeded(fieldProvider.query_to(fieldSimple.put()), "label association field provider exposes IRawElementProviderSimple");
+    Require(ReadProviderStringProperty(*fieldSimple.get(), UIA_NamePropertyId, "unassociated field exposes fallback name") == L"*.tmp",
+            "text field starts with its fallback accessible name while the label targets the toggle");
+
+    label->SetMnemonicTarget(pattern);
+    Require(ReadProviderStringProperty(*fieldSimple.get(), UIA_NamePropertyId, "retargeted label updates field name") == L"Ignore files",
+            "text field accessibility name refreshes when a label retargets to it");
+
+    label->SetText(L"File patterns");
+    Require(ReadProviderStringProperty(*fieldSimple.get(), UIA_NamePropertyId, "label text update refreshes associated field name") == L"File patterns",
+            "text field accessibility name refreshes when its associated label text changes");
 }
 
 void TestAccessibilityProviderExposesDirectSemanticRootControls()
@@ -287,26 +1574,26 @@ void TestAccessibilityProviderExposesDirectSemanticRootControls()
     wil::com_ptr_nothrow<IRawElementProviderFragment> rootFragment;
     RequireSucceeded(rootProvider.query_to(rootFragment.put()), "direct-root accessibility root exposes IRawElementProviderFragment");
 
-    wil::com_ptr_nothrow<IRawElementProviderFragment> firstChildProvider;
-    RequireSucceeded(rootFragment->Navigate(NavigateDirection_FirstChild, firstChildProvider.put()),
-                     "direct-root accessibility provider exposes a first child");
-    Require(firstChildProvider != nullptr, "direct-root accessibility provider returns the semantic root control as a child");
-
-    wil::com_ptr_nothrow<IRawElementProviderSimple> firstChildSimple;
-    RequireSucceeded(firstChildProvider.query_to(firstChildSimple.put()), "direct-root child provider exposes IRawElementProviderSimple");
-    Require(ReadProviderLongProperty(*firstChildSimple.get(), UIA_ControlTypePropertyId, "direct-root combo exposes UIA control type") ==
-                UIA_ComboBoxControlTypeId,
+    wil::com_ptr_nothrow<IRawElementProviderSimple> rootSimple;
+    RequireSucceeded(rootProvider.query_to(rootSimple.put()), "direct-root root provider exposes IRawElementProviderSimple");
+    Require(ReadProviderLongProperty(*rootSimple.get(), UIA_ControlTypePropertyId, "direct-root combo exposes UIA control type") == UIA_ComboBoxControlTypeId,
             "direct-root combo accessibility provider reports combo-box control type");
-    Require(ReadProviderStringProperty(*firstChildSimple.get(), UIA_ValueValuePropertyId, "direct-root combo exposes current value") == L"current",
+    Require(ReadProviderStringProperty(*rootSimple.get(), UIA_ValueValuePropertyId, "direct-root combo exposes current value") == L"current",
             "direct-root combo accessibility provider reports the current value");
 
     wil::com_ptr_nothrow<IUnknown> comboValuePatternUnknown;
-    RequireSucceeded(firstChildSimple->GetPatternProvider(UIA_ValuePatternId, comboValuePatternUnknown.put()),
-                     "direct-root combo value pattern lookup succeeds");
+    RequireSucceeded(rootSimple->GetPatternProvider(UIA_ValuePatternId, comboValuePatternUnknown.put()), "direct-root combo value pattern lookup succeeds");
     Require(comboValuePatternUnknown != nullptr, "direct-root combo accessibility provider exposes value pattern");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> firstChildProvider;
+    RequireSucceeded(rootFragment->Navigate(NavigateDirection_FirstChild, firstChildProvider.put()),
+                     "direct-root collapsed provider first-child lookup succeeds");
+    Require(firstChildProvider == nullptr, "direct-root collapsed provider does not expose the same semantic control as a duplicate child");
 
     wil::com_ptr_nothrow<IRawElementProviderFragment> hitProvider =
         GetProviderAtDipPoint(window.Hwnd(), window.Host(), *rootProvider.get(), 40.0f, 16.0f, "direct-root combo provider is resolved by point");
+    wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> hitRoot;
+    RequireSucceeded(hitProvider.query_to(hitRoot.put()), "direct-root point-hit provider is the collapsed root provider");
     wil::com_ptr_nothrow<IRawElementProviderSimple> hitSimple;
     RequireSucceeded(hitProvider.query_to(hitSimple.put()), "direct-root point-hit provider exposes IRawElementProviderSimple");
     Require(ReadProviderLongProperty(*hitSimple.get(), UIA_ControlTypePropertyId, "direct-root point-hit provider exposes combo control type") ==
@@ -316,10 +1603,192 @@ void TestAccessibilityProviderExposesDirectSemanticRootControls()
     wil::com_ptr_nothrow<IRawElementProviderFragment> focusedProvider;
     RequireSucceeded(rootProvider->GetFocus(focusedProvider.put()), "direct-root focus lookup succeeds");
     Require(focusedProvider != nullptr, "direct-root focus lookup returns the combo control");
+    wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> focusedRoot;
+    RequireSucceeded(focusedProvider.query_to(focusedRoot.put()), "direct-root focused provider is the collapsed root provider");
     wil::com_ptr_nothrow<IRawElementProviderSimple> focusedSimple;
     RequireSucceeded(focusedProvider.query_to(focusedSimple.put()), "direct-root focused provider exposes IRawElementProviderSimple");
     Require(ReadProviderStringProperty(*focusedSimple.get(), UIA_ValueValuePropertyId, "direct-root focused combo exposes value") == L"current",
             "direct-root focus lookup returns the semantic root combo provider");
+}
+
+void TestAccessibilityLabelOnlyRootDoesNotUseDirectSemanticRootCollapse()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    auto label = std::make_unique<Label>(L"Standalone label");
+    label->SetBounds(D2D1::RectF(0.0f, 0.0f, 180.0f, 24.0f));
+    window.Host().SetRoot(std::move(label));
+
+    wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> rootProvider;
+    rootProvider.attach(window.Host().DebugCreateAccessibilityProvider());
+    Require(rootProvider != nullptr, "label-only accessibility test creates a root provider");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> rootFragment;
+    RequireSucceeded(rootProvider.query_to(rootFragment.put()), "label-only accessibility root exposes IRawElementProviderFragment");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> firstChildProvider;
+    RequireSucceeded(rootFragment->Navigate(NavigateDirection_FirstChild, firstChildProvider.put()),
+                     "label-only root first-child lookup succeeds");
+    Require(firstChildProvider != nullptr, "label-only root exposes the label as a child instead of collapsing it into the root");
+
+    wil::com_ptr_nothrow<IRawElementProviderSimple> childSimple;
+    RequireSucceeded(firstChildProvider.query_to(childSimple.put()), "label-only child provider exposes IRawElementProviderSimple");
+    Require(ReadProviderLongProperty(*childSimple.get(), UIA_ControlTypePropertyId, "label-only child exposes text control type") == UIA_TextControlTypeId,
+            "label-only child provider is the label text element");
+    Require(ReadProviderStringProperty(*childSimple.get(), UIA_NamePropertyId, "label-only child exposes label text") == L"Standalone label",
+            "label-only child provider exposes the label text");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> duplicateGrandchild;
+    RequireSucceeded(firstChildProvider->Navigate(NavigateDirection_FirstChild, duplicateGrandchild.put()),
+                     "label-only child first-child lookup succeeds");
+    Require(duplicateGrandchild == nullptr, "label-only label child does not expose a duplicate nested label");
+}
+
+void TestAccessibilityDirectSemanticRootMatchesUiAutomationClientTree()
+{
+    using namespace RedSalamander::DxUi;
+
+    const HRESULT coinitHr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    Require(coinitHr == S_OK || coinitHr == S_FALSE || coinitHr == RPC_E_CHANGED_MODE, "UIAutomation direct-root client test initializes COM");
+    const bool uninitializeCom       = coinitHr == S_OK || coinitHr == S_FALSE;
+    const auto uninitializeComOnExit = wil::scope_exit([&]
+    {
+        if (uninitializeCom)
+        {
+            CoUninitialize();
+        }
+    });
+
+    AttachedHostWindow window;
+    auto combo = std::make_unique<ComboBox>();
+    combo->SetEditable(true);
+    combo->SetText(L"current");
+    combo->SetBounds(D2D1::RectF(0.0f, 0.0f, 220.0f, 32.0f));
+    window.Host().SetRoot(std::move(combo));
+
+    wil::com_ptr_nothrow<IUIAutomation> automation;
+    RequireSucceeded(CoCreateInstance(CLSID_CUIAutomation, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(automation.put())),
+                     "UIAutomation direct-root client is created");
+    Require(automation != nullptr, "UIAutomation direct-root client instance is available");
+
+    wil::com_ptr_nothrow<IUIAutomationElement> rootElement;
+    RequireSucceeded(automation->ElementFromHandle(window.Hwnd(), rootElement.put()), "UIAutomation direct-root ElementFromHandle succeeds");
+    Require(rootElement != nullptr, "UIAutomation direct-root ElementFromHandle returns an element");
+
+    CONTROLTYPEID rootControlType = 0;
+    RequireSucceeded(rootElement->get_CurrentControlType(&rootControlType), "UIAutomation direct-root current control type lookup succeeds");
+    Require(rootControlType == UIA_ComboBoxControlTypeId, "UIAutomation direct-root element is the semantic combo box, not a wrapper pane");
+
+    wil::com_ptr_nothrow<IUIAutomationValuePattern> valuePattern;
+    RequireSucceeded(rootElement->GetCurrentPatternAs(UIA_ValuePatternId, __uuidof(IUIAutomationValuePattern), valuePattern.put_void()),
+                     "UIAutomation direct-root value pattern lookup succeeds");
+    Require(valuePattern != nullptr, "UIAutomation direct-root exposes the combo value pattern");
+
+    BSTR currentValue = nullptr;
+    RequireSucceeded(valuePattern->get_CurrentValue(&currentValue), "UIAutomation direct-root value lookup succeeds");
+    const auto freeCurrentValue = wil::scope_exit([&] { SysFreeString(currentValue); });
+    Require(std::wstring_view(currentValue ? currentValue : L"", SysStringLen(currentValue)) == L"current", "UIAutomation direct-root reports the combo value");
+
+    BOOL isContentElement = FALSE;
+    RequireSucceeded(rootElement->get_CurrentIsContentElement(&isContentElement), "UIAutomation direct-root content-element lookup succeeds");
+    Require(isContentElement == TRUE, "UIAutomation direct-root element is a content element");
+
+    VARIANT contentElementProperty{};
+    VariantInit(&contentElementProperty);
+    contentElementProperty.vt      = VT_BOOL;
+    contentElementProperty.boolVal = VARIANT_TRUE;
+    wil::com_ptr_nothrow<IUIAutomationCondition> contentViewCondition;
+    RequireSucceeded(automation->CreatePropertyCondition(UIA_IsContentElementPropertyId, contentElementProperty, contentViewCondition.put()),
+                     "UIAutomation direct-root content-view condition is created");
+    Require(contentViewCondition != nullptr, "UIAutomation direct-root content-view condition instance is available");
+
+    wil::com_ptr_nothrow<IUIAutomationElementArray> contentChildren;
+    RequireSucceeded(rootElement->FindAll(TreeScope_Children, contentViewCondition.get(), contentChildren.put()),
+                     "UIAutomation direct-root content-view child enumeration succeeds");
+    Require(contentChildren != nullptr, "UIAutomation direct-root content-view child enumeration returns an array");
+
+    int contentChildCount = -1;
+    RequireSucceeded(contentChildren->get_Length(&contentChildCount), "UIAutomation direct-root content-view child count lookup succeeds");
+    Require(contentChildCount == 0, "UIAutomation direct-root content view exposes exactly one content element with no duplicate child");
+}
+
+void TestAccessibilityDirectSemanticRootTreeSelectionMatchesUiAutomationClientTree()
+{
+    using namespace RedSalamander::DxUi;
+
+    const HRESULT coinitHr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    Require(coinitHr == S_OK || coinitHr == S_FALSE || coinitHr == RPC_E_CHANGED_MODE,
+            "UIAutomation direct-root tree selection test initializes COM");
+    const bool uninitializeCom = coinitHr == S_OK || coinitHr == S_FALSE;
+    const auto uninitializeComOnExit = wil::scope_exit([&]
+    {
+        if (uninitializeCom)
+        {
+            CoUninitialize();
+        }
+    });
+
+    AttachedHostWindow window;
+    MutableTreeModel treeModel;
+    treeModel.SetVisibleItems({
+        TreeItemData{.id = 1u, .text = L"General"},
+        TreeItemData{.id = 2u, .text = L"Panes"},
+        TreeItemData{.id = 3u, .text = L"Viewers"},
+    });
+
+    auto tree = std::make_unique<Tree>();
+    tree->SetBounds(D2D1::RectF(0.0f, 0.0f, 220.0f, 96.0f));
+    tree->SetModel(&treeModel);
+    Tree* const liveTree = tree.get();
+    window.Host().SetRoot(std::move(tree));
+    liveTree->SetSelectedItemId(2u);
+
+    wil::com_ptr_nothrow<IUIAutomation> automation;
+    RequireSucceeded(CoCreateInstance(CLSID_CUIAutomation, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(automation.put())),
+                     "UIAutomation direct-root tree selection client is created");
+    Require(automation != nullptr, "UIAutomation direct-root tree selection client instance is available");
+
+    wil::com_ptr_nothrow<IUIAutomationElement> rootElement;
+    RequireSucceeded(automation->ElementFromHandle(window.Hwnd(), rootElement.put()), "UIAutomation direct-root tree ElementFromHandle succeeds");
+    Require(rootElement != nullptr, "UIAutomation direct-root tree ElementFromHandle returns an element");
+
+    CONTROLTYPEID rootControlType = 0;
+    RequireSucceeded(rootElement->get_CurrentControlType(&rootControlType), "UIAutomation direct-root tree control type lookup succeeds");
+    Require(rootControlType == UIA_TreeControlTypeId, "UIAutomation direct-root tree element is the semantic tree");
+
+    wil::com_ptr_nothrow<IUIAutomationSelectionPattern> selectionPattern;
+    RequireSucceeded(rootElement->GetCurrentPatternAs(UIA_SelectionPatternId, __uuidof(IUIAutomationSelectionPattern), selectionPattern.put_void()),
+                     "UIAutomation direct-root tree exposes SelectionPattern");
+    Require(selectionPattern != nullptr, "UIAutomation direct-root tree selection pattern is available");
+
+    BOOL canSelectMultiple = TRUE;
+    RequireSucceeded(selectionPattern->get_CurrentCanSelectMultiple(&canSelectMultiple),
+                     "UIAutomation direct-root tree selection pattern reports multi-select capability");
+    Require(canSelectMultiple == FALSE, "UIAutomation direct-root tree selection pattern reports single-selection behavior");
+
+    wil::com_ptr_nothrow<IUIAutomationElementArray> selection;
+    RequireSucceeded(selectionPattern->GetCurrentSelection(selection.put()), "UIAutomation direct-root tree selected-items lookup succeeds");
+    Require(selection != nullptr, "UIAutomation direct-root tree selected-items lookup returns an array");
+
+    int selectionLength = 0;
+    RequireSucceeded(selection->get_Length(&selectionLength), "UIAutomation direct-root tree selected-items array reports length");
+    Require(selectionLength == 1, "UIAutomation direct-root tree returns exactly one selected item");
+
+    wil::com_ptr_nothrow<IUIAutomationElement> selectedElement;
+    RequireSucceeded(selection->GetElement(0, selectedElement.put()), "UIAutomation direct-root tree selected item lookup succeeds");
+    Require(selectedElement != nullptr, "UIAutomation direct-root tree selected item is available");
+
+    CONTROLTYPEID selectedControlType = 0;
+    RequireSucceeded(selectedElement->get_CurrentControlType(&selectedControlType),
+                     "UIAutomation direct-root tree selected item control type lookup succeeds");
+    Require(selectedControlType == UIA_TreeItemControlTypeId, "UIAutomation direct-root tree selected element is a tree item");
+
+    BSTR selectedName = nullptr;
+    RequireSucceeded(selectedElement->get_CurrentName(&selectedName), "UIAutomation direct-root tree selected item name lookup succeeds");
+    const auto freeSelectedName = wil::scope_exit([&] { SysFreeString(selectedName); });
+    Require(std::wstring_view(selectedName ? selectedName : L"", SysStringLen(selectedName)) == L"Panes",
+            "UIAutomation direct-root tree selected item reports the selected visible item name");
 }
 
 void TestAccessibilityProviderReportsFocusedControl()
@@ -635,13 +2104,11 @@ void TestAccessibilityProviderExposesTextPatternForTextField()
     RequireSucceeded(maskedProvider.query_to(maskedSimple.put()), "masked text field provider exposes IRawElementProviderSimple");
     wil::com_ptr_nothrow<IUnknown> maskedTextPatternUnknown;
     RequireSucceeded(maskedSimple->GetPatternProvider(UIA_TextPatternId, maskedTextPatternUnknown.put()), "masked text field TextPattern lookup succeeds");
-    Require(maskedTextPatternUnknown != nullptr, "masked text field exposes TextPattern");
-    wil::com_ptr_nothrow<ITextProvider> maskedTextPattern;
-    RequireSucceeded(maskedTextPatternUnknown.query_to(maskedTextPattern.put()), "masked text field TextPattern supports ITextProvider");
-    wil::com_ptr_nothrow<ITextRangeProvider> maskedDocumentRange;
-    RequireSucceeded(maskedTextPattern->get_DocumentRange(maskedDocumentRange.put()), "masked text field TextPattern exposes a document range");
-    Require(ReadTextRangeText(*maskedDocumentRange.get(), -1, "masked text field document range suppresses text").empty(),
-            "masked text field TextPattern does not expose the secret");
+    Require(maskedTextPatternUnknown == nullptr, "masked text field does not expose TextPattern over protected content");
+    wil::com_ptr_nothrow<IUnknown> maskedTextEditPatternUnknown;
+    RequireSucceeded(maskedSimple->GetPatternProvider(UIA_TextEditPatternId, maskedTextEditPatternUnknown.put()),
+                     "masked text field TextEditPattern lookup succeeds");
+    Require(maskedTextEditPatternUnknown == nullptr, "masked text field does not expose TextEditPattern over protected content");
 
     wil::com_ptr_nothrow<IRawElementProviderFragment> multilineProvider =
         GetProviderAtDipPoint(window.Hwnd(), window.Host(), *rootProvider.get(), 40.0f, 148.0f, "multiline text field provider is resolved by point");
@@ -790,6 +2257,87 @@ void TestAccessibilityTextFieldMultilineRangeFromPointUsesNativeHitTest()
     Require(moved == 1, "multiline RangeFromPoint caret range reports one expanded character");
     Require(ReadTextRangeText(*pointRange.get(), -1, "multiline RangeFromPoint expanded range exposes text") == L"t",
             "multiline RangeFromPoint maps the second-line point to the native logical ACP");
+}
+
+void TestAccessibilityTextRangeFromPointDispatchesToWindowThread()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    window.Host().SetTextInputBackend(TextInputBackend::Native);
+
+    auto root   = std::make_unique<Panel>();
+    auto* field = root->AddChild<TextField>(L"one\ntwo three\nfour");
+    field->SetMultiline(true);
+    field->SetBounds(D2D1::RectF(20.0f, 18.0f, 280.0f, 112.0f));
+    window.Host().SetRoot(std::move(root));
+
+    wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> rootProvider;
+    rootProvider.attach(window.Host().DebugCreateAccessibilityProvider());
+    Require(rootProvider != nullptr, "cross-thread RangeFromPoint test creates a root provider");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> fieldProvider = GetProviderAtDipPoint(
+        window.Hwnd(), window.Host(), *rootProvider.get(), 40.0f, 40.0f, "cross-thread RangeFromPoint field provider is resolved by point");
+    wil::com_ptr_nothrow<IRawElementProviderSimple> fieldSimple;
+    RequireSucceeded(fieldProvider.query_to(fieldSimple.put()), "cross-thread RangeFromPoint provider exposes simple provider");
+
+    wil::com_ptr_nothrow<IUnknown> textPatternUnknown;
+    RequireSucceeded(fieldSimple->GetPatternProvider(UIA_TextPatternId, textPatternUnknown.put()), "cross-thread RangeFromPoint TextPattern lookup succeeds");
+    Require(textPatternUnknown != nullptr, "cross-thread RangeFromPoint field exposes TextPattern");
+    wil::com_ptr_nothrow<ITextProvider> textPattern;
+    RequireSucceeded(textPatternUnknown.query_to(textPattern.put()), "cross-thread RangeFromPoint TextPattern supports ITextProvider");
+
+    D2D1_RECT_F caretRectDip{};
+    Require(field->DebugGetCaretRect(window.Host(), 8u, caretRectDip), "cross-thread RangeFromPoint test measures the target caret");
+    const POINT queryPoint = window.Host().DipPointToScreenPoint(D2D1::Point2F(caretRectDip.left, (caretRectDip.top + caretRectDip.bottom) * 0.5f));
+    const UiaPoint rangePoint{static_cast<double>(queryPoint.x), static_cast<double>(queryPoint.y)};
+
+    constexpr HRESULT kPendingRange = E_PENDING;
+    std::atomic<bool> workerStarted{false};
+    std::atomic<HRESULT> rangeResult{kPendingRange};
+    ITextRangeProvider* returnedRange = nullptr;
+    std::thread worker([&]
+    {
+        workerStarted.store(true, std::memory_order_release);
+        const HRESULT hr = textPattern->RangeFromPoint(rangePoint, &returnedRange);
+        rangeResult.store(hr, std::memory_order_release);
+    });
+
+    const auto startDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(500);
+    while (! workerStarted.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < startDeadline)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    Require(workerStarted.load(std::memory_order_acquire), "cross-thread RangeFromPoint worker starts");
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    if (rangeResult.load(std::memory_order_acquire) != kPendingRange)
+    {
+        worker.join();
+        Require(false, "cross-thread RangeFromPoint waits for host window-thread dispatch");
+    }
+
+    const auto rangeDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (rangeResult.load(std::memory_order_acquire) == kPendingRange && std::chrono::steady_clock::now() < rangeDeadline)
+    {
+        window.PumpMessages();
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+
+    const HRESULT result = rangeResult.load(std::memory_order_acquire);
+    worker.join();
+    Require(result != kPendingRange, "cross-thread RangeFromPoint completes after host window-thread dispatch");
+    RequireSucceeded(result, "cross-thread RangeFromPoint succeeds after dispatch");
+    wil::com_ptr_nothrow<ITextRangeProvider> pointRange;
+    pointRange.attach(returnedRange);
+    Require(pointRange != nullptr, "cross-thread RangeFromPoint returns a range after dispatch");
+
+    int moved = 0;
+    RequireSucceeded(pointRange->MoveEndpointByUnit(TextPatternRangeEndpoint_End, TextUnit_Character, 1, &moved),
+                     "cross-thread RangeFromPoint returned range expands by one character");
+    Require(moved == 1, "cross-thread RangeFromPoint range expands by one character");
+    const std::wstring expandedText = ReadTextRangeText(*pointRange.get(), -1, "cross-thread RangeFromPoint expanded range exposes text");
+    Require(expandedText == L"t", "cross-thread RangeFromPoint maps the second-line point to the native logical ACP");
 }
 
 void TestAccessibilityTextFieldMultilineSameLineRangeBoundingRectanglesUseCaretGeometry()
@@ -1134,6 +2682,174 @@ void TestAccessibilityTextFieldWrappedLineMovementUsesVisualLines()
     Require(ReadTextRangeText(*selectedRange.get(), -1, "wrapped selected range exposes moved visual-line text") ==
                 text.substr(secondLineStart, thirdLineStart - secondLineStart),
             "wrapped selected range lands on the next visual line span");
+}
+
+void TestAccessibilityTextRangeEndpointLineMovementDispatchesToWindowThread()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    window.Host().SetTextInputBackend(TextInputBackend::Native);
+
+    const std::wstring text = L"alpha beta gamma delta epsilon zeta";
+    auto root               = std::make_unique<Panel>();
+    auto* field             = root->AddChild<TextField>(text);
+    field->SetMultiline(true);
+    field->SetBounds(D2D1::RectF(20.0f, 24.0f, 118.0f, 112.0f));
+    window.Host().SetRoot(std::move(root));
+
+    const std::vector<size_t> visualLineStarts =
+        ResolveVisualLineStarts(window.Host(), *field, text, "cross-thread endpoint line movement resolves native visual-line starts");
+    Require(visualLineStarts.size() >= 2u, "cross-thread endpoint line movement fixture creates wrapped visual lines");
+    const size_t secondLineStart = visualLineStarts[1];
+
+    wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> rootProvider;
+    rootProvider.attach(window.Host().DebugCreateAccessibilityProvider());
+    Require(rootProvider != nullptr, "cross-thread endpoint line movement creates a root provider");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> fieldProvider = GetProviderAtDipPoint(
+        window.Hwnd(), window.Host(), *rootProvider.get(), 40.0f, 40.0f, "cross-thread endpoint line movement field provider is resolved by point");
+    wil::com_ptr_nothrow<IRawElementProviderSimple> fieldSimple;
+    RequireSucceeded(fieldProvider.query_to(fieldSimple.put()), "cross-thread endpoint line movement provider exposes simple provider");
+
+    wil::com_ptr_nothrow<IUnknown> textPatternUnknown;
+    RequireSucceeded(fieldSimple->GetPatternProvider(UIA_TextPatternId, textPatternUnknown.put()),
+                     "cross-thread endpoint line movement TextPattern lookup succeeds");
+    Require(textPatternUnknown != nullptr, "cross-thread endpoint line movement field exposes TextPattern");
+    wil::com_ptr_nothrow<ITextProvider> textPattern;
+    RequireSucceeded(textPatternUnknown.query_to(textPattern.put()), "cross-thread endpoint line movement TextPattern supports ITextProvider");
+
+    wil::com_ptr_nothrow<ITextRangeProvider> documentRange;
+    RequireSucceeded(textPattern->get_DocumentRange(documentRange.put()), "cross-thread endpoint line movement TextPattern exposes a document range");
+
+    constexpr HRESULT kPendingMove = E_PENDING;
+    std::atomic<bool> workerStarted{false};
+    std::atomic<HRESULT> moveResult{kPendingMove};
+    std::atomic<int> movedResult{0};
+    std::thread worker([&]
+    {
+        int moved = 0;
+        workerStarted.store(true, std::memory_order_release);
+        const HRESULT hr = documentRange->MoveEndpointByUnit(TextPatternRangeEndpoint_Start, TextUnit_Line, 1, &moved);
+        movedResult.store(moved, std::memory_order_release);
+        moveResult.store(hr, std::memory_order_release);
+    });
+
+    const auto startDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(500);
+    while (! workerStarted.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < startDeadline)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    Require(workerStarted.load(std::memory_order_acquire), "cross-thread TextRange endpoint line movement worker starts");
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    if (moveResult.load(std::memory_order_acquire) != kPendingMove)
+    {
+        worker.join();
+        Require(false, "cross-thread TextRange endpoint line movement waits for host window-thread dispatch");
+    }
+
+    const auto moveDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (moveResult.load(std::memory_order_acquire) == kPendingMove && std::chrono::steady_clock::now() < moveDeadline)
+    {
+        window.PumpMessages();
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+
+    const HRESULT result = moveResult.load(std::memory_order_acquire);
+    worker.join();
+    Require(result != kPendingMove, "cross-thread TextRange endpoint line movement completes after host window-thread dispatch");
+    RequireSucceeded(result, "cross-thread TextRange endpoint line movement succeeds after dispatch");
+    Require(movedResult.load(std::memory_order_acquire) == 1, "cross-thread TextRange endpoint line movement reports one visual line");
+    Require(ReadTextRangeText(*documentRange.get(), -1, "cross-thread endpoint line movement exposes moved text") == text.substr(secondLineStart),
+            "cross-thread TextRange endpoint line movement lands on the second visual line");
+}
+
+void TestAccessibilityTextRangeSpanLineMovementDispatchesToWindowThread()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    window.Host().SetTextInputBackend(TextInputBackend::Native);
+
+    const std::wstring text = L"alpha beta gamma delta epsilon zeta";
+    auto root               = std::make_unique<Panel>();
+    auto* field             = root->AddChild<TextField>(text);
+    field->SetMultiline(true);
+    field->SetBounds(D2D1::RectF(20.0f, 24.0f, 118.0f, 112.0f));
+    window.Host().SetRoot(std::move(root));
+
+    const std::vector<size_t> visualLineStarts =
+        ResolveVisualLineStarts(window.Host(), *field, text, "cross-thread span line movement resolves native visual-line starts");
+    Require(visualLineStarts.size() >= 3u, "cross-thread span line movement fixture creates wrapped visual lines");
+    const size_t secondLineStart = visualLineStarts[1];
+    const size_t thirdLineStart  = visualLineStarts[2];
+
+    wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> rootProvider;
+    rootProvider.attach(window.Host().DebugCreateAccessibilityProvider());
+    Require(rootProvider != nullptr, "cross-thread span line movement creates a root provider");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> fieldProvider = GetProviderAtDipPoint(
+        window.Hwnd(), window.Host(), *rootProvider.get(), 40.0f, 40.0f, "cross-thread span line movement field provider is resolved by point");
+    wil::com_ptr_nothrow<IRawElementProviderSimple> fieldSimple;
+    RequireSucceeded(fieldProvider.query_to(fieldSimple.put()), "cross-thread span line movement provider exposes simple provider");
+
+    wil::com_ptr_nothrow<IUnknown> textPatternUnknown;
+    RequireSucceeded(fieldSimple->GetPatternProvider(UIA_TextPatternId, textPatternUnknown.put()),
+                     "cross-thread span line movement TextPattern lookup succeeds");
+    Require(textPatternUnknown != nullptr, "cross-thread span line movement field exposes TextPattern");
+    wil::com_ptr_nothrow<ITextProvider> textPattern;
+    RequireSucceeded(textPatternUnknown.query_to(textPattern.put()), "cross-thread span line movement TextPattern supports ITextProvider");
+
+    field->SetSelectionRange(0u, secondLineStart);
+    SAFEARRAY* selectionRanges = nullptr;
+    RequireSucceeded(textPattern->GetSelection(&selectionRanges), "cross-thread span line movement selection lookup succeeds");
+    const auto destroySelectionRanges = wil::scope_exit([&] { SafeArrayDestroy(selectionRanges); });
+    wil::com_ptr_nothrow<ITextRangeProvider> selectedRange =
+        GetSingleTextRangeFromArray(selectionRanges, "cross-thread span line movement TextPattern exposes one selection range");
+
+    constexpr HRESULT kPendingMove = E_PENDING;
+    std::atomic<bool> workerStarted{false};
+    std::atomic<HRESULT> moveResult{kPendingMove};
+    std::atomic<int> movedResult{0};
+    std::thread worker([&]
+    {
+        int moved = 0;
+        workerStarted.store(true, std::memory_order_release);
+        const HRESULT hr = selectedRange->Move(TextUnit_Line, 1, &moved);
+        movedResult.store(moved, std::memory_order_release);
+        moveResult.store(hr, std::memory_order_release);
+    });
+
+    const auto startDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(500);
+    while (! workerStarted.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < startDeadline)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    Require(workerStarted.load(std::memory_order_acquire), "cross-thread TextRange span line movement worker starts");
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    if (moveResult.load(std::memory_order_acquire) != kPendingMove)
+    {
+        worker.join();
+        Require(false, "cross-thread TextRange span line movement waits for host window-thread dispatch");
+    }
+
+    const auto moveDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (moveResult.load(std::memory_order_acquire) == kPendingMove && std::chrono::steady_clock::now() < moveDeadline)
+    {
+        window.PumpMessages();
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+
+    const HRESULT result = moveResult.load(std::memory_order_acquire);
+    worker.join();
+    Require(result != kPendingMove, "cross-thread TextRange span line movement completes after host window-thread dispatch");
+    RequireSucceeded(result, "cross-thread TextRange span line movement succeeds after dispatch");
+    Require(movedResult.load(std::memory_order_acquire) == 1, "cross-thread TextRange span line movement reports one visual line");
+    Require(ReadTextRangeText(*selectedRange.get(), -1, "cross-thread span line movement exposes moved text") ==
+                text.substr(secondLineStart, thirdLineStart - secondLineStart),
+            "cross-thread TextRange span line movement lands on the next visual line span");
 }
 
 void TestAccessibilityTextFieldSingleLineMixedBiDiRangeBoundingRectanglesUseDirectWriteGeometry()
@@ -1513,6 +3229,383 @@ void TestAccessibilityTextRangeSelectDispatchesToWindowThread()
             "cross-thread TextRange Select applies the range on the host window thread");
 }
 
+struct AccessibilityTextRangeSelectFixture
+{
+    explicit AccessibilityTextRangeSelectFixture(AttachedHostWindow& window)
+    {
+        using namespace RedSalamander::DxUi;
+
+        auto root = std::make_unique<Panel>();
+        field     = root->AddChild<TextField>(L"alpha beta");
+        field->SetBounds(D2D1::RectF(0.0f, 28.0f, 260.0f, 60.0f));
+        field->SetSelectionRange(0u, 5u);
+        window.Host().SetRoot(std::move(root));
+
+        rootProvider.attach(window.Host().DebugCreateAccessibilityProvider());
+        Require(rootProvider != nullptr, "UIA Select dispatch fixture creates a root provider");
+        fieldProvider = GetProviderAtDipPoint(
+            window.Hwnd(), window.Host(), *rootProvider.get(), 40.0f, 44.0f, "UIA Select dispatch fixture resolves the text field provider");
+        RequireSucceeded(fieldProvider.query_to(fieldSimple.put()), "UIA Select dispatch fixture exposes IRawElementProviderSimple");
+        RequireSucceeded(fieldSimple->GetPatternProvider(UIA_TextPatternId, textPatternUnknown.put()), "UIA Select dispatch fixture gets TextPattern");
+        Require(textPatternUnknown != nullptr, "UIA Select dispatch fixture exposes TextPattern");
+        RequireSucceeded(textPatternUnknown.query_to(textPattern.put()), "UIA Select dispatch fixture gets ITextProvider");
+        RequireSucceeded(textPattern->get_DocumentRange(documentRange.put()), "UIA Select dispatch fixture gets the document range");
+
+        int moved = 0;
+        RequireSucceeded(documentRange->MoveEndpointByUnit(TextPatternRangeEndpoint_Start, TextUnit_Character, 6, &moved),
+                         "UIA Select dispatch fixture moves the range start to beta");
+        Require(moved == 6, "UIA Select dispatch fixture reports the moved range start");
+    }
+
+    RedSalamander::DxUi::TextField* field = nullptr;
+    wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> rootProvider;
+    wil::com_ptr_nothrow<IRawElementProviderFragment> fieldProvider;
+    wil::com_ptr_nothrow<IRawElementProviderSimple> fieldSimple;
+    wil::com_ptr_nothrow<IUnknown> textPatternUnknown;
+    wil::com_ptr_nothrow<ITextProvider> textPattern;
+    wil::com_ptr_nothrow<ITextRangeProvider> documentRange;
+};
+
+void TestAccessibilityTimedOutTextRangeSelectDoesNotExecuteLater()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    AccessibilityTextRangeSelectFixture fixture(window);
+
+    wil::unique_event_nothrow posted;
+    posted.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    Require(posted != nullptr, "timed-out Select test creates the posted event");
+    wil::unique_event_nothrow handlerEntered;
+    handlerEntered.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    Require(handlerEntered != nullptr, "timed-out Select test creates the handler-entered event");
+    wil::unique_event_nothrow releaseHandler;
+    releaseHandler.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    Require(releaseHandler != nullptr, "timed-out Select test creates the release event");
+
+    DebugResetAccessibilityUiActionExecutionCountForTest();
+    DebugSetAccessibilityUiActionDispatchTimeoutForTest(100u);
+    DebugSetAccessibilityUiActionPostedEventForTest(posted.get());
+    DebugSetAccessibilityUiActionHandlerStallForTest(handlerEntered.get(), releaseHandler.get());
+    const auto clearHooks = wil::scope_exit([]() noexcept
+    {
+        DebugSetAccessibilityUiActionHandlerStallForTest(nullptr, nullptr);
+        DebugSetAccessibilityUiActionPostedEventForTest(nullptr);
+        DebugSetAccessibilityUiActionDispatchTimeoutForTest(0u);
+    });
+
+    constexpr HRESULT kPending = E_PENDING;
+    std::atomic<HRESULT> result{kPending};
+    std::atomic<bool> enteredObserved{false};
+    std::thread worker([&] { result.store(fixture.documentRange->Select(), std::memory_order_release); });
+
+    Require(WaitForSingleObject(posted.get(), 2000u) == WAIT_OBJECT_0, "timed-out Select request is posted");
+    std::thread releaser([&]
+    {
+        enteredObserved.store(WaitForSingleObject(handlerEntered.get(), 2000u) == WAIT_OBJECT_0, std::memory_order_release);
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+        while (result.load(std::memory_order_acquire) == kPending && std::chrono::steady_clock::now() < deadline)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        static_cast<void>(SetEvent(releaseHandler.get()));
+    });
+
+    window.PumpMessages();
+    worker.join();
+    releaser.join();
+
+    Require(enteredObserved.load(std::memory_order_acquire), "timed-out Select handler reaches the pre-take stall");
+    Require(result.load(std::memory_order_acquire) == HRESULT_FROM_WIN32(ERROR_TIMEOUT), "timed-out Select reports ERROR_TIMEOUT");
+    Require(DebugGetAccessibilityUiActionExecutionCountForTest() == 0u, "abandoned Select is not executed after its caller times out");
+    const auto selection = fixture.field->GetSelectionRange();
+    Require(selection == std::optional<std::pair<size_t, size_t>>{{0u, 5u}}, "abandoned Select leaves the retained selection unchanged");
+}
+
+void TestAccessibilityTakenTextRangeSelectExecutesOnlyOnce()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    AccessibilityTextRangeSelectFixture fixture(window);
+
+    wil::unique_event_nothrow posted;
+    posted.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    Require(posted != nullptr, "taken Select test creates the posted event");
+    wil::unique_event_nothrow handlerTaken;
+    handlerTaken.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    Require(handlerTaken != nullptr, "taken Select test creates the handler-taken event");
+    wil::unique_event_nothrow releaseHandler;
+    releaseHandler.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    Require(releaseHandler != nullptr, "taken Select test creates the release event");
+
+    DebugResetAccessibilityUiActionExecutionCountForTest();
+    DebugSetAccessibilityUiActionDispatchTimeoutForTest(100u);
+    DebugSetAccessibilityUiActionPostedEventForTest(posted.get());
+    DebugSetAccessibilityUiActionHandlerTakenStallForTest(handlerTaken.get(), releaseHandler.get());
+    const auto clearHooks = wil::scope_exit([]() noexcept
+    {
+        DebugSetAccessibilityUiActionHandlerTakenStallForTest(nullptr, nullptr);
+        DebugSetAccessibilityUiActionPostedEventForTest(nullptr);
+        DebugSetAccessibilityUiActionDispatchTimeoutForTest(0u);
+    });
+
+    constexpr HRESULT kPending = E_PENDING;
+    std::atomic<HRESULT> result{kPending};
+    std::atomic<bool> takenObserved{false};
+    std::thread worker([&] { result.store(fixture.documentRange->Select(), std::memory_order_release); });
+
+    Require(WaitForSingleObject(posted.get(), 2000u) == WAIT_OBJECT_0, "taken Select request is posted");
+    std::thread releaser([&]
+    {
+        takenObserved.store(WaitForSingleObject(handlerTaken.get(), 2000u) == WAIT_OBJECT_0, std::memory_order_release);
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+        while (result.load(std::memory_order_acquire) == kPending && std::chrono::steady_clock::now() < deadline)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        static_cast<void>(SetEvent(releaseHandler.get()));
+    });
+
+    window.PumpMessages();
+    worker.join();
+    releaser.join();
+
+    Require(takenObserved.load(std::memory_order_acquire), "taken Select handler owns the dispatch before timeout");
+    Require(result.load(std::memory_order_acquire) == HRESULT_FROM_WIN32(ERROR_TIMEOUT), "taken-but-incomplete Select reports ERROR_TIMEOUT");
+    Require(DebugGetAccessibilityUiActionExecutionCountForTest() == 1u, "taken Select executes exactly once after the timeout race");
+    const auto selection = fixture.field->GetSelectionRange();
+    Require(selection == std::optional<std::pair<size_t, size_t>>{{6u, 10u}}, "taken Select applies its range exactly once");
+}
+
+void TestAccessibilityDestroyWithPendingDispatchReturnsCancelled()
+{
+    using namespace RedSalamander::DxUi;
+
+    auto window = std::make_unique<AttachedHostWindow>();
+    AccessibilityTextRangeSelectFixture fixture(*window);
+
+    wil::unique_event_nothrow posted;
+    posted.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    Require(posted != nullptr, "destroy-pending Select test creates the posted event");
+    DebugSetAccessibilityUiActionPostedEventForTest(posted.get());
+    const auto clearHook = wil::scope_exit([]() noexcept { DebugSetAccessibilityUiActionPostedEventForTest(nullptr); });
+
+    constexpr HRESULT kPending = E_PENDING;
+    std::atomic<HRESULT> result{kPending};
+    std::thread worker([&] { result.store(fixture.documentRange->Select(), std::memory_order_release); });
+
+    Require(WaitForSingleObject(posted.get(), 2000u) == WAIT_OBJECT_0, "destroy-pending Select request is posted");
+    window.reset();
+    worker.join();
+
+    Require(result.load(std::memory_order_acquire) == HRESULT_FROM_WIN32(ERROR_CANCELLED),
+            "destroying a window drains its pending Select request with ERROR_CANCELLED");
+}
+
+void TestAccessibilityTextRangeBoundingRectanglesDispatchesToWindowThread()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    auto root   = std::make_unique<Panel>();
+    auto* field = root->AddChild<TextField>(L"alpha beta");
+    field->SetBounds(D2D1::RectF(0.0f, 28.0f, 260.0f, 60.0f));
+    window.Host().SetRoot(std::move(root));
+
+    wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> rootProvider;
+    rootProvider.attach(window.Host().DebugCreateAccessibilityProvider());
+    Require(rootProvider != nullptr, "cross-thread text range bounds test creates a root provider");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> fieldProvider =
+        GetProviderAtDipPoint(window.Hwnd(), window.Host(), *rootProvider.get(), 40.0f, 44.0f, "cross-thread bounds text field provider is resolved by point");
+    wil::com_ptr_nothrow<IRawElementProviderSimple> fieldSimple;
+    RequireSucceeded(fieldProvider.query_to(fieldSimple.put()), "cross-thread bounds text field provider exposes IRawElementProviderSimple");
+
+    wil::com_ptr_nothrow<IUnknown> textPatternUnknown;
+    RequireSucceeded(fieldSimple->GetPatternProvider(UIA_TextPatternId, textPatternUnknown.put()), "cross-thread bounds TextPattern lookup succeeds");
+    Require(textPatternUnknown != nullptr, "cross-thread bounds text field exposes TextPattern");
+    wil::com_ptr_nothrow<ITextProvider> textPattern;
+    RequireSucceeded(textPatternUnknown.query_to(textPattern.put()), "cross-thread bounds TextPattern supports ITextProvider");
+
+    wil::com_ptr_nothrow<ITextRangeProvider> documentRange;
+    RequireSucceeded(textPattern->get_DocumentRange(documentRange.put()), "cross-thread bounds TextPattern exposes a document range");
+
+    int moved = 0;
+    RequireSucceeded(documentRange->MoveEndpointByUnit(TextPatternRangeEndpoint_Start, TextUnit_Character, 6, &moved),
+                     "cross-thread bounds range start endpoint moves to beta");
+    Require(moved == 6, "cross-thread bounds range start endpoint reports moved characters");
+
+    constexpr HRESULT kPendingBounds = E_PENDING;
+    std::atomic<bool> workerStarted{false};
+    std::atomic<HRESULT> boundsResult{kPendingBounds};
+    SAFEARRAY* workerRectangles = nullptr;
+    std::thread worker([&]
+    {
+        workerStarted.store(true, std::memory_order_release);
+        boundsResult.store(documentRange->GetBoundingRectangles(&workerRectangles), std::memory_order_release);
+    });
+
+    const auto startDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(500);
+    while (! workerStarted.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < startDeadline)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    Require(workerStarted.load(std::memory_order_acquire), "cross-thread TextRange bounds worker starts");
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    if (boundsResult.load(std::memory_order_acquire) != kPendingBounds)
+    {
+        worker.join();
+        const auto destroyEarlyRectangles = wil::scope_exit([&]
+        {
+            if (workerRectangles)
+            {
+                SafeArrayDestroy(workerRectangles);
+            }
+        });
+        Require(false, "cross-thread TextRange GetBoundingRectangles waits for host window-thread dispatch");
+    }
+
+    const auto boundsDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (boundsResult.load(std::memory_order_acquire) == kPendingBounds && std::chrono::steady_clock::now() < boundsDeadline)
+    {
+        window.PumpMessages();
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+
+    const HRESULT result = boundsResult.load(std::memory_order_acquire);
+    worker.join();
+    const auto destroyRectangles = wil::scope_exit([&]
+    {
+        if (workerRectangles)
+        {
+            SafeArrayDestroy(workerRectangles);
+        }
+    });
+    Require(result != kPendingBounds, "cross-thread TextRange GetBoundingRectangles completes after host window-thread dispatch");
+    RequireSucceeded(result, "cross-thread TextRange GetBoundingRectangles succeeds after dispatch");
+
+    const std::vector<double> rectangleValues = ReadDoubleArray(workerRectangles, "cross-thread moved range returns bounding rectangle values");
+    Require(rectangleValues.size() == 4u, "cross-thread moved range returns one bounding rectangle");
+    Require(rectangleValues[2] > 0.0 && rectangleValues[3] > 0.0, "cross-thread moved range rectangle is non-empty");
+}
+
+void TestAccessibilityTextRangeBoundingRectanglesTimeoutKeepsLateHandlerStorageAlive()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    auto root   = std::make_unique<Panel>();
+    auto* field = root->AddChild<TextField>(L"alpha beta");
+    field->SetBounds(D2D1::RectF(0.0f, 28.0f, 260.0f, 60.0f));
+    window.Host().SetRoot(std::move(root));
+
+    wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> rootProvider;
+    rootProvider.attach(window.Host().DebugCreateAccessibilityProvider());
+    Require(rootProvider != nullptr, "late-handler text range bounds test creates a root provider");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> fieldProvider =
+        GetProviderAtDipPoint(window.Hwnd(), window.Host(), *rootProvider.get(), 40.0f, 44.0f, "late-handler bounds text field provider is resolved by point");
+    wil::com_ptr_nothrow<IRawElementProviderSimple> fieldSimple;
+    RequireSucceeded(fieldProvider.query_to(fieldSimple.put()), "late-handler bounds text field provider exposes IRawElementProviderSimple");
+
+    wil::com_ptr_nothrow<IUnknown> textPatternUnknown;
+    RequireSucceeded(fieldSimple->GetPatternProvider(UIA_TextPatternId, textPatternUnknown.put()), "late-handler bounds TextPattern lookup succeeds");
+    Require(textPatternUnknown != nullptr, "late-handler bounds text field exposes TextPattern");
+    wil::com_ptr_nothrow<ITextProvider> textPattern;
+    RequireSucceeded(textPatternUnknown.query_to(textPattern.put()), "late-handler bounds TextPattern supports ITextProvider");
+
+    wil::com_ptr_nothrow<ITextRangeProvider> documentRange;
+    RequireSucceeded(textPattern->get_DocumentRange(documentRange.put()), "late-handler bounds TextPattern exposes a document range");
+
+    int moved = 0;
+    RequireSucceeded(documentRange->MoveEndpointByUnit(TextPatternRangeEndpoint_Start, TextUnit_Character, 6, &moved),
+                     "late-handler bounds range start endpoint moves to beta");
+    Require(moved == 6, "late-handler bounds range start endpoint reports moved characters");
+
+    wil::unique_event_nothrow handlerEntered;
+    handlerEntered.reset(::CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    Require(handlerEntered != nullptr, "late-handler bounds test creates handler-entered event");
+    wil::unique_event_nothrow releaseHandler;
+    releaseHandler.reset(::CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    Require(releaseHandler != nullptr, "late-handler bounds test creates release event");
+
+    DebugSetAccessibilityUiActionHandlerStallForTest(handlerEntered.get(), releaseHandler.get());
+    DebugSetAccessibilityUiActionDispatchTimeoutForTest(100u);
+    const auto clearStallHook = wil::scope_exit([]() noexcept
+    {
+        DebugSetAccessibilityUiActionHandlerStallForTest(nullptr, nullptr);
+        DebugSetAccessibilityUiActionDispatchTimeoutForTest(0u);
+    });
+
+    constexpr HRESULT kPendingBounds = E_PENDING;
+    constexpr HRESULT kExpectedTimeout = HRESULT_FROM_WIN32(ERROR_TIMEOUT);
+    std::atomic<bool> workerStarted{false};
+    std::atomic<bool> handlerEnteredObserved{false};
+    std::atomic<bool> timeoutObservedBeforeRelease{false};
+    std::atomic<HRESULT> boundsResult{kPendingBounds};
+    SAFEARRAY* workerRectangles = nullptr;
+
+    std::thread worker([&]
+    {
+        workerStarted.store(true, std::memory_order_release);
+        boundsResult.store(documentRange->GetBoundingRectangles(&workerRectangles), std::memory_order_release);
+    });
+
+    std::thread releaser([&]
+    {
+        const DWORD entered = ::WaitForSingleObject(handlerEntered.get(), 2000u);
+        handlerEnteredObserved.store(entered == WAIT_OBJECT_0, std::memory_order_release);
+        if (entered == WAIT_OBJECT_0)
+        {
+            const auto timeoutDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(7);
+            while (boundsResult.load(std::memory_order_acquire) == kPendingBounds && std::chrono::steady_clock::now() < timeoutDeadline)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+            timeoutObservedBeforeRelease.store(boundsResult.load(std::memory_order_acquire) == kExpectedTimeout, std::memory_order_release);
+        }
+        static_cast<void>(::SetEvent(releaseHandler.get()));
+    });
+
+    const auto startDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(500);
+    while (! workerStarted.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < startDeadline)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    Require(workerStarted.load(std::memory_order_acquire), "late-handler TextRange bounds worker starts");
+
+    const auto completionDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(9);
+    while (boundsResult.load(std::memory_order_acquire) == kPendingBounds && std::chrono::steady_clock::now() < completionDeadline)
+    {
+        window.PumpMessages();
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+
+    if (worker.joinable())
+    {
+        worker.join();
+    }
+    if (releaser.joinable())
+    {
+        releaser.join();
+    }
+    const auto destroyRectangles = wil::scope_exit([&]
+    {
+        if (workerRectangles)
+        {
+            SafeArrayDestroy(workerRectangles);
+        }
+    });
+
+    Require(handlerEnteredObserved.load(std::memory_order_acquire), "late-handler UIA action is dequeued before the sender times out");
+    Require(timeoutObservedBeforeRelease.load(std::memory_order_acquire), "late-handler UIA action sender times out before handler completion");
+    Require(boundsResult.load(std::memory_order_acquire) == kExpectedTimeout,
+            "late-handler TextRange GetBoundingRectangles reports timeout instead of reading late output");
+    Require(workerRectangles == nullptr, "late-handler timeout leaves caller SAFEARRAY output untouched");
+}
+
 void TestAccessibilityProviderExposesNativeImeTextEditRanges()
 {
     using namespace RedSalamander::DxUi;
@@ -1622,6 +3715,44 @@ void TestAccessibilityNativeTextInputRaisesTextAndTextEditEventCounters()
             "native IME target conversion raises a UIA TextEdit conversion-target-changed event");
 
     static_cast<void>(SendMessageW(window.Hwnd(), WM_IME_ENDCOMPOSITION, 0, 0));
+}
+
+void TestAccessibilityGridSnapshotRebuildMeetsTenThousandRowSelectionBudget()
+{
+    using namespace RedSalamander::DxUi;
+
+    constexpr size_t kRowCount = 10'000u;
+    MultiRowGridModel gridModel(kRowCount);
+    AttachedHostWindow window;
+    auto grid = std::make_unique<Grid>();
+    grid->SetBounds(D2D1::RectF(0.0f, 0.0f, 320.0f, 180.0f));
+    grid->SetModel(&gridModel);
+    Grid* const liveGrid = grid.get();
+    window.Host().SetRoot(std::move(grid));
+
+    wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> rootProvider;
+    rootProvider.attach(window.Host().DebugCreateAccessibilityProvider());
+    Require(rootProvider != nullptr, "10k-row grid snapshot test creates an accessibility provider");
+
+    std::vector<uint64_t> selectedRowIds(kRowCount);
+    std::iota(selectedRowIds.begin(), selectedRowIds.end(), uint64_t{0u});
+    liveGrid->GetSelectionModel().SetRange(selectedRowIds, selectedRowIds.front(), selectedRowIds.back());
+
+    DebugSetAccessibilityOffscreenSelectedRowMaterializationLimitForTest(kRowCount);
+    const auto resetMaterializationLimit = wil::scope_exit([]() noexcept
+    { DebugSetAccessibilityOffscreenSelectedRowMaterializationLimitForTest(0u); });
+    const auto baselineStarted = std::chrono::steady_clock::now();
+    liveGrid->RefreshAccessibilitySnapshot();
+    const auto baselineElapsed = std::chrono::steady_clock::now() - baselineStarted;
+
+    DebugSetAccessibilityOffscreenSelectedRowMaterializationLimitForTest(256u);
+    const auto candidateStarted = std::chrono::steady_clock::now();
+    liveGrid->RefreshAccessibilitySnapshot();
+    const auto candidateElapsed = std::chrono::steady_clock::now() - candidateStarted;
+
+    Require(liveGrid->GetSelectionModel().GetCount() == kRowCount, "10k-row grid snapshot retains the complete Ctrl+A selection");
+    Require(candidateElapsed < std::chrono::milliseconds(250), "10k-row grid Ctrl+A accessibility snapshot rebuild stays under the 250 ms Debug budget");
+    Require(candidateElapsed < baselineElapsed, "capped offscreen row materialization improves the 10k-row Ctrl+A snapshot rebuild");
 }
 
 void TestAccessibilityProviderExposesTreeAndGridMetadata()
@@ -1900,9 +4031,11 @@ void TestAccessibilityProviderExposesTreeItemSelectionAndExpandCollapsePatterns(
     RequireSucceeded(expandPattern->get_ExpandCollapseState(&expandState), "tree item expand state query succeeds");
     Require(expandState == ExpandCollapseState_Collapsed, "tree item expand-collapse pattern reports the collapsed state");
 
+    Require(! window.Host().DebugHasActiveAnimationSubscription(), "tree item expand-collapse pattern starts without an active host animation");
     RequireSucceeded(expandPattern->Expand(), "tree item expand-collapse pattern can expand the parent item");
     Require(delegate.toggleCount == 1u && delegate.lastToggledItemId && delegate.lastToggledItemId.value() == 10u && delegate.lastExpandedState == true,
             "tree item expand-collapse pattern uses the shared delegate-driven expansion path");
+    Require(window.Host().DebugHasActiveAnimationSubscription(), "tree item expand-collapse pattern requests host animation for expansion visuals");
     Require(treeModel.GetVisibleItemCount() == 3u, "tree model exposes the child item after Expand");
     RequireSucceeded(expandPattern->get_ExpandCollapseState(&expandState), "expanded tree item state query succeeds");
     Require(expandState == ExpandCollapseState_Expanded, "tree item expand-collapse pattern reports the expanded state");
@@ -2336,6 +4469,198 @@ void TestAccessibilityProviderExposesGridRowSelectionPatterns()
             "grid selection provider drops the removed row and preserves the remaining selection");
 }
 
+void TestAccessibilityProviderExposesHorizontallyScrolledGridRowStructure()
+{
+    using namespace RedSalamander::DxUi;
+
+    class WideGridModel final : public IDxGridModel
+    {
+    public:
+        [[nodiscard]] size_t GetRowCount() const noexcept override
+        {
+            return 1u;
+        }
+
+        [[nodiscard]] size_t GetColumnCount() const noexcept override
+        {
+            return 3u;
+        }
+
+        [[nodiscard]] GridColumnDesc GetColumn(size_t columnIndex) const override
+        {
+            GridColumnDesc column;
+            switch (columnIndex)
+            {
+            case 0u:
+                column.id    = L"name";
+                column.title = L"Name";
+                break;
+            case 1u:
+                column.id    = L"status";
+                column.title = L"Status";
+                break;
+            default:
+                column.id    = L"state";
+                column.title = L"State";
+                break;
+            }
+            column.widthDip = 120.0f;
+            return column;
+        }
+
+        void GetCellData(size_t /*rowIndex*/, size_t columnIndex, GridCellData& outCell) const override
+        {
+            outCell.kind = GridCellKind::Text;
+            switch (columnIndex)
+            {
+            case 0u:
+                outCell.text = L"Alpha";
+                break;
+            case 1u:
+                outCell.text = L"Ready";
+                break;
+            default:
+                outCell.text = L"Archived";
+                break;
+            }
+        }
+
+        [[nodiscard]] uint64_t GetStableRowId(size_t /*rowIndex*/) const noexcept override
+        {
+            return 100u;
+        }
+
+        [[nodiscard]] std::optional<size_t> FindRowByStableId(uint64_t rowId) const noexcept override
+        {
+            return (rowId == 100u) ? std::optional<size_t>{0u} : std::nullopt;
+        }
+    };
+
+    AttachedHostWindow window;
+    auto root       = std::make_unique<Panel>();
+    auto* gridLabel = root->AddChild<Label>(L"Results");
+    gridLabel->SetBounds(D2D1::RectF(0.0f, 0.0f, 120.0f, 24.0f));
+    auto* grid = root->AddChild<Grid>();
+    grid->SetBounds(D2D1::RectF(0.0f, 28.0f, 190.0f, 128.0f));
+
+    WideGridModel gridModel;
+    grid->SetModel(&gridModel);
+    grid->DebugSetScrollOffsets(0.0f, 130.0f);
+    gridLabel->SetMnemonicTarget(grid);
+
+    Require(! grid->GetVisibleCellRect(0u, 0u).has_value(), "scrolled grid keeps the first column outside the visible cell viewport");
+    Require(grid->GetVisibleCellRect(0u, 1u).has_value(), "scrolled grid keeps later columns visible for point-hit comparison");
+
+    window.Host().SetRoot(std::move(root));
+
+    wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> rootProvider;
+    rootProvider.attach(window.Host().DebugCreateAccessibilityProvider());
+    Require(rootProvider != nullptr, "horizontally scrolled grid accessibility test creates a root provider");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> gridLabelProvider =
+        GetProviderAtDipPoint(window.Hwnd(), window.Host(), *rootProvider.get(), 40.0f, 12.0f, "scrolled grid label provider is resolved by point");
+    wil::com_ptr_nothrow<IRawElementProviderFragment> gridProvider;
+    RequireSucceeded(gridLabelProvider->Navigate(NavigateDirection_NextSibling, gridProvider.put()),
+                     "scrolled grid label accessibility provider navigates to the grid");
+    Require(gridProvider != nullptr, "scrolled grid label provider returns the grid as the next sibling");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> childProvider;
+    RequireSucceeded(gridProvider->Navigate(NavigateDirection_FirstChild, childProvider.put()),
+                     "scrolled grid provider navigates to its first structural child");
+    Require(childProvider != nullptr, "scrolled grid provider exposes at least one structural child");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> rowProvider;
+    for (size_t step = 0u; childProvider && step < 8u; ++step)
+    {
+        wil::com_ptr_nothrow<IRawElementProviderSimple> childSimple;
+        RequireSucceeded(childProvider.query_to(childSimple.put()), "scrolled grid child exposes IRawElementProviderSimple");
+        if (ReadProviderLongProperty(*childSimple.get(), UIA_ControlTypePropertyId, "scrolled grid child exposes UIA control type") ==
+            UIA_DataItemControlTypeId)
+        {
+            rowProvider = childProvider;
+            break;
+        }
+
+        wil::com_ptr_nothrow<IRawElementProviderFragment> nextProvider;
+        RequireSucceeded(childProvider->Navigate(NavigateDirection_NextSibling, nextProvider.put()),
+                         "scrolled grid child navigates to the next structural sibling");
+        childProvider = nextProvider;
+    }
+
+    Require(rowProvider != nullptr, "scrolled grid structure exposes a row provider after visible headers");
+    wil::com_ptr_nothrow<IRawElementProviderSimple> rowSimple;
+    RequireSucceeded(rowProvider.query_to(rowSimple.put()), "scrolled grid row provider exposes IRawElementProviderSimple");
+    Require(ReadProviderStringProperty(*rowSimple.get(), UIA_NamePropertyId, "scrolled grid row exposes accessibility name") ==
+                L"Alpha | Ready | Archived",
+            "scrolled grid row name includes all model columns, including horizontally off-view cells");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> firstCellProvider;
+    RequireSucceeded(rowProvider->Navigate(NavigateDirection_FirstChild, firstCellProvider.put()),
+                     "scrolled grid row provider navigates to its first structural cell");
+    Require(firstCellProvider != nullptr, "scrolled grid row exposes a first structural cell");
+    wil::com_ptr_nothrow<IRawElementProviderSimple> firstCellSimple;
+    RequireSucceeded(firstCellProvider.query_to(firstCellSimple.put()), "scrolled grid first cell provider exposes IRawElementProviderSimple");
+    Require(ReadProviderStringProperty(*firstCellSimple.get(), UIA_NamePropertyId, "scrolled grid first cell exposes accessibility name") == L"Alpha",
+            "scrolled grid first row child is the horizontally off-view first model column");
+    Require(ReadProviderBoolProperty(*firstCellSimple.get(), UIA_IsOffscreenPropertyId, "scrolled grid first cell exposes offscreen state"),
+            "scrolled grid off-view cell fragment reports itself offscreen");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> secondCellProvider;
+    RequireSucceeded(firstCellProvider->Navigate(NavigateDirection_NextSibling, secondCellProvider.put()),
+                     "scrolled grid first cell navigates to the second structural cell");
+    Require(secondCellProvider != nullptr, "scrolled grid first cell returns the next model-column cell");
+    wil::com_ptr_nothrow<IRawElementProviderSimple> secondCellSimple;
+    RequireSucceeded(secondCellProvider.query_to(secondCellSimple.put()), "scrolled grid second cell provider exposes IRawElementProviderSimple");
+    Require(ReadProviderStringProperty(*secondCellSimple.get(), UIA_NamePropertyId, "scrolled grid second cell exposes accessibility name") == L"Ready",
+            "scrolled grid cell navigation continues through the full model column set");
+}
+
+void TestAccessibilityProviderPointHitsClipAndTranslateScrollPanelChildren()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    auto root    = std::make_unique<Panel>();
+    auto* scroll = root->AddChild<ScrollPanel>();
+    scroll->SetBounds(D2D1::RectF(0.0f, 0.0f, 220.0f, 120.0f));
+    scroll->SetContentHeight(260.0f);
+    scroll->SetScrollOffset(80.0f);
+
+    auto* offscreenButton = scroll->AddChild<Button>(L"Hidden above");
+    offscreenButton->SetBounds(D2D1::RectF(12.0f, 12.0f, 180.0f, 48.0f));
+    auto* visibleButton = scroll->AddChild<Button>(L"Visible after scroll");
+    visibleButton->SetBounds(D2D1::RectF(12.0f, 112.0f, 180.0f, 148.0f));
+
+    window.Host().SetRoot(std::move(root));
+
+    wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> rootProvider;
+    rootProvider.attach(window.Host().DebugCreateAccessibilityProvider());
+    Require(rootProvider != nullptr, "scrolled panel point-hit test creates a root provider");
+
+    const POINT rawContentSpacePointPx = window.Host().DipPointToScreenPoint(D2D1::Point2F(24.0f, 24.0f));
+    wil::com_ptr_nothrow<IRawElementProviderFragment> rawContentSpaceProvider;
+    RequireSucceeded(rootProvider->ElementProviderFromPoint(static_cast<double>(rawContentSpacePointPx.x),
+                                                            static_cast<double>(rawContentSpacePointPx.y),
+                                                            rawContentSpaceProvider.put()),
+                     "scrolled panel raw content-space point query succeeds");
+    Require(rawContentSpaceProvider != nullptr, "scrolled panel empty viewport point resolves the root provider");
+    wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> rawContentSpaceRoot;
+    RequireSucceeded(rawContentSpaceProvider.query_to(rawContentSpaceRoot.put()), "scrolled panel empty viewport provider is the root provider");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> visibleProvider = GetProviderAtDipPoint(window.Hwnd(),
+                                                                                              window.Host(),
+                                                                                              *rootProvider.get(),
+                                                                                              24.0f,
+                                                                                              44.0f,
+                                                                                              "scrolled panel visible child point is queryable");
+    Require(visibleProvider != nullptr, "scrolled ScrollPanel child is hit-testable at its viewport-translated position");
+    wil::com_ptr_nothrow<IRawElementProviderSimple> visibleSimple;
+    RequireSucceeded(visibleProvider.query_to(visibleSimple.put()), "scrolled panel visible provider exposes IRawElementProviderSimple");
+    Require(ReadProviderStringProperty(*visibleSimple.get(), UIA_NamePropertyId, "scrolled panel visible provider exposes accessibility name") ==
+                L"Visible after scroll",
+            "scrolled panel point-hit translation resolves the visible child rather than its raw content-space position");
+}
+
 void TestAccessibilityProviderExposesGridCellToggleAndRangePatterns()
 {
     using namespace RedSalamander::DxUi;
@@ -2676,31 +5001,67 @@ void TestAccessibilityProviderExposesSliderRangeValuePattern()
 
 void RunAccessibilityTests()
 {
+    TestAccessibilityTargetPublishesImmutableSnapshotBeforeTreeTeardown();
+    TestAccessibilityLiveHostResolutionIsWindowThreadOnly();
+    TestAccessibilityProviderTraversalSurvivesConcurrentRootReplacement();
+    TestAccessibilityTreeHitTestUsesCheapVisibleIndexLookup();
+    TestAccessibilityProviderFactoriesUseSharedMakeProviderHelper();
+    TestAccessibilityRuntimeIdsUseSharedBuilder();
+    TestAccessibilityPatternDispatchUsesSharedQueryPattern();
+    TestAccessibilityElementProviderFromPointUsesSnapshot();
+    TestAccessibilityBoundingRectangleUsesSnapshot();
+    TestAccessibilityGridPatternReadsUseSnapshots();
+    TestAccessibilityControlStateReadsUseSnapshots();
+    TestAccessibilityGridCellValueReadsUseSnapshots();
+    TestAccessibilityGridRowPropertyReadsUseSnapshots();
+    TestAccessibilityTreeGridSelectionReadsUseSnapshots();
+    TestAccessibilityTreeItemStateReadsUseSnapshots();
+    TestAccessibilityTextPatternDocumentAndSelectionReadsUseSnapshots();
+    TestAccessibilityTextEditCompositionReadsUseSnapshots();
+    TestAccessibilityPasswordRevealButtonReadsUseSnapshots();
+    TestAccessibilityNavigateUsesSnapshot();
+    TestAccessibilityTreeSnapshotHitRecordsUseVisibleGeometryOnly();
     TestAttachedWindowHostWmGetObjectReturnsAccessibilityProvider();
     TestAccessibilityRootRuntimeIdIncludesProviderSpecificValues();
     TestAccessibilityProviderExposesInvokeToggleAndLabeledValuePatterns();
+    TestAccessibilityProviderRefreshesButtonSemanticProperties();
+    TestAccessibilityProviderRefreshesLabelAssociations();
     TestAccessibilityProviderExposesDirectSemanticRootControls();
+    TestAccessibilityLabelOnlyRootDoesNotUseDirectSemanticRootCollapse();
+    TestAccessibilityDirectSemanticRootMatchesUiAutomationClientTree();
+    TestAccessibilityDirectSemanticRootTreeSelectionMatchesUiAutomationClientTree();
     TestAccessibilityProviderReportsFocusedControl();
     TestAccessibilityProviderMasksPasswordTextFieldValue();
     TestAccessibilityProviderExposesMaskedRevealButton();
     TestAccessibilityProviderExposesTextPatternForTextField();
     TestAccessibilityTextFieldSimpleRangeBoundingRectanglesUseCaretGeometry();
     TestAccessibilityTextFieldMultilineRangeFromPointUsesNativeHitTest();
+    TestAccessibilityTextRangeFromPointDispatchesToWindowThread();
     TestAccessibilityTextFieldMultilineSameLineRangeBoundingRectanglesUseCaretGeometry();
     TestAccessibilityTextFieldMultilineRangeBoundingRectanglesUseLineCaretGeometry();
     TestAccessibilityTextFieldWrappedRangeBoundingRectanglesUseVisualLineGeometry();
     TestAccessibilityTextFieldWrappedCrossLineRangeBoundingRectanglesUseVisualLineGeometry();
     TestAccessibilityTextFieldWrappedLineMovementUsesVisualLines();
+    TestAccessibilityTextRangeEndpointLineMovementDispatchesToWindowThread();
+    TestAccessibilityTextRangeSpanLineMovementDispatchesToWindowThread();
     TestAccessibilityTextFieldSingleLineMixedBiDiRangeBoundingRectanglesUseDirectWriteGeometry();
     TestAccessibilityTextFieldMultilineMixedBiDiRangeBoundingRectanglesUseDirectWriteGeometry();
     TestAccessibilityEditableComboBoxSingleLineMixedBiDiRangeBoundingRectanglesUseDirectWriteGeometry();
     TestAccessibilityProviderExposesTextPatternForEditableComboBox();
     TestAccessibilityTextRangeSelectDispatchesToWindowThread();
+    TestAccessibilityTimedOutTextRangeSelectDoesNotExecuteLater();
+    TestAccessibilityTakenTextRangeSelectExecutesOnlyOnce();
+    TestAccessibilityDestroyWithPendingDispatchReturnsCancelled();
+    TestAccessibilityTextRangeBoundingRectanglesDispatchesToWindowThread();
+    TestAccessibilityTextRangeBoundingRectanglesTimeoutKeepsLateHandlerStorageAlive();
     TestAccessibilityProviderExposesNativeImeTextEditRanges();
     TestAccessibilityNativeTextInputRaisesTextAndTextEditEventCounters();
+    TestAccessibilityGridSnapshotRebuildMeetsTenThousandRowSelectionBudget();
     TestAccessibilityProviderExposesTreeAndGridMetadata();
     TestAccessibilityProviderExposesTreeItemSelectionAndExpandCollapsePatterns();
     TestAccessibilityProviderExposesGridRowSelectionPatterns();
+    TestAccessibilityProviderExposesHorizontallyScrolledGridRowStructure();
+    TestAccessibilityProviderPointHitsClipAndTranslateScrollPanelChildren();
     TestAccessibilityProviderExposesGridCellToggleAndRangePatterns();
     TestAccessibilityProviderExposesSliderRangeValuePattern();
 }

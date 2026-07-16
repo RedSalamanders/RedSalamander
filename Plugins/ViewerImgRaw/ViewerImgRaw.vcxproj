@@ -187,8 +187,10 @@ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\yyjson.dll" "$(OutDir)"</
     <ClCompile Include="ViewerImgRaw.Export.cpp" />
     <ClCompile Include="ViewerImgRaw.cpp" />
     <ClInclude Include="resource.h" />
+    <ClInclude Include="ViewerImgRaw.AsyncProtocol.h" />
     <ClInclude Include="ViewerImgRaw.h" />
     <ClInclude Include="ViewerImgRaw.Internal.h" />
+    <ClInclude Include="ViewerImgRaw.ResourcePolicy.h" />
     <ClInclude Include="ViewerImgRaw.ThemeHelpers.h" />
     <ResourceCompile Include="ViewerImgRawResources.rc" />
   </ItemGroup>

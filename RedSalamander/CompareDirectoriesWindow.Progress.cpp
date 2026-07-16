@@ -48,6 +48,16 @@ struct ContentProgressPayload
     SteadyClock::time_point enqueuedAt{};
 };
 
+[[nodiscard]] bool TryStartCompareTimer(HWND hwnd, UINT_PTR timerId, UINT delayMs, bool& activeFlag, const wchar_t* failureMessage) noexcept
+{
+    activeFlag = hwnd && SetTimer(hwnd, timerId, delayMs, nullptr) != 0;
+    if (! activeFlag && failureMessage)
+    {
+        Debug::ErrorWithLastError(failureMessage);
+    }
+    return activeFlag;
+}
+
 [[nodiscard]] std::wstring FormatDurationHmsNoexcept(uint64_t seconds) noexcept
 {
     const uint64_t hours64   = seconds / 3600u;
@@ -108,7 +118,8 @@ void CompareDirectoriesWindow::SetSessionCallbacksForRun(uint64_t runId) noexcep
         payload->relativeFolder             = relativeFolder;
         payload->entryName                  = std::wstring(currentEntryName);
         payload->enqueuedAt                 = SteadyClock::now();
-        static_cast<void>(PostMessagePayload(hwnd, WndMsg::kCompareDirectoriesScanProgress, 0, std::move(payload)));
+        const WPARAM operationKey            = static_cast<WPARAM>(payload->runId);
+        static_cast<void>(PostMessagePayload(hwnd, WndMsg::kCompareDirectoriesScanProgress, operationKey, std::move(payload)));
     });
 
     _session->SetContentProgressCallback([hwnd, runId](uint32_t workerIndex,
@@ -140,7 +151,8 @@ void CompareDirectoriesWindow::SetSessionCallbacksForRun(uint64_t runId) noexcep
         payload->relativeFolder           = relativeFolder;
         payload->entryName                = std::wstring(entryName);
         payload->enqueuedAt               = SteadyClock::now();
-        static_cast<void>(PostMessagePayload(hwnd, WndMsg::kCompareDirectoriesContentProgress, 0, std::move(payload)));
+        const WPARAM operationKey          = static_cast<WPARAM>(payload->runId);
+        static_cast<void>(PostMessagePayload(hwnd, WndMsg::kCompareDirectoriesContentProgress, operationKey, std::move(payload)));
     });
 
     _session->SetDecisionUpdatedCallback([hwnd, runId]() noexcept
@@ -158,12 +170,27 @@ void CompareDirectoriesWindow::ScheduleDecisionRefresh() noexcept
 {
     _decisionRefreshPending = true;
 
-    if (_decisionRefreshTimerActive || ! _hWnd)
+    if (_decisionRefreshTimerActive || _decisionRefreshFallbackPending || ! _hWnd)
     {
         return;
     }
 
-    _decisionRefreshTimerActive = SetTimer(_hWnd.get(), kCompareDecisionRefreshTimerId, kCompareDecisionRefreshTimerIntervalMs, nullptr) != 0;
+    if (TryStartCompareTimer(_hWnd.get(),
+                             kCompareDecisionRefreshTimerId,
+                             kCompareDecisionRefreshTimerIntervalMs,
+                             _decisionRefreshTimerActive,
+                             L"CompareDirectories: failed to start decision refresh timer."))
+    {
+        return;
+    }
+
+    _decisionRefreshFallbackPending = true;
+    if (PostMessageW(_hWnd.get(), WndMsg::kCompareDirectoriesDecisionRefreshNow, static_cast<WPARAM>(_compareRunId), 0) == 0)
+    {
+        _decisionRefreshFallbackPending = false;
+        Debug::ErrorWithLastError(L"CompareDirectories: failed to post decision refresh fallback.");
+        OnDecisionRefreshTimer();
+    }
 }
 
 void CompareDirectoriesWindow::OnDecisionRefreshTimer() noexcept
@@ -200,12 +227,12 @@ void CompareDirectoriesWindow::OnDecisionRefreshTimer() noexcept
         _folderWindow.RefreshPaneDetailsText(FolderWindow::Pane::Left);
         _folderWindow.RefreshPaneDetailsText(FolderWindow::Pane::Right);
 
-        if (const auto leftPath = _folderWindow.GetCurrentPath(FolderWindow::Pane::Left))
+        if (const auto leftPath = _folderWindow.GetCurrentPluginPath(FolderWindow::Pane::Left))
         {
             ApplySelectionForFolder(ComparePane::Left, leftPath.value());
             UpdateEmptyStateForFolder(ComparePane::Left, leftPath.value());
         }
-        if (const auto rightPath = _folderWindow.GetCurrentPath(FolderWindow::Pane::Right))
+        if (const auto rightPath = _folderWindow.GetCurrentPluginPath(FolderWindow::Pane::Right))
         {
             ApplySelectionForFolder(ComparePane::Right, rightPath.value());
             UpdateEmptyStateForFolder(ComparePane::Right, rightPath.value());
@@ -232,7 +259,7 @@ void CompareDirectoriesWindow::OnDecisionRefreshTimer() noexcept
             return snap;
         }
 
-        const auto currentPathOpt = _folderWindow.GetCurrentPath(fwPane);
+        const auto currentPathOpt = _folderWindow.GetCurrentPluginPath(fwPane);
         if (! currentPathOpt.has_value())
         {
             return snap;
@@ -275,40 +302,21 @@ void CompareDirectoriesWindow::OnDecisionRefreshTimer() noexcept
     }
 }
 
-LRESULT CompareDirectoriesWindow::OnScanProgress(LPARAM lp) noexcept
+LRESULT CompareDirectoriesWindow::OnScanProgress(WPARAM operationKey, LPARAM lp) noexcept
 {
-    auto payload = TakeMessagePayload<ScanProgressPayload>(lp);
+    auto drained = TakeAndCoalesceContiguousPostedPayloads<ScanProgressPayload>(
+        _hWnd.get(),
+        WndMsg::kCompareDirectoriesScanProgress,
+        operationKey,
+        lp,
+        [](const ScanProgressPayload&, uint64_t) noexcept { return true; },
+        [](std::unique_ptr<ScanProgressPayload>& current, std::unique_ptr<ScanProgressPayload> newer) noexcept { current = std::move(newer); });
+    auto payload = std::move(drained.payload);
     if (! payload)
     {
         return 0;
     }
-
-    uint64_t drainedPayloadCount = 0u;
-    while (_hWnd)
-    {
-        MSG queuedMessage{};
-        if (! ::PeekMessageW(&queuedMessage, _hWnd.get(), 0, 0, PM_NOREMOVE))
-        {
-            break;
-        }
-        if (queuedMessage.message != WndMsg::kCompareDirectoriesScanProgress)
-        {
-            break;
-        }
-        if (! ::PeekMessageW(&queuedMessage, _hWnd.get(), WndMsg::kCompareDirectoriesScanProgress, WndMsg::kCompareDirectoriesScanProgress, PM_REMOVE))
-        {
-            break;
-        }
-
-        auto newerPayload = TakeMessagePayload<ScanProgressPayload>(queuedMessage.lParam);
-        if (! newerPayload)
-        {
-            continue;
-        }
-
-        payload = std::move(newerPayload);
-        ++drainedPayloadCount;
-    }
+    const uint64_t drainedPayloadCount = drained.drainedPayloadCount;
 
     Debug::Perf::EmitCounter(L"compare.ui.scan_progress_message_count");
     if (drainedPayloadCount != 0u)
@@ -326,25 +334,25 @@ LRESULT CompareDirectoriesWindow::OnScanProgress(LPARAM lp) noexcept
                           S_OK);
     }
 
-    if (! _compareActive || payload->runId != _compareRunId)
+    if (! _compareActive || payload->runId != _compareRunId || static_cast<WPARAM>(payload->runId) != operationKey)
     {
         return 0;
     }
 
-    _compareRunSawScanProgress = true;
+    _progress.compareRunSawScanProgress = true;
 
-    _progress.scanActiveScans                = payload->activeScans;
-    _progress.scanFolderCount                = payload->folderCount;
-    _progress.scanEntryCount                 = payload->entryCount;
-    _progress.scanContentCandidateFileCount  = payload->contentCandidateFileCount;
-    _progress.scanContentCandidateTotalBytes = payload->contentCandidateTotalBytes;
-    _progress.scanRelativeFolder             = std::move(payload->relativeFolder);
-    _progress.scanEntryName                  = std::move(payload->entryName);
+    _progress.banner.scanActiveScans                = payload->activeScans;
+    _progress.banner.scanFolderCount                = payload->folderCount;
+    _progress.banner.scanEntryCount                 = payload->entryCount;
+    _progress.banner.scanContentCandidateFileCount  = payload->contentCandidateFileCount;
+    _progress.banner.scanContentCandidateTotalBytes = payload->contentCandidateTotalBytes;
+    _progress.banner.scanRelativeFolder             = std::move(payload->relativeFolder);
+    _progress.banner.scanEntryName                  = std::move(payload->entryName);
 
-    if (_progress.scanActiveScans == 0u)
+    if (_progress.banner.scanActiveScans == 0u)
     {
-        _progress.scanRelativeFolder.clear();
-        _progress.scanEntryName.clear();
+        _progress.banner.scanRelativeFolder.clear();
+        _progress.banner.scanEntryName.clear();
     }
 
     UpdateRescanButtonText();
@@ -357,40 +365,21 @@ LRESULT CompareDirectoriesWindow::OnScanProgress(LPARAM lp) noexcept
     return 0;
 }
 
-LRESULT CompareDirectoriesWindow::OnContentProgress(LPARAM lp) noexcept
+LRESULT CompareDirectoriesWindow::OnContentProgress(WPARAM operationKey, LPARAM lp) noexcept
 {
-    auto payload = TakeMessagePayload<ContentProgressPayload>(lp);
+    auto drained = TakeAndCoalesceContiguousPostedPayloads<ContentProgressPayload>(
+        _hWnd.get(),
+        WndMsg::kCompareDirectoriesContentProgress,
+        operationKey,
+        lp,
+        [](const ContentProgressPayload&, uint64_t) noexcept { return true; },
+        [](std::unique_ptr<ContentProgressPayload>& current, std::unique_ptr<ContentProgressPayload> newer) noexcept { current = std::move(newer); });
+    auto payload = std::move(drained.payload);
     if (! payload)
     {
         return 0;
     }
-
-    uint64_t drainedPayloadCount = 0u;
-    while (_hWnd)
-    {
-        MSG queuedMessage{};
-        if (! ::PeekMessageW(&queuedMessage, _hWnd.get(), 0, 0, PM_NOREMOVE))
-        {
-            break;
-        }
-        if (queuedMessage.message != WndMsg::kCompareDirectoriesContentProgress)
-        {
-            break;
-        }
-        if (! ::PeekMessageW(&queuedMessage, _hWnd.get(), WndMsg::kCompareDirectoriesContentProgress, WndMsg::kCompareDirectoriesContentProgress, PM_REMOVE))
-        {
-            break;
-        }
-
-        auto newerPayload = TakeMessagePayload<ContentProgressPayload>(queuedMessage.lParam);
-        if (! newerPayload)
-        {
-            continue;
-        }
-
-        payload = std::move(newerPayload);
-        ++drainedPayloadCount;
-    }
+    const uint64_t drainedPayloadCount = drained.drainedPayloadCount;
 
     Debug::Perf::EmitCounter(L"compare.ui.content_progress_message_count");
     if (drainedPayloadCount != 0u)
@@ -408,22 +397,22 @@ LRESULT CompareDirectoriesWindow::OnContentProgress(LPARAM lp) noexcept
                           S_OK);
     }
 
-    if (! _compareActive || payload->runId != _compareRunId)
+    if (! _compareActive || payload->runId != _compareRunId || static_cast<WPARAM>(payload->runId) != operationKey)
     {
         return 0;
     }
 
     const ULONGLONG nowTick = GetTickCount64();
 
-    _progress.contentPendingCompares       = payload->pendingContentCompares;
-    _progress.contentTotalCompares         = payload->totalContentCompares;
-    _progress.contentCompletedCompares     = payload->completedContentCompares;
-    _progress.contentOverallTotalBytes     = payload->overallTotalBytes;
-    _progress.contentOverallCompletedBytes = payload->overallCompletedBytes;
-    _progress.contentFileTotalBytes        = payload->fileTotalBytes;
-    _progress.contentFileCompletedBytes    = payload->fileCompletedBytes;
+    _progress.banner.contentPendingCompares       = payload->pendingContentCompares;
+    _progress.banner.contentTotalCompares         = payload->totalContentCompares;
+    _progress.banner.contentCompletedCompares     = payload->completedContentCompares;
+    _progress.banner.contentOverallTotalBytes     = payload->overallTotalBytes;
+    _progress.banner.contentOverallCompletedBytes = payload->overallCompletedBytes;
+    _progress.banner.contentFileTotalBytes        = payload->fileTotalBytes;
+    _progress.banner.contentFileCompletedBytes    = payload->fileCompletedBytes;
 
-    if (_progress.contentPendingCompares > 0u)
+    if (_progress.banner.contentPendingCompares > 0u)
     {
         std::filesystem::path fileRel = payload->relativeFolder;
         if (! payload->entryName.empty())
@@ -434,9 +423,9 @@ LRESULT CompareDirectoriesWindow::OnContentProgress(LPARAM lp) noexcept
         if (! fileRel.empty())
         {
             const uint32_t slotIndex = payload->workerIndex;
-            if (slotIndex < _progress.contentInFlight.size())
+            if (slotIndex < _progress.banner.contentInFlight.size())
             {
-                auto& slot          = _progress.contentInFlight[slotIndex];
+                auto& slot          = _progress.banner.contentInFlight[slotIndex];
                 slot.relativePath   = std::move(fileRel);
                 slot.totalBytes     = payload->fileTotalBytes;
                 slot.completedBytes = payload->fileCompletedBytes;
@@ -446,64 +435,70 @@ LRESULT CompareDirectoriesWindow::OnContentProgress(LPARAM lp) noexcept
     }
     else
     {
-        for (auto& slot : _progress.contentInFlight)
+        for (auto& slot : _progress.banner.contentInFlight)
         {
             slot = {};
         }
     }
 
-    _progress.contentRelativeFolder = std::move(payload->relativeFolder);
-    _progress.contentEntryName      = std::move(payload->entryName);
+    _progress.banner.contentRelativeFolder = std::move(payload->relativeFolder);
+    _progress.banner.contentEntryName      = std::move(payload->entryName);
 
-    if (_progress.contentPendingCompares > 0u)
+    if (_progress.banner.contentPendingCompares > 0u)
     {
-        const uint64_t completed = _progress.contentOverallCompletedBytes;
-        const uint64_t total     = _progress.contentOverallTotalBytes;
+        const uint64_t completed = _progress.banner.contentOverallCompletedBytes;
+        const uint64_t total     = _progress.banner.contentOverallTotalBytes;
 
-        if (_contentEtaLastTickMs != 0u && nowTick > _contentEtaLastTickMs && completed >= _contentEtaLastCompletedBytes)
+        if (_progress.contentEtaLastTickMs != 0u && nowTick > _progress.contentEtaLastTickMs && completed >= _progress.contentEtaLastCompletedBytes)
         {
-            const uint64_t deltaBytes = completed - _contentEtaLastCompletedBytes;
-            const double deltaSeconds = static_cast<double>(nowTick - _contentEtaLastTickMs) / 1000.0;
+            const uint64_t deltaBytes = completed - _progress.contentEtaLastCompletedBytes;
+            const double deltaSeconds = static_cast<double>(nowTick - _progress.contentEtaLastTickMs) / 1000.0;
             if (deltaBytes > 0u && deltaSeconds >= 0.2)
             {
                 const double rate = static_cast<double>(deltaBytes) / deltaSeconds;
-                if (_contentEtaSmoothedBytesPerSec <= 1.0)
+                if (_progress.contentEtaSmoothedBytesPerSec <= 1.0)
                 {
-                    _contentEtaSmoothedBytesPerSec = rate;
+                    _progress.contentEtaSmoothedBytesPerSec = rate;
                 }
                 else
                 {
-                    constexpr double kAlpha        = 0.15;
-                    _contentEtaSmoothedBytesPerSec = (_contentEtaSmoothedBytesPerSec * (1.0 - kAlpha)) + (rate * kAlpha);
+                    constexpr double kAlpha                 = 0.15;
+                    _progress.contentEtaSmoothedBytesPerSec = (_progress.contentEtaSmoothedBytesPerSec * (1.0 - kAlpha)) + (rate * kAlpha);
                 }
             }
         }
 
-        _contentEtaLastTickMs         = nowTick;
-        _contentEtaLastCompletedBytes = completed;
+        _progress.contentEtaLastTickMs         = nowTick;
+        _progress.contentEtaLastCompletedBytes = completed;
 
-        _contentEtaSeconds.reset();
-        if (total > 0u && completed <= total && _contentEtaSmoothedBytesPerSec > 1.0)
+        _progress.contentEtaSeconds.reset();
+        constexpr double kMinUsefulContentEtaBytesPerSec = 1024.0;
+        constexpr double kMaxDisplayedContentEtaSeconds  = 7.0 * 24.0 * 60.0 * 60.0;
+        if (total > 0u && completed <= total && std::isfinite(_progress.contentEtaSmoothedBytesPerSec) &&
+            _progress.contentEtaSmoothedBytesPerSec >= kMinUsefulContentEtaBytesPerSec)
         {
             const uint64_t remaining = total - completed;
-            const double secondsD    = static_cast<double>(remaining) / _contentEtaSmoothedBytesPerSec;
-            _contentEtaSeconds       = static_cast<uint64_t>(std::ceil(std::max(0.0, secondsD)));
+            const double secondsD    = static_cast<double>(remaining) / _progress.contentEtaSmoothedBytesPerSec;
+            if (std::isfinite(secondsD) && secondsD >= 0.0 && secondsD <= kMaxDisplayedContentEtaSeconds)
+            {
+                _progress.contentEtaSeconds = static_cast<uint64_t>(std::ceil(secondsD));
+            }
         }
     }
     else
     {
-        _contentEtaLastTickMs          = 0;
-        _contentEtaLastCompletedBytes  = 0;
-        _contentEtaSmoothedBytesPerSec = 0.0;
-        _contentEtaSeconds.reset();
+        _progress.contentEtaLastTickMs          = 0;
+        _progress.contentEtaLastCompletedBytes  = 0;
+        _progress.contentEtaSmoothedBytesPerSec = 0.0;
+        _progress.contentEtaSeconds.reset();
     }
 
-    if (_progress.contentPendingCompares == 0u)
+    if (_progress.banner.contentPendingCompares == 0u)
     {
-        _progress.contentFileTotalBytes     = 0;
-        _progress.contentFileCompletedBytes = 0;
-        _progress.contentRelativeFolder.clear();
-        _progress.contentEntryName.clear();
+        _progress.banner.contentFileTotalBytes     = 0;
+        _progress.banner.contentFileCompletedBytes = 0;
+        _progress.banner.contentRelativeFolder.clear();
+        _progress.banner.contentEntryName.clear();
     }
 
     UpdateRescanButtonText();
@@ -521,61 +516,63 @@ void CompareDirectoriesWindow::UpdateProgressControls() noexcept
     Debug::Perf::EmitCounter(L"compare.ui.progress_controls_update_count");
     const SteadyClock::time_point startedAt = SteadyClock::now();
 
-    if (! _scanProgressText && ! _dxScanProgressTextHostHwnd && ! _scanProgressBar)
+    if (! _progress.scanProgressText && ! _progress.scanProgressTextHostHwnd && ! _progress.scanProgressBar)
     {
         UpdateCompareWatermark();
+        if (_progress.watermarkState == CompareWatermarkState::InProgress)
+        {
+            EnsureProgressPulseTimer();
+        }
+        else
+        {
+            StopProgressPulseTimerIfIdle();
+        }
         Debug::Perf::Emit(L"compare.ui.progress_controls_update_us", L"", ElapsedUsSince(startedAt), 0u, 0u, S_OK);
         return;
     }
 
-    const bool show              = (_compareActive && _compareRunPending) || _progress.scanActiveScans > 0u || _progress.contentPendingCompares > 0u;
-    const bool useDxProgressText = _usesDxBannerText && _dxScanProgressTextHostHwnd && _dxScanProgressTextLabel;
-    const bool wasVisible        = (useDxProgressText && IsWindowVisible(_dxScanProgressTextHostHwnd.get()) != 0) ||
-                                   (_scanProgressText && IsWindowVisible(_scanProgressText.get()) != 0) ||
-                                   (_scanProgressBar && IsWindowVisible(_scanProgressBar.get()) != 0);
+    const bool show = (_compareActive && _compareRunPending) || _progress.banner.scanActiveScans > 0u || _progress.banner.contentPendingCompares > 0u;
+    const bool useDxProgressText = _chrome.usesBannerText && _progress.scanProgressTextHostHwnd && _progress.scanProgressTextLabel;
+    const bool wasVisible        = (useDxProgressText && IsWindowVisible(_progress.scanProgressTextHostHwnd.get()) != 0) ||
+                                   (_progress.scanProgressText && IsWindowVisible(_progress.scanProgressText.get()) != 0) ||
+                                   (_progress.scanProgressBar && IsWindowVisible(_progress.scanProgressBar.get()) != 0);
 
     if (! show)
     {
-        if (_progressSpinnerTimerActive && _hWnd)
+        if (_progress.scanProgressBar)
         {
-            KillTimer(_hWnd.get(), kCompareBannerSpinnerTimerId);
-            _progressSpinnerTimerActive = false;
-        }
-
-        if (_scanProgressBar)
-        {
-            if (_progressControlsVisible || IsWindowVisible(_scanProgressBar.get()) != 0)
+            if (_progress.controlsVisible || IsWindowVisible(_progress.scanProgressBar.get()) != 0)
             {
-                ShowWindow(_scanProgressBar.get(), SW_HIDE);
+                ShowWindow(_progress.scanProgressBar.get(), SW_HIDE);
             }
         }
-        if (_scanProgressText)
+        if (_progress.scanProgressText)
         {
-            if (! useDxProgressText && ! _lastProgressMessage.empty())
+            if (! useDxProgressText && ! _progress.lastMessage.empty())
             {
-                SetWindowTextW(_scanProgressText.get(), L"");
+                SetWindowTextW(_progress.scanProgressText.get(), L"");
                 Debug::Perf::EmitCounter(L"compare.ui.progress_controls_text_applied_count");
             }
-            if (_progressControlsVisible || IsWindowVisible(_scanProgressText.get()) != 0)
+            if (_progress.controlsVisible || IsWindowVisible(_progress.scanProgressText.get()) != 0)
             {
-                ShowWindow(_scanProgressText.get(), SW_HIDE);
+                ShowWindow(_progress.scanProgressText.get(), SW_HIDE);
             }
         }
         if (useDxProgressText)
         {
-            if (! _lastProgressMessage.empty())
+            if (! _progress.lastMessage.empty())
             {
-                _dxScanProgressTextLabel->SetText(std::wstring{});
-                _dxScanProgressTextHost.Invalidate();
+                _progress.scanProgressTextLabel->SetText(std::wstring{});
+                _progress.scanProgressTextHost.Invalidate();
                 Debug::Perf::EmitCounter(L"compare.ui.progress_controls_text_applied_count");
             }
-            if (_progressControlsVisible || IsWindowVisible(_dxScanProgressTextHostHwnd.get()) != 0)
+            if (_progress.controlsVisible || IsWindowVisible(_progress.scanProgressTextHostHwnd.get()) != 0)
             {
-                ShowWindow(_dxScanProgressTextHostHwnd.get(), SW_HIDE);
+                ShowWindow(_progress.scanProgressTextHostHwnd.get(), SW_HIDE);
             }
         }
-        _progressControlsVisible = false;
-        _lastProgressMessage.clear();
+        _progress.controlsVisible = false;
+        _progress.lastMessage.clear();
         if (wasVisible)
         {
             Debug::Perf::EmitCounter(L"compare.ui.progress_controls_hide_count");
@@ -586,17 +583,18 @@ void CompareDirectoriesWindow::UpdateProgressControls() noexcept
             Debug::Perf::EmitCounter(L"compare.ui.progress_controls_skipped_count");
         }
         UpdateCompareWatermark();
+        StopProgressPulseTimerIfIdle();
         Debug::Perf::Emit(L"compare.ui.progress_controls_update_us", L"", ElapsedUsSince(startedAt), 0u, 0u, S_OK);
         return;
     }
 
     std::wstring scanText;
-    if (_progress.scanActiveScans > 0u || (_compareActive && _compareRunPending && _progress.contentPendingCompares == 0u))
+    if (_progress.banner.scanActiveScans > 0u || (_compareActive && _compareRunPending && _progress.banner.contentPendingCompares == 0u))
     {
-        std::filesystem::path displayPath = _progress.scanRelativeFolder;
-        if (! _progress.scanEntryName.empty())
+        std::filesystem::path displayPath = _progress.banner.scanRelativeFolder;
+        if (! _progress.banner.scanEntryName.empty())
         {
-            displayPath /= std::filesystem::path(_progress.scanEntryName);
+            displayPath /= std::filesystem::path(_progress.banner.scanEntryName);
         }
 
         std::wstring pathText;
@@ -609,10 +607,10 @@ void CompareDirectoriesWindow::UpdateProgressControls() noexcept
             pathText = displayPath.wstring();
         }
 
-        scanText = FormatStringResource(nullptr, IDS_FMT_COMPARE_SCAN_STATUS, pathText, _progress.scanFolderCount, _progress.scanEntryCount);
-        if (_scanStartTickMs != 0)
+        scanText = FormatStringResource(nullptr, IDS_FMT_COMPARE_SCAN_STATUS, pathText, _progress.banner.scanFolderCount, _progress.banner.scanEntryCount);
+        if (_progress.scanStartTickMs != 0)
         {
-            const uint64_t elapsedSec   = (GetTickCount64() - _scanStartTickMs) / 1000u;
+            const uint64_t elapsedSec   = (GetTickCount64() - _progress.scanStartTickMs) / 1000u;
             const std::wstring duration = FormatDurationHmsNoexcept(elapsedSec);
             if (! duration.empty())
             {
@@ -627,12 +625,12 @@ void CompareDirectoriesWindow::UpdateProgressControls() noexcept
     }
 
     std::wstring contentText;
-    if (_progress.contentPendingCompares > 0u && ! _progress.contentEntryName.empty())
+    if (_progress.banner.contentPendingCompares > 0u && ! _progress.banner.contentEntryName.empty())
     {
-        std::filesystem::path displayPath = _progress.contentRelativeFolder;
-        if (! _progress.contentEntryName.empty())
+        std::filesystem::path displayPath = _progress.banner.contentRelativeFolder;
+        if (! _progress.banner.contentEntryName.empty())
         {
-            displayPath /= std::filesystem::path(_progress.contentEntryName);
+            displayPath /= std::filesystem::path(_progress.banner.contentEntryName);
         }
 
         std::wstring pathText;
@@ -645,10 +643,10 @@ void CompareDirectoriesWindow::UpdateProgressControls() noexcept
             pathText = displayPath.wstring();
         }
 
-        const std::wstring completedText = FormatBytesCompact(_progress.contentFileCompletedBytes);
-        if (_progress.contentFileTotalBytes > 0u)
+        const std::wstring completedText = FormatBytesCompact(_progress.banner.contentFileCompletedBytes);
+        if (_progress.banner.contentFileTotalBytes > 0u)
         {
-            const std::wstring totalText = FormatBytesCompact(_progress.contentFileTotalBytes);
+            const std::wstring totalText = FormatBytesCompact(_progress.banner.contentFileTotalBytes);
             contentText                  = FormatStringResource(nullptr, IDS_FMT_COMPARE_CONTENT_STATUS, pathText, completedText, totalText);
         }
         else
@@ -656,9 +654,9 @@ void CompareDirectoriesWindow::UpdateProgressControls() noexcept
             contentText = FormatStringResource(nullptr, IDS_FMT_COMPARE_CONTENT_STATUS_UNKNOWN, pathText, completedText);
         }
 
-        if (_contentEtaSeconds.has_value())
+        if (_progress.contentEtaSeconds.has_value())
         {
-            const std::wstring duration = FormatDurationHmsNoexcept(_contentEtaSeconds.value());
+            const std::wstring duration = FormatDurationHmsNoexcept(_progress.contentEtaSeconds.value());
             if (! duration.empty())
             {
                 const std::wstring etaText = FormatStringResource(nullptr, IDS_FMT_COMPARE_ETA, duration);
@@ -688,22 +686,22 @@ void CompareDirectoriesWindow::UpdateProgressControls() noexcept
     bool textApplied = false;
     if (useDxProgressText)
     {
-        if (message != _lastProgressMessage)
+        if (message != _progress.lastMessage)
         {
-            _dxScanProgressTextLabel->SetText(message);
-            _lastProgressMessage = message;
-            textApplied          = true;
-            _dxScanProgressTextHost.Invalidate();
+            _progress.scanProgressTextLabel->SetText(message);
+            _progress.lastMessage = message;
+            textApplied           = true;
+            _progress.scanProgressTextHost.Invalidate();
             Debug::Perf::EmitCounter(L"compare.ui.progress_controls_text_applied_count");
         }
     }
-    else if (_scanProgressText)
+    else if (_progress.scanProgressText)
     {
-        if (message != _lastProgressMessage)
+        if (message != _progress.lastMessage)
         {
-            SetWindowTextW(_scanProgressText.get(), message.c_str());
-            _lastProgressMessage = message;
-            textApplied          = true;
+            SetWindowTextW(_progress.scanProgressText.get(), message.c_str());
+            _progress.lastMessage = message;
+            textApplied           = true;
             Debug::Perf::EmitCounter(L"compare.ui.progress_controls_text_applied_count");
         }
     }
@@ -711,37 +709,31 @@ void CompareDirectoriesWindow::UpdateProgressControls() noexcept
     bool uiChanged = false;
     if (useDxProgressText)
     {
-        if (_scanProgressText && IsWindowVisible(_scanProgressText.get()) != 0)
+        if (_progress.scanProgressText && IsWindowVisible(_progress.scanProgressText.get()) != 0)
         {
-            ShowWindow(_scanProgressText.get(), SW_HIDE);
+            ShowWindow(_progress.scanProgressText.get(), SW_HIDE);
         }
-        if (! _progressControlsVisible || IsWindowVisible(_dxScanProgressTextHostHwnd.get()) == 0)
+        if (! _progress.controlsVisible || IsWindowVisible(_progress.scanProgressTextHostHwnd.get()) == 0)
         {
-            ShowWindow(_dxScanProgressTextHostHwnd.get(), SW_SHOWNA);
+            ShowWindow(_progress.scanProgressTextHostHwnd.get(), SW_SHOWNA);
             uiChanged = true;
         }
     }
-    else if (_scanProgressText && (! _progressControlsVisible || IsWindowVisible(_scanProgressText.get()) == 0))
+    else if (_progress.scanProgressText && (! _progress.controlsVisible || IsWindowVisible(_progress.scanProgressText.get()) == 0))
     {
-        ShowWindow(_scanProgressText.get(), SW_SHOW);
+        ShowWindow(_progress.scanProgressText.get(), SW_SHOW);
         uiChanged = true;
     }
-    if (_scanProgressBar && (! _progressControlsVisible || IsWindowVisible(_scanProgressBar.get()) == 0))
+    if (_progress.scanProgressBar && (! _progress.controlsVisible || IsWindowVisible(_progress.scanProgressBar.get()) == 0))
     {
-        ShowWindow(_scanProgressBar.get(), SW_SHOW);
+        ShowWindow(_progress.scanProgressBar.get(), SW_SHOW);
         Debug::Perf::EmitCounter(L"compare.ui.progress_controls_show_count");
         uiChanged = true;
     }
-    if (_scanProgressBar && (! _progressControlsVisible || ! _progressSpinnerTimerActive))
+    if (_progress.scanProgressBar && (! _progress.controlsVisible || ! _progress.pulseTimerActive))
     {
-        InvalidateRect(_scanProgressBar.get(), nullptr, FALSE);
+        InvalidateRect(_progress.scanProgressBar.get(), nullptr, FALSE);
         Debug::Perf::EmitCounter(L"compare.ui.progress_controls_progressbar_invalidate_count");
-    }
-    if (! _progressSpinnerTimerActive && _hWnd && _scanProgressBar)
-    {
-        _progressSpinnerAngleDeg    = 0.0f;
-        _progressSpinnerLastTickMs  = GetTickCount64();
-        _progressSpinnerTimerActive = SetTimer(_hWnd.get(), kCompareBannerSpinnerTimerId, kCompareBannerSpinnerTimerIntervalMs, nullptr) != 0;
     }
     if (! wasVisible)
     {
@@ -751,58 +743,111 @@ void CompareDirectoriesWindow::UpdateProgressControls() noexcept
     {
         Debug::Perf::EmitCounter(L"compare.ui.progress_controls_skipped_count");
     }
-    _progressControlsVisible = true;
+    _progress.controlsVisible = true;
     UpdateCompareWatermark();
+    EnsureProgressPulseTimer();
     Debug::Perf::Emit(L"compare.ui.progress_controls_update_us", L"", ElapsedUsSince(startedAt), 0u, 0u, S_OK);
 }
 
-void CompareDirectoriesWindow::OnProgressSpinnerTimer() noexcept
+void CompareDirectoriesWindow::EnsureProgressPulseTimer() noexcept
 {
-    if (! _hWnd || ! _scanProgressBar || ! _progressSpinnerTimerActive)
+    if (! _hWnd || _progress.pulseTimerActive)
     {
         return;
     }
 
-    if (IsWindowVisible(_scanProgressBar.get()) == 0)
+    const bool spinnerVisible = _progress.scanProgressBar && IsWindowVisible(_progress.scanProgressBar.get()) != 0;
+    if (! spinnerVisible && _progress.watermarkState != CompareWatermarkState::InProgress)
     {
         return;
     }
 
-    const ULONGLONG now        = GetTickCount64();
-    const ULONGLONG last       = _progressSpinnerLastTickMs;
-    _progressSpinnerLastTickMs = now;
+    _progress.spinnerAngleDeg   = 0.0f;
+    _progress.spinnerLastTickMs = GetTickCount64();
+    static_cast<void>(TryStartCompareTimer(_hWnd.get(),
+                                           kCompareProgressPulseTimerId,
+                                           kCompareProgressPulseTimerIntervalMs,
+                                           _progress.pulseTimerActive,
+                                           L"CompareDirectories: failed to start progress pulse timer."));
+}
 
-    double deltaSec = 0.0;
-    if (now > last)
+void CompareDirectoriesWindow::StopProgressPulseTimerIfIdle() noexcept
+{
+    if (! _progress.pulseTimerActive)
     {
-        deltaSec = static_cast<double>(now - last) / 1000.0;
+        return;
     }
 
-    constexpr float kSpinnerDegPerSec = 180.0f;
-    _progressSpinnerAngleDeg += static_cast<float>(deltaSec * static_cast<double>(kSpinnerDegPerSec));
-    while (_progressSpinnerAngleDeg >= 360.0f)
+    const bool spinnerVisible = _progress.scanProgressBar && IsWindowVisible(_progress.scanProgressBar.get()) != 0;
+    if (spinnerVisible || _progress.watermarkState == CompareWatermarkState::InProgress)
     {
-        _progressSpinnerAngleDeg -= 360.0f;
+        return;
     }
 
-    InvalidateRect(_scanProgressBar.get(), nullptr, FALSE);
-    if (_watermarkState == CompareWatermarkState::InProgress)
+    if (_hWnd)
     {
-        constexpr ULONGLONG kInvalidateIntervalMs = 100;
-        if (_paneWatermarkLastInvalidateTickMs == 0 || (now - _paneWatermarkLastInvalidateTickMs) >= kInvalidateIntervalMs)
+        KillTimer(_hWnd.get(), kCompareProgressPulseTimerId);
+    }
+    _progress.pulseTimerActive = false;
+}
+
+void CompareDirectoriesWindow::InvalidateCompareWatermarkPanesIfDue(ULONGLONG now) noexcept
+{
+    if (_progress.watermarkState != CompareWatermarkState::InProgress)
+    {
+        return;
+    }
+
+    constexpr ULONGLONG kInvalidateIntervalMs = 100;
+    if (_progress.paneWatermarkLastInvalidateTickMs != 0 && (now - _progress.paneWatermarkLastInvalidateTickMs) < kInvalidateIntervalMs)
+    {
+        return;
+    }
+
+    _progress.paneWatermarkLastInvalidateTickMs = now;
+
+    if (const HWND left = _folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left))
+    {
+        InvalidateRect(left, nullptr, FALSE);
+    }
+    if (const HWND right = _folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Right))
+    {
+        InvalidateRect(right, nullptr, FALSE);
+    }
+}
+
+void CompareDirectoriesWindow::OnProgressPulseTimer() noexcept
+{
+    if (! _hWnd || ! _progress.pulseTimerActive)
+    {
+        return;
+    }
+
+    const ULONGLONG now         = GetTickCount64();
+    const bool spinnerVisible   = _progress.scanProgressBar && IsWindowVisible(_progress.scanProgressBar.get()) != 0;
+    const ULONGLONG lastSpinner = _progress.spinnerLastTickMs;
+    _progress.spinnerLastTickMs = now;
+
+    if (spinnerVisible)
+    {
+        double deltaSec = 0.0;
+        if (now > lastSpinner)
         {
-            _paneWatermarkLastInvalidateTickMs = now;
-
-            if (const HWND left = _folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left))
-            {
-                InvalidateRect(left, nullptr, FALSE);
-            }
-            if (const HWND right = _folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Right))
-            {
-                InvalidateRect(right, nullptr, FALSE);
-            }
+            deltaSec = static_cast<double>(now - lastSpinner) / 1000.0;
         }
+
+        constexpr float kSpinnerDegPerSec = 180.0f;
+        _progress.spinnerAngleDeg += static_cast<float>(deltaSec * static_cast<double>(kSpinnerDegPerSec));
+        while (_progress.spinnerAngleDeg >= 360.0f)
+        {
+            _progress.spinnerAngleDeg -= 360.0f;
+        }
+
+        InvalidateRect(_progress.scanProgressBar.get(), nullptr, FALSE);
     }
+
+    InvalidateCompareWatermarkPanesIfDue(now);
+    StopProgressPulseTimerIfIdle();
 }
 
 void CompareDirectoriesWindow::DrawProgressSpinner(HDC hdc, const RECT& bounds) noexcept
@@ -851,7 +896,7 @@ void CompareDirectoriesWindow::DrawProgressSpinner(HDC hdc, const RECT& bounds) 
     }
 
     constexpr float kPi = 3.14159265358979323846f;
-    const float baseRad = (_progressSpinnerAngleDeg - 90.0f) * (kPi / 180.0f);
+    const float baseRad = (_progress.spinnerAngleDeg - 90.0f) * (kPi / 180.0f);
     float rainbowHue    = 0.0f;
     float rainbowSat    = 0.0f;
     float rainbowVal    = 0.0f;
@@ -890,7 +935,7 @@ void CompareDirectoriesWindow::DrawProgressSpinner(HDC hdc, const RECT& bounds) 
 
         const float alpha       = 0.15f + 0.85f * (1.0f - t);
         const int overlayWeight = static_cast<int>(std::lround(std::clamp(alpha, 0.0f, 1.0f) * 255.0f));
-        const COLORREF color    = UiMetrics::BlendColor(bg, segmentBase, overlayWeight, 255);
+        const COLORREF color    = UiMetrics::BlendColorRefWeightedTruncate(bg, segmentBase, overlayWeight, 255);
 
         paint.DrawLine(static_cast<float>(x1), static_cast<float>(y1), static_cast<float>(x2), static_cast<float>(y2), color, static_cast<float>(stroke));
     }
@@ -898,19 +943,19 @@ void CompareDirectoriesWindow::DrawProgressSpinner(HDC hdc, const RECT& bounds) 
 
 void CompareDirectoriesWindow::UpdateCompareWatermark() noexcept
 {
-    const bool optionsVisible = _optionsDlg && IsWindowVisible(_optionsDlg.get()) != 0;
+    const bool optionsVisible = _optionsPanel.dlg && IsWindowVisible(_optionsPanel.dlg.get()) != 0;
     const HRESULT cancelledHr = HRESULT_FROM_WIN32(ERROR_CANCELLED);
 
     CompareWatermarkState desired = CompareWatermarkState::Hidden;
     if (_compareStarted && ! optionsVisible && _compareActive)
     {
-        if (_compareRunResultHr == cancelledHr)
+        if (_progress.compareRunResultHr == cancelledHr)
         {
             desired = CompareWatermarkState::Cancelled;
         }
         else
         {
-            const bool runBusy = _compareRunPending || _progress.scanActiveScans > 0u || _progress.contentPendingCompares > 0u;
+            const bool runBusy = _compareRunPending || _progress.banner.scanActiveScans > 0u || _progress.banner.contentPendingCompares > 0u;
             if (runBusy)
             {
                 desired = CompareWatermarkState::InProgress;
@@ -918,12 +963,12 @@ void CompareDirectoriesWindow::UpdateCompareWatermark() noexcept
         }
     }
 
-    if (desired == _watermarkState)
+    if (desired == _progress.watermarkState)
     {
         return;
     }
 
-    _watermarkState = desired;
+    _progress.watermarkState = desired;
     if (desired == CompareWatermarkState::Hidden)
     {
         _folderWindow.SetPaneBackgroundWatermark(FolderWindow::Pane::Left, {}, false);
@@ -936,47 +981,52 @@ void CompareDirectoriesWindow::UpdateCompareWatermark() noexcept
     const std::wstring text = LoadStringResource(nullptr, textId);
     const bool animated     = desired == CompareWatermarkState::InProgress;
 
-    _paneWatermarkLastInvalidateTickMs = 0;
+    _progress.paneWatermarkLastInvalidateTickMs = 0;
     _folderWindow.SetPaneBackgroundWatermark(FolderWindow::Pane::Left, text, animated);
     _folderWindow.SetPaneBackgroundWatermark(FolderWindow::Pane::Right, text, animated);
 }
 
 void CompareDirectoriesWindow::UpdateRescanButtonText() noexcept
 {
-    const bool runBusy          = _compareRunPending || _progress.scanActiveScans > 0u || _progress.contentPendingCompares > 0u;
+    const bool runBusy          = _compareRunPending || _progress.banner.scanActiveScans > 0u || _progress.banner.contentPendingCompares > 0u;
     const bool shouldShowCancel = _compareActive && runBusy;
-    if (shouldShowCancel == _bannerRescanIsCancel)
+    if (shouldShowCancel == _chrome.rescanIsCancel)
     {
         return;
     }
 
-    _bannerRescanIsCancel   = shouldShowCancel;
+    _chrome.rescanIsCancel  = shouldShowCancel;
     const UINT textId       = shouldShowCancel ? IDS_COMPARE_BANNER_CANCEL : IDS_COMPARE_BANNER_RESCAN;
     const std::wstring text = LoadStringResource(nullptr, textId);
-    if (_bannerRescanButton)
+    if (_chrome.bannerRescanButton)
     {
-        SetWindowTextW(_bannerRescanButton.get(), text.c_str());
+        SetWindowTextW(_chrome.bannerRescanButton.get(), text.c_str());
     }
     SyncDxBannerButtons();
     Layout();
-    if (_bannerRescanButton)
+    if (_chrome.bannerRescanButton)
     {
-        InvalidateRect(_bannerRescanButton.get(), nullptr, TRUE);
+        InvalidateRect(_chrome.bannerRescanButton.get(), nullptr, TRUE);
     }
 }
 
-void CompareDirectoriesWindow::UpdateCompareTaskCard(bool finished) noexcept
+void CompareDirectoriesWindow::UpdateCompareTaskCard(bool finished, bool force) noexcept
 {
-    if (! finished && _compareTaskId != 0)
+    if (! finished && ! force && _progress.compareTaskId != 0)
     {
         const ULONGLONG nowTick = GetTickCount64();
-        if (_lastCompareTaskCardUpdateTickMs != 0 && nowTick >= _lastCompareTaskCardUpdateTickMs &&
-            (nowTick - _lastCompareTaskCardUpdateTickMs) < kCompareTaskCardUpdateMinIntervalMs)
+        if (_progress.lastTaskCardUpdateTickMs != 0 && nowTick >= _progress.lastTaskCardUpdateTickMs &&
+            (nowTick - _progress.lastTaskCardUpdateTickMs) < kCompareTaskCardUpdateMinIntervalMs)
         {
+            const ULONGLONG elapsed = nowTick - _progress.lastTaskCardUpdateTickMs;
+            const ULONGLONG delayMs = std::max<ULONGLONG>(1, kCompareTaskCardUpdateMinIntervalMs - elapsed);
+            ScheduleCompareTaskCardTrailingFlush(delayMs);
             Debug::Perf::EmitCounter(L"compare.ui.taskcard_update_throttled_count");
             return;
         }
     }
+
+    CancelCompareTaskCardTrailingFlush();
 
     Debug::Perf::EmitCounter(L"compare.ui.taskcard_update_count");
     const SteadyClock::time_point startedAt      = SteadyClock::now();
@@ -984,52 +1034,52 @@ void CompareDirectoriesWindow::UpdateCompareTaskCard(bool finished) noexcept
 
     FolderWindow::InformationalTaskUpdate update{};
     update.kind      = FolderWindow::InformationalTaskUpdate::Kind::CompareDirectories;
-    update.taskId    = _compareTaskId;
+    update.taskId    = _progress.compareTaskId;
     update.title     = LoadStringResource(nullptr, IDS_COMPARE_BANNER_TITLE);
     update.leftRoot  = _leftContext.rootPluginPath;
     update.rightRoot = _rightContext.rootPluginPath;
 
-    update.scanActive = _compareRunPending && (_progress.scanActiveScans > 0u || ! _compareRunSawScanProgress);
-    if (_progress.scanActiveScans > 0u)
+    update.scanActive = _compareRunPending && (_progress.banner.scanActiveScans > 0u || ! _progress.compareRunSawScanProgress);
+    if (_progress.banner.scanActiveScans > 0u)
     {
-        std::filesystem::path current = _progress.scanRelativeFolder;
-        if (! _progress.scanEntryName.empty())
+        std::filesystem::path current = _progress.banner.scanRelativeFolder;
+        if (! _progress.banner.scanEntryName.empty())
         {
-            current /= std::filesystem::path(_progress.scanEntryName);
+            current /= std::filesystem::path(_progress.banner.scanEntryName);
         }
         update.scanCurrentRelative = std::move(current);
     }
-    update.scanFolderCount         = _progress.scanFolderCount;
-    update.scanEntryCount          = _progress.scanEntryCount;
-    update.scanCandidateFileCount  = _progress.scanContentCandidateFileCount;
-    update.scanCandidateTotalBytes = static_cast<uint64_t>(_progress.scanContentCandidateTotalBytes);
-    if (update.scanActive && _scanStartTickMs != 0)
+    update.scanFolderCount         = _progress.banner.scanFolderCount;
+    update.scanEntryCount          = _progress.banner.scanEntryCount;
+    update.scanCandidateFileCount  = _progress.banner.scanContentCandidateFileCount;
+    update.scanCandidateTotalBytes = static_cast<uint64_t>(_progress.banner.scanContentCandidateTotalBytes);
+    if (update.scanActive && _progress.scanStartTickMs != 0)
     {
-        update.scanElapsedSeconds = (GetTickCount64() - _scanStartTickMs) / 1000u;
+        update.scanElapsedSeconds = (GetTickCount64() - _progress.scanStartTickMs) / 1000u;
     }
 
-    update.contentActive = _progress.contentPendingCompares > 0u;
+    update.contentActive = _progress.banner.contentPendingCompares > 0u;
     if (update.contentActive)
     {
-        std::filesystem::path current = _progress.contentRelativeFolder;
-        if (! _progress.contentEntryName.empty())
+        std::filesystem::path current = _progress.banner.contentRelativeFolder;
+        if (! _progress.banner.contentEntryName.empty())
         {
-            current /= std::filesystem::path(_progress.contentEntryName);
+            current /= std::filesystem::path(_progress.banner.contentEntryName);
         }
         update.contentCurrentRelative = std::move(current);
     }
-    update.contentCurrentTotalBytes     = static_cast<uint64_t>(_progress.contentFileTotalBytes);
-    update.contentCurrentCompletedBytes = static_cast<uint64_t>(_progress.contentFileCompletedBytes);
-    update.contentTotalBytes            = static_cast<uint64_t>(_progress.contentOverallTotalBytes);
-    update.contentCompletedBytes        = static_cast<uint64_t>(_progress.contentOverallCompletedBytes);
-    update.contentPendingCount          = _progress.contentPendingCompares;
-    update.contentCompletedCount        = _progress.contentCompletedCompares;
-    if (update.contentActive && _contentEtaSeconds.has_value())
+    update.contentCurrentTotalBytes     = static_cast<uint64_t>(_progress.banner.contentFileTotalBytes);
+    update.contentCurrentCompletedBytes = static_cast<uint64_t>(_progress.banner.contentFileCompletedBytes);
+    update.contentTotalBytes            = static_cast<uint64_t>(_progress.banner.contentOverallTotalBytes);
+    update.contentCompletedBytes        = static_cast<uint64_t>(_progress.banner.contentOverallCompletedBytes);
+    update.contentPendingCount          = _progress.banner.contentPendingCompares;
+    update.contentCompletedCount        = _progress.banner.contentCompletedCompares;
+    if (update.contentActive && _progress.contentEtaSeconds.has_value())
     {
-        update.contentEtaSeconds = _contentEtaSeconds;
+        update.contentEtaSeconds = _progress.contentEtaSeconds;
     }
 
-    for (const auto& slot : _progress.contentInFlight)
+    for (const auto& slot : _progress.banner.contentInFlight)
     {
         if (update.contentInFlightCount >= update.contentInFlight.size())
         {
@@ -1052,20 +1102,21 @@ void CompareDirectoriesWindow::UpdateCompareTaskCard(bool finished) noexcept
     update.finished = finished;
     if (finished)
     {
-        update.resultHr = _compareRunResultHr;
+        update.resultHr = _progress.compareRunResultHr;
 
-        if (_progress.contentTotalCompares > 0u)
+        if (_progress.banner.contentTotalCompares > 0u)
         {
             update.doneSummary = FormatStringResource(nullptr,
                                                       IDS_FMT_COMPARE_DONE_SUMMARY,
-                                                      _progress.scanFolderCount,
-                                                      _progress.scanEntryCount,
-                                                      _progress.contentCompletedCompares,
-                                                      _progress.contentTotalCompares);
+                                                      _progress.banner.scanFolderCount,
+                                                      _progress.banner.scanEntryCount,
+                                                      _progress.banner.contentCompletedCompares,
+                                                      _progress.banner.contentTotalCompares);
         }
         else
         {
-            update.doneSummary = FormatStringResource(nullptr, IDS_FMT_COMPARE_DONE_SUMMARY_SCAN_ONLY, _progress.scanFolderCount, _progress.scanEntryCount);
+            update.doneSummary =
+                FormatStringResource(nullptr, IDS_FMT_COMPARE_DONE_SUMMARY_SCAN_ONLY, _progress.banner.scanFolderCount, _progress.banner.scanEntryCount);
         }
     }
 
@@ -1073,11 +1124,59 @@ void CompareDirectoriesWindow::UpdateCompareTaskCard(bool finished) noexcept
     Debug::Perf::Emit(L"compare.ui.taskcard_build_us", L"", buildUs, update.contentPendingCount, update.scanEntryCount, S_OK);
 
     const SteadyClock::time_point applyStartedAt = SteadyClock::now();
-    _compareTaskId                               = _folderWindow.CreateOrUpdateInformationalTask(update);
+    _progress.compareTaskId                      = _folderWindow.CreateOrUpdateInformationalTask(update);
     const uint64_t applyUs                       = ElapsedUsSince(applyStartedAt);
-    _lastCompareTaskCardUpdateTickMs             = GetTickCount64();
+    _progress.lastTaskCardUpdateTickMs           = GetTickCount64();
     Debug::Perf::Emit(L"compare.ui.taskcard_apply_us", L"", applyUs, update.contentPendingCount, update.scanEntryCount, S_OK);
     Debug::Perf::Emit(L"compare.ui.taskcard_update_us", L"", ElapsedUsSince(startedAt), update.contentPendingCount, update.scanEntryCount, S_OK);
+}
+
+void CompareDirectoriesWindow::ScheduleCompareTaskCardTrailingFlush(ULONGLONG delayMs) noexcept
+{
+    if (! _hWnd || _progress.taskCardTrailingFlushPending)
+    {
+        return;
+    }
+
+    _progress.taskCardTrailingFlushPending = true;
+    const UINT delay                       = static_cast<UINT>(std::clamp<ULONGLONG>(delayMs, 1, std::numeric_limits<UINT>::max()));
+    bool timerActive                       = false;
+    if (TryStartCompareTimer(
+            _hWnd.get(), kCompareTaskCardTrailingFlushTimerId, delay, timerActive, L"CompareDirectories: failed to start task-card trailing flush timer."))
+    {
+        return;
+    }
+
+    _progress.taskCardTrailingFlushPending = false;
+    UpdateCompareTaskCard(false, true);
+}
+
+void CompareDirectoriesWindow::CancelCompareTaskCardTrailingFlush() noexcept
+{
+    if (! _progress.taskCardTrailingFlushPending)
+    {
+        return;
+    }
+
+    if (_hWnd)
+    {
+        KillTimer(_hWnd.get(), kCompareTaskCardTrailingFlushTimerId);
+    }
+    _progress.taskCardTrailingFlushPending = false;
+}
+
+void CompareDirectoriesWindow::OnCompareTaskCardTrailingFlushTimer() noexcept
+{
+    if (_hWnd)
+    {
+        KillTimer(_hWnd.get(), kCompareTaskCardTrailingFlushTimerId);
+    }
+    _progress.taskCardTrailingFlushPending = false;
+
+    if (_progress.compareTaskId != 0 && _compareActive && _compareRunPending)
+    {
+        UpdateCompareTaskCard(false, true);
+    }
 }
 
 void CompareDirectoriesWindow::MaybeCompleteCompareRun() noexcept
@@ -1087,21 +1186,21 @@ void CompareDirectoriesWindow::MaybeCompleteCompareRun() noexcept
         return;
     }
 
-    if (_progress.scanActiveScans != 0u || _progress.contentPendingCompares != 0u)
+    if (_progress.banner.scanActiveScans != 0u || _progress.banner.contentPendingCompares != 0u)
     {
         return;
     }
 
     // Content progress resets (e.g. SetRoots/Invalidate) can post "idle" updates before any scan begins.
     // Don't mark the run complete until we see scan progress (or the run was canceled/failed).
-    if (! _compareRunSawScanProgress && _compareRunResultHr == S_OK)
+    if (! _progress.compareRunSawScanProgress && _progress.compareRunResultHr == S_OK)
     {
         return;
     }
 
     if (_session)
     {
-        LogComparePerfStats(L"done", _session, _compareRunResultHr);
+        LogComparePerfStats(L"done", _session, _progress.compareRunResultHr);
     }
 
     _compareRunPending = false;
@@ -1115,11 +1214,11 @@ void CompareDirectoriesWindow::MaybeCompleteCompareRun() noexcept
 
     UpdateProgressControls();
 
-    if (const auto leftPath = _folderWindow.GetCurrentPath(FolderWindow::Pane::Left))
+    if (const auto leftPath = _folderWindow.GetCurrentPluginPath(FolderWindow::Pane::Left))
     {
         UpdateEmptyStateForFolder(ComparePane::Left, leftPath.value());
     }
-    if (const auto rightPath = _folderWindow.GetCurrentPath(FolderWindow::Pane::Right))
+    if (const auto rightPath = _folderWindow.GetCurrentPluginPath(FolderWindow::Pane::Right))
     {
         UpdateEmptyStateForFolder(ComparePane::Right, rightPath.value());
     }
@@ -1127,15 +1226,17 @@ void CompareDirectoriesWindow::MaybeCompleteCompareRun() noexcept
 
 void CompareDirectoriesWindow::DismissCompareTaskCard() noexcept
 {
-    if (_compareTaskId == 0)
+    CancelCompareTaskCardTrailingFlush();
+
+    if (_progress.compareTaskId == 0)
     {
-        _lastCompareTaskCardUpdateTickMs = 0;
+        _progress.lastTaskCardUpdateTickMs = 0;
         return;
     }
 
-    _folderWindow.DismissInformationalTask(_compareTaskId);
-    _compareTaskId                   = 0;
-    _lastCompareTaskCardUpdateTickMs = 0;
+    _folderWindow.DismissInformationalTask(_progress.compareTaskId);
+    _progress.compareTaskId            = 0;
+    _progress.lastTaskCardUpdateTickMs = 0;
 }
 
 } // namespace CompareDirectoriesWindowInternal

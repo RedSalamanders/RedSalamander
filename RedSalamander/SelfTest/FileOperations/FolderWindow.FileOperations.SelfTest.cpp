@@ -46,6 +46,7 @@
 #include <AclAPI.h>
 #include <TlHelp32.h>
 #include <winioctl.h>
+#include <winhttp.h>
 
 #pragma warning(push)
 #pragma warning(disable : 4625 4626 5026 5027 4514 28182) // WIL headers: deleted copy/move and unreferenced inline helpers
@@ -94,22 +95,26 @@ constexpr std::wstring_view kPluginIdOneDrivePersonal = L"builtin/file-system-on
 constexpr std::wstring_view kPluginIdOneDriveBusiness = L"builtin/file-system-onedrive-business";
 constexpr std::wstring_view kPluginIdSharePoint       = L"builtin/file-system-sharepoint";
 
-constexpr std::wstring_view kSelfTestEnvConnFtp                     = L"REDSALAMANDER_SELFTEST_CONN_FTP";
-constexpr std::wstring_view kSelfTestEnvConnSftp                    = L"REDSALAMANDER_SELFTEST_CONN_SFTP";
-constexpr std::wstring_view kSelfTestEnvConnScp                     = L"REDSALAMANDER_SELFTEST_CONN_SCP";
-constexpr std::wstring_view kSelfTestEnvConnImap                    = L"REDSALAMANDER_SELFTEST_CONN_IMAP";
-constexpr std::wstring_view kSelfTestEnvConnS3                      = L"REDSALAMANDER_SELFTEST_CONN_S3";
-constexpr std::wstring_view kSelfTestEnvConnS3Alt                   = L"REDSALAMANDER_SELFTEST_CONN_S3_ALT";
-constexpr std::wstring_view kSelfTestEnvConnOneDrivePersonal        = L"REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_PERSONAL";
-constexpr std::wstring_view kSelfTestEnvConnOneDriveBusiness        = L"REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_BUSINESS";
-constexpr std::wstring_view kSelfTestEnvConnSharePoint              = L"REDSALAMANDER_SELFTEST_CONN_SHAREPOINT";
-constexpr std::wstring_view kSelfTestEnvBandwidthThrottleWorkerMode = L"REDSALAMANDER_FILEOPS_BW_WORKER_MODE";
-constexpr std::wstring_view kSelfTestEnvForceMoveCopyFallback       = L"REDSALAMANDER_FILEOPS_FORCE_MOVE_COPY_FALLBACK";
-constexpr std::wstring_view kSelfTestEnvDeleteToctouSwapPath        = L"REDSALAMANDER_FILEOPS_DELETE_TOCTOU_SWAP_PATH";
-constexpr std::wstring_view kSelfTestEnvDeleteToctouSwapTarget      = L"REDSALAMANDER_FILEOPS_DELETE_TOCTOU_SWAP_TARGET";
-constexpr std::wstring_view kSelfTestEnvDeleteToctouSwapFired       = L"REDSALAMANDER_FILEOPS_DELETE_TOCTOU_SWAP_FIRED";
-constexpr std::wstring_view kSelfTestEnvReparseMoveSourceDeleteFailPath = L"REDSALAMANDER_FILEOPS_REPARSE_MOVE_SOURCE_DELETE_FAIL_PATH";
+constexpr std::wstring_view kSelfTestEnvConnFtp                          = L"REDSALAMANDER_SELFTEST_CONN_FTP";
+constexpr std::wstring_view kSelfTestEnvConnSftp                         = L"REDSALAMANDER_SELFTEST_CONN_SFTP";
+constexpr std::wstring_view kSelfTestEnvConnScp                          = L"REDSALAMANDER_SELFTEST_CONN_SCP";
+constexpr std::wstring_view kSelfTestEnvConnImap                         = L"REDSALAMANDER_SELFTEST_CONN_IMAP";
+constexpr std::wstring_view kSelfTestEnvConnS3                           = L"REDSALAMANDER_SELFTEST_CONN_S3";
+constexpr std::wstring_view kSelfTestEnvConnS3Alt                        = L"REDSALAMANDER_SELFTEST_CONN_S3_ALT";
+constexpr std::wstring_view kSelfTestEnvConnOneDrivePersonal             = L"REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_PERSONAL";
+constexpr std::wstring_view kSelfTestEnvConnOneDriveBusiness             = L"REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_BUSINESS";
+constexpr std::wstring_view kSelfTestEnvConnSharePoint                   = L"REDSALAMANDER_SELFTEST_CONN_SHAREPOINT";
+constexpr std::wstring_view kSelfTestEnvBandwidthThrottleWorkerMode      = L"REDSALAMANDER_FILEOPS_BW_WORKER_MODE";
+constexpr std::wstring_view kSelfTestEnvForceMoveCopyFallback            = L"REDSALAMANDER_FILEOPS_FORCE_MOVE_COPY_FALLBACK";
+constexpr std::wstring_view kSelfTestEnvDeleteToctouSwapPath             = L"REDSALAMANDER_FILEOPS_DELETE_TOCTOU_SWAP_PATH";
+constexpr std::wstring_view kSelfTestEnvDeleteToctouSwapTarget           = L"REDSALAMANDER_FILEOPS_DELETE_TOCTOU_SWAP_TARGET";
+constexpr std::wstring_view kSelfTestEnvDeleteToctouSwapFired            = L"REDSALAMANDER_FILEOPS_DELETE_TOCTOU_SWAP_FIRED";
+constexpr std::wstring_view kSelfTestEnvReparseMoveSourceDeleteFailPath  = L"REDSALAMANDER_FILEOPS_REPARSE_MOVE_SOURCE_DELETE_FAIL_PATH";
 constexpr std::wstring_view kSelfTestEnvReparseMoveSourceDeleteFailFired = L"REDSALAMANDER_FILEOPS_REPARSE_MOVE_SOURCE_DELETE_FAIL_FIRED";
+constexpr std::wstring_view kSelfTestEnvStagedCopyPromoteFailPath        = L"REDSALAMANDER_FILEOPS_STAGED_COPY_PROMOTE_FAIL_PATH";
+constexpr std::wstring_view kSelfTestEnvStagedCopyPromoteFailFired       = L"REDSALAMANDER_FILEOPS_STAGED_COPY_PROMOTE_FAIL_FIRED";
+constexpr std::wstring_view kSelfTestEnvFinalAttributesFailPath          = L"REDSALAMANDER_FILEOPS_FINAL_ATTRIBUTES_FAIL_PATH";
+constexpr std::wstring_view kSelfTestEnvFinalAttributesFailFired         = L"REDSALAMANDER_FILEOPS_FINAL_ATTRIBUTES_FAIL_FIRED";
 
 constexpr std::wstring_view kSelfTestDefaultConnFtp              = L"FileOpsSelfTest FTP";
 constexpr std::wstring_view kSelfTestDefaultConnSftp             = L"FileOpsSelfTest SFTP";
@@ -142,26 +147,28 @@ struct WatchCallback;
 
 struct CompletedTaskInfo
 {
-    HRESULT hr                           = S_OK;
-    ULONGLONG completionTick             = 0;
-    bool preCalcCompleted                = false;
-    bool earlyAdmissionTransferObserved  = false;
-    bool preCalcSkipped                  = false;
-    uint64_t preCalcTotalBytes           = 0;
-    uint64_t preCalcDurationUs           = 0;
-    unsigned int preCalcWorkerCountUsed  = 0;
-    bool started                         = false;
-    unsigned long progressTotalItems     = 0;
-    unsigned long progressCompletedItems = 0;
-    uint64_t progressCompletedBytes      = 0;
-    unsigned long completedFiles         = 0;
-    unsigned long completedFolders       = 0;
-    uint64_t conflictWaitUs              = 0;
-    uint64_t conflictConvergenceWaitUs   = 0;
-    uint64_t conflictPromptCount         = 0;
-    uint64_t bridgeDirectoryEnsureCount  = 0;
-    uint64_t bridgeFileAdmissionCount    = 0;
-    uint64_t bridgeEarlyFileStartCount   = 0;
+    HRESULT hr                            = S_OK;
+    ULONGLONG completionTick              = 0;
+    bool preCalcCompleted                 = false;
+    bool earlyAdmissionTransferObserved   = false;
+    bool preCalcSkipped                   = false;
+    uint64_t preCalcTotalBytes            = 0;
+    uint64_t preCalcDurationUs            = 0;
+    unsigned int preCalcWorkerCountUsed   = 0;
+    bool started                          = false;
+    unsigned long progressTotalItems      = 0;
+    unsigned long progressCompletedItems  = 0;
+    uint64_t progressCompletedBytes       = 0;
+    unsigned long completedFiles          = 0;
+    unsigned long completedFolders        = 0;
+    uint64_t conflictWaitUs               = 0;
+    uint64_t conflictConvergenceWaitUs    = 0;
+    uint64_t conflictPromptCount          = 0;
+    uint64_t bridgeDirectoryEnsureCount   = 0;
+    uint64_t bridgeSourceDirectoryEnumerationCount = 0;
+    bool preCalcSuppressedForHighMetadataCrossFs = false;
+    uint64_t bridgeFileAdmissionCount     = 0;
+    uint64_t bridgeEarlyFileStartCount    = 0;
     uint64_t bridgeAdmissionMaxQueueDepth = 0;
     unsigned int configuredMaxConcurrency = 0;
 };
@@ -187,6 +194,7 @@ struct SelfTestState
         FileOps_CrossVolumeMovePartialFailureStatus,
         FileOps_ReparseRetargetDestinationContainment,
         FileOps_DeleteToctouSwapGuard,
+        FileOps_ResolvedItemsExactDestinations,
         Riptide_MoveDistinctSameSizeFilePreservesSource,
         Riptide_ReparseMoveRollbackKeepsOverwrittenDestination,
         Fairstream_MoveFallbackPreservesUncopiedNewFiles,
@@ -194,6 +202,7 @@ struct SelfTestState
         Fairstream_OverwriteGrantIsOneShot,
         Fairstream_ConflictPromptsSerializedUnderParallelism,
         Fairstream_ReparseReplaceNonEmptyDirRequiresConsent,
+        Floodgate_ConflictApplyAllKeepsRiskBucketsSeparate,
         Riptide_ReparseCopyOntoEmptyRealDirRequiresConsent,
         Riptide_ReparseMoveSourceNeverUsesDirectoryMerge,
         Fairstream_MovedTreeRetargetsInternalLinks,
@@ -216,7 +225,17 @@ struct SelfTestState
         Riptide_EarlyAdmissionDisabledDoesNotStartThread,
         Riptide_LiveFinishedSnapshotCarriesDiagnostics,
         Riptide_BridgeSequentialContinueOnErrorCopiesSiblings,
+        Causeway_BridgeRejectsHostileChildNames,
+        Causeway_BridgeProviderOutputContracts,
+        Causeway_BridgeSchedulingAndResourceContracts,
+        Causeway_BridgeFileReparsePolicy,
+        Causeway_BridgeFailureStatusAndPausedReader,
+        Floodgate_CrossFsCopyGetSizeFailureRefusesCommit,
         Floodgate_CrossFsMoveGetSizeFailurePreservesSource,
+        Floodgate_CrossFsMoveCleanupDetectsDestinationCorruption,
+        Floodgate_CrossFsDirectoryMoveCleanupPreservesChangedSource,
+        Floodgate_LocalWriterOverwriteIsStaged,
+        Floodgate_LocalCopyOverwriteIsStaged,
         Riptide_SharedFileOpsSchedulerShutdownWaitsForBlockedWorker,
         Riptide_HostPerItemSchedulerShutdownWaitsForBlockedWorker,
         Phase5_PreCalcSettingsApplied,
@@ -256,7 +275,8 @@ struct SelfTestState
         Phase9_ConflictPrompt_OverwriteReplaceReadonly,
         Phase9_ConflictPrompt_ApplyToAllUiCache,
         Phase9_ConflictPrompt_OverwriteAutoCap,
-        Phase9_ConflictPrompt_SkipAll,
+        Phase9_ConflictPrompt_LocalFileOntoDirectory,
+        Phase9_ConflictPrompt_SkipApplyToAll,
         Phase9_ConflictPrompt_RetryCap,
         Phase9_ConflictPrompt_SkipContinuesDirectoryCopy,
         Phase9_PerItemConcurrency,
@@ -331,6 +351,8 @@ struct SelfTestState
 
     bool fileOperationsBackedUp = false;
     std::optional<Common::Settings::FileOperationsSettings> fileOperationsOriginal;
+    bool appThemeBackedUp = false;
+    std::optional<AppTheme> appThemeOriginal;
 
     bool connectionsBackedUp = false;
     std::optional<Common::Settings::ConnectionsSettings> connectionsOriginal;
@@ -416,6 +438,8 @@ struct SelfTestState
     ULONGLONG stepStartTick                    = 0;
     ULONGLONG markerTick                       = 0;
     ULONGLONG lastProgressLogTick              = 0;
+    unsigned long pauseResumeBaselineItems     = 0;
+    uint64_t pauseResumeBaselineBytes          = 0;
     size_t baselineThreadCount                 = 0;
     ULONGLONG localBandwidthRunStartTick       = 0;
     ULONGLONG localBandwidthCancelStartTick    = 0;
@@ -441,19 +465,19 @@ struct SelfTestState
 
     // Best graph-fairness layout values observed while the task ran (the popup can auto-close
     // at completion, so the final poll may no longer see it).
-    uint32_t fairstreamGraphMaxMultiBuckets  = 0;
-    uint32_t fairstreamGraphSingleBuckets    = 0;
-    uint32_t fairstreamGraphDistinctHues     = 0;
-    double fairstreamGraphMinShare           = 0.0;
-    double fairstreamGraphMaxShare           = 0.0;
-    size_t fairstreamGraphMaxInFlight        = 0;
-    uint32_t fairstreamGraphAccumCalls       = 0;
-    uint32_t fairstreamGraphLastPending      = 0;
-    uint32_t fairstreamGraphAccumMaxStreams  = 0;
-    bool fairstreamGraphFairnessObserved     = false;
-    size_t fairstreamSaturationDispatchMetricBaseline = 0;
+    uint32_t fairstreamGraphMaxMultiBuckets             = 0;
+    uint32_t fairstreamGraphSingleBuckets               = 0;
+    uint32_t fairstreamGraphDistinctHues                = 0;
+    double fairstreamGraphMinShare                      = 0.0;
+    double fairstreamGraphMaxShare                      = 0.0;
+    size_t fairstreamGraphMaxInFlight                   = 0;
+    uint32_t fairstreamGraphAccumCalls                  = 0;
+    uint32_t fairstreamGraphLastPending                 = 0;
+    uint32_t fairstreamGraphAccumMaxStreams             = 0;
+    bool fairstreamGraphFairnessObserved                = false;
+    size_t fairstreamSaturationDispatchMetricBaseline   = 0;
     size_t fairstreamSaturationMaxDistinctInFlightTrees = 0;
-    size_t storageClampMaxInFlight           = 0;
+    size_t storageClampMaxInFlight                      = 0;
 
     // NTFS file ids captured before a merge move; identical ids at the destination prove the
     // children were renamed, not copied (used by Fairstream_MergeMoveRenamesChildren).
@@ -536,17 +560,15 @@ std::wstring_view StepToString(SelfTestState::Step step) noexcept
         case SelfTestState::Step::FileOps_CopyMergeIntoExistingFolder: return L"FileOps_CopyMergeIntoExistingFolder";
         case SelfTestState::Step::FileOps_MoveMergeIntoExistingFolderSameVolume: return L"FileOps_MoveMergeIntoExistingFolderSameVolume";
         case SelfTestState::Step::Riptide_MoveDistinctSameSizeFilePreservesSource: return L"Riptide_MoveDistinctSameSizeFilePreservesSource";
-        case SelfTestState::Step::Riptide_ReparseMoveRollbackKeepsOverwrittenDestination:
-            return L"Riptide_ReparseMoveRollbackKeepsOverwrittenDestination";
+        case SelfTestState::Step::Riptide_ReparseMoveRollbackKeepsOverwrittenDestination: return L"Riptide_ReparseMoveRollbackKeepsOverwrittenDestination";
         case SelfTestState::Step::Fairstream_MoveFallbackPreservesUncopiedNewFiles: return L"Fairstream_MoveFallbackPreservesUncopiedNewFiles";
         case SelfTestState::Step::Fairstream_MoveMergeReadonlyDestinationFolder: return L"Fairstream_MoveMergeReadonlyDestinationFolder";
         case SelfTestState::Step::Fairstream_OverwriteGrantIsOneShot: return L"Fairstream_OverwriteGrantIsOneShot";
         case SelfTestState::Step::Fairstream_ConflictPromptsSerializedUnderParallelism: return L"Fairstream_ConflictPromptsSerializedUnderParallelism";
         case SelfTestState::Step::Fairstream_ReparseReplaceNonEmptyDirRequiresConsent: return L"Fairstream_ReparseReplaceNonEmptyDirRequiresConsent";
-        case SelfTestState::Step::Riptide_ReparseCopyOntoEmptyRealDirRequiresConsent:
-            return L"Riptide_ReparseCopyOntoEmptyRealDirRequiresConsent";
-        case SelfTestState::Step::Riptide_ReparseMoveSourceNeverUsesDirectoryMerge:
-            return L"Riptide_ReparseMoveSourceNeverUsesDirectoryMerge";
+        case SelfTestState::Step::Floodgate_ConflictApplyAllKeepsRiskBucketsSeparate: return L"Floodgate_ConflictApplyAllKeepsRiskBucketsSeparate";
+        case SelfTestState::Step::Riptide_ReparseCopyOntoEmptyRealDirRequiresConsent: return L"Riptide_ReparseCopyOntoEmptyRealDirRequiresConsent";
+        case SelfTestState::Step::Riptide_ReparseMoveSourceNeverUsesDirectoryMerge: return L"Riptide_ReparseMoveSourceNeverUsesDirectoryMerge";
         case SelfTestState::Step::Fairstream_MovedTreeRetargetsInternalLinks: return L"Fairstream_MovedTreeRetargetsInternalLinks";
         case SelfTestState::Step::Fairstream_CrossFsConcurrentMoveUsesBridge: return L"Fairstream_CrossFsConcurrentMoveUsesBridge";
         case SelfTestState::Step::Fairstream_RerunCopyIsResumeAware: return L"Fairstream_RerunCopyIsResumeAware";
@@ -558,24 +580,29 @@ std::wstring_view StepToString(SelfTestState::Step step) noexcept
         case SelfTestState::Step::Fairstream_StorageKindProbed: return L"Fairstream_StorageKindProbed";
         case SelfTestState::Step::Fairstream_ParallelDeleteContinuesPastLockedChild: return L"Fairstream_ParallelDeleteContinuesPastLockedChild";
         case SelfTestState::Step::Fairstream_BridgePerFileConflictSkips: return L"Fairstream_BridgePerFileConflictSkips";
-        case SelfTestState::Step::Riptide_BridgeNestedDirVsFileSkipContinuesSiblings:
-            return L"Riptide_BridgeNestedDirVsFileSkipContinuesSiblings";
+        case SelfTestState::Step::Riptide_BridgeNestedDirVsFileSkipContinuesSiblings: return L"Riptide_BridgeNestedDirVsFileSkipContinuesSiblings";
         case SelfTestState::Step::Riptide_BridgeDirectoryOverReadOnlyFileRequiresReplaceReadOnly:
             return L"Riptide_BridgeDirectoryOverReadOnlyFileRequiresReplaceReadOnly";
         case SelfTestState::Step::Riptide_BridgeCreateDirectoryRaceExistingFilePromptsPartial:
             return L"Riptide_BridgeCreateDirectoryRaceExistingFilePromptsPartial";
         case SelfTestState::Step::Fairstream_SaturationConcurrentCopiesMakeProgress: return L"Fairstream_SaturationConcurrentCopiesMakeProgress";
         case SelfTestState::Step::Fairstream_EarlyAdmissionOverlapsPreCalc: return L"Fairstream_EarlyAdmissionOverlapsPreCalc";
-        case SelfTestState::Step::Riptide_EarlyAdmissionThreadStartFailureFallsBack:
-            return L"Riptide_EarlyAdmissionThreadStartFailureFallsBack";
-        case SelfTestState::Step::Riptide_EarlyAdmissionDisabledDoesNotStartThread:
-            return L"Riptide_EarlyAdmissionDisabledDoesNotStartThread";
-        case SelfTestState::Step::Riptide_LiveFinishedSnapshotCarriesDiagnostics:
-            return L"Riptide_LiveFinishedSnapshotCarriesDiagnostics";
-        case SelfTestState::Step::Riptide_BridgeSequentialContinueOnErrorCopiesSiblings:
-            return L"Riptide_BridgeSequentialContinueOnErrorCopiesSiblings";
-        case SelfTestState::Step::Floodgate_CrossFsMoveGetSizeFailurePreservesSource:
-            return L"Floodgate_CrossFsMoveGetSizeFailurePreservesSource";
+        case SelfTestState::Step::Riptide_EarlyAdmissionThreadStartFailureFallsBack: return L"Riptide_EarlyAdmissionThreadStartFailureFallsBack";
+        case SelfTestState::Step::Riptide_EarlyAdmissionDisabledDoesNotStartThread: return L"Riptide_EarlyAdmissionDisabledDoesNotStartThread";
+        case SelfTestState::Step::Riptide_LiveFinishedSnapshotCarriesDiagnostics: return L"Riptide_LiveFinishedSnapshotCarriesDiagnostics";
+        case SelfTestState::Step::Riptide_BridgeSequentialContinueOnErrorCopiesSiblings: return L"Riptide_BridgeSequentialContinueOnErrorCopiesSiblings";
+        case SelfTestState::Step::Causeway_BridgeRejectsHostileChildNames: return L"Causeway_BridgeRejectsHostileChildNames";
+        case SelfTestState::Step::Causeway_BridgeProviderOutputContracts: return L"Causeway_BridgeProviderOutputContracts";
+        case SelfTestState::Step::Causeway_BridgeSchedulingAndResourceContracts: return L"Causeway_BridgeSchedulingAndResourceContracts";
+        case SelfTestState::Step::Causeway_BridgeFileReparsePolicy: return L"Causeway_BridgeFileReparsePolicy";
+        case SelfTestState::Step::Causeway_BridgeFailureStatusAndPausedReader: return L"Causeway_BridgeFailureStatusAndPausedReader";
+        case SelfTestState::Step::Floodgate_CrossFsCopyGetSizeFailureRefusesCommit: return L"Floodgate_CrossFsCopyGetSizeFailureRefusesCommit";
+        case SelfTestState::Step::Floodgate_CrossFsMoveGetSizeFailurePreservesSource: return L"Floodgate_CrossFsMoveGetSizeFailurePreservesSource";
+        case SelfTestState::Step::Floodgate_CrossFsMoveCleanupDetectsDestinationCorruption: return L"Floodgate_CrossFsMoveCleanupDetectsDestinationCorruption";
+        case SelfTestState::Step::Floodgate_CrossFsDirectoryMoveCleanupPreservesChangedSource:
+            return L"Floodgate_CrossFsDirectoryMoveCleanupPreservesChangedSource";
+        case SelfTestState::Step::Floodgate_LocalWriterOverwriteIsStaged: return L"Floodgate_LocalWriterOverwriteIsStaged";
+        case SelfTestState::Step::Floodgate_LocalCopyOverwriteIsStaged: return L"Floodgate_LocalCopyOverwriteIsStaged";
         case SelfTestState::Step::Riptide_SharedFileOpsSchedulerShutdownWaitsForBlockedWorker:
             return L"Riptide_SharedFileOpsSchedulerShutdownWaitsForBlockedWorker";
         case SelfTestState::Step::Riptide_HostPerItemSchedulerShutdownWaitsForBlockedWorker:
@@ -586,6 +613,7 @@ std::wstring_view StepToString(SelfTestState::Step step) noexcept
         case SelfTestState::Step::FileOps_CrossVolumeMovePartialFailureStatus: return L"FileOps_CrossVolumeMovePartialFailureStatus";
         case SelfTestState::Step::FileOps_ReparseRetargetDestinationContainment: return L"FileOps_ReparseRetargetDestinationContainment";
         case SelfTestState::Step::FileOps_DeleteToctouSwapGuard: return L"FileOps_DeleteToctouSwapGuard";
+        case SelfTestState::Step::FileOps_ResolvedItemsExactDestinations: return L"FileOps_ResolvedItemsExactDestinations";
         case SelfTestState::Step::Phase5_PreCalcSettingsApplied: return L"Phase5_PreCalcSettingsApplied";
         case SelfTestState::Step::Phase5_PreCalcCancelReleasesSlot: return L"Phase5_PreCalcCancelReleasesSlot";
         case SelfTestState::Step::Phase5_PreCalcCancelLatencyLocal: return L"Phase5_PreCalcCancelLatencyLocal";
@@ -623,7 +651,8 @@ std::wstring_view StepToString(SelfTestState::Step step) noexcept
         case SelfTestState::Step::Phase9_ConflictPrompt_OverwriteReplaceReadonly: return L"Phase9_ConflictPrompt_OverwriteReplaceReadonly";
         case SelfTestState::Step::Phase9_ConflictPrompt_ApplyToAllUiCache: return L"Phase9_ConflictPrompt_ApplyToAllUiCache";
         case SelfTestState::Step::Phase9_ConflictPrompt_OverwriteAutoCap: return L"Phase9_ConflictPrompt_OverwriteAutoCap";
-        case SelfTestState::Step::Phase9_ConflictPrompt_SkipAll: return L"Phase9_ConflictPrompt_SkipAll";
+        case SelfTestState::Step::Phase9_ConflictPrompt_LocalFileOntoDirectory: return L"Phase9_ConflictPrompt_LocalFileOntoDirectory";
+        case SelfTestState::Step::Phase9_ConflictPrompt_SkipApplyToAll: return L"Phase9_ConflictPrompt_SkipApplyToAll";
         case SelfTestState::Step::Phase9_ConflictPrompt_RetryCap: return L"Phase9_ConflictPrompt_RetryCap";
         case SelfTestState::Step::Phase9_ConflictPrompt_SkipContinuesDirectoryCopy: return L"Phase9_ConflictPrompt_SkipContinuesDirectoryCopy";
         case SelfTestState::Step::Phase9_PerItemConcurrency: return L"Phase9_PerItemConcurrency";
@@ -668,57 +697,73 @@ std::wstring_view StepToString(SelfTestState::Step step) noexcept
 }
 
 constexpr auto kFileOpsPhaseOrder = std::to_array<SelfTestState::Step>({
-    SelfTestState::Step::Setup,                                            // Environment setup and plugin loading
-    SelfTestState::Step::FileOps_CopyMergeIntoExistingFolder,               // Clearflow Phase 1 - copy folder into existing destination folder merges
-    SelfTestState::Step::FileOps_MoveMergeIntoExistingFolderSameVolume,     // Clearflow Phase 1 - same-volume move folder into existing destination folder merges
-    SelfTestState::Step::FileOps_ReparseDirectoryMergeIntoExistingFolder,   // Clearflow Phase 1 - directory reparse copy requires overwrite for existing dir
-    SelfTestState::Step::FileOps_ProviderCapabilityMatrix,                  // Clearflow Phase 7 - provider capability matrix and offline conformance
-    SelfTestState::Step::FileOps_ParallelGraphFairColorWeight,              // Clearflow Phase 3 - parallel graph hue weights are fair
-    SelfTestState::Step::FileOps_CrossVolumeMovePartialFailureStatus,       // Clearflow Phase 4 - partial move status is explicit
-    SelfTestState::Step::FileOps_ReparseRetargetDestinationContainment,     // Clearflow Phase 4 - copied reparse retargets remain contained
-    SelfTestState::Step::FileOps_DeleteToctouSwapGuard,                     // Clearflow Phase 4 - delete path rejects stale check/act swaps
-    SelfTestState::Step::Riptide_MoveDistinctSameSizeFilePreservesSource,   // Riptide R0-1 - same size/mtime move conflict must preserve source
+    SelfTestState::Step::Setup,                                           // Environment setup and plugin loading
+    SelfTestState::Step::FileOps_CopyMergeIntoExistingFolder,             // Clearflow Phase 1 - copy folder into existing destination folder merges
+    SelfTestState::Step::FileOps_MoveMergeIntoExistingFolderSameVolume,   // Clearflow Phase 1 - same-volume move folder into existing destination folder merges
+    SelfTestState::Step::FileOps_ReparseDirectoryMergeIntoExistingFolder, // Clearflow Phase 1 - directory reparse copy requires overwrite for existing dir
+    SelfTestState::Step::FileOps_ProviderCapabilityMatrix,                // Clearflow Phase 7 - provider capability matrix and offline conformance
+    SelfTestState::Step::FileOps_ParallelGraphFairColorWeight,            // Clearflow Phase 3 - parallel graph hue weights are fair
+    SelfTestState::Step::FileOps_CrossVolumeMovePartialFailureStatus,     // Clearflow Phase 4 - partial move status is explicit
+    SelfTestState::Step::FileOps_ReparseRetargetDestinationContainment,   // Clearflow Phase 4 - copied reparse retargets remain contained
+    SelfTestState::Step::FileOps_DeleteToctouSwapGuard,                   // Clearflow Phase 4 - delete path rejects stale check/act swaps
+    SelfTestState::Step::FileOps_ResolvedItemsExactDestinations,          // Clearflow Phase 4 - resolved compare-sync items use exact destinations
+    SelfTestState::Step::Riptide_MoveDistinctSameSizeFilePreservesSource, // Riptide R0-1 - same size/mtime move conflict must preserve source
     SelfTestState::Step::Riptide_ReparseMoveRollbackKeepsOverwrittenDestination, // Riptide R0-2 - reparse move rollback keeps pre-existing destination
-    SelfTestState::Step::Fairstream_MoveFallbackPreservesUncopiedNewFiles,  // Fairstream 1A - move fallback deletes only verified-copied entries
-    SelfTestState::Step::Fairstream_MoveMergeReadonlyDestinationFolder,     // Fairstream 2C - readonly destination folder merges without prompt
-    SelfTestState::Step::Fairstream_OverwriteGrantIsOneShot,                // Fairstream 1D - single Overwrite answer authorizes one file only
-    SelfTestState::Step::Fairstream_ConflictPromptsSerializedUnderParallelism, // Fairstream 1C - concurrent conflicts never clobber the active prompt
-    SelfTestState::Step::Fairstream_ReparseReplaceNonEmptyDirRequiresConsent,  // Fairstream 1E - non-empty dir replace needs its own answered conflict
-    SelfTestState::Step::Riptide_ReparseCopyOntoEmptyRealDirRequiresConsent,   // Riptide R2-1 - empty real dir cannot be silently converted to a junction
-    SelfTestState::Step::Riptide_ReparseMoveSourceNeverUsesDirectoryMerge,     // Riptide R2-1 - source junction never uses directory-merge rename path
-    SelfTestState::Step::Fairstream_MovedTreeRetargetsInternalLinks,           // Fairstream 1E - moved trees retarget intra-tree links
-    SelfTestState::Step::Fairstream_CrossFsConcurrentMoveUsesBridge,           // Fairstream 1B - concurrent cross-FS move uses the bridge
-    SelfTestState::Step::Fairstream_RerunCopyIsResumeAware,                    // Fairstream 2D - re-run copies skip byte-identical destinations silently
-    SelfTestState::Step::Fairstream_MoveFallbackSameSizeCollisionPrompts,      // Fairstream 2D - same-size/same-mtime collisions still prompt when bytes differ
-    SelfTestState::Step::Fairstream_GraphBandsFairUnderParallelCopy,           // Fairstream 4 - live graph history shows 4 equal bands for 4 equal streams
-    SelfTestState::Step::Fairstream_MergeMoveRenamesChildren,                  // Fairstream 5A - same-volume merge move renames children (file ids preserved)
-    SelfTestState::Step::Fairstream_JunctionMergeTargetRequiresConsent,        // Fairstream 6B - junction destination never merges silently
-    SelfTestState::Step::Fairstream_CopyIntoSelfAliasRejected,                 // Fairstream 6C - aliased copy-into-self rejected via canonical paths
-    SelfTestState::Step::Fairstream_StorageKindProbed,                         // Fairstream 5D - storage profile clamps recursive copy fan-out
-    SelfTestState::Step::Fairstream_ParallelDeleteContinuesPastLockedChild,    // Fairstream 7D - locked child does not abort a continue-on-error parallel delete
-    SelfTestState::Step::Fairstream_BridgePerFileConflictSkips,                // Fairstream 7E - cross-FS bridge raises per-file conflicts; Skip preserves the destination
-    SelfTestState::Step::Riptide_BridgeNestedDirVsFileSkipContinuesSiblings,   // Riptide R1-1 - bridge child directory-vs-file Skip continues siblings
-    SelfTestState::Step::Riptide_BridgeDirectoryOverReadOnlyFileRequiresReplaceReadOnly, // Riptide R1-1 - bridge directory-over-readonly-file honors ReplaceReadOnly
-    SelfTestState::Step::Riptide_BridgeCreateDirectoryRaceExistingFilePromptsPartial, // Riptide R1-1 - bridge CreateDirectory race re-probes existing file
-    SelfTestState::Step::Fairstream_SaturationConcurrentCopiesMakeProgress,    // Fairstream 5E - concurrent directory copies share the dynamic-job pool without stalling
-    SelfTestState::Step::Fairstream_EarlyAdmissionOverlapsPreCalc,             // Fairstream 5F - transfer overlaps pre-calc (early admission); totals reconcile
-    SelfTestState::Step::Riptide_EarlyAdmissionThreadStartFailureFallsBack,     // Riptide R1-6 - early-admission pre-calc thread start failure falls back serially
-    SelfTestState::Step::Riptide_EarlyAdmissionDisabledDoesNotStartThread,      // Riptide R1-6 - disabled pre-calc does not spawn an early-admission thread
-    SelfTestState::Step::Riptide_LiveFinishedSnapshotCarriesDiagnostics,        // Riptide R2-6 - live just-finished popup row keeps diagnostics
-    SelfTestState::Step::Riptide_BridgeSequentialContinueOnErrorCopiesSiblings, // Riptide R2-7 - sequential bridge honors continue-on-error
-    SelfTestState::Step::Floodgate_CrossFsMoveGetSizeFailurePreservesSource,    // Floodgate FG-P0-2 - MOVE preserves source when source size is unverifiable
+    SelfTestState::Step::Fairstream_MoveFallbackPreservesUncopiedNewFiles,       // Fairstream 1A - move fallback deletes only verified-copied entries
+    SelfTestState::Step::Fairstream_MoveMergeReadonlyDestinationFolder,          // Fairstream 2C - readonly destination folder merges without prompt
+    SelfTestState::Step::Fairstream_OverwriteGrantIsOneShot,                     // Fairstream 1D - single Overwrite answer authorizes one file only
+    SelfTestState::Step::Fairstream_ConflictPromptsSerializedUnderParallelism,   // Fairstream 1C - concurrent conflicts never clobber the active prompt
+    SelfTestState::Step::Fairstream_ReparseReplaceNonEmptyDirRequiresConsent,    // Fairstream 1E - non-empty dir replace needs its own answered conflict
+    SelfTestState::Step::Floodgate_ConflictApplyAllKeepsRiskBucketsSeparate,     // Floodgate FS-Track-C - apply-to-all decisions stay within one risk bucket
+    SelfTestState::Step::Riptide_ReparseCopyOntoEmptyRealDirRequiresConsent,     // Riptide R2-1 - empty real dir cannot be silently converted to a junction
+    SelfTestState::Step::Riptide_ReparseMoveSourceNeverUsesDirectoryMerge,       // Riptide R2-1 - source junction never uses directory-merge rename path
+    SelfTestState::Step::Fairstream_MovedTreeRetargetsInternalLinks,             // Fairstream 1E - moved trees retarget intra-tree links
+    SelfTestState::Step::Fairstream_CrossFsConcurrentMoveUsesBridge,             // Fairstream 1B - concurrent cross-FS move uses the bridge
+    SelfTestState::Step::Fairstream_RerunCopyIsResumeAware,                      // Fairstream 2D - re-run copies report byte-identical destinations as skipped
+    SelfTestState::Step::Fairstream_MoveFallbackSameSizeCollisionPrompts,   // Fairstream 2D - same-size/same-mtime collisions still prompt when bytes differ
+    SelfTestState::Step::Fairstream_GraphBandsFairUnderParallelCopy,        // Fairstream 4 - live graph history shows 4 equal bands for 4 equal streams
+    SelfTestState::Step::Fairstream_MergeMoveRenamesChildren,               // Fairstream 5A - same-volume merge move renames children (file ids preserved)
+    SelfTestState::Step::Fairstream_JunctionMergeTargetRequiresConsent,     // Fairstream 6B - junction destination never merges silently
+    SelfTestState::Step::Fairstream_CopyIntoSelfAliasRejected,              // Fairstream 6C - aliased copy-into-self rejected via canonical paths
+    SelfTestState::Step::Fairstream_StorageKindProbed,                      // Fairstream 5D - storage profile clamps recursive copy fan-out
+    SelfTestState::Step::Fairstream_ParallelDeleteContinuesPastLockedChild, // Fairstream 7D - locked child does not abort a continue-on-error parallel delete
+    SelfTestState::Step::Fairstream_BridgePerFileConflictSkips, // Fairstream 7E - cross-FS bridge raises per-file conflicts; Skip preserves the destination
+    SelfTestState::Step::Riptide_BridgeNestedDirVsFileSkipContinuesSiblings, // Riptide R1-1 - bridge child directory-vs-file Skip continues siblings
+    SelfTestState::Step::Riptide_BridgeDirectoryOverReadOnlyFileRequiresReplaceReadOnly, // Riptide R1-1 - bridge directory-over-readonly-file honors
+                                                                                         // ReplaceReadOnly
+    SelfTestState::Step::Riptide_BridgeCreateDirectoryRaceExistingFilePromptsPartial,    // Riptide R1-1 - bridge CreateDirectory race re-probes existing file
+    SelfTestState::Step::Fairstream_SaturationConcurrentCopiesMakeProgress, // Fairstream 5E - concurrent directory copies share the dynamic-job pool without
+                                                                            // stalling
+    SelfTestState::Step::Fairstream_EarlyAdmissionOverlapsPreCalc,          // Fairstream 5F - transfer overlaps pre-calc (early admission); totals reconcile
+    SelfTestState::Step::Riptide_EarlyAdmissionThreadStartFailureFallsBack, // Riptide R1-6 - early-admission pre-calc thread start failure falls back serially
+    SelfTestState::Step::Riptide_EarlyAdmissionDisabledDoesNotStartThread,  // Riptide R1-6 - disabled pre-calc does not spawn an early-admission thread
+    SelfTestState::Step::Riptide_LiveFinishedSnapshotCarriesDiagnostics,    // Riptide R2-6 - live just-finished popup row keeps diagnostics
+    SelfTestState::Step::Riptide_BridgeSequentialContinueOnErrorCopiesSiblings,    // Riptide R2-7 - sequential bridge honors continue-on-error
+    SelfTestState::Step::Causeway_BridgeRejectsHostileChildNames,                   // Causeway CW-1 - hostile provider names never reach path joins
+    SelfTestState::Step::Causeway_BridgeProviderOutputContracts,                    // Causeway CW-2/CW-2A/CW-T1 - reject invalid reader/writer counts and short streams
+    SelfTestState::Step::Causeway_BridgeSchedulingAndResourceContracts,             // Causeway CW-3/CW-15/CW-25/CW-26 - nested scheduling, cloud listings, error vocabulary, memory budget
+    SelfTestState::Step::Causeway_BridgeFileReparsePolicy,                          // Causeway CW-8 - file reparse entries obey Skip/CopyReparse
+    SelfTestState::Step::Causeway_BridgeFailureStatusAndPausedReader,                // Causeway CW-18/CW-24 - paused-reader shutdown and real worker HRESULT propagation
+    SelfTestState::Step::Floodgate_CrossFsCopyGetSizeFailureRefusesCommit,         // Floodgate FG-P0-2 - COPY refuses unverifiable unknown-size sources
+    SelfTestState::Step::Floodgate_CrossFsMoveGetSizeFailurePreservesSource,       // Floodgate FG-P0-2 - MOVE preserves source when source size is unverifiable
+    SelfTestState::Step::Floodgate_CrossFsMoveCleanupDetectsDestinationCorruption, // Floodgate FG-P0-4 - MOVE cleanup preserves source on destination
+                                                                                   // corruption
+    SelfTestState::Step::Floodgate_CrossFsDirectoryMoveCleanupPreservesChangedSource, // Floodgate FG-P0-4 - MOVE cleanup preserves source changes after copy
+    SelfTestState::Step::Floodgate_LocalWriterOverwriteIsStaged, // Floodgate FG-P0-3 - overwrite writer abort preserves existing destination
+    SelfTestState::Step::Floodgate_LocalCopyOverwriteIsStaged,   // Floodgate FS-Track-A - same-FS copy overwrite preserves existing destination until promote
     SelfTestState::Step::Riptide_SharedFileOpsSchedulerShutdownWaitsForBlockedWorker, // Riptide R2-9 - shared scheduler shutdown waits for active callbacks
-    SelfTestState::Step::Riptide_HostPerItemSchedulerShutdownWaitsForBlockedWorker, // Riptide R2-9 - host per-item scheduler shutdown waits for active callbacks
-    SelfTestState::Step::Phase5_PreCalcSettingsApplied,                    // Phase 5 â€” pre-calc settings apply at task creation
-    SelfTestState::Step::Phase5_PreCalcCancelReleasesSlot,                 // Phase 5 â€” pre-calc: cancel releases the queued slot
-    SelfTestState::Step::Phase5_PreCalcCancelLatencyLocal,                 // Phase 5 â€” pre-calc: local plugin observes cancel between entries
-    SelfTestState::Step::Phase5_PreCalcSkipContinues,                      // Phase 5 â€” pre-calc: skip continues to the next item
-    SelfTestState::Step::Phase5_CancelQueuedTask,                          // Phase 5 â€” canceling a queued (not-yet-running) task
-    SelfTestState::Step::Phase5_SwitchParallelToWaitDuringPreCalc,         // Phase 5 â€” mode switch parallelâ†’wait mid-pre-calc
-    SelfTestState::Step::Phase5_SwitchWaitToParallelResume,                // Phase 5 â€” mode switch waitâ†’parallel and resume
-    SelfTestState::Step::Phase6_PopupRateSmoothing,                        // Phase 6 - popup rate/ETA smoothing contract
-    SelfTestState::Step::Phase6_PopupSmokeResizeAndPause,                  // Phase 6 â€” popup resize and pause-button interaction
-    SelfTestState::Step::Phase6_DeleteBytesMeaningful,                     // Phase 6 â€” delete reports meaningful byte counts in progress
+    SelfTestState::Step::Riptide_HostPerItemSchedulerShutdownWaitsForBlockedWorker,   // Riptide R2-9 - host per-item scheduler shutdown waits for active
+                                                                                      // callbacks
+    SelfTestState::Step::Phase5_PreCalcSettingsApplied,                               // Phase 5 â€” pre-calc settings apply at task creation
+    SelfTestState::Step::Phase5_PreCalcCancelReleasesSlot,                            // Phase 5 â€” pre-calc: cancel releases the queued slot
+    SelfTestState::Step::Phase5_PreCalcCancelLatencyLocal,                            // Phase 5 â€” pre-calc: local plugin observes cancel between entries
+    SelfTestState::Step::Phase5_PreCalcSkipContinues,                                 // Phase 5 â€” pre-calc: skip continues to the next item
+    SelfTestState::Step::Phase5_CancelQueuedTask,                                     // Phase 5 â€” canceling a queued (not-yet-running) task
+    SelfTestState::Step::Phase5_SwitchParallelToWaitDuringPreCalc,                    // Phase 5 â€” mode switch parallelâ†’wait mid-pre-calc
+    SelfTestState::Step::Phase5_SwitchWaitToParallelResume,                           // Phase 5 â€” mode switch waitâ†’parallel and resume
+    SelfTestState::Step::Phase6_PopupRateSmoothing,                                   // Phase 6 - popup rate/ETA smoothing contract
+    SelfTestState::Step::Phase6_PopupSmokeResizeAndPause,                             // Phase 6 â€” popup resize and pause-button interaction
+    SelfTestState::Step::Phase6_DeleteBytesMeaningful,                                // Phase 6 â€” delete reports meaningful byte counts in progress
     SelfTestState::Step::Phase6_LocalBandwidthThrottle,                    // Phase 6 â€” local CopyFileEx bandwidth throttle duration and cancel latency
     SelfTestState::Step::Phase6_ParallelBandwidthThrottleFairness,         // Phase 6 â€” parallel throttle fairness: shared-only vs per-worker budget
     SelfTestState::Step::Phase7_WatcherChurn,                              // Phase 7 â€” directory watcher fires correctly under heavy churn
@@ -746,14 +791,15 @@ constexpr auto kFileOpsPhaseOrder = std::to_array<SelfTestState::Step>({
     SelfTestState::Step::Phase9_ConflictPrompt_OverwriteReplaceReadonly,      // Phase 9 â€” overwrite read-only via conflict prompt
     SelfTestState::Step::Phase9_ConflictPrompt_ApplyToAllUiCache,             // Phase 9 â€” apply-to-all caching in conflict prompt UI
     SelfTestState::Step::Phase9_ConflictPrompt_OverwriteAutoCap,              // Phase 9 â€” auto-cap on overwrite conflict
-    SelfTestState::Step::Phase9_ConflictPrompt_SkipAll,                       // Phase 9 â€” skip-all in conflict prompt
+    SelfTestState::Step::Phase9_ConflictPrompt_LocalFileOntoDirectory,        // Phase 9 - local file-on-directory prompt excludes Overwrite
+    SelfTestState::Step::Phase9_ConflictPrompt_SkipApplyToAll,                // Phase 9 â€” Skip + All similar conflict decision cache
     SelfTestState::Step::Phase9_ConflictPrompt_RetryCap,                      // Phase 9 â€” retry cap in conflict prompt
     SelfTestState::Step::Phase9_ConflictPrompt_SkipContinuesDirectoryCopy,    // Phase 9 â€” skip continues directory copy
     SelfTestState::Step::Phase9_PerItemConcurrency,                           // Phase 9 â€” per-item mode with concurrent operations
     SelfTestState::Step::Phase10_PermanentDelete,                             // Phase 10 â€” confirmed permanent delete
     SelfTestState::Step::Phase11_CrossFileSystemBridge,                       // Phase 11 â€” copy/move across different file-system plugins
     SelfTestState::Step::Phase11_BridgeSingleFolderParallelCopyInFlightLines, // Phase 11 â€” bridge: single-folder copy uses within-folder parallelism
-    SelfTestState::Step::Phase11_BridgeMultiFolderParallelCopyInFlightLines,  // Phase 11 â€” bridge: multi-folder copy still uses within-folder parallelism
+    SelfTestState::Step::Phase11_BridgeMultiFolderParallelCopyInFlightLines,  // Phase 11 â€” bridge: multi-folder copy keeps bounded early file admission
     SelfTestState::Step::Phase11_BridgePipelineDummyToDummyPerf,              // Phase 11 â€” bridge: pipeline overlaps dummy read/write chunk latency
     SelfTestState::Step::Phase11_ConnectionOverridePrecedence,                // Phase 11 / 8 â€” non-zero @conn override takes precedence over plugin default
     SelfTestState::Step::Phase11_ConnectionOverrideGlobalGate,                // Phase 11 â€” connection overrides apply globally across tasks
@@ -799,13 +845,14 @@ constexpr std::array<SelfTestState::Step, 1> kFileOpsFamilyClearflowPhase03{{
     SelfTestState::Step::FileOps_ParallelGraphFairColorWeight,
 }};
 
-constexpr std::array<SelfTestState::Step, 3> kFileOpsFamilyClearflowPhase04{{
+constexpr std::array<SelfTestState::Step, 4> kFileOpsFamilyClearflowPhase04{{
     SelfTestState::Step::FileOps_CrossVolumeMovePartialFailureStatus,
     SelfTestState::Step::FileOps_ReparseRetargetDestinationContainment,
     SelfTestState::Step::FileOps_DeleteToctouSwapGuard,
+    SelfTestState::Step::FileOps_ResolvedItemsExactDestinations,
 }};
 
-constexpr std::array<SelfTestState::Step, 32> kFileOpsFamilyFairstream{{
+constexpr std::array<SelfTestState::Step, 43> kFileOpsFamilyFairstream{{
     SelfTestState::Step::Riptide_MoveDistinctSameSizeFilePreservesSource,
     SelfTestState::Step::Riptide_ReparseMoveRollbackKeepsOverwrittenDestination,
     SelfTestState::Step::Fairstream_MoveFallbackPreservesUncopiedNewFiles,
@@ -813,6 +860,7 @@ constexpr std::array<SelfTestState::Step, 32> kFileOpsFamilyFairstream{{
     SelfTestState::Step::Fairstream_OverwriteGrantIsOneShot,
     SelfTestState::Step::Fairstream_ConflictPromptsSerializedUnderParallelism,
     SelfTestState::Step::Fairstream_ReparseReplaceNonEmptyDirRequiresConsent,
+    SelfTestState::Step::Floodgate_ConflictApplyAllKeepsRiskBucketsSeparate,
     SelfTestState::Step::Riptide_ReparseCopyOntoEmptyRealDirRequiresConsent,
     SelfTestState::Step::Riptide_ReparseMoveSourceNeverUsesDirectoryMerge,
     SelfTestState::Step::Fairstream_MovedTreeRetargetsInternalLinks,
@@ -835,7 +883,17 @@ constexpr std::array<SelfTestState::Step, 32> kFileOpsFamilyFairstream{{
     SelfTestState::Step::Riptide_EarlyAdmissionDisabledDoesNotStartThread,
     SelfTestState::Step::Riptide_LiveFinishedSnapshotCarriesDiagnostics,
     SelfTestState::Step::Riptide_BridgeSequentialContinueOnErrorCopiesSiblings,
+    SelfTestState::Step::Causeway_BridgeRejectsHostileChildNames,
+    SelfTestState::Step::Causeway_BridgeProviderOutputContracts,
+    SelfTestState::Step::Causeway_BridgeSchedulingAndResourceContracts,
+    SelfTestState::Step::Causeway_BridgeFileReparsePolicy,
+    SelfTestState::Step::Causeway_BridgeFailureStatusAndPausedReader,
+    SelfTestState::Step::Floodgate_CrossFsCopyGetSizeFailureRefusesCommit,
     SelfTestState::Step::Floodgate_CrossFsMoveGetSizeFailurePreservesSource,
+    SelfTestState::Step::Floodgate_CrossFsMoveCleanupDetectsDestinationCorruption,
+    SelfTestState::Step::Floodgate_CrossFsDirectoryMoveCleanupPreservesChangedSource,
+    SelfTestState::Step::Floodgate_LocalWriterOverwriteIsStaged,
+    SelfTestState::Step::Floodgate_LocalCopyOverwriteIsStaged,
     SelfTestState::Step::Riptide_SharedFileOpsSchedulerShutdownWaitsForBlockedWorker,
     SelfTestState::Step::Riptide_HostPerItemSchedulerShutdownWaitsForBlockedWorker,
 }};
@@ -893,11 +951,12 @@ constexpr std::array<SelfTestState::Step, 5> kFileOpsFamilyPhase08{{
     SelfTestState::Step::Phase8_PerItemOrchestration,
 }};
 
-constexpr std::array<SelfTestState::Step, 7> kFileOpsFamilyPhase09{{
+constexpr std::array<SelfTestState::Step, 8> kFileOpsFamilyPhase09{{
     SelfTestState::Step::Phase9_ConflictPrompt_OverwriteReplaceReadonly,
     SelfTestState::Step::Phase9_ConflictPrompt_ApplyToAllUiCache,
     SelfTestState::Step::Phase9_ConflictPrompt_OverwriteAutoCap,
-    SelfTestState::Step::Phase9_ConflictPrompt_SkipAll,
+    SelfTestState::Step::Phase9_ConflictPrompt_LocalFileOntoDirectory,
+    SelfTestState::Step::Phase9_ConflictPrompt_SkipApplyToAll,
     SelfTestState::Step::Phase9_ConflictPrompt_RetryCap,
     SelfTestState::Step::Phase9_ConflictPrompt_SkipContinuesDirectoryCopy,
     SelfTestState::Step::Phase9_PerItemConcurrency,
@@ -1099,6 +1158,19 @@ struct RunSelection
 
     if (const std::optional<SelfTestState::Step> phase = FindPhaseByName(filter); phase.has_value())
     {
+        if (phase.value() == SelfTestState::Step::Phase5_SwitchWaitToParallelResume)
+        {
+            // The resume assertion consumes the queue-paused task deliberately established by the
+            // immediately preceding transition phase. Keep exact-case retries deterministic by
+            // scheduling that setup phase explicitly instead of relying on a previous process run.
+            selection.reportedPhases = {SelfTestState::Step::Setup,
+                                        SelfTestState::Step::Phase5_SwitchParallelToWaitDuringPreCalc,
+                                        phase.value(),
+                                        SelfTestState::Step::Cleanup_RestorePluginConfig};
+            selection.activePhases   = {SelfTestState::Step::Phase5_SwitchParallelToWaitDuringPreCalc, phase.value()};
+            return selection;
+        }
+
         selection.reportedPhases = {SelfTestState::Step::Setup, phase.value(), SelfTestState::Step::Cleanup_RestorePluginConfig};
         selection.activePhases   = {phase.value()};
         return selection;
@@ -1428,11 +1500,30 @@ void PerformCleanup(SelfTestState& state) noexcept
     static_cast<void>(TakeFileOpsBridgeFailNextFileCopyAttemptsForSelfTest());
     SetFileOpsBridgeFailNextSourceGetSizeForSelfTest(0);
     static_cast<void>(TakeFileOpsBridgeFailNextSourceGetSizeAttemptsForSelfTest());
+    SetFileOpsBridgeFailNextDestinationGetSizeForSelfTest(0);
+    static_cast<void>(TakeFileOpsBridgeFailNextDestinationGetSizeAttemptsForSelfTest());
+    SetFileOpsBridgeOverReportNextReadForSelfTest(0);
+    static_cast<void>(TakeFileOpsBridgeOverReportNextReadAttemptsForSelfTest());
+    SetFileOpsBridgePrematureEofNextReadForSelfTest(0);
+    static_cast<void>(TakeFileOpsBridgePrematureEofNextReadAttemptsForSelfTest());
+    SetFileOpsBridgeUnderConsumeNextWriteForSelfTest(0);
+    static_cast<void>(TakeFileOpsBridgeUnderConsumeNextWriteAttemptsForSelfTest());
+    SetFileOpsBridgeOverReportNextWriteForSelfTest(0);
+    static_cast<void>(TakeFileOpsBridgeOverReportNextWriteAttemptsForSelfTest());
+    SetFileOpsBridgeInjectHostileChildNamesForSelfTest(false);
+    static_cast<void>(TakeFileOpsBridgeInjectHostileChildNameAttemptsForSelfTest());
+    SetFileOpsBridgeInjectFileReparseForSelfTest(0);
+    static_cast<void>(TakeFileOpsBridgeInjectFileReparseAttemptsForSelfTest());
+    SetFileOpsBridgeReparsePolicyOverrideForSelfTest(FileOpsBridgeReparsePolicyOverride::None);
     SetFileOpsPreCalcThreadStartFailureForSelfTest(false);
     static_cast<void>(TakeFileOpsPreCalcThreadStartAttemptsForSelfTest());
     SetFileOpsAutoConcurrencyOverrideForSelfTest(false, 1u, FILESYSTEM_STORAGE_UNKNOWN);
     ReleaseFileOpsPostFinishedCompletionPauseForSelfTest();
     SetFileOpsPostFinishedCompletionPauseForSelfTest(false);
+    ReleaseFileOpsBridgeMoveSourceCleanupPauseForSelfTest();
+    SetFileOpsBridgeMoveSourceCleanupPauseForSelfTest(false);
+    ReleaseFileOpsBridgeMoveManifestTakePauseForSelfTest();
+    SetFileOpsBridgeMoveManifestTakePauseForSelfTest(false);
 
     if (state.fileOps)
     {
@@ -1446,6 +1537,15 @@ void PerformCleanup(SelfTestState& state) noexcept
         AppendLog(L"PerformCleanup: restoring file-operations settings snapshot");
         g_settings.fileOperations = state.fileOperationsOriginal;
         AppendLog(L"PerformCleanup: restored file-operations settings snapshot");
+    }
+
+    if (state.appThemeBackedUp && state.folderWindow && state.appThemeOriginal.has_value())
+    {
+        AppendLog(L"PerformCleanup: restoring app theme snapshot");
+        state.folderWindow->ApplyTheme(state.appThemeOriginal.value());
+        state.appThemeOriginal.reset();
+        state.appThemeBackedUp = false;
+        AppendLog(L"PerformCleanup: restored app theme snapshot");
     }
 
     AppendLog(L"PerformCleanup: restore plugin/config state");
@@ -1544,6 +1644,10 @@ void PerformCleanup(SelfTestState& state) noexcept
     static_cast<void>(SetEnvironmentVariableW(kSelfTestEnvDeleteToctouSwapTarget.data(), nullptr));
     static_cast<void>(SetEnvironmentVariableW(kSelfTestEnvDeleteToctouSwapFired.data(), nullptr));
     static_cast<void>(SetEnvironmentVariableW(kSelfTestEnvReparseMoveSourceDeleteFailFired.data(), nullptr));
+    static_cast<void>(SetEnvironmentVariableW(kSelfTestEnvStagedCopyPromoteFailPath.data(), nullptr));
+    static_cast<void>(SetEnvironmentVariableW(kSelfTestEnvStagedCopyPromoteFailFired.data(), nullptr));
+    static_cast<void>(SetEnvironmentVariableW(kSelfTestEnvFinalAttributesFailPath.data(), nullptr));
+    static_cast<void>(SetEnvironmentVariableW(kSelfTestEnvFinalAttributesFailFired.data(), nullptr));
     AppendLog(L"PerformCleanup: restore plugin/config state done");
 
     AppendLog(L"PerformCleanup: remote cleanup");
@@ -1845,7 +1949,7 @@ struct ProviderCapabilitySnapshot
 
 [[nodiscard]] bool TryGetJsonBool(yyjson_val* object, const char* key, bool& valueOut) noexcept
 {
-    valueOut = false;
+    valueOut          = false;
     yyjson_val* value = object ? yyjson_obj_get(object, key) : nullptr;
     if (! value || ! yyjson_is_bool(value))
     {
@@ -1886,33 +1990,15 @@ struct ProviderCapabilitySnapshot
 
 [[nodiscard]] std::wstring Utf16FromUtf8ForFileOpsSelfTest(std::string_view text) noexcept
 {
-    if (text.empty() || text.size() > static_cast<size_t>((std::numeric_limits<int>::max)()))
-    {
-        return {};
-    }
-
-    const int required = ::MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0);
-    if (required <= 0)
-    {
-        return {};
-    }
-
-    std::wstring result(static_cast<size_t>(required), L'\0');
-    const int written = ::MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), result.data(), required);
-    if (written != required)
-    {
-        return {};
-    }
-
-    return result;
+    return Common::Strings::Utf16FromUtf8StrictOrEmpty(text);
 }
 
 struct PerfMetricSample
 {
     uint64_t durationUs = 0;
-    uint64_t value0 = 0;
-    uint64_t value1 = 0;
-    HRESULT hr = S_OK;
+    uint64_t value0     = 0;
+    uint64_t value1     = 0;
+    HRESULT hr          = S_OK;
 };
 
 [[nodiscard]] bool TryReadPerfMetricSamples(std::string_view metricName, std::vector<PerfMetricSample>& samplesOut) noexcept
@@ -1940,8 +2026,8 @@ struct PerfMetricSample
                 continue;
             }
 
-            std::unique_ptr<yyjson_doc, decltype(&yyjson_doc_free)> doc(
-                yyjson_read_opts(line.data(), line.size(), YYJSON_READ_ALLOW_BOM, nullptr, nullptr), &yyjson_doc_free);
+            std::unique_ptr<yyjson_doc, decltype(&yyjson_doc_free)> doc(yyjson_read_opts(line.data(), line.size(), YYJSON_READ_ALLOW_BOM, nullptr, nullptr),
+                                                                        &yyjson_doc_free);
             if (! doc)
             {
                 continue;
@@ -2166,7 +2252,7 @@ struct PerfMetricSample
             return false;
         }
 
-        const char* text = yyjson_get_str(item);
+        const char* text       = yyjson_get_str(item);
         std::wstring separator = text ? Utf16FromUtf8ForFileOpsSelfTest(std::string_view{text, yyjson_get_len(item)}) : std::wstring{};
         if (separator.size() != 1u)
         {
@@ -2298,7 +2384,7 @@ struct PerfMetricSample
     return current.has_value() && EqualsIgnoreCase(current->wstring(), expected.wstring());
 }
 
-[[nodiscard]] bool DummyWriteTextFile(IFileSystem* fs, std::wstring_view path, std::string_view contents) noexcept
+[[nodiscard]] bool DummyWriteTextFile(IFileSystem* fs, std::wstring_view path, std::string_view contents, bool allowOverwrite = false) noexcept
 {
     if (! fs || path.empty())
     {
@@ -2314,7 +2400,8 @@ struct PerfMetricSample
 
     const std::wstring pathText(path);
     wil::com_ptr<IFileWriter> writer;
-    const HRESULT hrWriter = io->CreateFileWriter(pathText.c_str(), FILESYSTEM_FLAG_NONE, writer.put());
+    const FileSystemFlags flags = allowOverwrite ? FILESYSTEM_FLAG_ALLOW_OVERWRITE : FILESYSTEM_FLAG_NONE;
+    const HRESULT hrWriter      = io->CreateFileWriter(pathText.c_str(), flags, writer.put());
     if (FAILED(hrWriter) || ! writer)
     {
         return false;
@@ -2338,7 +2425,11 @@ struct PerfMetricSample
     return path.generic_wstring();
 }
 
-[[nodiscard]] bool WriteFileBytesFsIo(const wil::com_ptr<IFileSystemIO>& io, const std::filesystem::path& path, const void* data, size_t sizeBytes) noexcept
+[[nodiscard]] bool WriteFileBytesFsIo(const wil::com_ptr<IFileSystemIO>& io,
+                                      const std::filesystem::path& path,
+                                      const void* data,
+                                      size_t sizeBytes,
+                                      bool allowOverwrite = false) noexcept
 {
     if (! io)
     {
@@ -2357,7 +2448,8 @@ struct PerfMetricSample
 
     wil::com_ptr<IFileWriter> writer;
     const std::wstring pathText = ToPluginPathText(path);
-    const HRESULT createHr      = io->CreateFileWriter(pathText.c_str(), FILESYSTEM_FLAG_NONE, writer.put());
+    const FileSystemFlags flags = allowOverwrite ? FILESYSTEM_FLAG_ALLOW_OVERWRITE : FILESYSTEM_FLAG_NONE;
+    const HRESULT createHr      = io->CreateFileWriter(pathText.c_str(), flags, writer.put());
     if (FAILED(createHr) || ! writer)
     {
         return false;
@@ -2376,9 +2468,12 @@ struct PerfMetricSample
     return SUCCEEDED(writer->Commit());
 }
 
-[[nodiscard]] bool WriteFileTextFsIo(const wil::com_ptr<IFileSystemIO>& io, const std::filesystem::path& path, std::string_view text) noexcept
+[[nodiscard]] bool WriteFileTextFsIo(const wil::com_ptr<IFileSystemIO>& io,
+                                     const std::filesystem::path& path,
+                                     std::string_view text,
+                                     bool allowOverwrite = false) noexcept
 {
-    return WriteFileBytesFsIo(io, path, text.data(), text.size());
+    return WriteFileBytesFsIo(io, path, text.data(), text.size(), allowOverwrite);
 }
 
 [[nodiscard]] bool WritePatternFileFsIo(const wil::com_ptr<IFileSystemIO>& io, const std::filesystem::path& path, uint64_t sizeBytes) noexcept
@@ -2396,8 +2491,9 @@ struct PerfMetricSample
         return false;
     }
 
-    std::array<unsigned char, 256 * 1024> buffer{};
-    for (size_t i = 0; i < buffer.size(); ++i)
+    constexpr size_t kChunkBytes = 32 * 1024;
+    std::array<unsigned char, kChunkBytes> buffer{};
+    for (size_t i = 0; i < kChunkBytes; ++i)
     {
         buffer[i] = static_cast<unsigned char>((i * 131u) ^ 0x5Au);
     }
@@ -2405,7 +2501,7 @@ struct PerfMetricSample
     uint64_t remaining = sizeBytes;
     while (remaining > 0)
     {
-        const unsigned long chunk = static_cast<unsigned long>((std::min<uint64_t>)(remaining, static_cast<uint64_t>(buffer.size())));
+        const unsigned long chunk = static_cast<unsigned long>((std::min<uint64_t>)(remaining, static_cast<uint64_t>(kChunkBytes)));
         unsigned long written     = 0;
         const HRESULT writeHr     = writer->Write(buffer.data(), chunk, &written);
         if (FAILED(writeHr) || written != chunk)
@@ -2825,6 +2921,11 @@ void SecureClearAndFreeSecret(wil::unique_cotaskmem_string& secret) noexcept
     secret.reset();
 }
 
+[[nodiscard]] bool IsHostConnectionUiUnavailableHr(HRESULT hr) noexcept
+{
+    return hr == HRESULT_FROM_WIN32(ERROR_INVALID_WINDOW_HANDLE);
+}
+
 struct PhaseCheckResult
 {
     SelfTest::SelfTestCaseResult::Status status = SelfTest::SelfTestCaseResult::Status::skipped;
@@ -2955,6 +3056,13 @@ struct ResolvedRemoteProfile
     if (FAILED(hrSecret))
     {
         SecureClearAndFreeSecret(secret);
+        if (IsHostConnectionUiUnavailableHr(hrSecret))
+        {
+            return {.status = SelfTest::SelfTestCaseResult::Status::skipped,
+                    .reason = std::format(
+                        L"{}: host connection UI unavailable for GetConnectionSecret. hr=0x{:08X}", protocolLabel, static_cast<unsigned long>(hrSecret))};
+        }
+
         return {.status = SelfTest::SelfTestCaseResult::Status::failed,
                 .reason = std::format(L"{}: GetConnectionSecret failed. hr=0x{:08X}", protocolLabel, static_cast<unsigned long>(hrSecret))};
     }
@@ -3129,8 +3237,9 @@ bool RecreateEmptyDirectory(const std::filesystem::path& path) noexcept
         return false;
     }
 
-    constexpr int kMaxAttempts = 120; // ~6s total (50ms slices) for AV/indexer churn
-    for (int attempt = 0; attempt < kMaxAttempts; ++attempt)
+    constexpr DWORD kRetryDelayMs = 50u;
+    const ULONGLONG deadline       = ::GetTickCount64() + SelfTest::ScaleTimeout(6'000u);
+    do
     {
         std::error_code ec;
         static_cast<void>(std::filesystem::remove_all(path, ec));
@@ -3139,7 +3248,7 @@ bool RecreateEmptyDirectory(const std::filesystem::path& path) noexcept
         static_cast<void>(std::filesystem::create_directories(path, ec));
         if (ec)
         {
-            ::Sleep(50);
+            ::Sleep(kRetryDelayMs);
             continue;
         }
 
@@ -3149,8 +3258,8 @@ bool RecreateEmptyDirectory(const std::filesystem::path& path) noexcept
             return true;
         }
 
-        ::Sleep(50);
-    }
+        ::Sleep(kRetryDelayMs);
+    } while (::GetTickCount64() < deadline);
 
     return false;
 }
@@ -3850,12 +3959,12 @@ bool PromptHasAction(const FolderWindow::FileOperationState::Task::ConflictPromp
     {
         const std::wstring extendedPath = MakeExtendedPathForSelfTest(inputPath);
         return wil::unique_handle(CreateFileW(extendedPath.c_str(),
-                                             GENERIC_READ,
-                                             FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                                             nullptr,
-                                             OPEN_EXISTING,
-                                             FILE_ATTRIBUTE_NORMAL,
-                                             nullptr));
+                                              GENERIC_READ,
+                                              FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                              nullptr,
+                                              OPEN_EXISTING,
+                                              FILE_ATTRIBUTE_NORMAL,
+                                              nullptr));
     };
 
     wil::unique_handle lhsFile = openForRead(lhs);
@@ -3878,9 +3987,8 @@ bool PromptHasAction(const FolderWindow::FileOperationState::Task::ConflictPromp
         size_t offset = 0;
         while (offset < bytes.size())
         {
-            const DWORD toRead = static_cast<DWORD>(
-                std::min<size_t>(bytes.size() - offset, static_cast<size_t>((std::numeric_limits<DWORD>::max)())));
-            DWORD read = 0;
+            const DWORD toRead = static_cast<DWORD>(std::min<size_t>(bytes.size() - offset, static_cast<size_t>((std::numeric_limits<DWORD>::max)())));
+            DWORD read         = 0;
             if (! ReadFile(file, bytes.data() + offset, toRead, &read, nullptr) || read == 0)
             {
                 return false;
@@ -3964,11 +4072,8 @@ bool CreateDeleteTree(const std::filesystem::path& root, int directories, int fi
     return true;
 }
 
-[[nodiscard]] bool TryFindDiagnosticLine(std::wstring_view diagnosticsText,
-                                         uint64_t taskId,
-                                         std::wstring_view category,
-                                         std::wstring& lineOut,
-                                         std::wstring_view requiredNeedle = {}) noexcept
+[[nodiscard]] bool TryFindDiagnosticLine(
+    std::wstring_view diagnosticsText, uint64_t taskId, std::wstring_view category, std::wstring& lineOut, std::wstring_view requiredNeedle = {}) noexcept
 {
     lineOut.clear();
     const std::wstring taskNeedle     = std::format(L"\"task\":{}", taskId);
@@ -3986,8 +4091,7 @@ bool CreateDeleteTree(const std::filesystem::path& root, int directories, int fi
         const size_t lineEnd              = diagnosticsText.find(L'\n', searchPos);
         const size_t contentEnd           = lineEnd == std::wstring_view::npos ? diagnosticsText.size() : lineEnd;
         const std::wstring_view candidate = diagnosticsText.substr(contentStart, contentEnd - contentStart);
-        if (candidate.find(categoryNeedle) != std::wstring_view::npos &&
-            (requiredNeedle.empty() || candidate.find(requiredNeedle) != std::wstring_view::npos))
+        if (candidate.find(categoryNeedle) != std::wstring_view::npos && (requiredNeedle.empty() || candidate.find(requiredNeedle) != std::wstring_view::npos))
         {
             lineOut.assign(candidate);
             if (! lineOut.empty() && lineOut.back() == L'\r')
@@ -4495,6 +4599,59 @@ constexpr ULONG kSymlinkRelativeFlag = 0x00000001u;
     return std::wstring(volumeGuidPath.data());
 }
 
+void PruneEmptyAlternateVolumeSandboxParents(const std::filesystem::path& sandboxRoot) noexcept
+{
+    try
+    {
+        const std::filesystem::path suiteRoot   = sandboxRoot.parent_path();
+        const std::filesystem::path scratchRoot = suiteRoot.parent_path();
+        const std::filesystem::path runRoot     = scratchRoot.parent_path();
+        const std::filesystem::path runsRoot    = runRoot.parent_path();
+
+        if (suiteRoot.empty() || scratchRoot.filename() != L"scratch" || runsRoot.filename() != L"runs")
+        {
+            return;
+        }
+
+        const auto pruneIfEmpty = [](const std::filesystem::path& path) noexcept
+        {
+            std::error_code ec;
+            if (! std::filesystem::is_directory(path, ec) || ec)
+            {
+                return false;
+            }
+
+            ec.clear();
+            if (! std::filesystem::is_empty(path, ec) || ec)
+            {
+                return false;
+            }
+
+            ec.clear();
+            return std::filesystem::remove(path, ec) && ! ec;
+        };
+
+        if (! pruneIfEmpty(suiteRoot))
+        {
+            return;
+        }
+        if (! pruneIfEmpty(scratchRoot))
+        {
+            return;
+        }
+        static_cast<void>(pruneIfEmpty(runRoot));
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::terminate();
+    }
+    catch (const std::exception&)
+    {
+        // Cleanup is best-effort at the noexcept self-test boundary; the next runner cleanup pass owns any leftover empty parents.
+        Debug::Warning(L"FileOpsSelfTest: alternate-volume TestSandbox parent pruning failed.");
+    }
+}
+
 [[nodiscard]] std::optional<std::filesystem::path> TryCreateAlternateWritableVolumeSelfTestRoot(const std::filesystem::path& referencePath,
                                                                                                 std::wstring& detail) noexcept
 {
@@ -4514,7 +4671,6 @@ constexpr ULONG kSymlinkRelativeFlag = 0x00000001u;
         return std::nullopt;
     }
 
-    const std::wstring uniqueName = L"RedSalamanderCrossVolumeSelfTest_" + NewGuidString();
     for (wchar_t drive = L'A'; drive <= L'Z'; ++drive)
     {
         const DWORD bit = 1u << static_cast<DWORD>(drive - L'A');
@@ -4538,27 +4694,30 @@ constexpr ULONG kSymlinkRelativeFlag = 0x00000001u;
             continue;
         }
 
-        const std::filesystem::path candidate = root / uniqueName;
-        std::error_code ec;
-        std::filesystem::create_directories(candidate, ec);
-        if (ec)
+        const SelfTest::TestSandbox alternateVolumeSandbox =
+            SelfTest::AcquireTestSandboxOnVolume(SelfTest::SelfTestSuite::FileOperations, L"real_cross_volume_move", root);
+        if (! alternateVolumeSandbox.IsValid())
         {
-            detail = std::format(L"create-failed-{}-{}", rootText, ec.value());
+            detail = std::format(L"test-sandbox-unavailable-{}", rootText);
             continue;
         }
 
+        const std::filesystem::path& candidate = alternateVolumeSandbox.root;
         const std::filesystem::path probe = candidate / L"probe.tmp";
         {
             std::ofstream out(probe, std::ios::binary | std::ios::trunc);
             if (! out)
             {
+                std::error_code ec;
                 std::filesystem::remove_all(candidate, ec);
+                PruneEmptyAlternateVolumeSandboxParents(candidate);
                 detail = std::format(L"probe-open-failed-{}", rootText);
                 continue;
             }
             out << "probe";
         }
 
+        std::error_code ec;
         std::filesystem::remove(probe, ec);
         return candidate;
     }
@@ -4622,10 +4781,11 @@ std::optional<std::uint64_t> StartFileOperationAndGetId(
     std::filesystem::path destinationFolder,
     FileSystemFlags flags,
     bool waitForOthers,
-    uint64_t initialSpeedLimitBytesPerSecond                      = 0,
-    FolderWindow::FileOperationState::ExecutionMode executionMode = FolderWindow::FileOperationState::ExecutionMode::BulkItems,
-    bool requireConfirmation                                      = false,
-    wil::com_ptr<IFileSystem> destinationFileSystem               = nullptr) noexcept
+    uint64_t initialSpeedLimitBytesPerSecond                           = 0,
+    FolderWindow::FileOperationState::ExecutionMode executionMode      = FolderWindow::FileOperationState::ExecutionMode::BulkItems,
+    bool requireConfirmation                                           = false,
+    wil::com_ptr<IFileSystem> destinationFileSystem                    = nullptr,
+    std::vector<FolderWindow::ResolvedFileOperationItem> resolvedItems = {}) noexcept
 {
     if (! fileOps)
     {
@@ -4656,7 +4816,9 @@ std::optional<std::uint64_t> StartFileOperationAndGetId(
                                                     initialSpeedLimitBytesPerSecond,
                                                     executionMode,
                                                     requireConfirmation,
-                                                    std::move(destinationFileSystem));
+                                                    std::move(destinationFileSystem),
+                                                    nullptr,
+                                                    std::move(resolvedItems));
     if (FAILED(hrStart))
     {
         return std::nullopt;
@@ -4828,6 +4990,8 @@ void FileOperationsSelfTest::Start(HWND mainWindow, const SelfTest::SelfTestOpti
     state.autoDismissSuccessOriginal          = false;
     state.fileOperationsBackedUp              = false;
     state.fileOperationsOriginal.reset();
+    state.appThemeBackedUp = false;
+    state.appThemeOriginal.reset();
     state.copyTaskStartTick                 = 0;
     state.localBandwidthRunStartTick        = 0;
     state.localBandwidthCancelStartTick     = 0;
@@ -4864,6 +5028,10 @@ void FileOperationsSelfTest::Start(HWND mainWindow, const SelfTest::SelfTestOpti
     state.phase14ShutdownDone.store(false, std::memory_order_release);
     ReleaseFileOpsPostFinishedCompletionPauseForSelfTest();
     SetFileOpsPostFinishedCompletionPauseForSelfTest(false);
+    ReleaseFileOpsBridgeMoveSourceCleanupPauseForSelfTest();
+    SetFileOpsBridgeMoveSourceCleanupPauseForSelfTest(false);
+    ReleaseFileOpsBridgeMoveManifestTakePauseForSelfTest();
+    SetFileOpsBridgeMoveManifestTakePauseForSelfTest(false);
     SetFileOpsBridgeFailNextFileCopiesForSelfTest(0);
     static_cast<void>(TakeFileOpsBridgeFailNextFileCopyAttemptsForSelfTest());
 
@@ -4903,6 +5071,62 @@ void FileOperationsSelfTest::Start(HWND mainWindow, const SelfTest::SelfTestOpti
     Debug::Info(L"FileOpsSelfTest: started");
 }
 
+namespace
+{
+using TickResult = std::optional<bool>;
+
+#pragma warning(push)
+#pragma warning(disable : 4061) // Each helper intentionally owns only its phase subset; unmatched steps return nullopt.
+
+[[nodiscard]] TickResult TickFairstreamPhases(SelfTestState& state) noexcept
+{
+    switch (state.step)
+    {
+#include "FolderWindow.FileOperations.SelfTest.Fairstream.cpp"
+        default: return std::nullopt;
+    }
+}
+
+[[nodiscard]] TickResult TickPhases05To06(SelfTestState& state) noexcept
+{
+    switch (state.step)
+    {
+#include "FolderWindow.FileOperations.SelfTest.Phases05_06.cpp"
+        default: return std::nullopt;
+    }
+}
+
+[[nodiscard]] TickResult TickPhases07To09(SelfTestState& state) noexcept
+{
+    switch (state.step)
+    {
+#include "FolderWindow.FileOperations.SelfTest.Phases07_09.cpp"
+        default: return std::nullopt;
+    }
+}
+
+[[nodiscard]] TickResult TickPhases10To13(SelfTestState& state) noexcept
+{
+    switch (state.step)
+    {
+#include "FolderWindow.FileOperations.SelfTest.Phases10_13.cpp"
+        default: return std::nullopt;
+    }
+}
+
+[[nodiscard]] TickResult TickPhases14To16(SelfTestState& state) noexcept
+{
+    switch (state.step)
+    {
+#include "FolderWindow.FileOperations.SelfTest.Phases14_16.cpp"
+    return std::nullopt;
+}
+
+#pragma warning(pop)
+} // namespace
+
+#pragma warning(push)
+#pragma warning(disable : 4061) // Tick dispatches all non-setup steps through the phase helpers above.
 bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
 {
     SelfTestState& state = GetState();
@@ -4914,6 +5138,34 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
     if (state.done.load(std::memory_order_acquire))
     {
         return true;
+    }
+
+    // Keep the very large phase-local test fixtures off this dispatcher frame. In Debug builds,
+    // placing every included phase in this one switch made Tick reserve roughly 780 KiB and left
+    // too little of the default 1 MiB UI-thread stack for nested popup rendering.
+    const auto dispatchPhase = [&](const auto& tickPhase) noexcept -> TickResult
+    {
+        return tickPhase(state);
+    };
+    if (const TickResult result = dispatchPhase(TickFairstreamPhases); result.has_value())
+    {
+        return result.value();
+    }
+    if (const TickResult result = dispatchPhase(TickPhases05To06); result.has_value())
+    {
+        return result.value();
+    }
+    if (const TickResult result = dispatchPhase(TickPhases07To09); result.has_value())
+    {
+        return result.value();
+    }
+    if (const TickResult result = dispatchPhase(TickPhases10To13); result.has_value())
+    {
+        return result.value();
+    }
+    if (const TickResult result = dispatchPhase(TickPhases14To16); result.has_value())
+    {
+        return result.value();
     }
 
     switch (state.step)
@@ -4957,6 +5209,11 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             state.autoDismissSuccessOriginal = state.fileOps->GetAutoDismissSuccess();
             state.fileOperationsOriginal     = g_settings.fileOperations;
             state.fileOperationsBackedUp     = true;
+            state.appThemeOriginal           = state.folderWindow->GetTheme();
+            state.appThemeBackedUp           = true;
+            AppTheme deterministicMotionTheme = state.appThemeOriginal.value();
+            deterministicMotionTheme.reducedMotionOverride = false;
+            state.folderWindow->ApplyTheme(deterministicMotionTheme);
             if (! g_settings.fileOperations.has_value())
             {
                 g_settings.fileOperations.emplace();
@@ -5036,9 +5293,7 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             AppendLog(L"Setup: original plugin/config state available");
 
             const auto buildDummySeedConfig = [](unsigned int seed) noexcept
-            {
-                return std::format(R"json({{"maxChildrenPerDirectory":128,"maxDepth":10,"seed":{},"latencyMs":5,"virtualSpeedLimit":"0"}})json", seed);
-            };
+            { return std::format(R"json({{"maxChildrenPerDirectory":128,"maxDepth":10,"seed":{},"latencyMs":5,"virtualSpeedLimit":"0"}})json", seed); };
 
             const std::array<std::wstring_view, 9> dummyDestinationFolders{L"/dest-a",
                                                                            L"/dest-b",
@@ -5205,6 +5460,11 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 const std::filesystem::path preCalcSettingsWorkerB  = state.tempRoot / L"precalc-settings-worker-b";
                 const std::filesystem::path preCalcFanOutBudget1    = state.tempRoot / L"precalc-fanout-budget1";
                 const std::filesystem::path preCalcFanOutBudget4    = state.tempRoot / L"precalc-fanout-budget4";
+                const bool needsDeleteTree                          = IsPhaseSelected(state, SelfTestState::Step::Phase6_DeleteBytesMeaningful);
+                const bool needsPreCalcSwitchTrees                  = IsPhaseSelected(state, SelfTestState::Step::Phase5_SwitchParallelToWaitDuringPreCalc) ||
+                                                                      IsPhaseSelected(state, SelfTestState::Step::Phase5_SwitchWaitToParallelResume);
+                const bool needsPreCalcCancelLatencyTree            = IsPhaseSelected(state, SelfTestState::Step::Phase5_PreCalcCancelLatencyLocal);
+                const bool needsPreCalcSettingsTrees                = IsPhaseSelected(state, SelfTestState::Step::Phase5_PreCalcSettingsApplied);
 
                 std::error_code ec;
                 if (! SeedCopyKnobSourceFiles(src))
@@ -5223,13 +5483,20 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 }
                 AppendLog(L"Setup: copy-dst created");
 
-                std::filesystem::create_directories(del, ec);
-                if (ec)
+                if (needsDeleteTree)
                 {
-                    Fail(L"Failed to create delete-tree directory.");
-                    return true;
+                    std::filesystem::create_directories(del, ec);
+                    if (ec)
+                    {
+                        Fail(L"Failed to create delete-tree directory.");
+                        return true;
+                    }
+                    AppendLog(L"Setup: delete-tree root created");
                 }
-                AppendLog(L"Setup: delete-tree root created");
+                else
+                {
+                    AppendLog(L"Setup: delete-tree skipped");
+                }
 
                 std::filesystem::create_directories(en, ec);
                 if (ec)
@@ -5249,35 +5516,59 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
 
                 // Keep this tree large enough that delete progress callbacks occur beyond the initial throttle window,
                 // so delete completedBytes > 0 is observable while the task is running.
-                if (! CreateDeleteTree(del, 10, 300, 1))
+                if (needsDeleteTree)
                 {
-                    Fail(L"Failed to create delete-tree.");
-                    return true;
+                    if (! CreateDeleteTree(del, 10, 300, 1))
+                    {
+                        Fail(L"Failed to create delete-tree.");
+                        return true;
+                    }
+                    AppendLog(L"Setup: delete-tree seeded");
                 }
-                AppendLog(L"Setup: delete-tree seeded");
 
-                if (! CreateDeleteTreeWithRetry(preA, 10, 200, 1, L"pre-calc tree A") || ! CreateDeleteTreeWithRetry(preB, 10, 200, 1, L"pre-calc tree B"))
+                if (needsPreCalcSwitchTrees)
                 {
-                    Fail(L"Failed to create pre-calc trees.");
-                    return true;
+                    if (! CreateDeleteTreeWithRetry(preA, 10, 200, 1, L"pre-calc tree A") || ! CreateDeleteTreeWithRetry(preB, 10, 200, 1, L"pre-calc tree B"))
+                    {
+                        Fail(L"Failed to create pre-calc trees.");
+                        return true;
+                    }
+                    AppendLog(L"Setup: pre-calc trees seeded");
                 }
-                AppendLog(L"Setup: pre-calc trees seeded");
+                else
+                {
+                    AppendLog(L"Setup: pre-calc trees skipped");
+                }
 
-                if (! CreateDeleteTreeWithRetry(preCalcCancelLatency, 4, 12, 1, L"pre-calc cancel latency tree"))
+                if (needsPreCalcCancelLatencyTree)
                 {
-                    Fail(L"Failed to create pre-calc cancel latency tree.");
-                    return true;
+                    if (! CreateDeleteTreeWithRetry(preCalcCancelLatency, 4, 12, 1, L"pre-calc cancel latency tree"))
+                    {
+                        Fail(L"Failed to create pre-calc cancel latency tree.");
+                        return true;
+                    }
+                    AppendLog(L"Setup: pre-calc cancel latency tree seeded");
                 }
-                AppendLog(L"Setup: pre-calc cancel latency tree seeded");
+                else
+                {
+                    AppendLog(L"Setup: pre-calc cancel latency tree skipped");
+                }
 
-                if (! CreateDeleteTreeWithRetry(preCalcSettingsDisabled, 8, 160, 1, L"pre-calc settings tree disabled") ||
-                    ! CreateDeleteTreeWithRetry(preCalcSettingsWorkerA, 8, 160, 1, L"pre-calc settings tree worker A") ||
-                    ! CreateDeleteTreeWithRetry(preCalcSettingsWorkerB, 8, 160, 1, L"pre-calc settings tree worker B"))
+                if (needsPreCalcSettingsTrees)
                 {
-                    Fail(L"Failed to create pre-calc settings trees.");
-                    return true;
+                    if (! CreateDeleteTreeWithRetry(preCalcSettingsDisabled, 8, 160, 1, L"pre-calc settings tree disabled") ||
+                        ! CreateDeleteTreeWithRetry(preCalcSettingsWorkerA, 8, 160, 1, L"pre-calc settings tree worker A") ||
+                        ! CreateDeleteTreeWithRetry(preCalcSettingsWorkerB, 8, 160, 1, L"pre-calc settings tree worker B"))
+                    {
+                        Fail(L"Failed to create pre-calc settings trees.");
+                        return true;
+                    }
+                    AppendLog(L"Setup: pre-calc settings trees seeded");
                 }
-                AppendLog(L"Setup: pre-calc settings trees seeded");
+                else
+                {
+                    AppendLog(L"Setup: pre-calc settings trees skipped");
+                }
 
                 const auto createPreCalcPerfGroup = [&](std::wstring_view prefix) noexcept
                 {
@@ -5291,20 +5582,34 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                     }
                     return true;
                 };
-                if (! createPreCalcPerfGroup(L"precalc-settings-perf4") || ! createPreCalcPerfGroup(L"precalc-settings-perf8"))
+                if (needsPreCalcSettingsTrees)
                 {
-                    Fail(L"Failed to create pre-calc perf trees.");
-                    return true;
+                    if (! createPreCalcPerfGroup(L"precalc-settings-perf4") || ! createPreCalcPerfGroup(L"precalc-settings-perf8"))
+                    {
+                        Fail(L"Failed to create pre-calc perf trees.");
+                        return true;
+                    }
+                    AppendLog(L"Setup: pre-calc perf trees seeded");
                 }
-                AppendLog(L"Setup: pre-calc perf trees seeded");
+                else
+                {
+                    AppendLog(L"Setup: pre-calc perf trees skipped");
+                }
 
-                if (! CreatePreCalcFanOutTreeWithRetry(preCalcFanOutBudget1, 8, 8, 24, 512, L"pre-calc fan-out tree worker 1") ||
-                    ! CreatePreCalcFanOutTreeWithRetry(preCalcFanOutBudget4, 8, 8, 24, 512, L"pre-calc fan-out tree worker 4"))
+                if (needsPreCalcSettingsTrees)
                 {
-                    Fail(L"Failed to create pre-calc fan-out trees.");
-                    return true;
+                    if (! CreatePreCalcFanOutTreeWithRetry(preCalcFanOutBudget1, 8, 8, 24, 512, L"pre-calc fan-out tree worker 1") ||
+                        ! CreatePreCalcFanOutTreeWithRetry(preCalcFanOutBudget4, 8, 8, 24, 512, L"pre-calc fan-out tree worker 4"))
+                    {
+                        Fail(L"Failed to create pre-calc fan-out trees.");
+                        return true;
+                    }
+                    AppendLog(L"Setup: pre-calc fan-out trees seeded");
                 }
-                AppendLog(L"Setup: pre-calc fan-out trees seeded");
+                else
+                {
+                    AppendLog(L"Setup: pre-calc fan-out trees skipped");
+                }
                 AppendLog(L"Setup: temp root ready");
             }
 
@@ -5359,9 +5664,7 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
 
             if (minShare < 0.20 || maxShare > 0.30)
             {
-                Fail(std::format(L"FileOps_ParallelGraphFairColorWeight expected each stream share near 25%, got min={:.3f}, max={:.3f}.",
-                                 minShare,
-                                 maxShare));
+                Fail(std::format(L"FileOps_ParallelGraphFairColorWeight expected each stream share near 25%, got min={:.3f}, max={:.3f}.", minShare, maxShare));
                 return true;
             }
 
@@ -5369,14 +5672,12 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             return false;
         }
 
-#include "FolderWindow.FileOperations.SelfTest.Phases05_06.cpp"
-#include "FolderWindow.FileOperations.SelfTest.Phases07_09.cpp"
-#include "FolderWindow.FileOperations.SelfTest.Phases10_13.cpp"
-#include "FolderWindow.FileOperations.SelfTest.Fairstream.cpp"
-#include "FolderWindow.FileOperations.SelfTest.Phases14_16.cpp"
-
-            return false;
+        default: break;
     }
+
+    return false;
+}
+#pragma warning(pop)
 
     void FileOperationsSelfTest::NotifyTaskCompleted(std::uint64_t taskId, HRESULT hr) noexcept
     {
@@ -5393,21 +5694,27 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
         {
             if (auto* task = state.fileOps->FindTask(taskId))
             {
-                info.preCalcCompleted          = task->_preCalcCompleted.load(std::memory_order_acquire);
+                info.preCalcCompleted               = task->_preCalcCompleted.load(std::memory_order_acquire);
                 info.earlyAdmissionTransferObserved = task->_transferStartedBeforePreCalcComplete.load(std::memory_order_acquire);
-                info.preCalcSkipped            = task->_preCalcSkipped.load(std::memory_order_acquire);
-                info.preCalcTotalBytes         = task->_preCalcTotalBytes.load(std::memory_order_acquire);
-                info.preCalcDurationUs         = task->_perf.preCalcUs.load(std::memory_order_acquire);
-                info.preCalcWorkerCountUsed    = task->_preCalcWorkerCountUsed.load(std::memory_order_acquire);
-                info.started                   = task->HasStarted();
-                info.conflictWaitUs            = task->_perf.conflictWaitUs;
-                info.conflictConvergenceWaitUs = task->_perf.conflictConvergenceWaitUs;
-                info.conflictPromptCount       = task->_perf.conflictPromptCount;
-                info.bridgeDirectoryEnsureCount  = task->_bridgeDirectoryEnsureCount.load(std::memory_order_acquire);
-                info.bridgeFileAdmissionCount    = task->_bridgeFileAdmissionCount.load(std::memory_order_acquire);
-                info.bridgeEarlyFileStartCount   = task->_bridgeFileStartedBeforeProducerDone.load(std::memory_order_acquire);
-                info.bridgeAdmissionMaxQueueDepth = task->_bridgeAdmissionMaxQueueDepth.load(std::memory_order_acquire);
-                info.configuredMaxConcurrency     = task->_perItemMaxConcurrency;
+                info.preCalcSkipped                 = task->_preCalcSkipped.load(std::memory_order_acquire);
+                info.preCalcTotalBytes              = task->_preCalcTotalBytes.load(std::memory_order_acquire);
+                info.preCalcDurationUs              = task->_perf.preCalcUs.load(std::memory_order_acquire);
+                info.preCalcWorkerCountUsed         = task->_preCalcWorkerCountUsed.load(std::memory_order_acquire);
+                info.started                        = task->HasStarted();
+                info.conflictWaitUs                 = task->_perf.conflictWaitUs;
+                info.conflictConvergenceWaitUs      = task->_perf.conflictConvergenceWaitUs;
+                info.conflictPromptCount            = task->_perf.conflictPromptCount;
+                info.bridgeDirectoryEnsureCount     = task->_bridgeDirectoryEnsureCount.load(std::memory_order_acquire);
+                info.bridgeSourceDirectoryEnumerationCount = task->_bridgeSourceDirectoryEnumerationCount.load(std::memory_order_acquire);
+                info.preCalcSuppressedForHighMetadataCrossFs = task->_preCalcSuppressedForHighMetadataCrossFs;
+                info.bridgeFileAdmissionCount       = task->_bridgeFileAdmissionCount.load(std::memory_order_acquire);
+                info.bridgeEarlyFileStartCount      = task->_bridgeFileStartedBeforeProducerDone.load(std::memory_order_acquire);
+                info.bridgeAdmissionMaxQueueDepth   = task->_bridgeAdmissionMaxQueueDepth.load(std::memory_order_acquire);
+                info.configuredMaxConcurrency       = task->_effectiveConcurrencyBudget.load(std::memory_order_acquire);
+                if (info.configuredMaxConcurrency == 0u)
+                {
+                    info.configuredMaxConcurrency = task->_perItemMaxConcurrencyBudget;
+                }
                 {
                     std::scoped_lock lock(task->_progressMutex);
                     info.progressTotalItems     = task->_progressTotalItems;
@@ -5511,4 +5818,3 @@ std::wstring_view FileOperationsSelfTest::FailureMessage() noexcept
 }
 
 #endif // ENABLE_TESTS
-

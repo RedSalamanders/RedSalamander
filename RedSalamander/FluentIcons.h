@@ -43,6 +43,7 @@ inline constexpr wchar_t kHistory           = L'\uE81C';
 inline constexpr wchar_t kFind              = L'\uE721';
 inline constexpr wchar_t kFilter            = L'\uE71C';
 inline constexpr wchar_t kCommandPrompt     = L'\uE756';
+inline constexpr wchar_t kBulletedList      = L'\uE8FD';
 
 // Fallback glyphs (standard Unicode) when Segoe Fluent Icons isn't installed.
 inline constexpr wchar_t kFallbackChevronRight = L'\u203A'; // ›
@@ -52,4 +53,5 @@ inline constexpr wchar_t kFallbackCheckMark    = L'\u2713'; // ✓
 inline constexpr wchar_t kFallbackWarning      = L'\u26A0'; // ⚠
 inline constexpr wchar_t kFallbackError        = L'\u2716'; // ✖
 inline constexpr wchar_t kFallbackSort         = L'\u21C5'; // ⇅
+inline constexpr wchar_t kFallbackBulletedList = L'\u2630'; // ☰
 } // namespace FluentIcons

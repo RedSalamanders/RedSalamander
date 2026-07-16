@@ -8,14 +8,31 @@
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "SelfTestCommon.h"
+#include "SettingsStore.h"
 
 #ifdef ENABLE_TESTS
 void DebugResetConnectionManagerConnectNavigation() noexcept;
 void DebugSetConnectionManagerConnectNavigationSuppressed(bool suppressed) noexcept;
 [[nodiscard]] bool DebugGetConnectionManagerConnectNavigation(uint8_t& outPane, std::wstring& outName) noexcept;
+
+using SessionEndSettingsWriterForSelfTest = HRESULT (*)(std::wstring_view appId, const Common::Settings::Settings& settings) noexcept;
+
+struct SessionEndSettingsDebugSnapshot
+{
+    uint32_t writerCallCount          = 0u;
+    uint32_t normalTeardownCallCount  = 0u;
+    uint64_t durationUs               = 0u;
+    HRESULT lastResult                = S_OK;
+    Common::Settings::Settings settings;
+};
+
+void DebugResetSessionEndSettingsSaveForSelfTest() noexcept;
+void DebugSetSessionEndSettingsWriterForSelfTest(SessionEndSettingsWriterForSelfTest writer) noexcept;
+[[nodiscard]] SessionEndSettingsDebugSnapshot DebugGetSessionEndSettingsSnapshotForSelfTest();
 #endif
 
 namespace CommandsSelfTest

@@ -1,5 +1,7 @@
 #include "ViewerText.h"
 
+#include "ViewerText.SafetyHelpers.h"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -18,6 +20,8 @@
 #include "ViewerText.ThemeHelpers.h"
 
 #include "Helpers.h"
+#include "UnicodeClipboard.h"
+#include "WindowSizing.h"
 
 #include "resource.h"
 
@@ -28,102 +32,18 @@ namespace
 constexpr uint64_t kMaxHexLoadBytes = 128u * 1024u * 1024u; // 128 MiB
 constexpr float kMonoFontSizeDip    = 10.0f * 96.0f / 72.0f;
 
-uint32_t StableHash32(std::wstring_view text) noexcept
-{
-    uint32_t hash = 2166136261u;
-    for (wchar_t ch : text)
-    {
-        hash ^= static_cast<uint32_t>(ch);
-        hash *= 16777619u;
-    }
-    return hash;
-}
-
-COLORREF ColorFromHSV(float hueDegrees, float saturation, float value) noexcept
-{
-    const float h = std::fmod(std::max(0.0f, hueDegrees), 360.0f);
-    const float s = std::clamp(saturation, 0.0f, 1.0f);
-    const float v = std::clamp(value, 0.0f, 1.0f);
-
-    const float c = v * s;
-    const float x = c * (1.0f - std::fabs(std::fmod(h / 60.0f, 2.0f) - 1.0f));
-    const float m = v - c;
-
-    float rf = 0.0f;
-    float gf = 0.0f;
-    float bf = 0.0f;
-
-    if (h < 60.0f)
-    {
-        rf = c;
-        gf = x;
-        bf = 0.0f;
-    }
-    else if (h < 120.0f)
-    {
-        rf = x;
-        gf = c;
-        bf = 0.0f;
-    }
-    else if (h < 180.0f)
-    {
-        rf = 0.0f;
-        gf = c;
-        bf = x;
-    }
-    else if (h < 240.0f)
-    {
-        rf = 0.0f;
-        gf = x;
-        bf = c;
-    }
-    else if (h < 300.0f)
-    {
-        rf = x;
-        gf = 0.0f;
-        bf = c;
-    }
-    else
-    {
-        rf = c;
-        gf = 0.0f;
-        bf = x;
-    }
-
-    const auto toByte = [](float v01) noexcept
-    {
-        const float scaled = std::clamp(v01 * 255.0f, 0.0f, 255.0f);
-        return static_cast<BYTE>(std::lround(scaled));
-    };
-
-    const BYTE r = toByte(rf + m);
-    const BYTE g = toByte(gf + m);
-    const BYTE b = toByte(bf + m);
-    return RGB(r, g, b);
-}
-
 COLORREF ResolveAccentColor(const ViewerTheme& theme, std::wstring_view seed) noexcept
 {
     if (theme.rainbowMode)
     {
-        const uint32_t h = StableHash32(seed);
+        const uint32_t h = StableVisualHash32Utf16V1(seed);
         const float hue  = static_cast<float>(h % 360u);
         const float sat  = theme.darkBase ? 0.70f : 0.55f;
         const float val  = theme.darkBase ? 0.95f : 0.85f;
-        return ColorFromHSV(hue, sat, val);
+        return ColorRefFromHsvClampedNegativeHueToZero(hue, sat, val);
     }
 
     return ColorRefFromArgb(theme.accentArgb);
-}
-
-float DipsFromPixels(int px, UINT dpi) noexcept
-{
-    if (dpi == 0)
-    {
-        return static_cast<float>(px);
-    }
-
-    return static_cast<float>(px) * 96.0f / static_cast<float>(dpi);
 }
 
 size_t DecimalDigits(uint64_t value) noexcept
@@ -223,9 +143,11 @@ struct HexByteColorPalette
 
 struct HexColorizedRun
 {
-    size_t start   = 0u;
-    size_t length  = 0u;
-    COLORREF color = RGB(0, 0, 0);
+    size_t start        = 0u;
+    size_t length       = 0u;
+    size_t columnStart  = 0u;
+    size_t columnLength = 0u;
+    COLORREF color      = RGB(0, 0, 0);
 };
 
 struct HexPaintMetrics
@@ -257,32 +179,10 @@ struct HexPaintMetrics
     return static_cast<HexByteColorBucket>(static_cast<uint8_t>(HexByteColorBucketIndex(HexByteColorBucket::Leading0) + static_cast<size_t>(value >> 4u)));
 }
 
-double SrgbChannelToLinear(const uint8_t value) noexcept
-{
-    const double channel = static_cast<double>(value) / 255.0;
-    if (channel <= 0.04045)
-    {
-        return channel / 12.92;
-    }
-
-    return std::pow((channel + 0.055) / 1.055, 2.4);
-}
-
-double RelativeLuminance(COLORREF color) noexcept
-{
-    const double r = SrgbChannelToLinear(GetRValue(color));
-    const double g = SrgbChannelToLinear(GetGValue(color));
-    const double b = SrgbChannelToLinear(GetBValue(color));
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-}
-
 double ContrastRatio(COLORREF first, COLORREF second) noexcept
 {
-    const double firstLuma  = RelativeLuminance(first);
-    const double secondLuma = RelativeLuminance(second);
-    const double lighter    = std::max(firstLuma, secondLuma);
-    const double darker     = std::min(firstLuma, secondLuma);
-    return (lighter + 0.05) / (darker + 0.05);
+    return Common::Colors::ContrastRatioFromRelativeLuminance(Common::Colors::RelativeLuminanceFromColorRef(first),
+                                                               Common::Colors::RelativeLuminanceFromColorRef(second));
 }
 
 COLORREF ResolveReadableTextColor(COLORREF preferred, COLORREF background) noexcept
@@ -311,22 +211,27 @@ HexByteColorPalette BuildHexByteColorPalette(const ViewerTheme* theme, COLORREF 
     for (size_t nibble = 0; nibble < 16u; ++nibble)
     {
         const float hue                                                                = std::fmod(hueBias + static_cast<float>(nibble) * hueStep, 360.0f);
-        palette.colors[HexByteColorBucketIndex(HexByteColorBucket::Leading0) + nibble] = ColorFromHSV(hue, saturation, value);
+        palette.colors[HexByteColorBucketIndex(HexByteColorBucket::Leading0) + nibble] = ColorRefFromHsvClampedNegativeHueToZero(hue, saturation, value);
     }
 
     palette.colors[HexByteColorBucketIndex(HexByteColorBucket::Zero)] =
-        darkMode ? BlendColor(background, foreground, 96u) : BlendColor(background, foreground, 132u);
+        darkMode ? BlendColorRefTruncate(background, foreground, 96u) : BlendColorRefTruncate(background, foreground, 132u);
 
-    const COLORREF ffAccent = ColorFromHSV(355.0f, std::clamp(saturation + (rainbowMode ? 0.12f : 0.18f), 0.0f, 1.0f), darkMode ? 1.0f : 0.68f);
+    const COLORREF ffAccent = ColorRefFromHsvClampedNegativeHueToZero(355.0f, std::clamp(saturation + (rainbowMode ? 0.12f : 0.18f), 0.0f, 1.0f), darkMode ? 1.0f : 0.68f);
     palette.colors[HexByteColorBucketIndex(HexByteColorBucket::FF)] =
-        BlendColor(palette.colors[HexByteColorBucketIndex(HexByteColorBucket::LeadingF)], ffAccent, darkMode ? 200u : 220u);
+        BlendColorRefTruncate(palette.colors[HexByteColorBucketIndex(HexByteColorBucket::LeadingF)], ffAccent, darkMode ? 200u : 220u);
 
     return palette;
 }
 
-void AppendColorizedRun(std::vector<HexColorizedRun>& runs, size_t start, size_t length, COLORREF color)
+void AppendColorizedRun(std::vector<HexColorizedRun>& runs,
+                        size_t start,
+                        size_t length,
+                        size_t columnStart,
+                        size_t columnLength,
+                        COLORREF color)
 {
-    if (length == 0u)
+    if (length == 0u || columnLength == 0u)
     {
         return;
     }
@@ -334,14 +239,15 @@ void AppendColorizedRun(std::vector<HexColorizedRun>& runs, size_t start, size_t
     if (! runs.empty())
     {
         HexColorizedRun& last = runs.back();
-        if (last.color == color && start == (last.start + last.length))
+        if (last.color == color && start == (last.start + last.length) && columnStart == (last.columnStart + last.columnLength))
         {
             last.length += length;
+            last.columnLength += columnLength;
             return;
         }
     }
 
-    runs.push_back(HexColorizedRun{start, length, color});
+    runs.push_back(HexColorizedRun{start, length, columnStart, columnLength, color});
 }
 
 void DrawColorizedRuns(ID2D1HwndRenderTarget* target,
@@ -367,8 +273,8 @@ void DrawColorizedRuns(ID2D1HwndRenderTarget* target,
         }
 
         const size_t runLength = std::min(run.length, source.size() - run.start);
-        const float left       = columnStart + static_cast<float>(run.start) * charWidth;
-        const float right      = left + static_cast<float>(runLength) * charWidth;
+        const float left       = columnStart + static_cast<float>(run.columnStart) * charWidth;
+        const float right      = left + static_cast<float>(run.columnLength) * charWidth;
         const D2D1_RECT_F rect = D2D1::RectF(left, top, std::max(left, right), bottom);
 
         brush->SetColor(ColorFFromColorRef(run.color));
@@ -404,44 +310,6 @@ std::wstring CsvEscape(std::wstring_view value)
     }
     out.push_back(L'"');
     return out;
-}
-
-bool CopyUnicodeTextToClipboard(HWND hwnd, const std::wstring& text) noexcept
-{
-    if (! OpenClipboard(hwnd))
-    {
-        return false;
-    }
-
-    auto closeClipboard = wil::scope_exit([&] { CloseClipboard(); });
-    if (EmptyClipboard() == 0)
-    {
-        return false;
-    }
-
-    const size_t bytes = (text.size() + 1) * sizeof(wchar_t);
-    wil::unique_hglobal storage(GlobalAlloc(GMEM_MOVEABLE, bytes));
-    if (! storage)
-    {
-        return false;
-    }
-
-    void* buffer = GlobalLock(storage.get());
-    if (! buffer)
-    {
-        return false;
-    }
-
-    memcpy(buffer, text.c_str(), bytes);
-    GlobalUnlock(storage.get());
-
-    if (SetClipboardData(CF_UNICODETEXT, storage.get()) == nullptr)
-    {
-        return false;
-    }
-
-    storage.release();
-    return true;
 }
 
 std::optional<uint64_t> FindHexNeedleForwardInMemory(const std::vector<uint8_t>& hay, uint64_t startOffset, const std::vector<uint8_t>& needle) noexcept
@@ -532,8 +400,7 @@ std::optional<uint64_t> FindHexNeedleForward(
         return std::nullopt;
     }
 
-    uint64_t newPos      = 0;
-    const HRESULT seekHr = reader->Seek(static_cast<__int64>(startOffset), FILE_BEGIN, &newPos);
+    const HRESULT seekHr = ViewerTextSafety::SeekExact(reader, startOffset);
     if (FAILED(seekHr))
     {
         return std::nullopt;
@@ -548,7 +415,7 @@ std::optional<uint64_t> FindHexNeedleForward(
         const unsigned long toRead = static_cast<unsigned long>(std::min<uint64_t>(remaining, static_cast<uint64_t>(chunkBytes)));
 
         unsigned long bytesRead = 0;
-        const HRESULT readHr    = reader->Read(buffer.data() + carry, toRead, &bytesRead);
+        const HRESULT readHr    = ViewerTextSafety::ReadBounded(reader, buffer.data() + carry, toRead, bytesRead);
         if (FAILED(readHr) || bytesRead == 0)
         {
             return std::nullopt;
@@ -637,8 +504,7 @@ std::optional<uint64_t> FindHexNeedleBackward(
             return std::nullopt;
         }
 
-        uint64_t newPos      = 0;
-        const HRESULT seekHr = reader->Seek(static_cast<__int64>(blockStart), FILE_BEGIN, &newPos);
+        const HRESULT seekHr = ViewerTextSafety::SeekExact(reader, blockStart);
         if (FAILED(seekHr))
         {
             return std::nullopt;
@@ -646,8 +512,8 @@ std::optional<uint64_t> FindHexNeedleBackward(
 
         const unsigned long toRead = static_cast<unsigned long>(bytesToRead64);
         unsigned long bytesRead    = 0;
-        const HRESULT readHr       = reader->Read(buffer.data(), toRead, &bytesRead);
-        if (FAILED(readHr) || bytesRead == 0)
+        const HRESULT readHr       = ViewerTextSafety::ReadBounded(reader, buffer.data(), toRead, bytesRead);
+        if (FAILED(readHr) || bytesRead != toRead)
         {
             return std::nullopt;
         }
@@ -730,8 +596,8 @@ LRESULT ViewerText::OnHexViewPaint(HWND hwnd) noexcept
             RECT rc{};
             GetClientRect(hwnd, &rc);
 
-            const float widthDip  = DipsFromPixels(static_cast<int>(rc.right - rc.left), dpi);
-            const float heightDip = DipsFromPixels(static_cast<int>(rc.bottom - rc.top), dpi);
+            const float widthDip  = Common::WindowSizing::PixelToDip(static_cast<float>(rc.right - rc.left), static_cast<float>(dpi));
+            const float heightDip = Common::WindowSizing::PixelToDip(static_cast<float>(rc.bottom - rc.top), static_cast<float>(dpi));
             const float charW     = (_hexCharWidthDip > 0.0f) ? _hexCharWidthDip : 8.0f;
             const float lineH     = (_hexLineHeightDip > 0.0f) ? _hexLineHeightDip : 14.0f;
 
@@ -754,20 +620,20 @@ LRESULT ViewerText::OnHexViewPaint(HWND hwnd) noexcept
 
             if (_hasTheme && _theme.rainbowMode)
             {
-                const uint32_t h = StableHash32(seed);
+                const uint32_t h = StableVisualHash32Utf16V1(seed);
                 const float hue  = static_cast<float>(h % 360u);
                 const float sat  = _theme.darkBase ? 0.70f : 0.55f;
                 const float val  = _theme.darkBase ? 0.95f : 0.85f;
 
-                offsetAccent = ColorFromHSV(hue, sat, val);
-                dataAccent   = ColorFromHSV(hue + 120.0f, sat, val);
-                textAccent   = ColorFromHSV(hue + 240.0f, sat, val);
+                offsetAccent = ColorRefFromHsvClampedNegativeHueToZero(hue, sat, val);
+                dataAccent   = ColorRefFromHsvClampedNegativeHueToZero(hue + 120.0f, sat, val);
+                textAccent   = ColorRefFromHsvClampedNegativeHueToZero(hue + 240.0f, sat, val);
             }
 
             if (_hexViewFormat && lineH > 0.0f)
             {
                 const uint8_t alpha     = (_hasTheme && _theme.darkMode) ? 22u : 16u;
-                const COLORREF headerBg = BlendColor(bg, accent, alpha);
+                const COLORREF headerBg = BlendColorRefTruncate(bg, accent, alpha);
                 _hexViewBrush->SetColor(ColorFFromColorRef(headerBg));
 
                 const D2D1_RECT_F headerRc = D2D1::RectF(0.0f, headerY, widthDip, headerY + headerH);
@@ -786,7 +652,7 @@ LRESULT ViewerText::OnHexViewPaint(HWND hwnd) noexcept
                         default: break;
                     }
 
-                    const COLORREF hoverBg = BlendColor(bg, hoverAccent, hoverAlpha);
+                    const COLORREF hoverBg = BlendColorRefTruncate(bg, hoverAccent, hoverAlpha);
                     _hexViewBrush->SetColor(ColorFFromColorRef(hoverBg));
 
                     D2D1_RECT_F hotRc = headerRc;
@@ -884,7 +750,7 @@ LRESULT ViewerText::OnHexViewPaint(HWND hwnd) noexcept
                     const float offsetBarRight = std::min(widthDip, xHex);
                     if (offsetBarRight > offsetBarLeft)
                     {
-                        _hexViewBrush->SetColor(ColorFFromColorRef(BlendColor(bg, offsetAccent, barAlpha)));
+                        _hexViewBrush->SetColor(ColorFFromColorRef(BlendColorRefTruncate(bg, offsetAccent, barAlpha)));
                         _hexViewTarget->FillRectangle(D2D1::RectF(offsetBarLeft, barTop, offsetBarRight, barBottom), _hexViewBrush.get());
                     }
 
@@ -892,19 +758,19 @@ LRESULT ViewerText::OnHexViewPaint(HWND hwnd) noexcept
                     const float dataBarRight = std::min(widthDip, xText);
                     if (dataBarRight > dataBarLeft)
                     {
-                        _hexViewBrush->SetColor(ColorFFromColorRef(BlendColor(bg, dataAccent, barAlpha)));
+                        _hexViewBrush->SetColor(ColorFFromColorRef(BlendColorRefTruncate(bg, dataAccent, barAlpha)));
                         _hexViewTarget->FillRectangle(D2D1::RectF(dataBarLeft, barTop, dataBarRight, barBottom), _hexViewBrush.get());
                     }
 
                     const float textBarLeft = std::min(xText, widthDip);
                     if (widthDip > textBarLeft)
                     {
-                        _hexViewBrush->SetColor(ColorFFromColorRef(BlendColor(bg, textAccent, barAlpha)));
+                        _hexViewBrush->SetColor(ColorFFromColorRef(BlendColorRefTruncate(bg, textAccent, barAlpha)));
                         _hexViewTarget->FillRectangle(D2D1::RectF(textBarLeft, barTop, widthDip, barBottom), _hexViewBrush.get());
                     }
                 }
 
-                const COLORREF divider = BlendColor(bg, fg, (_hasTheme && _theme.darkMode) ? 40u : 20u);
+                const COLORREF divider = BlendColorRefTruncate(bg, fg, (_hasTheme && _theme.darkMode) ? 40u : 20u);
                 _hexViewBrush->SetColor(ColorFFromColorRef(divider));
                 const D2D1_POINT_2F p0 = D2D1::Point2F(0.0f, headerY + headerH);
                 const D2D1_POINT_2F p1 = D2D1::Point2F(widthDip, headerY + headerH);
@@ -975,13 +841,23 @@ LRESULT ViewerText::OnHexViewPaint(HWND hwnd) noexcept
                                 const COLORREF searchAccent =
                                     (_hasTheme && ! _theme.highContrast) ? ResolveAccentColor(_theme, L"search") : GetSysColor(COLOR_HIGHLIGHT);
                                 const uint8_t alpha = (_hasTheme && _theme.darkMode) ? 60u : 40u;
-                                searchBg            = BlendColor(bg, searchAccent, alpha);
+                                searchBg            = BlendColorRefTruncate(bg, searchAccent, alpha);
 
                                 searchMask.assign(visibleBytes, 0u);
 
                                 if (! _hexBytes.empty() && searchMaskStartOffset < static_cast<uint64_t>(_hexBytes.size()))
                                 {
                                     searchBytesPtr = _hexBytes.data() + static_cast<size_t>(searchMaskStartOffset);
+
+                                    // visibleBytes (and thus searchMask) is derived from _fileSize, but _hexBytes
+                                    // may be shorter than _fileSize after a short read (see LoadHexData). Clamp the
+                                    // scan window to the bytes actually present so the memcmp scan below never reads
+                                    // past the end of _hexBytes.
+                                    const size_t availableInMemory = _hexBytes.size() - static_cast<size_t>(searchMaskStartOffset);
+                                    if (availableInMemory < searchMask.size())
+                                    {
+                                        searchMask.resize(availableInMemory);
+                                    }
                                 }
                                 else
                                 {
@@ -1067,7 +943,7 @@ LRESULT ViewerText::OnHexViewPaint(HWND hwnd) noexcept
 
                     if (highlightRow)
                     {
-                        rowBg = BlendColor(bg, accent, 40u);
+                        rowBg = BlendColorRefTruncate(bg, accent, 40u);
                         _hexViewBrush->SetColor(ColorFFromColorRef(rowBg));
                         _hexViewTarget->FillRectangle(rowRc, _hexViewBrush.get());
                     }
@@ -1100,19 +976,19 @@ LRESULT ViewerText::OnHexViewPaint(HWND hwnd) noexcept
                                 }
 
                                 const ByteSpan hexSpan = hexSpans[byteIndex];
-                                if (hexSpan.length > 0)
+                                if (hexSpan.columnLength > 0u)
                                 {
-                                    const float hlX        = xHex + static_cast<float>(hexSpan.start) * charW;
-                                    const float hlW        = static_cast<float>(hexSpan.length) * charW;
+                                    const float hlX        = xHex + static_cast<float>(hexSpan.columnStart) * charW;
+                                    const float hlW        = static_cast<float>(hexSpan.columnLength) * charW;
                                     const D2D1_RECT_F hlRc = D2D1::RectF(hlX, y, hlX + hlW, lineBottom);
                                     _hexViewTarget->FillRectangle(hlRc, _hexViewBrush.get());
                                 }
 
                                 const ByteSpan textSpan = textSpans[byteIndex];
-                                if (textSpan.length > 0)
+                                if (textSpan.columnLength > 0u)
                                 {
-                                    const float hlX        = xText + static_cast<float>(textSpan.start) * charW;
-                                    const float hlW        = static_cast<float>(textSpan.length) * charW;
+                                    const float hlX        = xText + static_cast<float>(textSpan.columnStart) * charW;
+                                    const float hlW        = static_cast<float>(textSpan.columnLength) * charW;
                                     const D2D1_RECT_F hlRc = D2D1::RectF(hlX, y, hlX + hlW, lineBottom);
                                     _hexViewTarget->FillRectangle(hlRc, _hexViewBrush.get());
                                 }
@@ -1131,23 +1007,23 @@ LRESULT ViewerText::OnHexViewPaint(HWND hwnd) noexcept
                             }
 
                             const uint8_t alpha = (selected == activeOffset) ? (focusSearchSelection ? 180u : 120u) : (focusSearchSelection ? 120u : 90u);
-                            const COLORREF hlBg = BlendColor(bg, accent, alpha);
+                            const COLORREF hlBg = BlendColorRefTruncate(bg, accent, alpha);
                             _hexViewBrush->SetColor(ColorFFromColorRef(hlBg));
 
                             const ByteSpan hexSpan = hexSpans[byteIndex];
-                            if (hexSpan.length > 0)
+                            if (hexSpan.columnLength > 0u)
                             {
-                                const float hlX        = xHex + static_cast<float>(hexSpan.start) * charW;
-                                const float hlW        = static_cast<float>(hexSpan.length) * charW;
+                                const float hlX        = xHex + static_cast<float>(hexSpan.columnStart) * charW;
+                                const float hlW        = static_cast<float>(hexSpan.columnLength) * charW;
                                 const D2D1_RECT_F hlRc = D2D1::RectF(hlX, y, hlX + hlW, lineBottom);
                                 _hexViewTarget->FillRectangle(hlRc, _hexViewBrush.get());
                             }
 
                             const ByteSpan textSpan = textSpans[byteIndex];
-                            if (textSpan.length > 0)
+                            if (textSpan.columnLength > 0u)
                             {
-                                const float hlX        = xText + static_cast<float>(textSpan.start) * charW;
-                                const float hlW        = static_cast<float>(textSpan.length) * charW;
+                                const float hlX        = xText + static_cast<float>(textSpan.columnStart) * charW;
+                                const float hlW        = static_cast<float>(textSpan.columnLength) * charW;
                                 const D2D1_RECT_F hlRc = D2D1::RectF(hlX, y, hlX + hlW, lineBottom);
                                 _hexViewTarget->FillRectangle(hlRc, _hexViewBrush.get());
                             }
@@ -1190,7 +1066,7 @@ LRESULT ViewerText::OnHexViewPaint(HWND hwnd) noexcept
                                 {
                                     const uint8_t alpha =
                                         (selectedOffset == activeOffset) ? (focusSearchSelection ? 180u : 120u) : (focusSearchSelection ? 120u : 90u);
-                                    effectiveBackground = BlendColor(bg, accent, alpha);
+                                    effectiveBackground = BlendColorRefTruncate(bg, accent, alpha);
                                 }
                             }
 
@@ -1200,11 +1076,13 @@ LRESULT ViewerText::OnHexViewPaint(HWND hwnd) noexcept
 
                             if (hexSpan.length > 0)
                             {
-                                AppendColorizedRun(hexColorRuns, hexSpan.start, hexSpan.length, byteForeground);
+                                AppendColorizedRun(
+                                    hexColorRuns, hexSpan.start, hexSpan.length, hexSpan.columnStart, hexSpan.columnLength, byteForeground);
                             }
                             if (textSpan.length > 0 && ! asciiText.empty())
                             {
-                                AppendColorizedRun(textColorRuns, textSpan.start, textSpan.length, byteForeground);
+                                AppendColorizedRun(
+                                    textColorRuns, textSpan.start, textSpan.length, textSpan.columnStart, textSpan.columnLength, byteForeground);
                             }
 
                             paintMetrics.colorizedBytes += 1u;
@@ -1284,7 +1162,7 @@ LRESULT ViewerText::OnHexViewSize(HWND hwnd, UINT32 width, UINT32 height) noexce
 
 LRESULT ViewerText::OnHexViewVScroll(HWND hwnd, UINT scrollCode) noexcept
 {
-    const uint64_t totalLines = (_fileSize + (kHexBytesPerLine - 1)) / kHexBytesPerLine;
+    const uint64_t totalLines = (_fileSize / kHexBytesPerLine) + ((_fileSize % kHexBytesPerLine) != 0u ? 1u : 0u);
     if (totalLines == 0)
     {
         return 0;
@@ -1379,7 +1257,7 @@ LRESULT ViewerText::OnHexViewMouseWheel(HWND hwnd, int delta) noexcept
     const int stepLines   = notchCount * scrollLines;
     const int signedLines = (delta > 0) ? -stepLines : stepLines;
 
-    const uint64_t totalLines = (_fileSize + (kHexBytesPerLine - 1)) / kHexBytesPerLine;
+    const uint64_t totalLines = (_fileSize / kHexBytesPerLine) + ((_fileSize % kHexBytesPerLine) != 0u ? 1u : 0u);
     const uint64_t maxLine    = totalLines > 0 ? (totalLines - 1) : 0;
 
     int64_t nextTop = static_cast<int64_t>(_hexTopLine) + static_cast<int64_t>(signedLines);
@@ -1668,13 +1546,14 @@ void ViewerText::UpdateHexViewScrollBars(HWND hwnd) noexcept
         return;
     }
 
-    const uint64_t totalLines = (_fileSize + (kHexBytesPerLine - 1)) / kHexBytesPerLine;
+    const uint64_t totalLines = (_fileSize / kHexBytesPerLine) + ((_fileSize % kHexBytesPerLine) != 0u ? 1u : 0u);
     const uint64_t maxLine    = totalLines > 0 ? (totalLines - 1) : 0;
 
     RECT client{};
     GetClientRect(hwnd, &client);
     const UINT dpi             = GetDpiForWindow(hwnd);
-    const float heightDip      = std::max(1.0f, DipsFromPixels(static_cast<int>(client.bottom - client.top), dpi));
+    const float heightDip = std::max(
+        1.0f, Common::WindowSizing::PixelToDip(static_cast<float>(client.bottom - client.top), static_cast<float>(dpi)));
     const float lineH          = (_hexLineHeightDip > 0.0f) ? _hexLineHeightDip : 14.0f;
     const float charW          = (_hexCharWidthDip > 0.0f) ? _hexCharWidthDip : 8.0f;
     const HexViewLayout layout = ComputeHexViewLayout(lineH, charW, _fileSize, HexGroupSize(), dpi);
@@ -2094,8 +1973,7 @@ HRESULT ViewerText::LoadHexData(HWND hwnd) noexcept
     {
         _hexBytes.resize(static_cast<size_t>(_fileSize));
 
-        uint64_t ignored     = 0;
-        const HRESULT seekHr = _fileReader->Seek(0, FILE_BEGIN, &ignored);
+        const HRESULT seekHr = ViewerTextSafety::SeekExact(_fileReader.get(), 0u);
         if (FAILED(seekHr))
         {
             _hexBytes.clear();
@@ -2107,7 +1985,7 @@ HRESULT ViewerText::LoadHexData(HWND hwnd) noexcept
         {
             const unsigned long want = static_cast<unsigned long>(std::min<size_t>(256 * 1024, _hexBytes.size() - offset));
             unsigned long read       = 0;
-            const HRESULT readHr     = _fileReader->Read(_hexBytes.data() + offset, want, &read);
+            const HRESULT readHr     = ViewerTextSafety::ReadBounded(_fileReader.get(), _hexBytes.data() + offset, want, read);
             if (FAILED(readHr))
             {
                 _hexBytes.clear();
@@ -2118,6 +1996,27 @@ HRESULT ViewerText::LoadHexData(HWND hwnd) noexcept
                 break;
             }
             offset += read;
+        }
+
+        // IFileReader::Read does not guarantee bytesRead == bytesRequested, so a short read (truncation
+        // race, or normal behaviour on virtual/remote filesystems) can leave the tail of the buffer
+        // zero-filled from the initial resize. Shrink to the bytes actually read so _hexBytes.size() is
+        // the count of available bytes, never the reported file size — otherwise every consumer that
+        // treats _hexBytes.size() as authoritative (ReadHexBytes, FormatHexLine, the in-memory search,
+        // the search-mask paint path) would surface fabricated 0x00 bytes past the true end of data.
+        if (offset < _hexBytes.size())
+        {
+            Debug::Warning(L"ViewerText: hex load short read ({} of {} bytes); showing available data.", static_cast<uint64_t>(offset), _fileSize);
+            _hexBytes.resize(offset);
+        }
+        else
+        {
+            const HRESULT eofHr = ViewerTextSafety::VerifyEndOfFile(_fileReader.get());
+            if (FAILED(eofHr))
+            {
+                _hexBytes.clear();
+                return eofHr;
+            }
         }
     }
     else
@@ -2372,21 +2271,31 @@ HRESULT ViewerText::RefillHexCache(uint64_t offset) noexcept
         return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
     }
 
-    uint64_t ignored     = 0;
-    const HRESULT seekHr = _fileReader->Seek(static_cast<__int64>(aligned), FILE_BEGIN, &ignored);
+    const HRESULT seekHr = ViewerTextSafety::SeekExact(_fileReader.get(), aligned);
     if (FAILED(seekHr))
     {
         return seekHr;
     }
 
-    unsigned long read   = 0;
-    const HRESULT readHr = _fileReader->Read(_hexCache.data(), want, &read);
+    size_t read = 0u;
+    const HRESULT readHr = ViewerTextSafety::ReadUpTo(
+        _fileReader.get(), std::span<uint8_t>(_hexCache.data(), static_cast<size_t>(want)), read);
     if (FAILED(readHr))
     {
         return readHr;
     }
 
-    _hexCacheValid = static_cast<size_t>(read);
+    if (read == static_cast<size_t>(want) && aligned + static_cast<uint64_t>(want) == _fileSize)
+    {
+        const HRESULT eofHr = ViewerTextSafety::VerifyEndOfFile(_fileReader.get());
+        if (FAILED(eofHr))
+        {
+            _hexCacheValid = 0u;
+            return eofHr;
+        }
+    }
+
+    _hexCacheValid = read;
     return (_hexCacheValid == 0) ? S_FALSE : S_OK;
 }
 
@@ -2464,6 +2373,8 @@ void ViewerText::FormatHexLine(uint64_t offset,
                 outHex.push_back(kHexDigits[b & 0x0Fu]);
                 hexSpans[byteIndex].start  = groupCharStart + pos * 2u;
                 hexSpans[byteIndex].length = 2u;
+                hexSpans[byteIndex].columnStart  = hexSpans[byteIndex].start;
+                hexSpans[byteIndex].columnLength = hexSpans[byteIndex].length;
             }
             else
             {
@@ -2476,6 +2387,10 @@ void ViewerText::FormatHexLine(uint64_t offset,
 
     std::array<wchar_t, kHexBytesPerLine> textChars{};
     textChars.fill(L' ');
+    std::array<size_t, kHexBytesPerLine> textSourceLengths{};
+    std::array<size_t, kHexBytesPerLine> textColumnLengths{};
+    textSourceLengths.fill(1u);
+    textColumnLengths.fill(1u);
 
     if (_hexTextMode == HexTextMode::Utf16)
     {
@@ -2512,106 +2427,41 @@ void ViewerText::FormatHexLine(uint64_t offset,
     }
     else if (_hexTextMode == HexTextMode::Utf8)
     {
-        auto decodeUtf8 = [](const uint8_t* data, size_t available, wchar_t& outChar, size_t& consumed) noexcept -> bool
-        {
-            outChar  = L'.';
-            consumed = 1;
-
-            if (! data || available == 0)
-            {
-                return false;
-            }
-
-            const uint8_t b0 = data[0];
-            if (b0 <= 0x7Fu)
-            {
-                outChar  = static_cast<wchar_t>(b0);
-                consumed = 1;
-                return true;
-            }
-
-            if (b0 >= 0xC2u && b0 <= 0xDFu && available >= 2 && (data[1] & 0xC0u) == 0x80u)
-            {
-                const uint32_t cp = (static_cast<uint32_t>(b0 & 0x1Fu) << 6) | static_cast<uint32_t>(data[1] & 0x3Fu);
-                outChar           = static_cast<wchar_t>(cp);
-                consumed          = 2;
-                return true;
-            }
-
-            if (b0 >= 0xE0u && b0 <= 0xEFu && available >= 3 && (data[1] & 0xC0u) == 0x80u && (data[2] & 0xC0u) == 0x80u)
-            {
-                if (b0 == 0xE0u && data[1] < 0xA0u)
-                {
-                    return false;
-                }
-                if (b0 == 0xEDu && data[1] >= 0xA0u)
-                {
-                    return false;
-                }
-
-                uint32_t cp =
-                    (static_cast<uint32_t>(b0 & 0x0Fu) << 12) | (static_cast<uint32_t>(data[1] & 0x3Fu) << 6) | static_cast<uint32_t>(data[2] & 0x3Fu);
-
-                if (cp >= 0xD800u && cp <= 0xDFFFu)
-                {
-                    cp = 0xFFFDu;
-                }
-
-                outChar  = static_cast<wchar_t>(cp);
-                consumed = 3;
-                return true;
-            }
-
-            if (b0 >= 0xF0u && b0 <= 0xF4u && available >= 4 && (data[1] & 0xC0u) == 0x80u && (data[2] & 0xC0u) == 0x80u && (data[3] & 0xC0u) == 0x80u)
-            {
-                uint32_t cp = (static_cast<uint32_t>(b0 & 0x07u) << 18) | (static_cast<uint32_t>(data[1] & 0x3Fu) << 12) |
-                              (static_cast<uint32_t>(data[2] & 0x3Fu) << 6) | static_cast<uint32_t>(data[3] & 0x3Fu);
-
-                if (b0 == 0xF0u && data[1] < 0x90u)
-                {
-                    return false;
-                }
-                if (b0 == 0xF4u && data[1] >= 0x90u)
-                {
-                    return false;
-                }
-
-                if (cp > 0x10FFFFu)
-                {
-                    cp = 0xFFFDu;
-                }
-
-                outChar  = (cp <= 0xFFFFu) ? static_cast<wchar_t>(cp) : static_cast<wchar_t>(0xFFFDu);
-                consumed = 4;
-                return true;
-            }
-
-            return false;
-        };
-
-        size_t i = 0;
+        size_t i = 0u;
         while (i < count)
         {
-            wchar_t ch      = L'.';
-            size_t consumed = 1;
-            const bool ok   = decodeUtf8(bytes.data() + i, count - i, ch, consumed);
-            if (! ok || consumed == 0)
+            ViewerTextSafety::Utf8Scalar scalar = ViewerTextSafety::DecodeUtf8Scalar(bytes.data() + i, count - i);
+            if (! scalar.valid || scalar.consumed == 0u)
             {
-                consumed = 1;
-                ch       = L'.';
+                scalar.codePoint = static_cast<uint32_t>(L'.');
+                scalar.consumed  = 1u;
             }
 
-            if (ch < 32)
+            if (scalar.codePoint <= 0xFFFFu)
             {
-                ch = L'.';
+                wchar_t ch = static_cast<wchar_t>(scalar.codePoint);
+                if (ch < 32)
+                {
+                    ch = L'.';
+                }
+                textChars[i] = ch;
+            }
+            else
+            {
+                const uint32_t value = scalar.codePoint - 0x10000u;
+                textChars[i]         = static_cast<wchar_t>(0xD800u + (value >> 10u));
+                textChars[i + 1u]    = static_cast<wchar_t>(0xDC00u + (value & 0x3FFu));
+                textSourceLengths[i]      = 2u;
+                textSourceLengths[i + 1u] = 0u;
+                textColumnLengths[i]      = 2u;
             }
 
-            for (size_t j = 0; j < consumed && (i + j) < textChars.size(); ++j)
+            for (size_t j = scalar.codePoint > 0xFFFFu ? 2u : 1u; j < scalar.consumed && (i + j) < textChars.size(); ++j)
             {
-                textChars[i + j] = (j == 0) ? ch : L' ';
+                textChars[i + j] = L' ';
             }
 
-            i += consumed;
+            i += scalar.consumed;
         }
     }
     else
@@ -2648,15 +2498,18 @@ void ViewerText::FormatHexLine(uint64_t offset,
 
     for (size_t i = 0; i < kHexBytesPerLine; ++i)
     {
-        textSpans[i].start = outAscii.size();
+        textSpans[i].start       = outAscii.size();
+        textSpans[i].columnStart = i;
         if (i < count)
         {
-            textSpans[i].length = 1u;
+            textSpans[i].length       = textSourceLengths[i];
+            textSpans[i].columnLength = textColumnLengths[i];
             outAscii.push_back(textChars[i]);
         }
         else
         {
-            textSpans[i].length = 0;
+            textSpans[i].length       = 0u;
+            textSpans[i].columnLength = 0u;
             outAscii.push_back(L' ');
         }
     }
@@ -2678,8 +2531,8 @@ void ViewerText::OnHexMouseDown(HWND hwnd, int x, int y) noexcept
     static_cast<void>(EnsureHexViewDirect2D(hwnd));
 
     const UINT dpi   = GetDpiForWindow(hwnd);
-    const float xDip = DipsFromPixels(x, dpi);
-    const float yDip = DipsFromPixels(y, dpi);
+    const float xDip = Common::WindowSizing::PixelToDip(static_cast<float>(x), static_cast<float>(dpi));
+    const float yDip = Common::WindowSizing::PixelToDip(static_cast<float>(y), static_cast<float>(dpi));
 
     const float marginDip      = 6.0f;
     const float charW          = (_hexCharWidthDip > 0.0f) ? _hexCharWidthDip : 8.0f;
@@ -2799,8 +2652,8 @@ void ViewerText::OnHexMouseMove(HWND hwnd, int x, int y) noexcept
     static_cast<void>(EnsureHexViewDirect2D(hwnd));
 
     const UINT dpi   = GetDpiForWindow(hwnd);
-    const float xDip = DipsFromPixels(x, dpi);
-    const float yDip = DipsFromPixels(y, dpi);
+    const float xDip = Common::WindowSizing::PixelToDip(static_cast<float>(x), static_cast<float>(dpi));
+    const float yDip = Common::WindowSizing::PixelToDip(static_cast<float>(y), static_cast<float>(dpi));
 
     const float charW          = (_hexCharWidthDip > 0.0f) ? _hexCharWidthDip : 8.0f;
     const float lineH          = (_hexLineHeightDip > 0.0f) ? _hexLineHeightDip : 14.0f;
@@ -2948,7 +2801,7 @@ void ViewerText::CopyHexCsvToClipboard(HWND hwnd) noexcept
         return;
     }
 
-    const uint64_t totalLines = (_fileSize + (kHexBytesPerLine - 1)) / kHexBytesPerLine;
+    const uint64_t totalLines = (_fileSize / kHexBytesPerLine) + ((_fileSize % kHexBytesPerLine) != 0u ? 1u : 0u);
     if (totalLines == 0)
     {
         MessageBeep(MB_ICONINFORMATION);
@@ -2973,16 +2826,33 @@ void ViewerText::CopyHexCsvToClipboard(HWND hwnd) noexcept
         GetClientRect(hwnd, &client);
 
         const UINT dpi        = GetDpiForWindow(hwnd);
-        const float heightDip = std::max(1.0f, DipsFromPixels(static_cast<int>(client.bottom - client.top), dpi));
+        const float heightDip = std::max(
+            1.0f, Common::WindowSizing::PixelToDip(static_cast<float>(client.bottom - client.top), static_cast<float>(dpi)));
         const float marginDip = RoundDipToDevicePixels(6.0f, dpi);
         const float lineH     = (_hexLineHeightDip > 0.0f) ? _hexLineHeightDip : 14.0f;
         const float headerH   = lineH;
         const float usableDip = std::max(0.0f, heightDip - headerH - 2.0f * marginDip);
         const uint64_t rows   = std::max<uint64_t>(1u, static_cast<uint64_t>(std::ceil(usableDip / std::max(1.0f, lineH))));
 
-        startLine = std::min<uint64_t>(_hexTopLine, totalLines - 1);
-        endLine   = std::min<uint64_t>(totalLines - 1, startLine + rows - 1);
+        startLine                   = std::min<uint64_t>(_hexTopLine, totalLines - 1u);
+        const uint64_t availableRows = totalLines - startLine;
+        endLine                     = startLine + std::min(rows, availableRows) - 1u;
     }
+
+    const ViewerTextSafety::HexClipboardPlan copyPlan = ViewerTextSafety::ComputeHexClipboardPlan(_fileSize, startLine, endLine);
+    if (! copyPlan.hasData)
+    {
+        MessageBeep(MB_ICONINFORMATION);
+        return;
+    }
+
+    startLine = copyPlan.firstLine;
+    endLine   = copyPlan.lastLine;
+    Debug::Perf::EmitValue(L"viewer.hex.clipboard_accepted_bytes", copyPlan.copiedBytes);
+    Debug::Perf::EmitValue(L"viewer.hex.clipboard_rejected_bytes", copyPlan.rejectedBytes);
+    Debug::Perf::Scope clipboardPerf(L"viewer.hex.clipboard_format_us");
+    clipboardPerf.SetValue0(copyPlan.copiedBytes);
+    clipboardPerf.SetValue1(copyPlan.rejectedBytes);
 
     const std::wstring colOffset = LoadStringResource(g_hInstance, IDS_VIEWERTEXT_COL_OFFSET);
     const std::wstring colHex    = LoadStringResource(g_hInstance, IDS_VIEWERTEXT_COL_HEX);
@@ -2997,10 +2867,8 @@ void ViewerText::CopyHexCsvToClipboard(HWND hwnd) noexcept
     const std::wstring colText = LoadStringResource(g_hInstance, colTextId);
 
     std::wstring csv;
-    const uint64_t lineCount           = (endLine >= startLine) ? (endLine - startLine + 2) : 2;
-    constexpr uint64_t maxReserveLines = static_cast<uint64_t>(std::numeric_limits<size_t>::max() / 128u);
-    const uint64_t reserveLines        = std::min<uint64_t>(lineCount, maxReserveLines);
-    csv.reserve(static_cast<size_t>(reserveLines) * 128u);
+    const uint64_t lineCount = endLine - startLine + 2u;
+    csv.reserve(static_cast<size_t>(lineCount) * 128u);
     csv.append(CsvEscape(colOffset));
     csv.push_back(L',');
     csv.append(CsvEscape(colHex));
@@ -3008,7 +2876,7 @@ void ViewerText::CopyHexCsvToClipboard(HWND hwnd) noexcept
     csv.append(CsvEscape(colText));
     csv.append(L"\r\n");
 
-    for (uint64_t line = startLine; line <= endLine; ++line)
+    for (uint64_t line = startLine;; ++line)
     {
         const uint64_t offset = line * static_cast<uint64_t>(kHexBytesPerLine);
 
@@ -3027,10 +2895,21 @@ void ViewerText::CopyHexCsvToClipboard(HWND hwnd) noexcept
         csv.push_back(L',');
         csv.append(CsvEscape(asciiText));
         csv.append(L"\r\n");
+
+        if (line == endLine)
+        {
+            break;
+        }
     }
 
-    if (! CopyUnicodeTextToClipboard(GetAncestor(hwnd, GA_ROOT), csv))
+    if (! Common::Clipboard::TrySetUnicodeText(GetAncestor(hwnd, GA_ROOT), csv))
     {
         MessageBeep(MB_ICONERROR);
+        return;
+    }
+
+    if (copyPlan.truncated)
+    {
+        ShowInlineAlert(InlineAlertSeverity::Warning, IDS_VIEWERTEXT_NAME, IDS_VIEWERTEXT_MSG_HEX_COPY_TRUNCATED);
     }
 }

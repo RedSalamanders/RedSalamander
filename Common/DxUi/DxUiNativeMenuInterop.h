@@ -705,7 +705,9 @@ private:
         }
 
         ContextMenuSessionCallbacks sessionCallbacks{};
-        sessionCallbacks.focusFirstNavigableItem = keyboardInvocation;
+        sessionCallbacks.focusFirstNavigableItem   = keyboardInvocation;
+        sessionCallbacks.ignoreInitialLeftButtonUp  = keyboardInvocation;
+        sessionCallbacks.ignoreInitialRightButtonUp = keyboardInvocation;
         size_t activeIndex                       = index;
         sessionCallbacks.switchRootFromPointer   = [this, &activeIndex](POINT hoverScreenPoint) -> std::optional<ContextMenuRootSwitchRequest>
         {

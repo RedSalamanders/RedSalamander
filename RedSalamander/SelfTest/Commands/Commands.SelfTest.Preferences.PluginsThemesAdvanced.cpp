@@ -61,7 +61,7 @@ namespace
         return DebugGetPreferencesDialogSnapshot(outSnapshot) && predicate(outSnapshot);
     };
 
-    state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Plugins deferred-search test.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Plugins deferred-search test.");
     state.Require(DebugSelectPreferencesCategory(kPrefCategoryPlugins), L"Failed to select the Preferences Plugins category for Plugins deferred-search test.");
     PumpPendingMessages();
 
@@ -162,7 +162,8 @@ namespace
             const HWND activePage = DebugGetPreferencesActivePageHandle();
             if (activePage && IsWindow(activePage) != FALSE)
             {
-                const auto valueState = CollectVisibleDescendantValuePatternStateByName(activePage, UIA_EditControlTypeId, expectedName);
+                const auto valueState = CollectVisibleDescendantValuePatternStateByNameWithMessagePump(
+                    activePage, UIA_EditControlTypeId, expectedName, L"Preferences Themes live search value poll");
                 if (valueState.has_value() && valueState->value == expectedValue)
                 {
                     return true;
@@ -178,7 +179,8 @@ namespace
             return false;
         }
 
-        const auto valueState = CollectVisibleDescendantValuePatternStateByName(activePage, UIA_EditControlTypeId, expectedName);
+        const auto valueState = CollectVisibleDescendantValuePatternStateByNameWithMessagePump(
+            activePage, UIA_EditControlTypeId, expectedName, L"Preferences Themes live search final value read");
         return valueState.has_value() && valueState->value == expectedValue;
     };
 
@@ -299,8 +301,19 @@ namespace
             return false;
         }
 
-        const HWND focusedWindow = GetFocus();
+        const HWND focusedWindow = DebugGetPreferencesActivePageDxHostHandle();
         if (! focusedWindow || IsWindow(focusedWindow) == FALSE)
+        {
+            return false;
+        }
+
+        const auto focusDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(1000ms);
+        while (GetFocus() != focusedWindow && std::chrono::steady_clock::now() < focusDeadline)
+        {
+            PumpPendingMessages();
+            std::this_thread::sleep_for(10ms);
+        }
+        if (GetFocus() != focusedWindow)
         {
             return false;
         }
@@ -503,7 +516,7 @@ namespace
             return false;
         }
 
-        state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Plugins tab-traversal validation.");
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Plugins tab-traversal validation.");
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryPlugins),
                       L"Failed to select the Preferences Plugins category for Plugins tab-traversal validation.");
         PumpPendingMessages();
@@ -716,7 +729,7 @@ namespace
         return DebugGetPreferencesDialogSnapshot(outSnapshot) && predicate(outSnapshot);
     };
 
-    state.Require(SetFocus(categoryTreeHost) == categoryTreeHost,
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
                   L"Failed to focus the Preferences category host for Plugins empty custom-paths placeholder test.");
     state.Require(DebugSelectPreferencesCategory(kPrefCategoryPlugins),
                   L"Failed to select the Preferences Plugins category for Plugins empty custom-paths placeholder test.");
@@ -870,7 +883,7 @@ namespace
             return false;
         }
 
-        state.Require(SetFocus(targetCategoryTreeHost) == targetCategoryTreeHost,
+        state.Require(FocusWindowAndWait(targetCategoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
                       L"Failed to focus the Preferences category host for Plugins custom-paths remove interaction test.");
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryPlugins),
                       L"Failed to select the Preferences Plugins category for Plugins custom-paths remove interaction test.");
@@ -1125,7 +1138,7 @@ namespace
             return false;
         }
 
-        state.Require(SetFocus(targetCategoryTreeHost) == targetCategoryTreeHost,
+        state.Require(FocusWindowAndWait(targetCategoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
                       L"Failed to focus the Preferences category host for Plugins custom-paths add interaction test.");
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryPlugins),
                       L"Failed to select the Preferences Plugins category for Plugins custom-paths add interaction test.");
@@ -1363,7 +1376,7 @@ namespace
             return false;
         }
 
-        state.Require(SetFocus(targetCategoryTreeHost) == targetCategoryTreeHost,
+        state.Require(FocusWindowAndWait(targetCategoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
                       L"Failed to focus the Preferences category host for Plugins Configure interaction test.");
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryPlugins),
                       L"Failed to select the Preferences Plugins category for Plugins Configure interaction test.");
@@ -1450,8 +1463,9 @@ namespace
         return false;
     }
 
-    state.Require(ClickVisibleDescendantByName(activePage, UIA_ButtonControlTypeId, configureButtonText),
-                  L"Failed to click the visible Preferences Plugins Configure button through live mouse interaction.");
+    state.Require(
+        InvokeVisibleDescendantByNameWithMessagePump(activePage, UIA_ButtonControlTypeId, configureButtonText, L"Preferences Plugins Configure action"),
+        L"Failed to invoke the visible Preferences Plugins Configure button through live UIA interaction.");
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
     {
@@ -1552,8 +1566,9 @@ namespace
         return false;
     }
 
-    state.Require(ClickVisibleDescendantByName(reopenedActivePage, UIA_ButtonControlTypeId, configureButtonText),
-                  L"Failed to click the visible Preferences Plugins Configure button through live mouse interaction after shell Cancel reopen.");
+    state.Require(InvokeVisibleDescendantByNameWithMessagePump(
+                      reopenedActivePage, UIA_ButtonControlTypeId, configureButtonText, L"Preferences Plugins Configure action after shell Cancel reopen"),
+                  L"Failed to invoke the visible Preferences Plugins Configure button through live UIA interaction after shell Cancel reopen.");
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
     {
@@ -1656,7 +1671,7 @@ namespace
             return false;
         }
 
-        state.Require(SetFocus(targetCategoryTreeHost) == targetCategoryTreeHost,
+        state.Require(FocusWindowAndWait(targetCategoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
                       L"Failed to focus the Preferences category host for Plugins Test interaction test.");
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryPlugins),
                       L"Failed to select the Preferences Plugins category for Plugins Test interaction test.");
@@ -1906,7 +1921,7 @@ namespace
             return false;
         }
 
-        state.Require(SetFocus(targetCategoryTreeHost) == targetCategoryTreeHost,
+        state.Require(FocusWindowAndWait(targetCategoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
                       L"Failed to focus the Preferences category host for Plugins Test All interaction test.");
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryPlugins),
                       L"Failed to select the Preferences Plugins category for Plugins Test All interaction test.");
@@ -2115,7 +2130,7 @@ namespace
         return DebugGetPreferencesDialogSnapshot(outSnapshot) && predicate(outSnapshot);
     };
 
-    state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Themes deferred-search test.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Themes deferred-search test.");
     state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes), L"Failed to select the Preferences Themes category for Themes deferred-search test.");
     PumpPendingMessages();
 
@@ -2244,7 +2259,7 @@ namespace
             return false;
         }
 
-        state.Require(SetFocus(targetCategoryTreeHost) == targetCategoryTreeHost,
+        state.Require(FocusWindowAndWait(targetCategoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
                       L"Failed to focus the Preferences category host while navigating to the Themes page.");
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
                       L"Failed to select the Preferences Themes category while navigating to the Themes page.");
@@ -2287,7 +2302,8 @@ namespace
         return false;
     }
 
-    const auto initialValueState = CollectVisibleDescendantValuePatternStateByName(activePage, UIA_EditControlTypeId, searchFieldName);
+    const auto initialValueState = CollectVisibleDescendantValuePatternStateByNameWithMessagePump(
+        activePage, UIA_EditControlTypeId, searchFieldName, L"Preferences Themes initial search value read");
     state.Require(initialValueState.has_value(),
                   L"Preferences Themes page should expose a visible DX search edit descendant during live search interaction validation.");
     if (! initialValueState.has_value())
@@ -2326,17 +2342,31 @@ namespace
             return false;
         }
 
-        const HWND focusedWindow = GetFocus();
+        const HWND activePageForValue = DebugGetPreferencesActivePageHandle();
+        if (! activePageForValue || IsWindow(activePageForValue) == FALSE)
+        {
+            return false;
+        }
+
+        const HWND focusedWindow = DebugGetPreferencesActivePageDxHostHandle();
         if (! focusedWindow || IsWindow(focusedWindow) == FALSE)
         {
             return false;
         }
 
-        const std::wstring valueCopy(value);
-        SendMessageW(focusedWindow, EM_SETSEL, static_cast<WPARAM>(0), static_cast<LPARAM>(-1));
-        SendMessageW(focusedWindow, EM_REPLACESEL, TRUE, reinterpret_cast<LPARAM>(valueCopy.c_str()));
-        PumpPendingMessages();
-        return true;
+        const auto focusDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(1000ms);
+        while (GetFocus() != focusedWindow && std::chrono::steady_clock::now() < focusDeadline)
+        {
+            PumpPendingMessages();
+            std::this_thread::sleep_for(10ms);
+        }
+        if (GetFocus() != focusedWindow)
+        {
+            return false;
+        }
+
+        return SetVisibleDescendantValueByNameWithMessagePump(
+            activePageForValue, UIA_EditControlTypeId, editName, value, L"Preferences Themes focused search value mutation");
     };
 
     state.Require(setSearchValue(kSearchText), L"Preferences Themes page visible DX search field did not accept focused live input mutation.");
@@ -2364,7 +2394,7 @@ namespace
     }
 
     state.Require(
-        InvokeVisibleDescendantByName(getShellHost(), UIA_ButtonControlTypeId, shellCancelButtonText),
+        InvokeVisibleDescendantByNameWithMessagePump(getShellHost(), UIA_ButtonControlTypeId, shellCancelButtonText, L"Preferences Themes shell Cancel"),
         L"Preferences shell visible DX Cancel action did not expose live UIA InvokePattern interaction during Themes live search discard validation.");
     state.Require(WaitForWindowClosed(prefs, SelfTest::Scale(3000ms)),
                   L"Preferences dialog did not close after live UIA InvokePattern interaction on the visible DX Cancel action during Themes live search "
@@ -2790,7 +2820,7 @@ namespace
             return false;
         }
 
-        state.Require(SetFocus(targetCategoryTreeHost) == targetCategoryTreeHost,
+        state.Require(FocusWindowAndWait(targetCategoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
                       L"Failed to focus the Preferences category host for Themes duplicate interaction test.");
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
                       L"Failed to select the Preferences Themes category for Themes duplicate interaction test.");
@@ -3060,7 +3090,7 @@ namespace
             return false;
         }
 
-        state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Themes clear interaction test.");
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Themes clear interaction test.");
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
                       L"Failed to select the Preferences Themes category for Themes clear interaction test.");
         PumpPendingMessages();
@@ -3346,7 +3376,7 @@ namespace
             return false;
         }
 
-        state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Themes set interaction test.");
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Themes set interaction test.");
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
                       L"Failed to select the Preferences Themes category for Themes set interaction test.");
         PumpPendingMessages();
@@ -3619,7 +3649,7 @@ namespace
             return false;
         }
 
-        state.Require(SetFocus(categoryTreeHost) == categoryTreeHost,
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
                       L"Failed to focus the Preferences category host for Themes apply-temporarily interaction test.");
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
                       L"Failed to select the Preferences Themes category for Themes apply-temporarily interaction test.");
@@ -3878,7 +3908,7 @@ namespace
             return false;
         }
 
-        state.Require(SetFocus(targetCategoryTreeHost) == targetCategoryTreeHost,
+        state.Require(FocusWindowAndWait(targetCategoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
                       L"Failed to focus the Preferences category host for Themes save interaction test.");
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
                       L"Failed to select the Preferences Themes category for Themes save interaction test.");
@@ -4086,6 +4116,7 @@ namespace
     state.Require(SelfTest::EnsureDirectory(importDir), L"Failed to create Themes load interaction directory.");
     const std::filesystem::path importPath = importDir / L"imported.theme.json5";
     const std::wstring importJson          = std::format(L"{{\n"
+                                                         L"  formatVersion: 2,\n"
                                                          L"  id: \"{0}\",\n"
                                                          L"  name: \"{1}\",\n"
                                                          L"  baseThemeId: \"builtin/dark\",\n"
@@ -4162,7 +4193,7 @@ namespace
             return false;
         }
 
-        state.Require(SetFocus(targetCategoryTreeHost) == targetCategoryTreeHost,
+        state.Require(FocusWindowAndWait(targetCategoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
                       L"Failed to focus the Preferences category host for Themes load interaction test.");
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
                       L"Failed to select the Preferences Themes category for Themes load interaction test.");
@@ -4415,7 +4446,7 @@ namespace
             return false;
         }
 
-        state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Advanced navigation.");
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Advanced navigation.");
         PumpPendingMessages();
 
         SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_END, 0);
@@ -4611,7 +4642,7 @@ namespace
             return false;
         }
 
-        state.Require(SetFocus(treeHost) == treeHost, L"Failed to focus the Preferences category host for Advanced live interaction test.");
+        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Advanced live interaction test.");
         PumpPendingMessages();
 
         SendMessageW(treeHost, WM_KEYDOWN, VK_END, 0);
@@ -4978,17 +5009,13 @@ namespace
 
     std::filesystem::path openedPath;
     HRESULT openHr = S_FALSE;
-    state.Require(waitForCapturedOpen(openedPath, openHr),
-                  L"Preferences Advanced settings-file link did not reach the captured open-file command path.");
+    state.Require(waitForCapturedOpen(openedPath, openHr), L"Preferences Advanced settings-file link did not reach the captured open-file command path.");
     state.Require(openHr == S_OK,
-                  std::format(L"Preferences Advanced settings-file link reported unexpected HRESULT 0x{:08X}.",
-                              static_cast<unsigned long>(openHr)));
+                  std::format(L"Preferences Advanced settings-file link reported unexpected HRESULT 0x{:08X}.", static_cast<unsigned long>(openHr)));
 
     const std::filesystem::path expectedPath = Common::Settings::GetSettingsPath(L"RedSalamander");
     state.Require(openedPath == expectedPath,
-                  std::format(L"Preferences Advanced settings-file link opened '{}' instead of '{}'.",
-                              openedPath.wstring(),
-                              expectedPath.wstring()));
+                  std::format(L"Preferences Advanced settings-file link opened '{}' instead of '{}'.", openedPath.wstring(), expectedPath.wstring()));
 
     return state.failure.empty();
 }
@@ -5118,17 +5145,13 @@ namespace
 
     std::filesystem::path openedPath;
     HRESULT openHr = S_FALSE;
-    state.Require(waitForCapturedOpen(openedPath, openHr),
-                  L"Preferences Monitor settings-file link did not reach the captured open-file command path.");
+    state.Require(waitForCapturedOpen(openedPath, openHr), L"Preferences Monitor settings-file link did not reach the captured open-file command path.");
     state.Require(openHr == S_OK,
-                  std::format(L"Preferences Monitor settings-file link reported unexpected HRESULT 0x{:08X}.",
-                              static_cast<unsigned long>(openHr)));
+                  std::format(L"Preferences Monitor settings-file link reported unexpected HRESULT 0x{:08X}.", static_cast<unsigned long>(openHr)));
 
     const std::filesystem::path expectedPath = Common::Settings::GetSettingsPath(kPreferencesMonitorAppId);
     state.Require(openedPath == expectedPath,
-                  std::format(L"Preferences Monitor settings-file link opened '{}' instead of '{}'.",
-                              openedPath.wstring(),
-                              expectedPath.wstring()));
+                  std::format(L"Preferences Monitor settings-file link opened '{}' instead of '{}'.", openedPath.wstring(), expectedPath.wstring()));
 
     return state.failure.empty();
 }
@@ -5181,7 +5204,7 @@ namespace
             return false;
         }
 
-        state.Require(SetFocus(treeHost) == treeHost, L"Failed to focus the Preferences category host for Advanced tab-traversal validation.");
+        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Advanced tab-traversal validation.");
         PumpPendingMessages();
 
         SendMessageW(treeHost, WM_KEYDOWN, VK_END, 0);
@@ -5466,7 +5489,7 @@ namespace
         return pagePatternStats;
     };
 
-    state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Advanced round-trip test.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Advanced round-trip test.");
     PumpPendingMessages();
 
     SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_END, 0);
@@ -5622,7 +5645,7 @@ namespace
         return false;
     }
 
-    state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Editors/Mouse navigation.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Editors/Mouse navigation.");
     PumpPendingMessages();
 
     const auto waitForSnapshot = [&](const auto& predicate, PreferencesDebugSnapshot& outSnapshot) noexcept
@@ -5867,7 +5890,7 @@ namespace
                           std::format(L"Preferences {} page still exposes visible legacy statics after returning from General during {}.", pageLabel, context));
         };
 
-        state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, std::format(L"Failed to focus the Preferences category host during {}.", context));
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), std::format(L"Failed to focus the Preferences category host during {}.", context));
         PumpPendingMessages();
 
         verifyNoteRoundTrip(kPrefCategoryEditors, IDS_PREFS_CAT_EDITORS, IDS_PREFS_CAT_EDITORS_DESC, L"Editors");

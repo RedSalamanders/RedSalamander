@@ -1,4 +1,5 @@
 #include "Document.h"
+#include "Helpers.h"
 
 #include <algorithm>
 #include <array>
@@ -908,25 +909,15 @@ bool Document::SaveTextToFile(const std::wstring& path) const
     const unsigned char bom[] = {0xEF, 0xBB, 0xBF};
     file.write(reinterpret_cast<const char*>(bom), sizeof(bom));
 
-    std::string strTo;
-    strTo.reserve(200); // just to start with some capacity
     for (size_t i = 0; i < _lines.size(); ++i)
     {
-        // Convert wchar_t to UTF-8
-        const wchar_t* pData = _lines[i].text.data();
-        size_t size          = _lines[i].text.size();
-        size_t size_needed   = static_cast<size_t>(WideCharToMultiByte(CP_UTF8, 0, pData, static_cast<int>(size), NULL, 0, NULL, NULL));
-        if (size_needed <= 0)
-            continue;
-        if (strTo.capacity() < size_needed)
-            strTo.resize(size_needed);
-
-        int len = WideCharToMultiByte(CP_UTF8, 0, pData, static_cast<int>(size), strTo.data(), static_cast<int>(size_needed), NULL, NULL);
-        if (len > 0)
+        const std::string utf8 = Common::Strings::Utf8FromUtf16ReplacingInvalid(_lines[i].text);
+        if (utf8.empty() && ! _lines[i].text.empty())
         {
-            file.write(strTo.data(), len);
-            file.put('\n');
+            continue;
         }
+        file.write(utf8.data(), static_cast<std::streamsize>(utf8.size()));
+        file.put('\n');
     }
     return file.good();
 }

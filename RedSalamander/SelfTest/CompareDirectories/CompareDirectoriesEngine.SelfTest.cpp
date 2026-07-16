@@ -12,6 +12,7 @@
 #include "SearchServiceBroker.h"
 #include "SearchTextHelpers.h"
 #include "SqliteIndexStore.h"
+#include "TestSupport/ChildProcess.h"
 
 #include <algorithm>
 #include <array>
@@ -36,6 +37,8 @@
 #include <thread>
 #include <vector>
 
+#include <AccCtrl.h>
+#include <AclAPI.h>
 #include <winioctl.h>
 
 #pragma warning(push)
@@ -73,6 +76,7 @@ constexpr std::wstring_view kBuiltin7zFileSystemId               = L"builtin/fil
 constexpr std::wstring_view kBuiltinFtpFileSystemId              = L"builtin/file-system-ftp";
 constexpr std::wstring_view kBuiltinGoogleDriveFileSystemId      = L"builtin/file-system-gdrive";
 constexpr std::wstring_view kBuiltinS3FileSystemId               = L"builtin/file-system-s3";
+constexpr std::wstring_view kBuiltinMtpFileSystemId              = L"builtin/file-system-mtp";
 constexpr std::wstring_view kBuiltinOneDrivePersonalFileSystemId = L"builtin/file-system-onedrive-personal";
 constexpr std::wstring_view kBuiltinOneDriveBusinessFileSystemId = L"builtin/file-system-onedrive-business";
 constexpr std::wstring_view kBuiltinSharePointFileSystemId       = L"builtin/file-system-sharepoint";
@@ -120,8 +124,13 @@ constexpr std::wstring_view kCompareCaseNames[] = {
     L"sqlite_index_store_manual_compaction_reclaims_space",
     L"sqlite_index_store_automatic_checkpoint_truncates_wal",
     L"sqlite_index_store_automatic_compaction_is_bounded",
+    L"sqlite_index_store_automatic_rewrites_legacy_auto_vacuum",
+    L"search_service_rejects_device_root_and_continues",
+    L"search_service_slow_partial_client_does_not_block_next_client",
+    L"search_service_sqlite_legacy_auto_vacuum_queues_idle_maintenance",
     L"sqlite_index_store_upgrade_paths",
     L"sqlite_index_store_load_and_apply_journal_delta",
+    L"sqlite_index_store_root_lookup_case_insensitive",
     L"local_index_core_sqlite_option_keeps_snapshot_runtime_store",
     L"local_index_core_sqlite_cold_start_bypasses_snapshot_runtime_store",
     L"local_index_core_sqlite_authoritative_replays_without_snapshot_runtime_store",
@@ -140,6 +149,7 @@ constexpr std::wstring_view kCompareCaseNames[] = {
     L"local_search_fallback_follow_symlink_loop_guard",
     L"local_search_fallback_single_pass_large_directory",
     L"local_search_fallback_malformed_entry_skips_with_warning",
+    L"test_support_child_process_runner_contract",
     L"search_service_help_lists_cli_options",
     L"search_service_compact_cli_runs_manual_sqlite_maintenance",
     L"search_service_compact_request_roundtrip",
@@ -150,6 +160,7 @@ constexpr std::wstring_view kCompareCaseNames[] = {
     L"search_service_sqlite_cold_start_bypasses_snapshot_runtime_store",
     L"search_service_sqlite_ntfs_traversal_seed_stays_degraded",
     L"search_service_sqlite_cold_start_stale_root_refreshes_before_query",
+    L"search_service_sqlite_external_rotation_refreshes_without_retry",
     L"search_service_sqlite_invalid_store_falls_back_live_scan",
     L"search_service_sqlite_query_failure_falls_back_live_scan",
     L"search_service_sqlite_midquery_failure_restarts_live_scan_without_duplicates",
@@ -166,6 +177,9 @@ constexpr std::wstring_view kCompareCaseNames[] = {
     L"search_service_foreground_logs_request_status",
     L"search_service_status_and_query_roundtrip",
     L"search_service_query_reports_live_progress",
+    L"search_service_filters_cached_descendants_denied_to_client",
+    L"search_service_transient_authorization_failure_is_incomplete_not_cached",
+    L"search_service_candidate_impersonation_failure_is_incomplete_warning",
     L"local_search_service_indexed_name_latency_and_parity",
     L"local_search_service_matches_host_fallback",
     L"local_search_service_single_request_uses_query",
@@ -173,6 +187,7 @@ constexpr std::wstring_view kCompareCaseNames[] = {
     L"local_search_service_protocol_mismatch_falls_back_local_index",
     L"local_search_service_disconnect_falls_back_local_index",
     L"search_service_multi_client_and_rebuild_control",
+    L"search_service_rebuild_deleted_root_purges_index",
     L"search_text_helpers_decoding_and_binary",
     L"search_invariant_case_folding_consistency",
     L"search_text_helpers_chunk_overlap_literal_and_regex",
@@ -186,6 +201,12 @@ constexpr std::wstring_view kCompareCaseNames[] = {
     L"host_fallback_search_dummy_name_only",
     L"host_fallback_search_7z_name_only",
     L"host_fallback_search_remote_ftp_name_only",
+    L"search_service_missing_pipe_retry_is_cancellable",
+    L"local_search_service_root_rejection_does_not_arm_transport_cooldown",
+    L"search_service_transient_parent_failure_is_cached_and_warns_batch_and_completion",
+    L"local_search_sqlite_generation_probe_skips_steady_state_and_detects_bump",
+    L"local_search_junction_alias_hydration_indexes_alias_only_descendant_once",
+    L"sqlite_maintenance_busy_checkpoint_and_callback_skip_observability",
     L"windows_hello_cache",
     L"oauth_refresh_token_storage",
     L"oauth_authmode_roundtrip",
@@ -201,6 +222,8 @@ constexpr std::wstring_view kCompareCaseNames[] = {
     L"attributes",
     L"content",
     L"content_dual_io",
+    L"content_equal_size_equal_mtime_differs",
+    L"content_unknown_size_streaming_compare",
     L"content_no_io_disables_compareContent",
     L"content_size_mismatch_no_pending",
     L"zero_vs_nonzero_content",
@@ -208,16 +231,25 @@ constexpr std::wstring_view kCompareCaseNames[] = {
     L"content short reads",
     L"subdir pending",
     L"subdirs",
+    L"select_subdirs_only_in_one_pane",
+    L"sync_manifest_nested_differences_only",
+    L"sync_manifest_move_preserves_identical_children",
+    L"sync_manifest_not_ready_without_cached_decision",
+    L"sync_manifest_pending_blocks_and_schedules",
     L"no_sync_deep_scan",
     L"subdirattrs",
     L"missing folder",
+    L"missing_side_empty_enumeration",
+    L"failed_enumeration_retries_without_version_bump",
     L"reparse",
     L"dummy_content",
+    L"normalized_name_collision_preserves_same_side_entries",
     L"deep_tree",
     L"invalidate",
     L"concurrent_get_or_compute_decision",
     L"empty_directories",
     L"ignore",
+    L"ignore_direct_navigation_subtree",
     L"ignore_multiple_patterns",
     L"ignore_pattern_length_cap",
     L"ignore_pattern_count_cap",
@@ -235,16 +267,22 @@ constexpr std::wstring_view kCompareCaseNames[] = {
     L"try_make_relative_outside_root",
     L"baseInterfaces",
     L"contentCacheHit",
+    L"content_cache_hit_skips_io",
     L"root_decision_empty_directories",
     L"zeroByteContent",
     L"setSettingsInvalidates",
+    L"setRoots_resets_and_bumps_version",
     L"dircache_not_polluted_by_compare_scan",
     L"content_queue_bounded_hi_lo",
     L"decision_cache_eviction_budget_pins_visible",
+    L"decision_cache_eviction_budget_pending_wide_tree",
+    L"decision_cache_evicted_content_update_reaches_ancestor",
     L"cancel_completes_bounded",
     L"invalid_directory_entry_buffer",
+    L"invalidate_drops_stale_inflight_scan_writeback",
     L"scan_inflight_stamp_guards_restart",
     L"content_inflight_stamp_guards_restart",
+    L"worker_shutdown_joins_before_state_teardown",
     L"directory_size_local_callback_contract",
     L"directory_size_dummy_callback_contract",
     L"directory_size_7z_callback_contract",
@@ -260,6 +298,59 @@ constexpr std::wstring_view kCompareCaseNames[] = {
     L"remote_file_ftp",
     L"remote_ftp_directory_size_callback_contract",
     L"remote_ftp_continue_on_error_partial",
+    L"mtp_factory_single_mode_id_contract",
+    L"mtp_live_device_smoke",
+    L"mtp_queryinterface_matrix",
+    L"mtp_json_return_buffers_are_bounded",
+    L"mtp_capabilities_are_instance_honest",
+    L"mtp_path_scheme_and_device_key_normalization",
+    L"mtp_duplicate_names_require_stable_suffix",
+    L"mtp_disconnect_mid_enumeration_surfaces_error",
+    L"mtp_unload_quiet_point_no_callback_after_clear",
+    L"mtp_drive_info_and_disconnect_menu",
+    L"mtp_hung_device_times_out",
+    L"mtp_watchdog_requests_backend_cancel",
+    L"mtp_runtime_refresh_defers_when_worker_quarantined",
+    L"mtp_mutating_create_directory_times_out",
+    L"mtp_mutating_item_commands_time_out",
+    L"mtp_writer_commit_times_out",
+    L"mtp_menu_and_directory_size_time_out",
+    L"mtp_reader_seek_contract",
+    L"mtp_reader_streams_on_read_not_open",
+    L"mtp_concurrency_is_serialized",
+    L"mtp_backend_command_worker_is_reused",
+    L"mtp_wpd_session_and_path_cache_reuse",
+    L"mtp_wpd_cache_failure_reopens_session_and_refreshes_size",
+    L"mtp_overwrite_journal_generation_and_absent_cache_are_constant_cost",
+    L"mtp_property_fetch_is_batched",
+    L"mtp_public_writer_stages_until_commit",
+    L"mtp_overwrite_byte_verify_level_matches_capability",
+    L"mtp_writer_overwrite_uses_temp_puid_swap",
+    L"mtp_overwrite_temp_upload_failure_keeps_original_and_allows_retry",
+    L"mtp_overwrite_empty_temp_puid_keeps_original_and_blocks_later_upload",
+    L"mtp_overwrite_delete_original_failure_keeps_original_and_allows_retry",
+    L"mtp_overwrite_journal_write_failure_aborts_before_upload",
+    L"mtp_overwrite_journal_recovers_rename_temp_failure",
+    L"mtp_overwrite_journal_replay_removes_temp_when_final_exists",
+    L"mtp_overwrite_journal_replay_temp_cleanup_delete_failure_retries",
+    L"mtp_overwrite_journal_recovers_committed_temp_without_tempPuid",
+    L"mtp_overwrite_journal_clears_completed_swap_without_temp",
+    L"mtp_overwrite_never_duplicates_or_halfwrites",
+    L"mtp_overwrite_journal_replay_rename_rejection_is_bounded",
+    L"mtp_overwrite_verify_input_by_source_kind",
+    L"mtp_copy_move_overwrite_uses_temp_puid_swap",
+    L"mtp_rename_overwrite_uses_temp_puid_swap",
+    L"mtp_copy_move_overwrite_temp_copy_failure_keeps_original_and_allows_retry",
+    L"mtp_move_fallback_delete_source_failure_leaves_duplicate_and_reports_partial",
+    L"mtp_transfer_cancel_is_prompt",
+    L"mtp_batch_callbacks_report_item_indices",
+    L"mtp_copy_from_device_accounting",
+    L"mtp_copy_to_device_accounting",
+    L"mtp_fake_backend_enumerate_read_and_capabilities",
+    L"mtp_fake_backend_move_rejects_directory_transfer_fallback",
+    L"mtp_fake_backend_mutations_roundtrip",
+    L"mtp_fake_backend_readonly_configuration_blocks_mutations",
+    L"mtp_fake_backend_injection_uses_isolated_instance",
     L"remote_s3_metadata_smoke",
     L"remote_s3_delete_missing",
 };
@@ -424,6 +515,23 @@ void SecureClearAndFreeSecret(wil::unique_cotaskmem_string& secret) noexcept
     secret.reset();
 }
 
+[[nodiscard]] bool IsHostConnectionUiUnavailableHr(HRESULT hr) noexcept
+{
+    return hr == HRESULT_FROM_WIN32(ERROR_INVALID_WINDOW_HANDLE);
+}
+
+[[nodiscard]] bool SkipIfHostConnectionUiUnavailable(SelfTest::CaseState& state, HRESULT hr, std::wstring_view context) noexcept
+{
+    if (! IsHostConnectionUiUnavailableHr(hr))
+    {
+        return false;
+    }
+
+    state.Skip(std::format(
+        L"{} requires initialized host connection UI; host returned ERROR_INVALID_WINDOW_HANDLE (hr=0x{:08X}).", context, static_cast<unsigned long>(hr)));
+    return true;
+}
+
 struct PhaseCheckResult
 {
     SelfTest::SelfTestCaseResult::Status status = SelfTest::SelfTestCaseResult::Status::skipped;
@@ -554,6 +662,13 @@ struct ResolvedRemoteProfile
     if (FAILED(hrSecret))
     {
         SecureClearAndFreeSecret(secret);
+        if (IsHostConnectionUiUnavailableHr(hrSecret))
+        {
+            return {.status = SelfTest::SelfTestCaseResult::Status::skipped,
+                    .reason = std::format(
+                        L"{}: host connection UI unavailable for GetConnectionSecret. hr=0x{:08X}", protocolLabel, static_cast<unsigned long>(hrSecret))};
+        }
+
         return {.status = SelfTest::SelfTestCaseResult::Status::failed,
                 .reason = std::format(L"{}: GetConnectionSecret failed. hr=0x{:08X}", protocolLabel, static_cast<unsigned long>(hrSecret))};
     }
@@ -678,7 +793,12 @@ struct ResolvedRemoteProfile
     return {.status = SelfTest::SelfTestCaseResult::Status::passed};
 }
 
-using CreateFactoryFunc = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const wchar_t*, void**);
+using CreateFactoryFunc          = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const wchar_t*, void**);
+using GetConfigurationSchemaFunc = HRESULT(__stdcall*)(REFIID, const wchar_t*, const char**);
+using CreateMtpForSelfTestFunc   = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const char*, void**);
+using CreateMtpWpdCacheForSelfTestFunc = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const char*, void**);
+using PluginShutdownFunc         = void(__stdcall*)();
+using PluginCanUnloadNowFunc     = BOOL(__stdcall*)();
 
 struct CreatedFileSystemInstance
 {
@@ -694,26 +814,7 @@ struct CreatedFileSystemInstance
 
 [[nodiscard]] const FileSystemPluginManager::PluginEntry* FindFileSystemPluginById(std::wstring_view pluginId) noexcept
 {
-    if (pluginId.empty())
-    {
-        return nullptr;
-    }
-
-    const auto& plugins = FileSystemPluginManager::GetInstance().GetPlugins();
-    for (const FileSystemPluginManager::PluginEntry& entry : plugins)
-    {
-        if (entry.id.empty())
-        {
-            continue;
-        }
-
-        if (CompareStringOrdinal(entry.id.c_str(), -1, pluginId.data(), static_cast<int>(pluginId.size()), TRUE) == CSTR_EQUAL)
-        {
-            return &entry;
-        }
-    }
-
-    return nullptr;
+    return FileSystemPluginManager::GetInstance().FindPluginById(pluginId);
 }
 
 [[nodiscard]] HRESULT TryCreateFileSystemInstance(std::wstring_view pluginId, std::wstring_view instanceContext, CreatedFileSystemInstance& out) noexcept
@@ -868,6 +969,144 @@ struct CreatedFileSystemInstance
 
         std::wstring contextText(instanceContext);
         const HRESULT initHr = initializer->Initialize(contextText.c_str(), nullptr);
+        if (FAILED(initHr))
+        {
+            return initHr;
+        }
+    }
+
+    out.module     = std::move(module);
+    out.fileSystem = std::move(fileSystem);
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT TryCreateFakeMtpFileSystemInstance(std::string_view fakeBackendJsonUtf8,
+                                                         std::string_view configurationJsonUtf8,
+                                                         std::wstring_view rootPath,
+                                                         CreatedFileSystemInstance& out) noexcept
+{
+    out = {};
+
+    wil::unique_hmodule module;
+    FARPROC createAddress = nullptr;
+    const HRESULT loadHr  = SelfTest::LoadMtpPluginSelfTestExport("RedSalamanderMtpCreateForSelfTest", module, createAddress);
+    if (FAILED(loadHr))
+    {
+        return loadHr;
+    }
+#pragma warning(push)
+#pragma warning(disable : 4191) // GetProcAddress result is validated and cast to the named self-test ABI.
+    const auto createForSelfTest = reinterpret_cast<CreateMtpForSelfTestFunc>(createAddress);
+#pragma warning(pop)
+
+    FactoryOptions options{};
+    options.debugLevel = DEBUG_LEVEL_NONE;
+
+    wil::com_ptr<IFileSystem> fileSystem;
+    const std::string fakeBackendJson(fakeBackendJsonUtf8);
+    const HRESULT createHr = createForSelfTest(__uuidof(IFileSystem), &options, GetHostServices(), fakeBackendJson.c_str(), fileSystem.put_void());
+    if (FAILED(createHr) || ! fileSystem)
+    {
+        return createHr;
+    }
+
+    if (! configurationJsonUtf8.empty())
+    {
+        wil::com_ptr<IInformations> informations;
+        const HRESULT qiInfos = fileSystem->QueryInterface(__uuidof(IInformations), informations.put_void());
+        if (FAILED(qiInfos) || ! informations)
+        {
+            return qiInfos;
+        }
+
+        const std::string configuration(configurationJsonUtf8);
+        const HRESULT configHr = informations->SetConfiguration(configuration.c_str());
+        if (FAILED(configHr))
+        {
+            return configHr;
+        }
+    }
+
+    if (! rootPath.empty())
+    {
+        wil::com_ptr<IFileSystemInitialize> initializer;
+        const HRESULT qiInit = fileSystem->QueryInterface(__uuidof(IFileSystemInitialize), initializer.put_void());
+        if (FAILED(qiInit) || ! initializer)
+        {
+            return qiInit;
+        }
+
+        std::wstring root(rootPath);
+        const HRESULT initHr = initializer->Initialize(root.c_str(), nullptr);
+        if (FAILED(initHr))
+        {
+            return initHr;
+        }
+    }
+
+    out.module     = std::move(module);
+    out.fileSystem = std::move(fileSystem);
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT TryCreateWpdCacheMtpFileSystemInstance(std::string_view backendJsonUtf8,
+                                                             std::string_view configurationJsonUtf8,
+                                                             std::wstring_view rootPath,
+                                                             CreatedFileSystemInstance& out) noexcept
+{
+    out = {};
+
+    wil::unique_hmodule module;
+    FARPROC createAddress = nullptr;
+    const HRESULT loadHr  = SelfTest::LoadMtpPluginSelfTestExport("RedSalamanderMtpCreateWpdCacheForSelfTest", module, createAddress);
+    if (FAILED(loadHr))
+    {
+        return loadHr;
+    }
+#pragma warning(push)
+#pragma warning(disable : 4191) // GetProcAddress result is validated and cast to the named self-test ABI.
+    const auto createForSelfTest = reinterpret_cast<CreateMtpWpdCacheForSelfTestFunc>(createAddress);
+#pragma warning(pop)
+
+    FactoryOptions options{};
+    options.debugLevel = DEBUG_LEVEL_NONE;
+
+    wil::com_ptr<IFileSystem> fileSystem;
+    const std::string backendJson(backendJsonUtf8);
+    const HRESULT createHr = createForSelfTest(__uuidof(IFileSystem), &options, GetHostServices(), backendJson.c_str(), fileSystem.put_void());
+    if (FAILED(createHr) || ! fileSystem)
+    {
+        return createHr;
+    }
+
+    if (! configurationJsonUtf8.empty())
+    {
+        wil::com_ptr<IInformations> informations;
+        const HRESULT qiInfos = fileSystem->QueryInterface(__uuidof(IInformations), informations.put_void());
+        if (FAILED(qiInfos) || ! informations)
+        {
+            return qiInfos;
+        }
+
+        const std::string configuration(configurationJsonUtf8);
+        const HRESULT configHr = informations->SetConfiguration(configuration.c_str());
+        if (FAILED(configHr))
+        {
+            return configHr;
+        }
+    }
+
+    if (! rootPath.empty())
+    {
+        wil::com_ptr<IFileSystemInitialize> initializer;
+        const HRESULT qiInit = fileSystem->QueryInterface(__uuidof(IFileSystemInitialize), initializer.put_void());
+        if (FAILED(qiInit) || ! initializer)
+        {
+            return qiInit;
+        }
+
+        std::wstring root(rootPath);
+        const HRESULT initHr = initializer->Initialize(root.c_str(), nullptr);
         if (FAILED(initHr))
         {
             return initHr;
@@ -1107,6 +1346,114 @@ struct NavigationMenuCallbackProbe final : INavigationMenuCallback
     return text;
 }
 
+[[nodiscard]] std::wstring MakeExtendedPathForCompareSelfTest(const std::filesystem::path& inputPath)
+{
+    std::wstring normalized = inputPath.native();
+    std::replace(normalized.begin(), normalized.end(), L'/', L'\\');
+    if (normalized.empty())
+    {
+        normalized = L".";
+    }
+
+    if (normalized.rfind(L"\\\\?\\", 0) != 0)
+    {
+        const DWORD required = ::GetFullPathNameW(normalized.c_str(), 0, nullptr, nullptr);
+        if (required != 0)
+        {
+            std::wstring absolute(static_cast<size_t>(required) + 1u, L'\0');
+            const DWORD written = ::GetFullPathNameW(normalized.c_str(), static_cast<DWORD>(absolute.size()), absolute.data(), nullptr);
+            if (written != 0)
+            {
+                absolute.resize(static_cast<size_t>(written));
+                normalized = std::move(absolute);
+            }
+        }
+    }
+
+    if (normalized.rfind(L"\\\\?\\", 0) == 0)
+    {
+        return normalized;
+    }
+    if (normalized.rfind(L"\\\\", 0) == 0)
+    {
+        return std::wstring(L"\\\\?\\UNC\\") + normalized.substr(2u);
+    }
+    return std::wstring(L"\\\\?\\") + normalized;
+}
+
+[[nodiscard]] bool ExtendedDirectoryExistsForCompareSelfTest(const std::filesystem::path& path) noexcept
+{
+    if (path.empty())
+    {
+        return false;
+    }
+
+    const std::wstring extendedPath = MakeExtendedPathForCompareSelfTest(path);
+    const DWORD attributes          = ::GetFileAttributesW(extendedPath.c_str());
+    return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+}
+
+[[nodiscard]] bool EnsureExtendedDirectoryForCompareSelfTest(const std::filesystem::path& path) noexcept
+{
+    if (path.empty())
+    {
+        return false;
+    }
+
+    if (ExtendedDirectoryExistsForCompareSelfTest(path))
+    {
+        return true;
+    }
+
+    const std::filesystem::path parent = path.parent_path();
+    if (! parent.empty() && parent != path && ! ExtendedDirectoryExistsForCompareSelfTest(parent) &&
+        ! EnsureExtendedDirectoryForCompareSelfTest(parent))
+    {
+        return false;
+    }
+
+    const std::wstring extendedPath = MakeExtendedPathForCompareSelfTest(path);
+    if (::CreateDirectoryW(extendedPath.c_str(), nullptr) != 0)
+    {
+        return true;
+    }
+
+    return ::GetLastError() == ERROR_ALREADY_EXISTS && ExtendedDirectoryExistsForCompareSelfTest(path);
+}
+
+[[nodiscard]] bool WriteTextFileExtendedForCompareSelfTest(const std::filesystem::path& path, std::string_view text) noexcept
+{
+    if (path.empty())
+    {
+        return false;
+    }
+
+    if (path.has_parent_path() && ! EnsureExtendedDirectoryForCompareSelfTest(path.parent_path()))
+    {
+        return false;
+    }
+
+    const std::wstring extendedPath = MakeExtendedPathForCompareSelfTest(path);
+    wil::unique_handle file(
+        ::CreateFileW(extendedPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
+    if (! file)
+    {
+        return false;
+    }
+
+    DWORD written = 0u;
+    if (! text.empty() &&
+        (text.size() > (std::numeric_limits<DWORD>::max)() ||
+         ::WriteFile(file.get(), text.data(), static_cast<DWORD>(text.size()), &written, nullptr) == 0 ||
+         static_cast<size_t>(written) != text.size()))
+    {
+        return false;
+    }
+
+    static_cast<void>(::FlushFileBuffers(file.get()));
+    return true;
+}
+
 [[nodiscard]] bool SetFileLastWriteTime(const std::filesystem::path& path, const FILETIME& lastWriteTime) noexcept
 {
     wil::unique_handle file(::CreateFileW(
@@ -1284,8 +1631,7 @@ struct ObservedFileMetadata final
 
     sqlite3* rawDb               = nullptr;
     const std::u8string utf8Path = databasePath.u8string();
-    const int openResult =
-        sqlite3_open_v2(reinterpret_cast<const char*>(utf8Path.c_str()), &rawDb, SQLITE_OPEN_READWRITE | SQLITE_OPEN_NOMUTEX, nullptr);
+    const int openResult = sqlite3_open_v2(reinterpret_cast<const char*>(utf8Path.c_str()), &rawDb, SQLITE_OPEN_READWRITE | SQLITE_OPEN_NOMUTEX, nullptr);
     if (openResult != SQLITE_OK)
     {
         const auto* message = (rawDb != nullptr) ? static_cast<const wchar_t*>(sqlite3_errmsg16(rawDb)) : nullptr;
@@ -1307,16 +1653,15 @@ struct ObservedFileMetadata final
         }
     });
 
-    char* errorText = nullptr;
-    constexpr std::string_view kWalSeedSql =
-        "PRAGMA journal_mode=WAL;"
-        "PRAGMA wal_autocheckpoint=0;"
-        "BEGIN IMMEDIATE;"
-        "INSERT INTO meta(key, value) VALUES('selftest_wal_seed', '1') "
-        "ON CONFLICT(key) DO UPDATE SET value = excluded.value;"
-        "COMMIT;";
-    const int sqliteResult = sqlite3_exec(rawDb, kWalSeedSql.data(), nullptr, nullptr, &errorText);
-    const auto freeError   = wil::scope_exit([&]() noexcept
+    char* errorText                        = nullptr;
+    constexpr std::string_view kWalSeedSql = "PRAGMA journal_mode=WAL;"
+                                             "PRAGMA wal_autocheckpoint=0;"
+                                             "BEGIN IMMEDIATE;"
+                                             "INSERT INTO meta(key, value) VALUES('selftest_wal_seed', '1') "
+                                             "ON CONFLICT(key) DO UPDATE SET value = excluded.value;"
+                                             "COMMIT;";
+    const int sqliteResult                 = sqlite3_exec(rawDb, kWalSeedSql.data(), nullptr, nullptr, &errorText);
+    const auto freeError                   = wil::scope_exit([&]() noexcept
     {
         if (errorText != nullptr)
         {
@@ -1330,17 +1675,7 @@ struct ObservedFileMetadata final
         std::wstring message;
         if (errorText != nullptr)
         {
-            const int required = ::MultiByteToWideChar(CP_UTF8, 0, errorText, -1, nullptr, 0);
-            if (required > 0)
-            {
-                std::wstring buffer(static_cast<size_t>(required), L'\0');
-                static_cast<void>(::MultiByteToWideChar(CP_UTF8, 0, errorText, -1, buffer.data(), required));
-                if (! buffer.empty() && buffer.back() == L'\0')
-                {
-                    buffer.pop_back();
-                }
-                message = std::move(buffer);
-            }
+            message = Common::Strings::Utf16FromUtf8ReplacingInvalid(errorText);
         }
         if (message.empty())
         {
@@ -1382,10 +1717,16 @@ struct ObservedFileMetadata final
 class ShortReadFileReader final : public IFileReader
 {
 public:
-    ShortReadFileReader(wil::com_ptr<IFileReader> inner, unsigned long maxBytesPerRead, DWORD delayMs) noexcept
+    ShortReadFileReader(wil::com_ptr<IFileReader> inner,
+                        unsigned long maxBytesPerRead,
+                        DWORD delayMs,
+                        bool failGetSize,
+                        std::shared_ptr<std::atomic<uint32_t>> readCount) noexcept
         : _inner(std::move(inner)),
           _maxBytesPerRead(std::max<unsigned long>(maxBytesPerRead, 1u)),
-          _delayMs(delayMs)
+          _delayMs(delayMs),
+          _failGetSize(failGetSize),
+          _readCount(std::move(readCount))
     {
     }
 
@@ -1429,6 +1770,14 @@ public:
 
     HRESULT STDMETHODCALLTYPE GetSize(uint64_t* sizeBytes) noexcept override
     {
+        if (_failGetSize)
+        {
+            if (sizeBytes)
+            {
+                *sizeBytes = 0;
+            }
+            return E_FAIL;
+        }
         if (! _inner)
         {
             return E_FAIL;
@@ -1474,6 +1823,10 @@ public:
         {
             ::Sleep(_delayMs);
         }
+        if (_readCount)
+        {
+            _readCount->fetch_add(1u, std::memory_order_relaxed);
+        }
         return _inner->Read(buffer, capped, bytesRead);
     }
 
@@ -1484,6 +1837,8 @@ private:
     wil::com_ptr<IFileReader> _inner;
     unsigned long _maxBytesPerRead = 1;
     DWORD _delayMs                 = 0;
+    bool _failGetSize              = false;
+    std::shared_ptr<std::atomic<uint32_t>> _readCount;
 };
 
 // ShortReadFileSystem wraps a real IFileSystem/IFileSystemIO and limits every Read()
@@ -1493,11 +1848,18 @@ private:
 class ShortReadFileSystem final : public IFileSystem, public IFileSystemIO
 {
 public:
-    ShortReadFileSystem(wil::com_ptr<IFileSystem> base, std::filesystem::path shortReadRoot, unsigned long maxBytesPerRead, DWORD delayMs) noexcept
+    ShortReadFileSystem(wil::com_ptr<IFileSystem> base,
+                        std::filesystem::path shortReadRoot,
+                        unsigned long maxBytesPerRead,
+                        DWORD delayMs,
+                        bool failGetSize,
+                        std::shared_ptr<std::atomic<uint32_t>> readCount) noexcept
         : _base(std::move(base)),
           _shortReadRoot(std::move(shortReadRoot)),
           _maxBytesPerRead(std::max<unsigned long>(maxBytesPerRead, 1u)),
-          _delayMs(delayMs)
+          _delayMs(delayMs),
+          _failGetSize(failGetSize),
+          _readCount(std::move(readCount))
     {
         if (_base)
         {
@@ -1742,7 +2104,7 @@ public:
             return S_OK;
         }
 
-        auto* wrapper = new (std::nothrow) ShortReadFileReader(std::move(inner), _maxBytesPerRead, _delayMs);
+        auto* wrapper = new (std::nothrow) ShortReadFileReader(std::move(inner), _maxBytesPerRead, _delayMs, _failGetSize, _readCount);
         if (! wrapper)
         {
             return E_OUTOFMEMORY;
@@ -1797,15 +2159,19 @@ private:
     std::filesystem::path _shortReadRoot;
     unsigned long _maxBytesPerRead = 1;
     DWORD _delayMs                 = 0;
+    bool _failGetSize              = false;
+    std::shared_ptr<std::atomic<uint32_t>> _readCount;
 };
 
 [[nodiscard]] wil::com_ptr<IFileSystem> CreateShortReadFileSystem(const wil::com_ptr<IFileSystem>& base,
                                                                   const std::filesystem::path& shortReadRoot,
                                                                   unsigned long maxBytesPerRead,
-                                                                  DWORD delayMs) noexcept
+                                                                  DWORD delayMs,
+                                                                  bool failGetSize                                 = false,
+                                                                  std::shared_ptr<std::atomic<uint32_t>> readCount = {}) noexcept
 {
     wil::com_ptr<IFileSystem> wrapped;
-    auto* wrapper = new (std::nothrow) ShortReadFileSystem(base, shortReadRoot, maxBytesPerRead, delayMs);
+    auto* wrapper = new (std::nothrow) ShortReadFileSystem(base, shortReadRoot, maxBytesPerRead, delayMs, failGetSize, std::move(readCount));
     if (! wrapper)
     {
         return {};
@@ -1824,11 +2190,14 @@ struct RawDirectoryEntrySpec final
 struct ReadDirectoryTestBehavior
 {
     std::filesystem::path targetPath;
+    DWORD delayMs           = 0;
+    bool returnMalformed    = false;
+    unsigned long fakeCount = 1;
+    HRESULT forcedHr        = S_OK;
     std::vector<RawDirectoryEntrySpec> rawEntries;
-    DWORD delayMs                         = 0;
-    bool returnMalformed                  = false;
-    unsigned long fakeCount               = 1;
-    HRESULT forcedHr                      = S_OK;
+    std::shared_ptr<std::atomic<HRESULT>> forcedHrOverride;
+    std::shared_ptr<std::atomic<uint32_t>> callCount;
+    std::shared_ptr<std::atomic<uint32_t>> delayEnteredCount;
 };
 
 [[nodiscard]] std::wstring NormalizePathForNoCaseCompare(std::filesystem::path value) noexcept
@@ -2141,20 +2510,30 @@ public:
             return _base->ReadDirectoryInfo(path, ppFilesInformation);
         }
 
+        if (_behavior.callCount)
+        {
+            static_cast<void>(_behavior.callCount->fetch_add(1u, std::memory_order_acq_rel));
+        }
+
         if (_behavior.delayMs != 0u)
         {
+            if (_behavior.delayEnteredCount)
+            {
+                static_cast<void>(_behavior.delayEnteredCount->fetch_add(1u, std::memory_order_acq_rel));
+            }
             ::Sleep(_behavior.delayMs);
         }
 
-        if (FAILED(_behavior.forcedHr))
+        const HRESULT forcedHr = _behavior.forcedHrOverride ? _behavior.forcedHrOverride->load(std::memory_order_acquire) : _behavior.forcedHr;
+        if (FAILED(forcedHr))
         {
-            return _behavior.forcedHr;
+            return forcedHr;
         }
 
         if (! _behavior.rawEntries.empty())
         {
-            auto* info = new (std::nothrow) RawFilesInformation(BuildRawDirectoryBuffer(_behavior.rawEntries),
-                                                                static_cast<unsigned long>(_behavior.rawEntries.size()));
+            auto* info =
+                new (std::nothrow) RawFilesInformation(BuildRawDirectoryBuffer(_behavior.rawEntries), static_cast<unsigned long>(_behavior.rawEntries.size()));
             if (! info)
             {
                 return E_OUTOFMEMORY;
@@ -3566,6 +3945,40 @@ private:
     return std::format(LR"(\\.\pipe\RedSalamander.SearchService.Test.{})", MakeGuidText());
 }
 
+// Freshly linked service images and cold SQLite stores can legitimately spend
+// several seconds in verification and initialization before creating the pipe.
+constexpr uint32_t kForegroundSearchServiceReadinessTimeoutMs = 30'000u;
+
+[[nodiscard]] bool WaitForSearchServiceStatus(SelfTest::CaseState& state,
+                                              SearchServiceBroker::ServiceStatus& outStatus,
+                                              std::wstring_view expectedPipeName,
+                                              std::wstring_view context,
+                                              uint32_t timeoutMs = kForegroundSearchServiceReadinessTimeoutMs) noexcept
+{
+    const auto deadline =
+        std::chrono::steady_clock::now() + std::chrono::milliseconds{static_cast<std::chrono::milliseconds::rep>(SelfTest::ScaleTimeout(timeoutMs))};
+    HRESULT lastHr = HRESULT_FROM_WIN32(ERROR_TIMEOUT);
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        SearchServiceBroker::ServiceStatus candidate{};
+        lastHr = SearchServiceBroker::GetStatus(candidate);
+        if (SUCCEEDED(lastHr) && (expectedPipeName.empty() || EqualsIgnoreCase(candidate.pipeName, expectedPipeName)))
+        {
+            outStatus = std::move(candidate);
+            return true;
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    }
+
+    state.Require(false,
+                  std::format(L"Timed out waiting for SearchServiceBroker::GetStatus for {}. expectedPipe='{}' lastHr=0x{:08X}",
+                              context,
+                              expectedPipeName,
+                              static_cast<unsigned long>(lastHr)));
+    return false;
+}
+
 struct CapturedProcessResult final
 {
     DWORD exitCode = 0u;
@@ -3573,115 +3986,40 @@ struct CapturedProcessResult final
 };
 
 [[nodiscard]] bool RunProcessAndCaptureOutput(
-    std::wstring_view executablePath, std::wstring_view arguments, DWORD timeoutMs, CapturedProcessResult& outResult, std::wstring& outError) noexcept
+    std::wstring_view executablePath,
+    const std::vector<std::wstring>& arguments,
+    DWORD timeoutMs,
+    CapturedProcessResult& outResult,
+    std::wstring& outError) noexcept
 {
     outResult = {};
     outError.clear();
-
-    SECURITY_ATTRIBUTES securityAttributes{};
-    securityAttributes.nLength              = sizeof(securityAttributes);
-    securityAttributes.bInheritHandle       = TRUE;
-    securityAttributes.lpSecurityDescriptor = nullptr;
-
-    wil::unique_handle readPipe;
-    wil::unique_handle writePipe;
-    if (::CreatePipe(readPipe.put(), writePipe.put(), &securityAttributes, 0u) == 0)
+    const RedSalamander::TestSupport::ChildProcessResult sharedResult = RedSalamander::TestSupport::RunChildProcess(
+        {.executablePath = std::filesystem::path(executablePath),
+         .arguments      = arguments,
+         .timeout        = std::chrono::milliseconds(timeoutMs)});
+    if (! sharedResult.Completed())
     {
-        outError = std::format(L"CreatePipe failed. error={}", GetLastError());
+        outError = sharedResult.diagnostic;
         return false;
     }
 
-    if (::SetHandleInformation(readPipe.get(), HANDLE_FLAG_INHERIT, 0u) == 0)
+    outResult.exitCode = sharedResult.exitCode;
+    try
     {
-        outError = std::format(L"SetHandleInformation failed. error={}", GetLastError());
+        outResult.output = sharedResult.stdoutBytes;
+        outResult.output.append(sharedResult.stderrBytes);
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::terminate();
+    }
+    catch (const std::exception&)
+    {
+        // Mandatory: self-test helper runs under noexcept tests. Fail the adapter instead of unwinding.
+        outError = L"Process output merge failed with std::exception.";
         return false;
     }
-
-    std::wstring commandLine = std::format(L"\"{}\"", executablePath);
-    if (! arguments.empty())
-    {
-        commandLine.append(L" ");
-        commandLine.append(arguments);
-    }
-
-    STARTUPINFOW startupInfo{};
-    startupInfo.cb         = sizeof(startupInfo);
-    startupInfo.dwFlags    = STARTF_USESTDHANDLES;
-    startupInfo.hStdInput  = ::GetStdHandle(STD_INPUT_HANDLE);
-    startupInfo.hStdOutput = writePipe.get();
-    startupInfo.hStdError  = writePipe.get();
-
-    PROCESS_INFORMATION processInfo{};
-    if (::CreateProcessW(nullptr, commandLine.data(), nullptr, nullptr, TRUE, 0u, nullptr, nullptr, &startupInfo, &processInfo) == 0)
-    {
-        outError = std::format(L"CreateProcessW failed. error={}", GetLastError());
-        return false;
-    }
-
-    wil::unique_handle process(processInfo.hProcess);
-    wil::unique_handle thread(processInfo.hThread);
-    writePipe.reset();
-
-    const DWORD waitResult = ::WaitForSingleObject(process.get(), timeoutMs);
-    if (waitResult == WAIT_TIMEOUT)
-    {
-        static_cast<void>(::TerminateProcess(process.get(), 1u));
-        static_cast<void>(::WaitForSingleObject(process.get(), 2000u));
-        outError = L"Timed out waiting for child process completion.";
-        return false;
-    }
-
-    if (waitResult != WAIT_OBJECT_0)
-    {
-        outError = std::format(L"WaitForSingleObject failed. error={}", GetLastError());
-        return false;
-    }
-
-    DWORD exitCode = 0u;
-    if (::GetExitCodeProcess(process.get(), &exitCode) == 0)
-    {
-        outError = std::format(L"GetExitCodeProcess failed. error={}", GetLastError());
-        return false;
-    }
-    outResult.exitCode = exitCode;
-
-    std::array<char, 4096> buffer{};
-    for (;;)
-    {
-        DWORD bytesRead = 0u;
-        if (::ReadFile(readPipe.get(), buffer.data(), static_cast<DWORD>(buffer.size()), &bytesRead, nullptr) == 0)
-        {
-            const DWORD error = ::GetLastError();
-            if (error == ERROR_BROKEN_PIPE)
-            {
-                break;
-            }
-
-            outError = std::format(L"ReadFile failed. error={}", error);
-            return false;
-        }
-
-        if (bytesRead == 0u)
-        {
-            break;
-        }
-
-        try
-        {
-            outResult.output.append(buffer.data(), buffer.data() + bytesRead);
-        }
-        catch (const std::bad_alloc&)
-        {
-            std::terminate();
-        }
-        catch (const std::exception&)
-        {
-            // Mandatory: self-test helper runs under noexcept tests. Fail the helper instead of unwinding.
-            outError = L"Process output capture failed with std::exception.";
-            return false;
-        }
-    }
-
     return true;
 }
 
@@ -3818,7 +4156,6 @@ public:
     }
 
     [[nodiscard]] bool Start(std::wstring_view pipeName,
-                             uint32_t maxRequestsBeforeExit,
                              uint32_t disconnectAfterBatches,
                              uint32_t protocolVersion,
                              bool waitForReady,
@@ -3838,12 +4175,12 @@ public:
             return false;
         }
 
-        _pipeName = std::wstring(pipeName);
+        _pipeName        = std::wstring(pipeName);
+        _protocolVersion = protocolVersion;
 
-        std::wstring commandLine = std::format(L"\"{}\" --run-foreground --pipe-name=\"{}\" --max-requests={} --protocol-version={}",
+        std::wstring commandLine = std::format(L"\"{}\" --run-foreground --pipe-name=\"{}\" --protocol-version={}",
                                                servicePath.wstring(),
                                                _pipeName,
-                                               maxRequestsBeforeExit,
                                                protocolVersion);
         if (disconnectAfterBatches != 0u)
         {
@@ -3867,6 +4204,10 @@ public:
                 return false;
             }
         }
+        if (! SetClientMissingPipeRetryOverride(outError))
+        {
+            return false;
+        }
 
         STARTUPINFOW startupInfo{};
         startupInfo.cb = sizeof(startupInfo);
@@ -3878,16 +4219,55 @@ public:
             startupInfo.hStdError  = _stdoutCaptureFile.get();
         }
 
-        PROCESS_INFORMATION processInfo{};
-        if (::CreateProcessW(nullptr, commandLine.data(), nullptr, nullptr, captureOutput ? TRUE : FALSE, 0u, nullptr, nullptr, &startupInfo, &processInfo) ==
-            0)
+        if (! CreateKillOnCloseJob(outError))
         {
-            outError = std::format(L"CreateProcessW failed. error={}", GetLastError());
+            RestoreClientMissingPipeRetryOverride();
             return false;
         }
 
-        _process.reset(processInfo.hProcess);
-        _thread.reset(processInfo.hThread);
+        PROCESS_INFORMATION processInfo{};
+        if (::CreateProcessW(nullptr,
+                             commandLine.data(),
+                             nullptr,
+                             nullptr,
+                             captureOutput ? TRUE : FALSE,
+                             CREATE_SUSPENDED,
+                             nullptr,
+                             nullptr,
+                             &startupInfo,
+                             &processInfo) == 0)
+        {
+            outError = std::format(L"CreateProcessW failed. error={}", GetLastError());
+            _job.reset();
+            RestoreClientMissingPipeRetryOverride();
+            return false;
+        }
+
+        wil::unique_handle process(processInfo.hProcess);
+        wil::unique_handle thread(processInfo.hThread);
+        if (::AssignProcessToJobObject(_job.get(), process.get()) == 0)
+        {
+            outError = std::format(L"AssignProcessToJobObject failed for foreground search service JobObject. error={}", GetLastError());
+            static_cast<void>(::TerminateProcess(process.get(), 1u));
+            static_cast<void>(::WaitForSingleObject(process.get(), 2000u));
+            _job.reset();
+            RestoreClientMissingPipeRetryOverride();
+            return false;
+        }
+        AppendCompareSelfTestTraceLine(L"Foreground search service JobObject assigned.");
+
+        if (::ResumeThread(thread.get()) == static_cast<DWORD>(-1))
+        {
+            outError = std::format(L"ResumeThread failed for foreground search service. error={}", GetLastError());
+            static_cast<void>(::TerminateProcess(process.get(), 1u));
+            static_cast<void>(::WaitForSingleObject(process.get(), 2000u));
+            _job.reset();
+            RestoreClientMissingPipeRetryOverride();
+            return false;
+        }
+
+        _process = std::move(process);
+        _thread  = std::move(thread);
         if (! waitForReady)
         {
             return true;
@@ -3900,18 +4280,34 @@ public:
     {
         if (_process)
         {
-            static_cast<void>(::TerminateProcess(_process.get(), 0u));
-            static_cast<void>(::WaitForSingleObject(_process.get(), 2000u));
+            DWORD exitCode = STILL_ACTIVE;
+            const bool hasExited = HasExited(exitCode);
+            if (! hasExited && _protocolVersion == SearchServiceBroker::kProtocolVersion && ! _pipeName.empty())
+            {
+                if (SUCCEEDED(SearchServiceBroker::RequestShutdown(_pipeName, 500u)))
+                {
+                    static_cast<void>(::WaitForSingleObject(_process.get(), 2000u));
+                }
+            }
+
+            if (! HasExited(exitCode))
+            {
+                static_cast<void>(::TerminateProcess(_process.get(), 0u));
+                static_cast<void>(::WaitForSingleObject(_process.get(), 2000u));
+            }
         }
         _thread.reset();
         _process.reset();
+        _job.reset();
         _stdoutCaptureFile.reset();
         DeleteCapturedOutputFile();
         _capturedOutput.clear();
         _pipeName.clear();
+        _protocolVersion = 0u;
+        RestoreClientMissingPipeRetryOverride();
     }
 
-    [[nodiscard]] bool WaitForExitAndCapture(DWORD timeoutMs, std::string& outOutput, std::wstring& outError) noexcept
+    [[nodiscard]] bool ShutdownAndWaitForExitAndCapture(DWORD timeoutMs, std::string& outOutput, std::wstring& outError) noexcept
     {
         outOutput.clear();
         outError.clear();
@@ -3922,10 +4318,23 @@ public:
             return false;
         }
 
-        const DWORD waitResult = ::WaitForSingleObject(_process.get(), timeoutMs);
+        const ULONGLONG shutdownStartTick = ::GetTickCount64();
+        DWORD exitCode                    = STILL_ACTIVE;
+        HRESULT shutdownHr                = S_OK;
+        if (! HasExited(exitCode))
+        {
+            shutdownHr = SearchServiceBroker::RequestShutdown(_pipeName, timeoutMs);
+        }
+
+        const ULONGLONG shutdownElapsedMs = ::GetTickCount64() - shutdownStartTick;
+        const DWORD remainingTimeoutMs    = shutdownElapsedMs >= timeoutMs ? 0u : timeoutMs - static_cast<DWORD>(shutdownElapsedMs);
+        const DWORD waitResult            = ::WaitForSingleObject(_process.get(), remainingTimeoutMs);
         if (waitResult == WAIT_TIMEOUT)
         {
-            outError = L"Timed out waiting for the foreground search service process to exit.";
+            outError = FAILED(shutdownHr)
+                           ? std::format(L"Foreground search service graceful shutdown failed and the process did not exit. hr=0x{:08X}",
+                                         static_cast<unsigned long>(shutdownHr))
+                           : L"Timed out waiting for the foreground search service process to exit.";
             return false;
         }
         if (waitResult != WAIT_OBJECT_0)
@@ -3934,17 +4343,95 @@ public:
             return false;
         }
 
+        if (::GetExitCodeProcess(_process.get(), &exitCode) == 0)
+        {
+            outError = std::format(L"GetExitCodeProcess failed after foreground search service shutdown. error={}", GetLastError());
+            return false;
+        }
+        if (exitCode != 0u)
+        {
+            outError = std::format(L"Foreground search service exited with code {} after graceful shutdown.", exitCode);
+            return false;
+        }
         if (! DrainCapturedOutput(outError))
         {
             return false;
         }
 
         outOutput = _capturedOutput;
+        _thread.reset();
+        _process.reset();
+        _job.reset();
+        _pipeName.clear();
+        _protocolVersion = 0u;
+        RestoreClientMissingPipeRetryOverride();
         return true;
     }
 
+    [[nodiscard]] bool HasExited(DWORD& outExitCode) const noexcept
+    {
+        outExitCode = STILL_ACTIVE;
+        if (! _process)
+        {
+            return false;
+        }
+
+        if (::GetExitCodeProcess(_process.get(), &outExitCode) == 0)
+        {
+            outExitCode = STILL_ACTIVE;
+            return false;
+        }
+
+        return outExitCode != STILL_ACTIVE;
+    }
+
+    [[nodiscard]] std::wstring TryCaptureExitedOutputForFailure() noexcept
+    {
+        DWORD exitCode = STILL_ACTIVE;
+        if (! HasExited(exitCode))
+        {
+            return {};
+        }
+
+        std::wstring captureError;
+        if (! DrainCapturedOutput(captureError))
+        {
+            return std::format(L" serviceExitCode={} outputCaptureError='{}'", exitCode, captureError);
+        }
+
+        std::wstring output(_capturedOutput.begin(), _capturedOutput.end());
+        if (output.size() > 2048u)
+        {
+            output.resize(2048u);
+            output.append(L"...<truncated>");
+        }
+
+        return std::format(L" serviceExitCode={} output='{}'", exitCode, output);
+    }
+
 private:
-    [[nodiscard]] bool WaitForPipeReady(std::wstring& outError, bool allowExitedProcess) noexcept
+    [[nodiscard]] bool CreateKillOnCloseJob(std::wstring& outError) noexcept
+    {
+        _job.reset(::CreateJobObjectW(nullptr, nullptr));
+        if (! _job)
+        {
+            outError = std::format(L"CreateJobObjectW failed for foreground search service JobObject. error={}", GetLastError());
+            return false;
+        }
+
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
+        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        if (::SetInformationJobObject(_job.get(), JobObjectExtendedLimitInformation, &limits, sizeof(limits)) == 0)
+        {
+            outError = std::format(L"SetInformationJobObject failed for foreground search service JobObject. error={}", GetLastError());
+            _job.reset();
+            return false;
+        }
+
+        return true;
+    }
+
+    [[nodiscard]] bool WaitForPipeReady(std::wstring& outError) noexcept
     {
         if (_pipeName.empty())
         {
@@ -3958,11 +4445,6 @@ private:
             {
                 DWORD exitCode = 0u;
                 static_cast<void>(::GetExitCodeProcess(_process.get(), &exitCode));
-                if (allowExitedProcess && exitCode == 0u)
-                {
-                    return true;
-                }
-
                 outError = std::format(L"Service process exited before pipe readiness. exitCode={}", exitCode);
                 return false;
             }
@@ -3988,31 +4470,42 @@ private:
 
     [[nodiscard]] bool WaitUntilReady(std::wstring& outError) noexcept
     {
-        if (! WaitForPipeReady(outError, false))
+        if (! WaitForPipeReady(outError))
         {
             return false;
         }
 
-        for (int attempt = 0; attempt < 50; ++attempt)
+        HRESULT lastHr = HRESULT_FROM_WIN32(ERROR_TIMEOUT);
+        std::wstring lastPipeName;
+        const auto deadline = std::chrono::steady_clock::now() +
+                              std::chrono::milliseconds{static_cast<std::chrono::milliseconds::rep>(SelfTest::ScaleTimeout(5'000))};
+        while (std::chrono::steady_clock::now() < deadline)
         {
-            SearchServiceBroker::ServiceStatus status{};
-            if (SUCCEEDED(SearchServiceBroker::GetStatus(status)))
+            DWORD exitCode = STILL_ACTIVE;
+            if (HasExited(exitCode))
             {
-                return WaitForPipeReady(outError, true);
-            }
-
-            if (_process && ::WaitForSingleObject(_process.get(), 0u) == WAIT_OBJECT_0)
-            {
-                DWORD exitCode = 0u;
-                static_cast<void>(::GetExitCodeProcess(_process.get(), &exitCode));
-                outError = std::format(L"Service process exited before readiness. exitCode={}", exitCode);
+                outError = std::format(L"Service process exited before status readiness. exitCode={}", exitCode);
                 return false;
             }
 
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            SearchServiceBroker::ServiceStatus status{};
+            lastHr = SearchServiceBroker::GetStatus(status);
+            if (SUCCEEDED(lastHr))
+            {
+                lastPipeName = status.pipeName;
+                if (EqualsIgnoreCase(status.pipeName, _pipeName))
+                {
+                    return true;
+                }
+            }
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(25));
         }
 
-        outError = L"Timed out waiting for the search service foreground process.";
+        outError = std::format(L"Timed out waiting for the intended foreground search service status. expectedPipe='{}' lastPipe='{}' lastHr=0x{:08X}",
+                               _pipeName,
+                               lastPipeName,
+                               static_cast<unsigned long>(lastHr));
         return false;
     }
 
@@ -4071,37 +4564,75 @@ private:
     {
         DeleteCapturedOutputFile();
 
-        wchar_t tempPath[MAX_PATH] = {};
-        const DWORD pathLength     = ::GetTempPathW(static_cast<DWORD>(std::size(tempPath)), tempPath);
-        if (pathLength == 0u || pathLength >= std::size(tempPath))
+        const SelfTest::TestSandbox sandbox =
+            SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::CompareDirectories, L"foreground_search_service_stdout");
+        if (! sandbox.IsValid())
         {
-            outError = std::format(L"GetTempPathW failed. error={}", GetLastError());
+            outError = L"Failed to acquire TestSandbox for foreground search service stdout capture.";
             return false;
         }
 
-        wchar_t tempFile[MAX_PATH] = {};
-        if (::GetTempFileNameW(tempPath, L"RSS", 0u, tempFile) == 0)
+        for (uint32_t attempt = 0u; attempt < 32u; ++attempt)
         {
-            outError = std::format(L"GetTempFileNameW failed. error={}", GetLastError());
+            const std::filesystem::path capturePath =
+                sandbox.root / std::format(L"stdout-{}-{}-{}-{}.tmp", GetCurrentProcessId(), GetCurrentThreadId(), GetTickCount64(), attempt);
+
+            _stdoutCaptureFile.reset(::CreateFileW(capturePath.c_str(),
+                                                   GENERIC_READ | GENERIC_WRITE,
+                                                   FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                                   const_cast<SECURITY_ATTRIBUTES*>(&securityAttributes),
+                                                   CREATE_NEW,
+                                                   FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_SEQUENTIAL_SCAN,
+                                                   nullptr));
+            if (_stdoutCaptureFile)
+            {
+                _capturedOutputPath = capturePath.wstring();
+                return true;
+            }
+
+            const DWORD error = GetLastError();
+            if (error == ERROR_FILE_EXISTS || error == ERROR_ALREADY_EXISTS)
+            {
+                continue;
+            }
+
+            outError = std::format(L"CreateFileW failed for foreground search service stdout capture. error={}", error);
             return false;
         }
 
-        _capturedOutputPath = tempFile;
-        _stdoutCaptureFile.reset(::CreateFileW(_capturedOutputPath.c_str(),
-                                               GENERIC_READ | GENERIC_WRITE,
-                                               FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                                               const_cast<SECURITY_ATTRIBUTES*>(&securityAttributes),
-                                               CREATE_ALWAYS,
-                                               FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_SEQUENTIAL_SCAN,
-                                               nullptr));
-        if (! _stdoutCaptureFile)
+        outError = L"Failed to allocate a unique foreground search service stdout capture file in TestSandbox.";
+        return false;
+    }
+
+    [[nodiscard]] bool SetClientMissingPipeRetryOverride(std::wstring& outError) noexcept
+    {
+        if (_clientMissingPipeRetryOverrideSet)
         {
-            outError = std::format(L"CreateFileW failed. error={}", GetLastError());
-            DeleteCapturedOutputFile();
+            return true;
+        }
+
+        _previousClientMissingPipeRetryOverride = GetEnvVarTrimmed(SearchServiceBroker::kClientMissingPipeRetryMsEnvVar);
+        if (::SetEnvironmentVariableW(SearchServiceBroker::kClientMissingPipeRetryMsEnvVar, L"5000") == 0)
+        {
+            outError = std::format(L"Failed to set {}. error={}", SearchServiceBroker::kClientMissingPipeRetryMsEnvVar, GetLastError());
             return false;
         }
 
+        _clientMissingPipeRetryOverrideSet = true;
         return true;
+    }
+
+    void RestoreClientMissingPipeRetryOverride() noexcept
+    {
+        if (! _clientMissingPipeRetryOverrideSet)
+        {
+            return;
+        }
+
+        const wchar_t* restoreValue = _previousClientMissingPipeRetryOverride.empty() ? nullptr : _previousClientMissingPipeRetryOverride.c_str();
+        static_cast<void>(::SetEnvironmentVariableW(SearchServiceBroker::kClientMissingPipeRetryMsEnvVar, restoreValue));
+        _previousClientMissingPipeRetryOverride.clear();
+        _clientMissingPipeRetryOverrideSet = false;
     }
 
     void DeleteCapturedOutputFile() noexcept
@@ -4118,11 +4649,59 @@ private:
 
     wil::unique_handle _process;
     wil::unique_handle _thread;
+    wil::unique_handle _job;
     wil::unique_handle _stdoutCaptureFile;
     std::string _capturedOutput;
     std::wstring _capturedOutputPath;
     std::wstring _pipeName;
+    std::wstring _previousClientMissingPipeRetryOverride;
+    uint32_t _protocolVersion = 0u;
+    bool _clientMissingPipeRetryOverrideSet = false;
 };
+
+[[nodiscard]] bool WaitForSearchServiceStatusWithProcessDiagnostics(SelfTest::CaseState& state,
+                                                                    SearchServiceBroker::ServiceStatus& outStatus,
+                                                                    std::wstring_view expectedPipeName,
+                                                                    std::wstring_view context,
+                                                                    ForegroundSearchServiceProcess& serviceProcess,
+                                                                    uint32_t timeoutMs = kForegroundSearchServiceReadinessTimeoutMs) noexcept
+{
+    const auto deadline =
+        std::chrono::steady_clock::now() + std::chrono::milliseconds{static_cast<std::chrono::milliseconds::rep>(SelfTest::ScaleTimeout(timeoutMs))};
+    HRESULT lastHr = HRESULT_FROM_WIN32(ERROR_TIMEOUT);
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        SearchServiceBroker::ServiceStatus candidate{};
+        lastHr = SearchServiceBroker::GetStatus(candidate);
+        if (SUCCEEDED(lastHr) && (expectedPipeName.empty() || EqualsIgnoreCase(candidate.pipeName, expectedPipeName)))
+        {
+            outStatus = std::move(candidate);
+            return true;
+        }
+
+        const std::wstring exitSummary = serviceProcess.TryCaptureExitedOutputForFailure();
+        if (! exitSummary.empty())
+        {
+            state.Require(false,
+                          std::format(L"Foreground search service exited before SearchServiceBroker::GetStatus for {}. expectedPipe='{}' lastHr=0x{:08X}{}",
+                                      context,
+                                      expectedPipeName,
+                                      static_cast<unsigned long>(lastHr),
+                                      exitSummary));
+            return false;
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    }
+
+    state.Require(false,
+                  std::format(L"Timed out waiting for SearchServiceBroker::GetStatus for {}. expectedPipe='{}' lastHr=0x{:08X}{}",
+                              context,
+                              expectedPipeName,
+                              static_cast<unsigned long>(lastHr),
+                              serviceProcess.TryCaptureExitedOutputForFailure()));
+    return false;
+}
 
 [[nodiscard]] std::vector<std::wstring> CollectIndexedCandidateNames(const std::vector<LocalSearchIndexCore::Candidate>& candidates) noexcept
 {
@@ -4228,7 +4807,7 @@ private:
                                           LocalSearchIndexCore::QueryStats& outStats,
                                           std::vector<LocalSearchIndexCore::Candidate>& outCandidates,
                                           LocalSearchIndexCore::CancelCheckFn cancelCheck = nullptr,
-                                          void* cancelCookie                             = nullptr) noexcept
+                                          void* cancelCookie                              = nullptr) noexcept
 {
     LocalSearchIndexCore::QueryPlan plan{};
     plan.rootPath           = std::wstring(rootPath);
@@ -4331,17 +4910,7 @@ private:
         std::wstring message;
         if (errorText != nullptr)
         {
-            const int required = ::MultiByteToWideChar(CP_UTF8, 0, errorText, -1, nullptr, 0);
-            if (required > 0)
-            {
-                std::wstring buffer(static_cast<size_t>(required), L'\0');
-                static_cast<void>(::MultiByteToWideChar(CP_UTF8, 0, errorText, -1, buffer.data(), required));
-                if (! buffer.empty() && buffer.back() == L'\0')
-                {
-                    buffer.pop_back();
-                }
-                message = std::move(buffer);
-            }
+            message = Common::Strings::Utf16FromUtf8ReplacingInvalid(errorText);
         }
 
         if (message.empty())
@@ -4924,6 +5493,11 @@ public:
         return _completedCalls.load(std::memory_order_acquire);
     }
 
+    [[nodiscard]] unsigned long ProgressCount() const noexcept
+    {
+        return _progressCalls.load(std::memory_order_acquire);
+    }
+
     [[nodiscard]] bool SawUnexpectedIssue() const noexcept
     {
         return _unexpectedIssue.load(std::memory_order_acquire);
@@ -4956,6 +5530,93 @@ private:
     }
 
     return false;
+}
+
+struct SearchJunctionReparseHeader final
+{
+    DWORD tag        = 0u;
+    USHORT dataBytes = 0u;
+    USHORT reserved  = 0u;
+};
+static_assert(sizeof(SearchJunctionReparseHeader) == 8u);
+
+struct SearchJunctionMountPointHeader final
+{
+    USHORT substituteOffset = 0u;
+    USHORT substituteLength = 0u;
+    USHORT printOffset      = 0u;
+    USHORT printLength      = 0u;
+};
+static_assert(sizeof(SearchJunctionMountPointHeader) == 8u);
+
+[[nodiscard]] bool TryCreateDirectoryJunction(const std::filesystem::path& junctionPath, const std::filesystem::path& targetPath) noexcept
+{
+    std::error_code ec;
+    std::filesystem::remove_all(junctionPath, ec);
+    ec.clear();
+    std::filesystem::create_directories(junctionPath, ec);
+    if (ec)
+    {
+        ::SetLastError(static_cast<DWORD>(ec.value()));
+        return false;
+    }
+
+    const std::filesystem::path absoluteTarget = std::filesystem::absolute(targetPath, ec);
+    if (ec)
+    {
+        ::SetLastError(static_cast<DWORD>(ec.value()));
+        return false;
+    }
+
+    std::wstring printName = absoluteTarget.wstring();
+    if (! printName.empty() && printName.back() != L'\\' && printName.back() != L'/')
+    {
+        printName.push_back(L'\\');
+    }
+    std::wstring substituteName = L"\\??\\";
+    substituteName.append(printName);
+
+    const size_t substituteBytes = substituteName.size() * sizeof(wchar_t);
+    const size_t printBytes      = printName.size() * sizeof(wchar_t);
+    const size_t pathBytes       = substituteBytes + sizeof(wchar_t) + printBytes + sizeof(wchar_t);
+    const size_t payloadBytes    = sizeof(SearchJunctionMountPointHeader) + pathBytes;
+    const size_t totalBytes      = sizeof(SearchJunctionReparseHeader) + payloadBytes;
+    if (payloadBytes > static_cast<size_t>((std::numeric_limits<USHORT>::max)()) || totalBytes > MAXIMUM_REPARSE_DATA_BUFFER_SIZE)
+    {
+        ::SetLastError(ERROR_BUFFER_OVERFLOW);
+        return false;
+    }
+
+    std::vector<std::byte> buffer(totalBytes);
+    auto* header      = reinterpret_cast<SearchJunctionReparseHeader*>(buffer.data());
+    header->tag       = IO_REPARSE_TAG_MOUNT_POINT;
+    header->dataBytes = static_cast<USHORT>(payloadBytes);
+
+    auto* mountHeader = reinterpret_cast<SearchJunctionMountPointHeader*>(buffer.data() + sizeof(SearchJunctionReparseHeader));
+    mountHeader->substituteLength = static_cast<USHORT>(substituteBytes);
+    mountHeader->printOffset      = static_cast<USHORT>(substituteBytes + sizeof(wchar_t));
+    mountHeader->printLength      = static_cast<USHORT>(printBytes);
+
+    std::byte* pathBuffer = buffer.data() + sizeof(SearchJunctionReparseHeader) + sizeof(SearchJunctionMountPointHeader);
+    std::memcpy(pathBuffer, substituteName.data(), substituteBytes);
+    std::memcpy(pathBuffer + substituteBytes + sizeof(wchar_t), printName.data(), printBytes);
+
+    wil::unique_handle junctionHandle(
+        ::CreateFileW(junctionPath.c_str(), GENERIC_WRITE, 0u, nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS, nullptr));
+    if (! junctionHandle)
+    {
+        return false;
+    }
+
+    DWORD bytesReturned = 0u;
+    return ::DeviceIoControl(junctionHandle.get(),
+                             FSCTL_SET_REPARSE_POINT,
+                             buffer.data(),
+                             static_cast<DWORD>(buffer.size()),
+                             nullptr,
+                             0u,
+                             &bytesReturned,
+                             nullptr) != 0;
 }
 
 [[nodiscard]] bool WriteFileFill(const std::filesystem::path& path, char ch, size_t sizeBytes) noexcept
@@ -5113,6 +5774,213 @@ void AppendCompareSelfTestTraceLine(std::wstring_view message) noexcept
     return std::any_of(names.begin(), names.end(), [&](const std::wstring& value) noexcept { return value == name; });
 }
 
+struct DirectoryEntrySnapshot
+{
+    std::wstring name;
+    unsigned long attributes = 0;
+    uint64_t sizeBytes       = 0;
+};
+
+[[nodiscard]] std::vector<DirectoryEntrySnapshot> SnapshotDirectoryEntries(const wil::com_ptr<IFileSystem>& fs,
+                                                                           const wchar_t* path,
+                                                                           SelfTest::CaseState& state,
+                                                                           std::wstring_view label) noexcept
+{
+    if (! fs || path == nullptr)
+    {
+        state.Require(false, std::format(L"{}: invalid directory snapshot inputs.", label));
+        return {};
+    }
+
+    wil::com_ptr<IFilesInformation> info;
+    const HRESULT readHr = fs->ReadDirectoryInfo(path, info.put());
+    state.Require(SUCCEEDED(readHr) && info, std::format(L"{}: ReadDirectoryInfo('{}') failed. hr=0x{:08X}", label, path, static_cast<unsigned long>(readHr)));
+    if (FAILED(readHr) || ! info)
+    {
+        return {};
+    }
+
+    FileInfo* head         = nullptr;
+    const HRESULT bufferHr = info->GetBuffer(&head);
+    state.Require(SUCCEEDED(bufferHr), std::format(L"{}: GetBuffer failed. hr=0x{:08X}", label, static_cast<unsigned long>(bufferHr)));
+    if (FAILED(bufferHr) || head == nullptr)
+    {
+        return {};
+    }
+
+    std::vector<DirectoryEntrySnapshot> entries;
+    for (FileInfo* entry = head; entry != nullptr;)
+    {
+        const size_t nameChars = static_cast<size_t>(entry->FileNameSize) / sizeof(wchar_t);
+        entries.push_back(DirectoryEntrySnapshot{
+            .name       = std::wstring(entry->FileName, nameChars),
+            .attributes = entry->FileAttributes,
+            .sizeBytes  = entry->EndOfFile < 0 ? 0u : static_cast<uint64_t>(entry->EndOfFile),
+        });
+
+        if (entry->NextEntryOffset == 0)
+        {
+            break;
+        }
+        entry = reinterpret_cast<FileInfo*>(reinterpret_cast<unsigned char*>(entry) + entry->NextEntryOffset);
+    }
+
+    return entries;
+}
+
+[[nodiscard]] const DirectoryEntrySnapshot* FindDirectoryEntrySnapshot(const std::vector<DirectoryEntrySnapshot>& entries, std::wstring_view name) noexcept
+{
+    const auto it = std::find_if(entries.begin(), entries.end(), [&](const DirectoryEntrySnapshot& entry) noexcept { return entry.name == name; });
+    return it == entries.end() ? nullptr : &(*it);
+}
+
+[[nodiscard]] bool ReadPluginFileText(
+    IFileSystemIO* io, const wchar_t* path, std::string& outText, SelfTest::CaseState& state, std::wstring_view label) noexcept
+{
+    outText.clear();
+    if (io == nullptr || path == nullptr)
+    {
+        state.Require(false, std::format(L"{}: invalid read inputs.", label));
+        return false;
+    }
+
+    wil::com_ptr<IFileReader> reader;
+    const HRESULT createHr = io->CreateFileReader(path, reader.put());
+    state.Require(SUCCEEDED(createHr) && reader,
+                  std::format(L"{}: CreateFileReader('{}') failed. hr=0x{:08X}", label, path, static_cast<unsigned long>(createHr)));
+    if (FAILED(createHr) || ! reader)
+    {
+        return false;
+    }
+
+    uint64_t sizeBytes   = 0;
+    const HRESULT sizeHr = reader->GetSize(&sizeBytes);
+    state.Require(SUCCEEDED(sizeHr), std::format(L"{}: GetSize failed. hr=0x{:08X}", label, static_cast<unsigned long>(sizeHr)));
+    state.Require(sizeBytes <= static_cast<uint64_t>((std::numeric_limits<size_t>::max)()), std::format(L"{}: file too large for selftest.", label));
+    if (FAILED(sizeHr) || sizeBytes > static_cast<uint64_t>((std::numeric_limits<size_t>::max)()))
+    {
+        return false;
+    }
+
+    outText.assign(static_cast<size_t>(sizeBytes), '\0');
+    size_t totalRead = 0;
+    while (totalRead < outText.size())
+    {
+        const size_t remaining           = outText.size() - totalRead;
+        const unsigned long requestBytes = static_cast<unsigned long>((std::min)(remaining, static_cast<size_t>((std::numeric_limits<unsigned long>::max)())));
+        unsigned long chunkRead          = 0;
+        const HRESULT readHr             = reader->Read(outText.data() + totalRead, requestBytes, &chunkRead);
+        state.Require(SUCCEEDED(readHr), std::format(L"{}: Read failed after {} bytes. hr=0x{:08X}", label, totalRead, static_cast<unsigned long>(readHr)));
+        if (FAILED(readHr))
+        {
+            return false;
+        }
+        if (chunkRead == 0)
+        {
+            break;
+        }
+        totalRead += chunkRead;
+    }
+
+    state.Require(totalRead == outText.size(), std::format(L"{}: expected {} bytes, read {}.", label, outText.size(), totalRead));
+    outText.resize(totalRead);
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool WritePluginFileText(
+    IFileSystemIO* io, const wchar_t* path, FileSystemFlags flags, std::string_view text, SelfTest::CaseState& state, std::wstring_view label) noexcept
+{
+    if (io == nullptr || path == nullptr)
+    {
+        state.Require(false, std::format(L"{}: invalid write inputs.", label));
+        return false;
+    }
+    if (text.size() > static_cast<size_t>((std::numeric_limits<unsigned long>::max)()))
+    {
+        state.Require(false, std::format(L"{}: payload is too large for one selftest write.", label));
+        return false;
+    }
+
+    wil::com_ptr<IFileWriter> writer;
+    const HRESULT createHr = io->CreateFileWriter(path, flags, writer.put());
+    state.Require(SUCCEEDED(createHr) && writer,
+                  std::format(L"{}: CreateFileWriter('{}') failed. hr=0x{:08X}", label, path, static_cast<unsigned long>(createHr)));
+    if (FAILED(createHr) || ! writer)
+    {
+        return false;
+    }
+
+    uint64_t position          = 0;
+    const HRESULT initialPosHr = writer->GetPosition(&position);
+    state.Require(SUCCEEDED(initialPosHr) && position == 0u,
+                  std::format(L"{}: initial writer position expected 0, got {} hr=0x{:08X}.", label, position, static_cast<unsigned long>(initialPosHr)));
+
+    const unsigned long expectedBytes = static_cast<unsigned long>(text.size());
+    unsigned long written             = 0;
+    const HRESULT writeHr             = writer->Write(text.data(), expectedBytes, &written);
+    state.Require(SUCCEEDED(writeHr) && written == expectedBytes,
+                  std::format(L"{}: Write expected {} bytes, wrote {} hr=0x{:08X}.", label, text.size(), written, static_cast<unsigned long>(writeHr)));
+    if (FAILED(writeHr) || written != expectedBytes)
+    {
+        return false;
+    }
+
+    const uint64_t expectedPosition = static_cast<uint64_t>(text.size());
+    const HRESULT positionHr        = writer->GetPosition(&position);
+    state.Require(
+        SUCCEEDED(positionHr) && position == expectedPosition,
+        std::format(L"{}: writer position expected {}, got {} hr=0x{:08X}.", label, expectedPosition, position, static_cast<unsigned long>(positionHr)));
+
+    const HRESULT commitHr = writer->Commit();
+    state.Require(SUCCEEDED(commitHr), std::format(L"{}: Commit failed. hr=0x{:08X}", label, static_cast<unsigned long>(commitHr)));
+    return SUCCEEDED(commitHr) && state.failure.empty();
+}
+
+template <typename TInterface>
+void RequireMtpSupportedQiIdentity(IFileSystem* fs, IUnknown* canonicalUnknown, SelfTest::CaseState& state, std::wstring_view label) noexcept
+{
+    if (fs == nullptr || canonicalUnknown == nullptr)
+    {
+        state.Require(false, std::format(L"MTP QI: invalid inputs for {}.", label));
+        return;
+    }
+
+    wil::com_ptr<TInterface> iface;
+    const HRESULT qiHr = fs->QueryInterface(__uuidof(TInterface), iface.put_void());
+    state.Require(SUCCEEDED(qiHr) && iface, std::format(L"MTP QI: {} failed. hr=0x{:08X}", label, static_cast<unsigned long>(qiHr)));
+    if (FAILED(qiHr) || ! iface)
+    {
+        return;
+    }
+
+    wil::com_ptr<IUnknown> identity;
+    const HRESULT identityHr = iface->QueryInterface(__uuidof(IUnknown), identity.put_void());
+    state.Require(SUCCEEDED(identityHr) && identity,
+                  std::format(L"MTP QI: {} did not QI back to IUnknown. hr=0x{:08X}", label, static_cast<unsigned long>(identityHr)));
+    state.Require(identity.get() == canonicalUnknown, std::format(L"MTP QI: {} returned a different COM identity.", label));
+}
+
+void RequireMtpUnsupportedQi(IFileSystem* fs, REFIID riid, SelfTest::CaseState& state, std::wstring_view label) noexcept
+{
+    if (fs == nullptr)
+    {
+        state.Require(false, std::format(L"MTP QI: invalid unsupported-QI input for {}.", label));
+        return;
+    }
+
+    void* raw          = reinterpret_cast<void*>(static_cast<uintptr_t>(1u));
+    const HRESULT qiHr = fs->QueryInterface(riid, &raw);
+    state.Require(qiHr == E_NOINTERFACE && raw == nullptr,
+                  std::format(L"MTP QI: {} expected E_NOINTERFACE/null, got hr=0x{:08X} ptr=0x{:016X}.",
+                              label,
+                              static_cast<unsigned long>(qiHr),
+                              reinterpret_cast<uintptr_t>(raw)));
+    if (SUCCEEDED(qiHr) && raw != nullptr)
+    {
+        reinterpret_cast<IUnknown*>(raw)->Release();
+    }
+}
+
 struct GetDecisionSehContext
 {
     CompareDirectoriesSession* session                                   = nullptr;
@@ -5226,6 +6094,40 @@ void InvokeGetRootDecision(void* rawContext) noexcept
             return true;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+
+    return false;
+}
+
+[[nodiscard]] bool DrainPendingSubdirUpdatesUntilQuiet(const std::shared_ptr<CompareDirectoriesSession>& session, std::chrono::milliseconds timeout) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! session)
+    {
+        return false;
+    }
+
+    const auto deadline  = std::chrono::steady_clock::now() + timeout;
+    size_t emptySamples  = 0u;
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        const bool morePending = session->FlushPendingSubdirUpdatesBudgeted(64);
+        const CompareDirectoriesPerfStats stats = session->GetPerfStats();
+        if (! morePending && stats.pendingSubdirUpdates == 0u)
+        {
+            ++emptySamples;
+            if (emptySamples >= 2u)
+            {
+                return true;
+            }
+        }
+        else
+        {
+            emptySamples = 0u;
+        }
+
+        std::this_thread::sleep_for(1ms);
     }
 
     return false;
@@ -5350,7 +6252,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
     wil::com_ptr<IFileSystemIO> dummyIo;
     wil::com_ptr<IFileSystemDirectoryOperations> dummyOps;
 
-    if (fatalSetupFailure.empty())
+    const auto initializeDummyFileSystem = [&]() noexcept -> std::wstring
     {
         std::wstring setupFailure;
         if (! dummyFs)
@@ -5384,6 +6286,31 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             }
         }
 
+        return setupFailure;
+    };
+
+    const auto resetSharedPluginInterfaces = [&]() noexcept
+    {
+        dummyOps.reset();
+        dummyIo.reset();
+        dummyInfo.reset();
+        dummyFs.reset();
+        baseFs.reset();
+    };
+
+    const auto reacquireSharedPluginInterfaces = [&]() noexcept
+    {
+        baseFs  = GetLocalFileSystem();
+        dummyFs = GetDummyFileSystem();
+        dummyInfo.reset();
+        dummyIo.reset();
+        dummyOps.reset();
+        static_cast<void>(initializeDummyFileSystem());
+    };
+
+    if (fatalSetupFailure.empty())
+    {
+        const std::wstring setupFailure = initializeDummyFileSystem();
         if (! setupFailure.empty())
         {
             AppendCaseResult(suite, L"setup", SelfTest::SelfTestCaseResult::Status::failed, setupFailure);
@@ -5394,6 +6321,12 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
     {
 #include "CompareDirectoriesEngine.SelfTest.Cases.CoreDiffs.cpp"
 #include "CompareDirectoriesEngine.SelfTest.Cases.RuntimeAndRemote.cpp"
+        // MTP runtime-refresh coverage intentionally unloads/reloads file-system
+        // plugin modules. Release manager-owned plugin interfaces before that
+        // block so COM destructors cannot run after FreeLibrary.
+        resetSharedPluginInterfaces();
+#include "CompareDirectoriesEngine.SelfTest.Cases.Mtp.cpp"
+        reacquireSharedPluginInterfaces();
 #include "CompareDirectoriesEngine.SelfTest.Cases.SearchAndIndex.cpp"
 
         AppendCompareSelfTestTraceLine(L"Run: finalizing");

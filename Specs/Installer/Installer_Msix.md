@@ -39,8 +39,15 @@ The package includes:
 - `RedSalamander.exe`
 - `RedSalamanderMonitor.exe`
 - `Plugins\*.dll` and their copied runtime dependencies
+- `Lang\*.dll` satellite resource assemblies
 - `Themes\*.theme.json5`
 - `SettingsStore.schema.json`
+
+Directory-preserving harvest is required. Recursive content from `.build\<platform>\<configuration>` must not flatten subdirectories into the MSIX package root. `Installer/msix/RedSalamanderInstaller.wapproj` keeps the broad runtime dependency harvest for root-level files, but explicitly harvests `Plugins\`, `Lang\`, and `Themes\` with matching `PackagePath`, `Link`, and `TargetPath` metadata so plugin DLLs, language satellites, and themes keep their runtime-relative paths.
+
+Validation:
+- `Tools/Tests/WingetValidation.Tests.ps1` asserts the MSIX project preserves `Plugins\`, `Lang\`, and `Themes\` package paths and that the portable ZIP copies `Lang\`.
+- Release package validation must list the built MSIX (or unpack it with `makeappx`) and confirm plugin DLLs and satellite resource DLLs appear under their expected subdirectories, not at the package root.
 
 ## Manifest
 

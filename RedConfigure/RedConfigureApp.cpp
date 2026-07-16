@@ -218,6 +218,17 @@ std::vector<std::wstring> BuildThemeColorSuggestions(std::wstring_view selectedK
 
     add(L"blend(menu.background,app.accent,16%)");
     add(L"blend(folderView.background,app.accent,12%)");
+    add(L"perceptualTone(app.accent,60)");
+    add(L"ensureContrast(menu.text,menu.background,4.5)");
+    add(L"harmonize(app.accent,navigation.accent,25%)");
+    add(L"systemAccent()");
+    add(L"systemColor(accent)");
+    add(L"tone(window.background,menu.background)");
+    if (selectedKey == L"folderView.itemBackgroundSelected")
+    {
+        add(L"seededRainbow(runtime.seed,85%,75%,100%,0)");
+        add(L"seededChoice(runtime.seed,app.accent,navigation.accent)");
+    }
     return suggestions;
 }
 } // namespace RedConfigure

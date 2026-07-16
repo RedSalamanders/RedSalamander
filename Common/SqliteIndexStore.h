@@ -21,9 +21,11 @@ struct StoreInfo final
     std::wstring writeAheadLogPath;
     uint64_t writeAheadLogBytes      = 0u;
     uint32_t schemaVersion           = 0u;
+    uint64_t storeGeneration         = 0u;
     uint64_t volumeCount             = 0u;
     uint64_t entryCount              = 0u;
     uint64_t legacyImportVolumeCount = 0u;
+    uint64_t queryUnreadyVolumeCount = 0u;
     uint64_t pageCount               = 0u;
     uint64_t freelistPageCount       = 0u;
     std::wstring lastCheckpointUtc;
@@ -157,6 +159,7 @@ struct AutomaticMaintenanceResult final
     StoreInfo after{};
     bool maintenanceNeeded        = false;
     bool ranCheckpoint            = false;
+    bool ranVacuum                = false;
     bool ranIncrementalVacuum     = false;
     uint64_t requestedVacuumPages = 0u;
     uint64_t reclaimedVacuumPages = 0u;
@@ -164,6 +167,7 @@ struct AutomaticMaintenanceResult final
 
 [[nodiscard]] HRESULT EnsureBootstrap(std::wstring_view databasePath, StoreInfo* outInfo) noexcept;
 [[nodiscard]] HRESULT InspectStore(std::wstring_view databasePath, StoreInfo& outInfo) noexcept;
+[[nodiscard]] HRESULT ReadStoreGeneration(std::wstring_view databasePath, uint64_t& outGeneration) noexcept;
 [[nodiscard]] HRESULT InspectVolume(std::wstring_view databasePath, std::wstring_view rootPath, VolumeInfo& outInfo) noexcept;
 [[nodiscard]] HRESULT LoadVolume(std::wstring_view databasePath, std::wstring_view rootPath, ReplaceVolumeRequest& outVolume) noexcept;
 [[nodiscard]] HRESULT ReplaceVolume(std::wstring_view databasePath, const ReplaceVolumeRequest& request, ReplaceVolumeResult* outResult) noexcept;

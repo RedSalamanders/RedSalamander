@@ -143,8 +143,7 @@ int wmain(int argc, wchar_t** argv)
     bool ranAnySuite = false;
     if (suiteFilter.has_value() && shouldRunSuite("Gallery"))
     {
-        const std::filesystem::path outputPath =
-            galleryOutputPath.value_or(FindRepoRootForDxUiTests() / L"Specs" / L"TestRuns" / L"DxUiGallery" / L"DxUiControlGallery.png");
+        const std::filesystem::path outputPath = galleryOutputPath.value_or(GetDxUiTestArtifactPath(L"DxUiControlGallery.png"));
         std::cerr << "[START] Gallery\n" << std::flush;
         if (galleryOutputDirectory.has_value())
         {
@@ -160,8 +159,7 @@ int wmain(int argc, wchar_t** argv)
     }
     if (suiteFilter.has_value() && shouldRunSuite("ButtonContrast"))
     {
-        const std::filesystem::path outputPath =
-            buttonAuditOutputPath.value_or(FindRepoRootForDxUiTests() / L"Specs" / L"TestRuns" / L"DxUiGallery" / L"DxUiButtonContrast.png");
+        const std::filesystem::path outputPath = buttonAuditOutputPath.value_or(GetDxUiTestArtifactPath(L"DxUiButtonContrast.png"));
         std::cerr << "[START] ButtonContrast\n" << std::flush;
         RunButtonContrastAuditGenerator(outputPath);
         RedSalamander::Ui::AnimationDispatcher::GetInstance().Shutdown();

@@ -59,6 +59,16 @@ bool DebugSelectPreferencesPluginsTreeChild(const size_t childIndex) noexcept
     return PreferencesDialog::DebugSelectPluginsTreeChild(childIndex);
 }
 
+bool DebugFocusPreferencesCategoryTree() noexcept
+{
+    return PreferencesDialog::DebugFocusCategoryTree();
+}
+
+bool DebugSendPreferencesCategoryTreeKey(const UINT virtualKey) noexcept
+{
+    return PreferencesDialog::DebugSendCategoryTreeKey(virtualKey);
+}
+
 bool DebugScrollPreferencesCategoryTreeByWheelDelta(const int wheelDelta) noexcept
 {
     return PreferencesDialog::DebugScrollCategoryTreeByWheelDelta(wheelDelta);

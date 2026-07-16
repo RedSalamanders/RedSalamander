@@ -1,14 +1,11 @@
 #include "ThemePreviewModel.h"
 
 #include "ThemeDefinitionIo.h"
+#include "Helpers.h"
 
-#include <algorithm>
 #include <array>
-#include <cwchar>
-#include <cwctype>
-#include <string>
-#include <utility>
-#include <vector>
+#include <chrono>
+#include <format>
 
 namespace
 {
@@ -22,30 +19,30 @@ struct DefaultColor
 constexpr std::array<DefaultColor, 26> kDefaultColors = {{
     {L"app.accent", 0xFF0078D4u, 0xFF005FB8u},
     {L"window.background", 0xFF202020u, 0xFFFFFFFFu},
-    {L"window.text", 0xFFF3F3F3u, 0xFF111111u},
-    {L"window.subduedText", 0xFFB8B8B8u, 0xFF5B5B5Bu},
     {L"navigation.background", 0xFF252525u, 0xFFEAF2FEu},
     {L"navigation.text", 0xFFF3F3F3u, 0xFF1F2937u},
     {L"navigation.accent", 0xFF0078D4u, 0xFF005FB8u},
+    {L"navigation.progressOk", 0xFF22C55Eu, 0xFF15803Du},
+    {L"navigation.progressBackground", 0xFF3A3A3Au, 0xFFE5E7EBu},
     {L"menu.background", 0xFF2B2B2Bu, 0xFFFFFFFFu},
     {L"menu.text", 0xFFF4F4F4u, 0xFF111111u},
-    {L"menu.selectionBackground", 0xFF3B3B3Bu, 0xFFE8F1FFu},
+    {L"menu.disabledText", 0xFFB8B8B8u, 0xFF5B5B5Bu},
+    {L"menu.selectionBg", 0xFF3B3B3Bu, 0xFFE8F1FFu},
     {L"menu.selectionText", 0xFFFFFFFFu, 0xFF0F172Au},
     {L"menu.border", 0xFF505050u, 0xFFD8D8D8u},
     {L"folderView.background", 0xFF1E1E1Eu, 0xFFFFFFFFu},
-    {L"folderView.itemForeground", 0xFFEDEDEDu, 0xFF111111u},
+    {L"folderView.textNormal", 0xFFEDEDEDu, 0xFF111111u},
     {L"folderView.itemBackgroundHovered", 0xFF333333u, 0xFFF0F6FFu},
     {L"folderView.itemBackgroundSelected", 0xFF264F78u, 0xFFCFE8FFu},
-    {L"folderView.itemForegroundSelected", 0xFFFFFFFFu, 0xFF0F172Au},
-    {L"folderView.warningForeground", 0xFFFFD166u, 0xFF8A4B00u},
-    {L"dialog.background", 0xFF2D2D2Du, 0xFFF7F7F7u},
-    {L"dialog.text", 0xFFF3F3F3u, 0xFF111111u},
-    {L"dialog.buttonBackground", 0xFF3A3A3Au, 0xFFFFFFFFu},
-    {L"dialog.buttonText", 0xFFF3F3F3u, 0xFF111111u},
-    {L"progress.background", 0xFF3A3A3Au, 0xFFE5E7EBu},
-    {L"progress.fill", 0xFF0078D4u, 0xFF2563EBu},
-    {L"diff.addedBackground", 0xFF173B24u, 0xFFEAF8EFu},
-    {L"diff.removedBackground", 0xFF4A1F25u, 0xFFFFECEFu},
+    {L"folderView.textSelected", 0xFFFFFFFFu, 0xFF0F172Au},
+    {L"folderView.warningBackground", 0xFF4A3512u, 0xFFFFF4CEu},
+    {L"folderView.warningText", 0xFFFFD166u, 0xFF8A4B00u},
+    {L"fileOps.progressBackground", 0xFF3A3A3Au, 0xFFE5E7EBu},
+    {L"fileOps.progressTotal", 0xFF0078D4u, 0xFF2563EBu},
+    {L"viewer.diff.addedBackground", 0xFF173B24u, 0xFFEAF8EFu},
+    {L"viewer.diff.removedBackground", 0xFF4A1F25u, 0xFFFFECEFu},
+    {L"monitor.textView.bg", 0xFF1E1E1Eu, 0xFFFFFFFFu},
+    {L"monitor.textView.fg", 0xFFF3F3F3u, 0xFF111111u},
 }};
 
 [[nodiscard]] bool IsLightBase(std::wstring_view baseThemeId) noexcept
@@ -53,197 +50,11 @@ constexpr std::array<DefaultColor, 26> kDefaultColors = {{
     return baseThemeId == L"builtin/light" || baseThemeId == L"builtin/system";
 }
 
-[[nodiscard]] std::wstring TrimCopy(std::wstring_view text)
+[[nodiscard]] std::optional<std::wstring_view> PaletteNameFromEditorKey(std::wstring_view key) noexcept
 {
-    const auto isSpace = [](wchar_t ch) noexcept { return ch == L' ' || ch == L'\t' || ch == L'\r' || ch == L'\n'; };
-
-    while (! text.empty() && isSpace(text.front()))
-    {
-        text.remove_prefix(1u);
-    }
-    while (! text.empty() && isSpace(text.back()))
-    {
-        text.remove_suffix(1u);
-    }
-
-    return std::wstring(text);
-}
-
-[[nodiscard]] std::wstring ToLowerCopy(std::wstring_view text)
-{
-    std::wstring result(text);
-    std::transform(result.begin(), result.end(), result.begin(), [](wchar_t ch) noexcept { return static_cast<wchar_t>(::towlower(ch)); });
-    return result;
-}
-
-[[nodiscard]] std::vector<std::wstring> SplitArguments(std::wstring_view text)
-{
-    std::vector<std::wstring> args;
-    size_t start = 0u;
-    while (start <= text.size())
-    {
-        const size_t comma = text.find(L',', start);
-        const size_t end   = comma == std::wstring_view::npos ? text.size() : comma;
-        args.push_back(TrimCopy(text.substr(start, end - start)));
-        if (comma == std::wstring_view::npos)
-        {
-            break;
-        }
-        start = comma + 1u;
-    }
-    return args;
-}
-
-[[nodiscard]] bool ParseAmount(std::wstring_view text, double& outAmount) noexcept
-{
-    std::wstring trimmed = TrimCopy(text);
-    if (trimmed.empty())
-    {
-        return false;
-    }
-
-    bool percent = false;
-    if (trimmed.back() == L'%')
-    {
-        percent = true;
-        trimmed.pop_back();
-        trimmed = TrimCopy(trimmed);
-        if (trimmed.empty())
-        {
-            return false;
-        }
-    }
-
-    wchar_t* end        = nullptr;
-    const double parsed = std::wcstod(trimmed.c_str(), &end);
-    if (! end || *end != L'\0')
-    {
-        return false;
-    }
-
-    outAmount = percent ? parsed / 100.0 : parsed;
-    return outAmount >= 0.0 && outAmount <= 1.0;
-}
-
-[[nodiscard]] bool ParseExpressionText(std::wstring_view text, RedConfigure::Themes::ThemeColorExpression& outExpression)
-{
-    const std::wstring trimmed = TrimCopy(text);
-    const size_t open          = trimmed.find(L'(');
-    const size_t close         = trimmed.rfind(L')');
-    if (open == std::wstring::npos || close == std::wstring::npos || close <= open || close != trimmed.size() - 1u)
-    {
-        return false;
-    }
-
-    const std::wstring function          = ToLowerCopy(TrimCopy(std::wstring_view(trimmed).substr(0u, open)));
-    const std::vector<std::wstring> args = SplitArguments(std::wstring_view(trimmed).substr(open + 1u, close - open - 1u));
-
-    using RedConfigure::Themes::ThemeColorExpressionKind;
-    RedConfigure::Themes::ThemeColorExpression expression;
-    if (function == L"ref")
-    {
-        if (args.size() != 1u || ! Common::Settings::IsValidThemeColorKey(args[0]))
-        {
-            return false;
-        }
-        expression.kind     = ThemeColorExpressionKind::Reference;
-        expression.firstKey = args[0];
-    }
-    else if (function == L"lighten" || function == L"darken" || function == L"alpha")
-    {
-        if (args.size() != 2u || ! Common::Settings::IsValidThemeColorKey(args[0]) || ! ParseAmount(args[1], expression.amount))
-        {
-            return false;
-        }
-        expression.kind     = (function == L"lighten")  ? ThemeColorExpressionKind::Lighten
-                              : (function == L"darken") ? ThemeColorExpressionKind::Darken
-                                                        : ThemeColorExpressionKind::Alpha;
-        expression.firstKey = args[0];
-    }
-    else if (function == L"blend")
-    {
-        if (args.size() != 3u || ! Common::Settings::IsValidThemeColorKey(args[0]) || ! Common::Settings::IsValidThemeColorKey(args[1]) ||
-            ! ParseAmount(args[2], expression.amount))
-        {
-            return false;
-        }
-        expression.kind      = ThemeColorExpressionKind::Blend;
-        expression.firstKey  = args[0];
-        expression.secondKey = args[1];
-    }
-    else if (function == L"contrast")
-    {
-        if (args.size() != 1u || ! Common::Settings::IsValidThemeColorKey(args[0]))
-        {
-            return false;
-        }
-        expression.kind     = ThemeColorExpressionKind::Contrast;
-        expression.firstKey = args[0];
-    }
-    else
-    {
-        return false;
-    }
-
-    outExpression = std::move(expression);
-    return true;
-}
-
-[[nodiscard]] uint32_t Channel(uint32_t argb, uint32_t shift) noexcept
-{
-    return (argb >> shift) & 0xFFu;
-}
-
-[[nodiscard]] uint32_t PackArgb(uint32_t a, uint32_t r, uint32_t g, uint32_t b) noexcept
-{
-    return ((a & 0xFFu) << 24u) | ((r & 0xFFu) << 16u) | ((g & 0xFFu) << 8u) | (b & 0xFFu);
-}
-
-[[nodiscard]] uint32_t MixChannel(uint32_t from, uint32_t to, double amount) noexcept
-{
-    const double mixed   = static_cast<double>(from) + ((static_cast<double>(to) - static_cast<double>(from)) * amount);
-    const double clamped = std::clamp(mixed, 0.0, 255.0);
-    return static_cast<uint32_t>(clamped + 0.5);
-}
-
-[[nodiscard]] uint32_t MixColors(uint32_t from, uint32_t to, double amount) noexcept
-{
-    return PackArgb(MixChannel(Channel(from, 24u), Channel(to, 24u), amount),
-                    MixChannel(Channel(from, 16u), Channel(to, 16u), amount),
-                    MixChannel(Channel(from, 8u), Channel(to, 8u), amount),
-                    MixChannel(Channel(from, 0u), Channel(to, 0u), amount));
-}
-
-[[nodiscard]] uint32_t SetAlpha(uint32_t argb, double amount) noexcept
-{
-    return PackArgb(MixChannel(0u, 255u, amount), Channel(argb, 16u), Channel(argb, 8u), Channel(argb, 0u));
-}
-
-[[nodiscard]] uint32_t RelativeBrightness(uint32_t argb) noexcept
-{
-    return ((Channel(argb, 16u) * 299u) + (Channel(argb, 8u) * 587u) + (Channel(argb, 0u) * 114u)) / 1000u;
-}
-
-[[nodiscard]] std::wstring FormatAmount(double amount)
-{
-    const uint32_t percent = static_cast<uint32_t>((amount * 100.0) + 0.5);
-    return std::to_wstring(percent) + L"%";
-}
-
-[[nodiscard]] std::wstring FormatExpression(const RedConfigure::Themes::ThemeColorExpression& expression)
-{
-    using RedConfigure::Themes::ThemeColorExpressionKind;
-    switch (expression.kind)
-    {
-        case ThemeColorExpressionKind::Reference: return L"ref(" + expression.firstKey + L")";
-        case ThemeColorExpressionKind::Lighten: return L"lighten(" + expression.firstKey + L"," + FormatAmount(expression.amount) + L")";
-        case ThemeColorExpressionKind::Darken: return L"darken(" + expression.firstKey + L"," + FormatAmount(expression.amount) + L")";
-        case ThemeColorExpressionKind::Alpha: return L"alpha(" + expression.firstKey + L"," + FormatAmount(expression.amount) + L")";
-        case ThemeColorExpressionKind::Blend:
-            return L"blend(" + expression.firstKey + L"," + expression.secondKey + L"," + FormatAmount(expression.amount) + L")";
-        case ThemeColorExpressionKind::Contrast: return L"contrast(" + expression.firstKey + L")";
-        default: return {};
-    }
+    constexpr std::wstring_view kPrefix = L"palette.";
+    if (! key.starts_with(kPrefix) || key.size() <= kPrefix.size()) return std::nullopt;
+    return key.substr(kPrefix.size());
 }
 } // namespace
 
@@ -252,7 +63,7 @@ namespace RedConfigure::Themes
 void ThemePreviewModel::SetTheme(const Common::Settings::ThemeDefinition& theme)
 {
     _theme = theme;
-    _expressions.clear();
+    static_cast<void>(Recompute());
 }
 
 const Common::Settings::ThemeDefinition& ThemePreviewModel::GetTheme() const noexcept
@@ -260,59 +71,23 @@ const Common::Settings::ThemeDefinition& ThemePreviewModel::GetTheme() const noe
     return _theme;
 }
 
-Common::Settings::ThemeDefinition ThemePreviewModel::BuildFlattenedTheme() const
-{
-    Common::Settings::ThemeDefinition flattened = _theme;
-    for (const auto& [key, _] : _expressions)
-    {
-        if (const std::optional<uint32_t> color = GetEffectiveColor(key))
-        {
-            flattened.colors[key] = color.value();
-        }
-    }
-    return flattened;
-}
-
 std::optional<uint32_t> ThemePreviewModel::GetEffectiveColor(std::wstring_view key) const
 {
-    std::vector<std::wstring> stack;
-    return ResolveColor(key, stack);
-}
-
-std::wstring ThemePreviewModel::GetAuthoredColorText(std::wstring_view key) const
-{
-    if (const auto expression = _expressions.find(std::wstring(key)); expression != _expressions.end())
+    if (const std::optional<std::wstring_view> paletteName = PaletteNameFromEditorKey(key); paletteName.has_value())
     {
-        return FormatExpression(expression->second);
+        const auto found = _resolved.paletteColors.find(std::wstring(paletteName.value()));
+        return found == _resolved.paletteColors.end() ? std::nullopt : std::optional<uint32_t>(found->second);
     }
-    if (const auto color = _theme.colors.find(std::wstring(key)); color != _theme.colors.end())
+    if (const auto dynamic = _resolved.dynamicColors.find(std::wstring(key)); dynamic != _resolved.dynamicColors.end())
     {
-        return Common::Settings::FormatColor(color->second);
+        return Common::Settings::EvaluateDynamicThemeColor(
+            dynamic->second, Common::Settings::ThemeRuntimeContext{.seedHash32 = _previewSeed, .highContrast = false});
     }
-    return {};
-}
-
-std::optional<uint32_t> ThemePreviewModel::ResolveColor(std::wstring_view key, std::vector<std::wstring>& stack) const
-{
-    const std::wstring keyText(key);
-    if (std::find(stack.begin(), stack.end(), keyText) != stack.end())
+    const auto found = _resolved.colors.find(std::wstring(key));
+    if (found != _resolved.colors.end())
     {
-        return std::nullopt;
+        return found->second;
     }
-
-    if (const auto expression = _expressions.find(keyText); expression != _expressions.end())
-    {
-        stack.push_back(keyText);
-        const std::optional<uint32_t> color = ResolveExpression(expression->second, stack);
-        stack.pop_back();
-        return color;
-    }
-
-    if (const auto it = _theme.colors.find(std::wstring(key)); it != _theme.colors.end())
-    {
-        return it->second;
-    }
-
     const bool light = IsLightBase(_theme.baseThemeId);
     for (const DefaultColor& color : kDefaultColors)
     {
@@ -321,80 +96,316 @@ std::optional<uint32_t> ThemePreviewModel::ResolveColor(std::wstring_view key, s
             return light ? color.lightValue : color.darkValue;
         }
     }
-
     return std::nullopt;
 }
 
-std::optional<uint32_t> ThemePreviewModel::ResolveExpression(const ThemeColorExpression& expression, std::vector<std::wstring>& stack) const
+std::wstring ThemePreviewModel::GetAuthoredColorText(std::wstring_view key) const
 {
-    const std::optional<uint32_t> first = ResolveColor(expression.firstKey, stack);
-    if (! first)
+    if (const std::optional<std::wstring_view> paletteName = PaletteNameFromEditorKey(key); paletteName.has_value())
     {
-        return std::nullopt;
+        const auto found = _theme.palette.find(std::wstring(paletteName.value()));
+        return found == _theme.palette.end() ? std::wstring{} : Common::Settings::FormatThemeColorSource(found->second);
     }
-
-    switch (expression.kind)
-    {
-        case ThemeColorExpressionKind::Reference: return first;
-        case ThemeColorExpressionKind::Lighten: return MixColors(first.value(), 0xFFFFFFFFu, expression.amount);
-        case ThemeColorExpressionKind::Darken: return MixColors(first.value(), 0xFF000000u, expression.amount);
-        case ThemeColorExpressionKind::Alpha: return SetAlpha(first.value(), expression.amount);
-        case ThemeColorExpressionKind::Blend:
-        {
-            const std::optional<uint32_t> second = ResolveColor(expression.secondKey, stack);
-            if (! second)
-            {
-                return std::nullopt;
-            }
-            return MixColors(first.value(), second.value(), expression.amount);
-        }
-        case ThemeColorExpressionKind::Contrast:
-            return RelativeBrightness(first.value()) >= 128u ? std::optional<uint32_t>(0xFF000000u) : std::optional<uint32_t>(0xFFFFFFFFu);
-        default: return std::nullopt;
-    }
+    const auto found = _theme.colors.find(std::wstring(key));
+    return found == _theme.colors.end() ? std::wstring{} : Common::Settings::FormatThemeColorSource(found->second);
 }
 
 bool ThemePreviewModel::TryEditOverride(std::wstring_view key, std::wstring_view colorText)
 {
-    if (! Common::Settings::IsValidThemeColorKey(key))
+    const std::optional<std::wstring_view> paletteName = PaletteNameFromEditorKey(key);
+    if ((! paletteName.has_value() && ! Common::Settings::IsValidThemeColorKey(key)) ||
+        (paletteName.has_value() && ! Common::Settings::IsValidThemePaletteName(paletteName.value())))
+    {
+        _lastError = L"The theme key or palette name is invalid.";
+        return false;
+    }
+    Common::Settings::ThemeColorSource source;
+    if (FAILED(Common::Settings::ParseThemeColorSource(colorText, source, &_lastError)))
+    {
+        return false;
+    }
+    const std::wstring keyText(key);
+    auto& destination = paletteName.has_value() ? _theme.palette : _theme.colors;
+    const std::wstring destinationKey = paletteName.has_value() ? std::wstring(paletteName.value()) : keyText;
+    const auto previous = destination.find(destinationKey);
+    const std::optional<Common::Settings::ThemeColorSource> previousSource =
+        previous == destination.end() ? std::nullopt : std::optional<Common::Settings::ThemeColorSource>(previous->second);
+    destination[destinationKey] = std::move(source);
+    if (Recompute())
+    {
+        return true;
+    }
+    const std::wstring failedError = _lastError;
+    if (previousSource.has_value())
+    {
+        destination[destinationKey] = previousSource.value();
+    }
+    else
+    {
+        destination.erase(destinationKey);
+    }
+    static_cast<void>(Recompute());
+    _lastError = failedError;
+    return false;
+}
+
+bool ThemePreviewModel::CreatePaletteEntry(std::wstring_view name, std::wstring_view colorText, bool replaceMatchingDirectSources)
+{
+    if (! Common::Settings::IsValidThemePaletteName(name) || _theme.palette.contains(std::wstring(name)))
+    {
+        _lastError = L"The palette name is invalid or already exists.";
+        return false;
+    }
+
+    Common::Settings::ThemeColorSource source;
+    if (FAILED(Common::Settings::ParseThemeColorSource(colorText, source, &_lastError)))
     {
         return false;
     }
 
-    const std::wstring authoredText = TrimCopy(colorText);
-    uint32_t argb                   = 0u;
-    if (! Common::Settings::TryParseColor(authoredText, argb))
+    Common::Settings::ThemeDefinition candidate = _theme;
+    candidate.palette.emplace(std::wstring(name), source);
+    if (replaceMatchingDirectSources && source.kind == Common::Settings::ThemeColorSourceKind::Direct)
     {
-        ThemeColorExpression expression;
-        if (! ParseExpressionText(authoredText, expression))
+        Common::Settings::ThemeColorSource reference;
+        reference.kind = Common::Settings::ThemeColorSourceKind::Reference;
+        reference.references.push_back(std::wstring(L"palette.") + std::wstring(name));
+        for (auto& [paletteName, value] : candidate.palette)
         {
-            return false;
+            if (paletteName != name && value == source) value = reference;
         }
-
-        const std::wstring keyText(key);
-        auto previousExpressions = _expressions;
-        auto previousColors      = _theme.colors;
-        _theme.colors.erase(keyText);
-        _expressions[keyText] = std::move(expression);
-        if (! GetEffectiveColor(key))
+        for (auto& [_, value] : candidate.colors)
         {
-            _expressions  = std::move(previousExpressions);
-            _theme.colors = std::move(previousColors);
-            return false;
+            if (value == source) value = reference;
         }
-        return true;
     }
 
-    const std::wstring keyText(key);
-    _expressions.erase(keyText);
-    _theme.colors[keyText] = argb;
-    return true;
+    const Common::Settings::ThemeDefinition previous = _theme;
+    _theme = std::move(candidate);
+    if (Recompute()) return true;
+    const std::wstring failedError = _lastError;
+    _theme = previous;
+    static_cast<void>(Recompute());
+    _lastError = failedError;
+    return false;
 }
 
-void ThemePreviewModel::ResetOverride(std::wstring_view key)
+bool ThemePreviewModel::WrapSourceWithTransform(std::wstring_view key, ThemeSourceTransform transform)
 {
-    const std::wstring keyText(key);
-    _expressions.erase(keyText);
-    _theme.colors.erase(keyText);
+    const std::optional<std::wstring_view> paletteName = PaletteNameFromEditorKey(key);
+    if ((! paletteName.has_value() && ! Common::Settings::IsValidThemeColorKey(key)) ||
+        (paletteName.has_value() && ! Common::Settings::IsValidThemePaletteName(paletteName.value())) ||
+        (transform == ThemeSourceTransform::BlendAccent16 && key == L"app.accent"))
+    {
+        _lastError = L"The selected theme source cannot use this transform.";
+        return false;
+    }
+
+    const auto& sources = paletteName.has_value() ? _theme.palette : _theme.colors;
+    const std::wstring sourceKey = paletteName.has_value() ? std::wstring(paletteName.value()) : std::wstring(key);
+    Common::Settings::ThemeColorSource original;
+    if (const auto found = sources.find(sourceKey); found != sources.end())
+    {
+        original = found->second;
+    }
+    else if (const std::optional<uint32_t> effective = GetEffectiveColor(key); effective.has_value())
+    {
+        original = Common::Settings::ThemeColorSource(effective.value());
+    }
+    else
+    {
+        _lastError = L"The selected theme source has no effective color to transform.";
+        return false;
+    }
+
+    std::wstring stem = L"source_";
+    for (const wchar_t ch : sourceKey)
+    {
+        const bool alphaNumeric = (ch >= L'a' && ch <= L'z') || (ch >= L'A' && ch <= L'Z') || (ch >= L'0' && ch <= L'9');
+        stem.push_back(alphaNumeric ? ch : L'_');
+        if (stem.size() >= 52u) break;
+    }
+    std::wstring generatedName = stem;
+    for (uint32_t suffix = 2u; _theme.palette.contains(generatedName); ++suffix)
+    {
+        generatedName = std::format(L"{}_{}", stem, suffix);
+    }
+
+    Common::Settings::ThemeDefinition candidate = _theme;
+    candidate.palette.emplace(generatedName, std::move(original));
+    const std::wstring expression = transform == ThemeSourceTransform::Darken10
+                                        ? std::format(L"darken(palette.{},10%)", generatedName)
+                                        : std::format(L"blend(palette.{0},app.accent,16%)", generatedName);
+    Common::Settings::ThemeColorSource transformed;
+    if (FAILED(Common::Settings::ParseThemeColorSource(expression, transformed, &_lastError))) return false;
+    auto& candidateSources = paletteName.has_value() ? candidate.palette : candidate.colors;
+    candidateSources[sourceKey] = std::move(transformed);
+
+    const Common::Settings::ThemeDefinition previous = _theme;
+    _theme = std::move(candidate);
+    if (Recompute()) return true;
+    const std::wstring failedError = _lastError;
+    _theme = previous;
+    static_cast<void>(Recompute());
+    _lastError = failedError;
+    return false;
+}
+
+bool ThemePreviewModel::ResetOverride(std::wstring_view key)
+{
+    if (const std::optional<std::wstring_view> paletteName = PaletteNameFromEditorKey(key); paletteName.has_value())
+    {
+        const std::wstring dependencyKey = std::wstring(L"palette.") + std::wstring(paletteName.value());
+        if (const auto affected = _resolved.affected.find(dependencyKey); affected != _resolved.affected.end() && ! affected->second.empty())
+        {
+            _lastError = std::format(L"Palette entry '{}' is still referenced by {} theme source(s).", paletteName.value(), affected->second.size());
+            return false;
+        }
+        _theme.palette.erase(std::wstring(paletteName.value()));
+        return Recompute();
+    }
+    _theme.colors.erase(std::wstring(key));
+    return Recompute();
+}
+
+bool ThemePreviewModel::RenamePaletteEntry(std::wstring_view oldName, std::wstring_view newName)
+{
+    if (! Common::Settings::IsValidThemePaletteName(oldName) || ! Common::Settings::IsValidThemePaletteName(newName) || oldName == newName ||
+        ! _theme.palette.contains(std::wstring(oldName)) || _theme.palette.contains(std::wstring(newName)))
+    {
+        _lastError = L"The palette rename is invalid or the destination name already exists.";
+        return false;
+    }
+
+    Common::Settings::ThemeDefinition candidate = _theme;
+    auto source = candidate.palette.extract(std::wstring(oldName));
+    source.key() = std::wstring(newName);
+    candidate.palette.insert(std::move(source));
+    const std::wstring oldReference = std::wstring(L"palette.") + std::wstring(oldName);
+    const std::wstring newReference = std::wstring(L"palette.") + std::wstring(newName);
+    const auto rewrite = [&](auto& sources)
+    {
+        for (auto& [_, value] : sources)
+        {
+            for (std::wstring& reference : value.references)
+            {
+                if (reference == oldReference) reference = newReference;
+            }
+        }
+    };
+    rewrite(candidate.palette);
+    rewrite(candidate.colors);
+
+    const Common::Settings::ThemeDefinition previous = _theme;
+    _theme = std::move(candidate);
+    if (Recompute()) return true;
+    const std::wstring failedError = _lastError;
+    _theme = previous;
+    static_cast<void>(Recompute());
+    _lastError = failedError;
+    return false;
+}
+
+std::vector<std::wstring> ThemePreviewModel::GetDependencies(std::wstring_view key) const
+{
+    const auto found = _resolved.dependencies.find(std::wstring(key));
+    return found == _resolved.dependencies.end() ? std::vector<std::wstring>{} : found->second;
+}
+
+std::vector<std::wstring> ThemePreviewModel::GetAffected(std::wstring_view key) const
+{
+    const auto found = _resolved.affected.find(std::wstring(key));
+    return found == _resolved.affected.end() ? std::vector<std::wstring>{} : found->second;
+}
+
+Common::Settings::ThemeColorEvaluationPhase ThemePreviewModel::GetEvaluationPhase(std::wstring_view key) const
+{
+    const auto phaseFor = [&](auto&& self, std::wstring_view sourceName, size_t depth) -> Common::Settings::ThemeColorEvaluationPhase
+    {
+        if (depth >= 32u) return Common::Settings::ThemeColorEvaluationPhase::Load;
+        const std::optional<std::wstring_view> paletteName = PaletteNameFromEditorKey(sourceName);
+        const auto& sources = paletteName.has_value() ? _theme.palette : _theme.colors;
+        const std::wstring sourceKey = paletteName.has_value() ? std::wstring(paletteName.value()) : std::wstring(sourceName);
+        const auto found = sources.find(sourceKey);
+        Common::Settings::ThemeColorEvaluationPhase phase =
+            found == sources.end() ? Common::Settings::ThemeColorEvaluationPhase::Load : Common::Settings::GetThemeColorEvaluationPhase(found->second);
+        if (phase == Common::Settings::ThemeColorEvaluationPhase::Paint) return phase;
+        if (const auto dependencies = _resolved.dependencies.find(std::wstring(sourceName)); dependencies != _resolved.dependencies.end())
+        {
+            for (const std::wstring& dependency : dependencies->second)
+            {
+                const auto dependencyPhase = self(self, dependency, depth + 1u);
+                if (dependencyPhase == Common::Settings::ThemeColorEvaluationPhase::Paint) return dependencyPhase;
+                if (dependencyPhase == Common::Settings::ThemeColorEvaluationPhase::Event) phase = dependencyPhase;
+            }
+        }
+        return phase;
+    };
+    return phaseFor(phaseFor, key, 0u);
+}
+
+std::optional<Common::Settings::ThemeColorSourceKind> ThemePreviewModel::GetSourceKind(std::wstring_view key) const noexcept
+{
+    const std::optional<std::wstring_view> paletteName = PaletteNameFromEditorKey(key);
+    const auto& sources = paletteName.has_value() ? _theme.palette : _theme.colors;
+    const std::wstring sourceKey = paletteName.has_value() ? std::wstring(paletteName.value()) : std::wstring(key);
+    const auto found = sources.find(sourceKey);
+    return found == sources.end() ? std::nullopt : std::optional<Common::Settings::ThemeColorSourceKind>(found->second.kind);
+}
+
+std::wstring_view ThemePreviewModel::GetLastError() const noexcept
+{
+    return _lastError;
+}
+
+void ThemePreviewModel::SetPreviewSeed(uint32_t seed) noexcept
+{
+    _previewSeed = seed;
+}
+
+uint32_t ThemePreviewModel::GetPreviewSeed() const noexcept
+{
+    return _previewSeed;
+}
+
+bool ThemePreviewModel::Recompute()
+{
+    const auto startedAt = std::chrono::steady_clock::now();
+    Common::Settings::ThemeResolutionContext context;
+    const bool light = IsLightBase(_theme.baseThemeId);
+    context.effectiveDark = ! light;
+    context.baseColor = [light](std::wstring_view key) -> std::optional<uint32_t>
+    {
+        for (const DefaultColor& color : kDefaultColors)
+        {
+            if (color.key == key)
+            {
+                return light ? color.lightValue : color.darkValue;
+            }
+        }
+        return std::nullopt;
+    };
+    context.systemColors = {{0xFF0078D4u, 0xFF60A5FAu, 0xFF005FB8u, light ? 0xFFFFFFFFu : 0xFF202020u,
+                             light ? 0xFF111111u : 0xFFF3F3F3u, 0xFF0078D4u, 0xFFFFFFFFu}};
+    Common::Settings::ResolvedThemeColors candidate;
+    std::wstring message;
+    if (FAILED(Common::Settings::ResolveThemeDefinition(_theme, context, candidate, &message)))
+    {
+        Debug::Perf::EmitDurationUs(L"redconfigure.theme.preview_resolve_us",
+                                    Debug::Perf::ElapsedUs(startedAt),
+                                    static_cast<uint64_t>(_theme.palette.size()),
+                                    static_cast<uint64_t>(_theme.colors.size()),
+                                    HRESULT_FROM_WIN32(ERROR_INVALID_DATA));
+        _lastError = std::move(message);
+        return false;
+    }
+    _resolved = std::move(candidate);
+    Debug::Perf::EmitDurationUs(L"redconfigure.theme.preview_resolve_us",
+                                Debug::Perf::ElapsedUs(startedAt),
+                                static_cast<uint64_t>(_theme.palette.size()),
+                                static_cast<uint64_t>(_theme.colors.size()),
+                                S_OK);
+    _lastError.clear();
+    return true;
 }
 } // namespace RedConfigure::Themes

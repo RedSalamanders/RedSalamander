@@ -28,6 +28,7 @@
 #include "LocalizationManager.h"
 #include "Version.h"
 #include "WindowMessages.h"
+#include "WindowSizing.h"
 #include "resource.h"
 
 namespace SplashScreen
@@ -111,7 +112,6 @@ struct SplashWindowState
 };
 
 LRESULT CALLBACK SplashWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) noexcept;
-[[nodiscard]] int ScaleDip(int dip, UINT dpi) noexcept;
 void StartSplashDrag(HWND hwnd) noexcept;
 void CenterOverOwner(HWND hwnd, HWND owner) noexcept;
 [[nodiscard]] std::wstring GetStatusText() noexcept;
@@ -244,11 +244,11 @@ private:
 void UpdateSplashWindowSize(HWND hwnd) noexcept
 {
     const UINT dpi     = GetDpiForWindow(hwnd);
-    const int widthPx  = ScaleDip(560, dpi);
-    const int heightPx = ScaleDip(220, dpi);
+    const int widthPx  = Common::WindowSizing::DipToPixelRounded(dpi, 560);
+    const int heightPx = Common::WindowSizing::DipToPixelRounded(dpi, 220);
     SetWindowPos(hwnd, nullptr, 0, 0, widthPx, heightPx, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
 
-    const int radius = ScaleDip(14, dpi);
+    const int radius = Common::WindowSizing::DipToPixelRounded(dpi, 14);
     wil::unique_hrgn rgn(CreateRoundRectRgn(0, 0, widthPx + 1, heightPx + 1, radius, radius));
     if (rgn)
     {
@@ -543,11 +543,6 @@ void StartSplashDrag(HWND hwnd) noexcept
     static_cast<void>(SendMessageW(dragTarget, WM_NCLBUTTONDOWN, HTCAPTION, 0));
 }
 
-[[nodiscard]] int ScaleDip(int dip, UINT dpi) noexcept
-{
-    return MulDiv(dip, static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI);
-}
-
 [[nodiscard]] RECT GetWorkAreaForOwner(HWND owner) noexcept
 {
     HMONITOR monitor = nullptr;
@@ -678,6 +673,7 @@ void ThreadMain(std::stop_token stopToken, std::chrono::milliseconds delay, HINS
 #endif
     const auto comCleanup = wil::scope_exit([&]
     {
+        RedSalamander::DxUi::ShutdownNativeTextInputForCurrentThread();
         if (SUCCEEDED(comHr))
         {
             CoUninitialize();
@@ -716,8 +712,8 @@ void ThreadMain(std::stop_token stopToken, std::chrono::milliseconds delay, HINS
                                           WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
                                           CW_USEDEFAULT,
                                           CW_USEDEFAULT,
-                                          ScaleDip(560, USER_DEFAULT_SCREEN_DPI),
-                                          ScaleDip(220, USER_DEFAULT_SCREEN_DPI),
+                                          Common::WindowSizing::DipToPixelRounded(USER_DEFAULT_SCREEN_DPI, 560),
+                                          Common::WindowSizing::DipToPixelRounded(USER_DEFAULT_SCREEN_DPI, 220),
                                           owner,
                                           nullptr,
                                           instance,

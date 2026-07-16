@@ -89,6 +89,7 @@ struct ShortcutsWindowDebugSnapshot
 [[nodiscard]] bool DebugSetShortcutsWindowSearchText(std::wstring_view text) noexcept;
 [[nodiscard]] bool DebugFocusShortcutsWindowSearch() noexcept;
 [[nodiscard]] bool DebugFocusShortcutsWindowGrid() noexcept;
+[[nodiscard]] bool DebugCopyShortcutsWindowSelection() noexcept;
 [[nodiscard]] bool DebugCycleShortcutsWindowGridSortByColumn(size_t columnIndex) noexcept;
 [[nodiscard]] bool DebugApplyShortcutsWindowGridLayout(const std::vector<Common::Settings::GridColumnLayoutEntry>& layout) noexcept;
 [[nodiscard]] bool DebugSetShortcutsWindowGroupCollapsed(size_t groupIndex, bool collapsed) noexcept;

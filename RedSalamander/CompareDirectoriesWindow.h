@@ -43,6 +43,9 @@ struct CompareDirectoriesOptionsDebugSnapshot
     bool optionsUsesDxUiToggles                           = false;
     bool optionsUsesDxUiEdits                             = false;
     bool usesDxUiTypographyMetrics                        = false;
+    bool optionsReloadParticipantRegistered               = false;
+    bool optionsStaleFromExternalReload                   = false;
+    bool optionsDialogDirty                               = false;
     bool compareSubdirectoriesChecked                     = false;
     bool themeDark                                        = false;
     bool themeHighContrast                                = false;
@@ -82,6 +85,7 @@ struct CompareDirectoriesRunDebugSnapshot
     bool compareActive                    = false;
     bool compareRunPending                = false;
     bool compareRunSawScanProgress        = false;
+    bool leaveScopePromptPending          = false;
     bool usesDxUiMenuBar                  = false;
     bool usesDxUiBannerButtons            = false;
     bool usesDxUiBannerText               = false;
@@ -102,6 +106,14 @@ struct CompareDirectoriesRunDebugSnapshot
     size_t visibleDxBannerTextHostCount   = 0u;
     size_t visibleLegacyBannerButtonCount = 0u;
     size_t visibleLegacyBannerTextCount   = 0u;
+    size_t leftPaneItemCount              = 0u;
+    size_t rightPaneItemCount             = 0u;
+    size_t leftPaneSelectedCount          = 0u;
+    size_t rightPaneSelectedCount         = 0u;
+    std::wstring leftPanePluginPath;
+    std::wstring rightPanePluginPath;
+    std::wstring leftPaneEmptyStateMessage;
+    std::wstring rightPaneEmptyStateMessage;
 };
 #endif
 
@@ -128,6 +140,9 @@ void UpdateCompareDirectoriesWindowsTheme(const AppTheme& theme) noexcept;
 [[nodiscard]] bool DebugGetCompareDirectoriesOptionsSnapshotForWindow(HWND compareWindow, CompareDirectoriesOptionsDebugSnapshot& out) noexcept;
 [[nodiscard]] bool DebugGetCompareDirectoriesRunSnapshot(CompareDirectoriesRunDebugSnapshot& out) noexcept;
 [[nodiscard]] bool DebugGetCompareDirectoriesRunSnapshotForWindow(HWND compareWindow, CompareDirectoriesRunDebugSnapshot& out) noexcept;
+[[nodiscard]] bool DebugSetCompareDirectoriesPanePathForWindow(HWND compareWindow, bool leftPane, const std::filesystem::path& path) noexcept;
+[[nodiscard]] bool DebugSetCompareDirectoriesRunPendingForWindow(HWND compareWindow, bool pending) noexcept;
+void DebugFailNextCompareDirectoriesWindowCreate() noexcept;
 [[nodiscard]] bool DebugGetCompareDirectoriesMenuBarItemLabel(size_t index, std::wstring& outText) noexcept;
 [[nodiscard]] bool DebugGetCompareDirectoriesMenuBarItemScreenRect(size_t index, RECT& outRect) noexcept;
 [[nodiscard]] bool DebugFocusCompareDirectoriesOptionsFirstControl() noexcept;

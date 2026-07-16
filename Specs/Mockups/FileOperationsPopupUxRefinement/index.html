@@ -1,0 +1,1291 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>File Operations Popup Mockup</title>
+  <script src="lucide-1.23.0.min.js"></script>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #edf1f5;
+      --window: #fbfcfd;
+      --surface: #ffffff;
+      --surface-2: #f5f7fa;
+      --surface-3: #eef2f6;
+      --border: #cfd8e3;
+      --border-strong: #aeb9c6;
+      --text: #1f2933;
+      --muted: #5c6b78;
+      --muted-2: #7a8794;
+      --accent: #1769d1;
+      --accent-soft: #d9e9ff;
+      --accent-strong: #0e55b3;
+      --ok: #16804a;
+      --ok-soft: #dff4e9;
+      --warn: #b26a00;
+      --warn-soft: #fff0d1;
+      --danger: #b42318;
+      --danger-soft: #ffe1dd;
+      --paused: #6b5da8;
+      --shadow: 0 24px 70px rgba(36, 46, 59, 0.22);
+      --radius: 8px;
+      --font: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: linear-gradient(180deg, #f6f8fa 0%, var(--bg) 100%);
+      color: var(--text);
+      font-family: var(--font);
+      letter-spacing: 0;
+    }
+
+    .stage {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 32px;
+    }
+
+    .popup {
+      width: min(940px, calc(100vw - 48px));
+      background: var(--window);
+      border: 1px solid #b9c4d0;
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .titlebar {
+      height: 40px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 12px;
+      padding: 0 12px 0 16px;
+      background: #f8fafc;
+      border-bottom: 1px solid var(--border);
+      user-select: none;
+    }
+
+    .titlebar h1 {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1;
+      font-weight: 600;
+    }
+
+    .window-buttons {
+      display: flex;
+      gap: 4px;
+    }
+
+    .window-button {
+      width: 32px;
+      height: 28px;
+      border: 0;
+      border-radius: 4px;
+      background: transparent;
+      color: var(--muted);
+      display: grid;
+      place-items: center;
+    }
+
+    .content {
+      padding: 14px 14px 0;
+      background: var(--surface-2);
+    }
+
+    .task-list {
+      display: grid;
+      gap: 10px;
+      max-height: 610px;
+      overflow: hidden;
+      padding-bottom: 12px;
+    }
+
+    .task-card {
+      position: relative;
+      display: grid;
+      grid-template-columns: 4px 1fr;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      transition:
+        border-color 180ms ease,
+        box-shadow 180ms ease,
+        transform 180ms ease,
+        opacity 180ms ease;
+    }
+
+    .task-card:hover {
+      border-color: #b7c5d4;
+      box-shadow: 0 8px 20px rgba(36, 46, 59, 0.08);
+    }
+
+    .task-card[data-state="running"] .stripe { background: var(--accent); }
+    .task-card[data-state="waiting"] .stripe { background: #8a97a5; }
+    .task-card[data-state="paused"] .stripe { background: var(--paused); }
+    .task-card[data-state="attention"] .stripe { background: var(--warn); }
+    .task-card[data-state="complete"] .stripe { background: var(--ok); }
+
+    .task-inner {
+      min-width: 0;
+      padding: 12px 12px 11px;
+    }
+
+    .task-header {
+      display: grid;
+      grid-template-columns: auto auto 1fr auto;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .status-icon {
+      width: 22px;
+      height: 22px;
+      border-radius: 5px;
+      display: grid;
+      place-items: center;
+      background: var(--accent-soft);
+      color: var(--accent-strong);
+      flex: 0 0 auto;
+    }
+
+    [data-state="waiting"] .status-icon {
+      background: #edf0f3;
+      color: #536171;
+    }
+
+    [data-state="attention"] .status-icon {
+      background: var(--warn-soft);
+      color: var(--warn);
+    }
+
+    [data-state="complete"] .status-icon {
+      background: var(--ok-soft);
+      color: var(--ok);
+    }
+
+    .task-title {
+      min-width: 0;
+      font-size: 14px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .state-chip {
+      justify-self: start;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 11px;
+      color: var(--muted);
+      background: var(--surface-2);
+      white-space: nowrap;
+    }
+
+    [data-state="running"] .state-chip {
+      border-color: #a9c8ef;
+      background: #eef6ff;
+      color: #0e55b3;
+    }
+
+    [data-state="attention"] .state-chip {
+      border-color: #e8c06f;
+      background: #fff7e6;
+      color: #8f5300;
+    }
+
+    [data-state="complete"] .state-chip {
+      border-color: #abd8be;
+      background: #ecf9f1;
+      color: #0e6639;
+    }
+
+    .icon-button {
+      width: 28px;
+      height: 28px;
+      border: 1px solid transparent;
+      border-radius: 5px;
+      background: transparent;
+      color: var(--muted);
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+    }
+
+    .icon-button:hover {
+      border-color: var(--border);
+      background: var(--surface-3);
+      color: var(--text);
+    }
+
+    .overall-line {
+      margin-top: 8px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .progress-track {
+      height: 7px;
+      background: #e7ecf2;
+      border: 1px solid #d4dde7;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: var(--value, 0%);
+      background: var(--accent);
+      border-radius: inherit;
+      transition: width 420ms ease;
+    }
+
+    .task-card[data-state="running"] .progress-fill,
+    .aggregate .progress-fill {
+      background:
+        linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.32) 50%, rgba(255,255,255,0) 100%) -80px 0 / 80px 100% no-repeat,
+        var(--accent);
+      animation: progress-shine 2.8s ease-in-out infinite;
+    }
+
+    .progress-fill.ok { background: var(--ok); }
+    .progress-fill.warn { background: var(--warn); }
+
+    .overall-percent {
+      color: var(--muted);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .meta-row {
+      margin-top: 8px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 18px;
+      color: var(--muted);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .path-row {
+      margin-top: 10px;
+      display: grid;
+      grid-template-columns: auto minmax(180px, 1fr) minmax(150px, 220px) auto;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      min-width: 0;
+    }
+
+    .path-label {
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .path-text {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-width: 0;
+    }
+
+    .file-percent {
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .graph {
+      margin-top: 10px;
+      height: 82px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background:
+        linear-gradient(to right, rgba(31, 41, 51, 0.045) 1px, transparent 1px) 0 0 / 64px 100%,
+        linear-gradient(to bottom, rgba(31, 41, 51, 0.04) 1px, transparent 1px) 0 0 / 100% 22px,
+      #fbfcfd;
+      position: relative;
+      overflow: hidden;
+      transition:
+        height 260ms ease,
+        opacity 180ms ease,
+        margin-top 260ms ease;
+    }
+
+    .graph svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .graph-label {
+      position: absolute;
+      top: 7px;
+      right: 10px;
+      font-size: 11px;
+      color: var(--muted);
+      background: rgba(251, 252, 253, 0.88);
+      padding: 1px 4px;
+      border-radius: 4px;
+    }
+
+    .throughput-line,
+    .throughput-area {
+      transition: opacity 180ms ease;
+    }
+
+    .limit-line {
+      animation: limit-drift 5.5s linear infinite;
+    }
+
+    .rainbow .throughput-line {
+      stroke: url(#rainbowStroke);
+      stroke-width: 3.4;
+    }
+
+    .rainbow .throughput-area {
+      fill: url(#rainbowArea);
+    }
+
+    .rainbow .task-card[data-state="running"] .stripe {
+      background: linear-gradient(180deg, #e84d8a, #f59e0b 28%, #22a06b 56%, #1769d1 100%);
+    }
+
+    .rainbow .graph-label {
+      color: #24425c;
+      border: 1px solid rgba(23,105,209,.18);
+    }
+
+    .task-actions {
+      margin-top: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .button-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      height: 30px;
+      border: 1px solid var(--border-strong);
+      border-radius: 5px;
+      background: #fff;
+      color: var(--text);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 10px;
+      font-family: var(--font);
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .btn:hover {
+      background: #f2f6fb;
+      border-color: #9fb0c1;
+    }
+
+    .btn.active {
+      border-color: #9fb0c1;
+      background: var(--accent-soft);
+      color: var(--accent-strong);
+      font-weight: 600;
+    }
+
+    .btn.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .btn.warning {
+      border-color: #dda842;
+      background: #fff8e9;
+      color: #7c4800;
+    }
+
+    .speed-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .speed-limit-wrap {
+      position: relative;
+      display: inline-flex;
+    }
+
+    .speed-button {
+      min-width: 118px;
+      height: 30px;
+      border: 1px solid var(--border-strong);
+      border-radius: 6px;
+      background: #fff;
+      color: var(--accent-strong);
+      display: inline-grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 8px;
+      padding: 0 9px 0 11px;
+      font-family: var(--font);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.85);
+    }
+
+    .speed-button:hover,
+    .speed-button[aria-expanded="true"] {
+      background: #f2f6fb;
+      border-color: #9fb0c1;
+    }
+
+    .speed-menu-panel {
+      position: absolute;
+      right: 0;
+      top: calc(100% + 4px);
+      z-index: 5;
+      min-width: 174px;
+      padding: 4px;
+      border: 1px solid var(--border-strong);
+      border-radius: 6px;
+      background: #fff;
+      box-shadow: 0 12px 28px rgba(36, 46, 59, 0.18);
+    }
+
+    .speed-menu-item {
+      width: 100%;
+      height: 28px;
+      border: 0;
+      border-radius: 4px;
+      background: transparent;
+      color: var(--text);
+      display: grid;
+      grid-template-columns: 18px 1fr;
+      align-items: center;
+      gap: 6px;
+      padding: 0 8px;
+      font-family: var(--font);
+      font-size: 12px;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .speed-menu-item:hover,
+    .speed-menu-item.selected {
+      background: var(--accent-soft);
+      color: var(--accent-strong);
+    }
+
+    .speed-menu-separator {
+      height: 1px;
+      margin: 4px 2px;
+      background: var(--border);
+    }
+
+    .waiting-body,
+    .attention-body,
+    .complete-body {
+      margin-top: 9px;
+      display: grid;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .conflict-box {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+      align-items: stretch;
+      padding: 9px 10px;
+      border: 1px solid #e6c27f;
+      border-radius: 6px;
+      background: #fffaf0;
+    }
+
+    .conflict-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .conflict-title strong {
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .conflict-detail-list {
+      display: grid;
+      gap: 7px;
+    }
+
+    .conflict-item {
+      display: grid;
+      grid-template-columns: 86px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 8px;
+      border: 1px solid #f0d69f;
+      border-radius: 5px;
+      background: rgba(255,255,255,.78);
+    }
+
+    .conflict-label {
+      color: var(--text);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .conflict-path {
+      min-width: 0;
+      color: #344250;
+      font-family: "Cascadia Mono", "Consolas", monospace;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .conflict-meta {
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .conflict-actions {
+      justify-content: flex-end;
+    }
+
+    .completed-group {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 9px 12px;
+    }
+
+    .completed-header {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .completed-items {
+      margin-top: 8px;
+      display: grid;
+      gap: 5px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .completed-item {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 8px;
+      align-items: center;
+      padding: 4px 0;
+      border-top: 1px solid #eef2f6;
+    }
+
+    .footer {
+      border-top: 1px solid var(--border);
+      background: #f8fafc;
+      padding: 10px 14px 12px;
+      transition: padding 220ms ease;
+    }
+
+    .aggregate {
+      display: grid;
+      grid-template-columns: minmax(160px, 1fr) auto;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .aggregate-label {
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .footer-row {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .mode-control {
+      justify-self: center;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .segmented {
+      display: inline-flex;
+      border: 1px solid var(--border-strong);
+      border-radius: 6px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    .segment {
+      min-width: 82px;
+      height: 30px;
+      border: 0;
+      border-right: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      font-family: var(--font);
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .segment:last-child {
+      border-right: 0;
+    }
+
+    .segment.selected {
+      background: var(--accent);
+      color: #fff;
+      font-weight: 600;
+    }
+
+    .footer-summary {
+      justify-self: end;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .density-toolbar {
+      position: fixed;
+      top: 18px;
+      right: 18px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px;
+      border: 1px solid #ccd6e1;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.92);
+      box-shadow: 0 10px 30px rgba(36, 46, 59, 0.12);
+      backdrop-filter: blur(12px);
+    }
+
+    .density-toolbar .btn {
+      height: 28px;
+      padding: 0 9px;
+    }
+
+    .compact .graph {
+      display: none;
+    }
+
+    .compact .task-inner {
+      padding: 9px 10px;
+    }
+
+    .compact .meta-row,
+    .compact .task-actions {
+      margin-top: 7px;
+    }
+
+    .compact .path-row {
+      grid-template-columns: auto minmax(120px, 1fr) 140px auto;
+      margin-top: 7px;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .footer-only .titlebar,
+    .footer-only .content {
+      display: none;
+    }
+
+    .footer-only .popup {
+      width: min(760px, calc(100vw - 48px));
+    }
+
+    .footer-only .footer {
+      border-top: 0;
+      padding: 10px 12px;
+    }
+
+    .footer-only .aggregate {
+      margin-bottom: 8px;
+    }
+
+    .footer-only .footer-row {
+      grid-template-columns: auto auto 1fr auto;
+    }
+
+    .footer-only .mode-control {
+      justify-self: start;
+    }
+
+    .restore-details {
+      display: none;
+    }
+
+    .footer-only .restore-details {
+      display: inline-flex;
+    }
+
+    @keyframes progress-shine {
+      0%, 35% { background-position: -80px 0, 0 0; }
+      70%, 100% { background-position: 140% 0, 0 0; }
+    }
+
+    @keyframes limit-drift {
+      from { stroke-dashoffset: 0; }
+      to { stroke-dashoffset: -28; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        animation-duration: 1ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 1ms !important;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .stage {
+        padding: 18px;
+      }
+
+      .popup {
+        width: calc(100vw - 20px);
+      }
+
+      .path-row,
+      .footer-row,
+      .aggregate {
+        grid-template-columns: 1fr;
+      }
+
+      .mode-control,
+      .footer-summary,
+      .aggregate-label {
+        justify-self: start;
+      }
+
+      .path-row {
+        gap: 5px;
+      }
+
+      .conflict-title,
+      .conflict-item {
+        grid-template-columns: 1fr;
+      }
+
+      .conflict-title {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .conflict-meta {
+        white-space: normal;
+      }
+
+      .density-toolbar {
+        position: static;
+        margin-bottom: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="stage">
+    <div>
+      <div class="density-toolbar" aria-label="Mockup controls">
+        <button class="btn" id="densityToggle" type="button"><i data-lucide="rows-3"></i> Comfortable</button>
+        <button class="btn" id="graphToggle" type="button"><i data-lucide="chart-no-axes-column"></i> Details</button>
+        <button class="btn" id="footerOnlyToggle" type="button"><i data-lucide="panel-bottom"></i> Footer only</button>
+        <button class="btn" id="rainbowToggle" type="button"><i data-lucide="palette"></i> Rainbow</button>
+      </div>
+
+      <section class="popup" aria-label="File Operations">
+        <header class="titlebar">
+          <h1>File Operations</h1>
+          <div class="window-buttons" aria-hidden="true">
+            <button class="window-button" type="button"><i data-lucide="minus"></i></button>
+            <button class="window-button" type="button"><i data-lucide="x"></i></button>
+          </div>
+        </header>
+
+        <main class="content">
+          <div class="task-list">
+            <article class="task-card" data-state="running">
+              <div class="stripe"></div>
+              <div class="task-inner">
+                <div class="task-header">
+                  <span class="status-icon"><i data-lucide="copy"></i></span>
+                  <div class="task-title">Copy - 3 of 10</div>
+                  <span class="state-chip">Running</span>
+                  <button class="icon-button collapse-button" type="button" title="Collapse task"><i data-lucide="chevron-up"></i></button>
+                </div>
+                <div class="overall-line">
+                  <div class="progress-track" aria-label="Overall progress">
+                    <div class="progress-fill" style="--value: 52%"></div>
+                  </div>
+                  <div class="overall-percent">52% overall</div>
+                </div>
+                <div class="meta-row">
+                  <span>240 MB/s</span>
+                  <span>1.2 GB / 5.0 GB</span>
+                  <span>About 3 min left</span>
+                </div>
+                <div class="path-row">
+                  <span class="path-label">From:</span>
+                  <span class="path-text">D:\Photos\Camera Raw\2026-07\IMG_0421.CR2</span>
+                  <div class="progress-track" aria-label="Current file progress">
+                    <div class="progress-fill" style="--value: 68%"></div>
+                  </div>
+                  <span class="file-percent">68%</span>
+                </div>
+                <div class="graph">
+                  <span class="graph-label">Throughput</span>
+                  <svg viewBox="0 0 720 82" preserveAspectRatio="none" aria-hidden="true">
+                    <defs>
+                      <linearGradient id="rainbowStroke" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stop-color="#e84d8a"></stop>
+                        <stop offset="24%" stop-color="#f59e0b"></stop>
+                        <stop offset="48%" stop-color="#22a06b"></stop>
+                        <stop offset="72%" stop-color="#1769d1"></stop>
+                        <stop offset="100%" stop-color="#7c3aed"></stop>
+                      </linearGradient>
+                      <linearGradient id="rainbowArea" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stop-color="#e84d8a" stop-opacity=".11"></stop>
+                        <stop offset="45%" stop-color="#22a06b" stop-opacity=".09"></stop>
+                        <stop offset="100%" stop-color="#1769d1" stop-opacity=".11"></stop>
+                      </linearGradient>
+                    </defs>
+                    <path id="throughputArea" class="throughput-area" d="M0 62 L34 54 L68 58 L102 34 L136 42 L170 28 L204 48 L238 44 L272 20 L306 26 L340 38 L374 31 L408 46 L442 24 L476 18 L510 29 L544 25 L578 43 L612 36 L646 50 L680 31 L720 37 L720 82 L0 82 Z" fill="rgba(23,105,209,.08)"></path>
+                    <polyline id="throughputLine" class="throughput-line" points="0,62 34,54 68,58 102,34 136,42 170,28 204,48 238,44 272,20 306,26 340,38 374,31 408,46 442,24 476,18 510,29 544,25 578,43 612,36 646,50 680,31 720,37" fill="none" stroke="#1769d1" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"></polyline>
+                    <line class="limit-line" x1="0" y1="22" x2="720" y2="22" stroke="#b26a00" stroke-width="1.5" stroke-dasharray="7 7"></line>
+                  </svg>
+                </div>
+                <div class="task-actions">
+                  <div class="button-row">
+                    <button class="btn pause-toggle" type="button"><i data-lucide="pause"></i> Pause</button>
+                    <button class="btn" type="button"><i data-lucide="x"></i> Cancel</button>
+                    <button class="btn" type="button"><i data-lucide="folder-open"></i> Destination</button>
+                  </div>
+                  <div class="speed-group">
+                    <span>Speed:</span>
+                    <div class="speed-limit-wrap">
+                      <button class="speed-button" id="speedLimitButton" type="button" aria-haspopup="menu" aria-expanded="false">
+                        <span id="speedCurrent">50 MB/s</span>
+                        <i data-lucide="chevron-down"></i>
+                      </button>
+                      <div class="speed-menu-panel hidden" id="speedMenu" role="menu" aria-label="Speed limit options">
+                        <button class="speed-menu-item" type="button" role="menuitem" data-speed="Unlimited"><span></span><span>Unlimited</span></button>
+                        <button class="speed-menu-item" type="button" role="menuitem" data-speed="5 MB/s"><span></span><span>5 MB/s</span></button>
+                        <button class="speed-menu-item" type="button" role="menuitem" data-speed="20 MB/s"><span></span><span>20 MB/s</span></button>
+                        <button class="speed-menu-item selected" type="button" role="menuitem" data-speed="50 MB/s"><span class="speed-check"><i data-lucide="check"></i></span><span>50 MB/s</span></button>
+                        <div class="speed-menu-separator" aria-hidden="true"></div>
+                        <button class="speed-menu-item" type="button" role="menuitem" data-speed="Custom..."><span></span><span>Custom...</span></button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <article class="task-card" data-state="waiting" id="waitingTask">
+              <div class="stripe"></div>
+              <div class="task-inner">
+                <div class="task-header">
+                  <span class="status-icon"><i data-lucide="clock-3"></i></span>
+                  <div class="task-title">Move - 1 of 4</div>
+                  <span class="state-chip" id="waitingChip">Queued</span>
+                  <button class="icon-button" type="button" title="Collapse task"><i data-lucide="chevron-up"></i></button>
+                </div>
+                <div class="waiting-body">
+                  <span>Waiting for previous operations to complete.</span>
+                  <div class="path-row">
+                    <span class="path-label">From:</span>
+                    <span class="path-text">E:\Work\ReleaseCandidate\InstallerOutput</span>
+                    <div class="progress-track" aria-label="Queued task progress">
+                      <div class="progress-fill" style="--value: 0%"></div>
+                    </div>
+                    <span class="file-percent">0%</span>
+                  </div>
+                  <div class="button-row">
+                    <button class="btn primary" id="startNow" type="button"><i data-lucide="play"></i> Start now</button>
+                    <button class="btn" type="button"><i data-lucide="x"></i> Cancel</button>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <article class="task-card" data-state="attention">
+              <div class="stripe"></div>
+              <div class="task-inner">
+                <div class="task-header">
+                  <span class="status-icon"><i data-lucide="triangle-alert"></i></span>
+                  <div class="task-title">Copy - needs attention</div>
+                  <span class="state-chip">Conflict</span>
+                  <button class="icon-button" type="button" title="Collapse task"><i data-lucide="chevron-up"></i></button>
+                </div>
+                <div class="attention-body">
+                  <div class="conflict-box">
+                    <div class="conflict-title">
+                      <strong>Destination already exists.</strong>
+                      <span class="state-chip">Compare before choosing</span>
+                    </div>
+                    <div class="conflict-detail-list" aria-label="Source and destination comparison">
+                      <div class="conflict-item">
+                        <span class="conflict-label">Source</span>
+                        <span class="conflict-path">D:\Camera Imports\2026\Client Shoots\July\Final Selection\Extremely Long Shoot Name\IMG_0421.CR2</span>
+                        <span class="conflict-meta">28.4 MB - Today 14:21</span>
+                      </div>
+                      <div class="conflict-item">
+                        <span class="conflict-label">Destination</span>
+                        <span class="conflict-path">D:\Photos\Archive\Client Shoots\July\Final Selection\Extremely Long Shoot Name\IMG_0421.CR2</span>
+                        <span class="conflict-meta">27.9 MB - Yesterday 22:08</span>
+                      </div>
+                    </div>
+                    <div class="button-row conflict-actions">
+                      <button class="btn warning" type="button">Keep both</button>
+                      <button class="btn" type="button">Overwrite</button>
+                      <button class="btn" type="button">Skip item</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <section class="completed-group" id="completedGroup">
+              <div class="completed-header">
+                <i data-lucide="check-circle-2"></i>
+                <span>Completed (3)</span>
+                <button class="btn" id="clearCompleted" type="button"><i data-lucide="trash-2"></i> Clear</button>
+              </div>
+              <div class="completed-items">
+                <div class="completed-item">
+                  <i data-lucide="check"></i>
+                  <span class="path-text">D:\Archive\Invoices-2025.zip</span>
+                  <span>Complete</span>
+                </div>
+                <div class="completed-item">
+                  <i data-lucide="check"></i>
+                  <span class="path-text">D:\Music\Exports\mixdown.wav</span>
+                  <span>Complete</span>
+                </div>
+                <div class="completed-item">
+                  <i data-lucide="circle-alert"></i>
+                  <span class="path-text">D:\Temp\skipped-items.log</span>
+                  <span>2 skipped</span>
+                </div>
+              </div>
+            </section>
+          </div>
+        </main>
+
+        <footer class="footer">
+          <div class="aggregate">
+            <div class="progress-track" aria-label="Aggregate progress">
+              <div class="progress-fill" id="aggregateFill" style="--value: 61%"></div>
+            </div>
+            <div class="aggregate-label" id="aggregateText">61% total - about 3 min left - 240 MB/s</div>
+          </div>
+          <div class="footer-row">
+            <button class="btn restore-details" id="restoreDetails" type="button"><i data-lucide="panel-top"></i> Show details</button>
+            <button class="btn" type="button"><i data-lucide="ban"></i> Cancel all</button>
+            <div class="mode-control">
+              <span>New tasks:</span>
+              <div class="segmented" role="group" aria-label="New task mode">
+                <button class="segment selected" id="queueSegment" type="button">Queue</button>
+                <button class="segment" id="parallelSegment" type="button">Parallel</button>
+              </div>
+            </div>
+            <div class="footer-summary" id="footerSummary">2 running - 1 waiting - 1 needs attention</div>
+          </div>
+        </footer>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const body = document.body;
+    const densityToggle = document.getElementById("densityToggle");
+    const graphToggle = document.getElementById("graphToggle");
+    const footerOnlyToggle = document.getElementById("footerOnlyToggle");
+    const rainbowToggle = document.getElementById("rainbowToggle");
+    const restoreDetails = document.getElementById("restoreDetails");
+    const speedLimitButton = document.getElementById("speedLimitButton");
+    const speedCurrent = document.getElementById("speedCurrent");
+    const speedMenu = document.getElementById("speedMenu");
+    const queueSegment = document.getElementById("queueSegment");
+    const parallelSegment = document.getElementById("parallelSegment");
+    const startNow = document.getElementById("startNow");
+    const waitingTask = document.getElementById("waitingTask");
+    const waitingChip = document.getElementById("waitingChip");
+    const footerSummary = document.getElementById("footerSummary");
+    const aggregateFill = document.getElementById("aggregateFill");
+    const aggregateText = document.getElementById("aggregateText");
+    const clearCompleted = document.getElementById("clearCompleted");
+    const completedGroup = document.getElementById("completedGroup");
+    const throughputLine = document.getElementById("throughputLine");
+    const throughputArea = document.getElementById("throughputArea");
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let savedFooterOnly = false;
+    let savedRainbow = false;
+    try {
+      savedFooterOnly = localStorage.getItem("fileops.mockup.footerOnly") === "true";
+      savedRainbow = localStorage.getItem("fileops.mockup.rainbow") === "true";
+    } catch {
+      savedFooterOnly = false;
+      savedRainbow = false;
+    }
+
+    const throughputSamples = [
+      [62, 54, 58, 34, 42, 28, 48, 44, 20, 26, 38, 31, 46, 24, 18, 29, 25, 43, 36, 50, 31, 37],
+      [57, 51, 42, 38, 25, 33, 41, 35, 30, 20, 27, 44, 40, 28, 22, 26, 39, 46, 32, 28, 35, 30],
+      [66, 59, 63, 48, 53, 45, 37, 41, 29, 33, 24, 21, 35, 31, 44, 38, 27, 24, 34, 42, 30, 25],
+      [54, 48, 52, 44, 30, 27, 34, 28, 22, 19, 25, 36, 29, 23, 18, 21, 33, 31, 26, 37, 29, 33]
+    ];
+    const throughputStep = 720 / (throughputSamples[0].length - 1);
+    let throughputIndex = 0;
+
+    function refreshIcons() {
+      if (window.lucide) {
+        window.lucide.createIcons({
+          attrs: {
+            "stroke-width": 1.8,
+            width: 16,
+            height: 16
+          }
+        });
+      }
+    }
+
+    function formatPoints(values) {
+      return values
+        .map((value, index) => `${Math.round(index * throughputStep)},${Math.round(value)}`)
+        .join(" ");
+    }
+
+    function formatArea(values) {
+      return `M${formatPoints(values).replaceAll(" ", " L")} L720 82 L0 82 Z`;
+    }
+
+    function animateThroughput() {
+      if (reduceMotion || !throughputLine || !throughputArea) {
+        return;
+      }
+
+      const from = throughputSamples[throughputIndex];
+      throughputIndex = (throughputIndex + 1) % throughputSamples.length;
+      const to = throughputSamples[throughputIndex];
+      const duration = 1200;
+      const start = performance.now();
+
+      function tick(now) {
+        const progress = Math.min((now - start) / duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        const current = from.map((value, index) => value + ((to[index] - value) * eased));
+        throughputLine.setAttribute("points", formatPoints(current));
+        throughputArea.setAttribute("d", formatArea(current));
+        if (progress < 1) {
+          requestAnimationFrame(tick);
+        }
+      }
+
+      requestAnimationFrame(tick);
+    }
+
+    function setFooterOnly(enabled) {
+      body.classList.toggle("footer-only", enabled);
+      footerOnlyToggle.innerHTML = enabled
+        ? '<i data-lucide="panel-top"></i> Show details'
+        : '<i data-lucide="panel-bottom"></i> Footer only';
+      try {
+        localStorage.setItem("fileops.mockup.footerOnly", enabled ? "true" : "false");
+      } catch {
+        // The production feature should use SettingsStore; this mockup tolerates blocked local storage.
+      }
+      refreshIcons();
+    }
+
+    function setRainbow(enabled) {
+      body.classList.toggle("rainbow", enabled);
+      rainbowToggle.classList.toggle("active", enabled);
+      try {
+        localStorage.setItem("fileops.mockup.rainbow", enabled ? "true" : "false");
+      } catch {
+        // The production feature should follow the app theme; this mockup tolerates blocked local storage.
+      }
+      refreshIcons();
+    }
+
+    function setSpeedMenuOpen(open) {
+      speedMenu.classList.toggle("hidden", !open);
+      speedLimitButton.setAttribute("aria-expanded", open ? "true" : "false");
+    }
+
+    function setMode(mode) {
+      const queue = mode === "queue";
+      queueSegment.classList.toggle("selected", queue);
+      parallelSegment.classList.toggle("selected", !queue);
+      footerSummary.textContent = queue
+        ? "2 running - 1 waiting - 1 needs attention"
+        : "3 running - 0 waiting - 1 needs attention";
+      if (!queue && waitingTask.dataset.state === "waiting") {
+        waitingTask.dataset.state = "running";
+        waitingChip.textContent = "Running";
+        startNow.innerHTML = '<i data-lucide="pause"></i> Pause';
+        aggregateFill.style.setProperty("--value", "64%");
+        aggregateText.textContent = "64% total - about 2 min left - 265 MB/s";
+      }
+      refreshIcons();
+    }
+
+    queueSegment.addEventListener("click", () => setMode("queue"));
+    parallelSegment.addEventListener("click", () => setMode("parallel"));
+
+    startNow.addEventListener("click", () => {
+      waitingTask.dataset.state = "running";
+      waitingChip.textContent = "Running";
+      startNow.innerHTML = '<i data-lucide="pause"></i> Pause';
+      footerSummary.textContent = "3 running - 0 waiting - 1 needs attention";
+      aggregateFill.style.setProperty("--value", "64%");
+      aggregateText.textContent = "64% total - about 2 min left - 265 MB/s";
+      refreshIcons();
+    });
+
+    densityToggle.addEventListener("click", () => {
+      body.classList.toggle("compact");
+      const compact = body.classList.contains("compact");
+      densityToggle.innerHTML = compact
+        ? '<i data-lucide="rows-2"></i> Compact'
+        : '<i data-lucide="rows-3"></i> Comfortable';
+      refreshIcons();
+    });
+
+    graphToggle.addEventListener("click", () => {
+      body.classList.toggle("compact");
+      const hidden = body.classList.contains("compact");
+      graphToggle.innerHTML = hidden
+        ? '<i data-lucide="chart-no-axes-column-increasing"></i> Show details'
+        : '<i data-lucide="chart-no-axes-column"></i> Details';
+      refreshIcons();
+    });
+
+    footerOnlyToggle.addEventListener("click", () => {
+      setFooterOnly(!body.classList.contains("footer-only"));
+    });
+
+    restoreDetails.addEventListener("click", () => {
+      setFooterOnly(false);
+    });
+
+    rainbowToggle.addEventListener("click", () => {
+      setRainbow(!body.classList.contains("rainbow"));
+    });
+
+    speedLimitButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      setSpeedMenuOpen(speedMenu.classList.contains("hidden"));
+    });
+
+    clearCompleted.addEventListener("click", () => {
+      completedGroup.classList.add("hidden");
+    });
+
+    document.querySelectorAll(".pause-toggle").forEach((button) => {
+      button.addEventListener("click", () => {
+        const task = button.closest(".task-card");
+        const paused = task.dataset.state === "paused";
+        task.dataset.state = paused ? "running" : "paused";
+        task.querySelector(".state-chip").textContent = paused ? "Running" : "Paused";
+        button.innerHTML = paused
+          ? '<i data-lucide="pause"></i> Pause'
+          : '<i data-lucide="play"></i> Resume';
+        refreshIcons();
+      });
+    });
+
+    document.querySelectorAll(".collapse-button").forEach((button) => {
+      button.addEventListener("click", () => {
+        const task = button.closest(".task-card");
+        task.querySelector(".graph").classList.toggle("hidden");
+        const hidden = task.querySelector(".graph").classList.contains("hidden");
+        button.innerHTML = hidden ? '<i data-lucide="chevron-down"></i>' : '<i data-lucide="chevron-up"></i>';
+        refreshIcons();
+      });
+    });
+
+    document.querySelectorAll(".speed-menu-item").forEach((button) => {
+      button.addEventListener("click", () => {
+        document.querySelectorAll(".speed-menu-item").forEach((candidate) => {
+          candidate.classList.toggle("selected", candidate === button);
+          const checkSlot = candidate.querySelector(".speed-check");
+          if (checkSlot) {
+            checkSlot.innerHTML = "";
+          }
+        });
+        let checkSlot = button.querySelector(".speed-check");
+        if (!checkSlot) {
+          checkSlot = button.querySelector("span");
+          checkSlot.classList.add("speed-check");
+        }
+        checkSlot.innerHTML = '<i data-lucide="check"></i>';
+        const value = button.dataset.speed || "50 MB/s";
+        speedCurrent.textContent = value;
+        setSpeedMenuOpen(false);
+        refreshIcons();
+      });
+    });
+
+    document.addEventListener("click", () => setSpeedMenuOpen(false));
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        setSpeedMenuOpen(false);
+      }
+    });
+
+    setFooterOnly(savedFooterOnly);
+    setRainbow(savedRainbow);
+    setInterval(animateThroughput, 1800);
+    refreshIcons();
+  </script>
+</body>
+</html>

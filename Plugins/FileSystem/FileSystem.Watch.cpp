@@ -409,12 +409,17 @@ private:
                     AcquireNextActiveBufferLocked();
                 }
             }
+            else
+            {
+                EnqueueOverflowLocked();
+            }
 
             // Re-arm read immediately before dispatching callbacks.
             const HRESULT hr = IssueRead();
             if (FAILED(hr))
             {
                 Debug::Warning(L"FileSystem: Failed to re-issue directory watch for '{}' (hr=0x{:08X})", _watchedPath, static_cast<unsigned long>(hr));
+                EnqueueOverflowLocked();
             }
 
             if (! _pendingEvents.empty() && _tpWork && ! _workSubmitted)

@@ -1,21 +1,29 @@
 #include "Localization/PlaceholderValidation.h"
 #include "Localization/RcParser.h"
 #include "Localization/RcWriter.h"
+#include "Helpers.h"
 #include "RedConfigureApp.h"
+#include "RedConfigureBinaryFile.h"
 #include "RedConfigureGridModels.h"
+#include "RedConfigureRoot.h"
 #include "RedConfigureSession.h"
+#include "RedConfigureWorkflow.h"
 #include "RedConfigureSplashScreen.h"
 #include "SettingsStore.h"
 #include "ThemeDefinitionIo.h"
 #include "Themes/ThemeCatalog.h"
 #include "Themes/ThemePreviewModel.h"
 #include "Workspace/WorkspaceDiscovery.h"
+#include "TestSupport/TestSupport.h"
 
+#include <algorithm>
 #include <array>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <format>
 #include <iostream>
 #include <optional>
 #include <span>
@@ -25,6 +33,8 @@
 #include <system_error>
 #include <vector>
 
+#include <Windows.h>
+
 #pragma warning(push)
 // WIL headers: deleted copy/move and unused inline helpers
 #pragma warning(disable : 4625 4626 5026 5027 4514 28182)
@@ -33,6 +43,8 @@
 
 namespace
 {
+constexpr std::wstring_view kRedConfigureHarnessSegment{L"redconfigure"};
+
 [[nodiscard]] bool Require(bool condition, std::wstring_view message)
 {
     if (! condition)
@@ -42,6 +54,20 @@ namespace
     }
 
     return true;
+}
+
+[[nodiscard]] std::wstring GetEnvironmentString(std::wstring_view name)
+{
+    return RedSalamander::TestSupport::GetEnvironmentString(name);
+}
+
+[[nodiscard]] std::filesystem::path AcquireRedConfigureTestSandbox(std::wstring_view caseName, std::error_code& ec) noexcept
+{
+    return RedSalamander::TestSupport::AcquireTestDirectory({.harnessSegment      = kRedConfigureHarnessSegment,
+                                                             .leafSegment         = caseName,
+                                                             .fallbackRunIdPrefix = L"redconfigure",
+                                                             .cleanExisting       = false},
+                                                            ec);
 }
 
 [[nodiscard]] bool WriteTestTextFile(const std::filesystem::path& path, std::string_view text)
@@ -61,6 +87,22 @@ namespace
 
     output.write(text.data(), static_cast<std::streamsize>(text.size()));
     return output.good();
+}
+
+void RemoveSettingsFiles(std::wstring_view appId) noexcept
+{
+    std::error_code ec;
+    const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(appId);
+    if (! settingsPath.empty())
+    {
+        std::filesystem::remove(settingsPath, ec);
+    }
+
+    const std::filesystem::path schemaPath = Common::Settings::GetSettingsSchemaPath(appId);
+    if (! schemaPath.empty())
+    {
+        std::filesystem::remove(schemaPath, ec);
+    }
 }
 
 [[nodiscard]] bool WriteTestBinaryFile(const std::filesystem::path& path, std::span<const uint8_t> bytes)
@@ -141,7 +183,7 @@ namespace
 [[nodiscard]] bool TestResolveWorkspaceRootForLaunchPath()
 {
     std::error_code ec;
-    const std::filesystem::path tempRoot = std::filesystem::temp_directory_path(ec) / L"RedConfigureWorkspaceRootResolveTest";
+    const std::filesystem::path tempRoot = AcquireRedConfigureTestSandbox(L"RedConfigureWorkspaceRootResolveTest", ec);
     if (ec)
     {
         return Require(false, L"Could not resolve a temporary directory for workspace-root tests.");
@@ -158,19 +200,71 @@ namespace
     const std::filesystem::path resolved = RedConfigure::ResolveWorkspaceRootForLaunchPath(tempRoot / L".build" / L"x64" / L"Debug");
     ok                                   = Require(resolved == tempRoot, L"Launch paths inside .build should resolve back to the repository root.") && ok;
 
-    const std::filesystem::path unknownRoot     = tempRoot.parent_path() / L"RedConfigureStandaloneRootResolveTest";
+    const std::filesystem::path unknownRoot     = std::filesystem::path(L"RedConfigureStandaloneRootResolveTest");
     const std::filesystem::path unknownResolved = RedConfigure::ResolveWorkspaceRootForLaunchPath(unknownRoot);
     ok                                          = Require(unknownResolved == unknownRoot, L"Paths without repository markers should be preserved.") && ok;
 
     std::filesystem::remove_all(tempRoot, ec);
-    std::filesystem::remove_all(unknownRoot, ec);
+    return ok;
+}
+
+[[nodiscard]] bool TestBoundedBinaryFileReader()
+{
+    std::error_code ec;
+    const std::filesystem::path tempRoot = AcquireRedConfigureTestSandbox(L"RedConfigureBinaryFileReaderTest", ec);
+    if (ec)
+    {
+        return Require(false, L"Could not resolve a temporary directory for binary-reader tests.");
+    }
+
+    std::filesystem::remove_all(tempRoot, ec);
+    ec.clear();
+
+    const std::filesystem::path emptyPath   = tempRoot / L"empty.bin";
+    const std::filesystem::path unicodePath = tempRoot / L"données-測試.bin";
+    const std::array<uint8_t, 4u> bytes{0x00u, 0x7Fu, 0x80u, 0xFFu};
+    bool ok = Require(WriteTestBinaryFile(emptyPath, {}), L"Failed to write empty binary-reader fixture.");
+    ok = Require(WriteTestBinaryFile(unicodePath, bytes), L"Failed to write Unicode binary-reader fixture.") && ok;
+
+    std::vector<uint8_t> actual{0xAAu};
+    HRESULT hr = RedConfigure::ReadBinaryFile(emptyPath, actual, 0u);
+    ok = Require(hr == S_OK && actual.empty(), L"The binary reader must accept an empty file at a zero-byte bound.") && ok;
+
+    hr = RedConfigure::ReadBinaryFile(unicodePath, actual, bytes.size());
+    ok = Require(hr == S_OK && std::ranges::equal(actual, bytes), L"The binary reader must preserve bytes at the exact bound and on Unicode paths.") && ok;
+
+    actual.assign(1u, 0xAAu);
+    hr = RedConfigure::ReadBinaryFile(unicodePath, actual, bytes.size() - 1u);
+    ok = Require(hr == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE) && actual.empty(),
+                 L"The binary reader must reject an oversized file without publishing partial bytes.") &&
+         ok;
+
+    actual.assign(1u, 0xAAu);
+    hr = RedConfigure::ReadBinaryFile(tempRoot / L"missing.bin", actual, bytes.size());
+    ok = Require(hr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND) && actual.empty(),
+                 L"The binary reader must preserve the missing-file HRESULT and clear prior output.") &&
+         ok;
+
+    wil::unique_handle locked(::CreateFileW(unicodePath.c_str(), GENERIC_READ, 0u, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+    ok = Require(static_cast<bool>(locked), L"Failed to open the binary-reader sharing fixture exclusively.") && ok;
+    if (locked)
+    {
+        actual.assign(1u, 0xAAu);
+        hr = RedConfigure::ReadBinaryFile(unicodePath, actual, bytes.size());
+        ok = Require(hr == HRESULT_FROM_WIN32(ERROR_SHARING_VIOLATION) && actual.empty(),
+                     L"The binary reader must return the locked-file error without publishing bytes.") &&
+             ok;
+    }
+
+    locked.reset();
+    std::filesystem::remove_all(tempRoot, ec);
     return ok;
 }
 
 [[nodiscard]] bool TestWorkspaceDiscoveryFindsResourcesAndThemes()
 {
     std::error_code ec;
-    const std::filesystem::path tempRoot = std::filesystem::temp_directory_path(ec) / L"RedConfigureWorkspaceDiscoveryTest";
+    const std::filesystem::path tempRoot = AcquireRedConfigureTestSandbox(L"RedConfigureWorkspaceDiscoveryTest", ec);
     if (ec)
     {
         return Require(false, L"Could not resolve a temporary directory for workspace discovery tests.");
@@ -280,7 +374,7 @@ namespace
 [[nodiscard]] bool TestWorkspaceDiscoveryReportsScanErrors()
 {
     std::error_code ec;
-    const std::filesystem::path tempRoot = std::filesystem::temp_directory_path(ec) / L"RedConfigureWorkspaceDiscoveryErrorTest";
+    const std::filesystem::path tempRoot = AcquireRedConfigureTestSandbox(L"RedConfigureWorkspaceDiscoveryErrorTest", ec);
     if (ec)
     {
         return Require(false, L"Could not resolve a temporary directory for workspace discovery error tests.");
@@ -308,12 +402,16 @@ namespace
     constexpr std::string_view json = R"json5(
 {
   // JSON5 comments and trailing commas are accepted.
+  "formatVersion": 2,
   "id": "user/forest-test",
   "name": "Forest Test",
   "baseThemeId": "builtin/dark",
+  "palette": {
+    "accent": "#2ECC71",
+  },
   "colors": {
-    "app.accent": "#2ECC71",
-    "folderView.itemBackgroundSelected": "#802ECC71",
+    "app.accent": "ref(palette.accent)",
+    "folderView.itemBackgroundSelected": "alpha(palette.accent,50.196078%)",
   },
 }
 )json5";
@@ -328,8 +426,11 @@ namespace
     ok                                             = Require(theme.name == L"Forest Test", L"Parsed theme name did not match.") && ok;
     ok                                             = Require(theme.baseThemeId == L"builtin/dark", L"Parsed base theme did not match.") && ok;
     ok                                             = Require(theme.colors.size() == 2u, L"Parsed theme color count did not match.") && ok;
-    ok = Require(theme.colors[L"app.accent"] == 0xFF2ECC71u, L"Parsed #RRGGBB color did not get opaque alpha.") && ok;
-    ok = Require(theme.colors[L"folderView.itemBackgroundSelected"] == 0x802ECC71u, L"Parsed #AARRGGBB color did not match.") && ok;
+    auto context = Common::Settings::MakeSystemThemeResolutionContext(true);
+    Common::Settings::ResolvedThemeColors resolved;
+    ok = Require(SUCCEEDED(Common::Settings::ResolveThemeDefinition(theme, context, resolved)), L"Parsed theme sources should resolve.") && ok;
+    ok = Require(resolved.colors[L"app.accent"] == 0xFF2ECC71u, L"Palette reference did not resolve.") && ok;
+    ok = Require(resolved.colors[L"folderView.itemBackgroundSelected"] == 0x802ECC71u, L"Alpha expression did not resolve.") && ok;
 
     return ok;
 }
@@ -344,77 +445,233 @@ namespace
     ok                       = Require(emptyInput == HRESULT_FROM_WIN32(ERROR_INVALID_DATA), L"Empty theme input should fail with invalid data.") && ok;
     ok = Require(error == Common::Settings::ThemeDefinitionIoError::EmptyInput, L"Empty theme input should report the empty-input error.") && ok;
 
+    const HRESULT missingVersion = Common::Settings::ParseThemeDefinitionJson5(
+        R"json({"id":"user/legacy","name":"Legacy","baseThemeId":"builtin/dark","colors":{"app.accent":"#112233"}})json", theme, &error, nullptr);
+    ok = Require(missingVersion == HRESULT_FROM_WIN32(ERROR_INVALID_DATA) &&
+                     error == Common::Settings::ThemeDefinitionIoError::MissingOrInvalidFormatVersion,
+                 L"Legacy themes without formatVersion should be rejected deterministically.") && ok;
+
+    const HRESULT versionOne = Common::Settings::ParseThemeDefinitionJson5(
+        R"json({"formatVersion":1,"id":"user/legacy","name":"Legacy","baseThemeId":"builtin/dark","colors":{}})json", theme, &error, nullptr);
+    ok = Require(versionOne == HRESULT_FROM_WIN32(ERROR_INVALID_DATA) && error == Common::Settings::ThemeDefinitionIoError::UnsupportedFormatVersion,
+                 L"Version 1 themes should be rejected deterministically.") && ok;
+
     const HRESULT missingId =
-        Common::Settings::ParseThemeDefinitionJson5(R"json({"name":"Bad","baseThemeId":"builtin/dark","colors":{}})json", theme, &error, nullptr);
+        Common::Settings::ParseThemeDefinitionJson5(R"json({"formatVersion":2,"name":"Bad","baseThemeId":"builtin/dark","colors":{}})json", theme, &error, nullptr);
     ok = Require(missingId == HRESULT_FROM_WIN32(ERROR_INVALID_DATA), L"Missing id should fail with invalid data.") && ok;
     ok = Require(error == Common::Settings::ThemeDefinitionIoError::MissingOrInvalidId, L"Missing id should report the id error.") && ok;
 
     const HRESULT missingName =
-        Common::Settings::ParseThemeDefinitionJson5(R"json({"id":"user/bad","baseThemeId":"builtin/dark","colors":{}})json", theme, &error, nullptr);
+        Common::Settings::ParseThemeDefinitionJson5(R"json({"formatVersion":2,"id":"user/bad","baseThemeId":"builtin/dark","colors":{}})json", theme, &error, nullptr);
     ok = Require(missingName == HRESULT_FROM_WIN32(ERROR_INVALID_DATA), L"Missing name should fail with invalid data.") && ok;
     ok = Require(error == Common::Settings::ThemeDefinitionIoError::MissingOrInvalidName, L"Missing name should report the name error.") && ok;
 
     const HRESULT missingBaseTheme =
-        Common::Settings::ParseThemeDefinitionJson5(R"json({"id":"user/bad","name":"Bad","colors":{}})json", theme, &error, nullptr);
+        Common::Settings::ParseThemeDefinitionJson5(R"json({"formatVersion":2,"id":"user/bad","name":"Bad","colors":{}})json", theme, &error, nullptr);
     ok = Require(missingBaseTheme == HRESULT_FROM_WIN32(ERROR_INVALID_DATA), L"Missing base theme should fail with invalid data.") && ok;
     ok = Require(error == Common::Settings::ThemeDefinitionIoError::MissingOrInvalidBaseThemeId, L"Missing base theme should report the base-theme error.") &&
          ok;
 
     const HRESULT missingColors =
-        Common::Settings::ParseThemeDefinitionJson5(R"json({"id":"user/bad","name":"Bad","baseThemeId":"builtin/dark"})json", theme, &error, nullptr);
+        Common::Settings::ParseThemeDefinitionJson5(R"json({"formatVersion":2,"id":"user/bad","name":"Bad","baseThemeId":"builtin/dark"})json", theme, &error, nullptr);
     ok = Require(missingColors == HRESULT_FROM_WIN32(ERROR_INVALID_DATA), L"Missing colors should fail with invalid data.") && ok;
     ok = Require(error == Common::Settings::ThemeDefinitionIoError::ColorsMissingOrNotObject, L"Missing colors should report the colors error.") && ok;
 
     const HRESULT invalidId = Common::Settings::ParseThemeDefinitionJson5(
-        R"json({"id":"builtin/dark","name":"Bad","baseThemeId":"builtin/dark","colors":{}})json", theme, &error, nullptr);
+        R"json({"formatVersion":2,"id":"builtin/dark","name":"Bad","baseThemeId":"builtin/dark","colors":{}})json", theme, &error, nullptr);
     ok = Require(invalidId == HRESULT_FROM_WIN32(ERROR_INVALID_DATA), L"Invalid user theme id should fail with invalid data.") && ok;
     ok = Require(error == Common::Settings::ThemeDefinitionIoError::InvalidId, L"Invalid id should report the id error.") && ok;
 
     const HRESULT invalidBaseTheme =
-        Common::Settings::ParseThemeDefinitionJson5(R"json({"id":"user/bad","name":"Bad","baseThemeId":"user/base","colors":{}})json", theme, &error, nullptr);
+        Common::Settings::ParseThemeDefinitionJson5(R"json({"formatVersion":2,"id":"user/bad","name":"Bad","baseThemeId":"user/base","colors":{}})json", theme, &error, nullptr);
     ok = Require(invalidBaseTheme == HRESULT_FROM_WIN32(ERROR_INVALID_DATA), L"Invalid base theme should fail with invalid data.") && ok;
     ok = Require(error == Common::Settings::ThemeDefinitionIoError::InvalidBaseThemeId, L"Invalid base theme should report the base-theme error.") && ok;
 
     const HRESULT invalidColorKey = Common::Settings::ParseThemeDefinitionJson5(
-        R"json({"id":"user/bad","name":"Bad","baseThemeId":"builtin/dark","colors":{"bad key":"#112233"}})json", theme, &error, nullptr);
+        R"json({"formatVersion":2,"id":"user/bad","name":"Bad","baseThemeId":"builtin/dark","colors":{"bad key":"#112233"}})json", theme, &error, nullptr);
     ok = Require(invalidColorKey == HRESULT_FROM_WIN32(ERROR_INVALID_DATA), L"Invalid color key should fail with invalid data.") && ok;
     ok = Require(error == Common::Settings::ThemeDefinitionIoError::InvalidColorKey, L"Invalid color key should report the color-key error.") && ok;
 
     const HRESULT colorNotString = Common::Settings::ParseThemeDefinitionJson5(
-        R"json({"id":"user/bad","name":"Bad","baseThemeId":"builtin/dark","colors":{"app.accent":12}})json", theme, &error, nullptr);
+        R"json({"formatVersion":2,"id":"user/bad","name":"Bad","baseThemeId":"builtin/dark","colors":{"app.accent":12}})json", theme, &error, nullptr);
     ok = Require(colorNotString == HRESULT_FROM_WIN32(ERROR_INVALID_DATA), L"Non-string color should fail with invalid data.") && ok;
     ok = Require(error == Common::Settings::ThemeDefinitionIoError::ColorValueNotString, L"Non-string color should report the color-string error.") && ok;
 
     const HRESULT invalidColor = Common::Settings::ParseThemeDefinitionJson5(
-        R"json({"id":"user/bad","name":"Bad","baseThemeId":"builtin/dark","colors":{"app.accent":"red"}})json", theme, &error, nullptr);
+        R"json({"formatVersion":2,"id":"user/bad","name":"Bad","baseThemeId":"builtin/dark","colors":{"app.accent":"red"}})json", theme, &error, nullptr);
     ok = Require(invalidColor == HRESULT_FROM_WIN32(ERROR_INVALID_DATA), L"Invalid color should fail with invalid data.") && ok;
     ok = Require(error == Common::Settings::ThemeDefinitionIoError::InvalidColorValue, L"Invalid color should report the color value error.") && ok;
+
+    const HRESULT duplicatePalette = Common::Settings::ParseThemeDefinitionJson5(
+        R"json({"formatVersion":2,"id":"user/bad","name":"Bad","baseThemeId":"builtin/dark","palette":{"accent":"#112233","accent":"#445566"},"colors":{}})json",
+        theme,
+        &error,
+        nullptr);
+    ok = Require(duplicatePalette == HRESULT_FROM_WIN32(ERROR_INVALID_DATA) && error == Common::Settings::ThemeDefinitionIoError::DuplicatePaletteName,
+                 L"Duplicate palette names should fail with a deterministic error.") && ok;
+
+    const HRESULT invalidPaletteName = Common::Settings::ParseThemeDefinitionJson5(
+        R"json({"formatVersion":2,"id":"user/bad","name":"Bad","baseThemeId":"builtin/dark","palette":{"bad.name":"#112233"},"colors":{}})json",
+        theme,
+        &error,
+        nullptr);
+    ok = Require(invalidPaletteName == HRESULT_FROM_WIN32(ERROR_INVALID_DATA) && error == Common::Settings::ThemeDefinitionIoError::InvalidPaletteName,
+                 L"Palette names containing a dot should fail with a deterministic error.") && ok;
+
+    const HRESULT dynamicPalette = Common::Settings::ParseThemeDefinitionJson5(
+        R"json({"formatVersion":2,"id":"user/bad","name":"Bad","baseThemeId":"builtin/dark","palette":{"accent":"systemAccent()"},"colors":{}})json",
+        theme,
+        &error,
+        nullptr);
+    ok = Require(dynamicPalette == HRESULT_FROM_WIN32(ERROR_INVALID_DATA) && error == Common::Settings::ThemeDefinitionIoError::InvalidColorValue,
+                 L"Palette entries should reject event-time sources.") && ok;
 
     return ok;
 }
 
 [[nodiscard]] bool TestThemeDefinitionJson5Export()
 {
+    bool ok = true;
     Common::Settings::ThemeDefinition theme;
     theme.id          = L"user/export-test";
     theme.name        = L"Export Test";
     theme.baseThemeId = L"builtin/light";
+    theme.palette.emplace(L"accent", 0xFF0055AAu);
+    Common::Settings::ThemeColorSource accentReference;
+    ok = Require(SUCCEEDED(Common::Settings::ParseThemeColorSource(L"ref(palette.accent)", accentReference)), L"Export test reference should parse.") && ok;
+    theme.colors.emplace(L"app.accent", accentReference);
     theme.colors.emplace(L"folderView.background", 0xFFFFFFFFu);
-    theme.colors.emplace(L"app.accent", 0xFF0055AAu);
 
     std::string json;
-    bool ok          = true;
     const HRESULT hr = Common::Settings::BuildThemeDefinitionJson5(theme, json);
     ok               = Require(SUCCEEDED(hr), L"Expected theme export to succeed.") && ok;
+    ok               = Require(json.find("// Named palette") != std::string::npos && json.find("// app") != std::string::npos,
+                               L"Exported theme should include stable palette and color-group comments.") &&
+                       ok;
     ok               = Require(json.find("\"id\": \"user/export-test\"") != std::string::npos, L"Exported theme id is missing.") && ok;
-    ok = Require(json.find("\"app.accent\": \"#0055AA\"") < json.find("\"folderView.background\": \"#FFFFFF\""), L"Exported colors should be sorted by key.") &&
+    ok = Require(json.find("\"app.accent\": \"ref(palette.accent)\"") < json.find("\"folderView.background\": \"#FFFFFF\""),
+                 L"Exported colors should preserve sources and be sorted by key.") &&
          ok;
 
     Common::Settings::ThemeDefinition reparsed;
     Common::Settings::ThemeDefinitionIoError error = Common::Settings::ThemeDefinitionIoError::None;
     const HRESULT parseHr                          = Common::Settings::ParseThemeDefinitionJson5(json, reparsed, &error, nullptr);
     ok                                             = Require(SUCCEEDED(parseHr), L"Exported theme should parse again.") && ok;
+    ok                                             = Require(reparsed.palette == theme.palette, L"Reparsed exported palette did not round trip.") && ok;
     ok                                             = Require(reparsed.colors == theme.colors, L"Reparsed exported colors did not round trip.") && ok;
+
+    return ok;
+}
+
+[[nodiscard]] bool TestThemeExpressionLanguageAndRuntimeSources()
+{
+    bool ok = true;
+    Common::Settings::ThemeDefinition theme;
+    theme.id = L"user/expression-language";
+    theme.name = L"Expression Language";
+    theme.baseThemeId = L"builtin/dark";
+
+    const auto addSource = [&](auto& destination, std::wstring key, std::wstring_view text)
+    {
+        Common::Settings::ThemeColorSource source;
+        std::wstring message;
+        const HRESULT hr = Common::Settings::ParseThemeColorSource(text, source, &message);
+        ok = Require(SUCCEEDED(hr), std::format(L"Theme source '{}' should parse: {}", text, message)) && ok;
+        if (SUCCEEDED(hr)) destination.emplace(std::move(key), std::move(source));
+    };
+
+    addSource(theme.palette, L"base", L"#336699");
+    addSource(theme.palette, L"white", L"#FFFFFF");
+    addSource(theme.palette, L"black", L"#000000");
+    addSource(theme.palette, L"red", L"#FF0000");
+    addSource(theme.palette, L"green", L"#00FF00");
+    addSource(theme.palette, L"blue", L"#0000FF");
+    addSource(theme.palette, L"lighter", L"lighten(palette.base,20%)");
+    addSource(theme.palette, L"darker", L"darken(palette.base,20%)");
+    addSource(theme.palette, L"mixed", L"blend(palette.black,palette.white,25%)");
+    addSource(theme.palette, L"readable", L"contrast(palette.base,palette.white,palette.black)");
+    addSource(theme.palette, L"tone60", L"perceptualTone(palette.base,60)");
+    addSource(theme.palette, L"contrastFixed", L"ensureContrast(palette.base,palette.white,4.5)");
+    addSource(theme.palette, L"harmonized", L"harmonize(palette.base,palette.red,25%)");
+
+    addSource(theme.colors, L"app.accent", L"systemAccent()");
+    addSource(theme.colors, L"window.background", L"systemColor(window)");
+    addSource(theme.colors, L"menu.background", L"tone(palette.white,palette.black)");
+    addSource(theme.colors, L"menu.text", L"ref(palette.readable)");
+    addSource(theme.colors, L"menu.disabledText", L"alpha(palette.base,50%)");
+    addSource(theme.colors, L"folderView.itemBackgroundSelected", L"seededChoice(runtime.seed,palette.red,palette.green,palette.blue)");
+
+    auto context = Common::Settings::MakeSystemThemeResolutionContext(true);
+    Common::Settings::ResolvedThemeColors resolved;
+    std::wstring resolveMessage;
+    ok = Require(SUCCEEDED(Common::Settings::ResolveThemeDefinition(theme, context, resolved, &resolveMessage)),
+                 std::format(L"Complete version 2 expression graph should resolve: {}", resolveMessage)) && ok;
+    ok = Require(resolved.colors[L"menu.background"] == 0xFF000000u, L"tone() should select the dark reference for a dark base.") && ok;
+    ok = Require(resolved.colors[L"menu.disabledText"] == 0x80336699u, L"alpha() should replace alpha deterministically.") && ok;
+    ok = Require(resolved.dynamicColors.size() == 1u, L"An allowlisted paint-time source should compile without being parsed during paint.") && ok;
+
+    if (const auto choice = resolved.dynamicColors.find(L"folderView.itemBackgroundSelected"); choice != resolved.dynamicColors.end())
+    {
+        const uint32_t selected = Common::Settings::EvaluateDynamicThemeColor(
+            choice->second, Common::Settings::ThemeRuntimeContext{.seedHash32 = 1u, .highContrast = false});
+        ok = Require(selected == 0xFF00FF00u, L"seededChoice() should use stable seed modulo candidate order.") && ok;
+        const uint32_t suppressed = Common::Settings::EvaluateDynamicThemeColor(
+            choice->second, Common::Settings::ThemeRuntimeContext{.seedHash32 = 1u, .highContrast = true});
+        ok = Require(suppressed == choice->second.fallbackArgb, L"High Contrast should suppress paint-time theme sources.") && ok;
+    }
+
+    Common::Settings::ThemeDefinition rainbowTheme = theme;
+    rainbowTheme.colors.erase(L"folderView.itemBackgroundSelected");
+    addSource(rainbowTheme.colors, L"folderView.itemBackgroundSelected", L"seededRainbow(runtime.seed,70%,90%,100%,15)");
+    Common::Settings::ResolvedThemeColors rainbowResolved;
+    ok = Require(SUCCEEDED(Common::Settings::ResolveThemeDefinition(rainbowTheme, context, rainbowResolved, &resolveMessage)),
+                 std::format(L"seededRainbow() should resolve on the allowlisted selection token: {}", resolveMessage)) && ok;
+    if (const auto rainbow = rainbowResolved.dynamicColors.find(L"folderView.itemBackgroundSelected"); rainbow != rainbowResolved.dynamicColors.end())
+    {
+        const Common::Settings::ThemeRuntimeContext runtime{.seedHash32 = 42u, .highContrast = false};
+        const uint32_t first = Common::Settings::EvaluateDynamicThemeColor(rainbow->second, runtime);
+        const uint32_t second = Common::Settings::EvaluateDynamicThemeColor(rainbow->second, runtime);
+        ok = Require(first == second && first != rainbow->second.fallbackArgb, L"seededRainbow() should be stable for the same seed.") && ok;
+    }
+
+    Common::Settings::ThemeDefinition rejectedDynamic = theme;
+    addSource(rejectedDynamic.colors, L"navigation.accent", L"seededChoice(runtime.seed,palette.red,palette.green)");
+    Common::Settings::ResolvedThemeColors rejectedResolved;
+    ok = Require(FAILED(Common::Settings::ResolveThemeDefinition(rejectedDynamic, context, rejectedResolved, &resolveMessage)) &&
+                     resolveMessage.find(L"does not accept") != std::wstring::npos,
+                 L"Paint-time sources should be rejected outside the explicit semantic-token allowlist.") && ok;
+
+    Common::Settings::ThemeDefinition referencedDynamic = theme;
+    referencedDynamic.colors.erase(L"app.accent");
+    addSource(referencedDynamic.colors, L"app.accent", L"ref(folderView.itemBackgroundSelected)");
+    Common::Settings::ResolvedThemeColors referencedDynamicResolved;
+    ok = Require(FAILED(Common::Settings::ResolveThemeDefinition(referencedDynamic, context, referencedDynamicResolved, &resolveMessage)) &&
+                     resolveMessage.find(L"cannot be referenced") != std::wstring::npos,
+                 L"Static sources should reject forward references to paint-time programs.") && ok;
+
+    Common::Settings::ThemeColorSource invalidRuntime;
+    ok = Require(FAILED(Common::Settings::ParseThemeColorSource(L"seededChoice(runtime.seed,palette.red)", invalidRuntime)),
+                 L"seededChoice() should require at least two candidates.") && ok;
+    ok = Require(FAILED(Common::Settings::ParseThemeColorSource(
+                     L"seededChoice(runtime.seed,palette.red,palette.green,palette.blue,palette.white,palette.black,palette.base,palette.lighter,palette.darker,palette.mixed)",
+                     invalidRuntime)),
+                 L"seededChoice() should reject more than eight candidates.") && ok;
+
+    Common::Settings::ThemeColorSource systemAccent;
+    ok = Require(SUCCEEDED(Common::Settings::ParseThemeColorSource(L"systemAccent()", systemAccent)) &&
+                     Common::Settings::FormatThemeColorSource(systemAccent) == L"systemAccent()",
+                 L"systemAccent() should preserve its compatibility spelling on round trip.") && ok;
+
+    Common::Settings::ThemeDefinition cyclic;
+    cyclic.id = L"user/cyclic";
+    cyclic.name = L"Cyclic";
+    cyclic.baseThemeId = L"builtin/dark";
+    addSource(cyclic.colors, L"app.accent", L"ref(menu.background)");
+    addSource(cyclic.colors, L"menu.background", L"ref(app.accent)");
+    Common::Settings::ResolvedThemeColors cycleResult;
+    ok = Require(FAILED(Common::Settings::ResolveThemeDefinition(cyclic, context, cycleResult, &resolveMessage)) &&
+                     resolveMessage.find(L"cycle") != std::wstring::npos,
+                 L"Theme dependency cycles should fail with a useful diagnostic.") && ok;
 
     return ok;
 }
@@ -422,7 +679,7 @@ namespace
 [[nodiscard]] bool TestSettingsStoreThemeDirectoryUsesSharedParser()
 {
     std::error_code ec;
-    const std::filesystem::path tempRoot = std::filesystem::temp_directory_path(ec) / L"RedConfigureSettingsThemeParserParityTest";
+    const std::filesystem::path tempRoot = AcquireRedConfigureTestSandbox(L"RedConfigureSettingsThemeParserParityTest", ec);
     if (ec)
     {
         return Require(false, L"Could not resolve a temporary directory for SettingsStore theme parser parity tests.");
@@ -432,6 +689,7 @@ namespace
     bool ok = true;
     ok      = Require(WriteTestTextFile(tempRoot / L"Good.theme.json5",
                                         R"json5({
+  formatVersion: 2,
   id: "user/settings-good",
   name: "Settings Good",
   baseThemeId: "builtin/dark",
@@ -443,6 +701,7 @@ namespace
               ok;
     ok      = Require(WriteTestTextFile(tempRoot / L"InvalidId.theme.json5",
                                         R"json5({
+  formatVersion: 2,
   id: "builtin/dark",
   name: "Invalid Builtin",
   baseThemeId: "builtin/dark",
@@ -463,6 +722,223 @@ namespace
     }
 
     std::filesystem::remove_all(tempRoot, ec);
+    return ok;
+}
+
+[[nodiscard]] bool TestShippedThemesUseVersion2Sources()
+{
+    constexpr std::array<std::pair<std::wstring_view, uint64_t>, 6> kMigratedThemeGoldens{{
+        {L"user/forest-mist", 0xB34ACE65892AE638ull},
+        {L"user/neon-tokyo", 0xE1B5EF92856E3518ull},
+        {L"user/paper-and-ink", 0x2F4D788E11B441BFull},
+        {L"user/retro-terminal", 0xADD3A34B68A03402ull},
+        {L"user/solar-flare", 0x42B6B9537475EBD2ull},
+        {L"user/ugly", 0xEC2CC5EBB3A3C727ull},
+    }};
+    const auto linear = [](uint8_t channel) noexcept
+    {
+        const double value = static_cast<double>(channel) / 255.0;
+        return value <= 0.04045 ? value / 12.92 : std::pow((value + 0.055) / 1.055, 2.4);
+    };
+    const auto luminance = [&](uint32_t argb) noexcept
+    {
+        return 0.2126 * linear(static_cast<uint8_t>((argb >> 16u) & 0xFFu)) +
+               0.7152 * linear(static_cast<uint8_t>((argb >> 8u) & 0xFFu)) +
+               0.0722 * linear(static_cast<uint8_t>(argb & 0xFFu));
+    };
+    const auto contrastRatio = [&](uint32_t first, uint32_t second) noexcept
+    {
+        const double firstLuminance = luminance(first);
+        const double secondLuminance = luminance(second);
+        return (std::max(firstLuminance, secondLuminance) + 0.05) / (std::min(firstLuminance, secondLuminance) + 0.05);
+    };
+
+    std::error_code ec;
+    std::filesystem::path root = std::filesystem::current_path(ec);
+    if (ec)
+    {
+        return Require(false, L"Could not resolve the current path for shipped theme validation.");
+    }
+
+    std::filesystem::path themesDirectory;
+    for (size_t depth = 0u; depth < 8u && ! root.empty(); ++depth)
+    {
+        const std::filesystem::path candidate = root / L"Specs" / L"Themes";
+        if (std::filesystem::is_directory(candidate, ec) && ! ec)
+        {
+            themesDirectory = candidate;
+            break;
+        }
+        ec.clear();
+        root = root.parent_path();
+    }
+    bool ok = Require(! themesDirectory.empty(), L"Could not locate Specs\\Themes for shipped theme validation.");
+    if (themesDirectory.empty()) return false;
+
+    size_t sourceFileCount = 0u;
+    for (std::filesystem::directory_iterator it(themesDirectory, ec), end; ! ec && it != end; it.increment(ec))
+    {
+        if (it->is_regular_file(ec) && ! ec && it->path().filename().wstring().ends_with(L".theme.json5")) ++sourceFileCount;
+        ec.clear();
+    }
+    ok = Require(! ec, L"Could not enumerate shipped theme source files.") && ok;
+
+    std::vector<Common::Settings::ThemeDefinition> themes;
+    ok = Require(SUCCEEDED(Common::Settings::LoadThemeDefinitionsFromDirectory(themesDirectory, themes)),
+                 L"The shipped theme directory should load through the shared strict parser.") && ok;
+    ok = Require(themes.size() == sourceFileCount, L"Every shipped .theme.json5 file should be a valid version 2 theme.") && ok;
+    ok = Require(themes.size() == 10u, L"The shipped catalogue should contain the six migrated themes, Dracula, and three Catppuccin themes.") && ok;
+
+    bool foundDracula = false;
+    bool foundLatte = false;
+    bool foundFrappe = false;
+    bool foundMocha = false;
+    for (const Common::Settings::ThemeDefinition& theme : themes)
+    {
+        ok = Require(theme.formatVersion == 2u, std::format(L"Shipped theme '{}' should require formatVersion 2.", theme.id)) && ok;
+        Common::Settings::ResolvedThemeColors resolved;
+        std::wstring message;
+        const bool effectiveDark = theme.baseThemeId != L"builtin/light";
+        auto context = Common::Settings::MakeSystemThemeResolutionContext(effectiveDark);
+        ok = Require(SUCCEEDED(Common::Settings::ResolveThemeDefinition(theme, context, resolved, &message)),
+                     std::format(L"Shipped theme '{}' should resolve: {}", theme.id, message)) && ok;
+        constexpr std::array<std::pair<std::wstring_view, std::wstring_view>, 4> kRequiredTextPairs{{
+            {L"menu.text", L"menu.background"},
+            {L"navigation.text", L"navigation.background"},
+            {L"folderView.textNormal", L"folderView.background"},
+            {L"monitor.textView.fg", L"monitor.textView.bg"},
+        }};
+        for (const auto& [foregroundKey, backgroundKey] : kRequiredTextPairs)
+        {
+            const auto foreground = resolved.colors.find(std::wstring(foregroundKey));
+            const auto background = resolved.colors.find(std::wstring(backgroundKey));
+            ok = Require(foreground != resolved.colors.end() && background != resolved.colors.end() &&
+                             contrastRatio(foreground->second, background->second) >= 4.5,
+                         std::format(L"Shipped theme '{}' should keep {} readable over {} at WCAG 4.5:1.", theme.id, foregroundKey, backgroundKey)) && ok;
+        }
+        const auto golden = std::ranges::find_if(kMigratedThemeGoldens, [&](const auto& entry) noexcept { return entry.first == theme.id; });
+        if (golden != kMigratedThemeGoldens.end())
+        {
+            std::vector<std::pair<std::wstring, uint32_t>> colors(resolved.colors.begin(), resolved.colors.end());
+            std::ranges::sort(colors, {}, &std::pair<std::wstring, uint32_t>::first);
+            uint64_t hash = 14695981039346656037ull;
+            const auto appendByte = [&](uint8_t value) noexcept
+            {
+                hash ^= value;
+                hash *= 1099511628211ull;
+            };
+            for (const auto& [key, argb] : colors)
+            {
+                for (const wchar_t ch : key) appendByte(static_cast<uint8_t>(ch));
+                appendByte(static_cast<uint8_t>('='));
+                for (const char ch : std::format("{:08X}", argb)) appendByte(static_cast<uint8_t>(ch));
+                appendByte(static_cast<uint8_t>('\n'));
+            }
+            ok = Require(colors.size() == 64u && hash == golden->second,
+                         std::format(L"Migrated theme '{}' should remain effective-color-equivalent to its 64 pre-cutover values.", theme.id)) && ok;
+        }
+        foundDracula = foundDracula || theme.id == L"user/dracula";
+        foundLatte = foundLatte || theme.id == L"user/catppuccin-latte";
+        foundFrappe = foundFrappe || theme.id == L"user/catppuccin-frappe";
+        foundMocha = foundMocha || theme.id == L"user/catppuccin-mocha";
+    }
+    ok = Require(foundDracula && foundLatte && foundFrappe && foundMocha,
+                 L"Dracula and the Latte, Frappe, and Mocha Catppuccin themes should all ship.") && ok;
+    return ok;
+}
+
+[[nodiscard]] bool TestSettingsStoreInlineThemesUseSharedParser()
+{
+    const auto uniqueTicks = std::chrono::steady_clock::now().time_since_epoch().count();
+    const std::wstring appId = L"RedConfigureTests_InlineThemeParser_" + std::to_wstring(uniqueTicks);
+    RemoveSettingsFiles(appId);
+    const auto cleanup = wil::scope_exit([&] { RemoveSettingsFiles(appId); });
+
+    const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(appId);
+    bool ok = Require(! settingsPath.empty(), L"Settings path should be available for inline theme parser test.");
+    ok      = Require(WriteTestTextFile(settingsPath,
+                                        R"json({
+  "schemaVersion": 16,
+  "theme": {
+    "themes": [
+      {
+        "formatVersion": 2,
+        "id": "user/settings-good",
+        "name": "Settings Good",
+        "baseThemeId": "builtin/dark",
+        "colors": {
+          "app.accent": "#336699"
+        }
+      },
+      {
+        "formatVersion": 2,
+        "id": "user/settings-malformed-key",
+        "name": "Settings theme name that is deliberately longer than sixty-four UTF-16 code units for clamping",
+        "baseThemeId": "future/vendor-theme",
+        "colors": {
+          "app.accent": "#445566",
+          "not a theme key": "#112233",
+          "app.background": "not-a-color"
+        }
+      },
+      "keep-this-opaque",
+      {
+        "formatVersion": 2,
+        "id": "user/settings-good",
+        "name": "Settings Duplicate",
+        "baseThemeId": "builtin/dark",
+        "colors": {
+          "app.accent": "#778899"
+        }
+      }
+    ]
+  }
+})json"),
+                      L"Failed to write inline settings theme fixture.") &&
+              ok;
+
+    Common::Settings::Settings loaded;
+    const HRESULT loadHr = Common::Settings::TryLoadSettingsNoRecovery(appId, loaded);
+    ok                   = Require(SUCCEEDED(loadHr), L"Inline settings theme fixture should load without recovery.") && ok;
+    ok                   = Require(loaded.theme.themes.size() == 2u,
+                                   L"Inline settings themes should retain a theme with invalid colors while rejecting duplicate ids.") &&
+         ok;
+    const auto good = std::find_if(loaded.theme.themes.begin(), loaded.theme.themes.end(), [](const Common::Settings::ThemeDefinition& theme) noexcept
+    { return theme.id == L"user/settings-good"; });
+    if (good != loaded.theme.themes.end())
+    {
+        ok = Require(good->colors.size() == 1u && good->colors.contains(L"app.accent"), L"Inline settings theme should preserve valid color keys.") && ok;
+    }
+    else
+    {
+        ok = Require(false, L"Inline settings themes should preserve the first valid id.") && ok;
+    }
+
+    const auto lenient = std::find_if(loaded.theme.themes.begin(), loaded.theme.themes.end(), [](const Common::Settings::ThemeDefinition& theme) noexcept
+    { return theme.id == L"user/settings-malformed-key"; });
+    ok = Require(lenient != loaded.theme.themes.end(), L"One invalid color must not drop an otherwise usable inline theme.") && ok;
+    if (lenient != loaded.theme.themes.end())
+    {
+        ok = Require(lenient->name.size() == 64u, L"Lenient inline theme parsing should clamp over-long names.") && ok;
+        ok = Require(lenient->baseThemeId == L"future/vendor-theme", L"Lenient inline theme parsing should preserve unknown base theme ids.") && ok;
+        ok = Require(lenient->colors.size() == 1u && lenient->colors.contains(L"app.accent"),
+                     L"Lenient inline theme parsing should skip invalid color entries and preserve valid entries.") &&
+             ok;
+    }
+
+    ok = Require(loaded.theme.opaqueThemeEntries.size() == 1u, L"Structurally unusable inline theme entries should be retained opaquely.") && ok;
+    const HRESULT saveHr = Common::Settings::SaveSettings(appId, loaded);
+    ok                   = Require(SUCCEEDED(saveHr), L"Failed to save lenient inline theme round-trip fixture.") && ok;
+    Common::Settings::Settings reloaded;
+    const HRESULT reloadHr = Common::Settings::TryLoadSettingsNoRecovery(appId, reloaded);
+    ok = Require(SUCCEEDED(reloadHr), L"Failed to reload lenient inline theme round-trip fixture.") && ok;
+    ok = Require(reloaded.theme.opaqueThemeEntries.size() == 1u, L"Opaque inline theme entries should survive save and reload.") && ok;
+    if (reloaded.theme.opaqueThemeEntries.size() == 1u)
+    {
+        const auto* text = std::get_if<std::string>(&reloaded.theme.opaqueThemeEntries.front().value);
+        ok               = Require(text && *text == "keep-this-opaque", L"Opaque inline theme entry changed during save and reload.") && ok;
+    }
+
     return ok;
 }
 
@@ -598,6 +1074,10 @@ END
     ok      = Require(ValidatePlaceholders(L"Value {0}", L"Valeur %s").status == RedConfigure::Localization::PlaceholderStatus::PrintfPlaceholder,
                       L"Printf placeholders should be rejected.") &&
               ok;
+    ok = Require(ValidatePlaceholders(L"Value {0}", L"Valeur {0").status == RedConfigure::Localization::PlaceholderStatus::InvalidPlaceholder,
+                 L"Expected an unbalanced opening brace to be rejected.") && ok;
+    ok = Require(ValidatePlaceholders(L"Value {0}", L"Valeur {name}").status == RedConfigure::Localization::PlaceholderStatus::InvalidPlaceholder,
+                 L"Expected a non-positional named placeholder to be rejected.") && ok;
     return ok;
 }
 
@@ -659,8 +1139,8 @@ END
 }
 
 [[nodiscard]] const RedConfigure::LocalizationReviewRow* FindReviewRow(std::span<const RedConfigure::LocalizationReviewRow> rows,
-                                                                        std::wstring_view ownerName,
-                                                                        std::wstring_view id) noexcept
+                                                                       std::wstring_view ownerName,
+                                                                       std::wstring_view id) noexcept
 {
     for (const RedConfigure::LocalizationReviewRow& row : rows)
     {
@@ -760,7 +1240,7 @@ END
 [[nodiscard]] bool TestRedConfigureSessionBuildsAllOwnerAllCultureLocalizationReview()
 {
     std::error_code ec;
-    const std::filesystem::path tempRoot = std::filesystem::temp_directory_path(ec) / L"RedConfigureLocalizationReviewTest";
+    const std::filesystem::path tempRoot = AcquireRedConfigureTestSandbox(L"RedConfigureLocalizationReviewTest", ec);
     if (ec)
     {
         return Require(false, L"Could not resolve a temporary directory for localization review tests.");
@@ -839,14 +1319,13 @@ END
 
     const auto reviewRows     = session.GetLocalizationReviewRows();
     const auto reviewCultures = session.GetLocalizationReviewCultures();
-    ok                       = Require(reviewRows.size() == 4u, L"Review rows should include all source string IDs from all owners.") && ok;
-    ok                       = Require(ContainsCulture(reviewCultures, L"fr-FR"), L"Review cultures should include fr-FR.") && ok;
-    ok                       = Require(ContainsCulture(reviewCultures, L"cs-CZ"), L"Review cultures should include cs-CZ.") && ok;
+    ok                        = Require(reviewRows.size() == 4u, L"Review rows should include all source string IDs from all owners.") && ok;
+    ok                        = Require(ContainsCulture(reviewCultures, L"fr-FR"), L"Review cultures should include fr-FR.") && ok;
+    ok                        = Require(ContainsCulture(reviewCultures, L"cs-CZ"), L"Review cultures should include cs-CZ.") && ok;
     if (reviewRows.size() == 4u)
     {
-        ok = Require(reviewRows[0u].ownerName == L"App" && reviewRows[0u].id == L"IDS_HELLO" &&
-                         reviewRows[1u].ownerName == L"App" && reviewRows[1u].id == L"IDS_APP_ONLY" &&
-                         reviewRows[2u].ownerName == L"Plugin" && reviewRows[2u].id == L"IDS_HELLO" &&
+        ok = Require(reviewRows[0u].ownerName == L"App" && reviewRows[0u].id == L"IDS_HELLO" && reviewRows[1u].ownerName == L"App" &&
+                         reviewRows[1u].id == L"IDS_APP_ONLY" && reviewRows[2u].ownerName == L"Plugin" && reviewRows[2u].id == L"IDS_HELLO" &&
                          reviewRows[3u].ownerName == L"Plugin" && reviewRows[3u].id == L"IDS_PLUGIN_ONLY",
                      L"Parallel localization review loading should preserve deterministic owner/source row order.") &&
              ok;
@@ -865,10 +1344,8 @@ END
     {
         const auto* frCell = FindReviewTargetCell(*appHello, L"fr-FR");
         const auto* csCell = FindReviewTargetCell(*appHello, L"cs-CZ");
-        ok                 = Require(frCell != nullptr && frCell->targetText == L"Bonjour {0}",
-                                     L"Review rows should merge existing fr-FR target text.") &&
-             ok;
-        ok = Require(csCell != nullptr && csCell->targetText == L"Ahoj {0}", L"Review rows should merge existing cs-CZ target text.") && ok;
+        ok                 = Require(frCell != nullptr && frCell->targetText == L"Bonjour {0}", L"Review rows should merge existing fr-FR target text.") && ok;
+        ok                 = Require(csCell != nullptr && csCell->targetText == L"Ahoj {0}", L"Review rows should merge existing cs-CZ target text.") && ok;
     }
 
     const auto* pluginOnly = FindReviewRow(reviewRows, L"Plugin", L"IDS_PLUGIN_ONLY");
@@ -877,9 +1354,7 @@ END
     {
         const auto* frCell = FindReviewTargetCell(*pluginOnly, L"fr-FR");
         const auto* csCell = FindReviewTargetCell(*pluginOnly, L"cs-CZ");
-        ok                 = Require(frCell != nullptr && frCell->targetText == L"Plugin seulement",
-                                     L"Review rows should merge plugin fr-FR target text.") &&
-             ok;
+        ok = Require(frCell != nullptr && frCell->targetText == L"Plugin seulement", L"Review rows should merge plugin fr-FR target text.") && ok;
         ok = Require(csCell != nullptr && csCell->targetText == L"Only plugin" && ! csCell->hasExistingTranslation,
                      L"Missing target cultures should display English source text without marking an existing translation.") &&
              ok;
@@ -892,7 +1367,7 @@ END
 [[nodiscard]] bool TestLocalizationReviewViewFiltersSearchesAndSorts()
 {
     std::error_code ec;
-    const std::filesystem::path tempRoot = std::filesystem::temp_directory_path(ec) / L"RedConfigureLocalizationReviewViewTest";
+    const std::filesystem::path tempRoot = AcquireRedConfigureTestSandbox(L"RedConfigureLocalizationReviewViewTest", ec);
     if (ec)
     {
         return Require(false, L"Could not resolve a temporary directory for localization review view tests.");
@@ -908,18 +1383,22 @@ END
     options.visibleOwnerNames   = {L"Plugin"};
     options.visibleCultureNames = {L"fr-FR", L"cs-CZ"};
     std::vector<size_t> view    = RedConfigure::BuildLocalizationReviewView(session.GetLocalizationReviewRows(), options);
-    ok = Require(view.size() == 2u, L"Review view owner filtering should keep only checked owners.") && ok;
+    ok                          = Require(view.size() == 2u, L"Review view owner filtering should keep only checked owners.") && ok;
     for (const size_t rowIndex : view)
     {
         ok = Require(session.GetLocalizationReviewRows()[rowIndex].ownerName == L"Plugin", L"Review view should not include unchecked owners.") && ok;
     }
 
     options.visibleOwnerNames = {L"App", L"Plugin"};
+    options.searchText        = L"cs-CZ";
+    view                      = RedConfigure::BuildLocalizationReviewView(session.GetLocalizationReviewRows(), options);
+    ok                        = Require(view.size() == 4u, L"Review view search should match visible language names.") && ok;
+
     options.searchText        = L"Ahoj";
     view                      = RedConfigure::BuildLocalizationReviewView(session.GetLocalizationReviewRows(), options);
     ok                        = Require(view.size() == 1u && session.GetLocalizationReviewRows()[view.front()].ownerName == L"App",
                                         L"Review view search should match visible target-language text.") &&
-         ok;
+                                ok;
 
     options.visibleCultureNames = {L"fr-FR"};
     view                        = RedConfigure::BuildLocalizationReviewView(session.GetLocalizationReviewRows(), options);
@@ -929,29 +1408,29 @@ END
     options.statusFilter = RedConfigure::LocalizationStatusFilter::Problems;
     view                 = RedConfigure::BuildLocalizationReviewView(session.GetLocalizationReviewRows(), options);
     ok                   = Require(view.size() == 2u && session.GetLocalizationReviewRows()[view.front()].id == L"IDS_APP_ONLY" &&
-                       session.GetLocalizationReviewRows()[view.front()].ownerName == L"App" &&
-                       session.GetLocalizationReviewRows()[view.back()].id == L"IDS_HELLO" &&
-                       session.GetLocalizationReviewRows()[view.back()].ownerName == L"Plugin",
-                       L"Review view problem filtering should include placeholder problems and missing visible translations.") &&
-         ok;
+                                       session.GetLocalizationReviewRows()[view.front()].ownerName == L"App" &&
+                                       session.GetLocalizationReviewRows()[view.back()].id == L"IDS_HELLO" &&
+                                       session.GetLocalizationReviewRows()[view.back()].ownerName == L"Plugin",
+                                   L"Review view problem filtering should include placeholder problems and missing visible translations.") &&
+                           ok;
 
-    options.statusFilter   = RedConfigure::LocalizationStatusFilter::All;
-    options.sortColumn     = RedConfigure::LocalizationViewColumn::Target;
+    options.statusFilter    = RedConfigure::LocalizationStatusFilter::All;
+    options.sortColumn      = RedConfigure::LocalizationViewColumn::Target;
     options.sortCultureName = L"fr-FR";
-    options.sortDirection  = RedConfigure::LocalizationSortDirection::Descending;
-    view                   = RedConfigure::BuildLocalizationReviewView(session.GetLocalizationReviewRows(), options);
-    ok = Require(view.size() == 4u && session.GetLocalizationReviewRows()[view.front()].ownerName == L"Plugin",
-                 L"Review view target-culture sorting should use the requested visible culture.") &&
-         ok;
+    options.sortDirection   = RedConfigure::LocalizationSortDirection::Descending;
+    view                    = RedConfigure::BuildLocalizationReviewView(session.GetLocalizationReviewRows(), options);
+    ok                      = Require(view.size() == 4u && session.GetLocalizationReviewRows()[view.front()].ownerName == L"Plugin",
+                                      L"Review view target-culture sorting should use the requested visible culture.") &&
+                              ok;
 
     std::filesystem::remove_all(tempRoot, ec);
     return ok;
 }
 
 [[nodiscard]] bool ContainsExportPreview(std::span<const RedConfigure::LocalizationExportPreview> previews,
-                                          std::wstring_view ownerName,
-                                          std::wstring_view cultureName,
-                                          std::wstring_view expectedText) noexcept
+                                         std::wstring_view ownerName,
+                                         std::wstring_view cultureName,
+                                         std::wstring_view expectedText) noexcept
 {
     for (const RedConfigure::LocalizationExportPreview& preview : previews)
     {
@@ -966,7 +1445,7 @@ END
 [[nodiscard]] bool TestLocalizationReviewEditingAndExportPreviews()
 {
     std::error_code ec;
-    const std::filesystem::path tempRoot = std::filesystem::temp_directory_path(ec) / L"RedConfigureLocalizationReviewEditExportTest";
+    const std::filesystem::path tempRoot = AcquireRedConfigureTestSandbox(L"RedConfigureLocalizationReviewEditExportTest", ec);
     if (ec)
     {
         return Require(false, L"Could not resolve a temporary directory for localization review edit/export tests.");
@@ -985,16 +1464,36 @@ END
         const size_t rowIndex = static_cast<size_t>(appHello - session.GetLocalizationReviewRows().data());
         ok                    = Require(session.UpdateLocalizationReviewTarget(rowIndex, L"cs-CZ", L"Ahoj upraveno {0}"),
                                         L"Review target edits should accept valid placeholder-equivalent text.") &&
+                                ok;
+        ok                    = Require(! session.UpdateLocalizationReviewTarget(rowIndex, L"cs-CZ", L"Ahoj upraveno"),
+                                        L"Review target edits should reject placeholder mismatches.") &&
+                                ok;
+        ok = Require(session.CanUndo() && session.Undo(), L"Localization edits should be undoable from the global command model.") && ok;
+        ok = Require(session.CanRedo() && session.Redo(), L"Undone localization edits should be redoable from the global command model.") && ok;
+
+        size_t csCultureIndex = 0u;
+        const auto currentRows = session.GetLocalizationReviewRows();
+        if (rowIndex < currentRows.size())
+        {
+            for (size_t index = 0u; index < currentRows[rowIndex].targets.size(); ++index)
+            {
+                if (currentRows[rowIndex].targets[index].cultureName == L"cs-CZ")
+                {
+                    csCultureIndex = index;
+                    break;
+                }
+            }
+        }
+        ok = Require(session.ApplyClipboardMatrix(rowIndex, csCultureIndex, L"Clipboard {0}"),
+                     L"Localization matrix should paste rectangular clipboard text into the selected culture.") &&
              ok;
-        ok = Require(! session.UpdateLocalizationReviewTarget(rowIndex, L"cs-CZ", L"Ahoj upraveno"),
-                     L"Review target edits should reject placeholder mismatches.") &&
-             ok;
+        ok = Require(session.Undo(), L"Rectangular clipboard paste should be undoable as one operation.") && ok;
 
         const auto* updatedRow  = FindReviewRow(session.GetLocalizationReviewRows(), L"App", L"IDS_HELLO");
         const auto* updatedCell = updatedRow ? FindReviewTargetCell(*updatedRow, L"cs-CZ") : nullptr;
-        ok = Require(updatedCell != nullptr && updatedCell->targetText == L"Ahoj upraveno {0}" && updatedCell->dirty,
-                     L"Rejected review target edits should keep the last valid target text and dirty state.") &&
-             ok;
+        ok                      = Require(updatedCell != nullptr && updatedCell->targetText == L"Ahoj upraveno {0}" && updatedCell->dirty,
+                                          L"Rejected review target edits should keep the last valid target text and dirty state.") &&
+                                  ok;
     }
 
     std::vector<RedConfigure::LocalizationExportPreview> previews;
@@ -1014,7 +1513,7 @@ END
 [[nodiscard]] bool TestLocalizationReviewSkipsBadResourceFilesAndKeepsWorkspaceOpen()
 {
     std::error_code ec;
-    const std::filesystem::path tempRoot = std::filesystem::temp_directory_path(ec) / L"RedConfigureLocalizationReviewBadRcTest";
+    const std::filesystem::path tempRoot = AcquireRedConfigureTestSandbox(L"RedConfigureLocalizationReviewBadRcTest", ec);
     if (ec)
     {
         return Require(false, L"Could not resolve a temporary directory for bad localization resource tests.");
@@ -1083,7 +1582,7 @@ END
 [[nodiscard]] bool TestLocalizationReviewGridModelShowsOwnersEnglishAndVisibleCultures()
 {
     std::error_code ec;
-    const std::filesystem::path tempRoot = std::filesystem::temp_directory_path(ec) / L"RedConfigureLocalizationReviewGridModelTest";
+    const std::filesystem::path tempRoot = AcquireRedConfigureTestSandbox(L"RedConfigureLocalizationReviewGridModelTest", ec);
     if (ec)
     {
         return Require(false, L"Could not resolve a temporary directory for localization review grid model tests.");
@@ -1096,22 +1595,22 @@ END
     ok = Require(SUCCEEDED(session.LoadWorkspace(tempRoot, L"fr-FR")), L"Session should load the localization review grid model fixture.") && ok;
 
     RedConfigure::LocalizationReviewViewOptions options;
-    options.visibleOwnerNames   = {L"App", L"Plugin"};
-    options.visibleCultureNames = {L"fr-FR", L"cs-CZ"};
+    options.visibleOwnerNames          = {L"App", L"Plugin"};
+    options.visibleCultureNames        = {L"fr-FR", L"cs-CZ"};
     const std::vector<size_t> viewRows = RedConfigure::BuildLocalizationReviewView(session.GetLocalizationReviewRows(), options);
 
     RedConfigure::Ui::LocalizationReviewGridModel model(nullptr, session);
     model.SetViewRows(viewRows);
     model.SetVisibleCultures(options.visibleCultureNames);
 
-    ok      = Require(model.GetRowCount() == viewRows.size(), L"Review grid model should expose projected rows.") && ok;
-    ok      = Require(model.GetColumnCount() == 6u, L"Review grid model should expose owner, ID, English, visible cultures, and status columns.") && ok;
-    ok      = Require(model.GetColumn(0u).id == L"owner", L"Review grid model first column should be owner.") && ok;
-    ok      = Require(model.GetColumn(2u).id == L"english", L"Review grid model should expose English as a read-only source column.") && ok;
-    ok      = Require(model.GetColumn(2u).multiline, L"Review grid model English column should allow wrapped two-line rows.") && ok;
-    ok      = Require(model.GetColumn(3u).id == L"target:fr-FR", L"Review grid model should expose the first visible culture column.") && ok;
-    ok      = Require(model.GetColumn(3u).multiline, L"Review grid model target columns should allow wrapped two-line rows.") && ok;
-    ok      = Require(model.GetColumn(4u).id == L"target:cs-CZ", L"Review grid model should expose the second visible culture column.") && ok;
+    ok = Require(model.GetRowCount() == viewRows.size(), L"Review grid model should expose projected rows.") && ok;
+    ok = Require(model.GetColumnCount() == 6u, L"Review grid model should expose owner, ID, English, visible cultures, and status columns.") && ok;
+    ok = Require(model.GetColumn(0u).id == L"owner", L"Review grid model first column should be owner.") && ok;
+    ok = Require(model.GetColumn(2u).id == L"english", L"Review grid model should expose English as a read-only source column.") && ok;
+    ok = Require(model.GetColumn(2u).multiline, L"Review grid model English column should allow wrapped two-line rows.") && ok;
+    ok = Require(model.GetColumn(3u).id == L"target:fr-FR", L"Review grid model should expose the first visible culture column.") && ok;
+    ok = Require(model.GetColumn(3u).multiline, L"Review grid model target columns should allow wrapped two-line rows.") && ok;
+    ok = Require(model.GetColumn(4u).id == L"target:cs-CZ", L"Review grid model should expose the second visible culture column.") && ok;
 
     RedSalamander::DxUi::GridCellData cell;
     model.GetCellData(0u, 0u, cell);
@@ -1143,7 +1642,7 @@ END
 [[nodiscard]] bool TestLocalizationReviewSurfacesMissingTranslations()
 {
     std::error_code ec;
-    const std::filesystem::path tempRoot = std::filesystem::temp_directory_path(ec) / L"RedConfigureLocalizationReviewMissingTest";
+    const std::filesystem::path tempRoot = AcquireRedConfigureTestSandbox(L"RedConfigureLocalizationReviewMissingTest", ec);
     if (ec)
     {
         return Require(false, L"Could not resolve a temporary directory for missing-translation review tests.");
@@ -1155,14 +1654,14 @@ END
     RedConfigure::RedConfigureSession session;
     ok = Require(SUCCEEDED(session.LoadWorkspace(tempRoot, L"fr-FR")), L"Session should load the missing-translation review fixture.") && ok;
 
-    const auto rows = session.GetLocalizationReviewRows();
+    const auto rows       = session.GetLocalizationReviewRows();
     const auto rowMatches = [&rows](size_t rowIndex, std::wstring_view ownerName, std::wstring_view id) noexcept
     { return rowIndex < rows.size() && rows[rowIndex].ownerName == ownerName && rows[rowIndex].id == id; };
 
     RedConfigure::LocalizationReviewViewOptions options;
-    options.visibleOwnerNames   = {L"App", L"Plugin"};
-    options.visibleCultureNames = {L"fr-FR", L"cs-CZ"};
-    options.statusFilter        = RedConfigure::LocalizationStatusFilter::Problems;
+    options.visibleOwnerNames             = {L"App", L"Plugin"};
+    options.visibleCultureNames           = {L"fr-FR", L"cs-CZ"};
+    options.statusFilter                  = RedConfigure::LocalizationStatusFilter::Problems;
     const std::vector<size_t> problemView = RedConfigure::BuildLocalizationReviewView(rows, options);
 
     bool problemsIncludeMissingRow = false;
@@ -1222,7 +1721,7 @@ END
 [[nodiscard]] bool TestLocalizationReviewCanCreateAndExportNewCulture()
 {
     std::error_code ec;
-    const std::filesystem::path tempRoot = std::filesystem::temp_directory_path(ec) / L"RedConfigureLocalizationReviewNewCultureTest";
+    const std::filesystem::path tempRoot = AcquireRedConfigureTestSandbox(L"RedConfigureLocalizationReviewNewCultureTest", ec);
     if (ec)
     {
         return Require(false, L"Could not resolve a temporary directory for localization review new-culture tests.");
@@ -1241,8 +1740,7 @@ END
     if (appHello)
     {
         const size_t rowIndex = static_cast<size_t>(appHello - session.GetLocalizationReviewRows().data());
-        ok                    = Require(session.UpdateLocalizationReviewTarget(rowIndex, L"de-DE", L"Hallo {0}"),
-                                        L"Review target edit should accept a newly created culture.") &&
+        ok = Require(session.UpdateLocalizationReviewTarget(rowIndex, L"de-DE", L"Hallo {0}"), L"Review target edit should accept a newly created culture.") &&
              ok;
     }
 
@@ -1262,7 +1760,7 @@ END
 
 [[nodiscard]] bool TestLocalizationReviewProjectionPerformanceMetric()
 {
-    constexpr size_t ownerCount    = 8u;
+    constexpr size_t ownerCount      = 8u;
     constexpr size_t stringsPerOwner = 600u;
     const std::vector<std::wstring> cultures{L"fr-FR", L"cs-CZ", L"ja-JP", L"sk-SK"};
 
@@ -1296,15 +1794,94 @@ END
         }
     }
 
-    const auto started        = std::chrono::steady_clock::now();
+    const auto started             = std::chrono::steady_clock::now();
     const std::vector<size_t> view = RedConfigure::BuildLocalizationReviewView(rows, options);
-    const auto finished       = std::chrono::steady_clock::now();
-    const auto elapsedMicros  = std::chrono::duration_cast<std::chrono::microseconds>(finished - started).count();
+    const auto finished            = std::chrono::steady_clock::now();
+    const auto elapsedMicros       = std::chrono::duration_cast<std::chrono::microseconds>(finished - started).count();
 
-    std::wcout << L"redconfigure.localization.review.all_owners_all_languages rows=" << rows.size() << L" visibleRows=" << view.size()
-               << L" cultures=" << cultures.size() << L" elapsedMicros=" << elapsedMicros << L'\n';
+    std::wcout << L"redconfigure.localization.review.all_owners_all_languages rows=" << rows.size() << L" visibleRows=" << view.size() << L" cultures="
+               << cultures.size() << L" elapsedMicros=" << elapsedMicros << L'\n';
 
     return Require(view.size() == rows.size(), L"Localization review perf projection should keep every checked owner/language row visible.");
+}
+
+[[nodiscard]] bool TestRedConfigureRepoSizedScanAndValidationPerformance()
+{
+    constexpr size_t ownerCount = 6u;
+    constexpr size_t stringsPerOwner = 250u;
+    const std::array<std::wstring, 4> cultures{{L"fr-FR", L"cs-CZ", L"ja-JP", L"sk-SK"}};
+    std::error_code ec;
+    const std::filesystem::path root = AcquireRedConfigureTestSandbox(L"RepoSizedScanValidationPerf", ec);
+    if (ec) return Require(false, L"Could not create repo-sized RedConfigure performance sandbox.");
+    std::filesystem::remove_all(root, ec);
+
+    bool ok = true;
+    for (size_t ownerIndex = 0u; ownerIndex < ownerCount; ++ownerIndex)
+    {
+        const std::wstring ownerName = L"PerfOwner" + std::to_wstring(ownerIndex);
+        const std::filesystem::path ownerRoot = root / ownerName;
+        const std::string project = std::format("<Project><ItemGroup><ResourceCompile Include=\"{}.rc\" /></ItemGroup></Project>\n", ownerIndex);
+        ok = Require(WriteTestTextFile(ownerRoot / (ownerName + L".vcxproj"), project), L"Could not write repo-sized perf project fixture.") && ok;
+
+        std::string source = "#include \"resource.h\"\nSTRINGTABLE\nBEGIN\n";
+        for (size_t stringIndex = 0u; stringIndex < stringsPerOwner; ++stringIndex)
+        {
+            source += std::format(" IDS_PERF_{}_{} \"Source {} {} {{0}}\"\n", ownerIndex, stringIndex, ownerIndex, stringIndex);
+        }
+        source += "END\n";
+        ok = Require(WriteTestTextFile(ownerRoot / (std::to_wstring(ownerIndex) + L".rc"), source), L"Could not write repo-sized source RC fixture.") && ok;
+
+        for (const std::wstring& culture : cultures)
+        {
+            std::string target = "#include \"resource.h\"\nSTRINGTABLE\nBEGIN\n";
+            for (size_t stringIndex = 0u; stringIndex < stringsPerOwner; ++stringIndex)
+            {
+                target += std::format(" IDS_PERF_{}_{} \"Target {} {} {{0}}\"\n", ownerIndex, stringIndex, ownerIndex, stringIndex);
+            }
+            target += "END\n";
+            ok = Require(WriteTestTextFile(ownerRoot / L"Lang" / culture / (ownerName + L"-" + culture + L".rc"), target),
+                         L"Could not write repo-sized target RC fixture.") &&
+                 ok;
+        }
+    }
+    for (size_t themeIndex = 0u; themeIndex < 10u; ++themeIndex)
+    {
+        const std::string theme = std::format(
+            "{{ formatVersion: 2, id: \"user/perf-{}\", name: \"Perf {}\", baseThemeId: \"builtin/dark\", colors: {{ \"app.accent\": \"#336699\" }} }}\n",
+            themeIndex,
+            themeIndex);
+        ok = Require(WriteTestTextFile(root / L"Specs" / L"Themes" / (L"Perf" + std::to_wstring(themeIndex) + L".theme.json5"), theme),
+                     L"Could not write repo-sized theme fixture.") &&
+             ok;
+    }
+    if (! ok) return false;
+
+    RedConfigure::RedConfigureSession session;
+    const auto scanStarted = std::chrono::steady_clock::now();
+    const HRESULT loadHr = session.LoadWorkspace(root, L"fr-FR");
+    const auto scanElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - scanStarted);
+    ok = Require(SUCCEEDED(loadHr), L"Repo-sized RedConfigure performance workspace should load.") && ok;
+    ok = Require(session.GetLocalizationReviewRows().size() == ownerCount * stringsPerOwner,
+                 L"Repo-sized RedConfigure performance workspace should expose every resource row.") &&
+         ok;
+
+    const auto validationStarted = std::chrono::steady_clock::now();
+    const RedConfigure::Workflow::ValidationSummary validation = session.Validate();
+    const auto validationElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - validationStarted);
+    ok = Require(validation.errorCount == 0u, L"Repo-sized RedConfigure performance fixture should validate without errors.") && ok;
+
+    const auto previewStarted = std::chrono::steady_clock::now();
+    ok = Require(session.UpdateThemeColor(L"app.accent", L"#5577AA"), L"Repo-sized RedConfigure preview update should succeed.") && ok;
+    const auto previewElapsed = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - previewStarted);
+
+    std::wcout << L"redconfigure.repo_sized owners=" << ownerCount << L" rows=" << session.GetLocalizationReviewRows().size() << L" themes="
+               << session.GetThemeCatalog().themes.size() << L" scanMs=" << scanElapsed.count() << L" validationMs=" << validationElapsed.count()
+               << L" previewUs=" << previewElapsed.count() << L'\n';
+    ok = Require(scanElapsed < std::chrono::milliseconds(500), L"Repo-sized RedConfigure scan should stay under the 500 ms target.") && ok;
+    ok = Require(validationElapsed < std::chrono::milliseconds(250), L"Repo-sized RedConfigure validation should stay under the 250 ms target.") && ok;
+    ok = Require(previewElapsed < std::chrono::milliseconds(16), L"Theme preview model update should stay within one 16 ms frame budget.") && ok;
+    std::filesystem::remove_all(root, ec);
+    return ok;
 }
 
 [[nodiscard]] bool TestSplashScreenCloseGuardSuppressesPendingOpen()
@@ -1365,7 +1942,7 @@ END
 [[nodiscard]] bool TestThemeCatalogLoadsThemeFiles()
 {
     std::error_code ec;
-    const std::filesystem::path tempRoot = std::filesystem::temp_directory_path(ec) / L"RedConfigureThemeCatalogTest";
+    const std::filesystem::path tempRoot = AcquireRedConfigureTestSandbox(L"RedConfigureThemeCatalogTest", ec);
     if (ec)
     {
         return Require(false, L"Could not resolve a temporary directory for theme catalog tests.");
@@ -1375,6 +1952,7 @@ END
     bool ok = true;
     ok      = Require(WriteTestTextFile(tempRoot / L"Good.theme.json5",
                                         R"json5({
+  formatVersion: 2,
   id: "user/catalog-good",
   name: "Catalog Good",
   baseThemeId: "builtin/dark",
@@ -1465,6 +2043,282 @@ END
     return ok;
 }
 
+[[nodiscard]] std::optional<std::filesystem::path> FindWindowsResourceCompiler()
+{
+    const std::wstring programFilesX86 = GetEnvironmentString(L"ProgramFiles(x86)");
+    if (programFilesX86.empty())
+    {
+        return std::nullopt;
+    }
+
+    const std::filesystem::path binRoot = std::filesystem::path(programFilesX86) / L"Windows Kits" / L"10" / L"bin";
+    std::error_code ec;
+    std::vector<std::filesystem::path> candidates;
+    for (std::filesystem::directory_iterator it(binRoot, ec), end; ! ec && it != end; it.increment(ec))
+    {
+        if (! it->is_directory(ec))
+        {
+            ec.clear();
+            continue;
+        }
+        const std::filesystem::path candidate = it->path() / L"x64" / L"rc.exe";
+        if (std::filesystem::is_regular_file(candidate, ec))
+        {
+            candidates.push_back(candidate);
+        }
+        ec.clear();
+    }
+    if (candidates.empty())
+    {
+        return std::nullopt;
+    }
+    std::ranges::sort(candidates);
+    return candidates.back();
+}
+
+[[nodiscard]] bool TestGeneratedRcCompilesWhenWindowsSdkIsAvailable()
+{
+    const std::optional<std::filesystem::path> rcExe = FindWindowsResourceCompiler();
+    if (! rcExe.has_value())
+    {
+        std::wcout << L"RedConfigureTests: Windows SDK rc.exe unavailable; generated RC compiler validation skipped.\n";
+        return true;
+    }
+
+    std::error_code ec;
+    const std::filesystem::path tempRoot = AcquireRedConfigureTestSandbox(L"GeneratedRcCompilerValidation", ec);
+    if (ec)
+    {
+        return Require(false, L"Could not create the generated RC compiler-validation sandbox.");
+    }
+    std::filesystem::remove_all(tempRoot, ec);
+    std::filesystem::create_directories(tempRoot, ec);
+    if (ec)
+    {
+        return Require(false, L"Could not reset the generated RC compiler-validation sandbox.");
+    }
+
+    const std::vector<RedConfigure::Localization::MergedStringEntry> merged = {
+        {.id = L"IDS_ALPHA", .sourceText = L"Alpha", .targetText = L"Alpha traduit"},
+        {.id = L"IDS_FORMATTED", .sourceText = L"Value {0}", .targetText = L"Valeur {0}"},
+    };
+    const std::wstring generated = RedConfigure::Localization::BuildSatelliteRcStringTable(L"resource.h", L"fr-FR", merged);
+    bool ok = Require(WriteTestUtf16LeTextFile(tempRoot / L"generated.rc", generated, true), L"Could not write generated RC compiler fixture.");
+    ok = Require(WriteTestTextFile(tempRoot / L"resource.h", "#define IDS_ALPHA 1001\n#define IDS_FORMATTED 1002\n"),
+                 L"Could not write generated RC resource header fixture.") &&
+         ok;
+    if (! ok)
+    {
+        return false;
+    }
+
+    const std::filesystem::path outputPath = tempRoot / L"generated.res";
+    std::wstring commandLine = std::format(L"\"{}\" /nologo /fo \"{}\" /I \"{}\" \"{}\"",
+                                           rcExe->wstring(),
+                                           outputPath.wstring(),
+                                           tempRoot.wstring(),
+                                           (tempRoot / L"generated.rc").wstring());
+    STARTUPINFOW startupInfo{.cb = sizeof(STARTUPINFOW)};
+    PROCESS_INFORMATION processInfo{};
+    if (! CreateProcessW(rcExe->c_str(), commandLine.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, tempRoot.c_str(), &startupInfo, &processInfo))
+    {
+        return Require(false, L"Could not start Windows SDK rc.exe for generated RC validation.");
+    }
+    wil::unique_handle process(processInfo.hProcess);
+    wil::unique_handle thread(processInfo.hThread);
+    if (WaitForSingleObject(process.get(), 30'000u) != WAIT_OBJECT_0)
+    {
+        static_cast<void>(TerminateProcess(process.get(), ERROR_TIMEOUT));
+        return Require(false, L"Windows SDK rc.exe timed out while validating generated RC output.");
+    }
+    DWORD exitCode = ERROR_GEN_FAILURE;
+    ok = Require(GetExitCodeProcess(process.get(), &exitCode) != FALSE && exitCode == 0u,
+                 L"Windows SDK rc.exe rejected RedConfigure generated RC output.") &&
+         ok;
+    ok = Require(std::filesystem::is_regular_file(outputPath, ec) && ! ec, L"Windows SDK rc.exe did not create the expected .res file.") && ok;
+    std::filesystem::remove_all(tempRoot, ec);
+    return ok;
+}
+
+[[nodiscard]] bool TestRedConfigureWorkflowModels()
+{
+    bool ok = true;
+    RedConfigure::Workflow::LanguageColumnModel columns;
+    const std::vector<std::wstring> initialCultures{L"fr-FR", L"de-DE", L"ja-JP"};
+    columns.Set(initialCultures);
+    ok = Require(columns.SetPinned(L"ja-JP", true), L"Language columns should support pinning.") && ok;
+    ok = Require(columns.Move(L"de-DE", 1u), L"Language columns should support reordering.") && ok;
+    ok = Require(columns.Remove(L"fr-FR"), L"Language columns should support removal.") && ok;
+    ok = Require(columns.Add(L"cs-CZ"), L"Language columns should support addition.") && ok;
+    const std::vector<std::wstring> ordered = columns.GetOrderedCultures();
+    ok = Require(ordered.size() == 3u && ordered.front() == L"ja-JP" && ordered.back() == L"cs-CZ",
+                 L"Pinned language columns should remain first while preserving configured order.") &&
+         ok;
+
+    RedConfigure::LocalizationReviewRow row;
+    row.ownerName = L"MenuOwner";
+    row.id = L"IDS_MENU_OPEN";
+    row.sourceText = L"&Open {0}";
+    row.targets.push_back({.cultureName = L"fr-FR", .targetText = L"Ouvrir { 0 }", .hasExistingTranslation = true});
+    std::vector<RedConfigure::LocalizationReviewRow> rows{row};
+    RedConfigure::Workflow::LocalizationBatchRequest normalize{
+        .kind = RedConfigure::Workflow::LocalizationBatchKind::NormalizePlaceholderWhitespace, .targetCulture = L"fr-FR"};
+    const auto normalized = RedConfigure::Workflow::PreviewLocalizationBatch(rows, normalize);
+    ok = Require(normalized.changes.size() == 1u && normalized.changes.front().after == L"Ouvrir {0}",
+                 L"Localization batch preview should normalize placeholder whitespace without writing.") &&
+         ok;
+
+    RedConfigure::Workflow::LocalizationBatchRequest accelerators{
+        .kind = RedConfigure::Workflow::LocalizationBatchKind::PreserveAccelerators, .targetCulture = L"fr-FR"};
+    const auto acceleratorPreview = RedConfigure::Workflow::PreviewLocalizationBatch(rows, accelerators);
+    ok = Require(acceleratorPreview.changes.size() == 1u && acceleratorPreview.changes.front().after.starts_with(L"&O"),
+                 L"Localization batch preview should preserve source accelerators.") &&
+         ok;
+
+    const auto clipboard = RedConfigure::Workflow::ParseClipboardMatrix(L"A\tB\r\nC\tD");
+    ok = Require(clipboard.rows.size() == 2u && clipboard.rows.front().size() == 2u &&
+                     RedConfigure::Workflow::SerializeClipboardMatrix(clipboard) == L"A\tB\r\nC\tD",
+                 L"Rectangular localization clipboard data should round trip as TSV.") &&
+         ok;
+    const auto trailingClipboard = RedConfigure::Workflow::ParseClipboardMatrix(L"A\tB\r\n");
+    ok = Require(trailingClipboard.rows.size() == 1u && trailingClipboard.rows.front().size() == 2u &&
+                     RedConfigure::Workflow::SerializeClipboardMatrix(trailingClipboard) == L"A\tB",
+                 L"Clipboard parser should ignore a terminal newline instead of synthesizing an empty trailing row.") &&
+         ok;
+    const auto emptyClipboard = RedConfigure::Workflow::ParseClipboardMatrix(L"");
+    ok = Require(emptyClipboard.rows.empty(), L"Empty clipboard text should not synthesize an editable row.") && ok;
+
+    rows.front().targets.front().targetText = L"&Ouvrir {0}";
+    rows.push_back(rows.front());
+    rows.back().id = L"IDS_MENU_OTHER";
+    const auto duplicates = RedConfigure::Workflow::FindDuplicateSiblingAccelerators(rows, L"fr-FR");
+    ok = Require(duplicates.size() == 1u && duplicates.front().resourceIds.size() == 2u,
+                 L"Sibling menu accelerator validation should report duplicates.") &&
+         ok;
+
+    Common::Settings::ThemeDefinition theme;
+    theme.id = L"user/workflow";
+    theme.name = L"Workflow";
+    theme.baseThemeId = L"builtin/dark";
+    theme.colors.emplace(L"menu.text", 0xFFFFFFFFu);
+    theme.colors.emplace(L"menu.background", 0xFF000000u);
+    RedConfigure::Themes::ThemePreviewModel model;
+    model.SetTheme(theme);
+    const auto metadata = RedConfigure::Workflow::BuildThemeTokenMetadata(model, L"menu.text");
+    ok = Require(metadata.group == L"menu" && metadata.contrastKnown && metadata.contrastPass,
+                 L"Theme token metadata should expose group, usage, and contrast status.") &&
+         ok;
+
+    RedConfigure::Workflow::ThemeMassRequest recipe{
+        .recipe = RedConfigure::Workflow::ThemeRecipe::SoftenedSelections, .keys = {L"menu.background"}};
+    const auto themePreview = RedConfigure::Workflow::PreviewThemeMassChange(model, recipe);
+    ok = Require(themePreview.changes.size() == 1u && themePreview.changes.front().after == L"alpha(palette.recipe_menu_background,72%)",
+                 L"Theme mass operations should produce a before/after preview.") &&
+         ok;
+    ok = Require(RedConfigure::Workflow::ApplyThemeMassChange(model, themePreview), L"Theme mass operation preview should apply atomically.") && ok;
+    return ok;
+}
+
+[[nodiscard]] bool TestRedConfigureUiPageCreationAndSwitching()
+{
+    RedConfigure::RedConfigureSession session;
+    RedConfigure::Ui::RedConfigureRootCreateResult result =
+        RedConfigure::Ui::CreateRedConfigureRoot(GetModuleHandleW(nullptr), session, std::filesystem::path(L"C:\\RedConfigureUiSmoke"));
+    bool ok = Require(result.control != nullptr && result.controller != nullptr, L"RedConfigure UI smoke should create the workbench root and controller.");
+    if (! ok)
+    {
+        return false;
+    }
+    result.control->SetBounds(D2D1::RectF(0.0f, 0.0f, 1440.0f, 900.0f));
+    for (size_t pageIndex = 0u; pageIndex < RedConfigure::GetPageDefinitions().size(); ++pageIndex)
+    {
+        result.controller->SelectPageForTest(pageIndex);
+    }
+    result.controller->SelectPageForTest(0u);
+    return true;
+}
+
+[[nodiscard]] bool TestThemePreviewModelPaletteOperationsAndDynamicInspection()
+{
+    Common::Settings::ThemeDefinition theme;
+    theme.id = L"user/palette-operations";
+    theme.name = L"Palette Operations";
+    theme.baseThemeId = L"builtin/dark";
+
+    const auto addSource = [](auto& destination, std::wstring key, std::wstring_view text)
+    {
+        Common::Settings::ThemeColorSource source;
+        if (FAILED(Common::Settings::ParseThemeColorSource(text, source))) return false;
+        destination.emplace(std::move(key), std::move(source));
+        return true;
+    };
+
+    bool ok = true;
+    ok = Require(addSource(theme.palette, L"accent", L"#336699"), L"Palette fixture accent should parse.") && ok;
+    ok = Require(addSource(theme.palette, L"alternate", L"#CC8844"), L"Palette fixture alternate should parse.") && ok;
+    ok = Require(addSource(theme.colors, L"app.accent", L"ref(palette.accent)"), L"Palette fixture semantic reference should parse.") && ok;
+    ok = Require(addSource(theme.colors,
+                           L"folderView.itemBackgroundSelected",
+                           L"seededChoice(runtime.seed,palette.accent,palette.alternate)"),
+                 L"Palette fixture dynamic source should parse.") && ok;
+
+    RedConfigure::Themes::ThemePreviewModel model;
+    model.SetTheme(theme);
+    ok = Require(model.GetEffectiveColor(L"palette.accent").value_or(0u) == 0xFF336699u,
+                 L"Palette entries should expose their effective swatch.") && ok;
+    ok = Require(model.GetDependencies(L"app.accent") == std::vector<std::wstring>{L"palette.accent"},
+                 L"Semantic dependency inspection should expose palette references.") && ok;
+    ok = Require(model.GetAffected(L"palette.accent").size() == 2u,
+                 L"Reverse dependency inspection should expose every dependent source.") && ok;
+    ok = Require(model.GetEvaluationPhase(L"folderView.itemBackgroundSelected") == Common::Settings::ThemeColorEvaluationPhase::Paint,
+                 L"Dynamic selection sources should report paint-time evaluation.") && ok;
+
+    model.SetPreviewSeed(1u);
+    ok = Require(model.GetEffectiveColor(L"folderView.itemBackgroundSelected").value_or(0u) == 0xFFCC8844u,
+                 L"The fixed preview seed should evaluate the same candidate order as runtime.") && ok;
+    ok = Require(model.RenamePaletteEntry(L"accent", L"brand"), L"Palette rename should rewrite all dependents atomically.") && ok;
+    ok = Require(model.GetAuthoredColorText(L"app.accent") == L"ref(palette.brand)",
+                 L"Palette rename should preserve authored expressions with the new reference.") && ok;
+    ok = Require(! model.ResetOverride(L"palette.brand") && ! model.GetLastError().empty(),
+                 L"Deleting a referenced palette entry should be blocked with a diagnostic.") && ok;
+    ok = Require(model.TryEditOverride(L"app.accent", L"#112233"), L"A dependent semantic token should remain directly editable.") && ok;
+    ok = Require(model.TryEditOverride(L"folderView.itemBackgroundSelected", L"#445566"),
+                 L"A dynamic dependent should be replaceable by a static source.") && ok;
+    ok = Require(model.ResetOverride(L"palette.brand"), L"An unreferenced palette entry should be removable.") && ok;
+    ok = Require(model.TryEditOverride(L"menu.background", L"#445566"), L"Repeated-literal fixture should be editable.") && ok;
+    ok = Require(model.CreatePaletteEntry(L"sharedSelection", L"#445566", true),
+                 L"Creating a palette entry should optionally convert every matching direct source.") && ok;
+    ok = Require(model.GetAuthoredColorText(L"menu.background") == L"ref(palette.sharedSelection)" &&
+                     model.GetAuthoredColorText(L"folderView.itemBackgroundSelected") == L"ref(palette.sharedSelection)" &&
+                     model.GetEffectiveColor(L"menu.background").value_or(0u) == 0xFF445566u,
+                 L"Repeated-literal conversion should preserve effective colors while removing authored redundancy.") && ok;
+    ok = Require(model.WrapSourceWithTransform(L"menu.background", RedConfigure::Themes::ThemeSourceTransform::Darken10),
+                 L"Batch-style transforms should preserve the original source in a generated palette recipe.") && ok;
+    ok = Require(model.GetAuthoredColorText(L"menu.background").starts_with(L"darken(palette.source_menu_background") &&
+                     model.GetEffectiveColor(L"menu.background").value_or(0u) == 0xFF3D4D5Cu,
+                 L"A darken transform should remain authored as a function instead of flattening to hex.") && ok;
+
+    Common::Settings::ThemeDefinition fanoutTheme;
+    fanoutTheme.id = L"user/preview-fanout";
+    fanoutTheme.name = L"Preview Fanout";
+    fanoutTheme.baseThemeId = L"builtin/dark";
+    fanoutTheme.palette.emplace(L"root", Common::Settings::ThemeColorSource(0xFF102030u));
+    for (size_t index = 0u; index < 512u; ++index)
+    {
+        Common::Settings::ThemeColorSource source;
+        source.kind = Common::Settings::ThemeColorSourceKind::Reference;
+        source.references.push_back(L"palette.root");
+        fanoutTheme.colors.emplace(std::format(L"selftest.preview.{}", index), std::move(source));
+    }
+    RedConfigure::Themes::ThemePreviewModel fanoutModel;
+    fanoutModel.SetTheme(fanoutTheme);
+    ok = Require(fanoutModel.GetAffected(L"palette.root").size() == 512u &&
+                     fanoutModel.TryEditOverride(L"palette.root", L"#405060") &&
+                     fanoutModel.GetEffectiveColor(L"selftest.preview.511").value_or(0u) == 0xFF405060u,
+                 L"A worst-allowed 512-token fan-out edit should recompute once and update every dependent preview color.") && ok;
+    return ok;
+}
+
 [[nodiscard]] bool TestThemeColorSuggestionsGuideExpressionEditing()
 {
     const std::vector<std::wstring> suggestions =
@@ -1481,6 +2335,12 @@ END
                       L"Theme color suggestions should include a blend expression using the previously selected color.") &&
               ok;
     ok      = Require(contains(L"ref(menu.background)"), L"Theme color suggestions should include the previous color reference.") && ok;
+    ok      = Require(contains(L"perceptualTone(app.accent,60)") && contains(L"ensureContrast(menu.text,menu.background,4.5)") &&
+                          contains(L"harmonize(app.accent,navigation.accent,25%)") && contains(L"systemColor(accent)"),
+                      L"Theme color suggestions should expose the approved load-time and event-time function templates.") && ok;
+    ok      = Require(contains(L"seededRainbow(runtime.seed,85%,75%,100%,0)") &&
+                          contains(L"seededChoice(runtime.seed,app.accent,navigation.accent)"),
+                      L"The allowlisted selection token should expose deterministic paint-time function templates.") && ok;
     return ok;
 }
 
@@ -1489,19 +2349,19 @@ END
     const std::vector<std::wstring> keys = {
         L"app.accent",
         L"menu.background",
-        L"menu.selectionBackground",
+        L"menu.selectionBg",
         L"folderView.background",
-        L"dialog.text",
+        L"viewer.diff.addedBackground",
     };
 
     bool ok                            = true;
     std::vector<std::wstring> filtered = RedConfigure::FilterThemeColorKeys(keys, L"MENU");
-    ok                                 = Require(filtered == std::vector<std::wstring>{L"menu.background", L"menu.selectionBackground"},
+    ok                                 = Require(filtered == std::vector<std::wstring>{L"menu.background", L"menu.selectionBg"},
                                                  L"Theme color key filter should match key groups case-insensitively.") &&
                                          ok;
 
     filtered = RedConfigure::FilterThemeColorKeys(keys, L"background");
-    ok       = Require(filtered == std::vector<std::wstring>{L"menu.background", L"menu.selectionBackground", L"folderView.background"},
+    ok       = Require(filtered == std::vector<std::wstring>{L"menu.background", L"folderView.background", L"viewer.diff.addedBackground"},
                        L"Theme color key filter should match substrings anywhere in the key.") &&
                ok;
 
@@ -1515,7 +2375,7 @@ END
     const std::vector<RedConfigure::ThemePreviewHitCandidate> candidates = {
         RedConfigure::ThemePreviewHitCandidate{.key = L"navigation.background", .left = 0.0f, .top = 0.0f, .right = 200.0f, .bottom = 200.0f},
         RedConfigure::ThemePreviewHitCandidate{.key = L"app.accent", .left = 0.0f, .top = 0.0f, .right = 6.0f, .bottom = 200.0f},
-        RedConfigure::ThemePreviewHitCandidate{.key = L"menu.selectionBackground", .left = 60.0f, .top = 10.0f, .right = 120.0f, .bottom = 40.0f},
+        RedConfigure::ThemePreviewHitCandidate{.key = L"menu.selectionBg", .left = 60.0f, .top = 10.0f, .right = 120.0f, .bottom = 40.0f},
         RedConfigure::ThemePreviewHitCandidate{.key = L"menu.background", .left = 40.0f, .top = 0.0f, .right = 240.0f, .bottom = 60.0f},
     };
 
@@ -1526,7 +2386,7 @@ END
     ok      = Require(RedConfigure::SelectThemePreviewHitKey(candidates, 3.0f, 50.0f, L"app.accent") == L"navigation.background",
                       L"Theme preview repeated clicks should cycle to the containing region.") &&
               ok;
-    ok      = Require(RedConfigure::SelectThemePreviewHitKey(candidates, 80.0f, 20.0f, {}) == L"menu.selectionBackground",
+    ok      = Require(RedConfigure::SelectThemePreviewHitKey(candidates, 80.0f, 20.0f, {}) == L"menu.selectionBg",
                       L"Theme preview hit selection should prefer nested menu selection over menu background.") &&
               ok;
     ok      = Require(RedConfigure::SelectThemePreviewHitKey(candidates, 500.0f, 500.0f, {}).empty(),
@@ -1538,7 +2398,7 @@ END
 [[nodiscard]] bool TestRedConfigureSessionExportsFirstUsableFiles()
 {
     std::error_code ec;
-    const std::filesystem::path tempRoot = std::filesystem::temp_directory_path(ec) / L"RedConfigureSessionTest";
+    const std::filesystem::path tempRoot = AcquireRedConfigureTestSandbox(L"RedConfigureSessionTest", ec);
     if (ec)
     {
         return Require(false, L"Could not resolve a temporary directory for session tests.");
@@ -1594,6 +2454,7 @@ END
               ok;
     ok      = Require(WriteTestTextFile(tempRoot / L"Themes" / L"Session.theme.json5",
                                         R"json5({
+  formatVersion: 2,
   id: "user/session",
   name: "Session",
   baseThemeId: "builtin/dark",
@@ -1605,6 +2466,7 @@ END
               ok;
     ok      = Require(WriteTestTextFile(tempRoot / L"Themes" / L"Zed.theme.json5",
                                         R"json5({
+  formatVersion: 2,
   id: "user/zed",
   name: "Zed",
   baseThemeId: "builtin/light",
@@ -1646,8 +2508,8 @@ END
     ok = Require(SUCCEEDED(session.BuildThemeExportText(themePreview)), L"Session should build a theme export preview.") && ok;
     ok = Require(rcPreview.find(L"Salut {0}") != std::wstring::npos, L"Localization export preview should contain edited translations.") && ok;
     ok = Require(themePreview.find("\"app.accent\": \"#123456\"") != std::string::npos, L"Theme export preview should contain edited colors.") && ok;
-    ok = Require(themePreview.find("\"folderView.itemBackgroundSelected\": \"#091A2B\"") != std::string::npos,
-                 L"Theme export preview should flatten expression-authored colors.") &&
+    ok = Require(themePreview.find("\"folderView.itemBackgroundSelected\": \"darken(app.accent,0.5)\"") != std::string::npos,
+                 L"Theme export preview should preserve expression-authored colors.") &&
          ok;
 
     const std::filesystem::path rcPath    = tempRoot / L"Out" / L"App-fr-FR.rc";
@@ -1664,7 +2526,7 @@ END
 [[nodiscard]] bool TestRedConfigureSessionReadsBomlessUtf16LeRcFiles()
 {
     std::error_code ec;
-    const std::filesystem::path tempRoot = std::filesystem::temp_directory_path(ec) / L"RedConfigureBomlessUtf16LeSessionTest";
+    const std::filesystem::path tempRoot = AcquireRedConfigureTestSandbox(L"RedConfigureBomlessUtf16LeSessionTest", ec);
     if (ec)
     {
         return Require(false, L"Could not resolve a temporary directory for BOM-less UTF-16 session tests.");
@@ -1721,11 +2583,27 @@ END
 
 int wmain()
 {
+    const std::wstring perfJsonlPath = GetEnvironmentString(L"REDCONFIGURE_PERF_JSONL");
+    if (! perfJsonlPath.empty())
+    {
+        Debug::Perf::ConfigureJsonlOutput(perfJsonlPath,
+                                          L"RedConfigure repo-sized scan and validation",
+                                          L"Debug x64",
+                                          {},
+                                          {},
+                                          GetEnvironmentString(L"REDCONFIGURE_PERF_MACHINE_HASH"),
+                                          GetEnvironmentString(L"REDCONFIGURE_PERF_RUN_ID"));
+    }
+    auto clearPerfOutput = wil::scope_exit([] { Debug::Perf::ClearJsonlOutput(); });
     if (! TestPageDefinitions())
     {
         return 1;
     }
     if (! TestResolveWorkspaceRootForLaunchPath())
+    {
+        return 1;
+    }
+    if (! TestBoundedBinaryFileReader())
     {
         return 1;
     }
@@ -1749,7 +2627,19 @@ int wmain()
     {
         return 1;
     }
+    if (! TestThemeExpressionLanguageAndRuntimeSources())
+    {
+        return 1;
+    }
     if (! TestSettingsStoreThemeDirectoryUsesSharedParser())
+    {
+        return 1;
+    }
+    if (! TestShippedThemesUseVersion2Sources())
+    {
+        return 1;
+    }
+    if (! TestSettingsStoreInlineThemesUseSharedParser())
     {
         return 1;
     }
@@ -1805,11 +2695,27 @@ int wmain()
     {
         return 1;
     }
+    if (! TestRedConfigureRepoSizedScanAndValidationPerformance())
+    {
+        return 1;
+    }
     if (! TestSplashScreenCloseGuardSuppressesPendingOpen())
     {
         return 1;
     }
     if (! TestRcWriterAndMerge())
+    {
+        return 1;
+    }
+    if (! TestGeneratedRcCompilesWhenWindowsSdkIsAvailable())
+    {
+        return 1;
+    }
+    if (! TestRedConfigureWorkflowModels())
+    {
+        return 1;
+    }
+    if (! TestRedConfigureUiPageCreationAndSwitching())
     {
         return 1;
     }
@@ -1822,6 +2728,10 @@ int wmain()
         return 1;
     }
     if (! TestThemePreviewModelResolvesColorExpressions())
+    {
+        return 1;
+    }
+    if (! TestThemePreviewModelPaletteOperationsAndDynamicInspection())
     {
         return 1;
     }

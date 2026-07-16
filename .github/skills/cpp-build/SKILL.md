@@ -89,6 +89,9 @@ metadata:
 - Resolves most `-ProjectName` builds to the target `.vcxproj` directly; `RedSalamander` stays on the solution build graph so the solution can also build its bundled sibling outputs (`Plugins\*.dll`, `RedSalamanderMonitor.exe`, `RedSalamanderSearchService.exe`)
 - Reuses the saved local beta build number by default, so ordinary repeated local builds stay incremental instead of forcing a fresh version stamp on every invocation
 - Plain consoles that support child-console output keep MSBuild's native console output/color while still capturing a `.build\logs\msbuild-*.log` file; Windows Terminal and redirected hosts such as Codex use the replay helper so build progress stays visible, with replayed errors/warnings/project completion colorized in the console
+- MSBuild launches always use the sanitized environment helper so duplicate `Path`/`PATH` process-environment aliases are collapsed to canonical `Path` before MSBuild starts compiler tool tasks
+- `build.ps1` and every `Run-AllTests.ps1` lane, including `-SkipBuild`, hold the same repository-scoped exclusive lock file. `.build\artifact-operation-owner.json` identifies the root PID, operation, and UTC start; only a direct child synchronously launched in a kill-on-close Job Object may reuse that ownership. Do not start unrelated operations in parallel or edit build inputs while either is running.
+- Interrupted launch trees are contained by a kill-on-close Job Object. If abandoned ownership marks `.build\artifact-operation-contaminated.json`, run one serialized `build.ps1 -Rebuild` before trusting incremental outputs or starting tests.
 - Shows build time and output file sizes
 - Supports multi-processor builds (`/m`)
 - Displays both executables when building full solution

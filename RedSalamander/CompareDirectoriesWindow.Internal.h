@@ -42,7 +42,6 @@
 #include "PlugInterfaces/Informations.h"
 #include "SessionState.h"
 #include "ShortcutManager.h"
-#include "ThemedInputFrames.h"
 #include "UiMetrics.h"
 #include "WindowMessages.h"
 #include "WindowPlacementPersistence.h"
@@ -51,28 +50,27 @@
 
 namespace CompareDirectoriesWindowInternal
 {
-[[nodiscard]] std::wstring_view LoadStringResourceView(_In_opt_ HINSTANCE hInstance, _In_ UINT uID) noexcept;
-
 void LogComparePerfStats(std::wstring_view reason, const std::shared_ptr<CompareDirectoriesSession>& session, HRESULT resultHr) noexcept;
 
 constexpr wchar_t kCompareDirectoriesWindowClassName[] = L"RedSalamander.CompareDirectoriesWindow";
 constexpr wchar_t kCompareDirectoriesWindowId[]        = L"CompareDirectoriesWindow";
 
-constexpr UINT_PTR kScanProgressTextId                = 1003;
-constexpr UINT_PTR kScanProgressBarId                 = 1004;
-constexpr UINT_PTR kCompareTaskAutoDismissTimerId     = 1005;
-constexpr UINT kCompareTaskAutoDismissDelayMs         = 5000;
-constexpr UINT_PTR kCompareBannerSpinnerTimerId       = 1006;
-constexpr UINT kCompareBannerSpinnerTimerIntervalMs   = 16;
-constexpr UINT_PTR kCompareDecisionRefreshTimerId     = 1007;
-constexpr UINT kCompareDecisionRefreshTimerIntervalMs = 200;
-constexpr int kScanStatusHeightDip                    = 22;
-constexpr int kScanStatusPaddingXDip                  = 6;
-constexpr int kSplitterGripDotSizeDip                 = 2;
-constexpr int kSplitterGripDotGapDip                  = 2;
-constexpr int kSplitterGripDotCount                   = 3;
-constexpr float kMinSplitRatio                        = 0.0f;
-constexpr float kMaxSplitRatio                        = 1.0f;
+constexpr UINT_PTR kScanProgressTextId                  = 1003;
+constexpr UINT_PTR kScanProgressBarId                   = 1004;
+constexpr UINT_PTR kCompareTaskAutoDismissTimerId       = 1005;
+constexpr UINT kCompareTaskAutoDismissDelayMs           = 5000;
+constexpr UINT_PTR kCompareProgressPulseTimerId         = 1006;
+constexpr UINT kCompareProgressPulseTimerIntervalMs     = 16;
+constexpr UINT_PTR kCompareDecisionRefreshTimerId       = 1007;
+constexpr UINT kCompareDecisionRefreshTimerIntervalMs   = 200;
+constexpr UINT_PTR kCompareTaskCardTrailingFlushTimerId = 1008;
+constexpr int kScanStatusHeightDip                      = 22;
+constexpr int kScanStatusPaddingXDip                    = 6;
+constexpr int kSplitterGripDotSizeDip                   = 2;
+constexpr int kSplitterGripDotGapDip                    = 2;
+constexpr int kSplitterGripDotCount                     = 3;
+constexpr float kMinSplitRatio                          = 0.0f;
+constexpr float kMaxSplitRatio                          = 1.0f;
 
 LRESULT CALLBACK CompareOptionsHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
 LRESULT CALLBACK CompareOptionsWheelRouteWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
@@ -161,6 +159,8 @@ private:
     [[nodiscard]] INT_PTR OnOptionsCtlColorStatic(HDC hdc, HWND control) noexcept;
     [[nodiscard]] INT_PTR OnOptionsCtlColorBtn(HDC hdc, HWND control) noexcept;
     [[nodiscard]] bool HandleOptionsDxMnemonic(wchar_t mnemonic) noexcept;
+    void RegisterOptionsReloadParticipant() noexcept;
+    void UnregisterOptionsReloadParticipant() noexcept;
     void CreateChildWindows(HWND hwnd) noexcept;
     void EnsureOptionsControlsCreated(HWND dlg) noexcept;
     [[nodiscard]] bool EnsureOptionsDxStaticHosts() noexcept;
@@ -197,6 +197,14 @@ private:
         bool startedBefore = false;
     };
 
+    struct LeaveScopePromptRequest
+    {
+        ComparePane changedPane = ComparePane::Left;
+        uint64_t runId          = 0;
+        std::filesystem::path attemptedPath;
+        std::filesystem::path revertPath;
+    };
+
     [[nodiscard]] std::optional<PreparedCompareRun> PrepareCompareRun() noexcept;
     void ExecutePreparedCompareRun(uint64_t runId, bool startedBefore) noexcept;
     LRESULT OnDeferredBeginOrRescanCompare(WPARAM wp) noexcept;
@@ -208,6 +216,9 @@ private:
     void SyncOtherPanePath(ComparePane changedPane,
                            const std::optional<std::filesystem::path>& previousPath,
                            const std::optional<std::filesystem::path>& newPath) noexcept;
+    void SetComparePanePathSilently(ComparePane pane, const std::filesystem::path& path) noexcept;
+    void QueueLeaveScopePrompt(ComparePane changedPane, const std::filesystem::path& attemptedPath, const std::filesystem::path& revertPath) noexcept;
+    LRESULT OnLeaveScopePrompt() noexcept;
     void ApplySelectionForFolder(ComparePane pane, const std::filesystem::path& folder) noexcept;
     void UpdateEmptyStateForFolder(ComparePane pane, const std::filesystem::path& folder) noexcept;
     [[nodiscard]] std::wstring BuildDetailsTextForCompareItem(ComparePane pane,
@@ -226,14 +237,20 @@ private:
                                                                DWORD fileAttributes) noexcept;
     void OnFolderWindowFileOperationCompleted(const FolderWindow::FileOperationCompletedEvent& e) noexcept;
     uint64_t _fileOperationCompletedCallbackToken = 0;
-    LRESULT OnScanProgress(LPARAM lp) noexcept;
-    LRESULT OnContentProgress(LPARAM lp) noexcept;
+    LRESULT OnScanProgress(WPARAM operationKey, LPARAM lp) noexcept;
+    LRESULT OnContentProgress(WPARAM operationKey, LPARAM lp) noexcept;
     void UpdateProgressControls() noexcept;
-    void OnProgressSpinnerTimer() noexcept;
+    void EnsureProgressPulseTimer() noexcept;
+    void StopProgressPulseTimerIfIdle() noexcept;
+    void OnProgressPulseTimer() noexcept;
+    void InvalidateCompareWatermarkPanesIfDue(ULONGLONG now) noexcept;
     void DrawProgressSpinner(HDC hdc, const RECT& bounds) noexcept;
     void UpdateCompareWatermark() noexcept;
     void UpdateRescanButtonText() noexcept;
-    void UpdateCompareTaskCard(bool finished) noexcept;
+    void UpdateCompareTaskCard(bool finished, bool force = false) noexcept;
+    void ScheduleCompareTaskCardTrailingFlush(ULONGLONG delayMs) noexcept;
+    void CancelCompareTaskCardTrailingFlush() noexcept;
+    void OnCompareTaskCardTrailingFlushTimer() noexcept;
     void MaybeCompleteCompareRun() noexcept;
     void DismissCompareTaskCard() noexcept;
     LRESULT OnExecuteShortcutCommand(LPARAM lp) noexcept;
@@ -242,6 +259,9 @@ private:
     Common::Settings::CompareDirectoriesSettings GetEffectiveCompareSettings() const noexcept;
     Common::Settings::CompareDirectoriesSettings ReadOptionsControlsToSettings() const noexcept;
     [[nodiscard]] bool IsOptionsDialogDirty() const noexcept;
+    void ApplyOptionsDraftInterlocks() noexcept;
+    void UpdateOptionsDraftToggle(UINT controlId, bool checked) noexcept;
+    void UpdateOptionsDraftText(UINT controlId, std::wstring_view text) noexcept;
     void LoadOptionsControlsFromSettings() noexcept;
     void SaveOptionsControlsToSettings() noexcept;
     [[nodiscard]] bool ResolveOptionsStaleSaveConflict(HWND dlg) noexcept;
@@ -250,35 +270,44 @@ private:
     void RefreshBothPanes() noexcept;
     void ScheduleDecisionRefresh() noexcept;
     void OnDecisionRefreshTimer() noexcept;
+    [[nodiscard]] bool StartCompareSyncToOtherPane(FolderWindow::Pane sourcePane, FileSystemOperation operation) noexcept;
 
     wil::unique_hwnd _hWnd;
-    wil::unique_hwnd _optionsDlg;
-    wil::unique_hwnd _scanProgressText;
-    wil::unique_hwnd _scanProgressBar;
-    wil::unique_hwnd _bannerTitle;
-    wil::unique_hwnd _bannerOptionsButton;
-    wil::unique_hwnd _bannerRescanButton;
-    wil::unique_hmenu _menuHandle;
-    wil::unique_hwnd _dxMenuBarHostHwnd;
-    wil::unique_hwnd _dxBannerOptionsHostHwnd;
-    wil::unique_hwnd _dxBannerRescanHostHwnd;
-    wil::unique_hwnd _dxBannerTitleHostHwnd;
-    wil::unique_hwnd _dxScanProgressTextHostHwnd;
-    RedSalamander::DxUi::WindowHost _dxMenuBarHost;
-    RedSalamander::DxUi::WindowHost _dxBannerOptionsHost;
-    RedSalamander::DxUi::WindowHost _dxBannerRescanHost;
-    RedSalamander::DxUi::WindowHost _dxBannerTitleHost;
-    RedSalamander::DxUi::WindowHost _dxScanProgressTextHost;
-    RedSalamander::DxUi::MenuBar* _dxMenuBar              = nullptr;
-    RedSalamander::DxUi::Button* _dxBannerOptionsDxButton = nullptr;
-    RedSalamander::DxUi::Button* _dxBannerRescanDxButton  = nullptr;
-    RedSalamander::DxUi::Label* _dxBannerTitleLabel       = nullptr;
-    RedSalamander::DxUi::Label* _dxScanProgressTextLabel  = nullptr;
-    std::atomic<int> _dxMenuBarSelectedIndexSnapshot{-1};
-    HWND _dxMenuBarFocusRestoreHwnd = nullptr;
-    bool _usesDxMenuBar             = false;
-    bool _usesDxBannerButtons       = false;
-    bool _usesDxBannerText          = false;
+
+    struct ChromeController
+    {
+        ChromeController()                                       = default;
+        ~ChromeController()                                      = default;
+        ChromeController(const ChromeController&)                = delete;
+        ChromeController& operator=(const ChromeController&)     = delete;
+        ChromeController(ChromeController&&) noexcept            = delete;
+        ChromeController& operator=(ChromeController&&) noexcept = delete;
+
+        wil::unique_hwnd bannerTitle;
+        wil::unique_hwnd bannerOptionsButton;
+        wil::unique_hwnd bannerRescanButton;
+        wil::unique_hmenu menuHandle;
+        wil::unique_hwnd menuBarHostHwnd;
+        wil::unique_hwnd bannerOptionsHostHwnd;
+        wil::unique_hwnd bannerRescanHostHwnd;
+        wil::unique_hwnd bannerTitleHostHwnd;
+        RedSalamander::DxUi::WindowHost menuBarHost;
+        RedSalamander::DxUi::WindowHost bannerOptionsHost;
+        RedSalamander::DxUi::WindowHost bannerRescanHost;
+        RedSalamander::DxUi::WindowHost bannerTitleHost;
+        RedSalamander::DxUi::MenuBar* menuBar              = nullptr;
+        RedSalamander::DxUi::Button* bannerOptionsButtonDx = nullptr;
+        RedSalamander::DxUi::Button* bannerRescanButtonDx  = nullptr;
+        RedSalamander::DxUi::Label* bannerTitleLabel       = nullptr;
+        std::atomic<int> menuBarSelectedIndexSnapshot{-1};
+        HWND menuBarFocusRestoreHwnd = nullptr;
+        bool usesMenuBar             = false;
+        bool usesBannerButtons       = false;
+        bool usesBannerText          = false;
+        bool rescanIsCancel          = false;
+    };
+
+    ChromeController _chrome{};
 
     struct BannerProgressState
     {
@@ -313,73 +342,64 @@ private:
         std::array<ContentInFlightEntry, kMaxContentInFlightSlots> contentInFlight{};
     };
 
-    BannerProgressState _progress{};
+    enum class CompareWatermarkState
+    {
+        Hidden,
+        InProgress,
+        Cancelled,
+    };
 
-    uint64_t _scanStartTickMs = 0;
+    struct ProgressController
+    {
+        ProgressController()                                         = default;
+        ~ProgressController()                                        = default;
+        ProgressController(const ProgressController&)                = delete;
+        ProgressController& operator=(const ProgressController&)     = delete;
+        ProgressController(ProgressController&&) noexcept            = delete;
+        ProgressController& operator=(ProgressController&&) noexcept = delete;
 
-    float _progressSpinnerAngleDeg               = 0.0f;
-    ULONGLONG _progressSpinnerLastTickMs         = 0;
-    bool _progressSpinnerTimerActive             = false;
-    ULONGLONG _paneWatermarkLastInvalidateTickMs = 0;
+        wil::unique_hwnd scanProgressText;
+        wil::unique_hwnd scanProgressBar;
+        wil::unique_hwnd scanProgressTextHostHwnd;
+        RedSalamander::DxUi::WindowHost scanProgressTextHost;
+        RedSalamander::DxUi::Label* scanProgressTextLabel = nullptr;
+        BannerProgressState banner{};
+        uint64_t scanStartTickMs                    = 0;
+        float spinnerAngleDeg                       = 0.0f;
+        ULONGLONG spinnerLastTickMs                 = 0;
+        bool pulseTimerActive                       = false;
+        ULONGLONG paneWatermarkLastInvalidateTickMs = 0;
+        uint64_t contentEtaLastTickMs               = 0;
+        uint64_t contentEtaLastCompletedBytes       = 0;
+        double contentEtaSmoothedBytesPerSec        = 0.0;
+        std::optional<uint64_t> contentEtaSeconds;
+        bool controlsVisible = false;
+        std::wstring lastMessage;
+        ULONGLONG lastTaskCardUpdateTickMs   = 0;
+        bool taskCardTrailingFlushPending    = false;
+        bool compareRunSawScanProgress       = false;
+        uint64_t compareTaskId               = 0;
+        HRESULT compareRunResultHr           = S_OK;
+        CompareWatermarkState watermarkState = CompareWatermarkState::Hidden;
+    };
+
+    ProgressController _progress{};
 
     static constexpr int kProgressSpinnerSegments = 12;
 
-    bool _decisionRefreshPending     = false;
-    bool _decisionRefreshTimerActive = false;
+    bool _decisionRefreshPending         = false;
+    bool _decisionRefreshTimerActive     = false;
+    bool _decisionRefreshFallbackPending = false;
 
     std::optional<std::filesystem::path> _lastRefreshedLeftRelativeFolder;
     std::optional<std::filesystem::path> _lastRefreshedRightRelativeFolder;
     std::shared_ptr<const CompareDirectoriesFolderDecision> _lastRefreshedLeftDecision;
     std::shared_ptr<const CompareDirectoriesFolderDecision> _lastRefreshedRightDecision;
 
-    uint64_t _contentEtaLastTickMs         = 0;
-    uint64_t _contentEtaLastCompletedBytes = 0;
-    double _contentEtaSmoothedBytesPerSec  = 0.0;
-    std::optional<uint64_t> _contentEtaSeconds;
-    bool _progressControlsVisible = false;
-    std::wstring _lastProgressMessage;
-    ULONGLONG _lastCompareTaskCardUpdateTickMs = 0;
-
-    struct OptionsToggleCard
-    {
-        HWND title       = nullptr;
-        HWND description = nullptr;
-        HWND toggle      = nullptr;
-    };
-
-    struct OptionsIgnoreCard
-    {
-        HWND title       = nullptr;
-        HWND description = nullptr;
-        HWND toggle      = nullptr;
-        HWND frame       = nullptr;
-        HWND edit        = nullptr;
-    };
-
     struct OptionsUi
     {
         HWND host = nullptr;
-
-        HWND headerCompare  = nullptr;
-        HWND headerSubdirs  = nullptr;
-        HWND headerAdvanced = nullptr;
-        HWND headerIgnore   = nullptr;
-
-        OptionsToggleCard compareSize;
-        OptionsToggleCard compareDateTime;
-        OptionsToggleCard compareAttributes;
-        OptionsToggleCard compareContent;
-        OptionsToggleCard compareSubdirectories;
-
-        OptionsToggleCard compareSubdirAttributes;
-        OptionsToggleCard selectSubdirsOnlyInOnePane;
-        OptionsToggleCard keepIdenticalItems;
-
-        OptionsIgnoreCard ignoreFiles;
-        OptionsIgnoreCard ignoreDirectories;
     };
-
-    OptionsUi _optionsUi{};
 
     struct OptionsToggleCardDx
     {
@@ -460,38 +480,6 @@ private:
         }
     };
 
-    // Compatibility-only placeholders while the old split-host layout code is
-    // being retired. The stabilized one-host implementation only uses `body`.
-    struct OptionsSectionDxLabel
-    {
-        OptionsSectionDxLabel()                                            = default;
-        ~OptionsSectionDxLabel()                                           = default;
-        OptionsSectionDxLabel(const OptionsSectionDxLabel&)                = delete;
-        OptionsSectionDxLabel& operator=(const OptionsSectionDxLabel&)     = delete;
-        OptionsSectionDxLabel(OptionsSectionDxLabel&&) noexcept            = delete;
-        OptionsSectionDxLabel& operator=(OptionsSectionDxLabel&&) noexcept = delete;
-
-        wil::unique_hwnd hostHwnd;
-        RedSalamander::DxUi::WindowHost host;
-        RedSalamander::DxUi::Label* label = nullptr;
-    };
-
-    struct OptionsCardDxText
-    {
-        OptionsCardDxText()                                        = default;
-        ~OptionsCardDxText()                                       = default;
-        OptionsCardDxText(const OptionsCardDxText&)                = delete;
-        OptionsCardDxText& operator=(const OptionsCardDxText&)     = delete;
-        OptionsCardDxText(OptionsCardDxText&&) noexcept            = delete;
-        OptionsCardDxText& operator=(OptionsCardDxText&&) noexcept = delete;
-
-        wil::unique_hwnd hostHwnd;
-        RedSalamander::DxUi::WindowHost host;
-        RedSalamander::DxUi::Panel* root        = nullptr;
-        RedSalamander::DxUi::Label* title       = nullptr;
-        RedSalamander::DxUi::Label* description = nullptr;
-    };
-
     struct OptionsButtonDx
     {
         OptionsButtonDx() = default;
@@ -528,34 +516,6 @@ private:
         }
     };
 
-    struct OptionsToggleDx
-    {
-        OptionsToggleDx()                                      = default;
-        ~OptionsToggleDx()                                     = default;
-        OptionsToggleDx(const OptionsToggleDx&)                = delete;
-        OptionsToggleDx& operator=(const OptionsToggleDx&)     = delete;
-        OptionsToggleDx(OptionsToggleDx&&) noexcept            = delete;
-        OptionsToggleDx& operator=(OptionsToggleDx&&) noexcept = delete;
-
-        wil::unique_hwnd hostHwnd;
-        RedSalamander::DxUi::WindowHost host;
-        RedSalamander::DxUi::Toggle* toggle = nullptr;
-    };
-
-    struct OptionsEditDx
-    {
-        OptionsEditDx()                                    = default;
-        ~OptionsEditDx()                                   = default;
-        OptionsEditDx(const OptionsEditDx&)                = delete;
-        OptionsEditDx& operator=(const OptionsEditDx&)     = delete;
-        OptionsEditDx(OptionsEditDx&&) noexcept            = delete;
-        OptionsEditDx& operator=(OptionsEditDx&&) noexcept = delete;
-
-        wil::unique_hwnd hostHwnd;
-        RedSalamander::DxUi::WindowHost host;
-        RedSalamander::DxUi::TextField* edit = nullptr;
-    };
-
     struct OptionsDxUiState
     {
         OptionsDxUiState()                                       = default;
@@ -566,34 +526,8 @@ private:
         OptionsDxUiState& operator=(OptionsDxUiState&&) noexcept = delete;
 
         OptionsBodyDx body;
-        OptionsSectionDxLabel headerCompare;
-        OptionsSectionDxLabel headerSubdirs;
-        OptionsSectionDxLabel headerAdvanced;
-        OptionsSectionDxLabel headerIgnore;
-        OptionsCardDxText compareSize;
-        OptionsCardDxText compareDateTime;
-        OptionsCardDxText compareAttributes;
-        OptionsCardDxText compareContent;
-        OptionsCardDxText compareSubdirectories;
-        OptionsCardDxText compareSubdirAttributes;
-        OptionsCardDxText selectSubdirsOnlyInOnePane;
-        OptionsCardDxText keepIdenticalItems;
-        OptionsCardDxText ignoreFiles;
-        OptionsCardDxText ignoreDirectories;
         OptionsButtonDx okButton;
         OptionsButtonDx cancelButton;
-        OptionsToggleDx compareSizeToggle;
-        OptionsToggleDx compareDateTimeToggle;
-        OptionsToggleDx compareAttributesToggle;
-        OptionsToggleDx compareContentToggle;
-        OptionsToggleDx compareSubdirectoriesToggle;
-        OptionsToggleDx compareSubdirAttributesToggle;
-        OptionsToggleDx selectSubdirsOnlyInOnePaneToggle;
-        OptionsToggleDx keepIdenticalItemsToggle;
-        OptionsToggleDx ignoreFilesToggle;
-        OptionsToggleDx ignoreDirectoriesToggle;
-        OptionsEditDx ignoreFilesEdit;
-        OptionsEditDx ignoreDirectoriesEdit;
         bool usesDxUiStatics = false;
         bool usesDxUiButtons = false;
         bool usesDxUiToggles = false;
@@ -611,23 +545,48 @@ private:
         }
     };
 
-    std::unique_ptr<OptionsDxUiState> _optionsDxUi;
-    std::vector<RECT> _optionsCards;
-    int _optionsScrollOffset               = 0;
-    int _optionsScrollMax                  = 0;
-    int _optionsBodyContentHeight          = 0;
-    int _optionsWheelRemainder             = 0;
-    bool _optionsUseTwoColumns             = false;
-    bool _optionsUsesDxUiTypographyMetrics = false;
-    int _optionsTwoColumnSeparatorX        = -1;
-    bool _optionsStaleFromExternalReload   = false;
-    bool _syncingOptionsDxEdits            = false;
+    struct OptionsPanelController
+    {
+        OptionsPanelController()                                             = default;
+        ~OptionsPanelController()                                            = default;
+        OptionsPanelController(const OptionsPanelController&)                = delete;
+        OptionsPanelController& operator=(const OptionsPanelController&)     = delete;
+        OptionsPanelController(OptionsPanelController&&) noexcept            = delete;
+        OptionsPanelController& operator=(OptionsPanelController&&) noexcept = delete;
+
+        wil::unique_hwnd dlg;
+        OptionsUi ui{};
+        std::unique_ptr<OptionsDxUiState> dxUi;
+        std::vector<RECT> cards;
+        int scrollOffset                 = 0;
+        int scrollMax                    = 0;
+        int bodyContentHeight            = 0;
+        int wheelRemainder               = 0;
+        bool useTwoColumns               = false;
+        bool usesDxUiTypographyMetrics   = false;
+        int twoColumnSeparatorX          = -1;
+        bool staleFromExternalReload     = false;
+        bool reloadParticipantRegistered = false;
+        bool syncingDxDraft              = false;
+        Common::Settings::CompareDirectoriesSettings draft{};
+        bool draftLoaded = false;
+        wil::unique_hbrush backgroundBrush;
+        wil::unique_hbrush cardBrush;
+        wil::unique_hbrush inputBrush;
+        wil::unique_hbrush inputFocusedBrush;
+        wil::unique_hbrush inputDisabledBrush;
+        COLORREF inputBackgroundColor         = RGB(255, 255, 255);
+        COLORREF inputFocusedBackgroundColor  = RGB(255, 255, 255);
+        COLORREF inputDisabledBackgroundColor = RGB(255, 255, 255);
+    };
+
+    OptionsPanelController _optionsPanel{};
 
     Common::Settings::Settings* _settings = nullptr;
     AppTheme _theme{};
     const ShortcutManager* _shortcuts = nullptr;
-    HWND _ownerWindow                  = nullptr;
-    HWND _restoreFolderViewWindow      = nullptr;
+    HWND _ownerWindow                 = nullptr;
+    HWND _restoreFolderViewWindow     = nullptr;
     CompareDirectoriesPaneContext _leftContext;
     CompareDirectoriesPaneContext _rightContext;
 
@@ -667,35 +626,20 @@ private:
     wil::unique_hbrush _splitterBrush;
     wil::unique_hbrush _splitterGripBrush;
     wil::unique_hbrush _menuBackgroundBrush;
-    wil::unique_hbrush _optionsBackgroundBrush;
-    wil::unique_hbrush _optionsCardBrush;
-    wil::unique_hbrush _optionsInputBrush;
-    wil::unique_hbrush _optionsInputFocusedBrush;
-    wil::unique_hbrush _optionsInputDisabledBrush;
 
-    COLORREF _optionsInputBackgroundColor         = RGB(255, 255, 255);
-    COLORREF _optionsInputFocusedBackgroundColor  = RGB(255, 255, 255);
-    COLORREF _optionsInputDisabledBackgroundColor = RGB(255, 255, 255);
-    ThemedInputFrames::FrameStyle _optionsFrameStyle{};
+    bool _compareStarted    = false;
+    bool _compareActive     = false;
+    bool _compareRunPending = false;
+    bool _syncingPaths      = false;
+    uint64_t _compareRunId  = 0;
 
-    bool _compareStarted            = false;
-    bool _compareActive             = false;
-    bool _compareRunPending         = false;
-    bool _compareRunSawScanProgress = false;
-    bool _bannerRescanIsCancel      = false;
-    bool _syncingPaths              = false;
-    uint64_t _compareRunId          = 0;
-    uint64_t _compareTaskId         = 0;
-    HRESULT _compareRunResultHr     = S_OK;
-
-    enum class CompareWatermarkState
+    enum class CompareSelectionMode : uint8_t
     {
-        Hidden,
-        InProgress,
-        Cancelled,
+        Default,
+        Inverted,
     };
 
-    CompareWatermarkState _watermarkState = CompareWatermarkState::Hidden;
+    CompareSelectionMode _selectionMode = CompareSelectionMode::Default;
 
     enum class DeferredStartPhase
     {
@@ -707,6 +651,8 @@ private:
     DeferredStartPhase _deferredCompareStartPhase = DeferredStartPhase::None;
     uint64_t _deferredCompareStartRunId           = 0;
     bool _deferredCompareStartStartedBefore       = false;
+    std::optional<LeaveScopePromptRequest> _leaveScopePromptRequest;
+    bool _leaveScopePromptPending = false;
 
     std::optional<std::filesystem::path> _lastLeftPluginPath;
     std::optional<std::filesystem::path> _lastRightPluginPath;
@@ -714,12 +660,15 @@ private:
     int _restoreShowCmd     = SW_SHOWNORMAL;
     bool _hasSavedPlacement = false;
     size_t _dispatchDepth   = 0u;
+    bool _createInProgress  = false;
     bool _deletePending     = false;
 
 #ifdef ENABLE_TESTS
 public:
     [[nodiscard]] bool DebugGetOptionsSnapshot(::CompareDirectoriesOptionsDebugSnapshot& out) const noexcept;
     [[nodiscard]] bool DebugGetRunSnapshot(::CompareDirectoriesRunDebugSnapshot& out) const noexcept;
+    [[nodiscard]] bool DebugSetPanePath(bool leftPane, const std::filesystem::path& path) noexcept;
+    [[nodiscard]] bool DebugSetRunPending(bool pending) noexcept;
     [[nodiscard]] bool DebugGetMenuBarItemLabel(size_t index, std::wstring& outText) const noexcept;
     [[nodiscard]] bool DebugGetMenuBarItemScreenRect(size_t index, RECT& outRect) const noexcept;
     [[nodiscard]] bool DebugFocusOptionsFirstControl() noexcept;

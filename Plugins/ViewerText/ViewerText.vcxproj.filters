@@ -12,6 +12,7 @@
   <ItemGroup>
     <ClInclude Include="resource.h" />
     <ClInclude Include="ViewerText.h" />
+    <ClInclude Include="ViewerText.SafetyHelpers.h" />
     <ClInclude Include="ViewerText.ThemeHelpers.h" />
   </ItemGroup>
   <ItemGroup>

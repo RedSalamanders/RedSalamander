@@ -269,9 +269,14 @@
     </PropertyGroup>
     <ItemGroup>
       <ThemeFiles Include="$(ThemeSourceDir)\*.theme.json5" />
+      <ThemeNoticeFiles Include="$(ThemeSourceDir)\THIRD-PARTY-NOTICES.md" />
+      <ThemeLicenseFiles Include="$(ThemeSourceDir)\Licenses\*.LICENSE.txt" />
     </ItemGroup>
     <MakeDir Directories="$(ThemeDestinationDir)" />
+    <MakeDir Directories="$(ThemeDestinationDir)Licenses\" />
     <Copy SourceFiles="@(ThemeFiles)" DestinationFolder="$(ThemeDestinationDir)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(ThemeNoticeFiles)" DestinationFolder="$(ThemeDestinationDir)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(ThemeLicenseFiles)" DestinationFolder="$(ThemeDestinationDir)Licenses\" SkipUnchangedFiles="true" />
   </Target>
   <Target Name="CopySettingsStoreSchema" AfterTargets="Build">
     <PropertyGroup>

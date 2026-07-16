@@ -45,6 +45,7 @@
 #include "SettingsStore.h"
 
 #include "Helpers.h"
+#include "HandleIo.h"
 #include "ThemeDefinitionIo.h"
 #include "Version.h"
 
@@ -56,6 +57,91 @@ constexpr wchar_t kSettingsDirectoryName[] = L"Settings";
 constexpr size_t kMaxSettingsFileBytes = 16u * 1024u * 1024u; // 16 MiB safety limit
 
 constexpr wchar_t kSettingsStoreSchemaFileName[] = L"SettingsStore.schema.json";
+#ifdef ENABLE_TESTS
+constexpr wchar_t kUnifiedTestRootEnvVar[]       = L"REDSALAMANDER_TEST_ROOT";
+constexpr wchar_t kUnifiedTestRunIdEnvVar[]      = L"REDSALAMANDER_TEST_RUN_ID";
+constexpr wchar_t kRunsDirName[]                 = L"runs";
+constexpr wchar_t kScratchDirName[]              = L"scratch";
+constexpr wchar_t kSettingsStoreScratchDirName[] = L"settings-store";
+
+[[nodiscard]] std::wstring GetEnvironmentString(std::wstring_view name) noexcept
+{
+    if (name.empty())
+    {
+        return {};
+    }
+
+    const std::wstring variableName(name);
+    const DWORD required = GetEnvironmentVariableW(variableName.c_str(), nullptr, 0);
+    if (required == 0)
+    {
+        return {};
+    }
+
+    std::wstring value(static_cast<size_t>(required), L'\0');
+    const DWORD written = GetEnvironmentVariableW(variableName.c_str(), value.data(), required);
+    if (written == 0 || written >= required)
+    {
+        return {};
+    }
+
+    value.resize(static_cast<size_t>(written));
+    return value;
+}
+
+[[nodiscard]] bool IsSafeUnifiedTestRunId(std::wstring_view value) noexcept
+{
+    if (value.empty() || value.size() > 160u)
+    {
+        return false;
+    }
+
+    return std::all_of(value.begin(),
+                       value.end(),
+                       [](const wchar_t ch) noexcept
+    {
+        return (ch >= L'0' && ch <= L'9') || (ch >= L'A' && ch <= L'Z') || (ch >= L'a' && ch <= L'z') || ch == L'-' || ch == L'_';
+    });
+}
+
+[[nodiscard]] std::filesystem::path NormalizeUnifiedTestRootPath(const std::filesystem::path& root) noexcept
+{
+    if (root.empty())
+    {
+        return {};
+    }
+
+    std::error_code ec;
+    if (! root.is_absolute())
+    {
+        const std::filesystem::path absoluteRoot = std::filesystem::absolute(root, ec);
+        if (! ec && ! absoluteRoot.empty())
+        {
+            return absoluteRoot.lexically_normal();
+        }
+    }
+
+    return root.lexically_normal();
+}
+
+[[nodiscard]] std::filesystem::path GetUnifiedTestSettingsDirectoryPathFromEnvironment() noexcept
+{
+    const std::wstring rootText = GetEnvironmentString(kUnifiedTestRootEnvVar);
+    const std::wstring runId    = GetEnvironmentString(kUnifiedTestRunIdEnvVar);
+    if (rootText.empty() || ! IsSafeUnifiedTestRunId(runId))
+    {
+        return {};
+    }
+
+    const std::filesystem::path root = NormalizeUnifiedTestRootPath(std::filesystem::path(rootText));
+    if (root.empty())
+    {
+        return {};
+    }
+
+    return root / kRunsDirName / runId / kScratchDirName / kSettingsStoreScratchDirName / kCompanyDirectoryName / kSettingsDirectoryName;
+}
+#endif
 
 [[nodiscard]] std::filesystem::path GetShippedSettingsStoreSchemaPath() noexcept
 {
@@ -92,49 +178,12 @@ void StripUtf8BomInPlace(std::string& text) noexcept
 
 std::wstring Utf16FromUtf8(std::string_view text) noexcept
 {
-    if (text.empty())
-    {
-        return {};
-    }
-
-    const int required = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0);
-    if (required <= 0)
-    {
-        return {};
-    }
-
-    std::wstring result(static_cast<size_t>(required), L'\0');
-    const int written = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), result.data(), required);
-    if (written != required)
-    {
-        return {};
-    }
-
-    return result;
+    return Common::Strings::Utf16FromUtf8StrictOrEmpty(text);
 }
 
 std::string Utf8FromUtf16(std::wstring_view text) noexcept
 {
-    if (text.empty())
-    {
-        return {};
-    }
-
-    const int required = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
-    if (required <= 0)
-    {
-        return {};
-    }
-
-    std::string result(static_cast<size_t>(required), '\0');
-    const int written =
-        WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), result.data(), required, nullptr, nullptr);
-    if (written != required)
-    {
-        return {};
-    }
-
-    return result;
+    return Common::Strings::Utf8FromUtf16StrictOrEmpty(text);
 }
 
 [[nodiscard]] wchar_t ToLower(wchar_t ch) noexcept
@@ -373,8 +422,45 @@ HRESULT ReadFileBytes(const std::filesystem::path& path, std::string& out) noexc
     return S_OK;
 }
 
-HRESULT WriteFileBytesAtomic(const std::filesystem::path& path, std::string_view bytes) noexcept
+[[nodiscard]] HRESULT GetFileStampByHandle(HANDLE file, Common::Settings::SettingsFileStamp& out) noexcept
 {
+    out = Common::Settings::SettingsFileStamp{};
+    if (! file || file == INVALID_HANDLE_VALUE)
+    {
+        return E_INVALIDARG;
+    }
+
+    BY_HANDLE_FILE_INFORMATION info{};
+    if (! GetFileInformationByHandle(file, &info))
+    {
+        return HRESULT_FROM_WIN32(GetLastError());
+    }
+
+    ULARGE_INTEGER lastWrite{};
+    lastWrite.LowPart  = info.ftLastWriteTime.dwLowDateTime;
+    lastWrite.HighPart = info.ftLastWriteTime.dwHighDateTime;
+
+    ULARGE_INTEGER fileSize{};
+    fileSize.LowPart  = info.nFileSizeLow;
+    fileSize.HighPart = info.nFileSizeHigh;
+
+    out.volumeSerialNumber = info.dwVolumeSerialNumber;
+    out.fileIndexHigh      = info.nFileIndexHigh;
+    out.fileIndexLow       = info.nFileIndexLow;
+    out.lastWriteTime      = lastWrite.QuadPart;
+    out.fileSize           = fileSize.QuadPart;
+    return S_OK;
+}
+
+HRESULT WriteFileBytesAtomic(const std::filesystem::path& path,
+                             std::string_view bytes,
+                             Common::Settings::SettingsFileStamp* writtenStamp = nullptr) noexcept
+{
+    if (writtenStamp)
+    {
+        *writtenStamp = Common::Settings::SettingsFileStamp{};
+    }
+
     const std::filesystem::path directory = path.parent_path();
     if (directory.empty())
     {
@@ -406,19 +492,13 @@ HRESULT WriteFileBytesAtomic(const std::filesystem::path& path, std::string_view
         return HRESULT_FROM_WIN32(GetLastError());
     }
 
-    size_t totalWritten = 0;
-    while (totalWritten < bytes.size())
+    const HRESULT writeHr = Common::HandleIo::WriteAll(file.get(), bytes.data(), bytes.size());
+    if (FAILED(writeHr))
     {
-        DWORD chunkWritten  = 0;
-        const DWORD toWrite = static_cast<DWORD>(std::min<size_t>(bytes.size() - totalWritten, static_cast<size_t>(std::numeric_limits<DWORD>::max())));
-        if (! WriteFile(file.get(), bytes.data() + totalWritten, toWrite, &chunkWritten, nullptr))
-        {
-            auto lastError = Debug::ErrorWithLastError(L"Failed to write settings file '{}'", tmpPath.c_str());
-            file.reset();
-            DeleteFileW(tmpPath.c_str());
-            return HRESULT_FROM_WIN32(lastError);
-        }
-        totalWritten += static_cast<size_t>(chunkWritten);
+        Debug::Error(L"Failed to write settings file '{}' (hr={:#x})", tmpPath.c_str(), static_cast<unsigned long>(writeHr));
+        file.reset();
+        DeleteFileW(tmpPath.c_str());
+        return writeHr;
     }
 
     if (! FlushFileBuffers(file.get()))
@@ -431,11 +511,47 @@ HRESULT WriteFileBytesAtomic(const std::filesystem::path& path, std::string_view
 
     file.reset();
 
+    Common::Settings::SettingsFileStamp tempStamp{};
+    wil::unique_handle stampFile;
+    if (writtenStamp)
+    {
+        stampFile.reset(CreateFileW(tmpPath.c_str(),
+                                    FILE_READ_ATTRIBUTES,
+                                    FILE_SHARE_READ | FILE_SHARE_DELETE,
+                                    nullptr,
+                                    OPEN_EXISTING,
+                                    FILE_ATTRIBUTE_NORMAL,
+                                    nullptr));
+        if (! stampFile)
+        {
+            const DWORD lastError = Debug::ErrorWithLastError(L"Failed to reopen finalized atomic settings file '{}'", tmpPath.c_str());
+            DeleteFileW(tmpPath.c_str());
+            return HRESULT_FROM_WIN32(lastError);
+        }
+
+        const HRESULT stampHr = GetFileStampByHandle(stampFile.get(), tempStamp);
+        if (FAILED(stampHr))
+        {
+            Debug::Error(L"Failed to capture finalized atomic settings file identity for '{}' (hr=0x{:08X})",
+                         tmpPath.c_str(),
+                         static_cast<unsigned long>(stampHr));
+            stampFile.reset();
+            DeleteFileW(tmpPath.c_str());
+            return stampHr;
+        }
+    }
+
     if (! MoveFileExW(tmpPath.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
     {
         auto lastError = Debug::ErrorWithLastError(L"Failed to replace settings file '{}' with temporary file '{}'", path.c_str(), tmpPath.c_str());
+        stampFile.reset();
         DeleteFileW(tmpPath.c_str());
         return HRESULT_FROM_WIN32(lastError);
+    }
+
+    if (writtenStamp)
+    {
+        *writtenStamp = tempStamp;
     }
 
     return S_OK;
@@ -822,6 +938,54 @@ std::optional<std::string_view> GetString(yyjson_val* obj, const char* key) noex
     return std::string_view(s);
 }
 
+template <typename TNormalizeColumnId>
+void ParseGridColumnLayout(yyjson_val* section,
+                           const char* propertyName,
+                           std::vector<Common::Settings::GridColumnLayoutEntry>& layout,
+                           TNormalizeColumnId&& normalizeColumnId)
+{
+    yyjson_val* layoutArray = yyjson_obj_get(section, propertyName);
+    if (! layoutArray || ! yyjson_is_arr(layoutArray))
+    {
+        return;
+    }
+
+    const size_t entryCount = yyjson_arr_size(layoutArray);
+    layout.reserve(layout.size() + entryCount);
+    for (size_t entryIndex = 0; entryIndex < entryCount; ++entryIndex)
+    {
+        yyjson_val* entry = yyjson_arr_get(layoutArray, entryIndex);
+        if (! entry || ! yyjson_is_obj(entry))
+        {
+            continue;
+        }
+
+        const std::optional<std::string_view> columnId = GetString(entry, "columnId");
+        if (! columnId.has_value())
+        {
+            continue;
+        }
+
+        Common::Settings::GridColumnLayoutEntry layoutEntry{};
+        layoutEntry.columnId = normalizeColumnId(columnId.value());
+        if (layoutEntry.columnId.empty())
+        {
+            continue;
+        }
+
+        if (yyjson_val* displayIndex = yyjson_obj_get(entry, "displayIndex"); displayIndex && yyjson_is_uint(displayIndex))
+        {
+            layoutEntry.displayIndex = static_cast<uint32_t>(yyjson_get_uint(displayIndex));
+        }
+        if (yyjson_val* widthDip = yyjson_obj_get(entry, "widthDip"); widthDip && yyjson_is_num(widthDip))
+        {
+            layoutEntry.widthDip = static_cast<float>(std::clamp(yyjson_get_num(widthDip), 0.0, 10000.0));
+        }
+
+        layout.push_back(std::move(layoutEntry));
+    }
+}
+
 HRESULT ConvertYyjsonToJsonValue(yyjson_val* val, Common::Settings::JsonValue& out) noexcept
 {
     if (! val || yyjson_is_null(val))
@@ -1163,68 +1327,62 @@ void ParseTheme(yyjson_val* root, Common::Settings::Settings& out)
 
     const size_t count = yyjson_arr_size(themes);
     out.theme.themes.clear();
+    out.theme.opaqueThemeEntries.clear();
     out.theme.themes.reserve(count);
+    out.theme.opaqueThemeEntries.reserve(count);
+    uint32_t unusableThemeEntryCount = 0u;
+    uint32_t skippedColorEntryCount  = 0u;
+    uint32_t duplicateThemeIdCount   = 0u;
 
     for (size_t i = 0; i < count; ++i)
     {
         yyjson_val* item = yyjson_arr_get(themes, i);
-        if (! item || ! yyjson_is_obj(item))
+        if (! item)
         {
             continue;
         }
 
-        const auto idText   = GetString(item, "id");
-        const auto nameText = GetString(item, "name");
-        const auto baseText = GetString(item, "baseThemeId");
-        yyjson_val* colors  = GetObj(item, "colors");
-        if (! idText || ! nameText || ! baseText || ! colors)
+        Common::Settings::JsonValue itemJson;
+        if (FAILED(ConvertYyjsonToJsonValue(item, itemJson)))
         {
+            ++unusableThemeEntryCount;
             continue;
         }
 
         Common::Settings::ThemeDefinition def;
-        def.id          = Utf16FromUtf8(*idText);
-        def.name        = Utf16FromUtf8(*nameText);
-        def.baseThemeId = Utf16FromUtf8(*baseText);
-        if (def.id.empty() || def.name.empty() || def.baseThemeId.empty())
+        uint32_t skippedColorEntries = 0u;
+        if (FAILED(Common::Settings::ParseThemeDefinitionFromValue(itemJson,
+                                                                   def,
+                                                                   Common::Settings::ThemeDefinitionParseMode::LenientInline,
+                                                                   nullptr,
+                                                                   nullptr,
+                                                                   &skippedColorEntries)))
         {
+            ++unusableThemeEntryCount;
+            out.theme.opaqueThemeEntries.push_back(std::move(itemJson));
+            continue;
+        }
+        skippedColorEntryCount += skippedColorEntries;
+
+        const auto duplicate = std::find_if(out.theme.themes.begin(), out.theme.themes.end(), [&](const Common::Settings::ThemeDefinition& existing) noexcept
+        {
+            return existing.id == def.id;
+        });
+        if (duplicate != out.theme.themes.end())
+        {
+            ++duplicateThemeIdCount;
             continue;
         }
 
-        yyjson_val* colorKey = nullptr;
-        yyjson_val* colorVal = nullptr;
-        yyjson_obj_iter iter = yyjson_obj_iter_with(colors);
-        while ((colorKey = yyjson_obj_iter_next(&iter)))
-        {
-            colorVal = yyjson_obj_iter_get_val(colorKey);
-            if (! colorVal || ! yyjson_is_str(colorKey) || ! yyjson_is_str(colorVal))
-            {
-                continue;
-            }
-
-            const char* keyStr = yyjson_get_str(colorKey);
-            const char* valStr = yyjson_get_str(colorVal);
-            if (! keyStr || ! valStr)
-            {
-                continue;
-            }
-
-            uint32_t argb = 0;
-            if (! TryParseColorUtf8(valStr, argb))
-            {
-                continue;
-            }
-
-            const std::wstring keyWide = Utf16FromUtf8(keyStr);
-            if (keyWide.empty())
-            {
-                continue;
-            }
-
-            def.colors[keyWide] = argb;
-        }
-
         out.theme.themes.push_back(std::move(def));
+    }
+
+    if (unusableThemeEntryCount != 0u || skippedColorEntryCount != 0u || duplicateThemeIdCount != 0u)
+    {
+        Debug::Warning(L"Inline settings themes recovered with unusableEntries={}, skippedColorEntries={}, duplicateIds={}.",
+                       unusableThemeEntryCount,
+                       skippedColorEntryCount,
+                       duplicateThemeIdCount);
     }
 }
 
@@ -1802,7 +1960,7 @@ void ParseExtensions(yyjson_val* root, Common::Settings::Settings& out)
     return ParseStringArray(appliesTo, "computerNames", action.appliesTo.computerNames);
 }
 
-[[nodiscard]] HRESULT ValidateFileActionDefinition(const Common::Settings::FileActionDefinition& action,
+[[nodiscard]] HRESULT ValidateFileActionDefinition(Common::Settings::FileActionDefinition& action,
                                                    bool pluginIdPresent,
                                                    bool executablePathPresent) noexcept
 {
@@ -1831,6 +1989,11 @@ void ParseExtensions(yyjson_val* root, Common::Settings::Settings& out)
             if (pluginIdPresent)
             {
                 return InvalidFileActionSettings(std::format(L"externalProgram file action '{}' must not specify pluginId", action.id));
+            }
+            if (! Common::Paths::IsExplicitAbsoluteExecutablePath(action.executablePath))
+            {
+                // Preserve legacy relative actions for repair in Preferences, but never leave them launchable.
+                action.enabled = false;
             }
             break;
     }
@@ -3224,6 +3387,8 @@ void ParseFileOperations(yyjson_val* root, Common::Settings::Settings& out)
 
     Common::Settings::FileOperationsSettings settings;
     GetBool(fileOperations, "autoDismissSuccess", settings.autoDismissSuccess);
+    GetBool(fileOperations, "popupFooterOnly", settings.popupFooterOnly);
+    GetBool(fileOperations, "popupCompactDensity", settings.popupCompactDensity);
     GetBool(fileOperations, "preCalcEnabled", settings.preCalcEnabled);
     GetBool(fileOperations, "diagnosticsInfoEnabled", settings.diagnosticsInfoEnabled);
     GetBool(fileOperations, "diagnosticsDebugEnabled", settings.diagnosticsDebugEnabled);
@@ -3288,43 +3453,10 @@ void ParseFileOperations(yyjson_val* root, Common::Settings::Settings& out)
     }
     GetBool(fileOperations, "issuesPaneSortDescending", settings.issuesPaneSortDescending);
 
-    if (yyjson_val* issuesPaneGridLayout = yyjson_obj_get(fileOperations, "issuesPaneGridLayout"); issuesPaneGridLayout && yyjson_is_arr(issuesPaneGridLayout))
-    {
-        const size_t entryCount = yyjson_arr_size(issuesPaneGridLayout);
-        settings.issuesPaneGridLayout.reserve(entryCount);
-        for (size_t entryIndex = 0; entryIndex < entryCount; ++entryIndex)
-        {
-            yyjson_val* entry = yyjson_arr_get(issuesPaneGridLayout, entryIndex);
-            if (! entry || ! yyjson_is_obj(entry))
-            {
-                continue;
-            }
-
-            const auto columnId = GetString(entry, "columnId");
-            if (! columnId.has_value())
-            {
-                continue;
-            }
-
-            Common::Settings::GridColumnLayoutEntry layoutEntry{};
-            layoutEntry.columnId = Utf16FromUtf8(columnId.value());
-            if (layoutEntry.columnId.empty())
-            {
-                continue;
-            }
-
-            if (yyjson_val* displayIndex = yyjson_obj_get(entry, "displayIndex"); displayIndex && yyjson_is_uint(displayIndex))
-            {
-                layoutEntry.displayIndex = static_cast<uint32_t>(yyjson_get_uint(displayIndex));
-            }
-            if (yyjson_val* widthDip = yyjson_obj_get(entry, "widthDip"); widthDip && yyjson_is_num(widthDip))
-            {
-                layoutEntry.widthDip = static_cast<float>(std::clamp(yyjson_get_num(widthDip), 0.0, 10000.0));
-            }
-
-            settings.issuesPaneGridLayout.push_back(std::move(layoutEntry));
-        }
-    }
+    ParseGridColumnLayout(fileOperations,
+                          "issuesPaneGridLayout",
+                          settings.issuesPaneGridLayout,
+                          [](std::string_view columnId) noexcept { return Utf16FromUtf8(columnId); });
 
     out.fileOperations = std::move(settings);
 }
@@ -3705,43 +3837,10 @@ void ParseSearchSettings(yyjson_val* root, Common::Settings::Settings& out)
     }
     GetBool(search, "sortDescending", settings.sortDescending);
 
-    if (yyjson_val* resultsGridLayout = yyjson_obj_get(search, "resultsGridLayout"); resultsGridLayout && yyjson_is_arr(resultsGridLayout))
-    {
-        const size_t entryCount = yyjson_arr_size(resultsGridLayout);
-        settings.resultsGridLayout.reserve(entryCount);
-        for (size_t entryIndex = 0; entryIndex < entryCount; ++entryIndex)
-        {
-            yyjson_val* entry = yyjson_arr_get(resultsGridLayout, entryIndex);
-            if (! entry || ! yyjson_is_obj(entry))
-            {
-                continue;
-            }
-
-            const auto columnId = GetString(entry, "columnId");
-            if (! columnId.has_value())
-            {
-                continue;
-            }
-
-            Common::Settings::GridColumnLayoutEntry layoutEntry{};
-            layoutEntry.columnId = Utf16FromUtf8(columnId.value());
-            if (layoutEntry.columnId.empty())
-            {
-                continue;
-            }
-
-            if (yyjson_val* displayIndex = yyjson_obj_get(entry, "displayIndex"); displayIndex && yyjson_is_uint(displayIndex))
-            {
-                layoutEntry.displayIndex = static_cast<uint32_t>(yyjson_get_uint(displayIndex));
-            }
-            if (yyjson_val* widthDip = yyjson_obj_get(entry, "widthDip"); widthDip && yyjson_is_num(widthDip))
-            {
-                layoutEntry.widthDip = static_cast<float>(std::clamp(yyjson_get_num(widthDip), 0.0, 10000.0));
-            }
-
-            settings.resultsGridLayout.push_back(std::move(layoutEntry));
-        }
-    }
+    ParseGridColumnLayout(search,
+                          "resultsGridLayout",
+                          settings.resultsGridLayout,
+                          [](std::string_view columnId) noexcept { return Utf16FromUtf8(columnId); });
 
     SanitizeSearchDialogSettings(settings);
 
@@ -3804,8 +3903,8 @@ void SanitizeBatchRenameHistory(std::vector<std::wstring>& history)
             continue;
         }
 
-        const bool duplicate =
-            std::any_of(sanitized.begin(), sanitized.end(), [&](const std::wstring& existing) noexcept { return OrdinalString::EqualsNoCase(existing, entry); });
+        const bool duplicate = std::any_of(
+            sanitized.begin(), sanitized.end(), [&](const std::wstring& existing) noexcept { return OrdinalString::EqualsNoCase(existing, entry); });
         if (duplicate)
         {
             continue;
@@ -3922,57 +4021,24 @@ void ParseBatchRenameSettings(yyjson_val* root, Common::Settings::Settings& out)
     }
     GetBool(batchRename, "previewSortDescending", settings.previewSortDescending);
 
-    if (yyjson_val* previewGridLayout = yyjson_obj_get(batchRename, "previewGridLayout"); previewGridLayout && yyjson_is_arr(previewGridLayout))
-    {
-        const size_t entryCount = yyjson_arr_size(previewGridLayout);
-        settings.previewGridLayout.reserve(entryCount);
-        for (size_t entryIndex = 0; entryIndex < entryCount; ++entryIndex)
-        {
-            yyjson_val* entry = yyjson_arr_get(previewGridLayout, entryIndex);
-            if (! entry || ! yyjson_is_obj(entry))
-            {
-                continue;
-            }
-
-            const auto columnId = GetString(entry, "columnId");
-            if (! columnId.has_value())
-            {
-                continue;
-            }
-
-            Common::Settings::GridColumnLayoutEntry layoutEntry{};
-            layoutEntry.columnId = StripSearchSingleLineControlCharacters(Utf16FromUtf8(columnId.value()));
-            if (layoutEntry.columnId.empty())
-            {
-                continue;
-            }
-
-            if (yyjson_val* displayIndex = yyjson_obj_get(entry, "displayIndex"); displayIndex && yyjson_is_uint(displayIndex))
-            {
-                layoutEntry.displayIndex = static_cast<uint32_t>(yyjson_get_uint(displayIndex));
-            }
-            if (yyjson_val* widthDip = yyjson_obj_get(entry, "widthDip"); widthDip && yyjson_is_num(widthDip))
-            {
-                layoutEntry.widthDip = static_cast<float>(std::clamp(yyjson_get_num(widthDip), 0.0, 10000.0));
-            }
-
-            settings.previewGridLayout.push_back(std::move(layoutEntry));
-        }
-    }
+    ParseGridColumnLayout(batchRename,
+                          "previewGridLayout",
+                          settings.previewGridLayout,
+                          [](std::string_view columnId) noexcept
+    { return StripSearchSingleLineControlCharacters(Utf16FromUtf8(columnId)); });
 
     SanitizeBatchRenameSettings(settings);
 
     const Common::Settings::BatchRenameSettings defaults{};
-    const bool hasNonDefault =
-        ! settings.lastRoot.empty() || ! settings.recentMasks.empty() || ! settings.recentNameTemplates.empty() ||
-        ! settings.recentSearchPatterns.empty() || ! settings.recentReplacePatterns.empty() ||
-        settings.includeSubdirectories != defaults.includeSubdirectories || settings.includeFiles != defaults.includeFiles ||
-        settings.includeFolders != defaults.includeFolders || settings.regexEnabled != defaults.regexEnabled ||
-        settings.caseSensitive != defaults.caseSensitive || settings.wholeWords != defaults.wholeWords ||
-        settings.replaceOnce != defaults.replaceOnce || settings.excludeExtension != defaults.excludeExtension ||
-        settings.flattenSeparator != defaults.flattenSeparator || settings.fileNameCaseStyle != defaults.fileNameCaseStyle ||
-        settings.extensionCaseStyle != defaults.extensionCaseStyle || ! settings.previewSortColumnId.empty() ||
-        settings.previewSortDescending != defaults.previewSortDescending || ! settings.previewGridLayout.empty();
+    const bool hasNonDefault = ! settings.lastRoot.empty() || ! settings.recentMasks.empty() || ! settings.recentNameTemplates.empty() ||
+                               ! settings.recentSearchPatterns.empty() || ! settings.recentReplacePatterns.empty() ||
+                               settings.includeSubdirectories != defaults.includeSubdirectories || settings.includeFiles != defaults.includeFiles ||
+                               settings.includeFolders != defaults.includeFolders || settings.regexEnabled != defaults.regexEnabled ||
+                               settings.caseSensitive != defaults.caseSensitive || settings.wholeWords != defaults.wholeWords ||
+                               settings.replaceOnce != defaults.replaceOnce || settings.excludeExtension != defaults.excludeExtension ||
+                               settings.flattenSeparator != defaults.flattenSeparator || settings.fileNameCaseStyle != defaults.fileNameCaseStyle ||
+                               settings.extensionCaseStyle != defaults.extensionCaseStyle || ! settings.previewSortColumnId.empty() ||
+                               settings.previewSortDescending != defaults.previewSortDescending || ! settings.previewGridLayout.empty();
     if (hasNonDefault)
     {
         out.batchRename = std::move(settings);
@@ -4152,43 +4218,10 @@ HRESULT ParseShortcuts(yyjson_val* root, Common::Settings::Settings& out) noexce
     }
     GetBool(shortcuts, "sortDescending", settings.sortDescending);
 
-    if (yyjson_val* gridLayout = yyjson_obj_get(shortcuts, "gridLayout"); gridLayout && yyjson_is_arr(gridLayout))
-    {
-        const size_t entryCount = yyjson_arr_size(gridLayout);
-        settings.gridLayout.reserve(entryCount);
-        for (size_t entryIndex = 0; entryIndex < entryCount; ++entryIndex)
-        {
-            yyjson_val* entry = yyjson_arr_get(gridLayout, entryIndex);
-            if (! entry || ! yyjson_is_obj(entry))
-            {
-                continue;
-            }
-
-            const auto columnId = GetString(entry, "columnId");
-            if (! columnId.has_value())
-            {
-                continue;
-            }
-
-            Common::Settings::GridColumnLayoutEntry layoutEntry{};
-            layoutEntry.columnId = Utf16FromUtf8(columnId.value());
-            if (layoutEntry.columnId.empty())
-            {
-                continue;
-            }
-
-            if (yyjson_val* displayIndex = yyjson_obj_get(entry, "displayIndex"); displayIndex && yyjson_is_uint(displayIndex))
-            {
-                layoutEntry.displayIndex = static_cast<uint32_t>(yyjson_get_uint(displayIndex));
-            }
-            if (yyjson_val* widthDip = yyjson_obj_get(entry, "widthDip"); widthDip && yyjson_is_num(widthDip))
-            {
-                layoutEntry.widthDip = static_cast<float>(std::clamp(yyjson_get_num(widthDip), 0.0, 10000.0));
-            }
-
-            settings.gridLayout.push_back(std::move(layoutEntry));
-        }
-    }
+    ParseGridColumnLayout(shortcuts,
+                          "gridLayout",
+                          settings.gridLayout,
+                          [](std::string_view columnId) noexcept { return Utf16FromUtf8(columnId); });
 
     out.shortcuts = std::move(settings);
     return S_OK;
@@ -4785,10 +4818,34 @@ yyjson_mut_val* NewString(yyjson_mut_doc* doc, const std::wstring& value)
 
 namespace Common::Settings
 {
+bool HasNonDefaultFileOperationsSettings(const FileOperationsSettings& fileOperations) noexcept
+{
+    const FileOperationsSettings defaults{};
+    return fileOperations.autoDismissSuccess != defaults.autoDismissSuccess || fileOperations.popupFooterOnly != defaults.popupFooterOnly ||
+           fileOperations.popupCompactDensity != defaults.popupCompactDensity || fileOperations.preCalcEnabled != defaults.preCalcEnabled ||
+           fileOperations.preCalcMaxWorkers != defaults.preCalcMaxWorkers ||
+           fileOperations.crossFsBridgeBufferSizeKB != defaults.crossFsBridgeBufferSizeKB ||
+           fileOperations.defaultBandwidthLimitBytesPerSecond != defaults.defaultBandwidthLimitBytesPerSecond ||
+           fileOperations.maxDiagnosticsLogFiles != defaults.maxDiagnosticsLogFiles || fileOperations.diagnosticsInfoEnabled != defaults.diagnosticsInfoEnabled ||
+           fileOperations.diagnosticsDebugEnabled != defaults.diagnosticsDebugEnabled || fileOperations.maxIssueReportFiles.has_value() ||
+           fileOperations.maxDiagnosticsInMemory.has_value() || fileOperations.maxDiagnosticsPerFlush.has_value() ||
+            fileOperations.diagnosticsFlushIntervalMs.has_value() || fileOperations.diagnosticsCleanupIntervalMs.has_value() ||
+            ! fileOperations.issuesPaneSortColumnId.empty() ||
+            fileOperations.issuesPaneSortDescending != defaults.issuesPaneSortDescending || ! fileOperations.issuesPaneGridLayout.empty();
+}
+
 namespace
 {
 [[nodiscard]] std::filesystem::path GetSettingsDirectoryPath() noexcept
 {
+#ifdef ENABLE_TESTS
+    const std::filesystem::path testSettingsDirectory = GetUnifiedTestSettingsDirectoryPathFromEnvironment();
+    if (! testSettingsDirectory.empty())
+    {
+        return testSettingsDirectory;
+    }
+#endif
+
     std::filesystem::path base;
 
     wil::unique_cotaskmem_string localAppData;
@@ -5015,6 +5072,103 @@ void ResetSettingsLoadRecoveryInfo(SettingsLoadRecoveryInfo* recovery) noexcept
     }
 }
 
+[[nodiscard]] bool IsKnownSettingsTopLevelMember(std::string_view key) noexcept
+{
+    static constexpr std::array<std::string_view, 23> kKnownMembers{{
+        "$schema",
+        "schemaVersion",
+        "windows",
+        "theme",
+        "plugins",
+        "extensions",
+        "fileActions",
+        "userMenu",
+        "makeFileList",
+        "shortcuts",
+        "cache",
+        "folders",
+        "monitor",
+        "mainMenu",
+        "startup",
+        "ui",
+        "connections",
+        "fileOperations",
+        "compareDirectories",
+        "hotPaths",
+        "selectionMasks",
+        "search",
+        "batchRename",
+    }};
+    return std::ranges::find(kKnownMembers, key) != kKnownMembers.end();
+}
+
+[[nodiscard]] HRESULT PreserveOpaqueTopLevelMember(yyjson_val* root, std::string_view key, Settings& settings) noexcept
+{
+    yyjson_val* value = yyjson_obj_getn(root, key.data(), key.size());
+    if (! value)
+    {
+        return S_FALSE;
+    }
+
+    JsonValue copy;
+    const HRESULT copyHr = ConvertYyjsonToJsonValue(value, copy);
+    if (FAILED(copyHr))
+    {
+        return copyHr;
+    }
+    settings.persistence.opaqueTopLevelMembers.emplace_back(std::string(key), std::move(copy));
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT PreserveUnknownTopLevelMembers(yyjson_val* root, Settings& settings) noexcept
+{
+    yyjson_val* key      = nullptr;
+    yyjson_obj_iter iter = yyjson_obj_iter_with(root);
+    while ((key = yyjson_obj_iter_next(&iter)))
+    {
+        yyjson_val* value = yyjson_obj_iter_get_val(key);
+        if (! value || ! yyjson_is_str(key))
+        {
+            continue;
+        }
+
+        const char* keyText = yyjson_get_str(key);
+        if (! keyText)
+        {
+            continue;
+        }
+        const std::string_view keyView(keyText, yyjson_get_len(key));
+        if (IsKnownSettingsTopLevelMember(keyView))
+        {
+            continue;
+        }
+
+        JsonValue copy;
+        const HRESULT copyHr = ConvertYyjsonToJsonValue(value, copy);
+        if (FAILED(copyHr))
+        {
+            return copyHr;
+        }
+        settings.persistence.opaqueTopLevelMembers.emplace_back(std::string(keyView), std::move(copy));
+    }
+    return S_OK;
+}
+
+void RecordSectionRecovery(SettingsLoadRecoveryInfo* recovery, SettingsLoadRecoveryReason reason, HRESULT hr)
+{
+    if (! recovery)
+    {
+        return;
+    }
+    if (recovery->reason == SettingsLoadRecoveryReason::None)
+    {
+        recovery->reason = reason;
+        recovery->hr     = hr;
+    }
+    recovery->usedDefaults = true;
+    recovery->sectionRecoveries.push_back(SettingsSectionRecoveryInfo{.reason = reason, .hr = hr});
+}
+
 [[nodiscard]] HRESULT RecoverSettingsLoadFailure(const std::filesystem::path& path,
                                                  Settings& out,
                                                  SettingsLoadRecoveryReason reason,
@@ -5097,6 +5251,21 @@ void ResetSettingsLoadRecoveryInfo(SettingsLoadRecoveryInfo* recovery) noexcept
     if (schemaVersion != 16)
     {
         Debug::Error(L"Unsupported schema version in settings file '{}'", path.c_str());
+        if (schemaVersion > 16 && fallbackToDefaults)
+        {
+            out = Settings{};
+            out.persistence.savePermission       = SettingsSavePermission::ExplicitReplacementRequired;
+            out.persistence.sourceSchemaVersion  = schemaVersion;
+            if (recovery)
+            {
+                recovery->reason                   = SettingsLoadRecoveryReason::UnsupportedSchemaVersion;
+                recovery->hr                       = HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+                recovery->settingsPath             = path;
+                recovery->unsupportedSchemaVersion = schemaVersion;
+                recovery->usedDefaults             = true;
+            }
+            return S_FALSE;
+        }
         return RecoverSettingsLoadFailure(path,
                                           out,
                                           SettingsLoadRecoveryReason::UnsupportedSchemaVersion,
@@ -5107,7 +5276,15 @@ void ResetSettingsLoadRecoveryInfo(SettingsLoadRecoveryInfo* recovery) noexcept
                                           schemaVersion);
     }
 
-    out.schemaVersion = static_cast<uint32_t>(schemaVersion);
+    Settings parsed{};
+    parsed.schemaVersion                    = static_cast<uint32_t>(schemaVersion);
+    parsed.persistence.sourceSchemaVersion = schemaVersion;
+
+    const HRESULT preserveUnknownHr = PreserveUnknownTopLevelMembers(root, parsed);
+    if (FAILED(preserveUnknownHr))
+    {
+        return preserveUnknownHr;
+    }
 
     yyjson_val* extensions = GetObj(root, "extensions");
     if (yyjson_obj_get(root, "viewers") || yyjson_obj_get(root, "editors") || (extensions && yyjson_obj_get(extensions, "openWithViewerByExtension")))
@@ -5117,51 +5294,76 @@ void ResetSettingsLoadRecoveryInfo(SettingsLoadRecoveryInfo* recovery) noexcept
             path, out, SettingsLoadRecoveryReason::LegacyShape, HRESULT_FROM_WIN32(ERROR_INVALID_DATA), backupBadFile, fallbackToDefaults, recovery);
     }
 
-    ParseWindows(root, out);
-    ParseTheme(root, out);
+    ParseWindows(root, parsed);
+    ParseTheme(root, parsed);
     if (schemaVersion >= 2)
     {
-        ParsePlugins(root, out);
+        ParsePlugins(root, parsed);
     }
-    ParseExtensions(root, out);
-    const HRESULT fileActionsHr = ParseFileActions(root, out);
+    ParseExtensions(root, parsed);
+    bool recoveredSection       = false;
+    const HRESULT fileActionsHr = ParseFileActions(root, parsed);
     if (FAILED(fileActionsHr))
     {
-        return RecoverSettingsLoadFailure(
-            path, out, SettingsLoadRecoveryReason::FileActionsInvalid, fileActionsHr, backupBadFile, fallbackToDefaults, recovery);
+        parsed.fileActions = DefaultFileActionsSettings();
+        const HRESULT preserveHr = PreserveOpaqueTopLevelMember(root, "fileActions", parsed);
+        if (FAILED(preserveHr))
+        {
+            return preserveHr;
+        }
+        recoveredSection = true;
+        RecordSectionRecovery(recovery, SettingsLoadRecoveryReason::FileActionsInvalid, fileActionsHr);
     }
-    const HRESULT userMenuHr = ParseUserMenuSettings(root, out.userMenu);
+    const HRESULT userMenuHr = ParseUserMenuSettings(root, parsed.userMenu);
     if (FAILED(userMenuHr))
     {
-        return RecoverSettingsLoadFailure(path, out, SettingsLoadRecoveryReason::UserMenuInvalid, userMenuHr, backupBadFile, fallbackToDefaults, recovery);
+        parsed.userMenu = UserMenuSettings{};
+        const HRESULT preserveHr = PreserveOpaqueTopLevelMember(root, "userMenu", parsed);
+        if (FAILED(preserveHr))
+        {
+            return preserveHr;
+        }
+        recoveredSection = true;
+        RecordSectionRecovery(recovery, SettingsLoadRecoveryReason::UserMenuInvalid, userMenuHr);
     }
-    ParseMakeFileListSettings(root, out);
-    const HRESULT shortcutsHr = ParseShortcuts(root, out);
+    ParseMakeFileListSettings(root, parsed);
+    const HRESULT shortcutsHr = ParseShortcuts(root, parsed);
     if (FAILED(shortcutsHr))
     {
-        return RecoverSettingsLoadFailure(path, out, SettingsLoadRecoveryReason::ShortcutsInvalid, shortcutsHr, backupBadFile, fallbackToDefaults, recovery);
+        parsed.shortcuts.reset();
+        const HRESULT preserveHr = PreserveOpaqueTopLevelMember(root, "shortcuts", parsed);
+        if (FAILED(preserveHr))
+        {
+            return preserveHr;
+        }
+        recoveredSection = true;
+        RecordSectionRecovery(recovery, SettingsLoadRecoveryReason::ShortcutsInvalid, shortcutsHr);
     }
-    ParseCache(root, out);
-    ParseFolders(root, out);
-    ParseMonitor(root, out);
-    ParseMainMenu(root, out);
-    ParseStartup(root, out);
-    ParseUi(root, out);
-    ParseConnections(root, out);
-    ParseFileOperations(root, out);
-    ParseCompareDirectories(root, out);
-    ParseHotPaths(root, out);
-    ParseSelectionMasks(root, out);
-    ParseSearchSettings(root, out);
-    ParseBatchRenameSettings(root, out);
+    ParseCache(root, parsed);
+    ParseFolders(root, parsed);
+    ParseMonitor(root, parsed);
+    ParseMainMenu(root, parsed);
+    ParseStartup(root, parsed);
+    ParseUi(root, parsed);
+    ParseConnections(root, parsed);
+    ParseFileOperations(root, parsed);
+    ParseCompareDirectories(root, parsed);
+    ParseHotPaths(root, parsed);
+    ParseSelectionMasks(root, parsed);
+    ParseSearchSettings(root, parsed);
+    ParseBatchRenameSettings(root, parsed);
 
-    out.schemaVersion = 16;
+    parsed.schemaVersion = 16;
+    out                  = std::move(parsed);
     if (recovery)
     {
-        recovery->hr           = S_OK;
+        if (! recoveredSection)
+        {
+            recovery->hr = S_OK;
+        }
         recovery->settingsPath = path;
     }
-    return S_OK;
+    return recoveredSection && fallbackToDefaults ? S_FALSE : S_OK;
 }
 
 [[nodiscard]] HRESULT TryGetSettingsFileStampForPath(const std::filesystem::path& path, SettingsFileStamp& out) noexcept
@@ -5187,26 +5389,12 @@ void ResetSettingsLoadRecoveryInfo(SettingsLoadRecoveryInfo* recovery) noexcept
         return HRESULT_FROM_WIN32(logged);
     }
 
-    BY_HANDLE_FILE_INFORMATION info{};
-    if (! GetFileInformationByHandle(file.get(), &info))
+    const HRESULT stampHr = GetFileStampByHandle(file.get(), out);
+    if (FAILED(stampHr))
     {
-        const DWORD logged = Debug::ErrorWithLastError(L"Failed to query settings file stamp for '{}'", path.c_str());
-        return HRESULT_FROM_WIN32(logged);
+        Debug::Error(L"Failed to query settings file stamp for '{}' (hr=0x{:08X})", path.c_str(), static_cast<unsigned long>(stampHr));
+        return stampHr;
     }
-
-    ULARGE_INTEGER lastWrite{};
-    lastWrite.LowPart  = info.ftLastWriteTime.dwLowDateTime;
-    lastWrite.HighPart = info.ftLastWriteTime.dwHighDateTime;
-
-    ULARGE_INTEGER fileSize{};
-    fileSize.LowPart  = info.nFileSizeLow;
-    fileSize.HighPart = info.nFileSizeHigh;
-
-    out.volumeSerialNumber = info.dwVolumeSerialNumber;
-    out.fileIndexHigh      = info.nFileIndexHigh;
-    out.fileIndexLow       = info.nFileIndexLow;
-    out.lastWriteTime      = lastWrite.QuadPart;
-    out.fileSize           = fileSize.QuadPart;
     return S_OK;
 }
 } // namespace
@@ -5274,6 +5462,25 @@ HRESULT TryGetSettingsFileStamp(std::wstring_view appId, SettingsFileStamp& out)
     return TryGetSettingsFileStampForPath(path, out);
 }
 
+HRESULT BackupSettingsForExplicitReplacement(std::wstring_view appId, std::filesystem::path& backupPath) noexcept
+{
+    backupPath.clear();
+    std::filesystem::path path;
+    const HRESULT resolveHr = ResolveSettingsLoadPath(appId, path);
+    if (resolveHr != S_OK)
+    {
+        return resolveHr;
+    }
+
+    const std::optional<std::filesystem::path> backup = BackupBadSettingsFile(path);
+    if (! backup.has_value())
+    {
+        return HRESULT_FROM_WIN32(ERROR_CANNOT_MAKE);
+    }
+    backupPath = backup.value();
+    return S_OK;
+}
+
 std::wstring FormatColor(uint32_t argb)
 {
     const uint8_t a = static_cast<uint8_t>((argb >> 24) & 0xFFu);
@@ -5298,8 +5505,54 @@ bool TryParseColor(std::wstring_view hex, uint32_t& argb) noexcept
     return TryParseColorUtf8(utf8, argb);
 }
 
-HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
+namespace
 {
+[[nodiscard]] bool HasOpaqueTopLevelMember(const Settings& settings, std::string_view key) noexcept
+{
+    return std::ranges::any_of(settings.persistence.opaqueTopLevelMembers,
+                               [&](const std::pair<std::string, JsonValue>& member) noexcept { return member.first == key; });
+}
+
+[[nodiscard]] HRESULT AppendOpaqueTopLevelMembers(yyjson_mut_doc* doc, yyjson_mut_val* root, const Settings& settings) noexcept
+{
+    for (const auto& [keyText, value] : settings.persistence.opaqueTopLevelMembers)
+    {
+        if (keyText.empty() || keyText == "$schema" || keyText == "schemaVersion")
+        {
+            continue;
+        }
+
+        yyjson_mut_val* key = yyjson_mut_strncpy(doc, keyText.data(), keyText.size());
+        if (! key)
+        {
+            return E_OUTOFMEMORY;
+        }
+
+        HRESULT valueHr       = S_OK;
+        yyjson_mut_val* member = NewYyjsonFromJsonValue(doc, value, valueHr);
+        if (FAILED(valueHr) || ! member)
+        {
+            return FAILED(valueHr) ? valueHr : E_OUTOFMEMORY;
+        }
+        if (! yyjson_mut_obj_add(root, key, member))
+        {
+            return E_OUTOFMEMORY;
+        }
+    }
+    return S_OK;
+}
+} // namespace
+
+HRESULT SaveSettingsImpl(std::wstring_view appId,
+                         const Settings& settings,
+                         bool writeBaseSchema,
+                         SettingsFileStamp* writtenStamp = nullptr) noexcept
+{
+    if (settings.persistence.savePermission != SettingsSavePermission::Automatic)
+    {
+        return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+    }
+
     const std::filesystem::path settingsPath = GetSettingsPath(appId);
     if (settingsPath.empty())
     {
@@ -5409,7 +5662,7 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
         const std::wstring currentThemeId = settings.theme.currentThemeId.empty() ? defaults.currentThemeId : settings.theme.currentThemeId;
 
         const bool writeThemeId = (currentThemeId != defaults.currentThemeId);
-        const bool writeThemes  = ! settings.theme.themes.empty();
+        const bool writeThemes  = ! settings.theme.themes.empty() || ! settings.theme.opaqueThemeEntries.empty();
         if (writeThemeId || writeThemes)
         {
             yyjson_mut_val* theme = yyjson_mut_obj(doc);
@@ -5451,6 +5704,10 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
                     {
                         return E_OUTOFMEMORY;
                     }
+                    if (! yyjson_mut_obj_add_uint(doc, defObj, "formatVersion", def->formatVersion))
+                    {
+                        return E_OUTOFMEMORY;
+                    }
                     if (const HRESULT hr = AddStringObjectMember(doc, defObj, "id", def->id); FAILED(hr))
                     {
                         return hr;
@@ -5464,51 +5721,63 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
                         return hr;
                     }
 
-                    yyjson_mut_val* colors = yyjson_mut_obj(doc);
-                    if (! colors)
+                    const auto addSources = [&](const char* memberName,
+                                                const std::unordered_map<std::wstring, ThemeColorSource>& sources) noexcept -> HRESULT
                     {
-                        return E_OUTOFMEMORY;
-                    }
-                    yyjson_mut_obj_add_val(doc, defObj, "colors", colors);
-
-                    std::vector<std::wstring> colorKeys;
-                    colorKeys.reserve(def->colors.size());
-                    for (const auto& [k, _] : def->colors)
-                    {
-                        colorKeys.push_back(k);
-                    }
-                    std::sort(colorKeys.begin(), colorKeys.end());
-
-                    for (const auto& k : colorKeys)
-                    {
-                        const auto it = def->colors.find(k);
-                        if (it == def->colors.end())
-                        {
-                            continue;
-                        }
-                        const std::wstring colorText = FormatColor(it->second);
-                        const std::string keyUtf8    = Utf8FromUtf16(k);
-                        if (keyUtf8.empty() && ! k.empty())
-                        {
-                            continue;
-                        }
-
-                        yyjson_mut_val* key = yyjson_mut_strncpy(doc, keyUtf8.c_str(), keyUtf8.size());
-                        if (! key)
+                        yyjson_mut_val* object = yyjson_mut_obj(doc);
+                        if (! object || ! yyjson_mut_obj_add_val(doc, defObj, memberName, object))
                         {
                             return E_OUTOFMEMORY;
                         }
-
-                        yyjson_mut_val* value = NewString(doc, colorText);
-                        if (! value)
+                        std::vector<std::wstring> keys;
+                        keys.reserve(sources.size());
+                        for (const auto& [key, _] : sources)
                         {
-                            return E_OUTOFMEMORY;
+                            keys.push_back(key);
                         }
+                        std::sort(keys.begin(), keys.end());
+                        for (const auto& keyText : keys)
+                        {
+                            const auto source = sources.find(keyText);
+                            if (source == sources.end())
+                            {
+                                continue;
+                            }
+                            const std::string keyUtf8 = Utf8FromUtf16(keyText);
+                            yyjson_mut_val* key = yyjson_mut_strncpy(doc, keyUtf8.data(), keyUtf8.size());
+                            yyjson_mut_val* value = NewString(doc, FormatThemeColorSource(source->second));
+                            if (! key || ! value || ! yyjson_mut_obj_add(object, key, value))
+                            {
+                                return E_OUTOFMEMORY;
+                            }
+                        }
+                        return S_OK;
+                    };
 
-                        yyjson_mut_obj_add(colors, key, value);
+                    if (! def->palette.empty())
+                    {
+                        if (const HRESULT hr = addSources("palette", def->palette); FAILED(hr))
+                        {
+                            return hr;
+                        }
+                    }
+                    if (const HRESULT hr = addSources("colors", def->colors); FAILED(hr))
+                    {
+                        return hr;
                     }
 
                     yyjson_mut_arr_add_val(themeArr, defObj);
+                }
+
+                for (const JsonValue& opaqueEntry : settings.theme.opaqueThemeEntries)
+                {
+                    HRESULT opaqueHr       = S_OK;
+                    yyjson_mut_val* opaque = NewYyjsonFromJsonValue(doc, opaqueEntry, opaqueHr);
+                    if (FAILED(opaqueHr) || ! opaque)
+                    {
+                        return FAILED(opaqueHr) ? opaqueHr : E_OUTOFMEMORY;
+                    }
+                    yyjson_mut_arr_add_val(themeArr, opaque);
                 }
             }
         }
@@ -5655,14 +5924,20 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
         }
     }
 
-    if (const HRESULT hr = AddFileActionsObjectMember(doc, root, settings.fileActions); FAILED(hr))
+    if (! HasOpaqueTopLevelMember(settings, "fileActions"))
     {
-        return hr;
+        if (const HRESULT hr = AddFileActionsObjectMember(doc, root, settings.fileActions); FAILED(hr))
+        {
+            return hr;
+        }
     }
 
-    if (const HRESULT hr = AddUserMenuObjectMember(doc, root, settings.userMenu); FAILED(hr))
+    if (! HasOpaqueTopLevelMember(settings, "userMenu"))
     {
-        return hr;
+        if (const HRESULT hr = AddUserMenuObjectMember(doc, root, settings.userMenu); FAILED(hr))
+        {
+            return hr;
+        }
     }
 
     if (settings.makeFileList.has_value())
@@ -5753,7 +6028,7 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
         }
     }
 
-    if (settings.shortcuts)
+    if (settings.shortcuts && ! HasOpaqueTopLevelMember(settings, "shortcuts"))
     {
         yyjson_mut_val* shortcuts = yyjson_mut_obj(doc);
         if (! shortcuts)
@@ -6672,17 +6947,7 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
     if (settings.fileOperations)
     {
         const Common::Settings::FileOperationsSettings defaults{};
-        const bool wroteFileOperations =
-            settings.fileOperations->autoDismissSuccess != defaults.autoDismissSuccess || settings.fileOperations->preCalcEnabled != defaults.preCalcEnabled ||
-            settings.fileOperations->preCalcMaxWorkers != defaults.preCalcMaxWorkers ||
-            settings.fileOperations->crossFsBridgeBufferSizeKB != defaults.crossFsBridgeBufferSizeKB ||
-            settings.fileOperations->defaultBandwidthLimitBytesPerSecond != defaults.defaultBandwidthLimitBytesPerSecond ||
-            settings.fileOperations->maxDiagnosticsLogFiles != defaults.maxDiagnosticsLogFiles ||
-            settings.fileOperations->diagnosticsInfoEnabled != defaults.diagnosticsInfoEnabled ||
-            settings.fileOperations->diagnosticsDebugEnabled != defaults.diagnosticsDebugEnabled || settings.fileOperations->maxIssueReportFiles.has_value() ||
-            settings.fileOperations->maxDiagnosticsInMemory.has_value() || settings.fileOperations->maxDiagnosticsPerFlush.has_value() ||
-            settings.fileOperations->diagnosticsFlushIntervalMs.has_value() || settings.fileOperations->diagnosticsCleanupIntervalMs.has_value() ||
-            ! settings.fileOperations->issuesPaneSortColumnId.empty() || ! settings.fileOperations->issuesPaneGridLayout.empty();
+        const bool wroteFileOperations = HasNonDefaultFileOperationsSettings(settings.fileOperations.value());
 
         if (wroteFileOperations)
         {
@@ -6696,6 +6961,16 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
             if (settings.fileOperations->autoDismissSuccess != defaults.autoDismissSuccess)
             {
                 yyjson_mut_obj_add_bool(doc, fileOperations, "autoDismissSuccess", settings.fileOperations->autoDismissSuccess);
+            }
+
+            if (settings.fileOperations->popupFooterOnly != defaults.popupFooterOnly)
+            {
+                yyjson_mut_obj_add_bool(doc, fileOperations, "popupFooterOnly", settings.fileOperations->popupFooterOnly);
+            }
+
+            if (settings.fileOperations->popupCompactDensity != defaults.popupCompactDensity)
+            {
+                yyjson_mut_obj_add_bool(doc, fileOperations, "popupCompactDensity", settings.fileOperations->popupCompactDensity);
             }
 
             if (settings.fileOperations->preCalcEnabled != defaults.preCalcEnabled)
@@ -6767,6 +7042,11 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
                 {
                     return hr;
                 }
+            }
+
+            if (! settings.fileOperations->issuesPaneSortColumnId.empty() ||
+                settings.fileOperations->issuesPaneSortDescending != FileOperationsSettings{}.issuesPaneSortDescending)
+            {
                 yyjson_mut_obj_add_bool(doc, fileOperations, "issuesPaneSortDescending", settings.fileOperations->issuesPaneSortDescending);
             }
 
@@ -7184,16 +7464,16 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
         SanitizeBatchRenameSettings(batchRename);
 
         const Common::Settings::BatchRenameSettings defaults{};
-        const bool wroteBatchRename =
-            ! batchRename.lastRoot.empty() || ! batchRename.recentMasks.empty() || ! batchRename.recentNameTemplates.empty() ||
-            ! batchRename.recentSearchPatterns.empty() || ! batchRename.recentReplacePatterns.empty() ||
-            batchRename.includeSubdirectories != defaults.includeSubdirectories || batchRename.includeFiles != defaults.includeFiles ||
-            batchRename.includeFolders != defaults.includeFolders || batchRename.regexEnabled != defaults.regexEnabled ||
-            batchRename.caseSensitive != defaults.caseSensitive || batchRename.wholeWords != defaults.wholeWords ||
-            batchRename.replaceOnce != defaults.replaceOnce || batchRename.excludeExtension != defaults.excludeExtension ||
-            batchRename.flattenSeparator != defaults.flattenSeparator || batchRename.fileNameCaseStyle != defaults.fileNameCaseStyle ||
-            batchRename.extensionCaseStyle != defaults.extensionCaseStyle || ! batchRename.previewSortColumnId.empty() ||
-            batchRename.previewSortDescending != defaults.previewSortDescending || ! batchRename.previewGridLayout.empty();
+        const bool wroteBatchRename = ! batchRename.lastRoot.empty() || ! batchRename.recentMasks.empty() || ! batchRename.recentNameTemplates.empty() ||
+                                      ! batchRename.recentSearchPatterns.empty() || ! batchRename.recentReplacePatterns.empty() ||
+                                      batchRename.includeSubdirectories != defaults.includeSubdirectories ||
+                                      batchRename.includeFiles != defaults.includeFiles || batchRename.includeFolders != defaults.includeFolders ||
+                                      batchRename.regexEnabled != defaults.regexEnabled || batchRename.caseSensitive != defaults.caseSensitive ||
+                                      batchRename.wholeWords != defaults.wholeWords || batchRename.replaceOnce != defaults.replaceOnce ||
+                                      batchRename.excludeExtension != defaults.excludeExtension || batchRename.flattenSeparator != defaults.flattenSeparator ||
+                                      batchRename.fileNameCaseStyle != defaults.fileNameCaseStyle ||
+                                      batchRename.extensionCaseStyle != defaults.extensionCaseStyle || ! batchRename.previewSortColumnId.empty() ||
+                                      batchRename.previewSortDescending != defaults.previewSortDescending || ! batchRename.previewGridLayout.empty();
         if (wroteBatchRename)
         {
             yyjson_mut_val* batchRenameObj = yyjson_mut_obj(doc);
@@ -7322,6 +7602,11 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
         }
     }
 
+    if (const HRESULT opaqueHr = AppendOpaqueTopLevelMembers(doc, root, settings); FAILED(opaqueHr))
+    {
+        return opaqueHr;
+    }
+
     yyjson_write_err writeErr{};
     size_t jsonLen                = 0;
     const yyjson_write_flag flags = YYJSON_WRITE_PRETTY_TWO_SPACES | YYJSON_WRITE_NEWLINE_AT_END;
@@ -7341,13 +7626,13 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
     output.push_back(static_cast<char>(0xBF));
     output.append(json, jsonLen);
 
-    const HRESULT writeHr = WriteFileBytesAtomic(settingsPath, output);
+    const HRESULT writeHr = WriteFileBytesAtomic(settingsPath, output, writtenStamp);
     if (FAILED(writeHr))
     {
         return writeHr;
     }
 
-    if (const std::string_view baseSchema = GetSettingsStoreSchemaJsonUtf8(); ! baseSchema.empty())
+    if (const std::string_view baseSchema = GetSettingsStoreSchemaJsonUtf8(); writeBaseSchema && ! baseSchema.empty())
     {
         const HRESULT schemaHr = SaveSettingsSchema(appId, baseSchema);
         if (FAILED(schemaHr))
@@ -7357,6 +7642,23 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
     }
 
     return S_OK;
+}
+
+HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
+{
+    return SaveSettingsImpl(appId, settings, true);
+}
+
+HRESULT SaveSettingsValuesOnly(std::wstring_view appId, const Settings& settings) noexcept
+{
+    return SaveSettingsImpl(appId, settings, false);
+}
+
+HRESULT SaveSettingsValuesOnlyWithStamp(std::wstring_view appId,
+                                        const Settings& settings,
+                                        SettingsFileStamp& writtenStamp) noexcept
+{
+    return SaveSettingsImpl(appId, settings, false, &writtenStamp);
 }
 
 HRESULT SaveSettingsSchema(std::wstring_view appId, std::string_view schemaJsonUtf8) noexcept
@@ -7402,6 +7704,93 @@ HRESULT ParseJsonValue(std::string_view jsonText, JsonValue& out) noexcept
     }
 
     return ConvertYyjsonToJsonValue(root, out);
+}
+
+const JsonValue* FindMember(const JsonValue& value, std::string_view key) noexcept
+{
+    const auto* object = std::get_if<JsonValue::ObjectPtr>(&value.value);
+    if (! object || ! *object)
+    {
+        return nullptr;
+    }
+
+    for (const auto& [memberKey, memberValue] : (*object)->members)
+    {
+        if (memberKey == key)
+        {
+            return &memberValue;
+        }
+    }
+    return nullptr;
+}
+
+std::optional<std::string> GetString(const JsonValue& value, std::string_view key) noexcept
+{
+    const JsonValue* member = FindMember(value, key);
+    if (! member)
+    {
+        return std::nullopt;
+    }
+    if (const auto* text = std::get_if<std::string>(&member->value))
+    {
+        return *text;
+    }
+    return std::nullopt;
+}
+
+std::optional<std::wstring> GetWString(const JsonValue& value, std::string_view key) noexcept
+{
+    const std::optional<std::string> text = GetString(value, key);
+    if (! text.has_value())
+    {
+        return std::nullopt;
+    }
+    return Common::Strings::TryUtf16FromUtf8Strict(text.value());
+}
+
+std::optional<bool> GetBool(const JsonValue& value, std::string_view key) noexcept
+{
+    const JsonValue* member = FindMember(value, key);
+    if (! member)
+    {
+        return std::nullopt;
+    }
+    if (const auto* flag = std::get_if<bool>(&member->value))
+    {
+        return *flag;
+    }
+    return std::nullopt;
+}
+
+std::optional<uint32_t> GetUInt32(const JsonValue& value, std::string_view key) noexcept
+{
+    const JsonValue* member = FindMember(value, key);
+    if (! member)
+    {
+        return std::nullopt;
+    }
+    if (const auto* unsignedValue = std::get_if<uint64_t>(&member->value))
+    {
+        return *unsignedValue <= (std::numeric_limits<uint32_t>::max)() ? std::make_optional(static_cast<uint32_t>(*unsignedValue)) : std::nullopt;
+    }
+    if (const auto* signedValue = std::get_if<int64_t>(&member->value))
+    {
+        return *signedValue >= 0 && *signedValue <= static_cast<int64_t>((std::numeric_limits<uint32_t>::max)())
+                   ? std::make_optional(static_cast<uint32_t>(*signedValue))
+                   : std::nullopt;
+    }
+    return std::nullopt;
+}
+
+const JsonArray* GetArray(const JsonValue& value, std::string_view key) noexcept
+{
+    const JsonValue* member = FindMember(value, key);
+    if (! member)
+    {
+        return nullptr;
+    }
+    const auto* array = std::get_if<JsonValue::ArrayPtr>(&member->value);
+    return array && *array ? array->get() : nullptr;
 }
 
 HRESULT SerializeJsonValue(const JsonValue& value, std::string& outJsonText) noexcept

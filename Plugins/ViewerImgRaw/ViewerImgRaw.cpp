@@ -1,6 +1,7 @@
 #include "ViewerImgRaw.h"
 
 #include "LocalizationManager.h"
+#include "ViewerImgRaw.AsyncProtocol.h"
 #include "ViewerImgRaw.Internal.h"
 #include "ViewerImgRaw.ThemeHelpers.h"
 
@@ -49,6 +50,7 @@
 #include "DxUi/DxUi.Typography.h"
 #include "Helpers.h"
 #include "ViewerFileComboHost.h"
+#include "ViewerTitleBarTheme.h"
 #include "WindowMessages.h"
 #include "WindowSizing.h"
 #include "resource.h"
@@ -69,33 +71,11 @@ constexpr UINT_PTR kLoadingAnimTimerId            = 2;
 constexpr UINT kLoadingDelayMs                    = 200u;
 constexpr UINT kLoadingAnimIntervalMs             = 16u;
 constexpr float kLoadingSpinnerDegPerSec          = 90.0f;
-constexpr size_t kViewerComboPopupMaxVisibleItems = 8u;
-
 constexpr wchar_t kFileComboHostOriginalWndProcProp[] = L"RS.ViewerImgRaw.FileComboHostOriginalWndProc";
 constexpr wchar_t kFileComboHostStateProp[]           = L"RS.ViewerImgRaw.FileComboHostState";
-
-[[nodiscard]] bool MessageMayOpenWindowComboPopup(UINT msg, WPARAM wp) noexcept
-{
-    switch (msg)
-    {
-        case WM_LBUTTONDOWN:
-        case WM_LBUTTONDBLCLK: return true;
-        case WM_SYSKEYDOWN: return static_cast<UINT>(wp) == VK_DOWN || static_cast<UINT>(wp) == VK_UP;
-        case WM_KEYDOWN:
-        {
-            const UINT vk = static_cast<UINT>(wp);
-            return vk == VK_SPACE || vk == VK_RETURN || vk == VK_F4 || vk == VK_DOWN || vk == VK_UP;
-        }
-        default: return false;
-    }
-}
-
-[[nodiscard]] int ComputeWindowComboPopupHeightPx(size_t itemCount, UINT dpi) noexcept
-{
-    const size_t visibleRows = std::max<size_t>(1u, std::min(itemCount, kViewerComboPopupMaxVisibleItems));
-    const int popupHeightDip = 2 + 8 + (24 * static_cast<int>(visibleRows));
-    return std::max(0, MulDiv(popupHeightDip, static_cast<int>(dpi), 96));
-}
+#if defined(ENABLE_TESTS)
+constexpr wchar_t kForceMenuAttachFailureEnvVar[] = L"REDSALAMANDER_VIEWERIMGRAW_FORCE_MENU_ATTACH_FAILURE";
+#endif
 
 LRESULT CALLBACK FileComboHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
 
@@ -329,126 +309,29 @@ constexpr char kViewerImgRawSchemaJson[] = R"json({
     return kViewerImgRawSchemaJson;
 }
 
-uint32_t StableHash32(std::wstring_view text) noexcept
-{
-    // FNV-1a
-    uint32_t hash = 2166136261u;
-    for (const wchar_t ch : text)
-    {
-        hash ^= static_cast<uint32_t>(ch);
-        hash *= 16777619u;
-    }
-    return hash;
-}
-
-COLORREF ColorFromHSV(float hueDegrees, float saturation, float value) noexcept
-{
-    const float h = std::fmod(std::max(0.0f, hueDegrees), 360.0f);
-    const float s = std::clamp(saturation, 0.0f, 1.0f);
-    const float v = std::clamp(value, 0.0f, 1.0f);
-
-    const float c = v * s;
-    const float x = c * (1.0f - std::fabs(std::fmod(h / 60.0f, 2.0f) - 1.0f));
-    const float m = v - c;
-
-    float rf = 0.0f;
-    float gf = 0.0f;
-    float bf = 0.0f;
-
-    if (h < 60.0f)
-    {
-        rf = c;
-        gf = x;
-        bf = 0.0f;
-    }
-    else if (h < 120.0f)
-    {
-        rf = x;
-        gf = c;
-        bf = 0.0f;
-    }
-    else if (h < 180.0f)
-    {
-        rf = 0.0f;
-        gf = c;
-        bf = x;
-    }
-    else if (h < 240.0f)
-    {
-        rf = 0.0f;
-        gf = x;
-        bf = c;
-    }
-    else if (h < 300.0f)
-    {
-        rf = x;
-        gf = 0.0f;
-        bf = c;
-    }
-    else
-    {
-        rf = c;
-        gf = 0.0f;
-        bf = x;
-    }
-
-    const auto toByte = [](float v01) noexcept
-    {
-        const float scaled = std::clamp(v01 * 255.0f, 0.0f, 255.0f);
-        return static_cast<BYTE>(std::lround(scaled));
-    };
-
-    const BYTE r = toByte(rf + m);
-    const BYTE g = toByte(gf + m);
-    const BYTE b = toByte(bf + m);
-    return RGB(r, g, b);
-}
+using Common::Colors::ColorRefFromHsvClampedNegativeHueToZero;
+using Common::Colors::StableVisualHash32Utf16V1;
 
 COLORREF ResolveAccentColor(const ViewerTheme& theme, std::wstring_view seed) noexcept
 {
     if (theme.rainbowMode)
     {
-        const uint32_t h = StableHash32(seed);
+        const uint32_t h = StableVisualHash32Utf16V1(seed);
         const float hue  = static_cast<float>(h % 360u);
         const float sat  = theme.darkBase ? 0.70f : 0.55f;
         const float val  = theme.darkBase ? 0.95f : 0.85f;
-        return ColorFromHSV(hue, sat, val);
+        return ColorRefFromHsvClampedNegativeHueToZero(hue, sat, val);
     }
 
     return ColorRefFromArgb(theme.accentArgb);
 }
 
-int PxFromDip(int dip, UINT dpi) noexcept
-{
-    return MulDiv(dip, static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI);
-}
-
-float DipsFromPixels(int px, UINT dpi) noexcept
-{
-    if (dpi == 0)
-    {
-        return static_cast<float>(px);
-    }
-
-    return static_cast<float>(px) * 96.0f / static_cast<float>(dpi);
-}
-
-float DipsFromPixelsF(float px, UINT dpi) noexcept
-{
-    if (dpi == 0)
-    {
-        return px;
-    }
-
-    return px * 96.0f / static_cast<float>(dpi);
-}
-
 D2D1_RECT_F RectFFromPixels(const RECT& rc, UINT dpi) noexcept
 {
-    const float left   = DipsFromPixels(static_cast<int>(rc.left), dpi);
-    const float top    = DipsFromPixels(static_cast<int>(rc.top), dpi);
-    const float right  = DipsFromPixels(static_cast<int>(rc.right), dpi);
-    const float bottom = DipsFromPixels(static_cast<int>(rc.bottom), dpi);
+    const float left   = Common::WindowSizing::PixelToDip(static_cast<float>(rc.left), static_cast<float>(dpi));
+    const float top    = Common::WindowSizing::PixelToDip(static_cast<float>(rc.top), static_cast<float>(dpi));
+    const float right  = Common::WindowSizing::PixelToDip(static_cast<float>(rc.right), static_cast<float>(dpi));
+    const float bottom = Common::WindowSizing::PixelToDip(static_cast<float>(rc.bottom), static_cast<float>(dpi));
     return D2D1::RectF(left, top, right, bottom);
 }
 
@@ -478,6 +361,9 @@ struct ViewerImgRawClassBackgroundBrushState
 };
 
 ViewerImgRawClassBackgroundBrushState g_viewerImgRawClassBackgroundBrush;
+std::atomic_uint32_t g_viewerImgRawLiveInstanceCount{0u};
+std::atomic_uint32_t g_viewerImgRawAsyncWorkCount{0u};
+std::atomic_bool g_viewerImgRawShutdownCleanupComplete{false};
 
 HBRUSH GetActiveViewerImgRawClassBackgroundBrush() noexcept
 {
@@ -533,7 +419,73 @@ void ApplyPendingViewerImgRawClassBackgroundBrush(HWND hwnd) noexcept
     g_viewerImgRawClassBackgroundBrush.pendingColor = CLR_INVALID;
 }
 
+[[nodiscard]] bool ResetViewerImgRawClassBackgroundBrushAtQuietPoint() noexcept
+{
+    if (g_viewerImgRawClassBackgroundBrush.classRegistered)
+    {
+        if (UnregisterClassW(L"RedSalamander.ViewerImgRaw", g_hInstance) == FALSE)
+        {
+            const DWORD error = GetLastError();
+            if (error != ERROR_CLASS_DOES_NOT_EXIST)
+            {
+                Debug::Warning(L"ViewerImgRaw: class/brush quiet-point cleanup deferred (error={0}).", error);
+                return false;
+            }
+        }
+        g_viewerImgRawClassBackgroundBrush.classRegistered = false;
+    }
+
+    g_viewerImgRawClassBackgroundBrush.pendingBrush.reset();
+    g_viewerImgRawClassBackgroundBrush.pendingColor = CLR_INVALID;
+    g_viewerImgRawClassBackgroundBrush.activeBrush.reset();
+    g_viewerImgRawClassBackgroundBrush.activeColor = CLR_INVALID;
+    return true;
+}
+
+void NotifyViewerImgRawInstanceCreated() noexcept
+{
+    static_cast<void>(g_viewerImgRawLiveInstanceCount.fetch_add(1u, std::memory_order_acq_rel));
+    g_viewerImgRawShutdownCleanupComplete.store(false, std::memory_order_release);
+}
+
+void NotifyViewerImgRawInstanceDestroyed() noexcept
+{
+    const uint32_t previous = g_viewerImgRawLiveInstanceCount.fetch_sub(1u, std::memory_order_acq_rel);
+    if (previous == 0u)
+    {
+        g_viewerImgRawLiveInstanceCount.store(0u, std::memory_order_release);
+        Debug::Error(L"ViewerImgRaw: live instance accounting underflow.");
+    }
+}
+
 } // namespace
+
+void NotifyViewerImgRawAsyncWorkQueued() noexcept
+{
+    static_cast<void>(g_viewerImgRawAsyncWorkCount.fetch_add(1u, std::memory_order_acq_rel));
+}
+
+void NotifyViewerImgRawAsyncWorkCompleted() noexcept
+{
+    const uint32_t previous = g_viewerImgRawAsyncWorkCount.fetch_sub(1u, std::memory_order_acq_rel);
+    if (previous == 0u)
+    {
+        g_viewerImgRawAsyncWorkCount.store(0u, std::memory_order_release);
+        Debug::Error(L"ViewerImgRaw: async work accounting underflow.");
+    }
+}
+
+void ShutdownViewerImgRawModuleState() noexcept
+{
+    g_viewerImgRawShutdownCleanupComplete.store(ResetViewerImgRawClassBackgroundBrushAtQuietPoint(), std::memory_order_release);
+}
+
+bool CanUnloadViewerImgRawModuleNow() noexcept
+{
+    return g_viewerImgRawShutdownCleanupComplete.load(std::memory_order_acquire) &&
+           g_viewerImgRawLiveInstanceCount.load(std::memory_order_acquire) == 0u &&
+           g_viewerImgRawAsyncWorkCount.load(std::memory_order_acquire) == 0u;
+}
 
 const char* GetViewerImgRawStaticConfigurationSchema() noexcept
 {
@@ -542,6 +494,8 @@ const char* GetViewerImgRawStaticConfigurationSchema() noexcept
 
 ViewerImgRaw::ViewerImgRaw()
 {
+    InitializeAsyncOpenScheduler();
+
     _metaId          = L"builtin/viewer-imgraw";
     _metaShortId     = L"viewimgraw";
     _metaName        = LoadStringResource(g_hInstance, IDS_VIEWERRAW_NAME);
@@ -555,6 +509,7 @@ ViewerImgRaw::ViewerImgRaw()
     _metaData.version     = VERSINFO_PLUGIN_VERSION;
 
     static_cast<void>(SetConfiguration(nullptr));
+    NotifyViewerImgRawInstanceCreated();
 }
 
 ViewerImgRaw::~ViewerImgRaw()
@@ -628,6 +583,7 @@ ULONG STDMETHODCALLTYPE ViewerImgRaw::Release() noexcept
     if (refs == 0)
     {
         delete this;
+        NotifyViewerImgRawInstanceDestroyed();
     }
     return refs;
 }
@@ -902,6 +858,81 @@ LRESULT ViewerImgRaw::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcep
             snapshot->ownerDrawItemCount = CountOwnerDrawMenuItems(_menuHandle.get());
             return TRUE;
         }
+        case WndMsg::kViewerImgRawDebugGetDecodeSnapshot:
+        {
+            auto* snapshot = reinterpret_cast<WndMsg::ViewerImgRawDecodeDebugSnapshot*>(lp);
+            if (! snapshot)
+            {
+                return FALSE;
+            }
+
+            *snapshot                   = {};
+            snapshot->hasImage          = HasDisplayImage();
+            snapshot->displayingThumbnail = IsDisplayingThumbnail();
+            snapshot->baseOrientation  = NormalizeExifOrientation(_baseOrientation);
+            snapshot->viewOrientation  = NormalizeExifOrientation(_viewOrientation);
+
+            if (_currentImage && snapshot->hasImage)
+            {
+                snapshot->sourceWidth  = snapshot->displayingThumbnail ? _currentImage->thumbWidth : _currentImage->rawWidth;
+                snapshot->sourceHeight = snapshot->displayingThumbnail ? _currentImage->thumbHeight : _currentImage->rawHeight;
+                const bool swapAxes     = snapshot->viewOrientation >= 5u && snapshot->viewOrientation <= 8u;
+                snapshot->orientedWidth  = swapAxes ? snapshot->sourceHeight : snapshot->sourceWidth;
+                snapshot->orientedHeight = swapAxes ? snapshot->sourceWidth : snapshot->sourceHeight;
+            }
+            return TRUE;
+        }
+        case WndMsg::kViewerImgRawDebugGetResourceSnapshot:
+        {
+            if (wp == ViewerImgRawAsyncProtocol::kDebugStateSnapshotSelector)
+            {
+                auto* snapshot = reinterpret_cast<ViewerImgRawAsyncProtocol::DebugStateSnapshot*>(lp);
+                if (! snapshot)
+                {
+                    return FALSE;
+                }
+
+                *snapshot                      = {};
+                snapshot->progressApplyCount   = _debugProgressApplyCount;
+                snapshot->progressStage        = _rawProgressStage;
+                snapshot->progressPercent      = _rawProgressPercent;
+                snapshot->prefetchCommitPaused = _debugPrefetchCommitPaused.load(std::memory_order_acquire);
+                return TRUE;
+            }
+
+            auto* snapshot = reinterpret_cast<WndMsg::ViewerImgRawResourceDebugSnapshot*>(lp);
+            if (! snapshot)
+            {
+                return FALSE;
+            }
+
+            *snapshot = {};
+            {
+                std::scoped_lock lock(_cacheMutex);
+                snapshot->speculativeBytes      = _speculativeDecodedBytes;
+                snapshot->speculativeBytesPeak  = _speculativeDecodedBytesPeak;
+                snapshot->budgetAcceptedCount   = _speculativeBudgetAcceptedCount;
+                snapshot->budgetRejectedCount   = _speculativeBudgetRejectedCount;
+                snapshot->cachedImageCount      = _imageCache.size();
+                snapshot->inflightDecodeCount   = _inflightDecodes.size();
+            }
+            snapshot->speculativeBytesLimit = SpeculativeDecodedByteLimit();
+            PopulateAsyncOpenDebugSnapshot(*snapshot);
+            return TRUE;
+        }
+        case WndMsg::kViewerImgRawDebugClearImageCache: ClearImageCache(); return TRUE;
+        case WndMsg::kViewerImgRawDebugExportToPath:
+        {
+            auto* request = reinterpret_cast<WndMsg::ViewerImgRawDebugExportRequest*>(lp);
+            if (! request || ! request->destinationPath || request->destinationPath[0] == L'\0')
+            {
+                return FALSE;
+            }
+            request->queued = false;
+            BeginExportImpl(hwnd, request->destinationPath);
+            request->queued = true;
+            return TRUE;
+        }
 #endif
         case WM_CREATE: OnCreate(hwnd); return 0;
         case WM_SIZE: OnSize(static_cast<UINT>(LOWORD(lp)), static_cast<UINT>(HIWORD(lp))); return 0;
@@ -951,7 +982,11 @@ LRESULT ViewerImgRaw::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcep
         case WM_INPUTLANGCHANGE: return OnInputLangChange(hwnd, wp, lp);
         case WM_PAINT: OnPaint(); return 0;
         case WM_ERASEBKGND: return OnEraseBkgnd(hwnd, reinterpret_cast<HDC>(wp));
-        case kAsyncProgressMessage: OnAsyncProgress(static_cast<int>(wp), static_cast<int>(lp)); return 0;
+        case kAsyncProgressMessage:
+            OnAsyncProgress(static_cast<uint64_t>(wp),
+                            ViewerImgRawAsyncProtocol::UnpackProgressStage(lp),
+                            ViewerImgRawAsyncProtocol::UnpackProgressPercent(lp));
+            return 0;
         case kAsyncOpenCompleteMessage:
         {
             auto result = TakeMessagePayload<AsyncOpenResult>(lp);
@@ -1069,7 +1104,7 @@ void ViewerImgRaw::OnHScroll(HWND hwnd, UINT code) noexcept
     int newPos       = si.nPos;
 
     const UINT dpi = GetDpiForWindow(hwnd);
-    const int line = std::max(1, PxFromDip(40, dpi));
+    const int line = std::max(1L, Common::WindowSizing::DipToPixelRounded(dpi, 40));
 
     switch (code)
     {
@@ -1142,7 +1177,7 @@ void ViewerImgRaw::OnVScroll(HWND hwnd, UINT code) noexcept
     int newPos       = si.nPos;
 
     const UINT dpi = GetDpiForWindow(hwnd);
-    const int line = std::max(1, PxFromDip(40, dpi));
+    const int line = std::max(1L, Common::WindowSizing::DipToPixelRounded(dpi, 40));
 
     switch (code)
     {
@@ -1351,7 +1386,8 @@ LRESULT ViewerImgRaw::OnNcDestroy(HWND hwnd, WPARAM wp, LPARAM lp) noexcept
 LRESULT ViewerImgRaw::HandleFileComboHostMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, bool& handled) noexcept
 {
     const bool popupWasOpen      = _fileComboControl && _fileComboControl->DebugIsPopupOpen();
-    const bool preExpandForPopup = ! popupWasOpen && _fileComboControl && MessageMayOpenWindowComboPopup(msg, wp);
+    const bool preExpandForPopup =
+        ! popupWasOpen && _fileComboControl && RedSalamander::ViewerFileComboHost::MessageMayOpenWindowComboPopup(msg, wp);
     if (preExpandForPopup)
     {
         _fileComboHostPreExpandPopup = true;
@@ -1471,11 +1507,8 @@ void ViewerImgRaw::OnCreate(HWND hwnd)
         _fileComboHost.SetRoot(std::move(combo));
     }
 
-    if (! _menuHandle)
-    {
-        _menuHandle.reset(GetMenu(hwnd));
-    }
-    if (_menuHandle)
+    HMENU menu = _menuHandle ? _menuHandle.get() : GetMenu(hwnd);
+    if (menu)
     {
         _menuBarHost.SetTheme(_hasTheme ? MakeThemePaletteFromViewerTheme(_theme) : MakeDefaultThemePalette(false));
         _menuBarHost.SetRefreshMenuStateCallback([this]
@@ -1501,7 +1534,29 @@ void ViewerImgRaw::OnCreate(HWND hwnd)
             }
             return true;
         });
-        static_cast<void>(_menuBarHost.Attach(g_hInstance, hwnd, _menuHandle.get()));
+
+#if defined(ENABLE_TESTS)
+        const bool forceAttachFailure = EnvironmentVariables::IsTruthyFlagSet(kForceMenuAttachFailureEnvVar);
+#else
+        constexpr bool forceAttachFailure = false;
+#endif
+        const bool attached = ! forceAttachFailure && _menuBarHost.Attach(g_hInstance, hwnd, menu);
+        if (attached && GetMenu(hwnd) == nullptr)
+        {
+            // NativeMenuBarHost detached the menu from the HWND. Adopt it only after that
+            // ownership transfer succeeds so there is never a second DestroyMenu owner.
+            if (! _menuHandle)
+            {
+                _menuHandle.reset(menu);
+            }
+        }
+        else
+        {
+            // Attach failures keep the native menu visible and window-owned. If Attach
+            // reported success without detaching it, discard the partial DxUi host too.
+            _menuBarHost.Detach();
+            Debug::Warning(L"ViewerImgRaw: DxUi menu attach failed; keeping the native menu fallback.");
+        }
     }
 
     ApplyTheme(hwnd);
@@ -1514,12 +1569,15 @@ void ViewerImgRaw::OnDestroy()
     EndLoadingUi();
     DiscardDirect2D();
     ClearImageCache();
+    CancelAsyncOpenRequests(true);
 
     NotifyViewerClosed();
 }
 
 void ViewerImgRaw::OnTimer(UINT_PTR timerId) noexcept
 {
+    PollAsyncOpenTerminalFallback();
+
     if (! _hWnd)
     {
         return;
@@ -1598,14 +1656,14 @@ void ViewerImgRaw::ComputeLayoutRects(HWND hwnd) noexcept
     }
 
     const bool showCombo = ! _embeddedMode && _otherItems.size() > 1;
-    const int padding    = PxFromDip(RedSalamander::ViewerFileComboHost::kStandaloneComboChromePaddingDip, dpi);
-    const int comboH     = std::max(1, PxFromDip(RedSalamander::ViewerFileComboHost::kStandaloneComboHeightDip, dpi));
-    int headerH          = _embeddedMode ? 0 : PxFromDip(kHeaderHeightDip, dpi);
+    const int padding = Common::WindowSizing::DipToPixelRounded(dpi, RedSalamander::ViewerFileComboHost::kStandaloneComboChromePaddingDip);
+    const int comboH = std::max(1L, Common::WindowSizing::DipToPixelRounded(dpi, RedSalamander::ViewerFileComboHost::kStandaloneComboHeightDip));
+    int headerH      = _embeddedMode ? 0 : Common::WindowSizing::DipToPixelRounded(dpi, kHeaderHeightDip);
     if (showCombo)
     {
         headerH = (std::max)(headerH, comboH + 2 * padding);
     }
-    const int statusH = PxFromDip(kStatusHeightDip, dpi);
+    const int statusH = Common::WindowSizing::DipToPixelRounded(dpi, kStatusHeightDip);
 
     _headerRect        = client;
     _headerRect.bottom = std::min(client.bottom, client.top + headerH);
@@ -1636,13 +1694,18 @@ void ViewerImgRaw::ComputeLayoutRects(HWND hwnd) noexcept
             const int w                = std::max(1L, (_headerRect.right - _headerRect.left) - 2 * padding);
             const int y                = _headerRect.top + std::max(0L, ((_headerRect.bottom - _headerRect.top) - comboH) / 2);
             const bool expandPopupHost = _fileComboHostPreExpandPopup || (_fileComboControl && _fileComboControl->DebugIsPopupOpen());
-            const int hostHeight       = comboH + (expandPopupHost ? ComputeWindowComboPopupHeightPx(_otherItems.size(), dpi) : 0);
+            const int hostHeight = comboH +
+                                   (expandPopupHost ? RedSalamander::ViewerFileComboHost::ComputeStandaloneComboPopupHeightPx(
+                                                          _otherItems.size(), dpi)
+                                                    : 0);
             SetWindowPos(_hFileComboHost.get(), HWND_TOP, x, y, w, hostHeight, SWP_NOACTIVATE);
 
             if (_fileComboControl)
             {
-                _fileComboControl->SetBounds(D2D1::RectF(
-                    0.0f, 0.0f, static_cast<float>(w) * 96.0f / static_cast<float>(dpi), static_cast<float>(comboH) * 96.0f / static_cast<float>(dpi)));
+                _fileComboControl->SetBounds(D2D1::RectF(0.0f,
+                                                         0.0f,
+                                                         Common::WindowSizing::PixelToDip(static_cast<float>(w), static_cast<float>(dpi)),
+                                                         Common::WindowSizing::PixelToDip(static_cast<float>(comboH), static_cast<float>(dpi))));
                 _fileComboHost.Invalidate();
             }
         }
@@ -1800,8 +1863,8 @@ void ViewerImgRaw::ApplyTheme(HWND hwnd) noexcept
     {
         const COLORREF accent           = ResolveAccentColor(_theme, L"header");
         static constexpr uint8_t kAlpha = 22u;
-        _uiHeaderBg                     = BlendColor(_uiBg, accent, kAlpha);
-        _uiStatusBg                     = BlendColor(_uiBg, accent, kAlpha);
+        _uiHeaderBg                     = BlendColorRefTruncate(_uiBg, accent, kAlpha);
+        _uiStatusBg                     = BlendColorRefTruncate(_uiBg, accent, kAlpha);
     }
 
     _fileComboHost.SetTheme(_hasTheme ? MakeThemePaletteFromViewerTheme(_theme) : MakeDefaultThemePalette(false));
@@ -1819,39 +1882,7 @@ void ViewerImgRaw::ApplyTitleBarTheme(bool windowActive) noexcept
         return;
     }
 
-    static constexpr DWORD kDwmwaUseImmersiveDarkMode19 = 19u;
-    static constexpr DWORD kDwmwaUseImmersiveDarkMode20 = 20u;
-    static constexpr DWORD kDwmwaBorderColor            = 34u;
-    static constexpr DWORD kDwmwaCaptionColor           = 35u;
-    static constexpr DWORD kDwmwaTextColor              = 36u;
-    static constexpr DWORD kDwmColorDefault             = 0xFFFFFFFFu;
-
-    const BOOL darkMode = (_theme.darkMode && ! _theme.highContrast) ? TRUE : FALSE;
-    DwmSetWindowAttribute(_hWnd.get(), kDwmwaUseImmersiveDarkMode20, &darkMode, sizeof(darkMode));
-    DwmSetWindowAttribute(_hWnd.get(), kDwmwaUseImmersiveDarkMode19, &darkMode, sizeof(darkMode));
-
-    DWORD borderValue  = kDwmColorDefault;
-    DWORD captionValue = kDwmColorDefault;
-    DWORD textValue    = kDwmColorDefault;
-    if (! _theme.highContrast && _theme.rainbowMode)
-    {
-        COLORREF accent = ResolveAccentColor(_theme, L"title");
-        if (! windowActive)
-        {
-            static constexpr uint8_t kInactiveTitleBlendAlpha = 223u;
-            const COLORREF bg                                 = ColorRefFromArgb(_theme.backgroundArgb);
-            accent                                            = BlendColor(accent, bg, kInactiveTitleBlendAlpha);
-        }
-
-        const COLORREF text = ContrastingTextColor(accent);
-        borderValue         = static_cast<DWORD>(accent);
-        captionValue        = static_cast<DWORD>(accent);
-        textValue           = static_cast<DWORD>(text);
-    }
-
-    DwmSetWindowAttribute(_hWnd.get(), kDwmwaBorderColor, &borderValue, sizeof(borderValue));
-    DwmSetWindowAttribute(_hWnd.get(), kDwmwaCaptionColor, &captionValue, sizeof(captionValue));
-    DwmSetWindowAttribute(_hWnd.get(), kDwmwaTextColor, &textValue, sizeof(textValue));
+    RedSalamander::ViewerChrome::ApplyTitleBarTheme(_hWnd.get(), _theme, windowActive, L"title");
 }
 
 void ViewerImgRaw::UpdateMenuChecks(HWND hwnd, bool syncDxMenuBar) noexcept
@@ -1912,9 +1943,9 @@ void ViewerImgRaw::ApplyMenuTheme(HWND hwnd) noexcept
 
 void ViewerImgRaw::BeginLoadingUi() noexcept
 {
-    if (_hostAlerts)
+    if (_hostAlerts && _hWnd)
     {
-        static_cast<void>(_hostAlerts->ClearAlert(HOST_ALERT_SCOPE_WINDOW, nullptr));
+        static_cast<void>(_hostAlerts->ClearAlert(HOST_ALERT_SCOPE_WINDOW, reinterpret_cast<void*>(_hWnd.get())));
     }
     _alertVisible = false;
 
@@ -1952,13 +1983,8 @@ bool ViewerImgRaw::CancelActiveOpen() noexcept
         return false;
     }
 
-    static_cast<void>(_openRequestId.fetch_add(1, std::memory_order_acq_rel));
+    CancelAsyncOpenRequests(false);
     EndLoadingUi();
-
-    {
-        std::scoped_lock lock(_cacheMutex);
-        _inflightDecodes.clear();
-    }
 
     _rawProgressPercent = -1;
     _rawProgressStage   = -1;
@@ -2030,7 +2056,7 @@ void ViewerImgRaw::DrawLoadingOverlay(ID2D1HwndRenderTarget* target, ID2D1SolidC
     {
         const bool hasPreviewImage = HasDisplayImage();
         const uint8_t tintAlpha    = hasPreviewImage ? ((_hasTheme && _theme.darkMode) ? 10u : 8u) : ((_hasTheme && _theme.darkMode) ? 28u : 18u);
-        const COLORREF tint        = BlendColor(bg, accent, tintAlpha);
+        const COLORREF tint        = BlendColorRefTruncate(bg, accent, tintAlpha);
         const float overlayA       = hasPreviewImage ? ((_hasTheme && _theme.darkMode) ? 0.25f : 0.18f) : ((_hasTheme && _theme.darkMode) ? 0.85f : 0.75f);
         brush->SetColor(ColorFFromColorRef(tint, overlayA));
         target->FillRectangle(content, brush);
@@ -2063,7 +2089,7 @@ void ViewerImgRaw::DrawLoadingOverlay(ID2D1HwndRenderTarget* target, ID2D1SolidC
     float rainbowVal          = 0.0f;
     if (rainbowSpinner)
     {
-        const uint32_t h = StableHash32(seed);
+        const uint32_t h = StableVisualHash32Utf16V1(seed);
         rainbowHue       = static_cast<float>(h % 360u);
         rainbowSat       = _theme.darkBase ? 0.70f : 0.55f;
         rainbowVal       = _theme.darkBase ? 0.95f : 0.85f;
@@ -2085,7 +2111,7 @@ void ViewerImgRaw::DrawLoadingOverlay(ID2D1HwndRenderTarget* target, ID2D1SolidC
         {
             const float hueStep    = 360.0f / static_cast<float>(kSegments);
             const float hueDegrees = rainbowHue + static_cast<float>(i) * hueStep;
-            segmentColor           = ColorFromHSV(hueDegrees, rainbowSat, rainbowVal);
+            segmentColor           = ColorRefFromHsvClampedNegativeHueToZero(hueDegrees, rainbowSat, rainbowVal);
         }
 
         brush->SetColor(ColorFFromColorRef(segmentColor, alpha));
@@ -2187,7 +2213,7 @@ void ViewerImgRaw::DrawLoadingOverlay(ID2D1HwndRenderTarget* target, ID2D1SolidC
         }
         else
         {
-            const COLORREF track = _hasTheme ? BlendColor(bg, accent, (_theme.darkMode ? 92u : 72u)) : accent;
+            const COLORREF track = _hasTheme ? BlendColorRefTruncate(bg, accent, (_theme.darkMode ? 92u : 72u)) : accent;
             brush->SetColor(ColorFFromColorRef(track, 0.55f));
             target->FillRoundedRectangle(D2D1::RoundedRect(trackRc, r, r), brush);
         }
@@ -2216,7 +2242,7 @@ void ViewerImgRaw::DrawLoadingOverlay(ID2D1HwndRenderTarget* target, ID2D1SolidC
         }
         else
         {
-            const COLORREF track = _hasTheme ? BlendColor(bg, accent, (_theme.darkMode ? 92u : 72u)) : accent;
+            const COLORREF track = _hasTheme ? BlendColorRefTruncate(bg, accent, (_theme.darkMode ? 92u : 72u)) : accent;
             brush->SetColor(ColorFFromColorRef(track, 0.50f));
             target->FillRoundedRectangle(D2D1::RoundedRect(trackRc, r, r), brush);
         }
@@ -2319,7 +2345,7 @@ void ViewerImgRaw::DrawExifOverlay(ID2D1HwndRenderTarget* target, ID2D1SolidColo
     else
     {
         const uint8_t tintAlpha = (_hasTheme && _theme.darkMode) ? 46u : 34u;
-        const COLORREF tint     = BlendColor(bg, accent, tintAlpha);
+        const COLORREF tint     = BlendColorRefTruncate(bg, accent, tintAlpha);
         const float overlayA    = (_hasTheme && _theme.darkMode) ? 0.88f : 0.82f;
         brush->SetColor(ColorFFromColorRef(tint, overlayA));
         target->FillRectangle(box, brush);
@@ -2701,7 +2727,7 @@ void ViewerImgRaw::OnKeyDown(HWND hwnd, UINT vk) noexcept
     {
         if (_alertVisible && _hostAlerts)
         {
-            static_cast<void>(_hostAlerts->ClearAlert(HOST_ALERT_SCOPE_WINDOW, nullptr));
+            static_cast<void>(_hostAlerts->ClearAlert(HOST_ALERT_SCOPE_WINDOW, reinterpret_cast<void*>(_hWnd.get())));
             _alertVisible = false;
             return;
         }
@@ -2753,7 +2779,7 @@ void ViewerImgRaw::OnKeyDown(HWND hwnd, UINT vk) noexcept
         }
 
         const UINT dpi     = hwnd ? GetDpiForWindow(hwnd) : USER_DEFAULT_SCREEN_DPI;
-        const float stepPx = static_cast<float>(PxFromDip(40, dpi));
+        const float stepPx = static_cast<float>(Common::WindowSizing::DipToPixelRounded(dpi, 40));
 
         if (vk == VK_LEFT)
         {
@@ -3564,8 +3590,8 @@ void ViewerImgRaw::OnPaint()
                 const CachedImage* image = _currentImage;
                 const uint32_t imgWPx    = image ? (IsDisplayingThumbnail() ? image->thumbWidth : image->rawWidth) : 0;
                 const uint32_t imgHPx    = image ? (IsDisplayingThumbnail() ? image->thumbHeight : image->rawHeight) : 0;
-                const float imgWDip      = DipsFromPixelsF(static_cast<float>(imgWPx), dpi);
-                const float imgHDip      = DipsFromPixelsF(static_cast<float>(imgHPx), dpi);
+                const float imgWDip = Common::WindowSizing::PixelToDip(static_cast<float>(imgWPx), static_cast<float>(dpi));
+                const float imgHDip = Common::WindowSizing::PixelToDip(static_cast<float>(imgHPx), static_cast<float>(dpi));
 
                 if (imgWDip > 0.0f && imgHDip > 0.0f)
                 {
@@ -3580,8 +3606,8 @@ void ViewerImgRaw::OnPaint()
                     });
 
                     const uint16_t orientation        = (_viewOrientation >= 1 && _viewOrientation <= 8) ? _viewOrientation : static_cast<uint16_t>(1);
-                    const float xDip                  = DipsFromPixelsF(x, dpi);
-                    const float yDip                  = DipsFromPixelsF(y, dpi);
+                    const float xDip = Common::WindowSizing::PixelToDip(x, static_cast<float>(dpi));
+                    const float yDip = Common::WindowSizing::PixelToDip(y, static_cast<float>(dpi));
                     const D2D1_MATRIX_3X2_F transform = ExifOrientationTransform(orientation, imgWDip, imgHDip) *
                                                         D2D1::Matrix3x2F::Scale(displayedZoom, displayedZoom) * D2D1::Matrix3x2F::Translation(xDip, yDip);
                     _d2dTarget->SetTransform(transform);

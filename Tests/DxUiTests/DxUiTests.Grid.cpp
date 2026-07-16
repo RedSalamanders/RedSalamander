@@ -1,9 +1,33 @@
 #include "DxUiTestHelpers.h"
 
 #include <cmath>
+#include <fstream>
+#include <iterator>
+#include <type_traits>
 
 namespace
 {
+
+template <typename Metrics, typename = void> struct HasVisibleCellDataReadCount : std::false_type
+{
+};
+
+template <typename Metrics>
+struct HasVisibleCellDataReadCount<Metrics, std::void_t<decltype(std::declval<Metrics>().visibleCellDataReadCount)>> : std::true_type
+{
+};
+
+template <typename Metrics> [[nodiscard]] std::optional<uint64_t> TryGetVisibleCellDataReadCount(const Metrics& metrics)
+{
+    if constexpr (HasVisibleCellDataReadCount<Metrics>::value)
+    {
+        return metrics.visibleCellDataReadCount;
+    }
+    else
+    {
+        return std::nullopt;
+    }
+}
 
 void TestSortCycle()
 {
@@ -23,6 +47,84 @@ void TestVisibleSpan()
     Require(span.beginIndex == 10u, "visible span begin index");
     Require(span.endIndex == 16u, "visible span end index");
     Require(span.offsetDip == 0.0f, "visible span offset");
+}
+
+void TestGridPaintReusesCollectedGroupsForContentAndVisibleRows()
+{
+    const std::filesystem::path sourcePath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.Grid.cpp";
+    std::ifstream input(sourcePath);
+    Require(input.good(), "Grid source is readable for paint hot-path guard");
+    const std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+
+    const size_t paintFunction = source.find("void Grid::Paint");
+    const size_t tickFunction  = source.find("bool Grid::Tick", paintFunction);
+    Require(paintFunction != std::string::npos && tickFunction != std::string::npos && paintFunction < tickFunction, "Grid::Paint source block is found");
+
+    const std::string paintBlock = source.substr(paintFunction, tickFunction - paintFunction);
+    const size_t collectGroups   = paintBlock.find("CollectOrderedGroups(_model)");
+    const size_t contentRect     = paintBlock.find("GetContentRect(_cachedGroups)", collectGroups);
+    const size_t visibleRows     = paintBlock.find("BuildVisibleBodyItems(_cachedGroups, bodyRect)", contentRect);
+    Require(collectGroups != std::string::npos, "Grid::Paint collects ordered groups once for the frame");
+    Require(contentRect != std::string::npos && collectGroups < contentRect, "Grid::Paint computes content rect from the collected frame groups");
+    Require(visibleRows != std::string::npos && contentRect < visibleRows, "Grid::Paint builds visible rows from the same groups and body rect");
+}
+
+void TestGridTickUsesPaintDiscoveredAnimatedCellState()
+{
+    const std::filesystem::path sourcePath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.Grid.cpp";
+    std::ifstream input(sourcePath);
+    Require(input.good(), "Grid source is readable for animation tick hot-path guard");
+    const std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+
+    const size_t tickFunction = source.find("bool Grid::Tick");
+    const size_t nextFunction = source.find("bool Grid::HasAnimatedVisibleCells", tickFunction);
+    Require(tickFunction != std::string::npos && nextFunction != std::string::npos && tickFunction < nextFunction, "Grid::Tick source block is found");
+
+    const std::string tickBlock = source.substr(tickFunction, nextFunction - tickFunction);
+    Require(tickBlock.find("_lastPaintHadAnimatedVisibleCells") != std::string::npos, "Grid::Tick reuses the animated-cell state discovered during Paint");
+    Require(tickBlock.find("_animatedVisibleCellStateValid ? _lastPaintHadAnimatedVisibleCells : HasAnimatedVisibleCells()") != std::string::npos,
+            "Grid::Tick scans visible cells only when the paint-discovered animated-cell state is invalid");
+    Require(tickBlock.find("GetCellData(") == std::string::npos, "Grid::Tick does not call the model for cell data every animation tick");
+}
+
+void TestGridPaintReusesCellDataScratchStorage()
+{
+    const std::filesystem::path sourcePath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.Grid.cpp";
+    std::ifstream input(sourcePath);
+    Require(input.good(), "Grid source is readable for cell-data scratch-storage guard");
+    const std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+
+    const size_t paintFunction = source.find("void Grid::Paint");
+    const size_t tickFunction  = source.find("bool Grid::Tick", paintFunction);
+    Require(paintFunction != std::string::npos && tickFunction != std::string::npos && paintFunction < tickFunction, "Grid::Paint source block is found");
+
+    const std::string paintBlock = source.substr(paintFunction, tickFunction - paintFunction);
+    const size_t scratch         = paintBlock.find("GridCellData cellData;");
+    const size_t reset           = paintBlock.find("ResetGridCellData(cellData);", scratch);
+    const size_t modelRead       = paintBlock.find("_model->GetCellData(rowIndex, columnIndex, cellData);", reset);
+    Require(scratch != std::string::npos, "Grid::Paint keeps one reusable GridCellData scratch object");
+    Require(paintBlock.find("GridCellData cellData{};") == std::string::npos, "Grid::Paint does not construct GridCellData per visible cell");
+    Require(reset != std::string::npos && reset < modelRead, "Grid::Paint resets scratch cell data before each model read");
+}
+
+void TestGridPaintEmitsCellDataReadMetric()
+{
+    const std::filesystem::path sourcePath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.Grid.cpp";
+    std::ifstream input(sourcePath);
+    Require(input.good(), "Grid source is readable for paint cell-data metric guard");
+    const std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+
+    const size_t paintFunction = source.find("void Grid::Paint");
+    const size_t tickFunction  = source.find("bool Grid::Tick", paintFunction);
+    Require(paintFunction != std::string::npos && tickFunction != std::string::npos && paintFunction < tickFunction, "Grid::Paint source block is found");
+
+    const std::string paintBlock = source.substr(paintFunction, tickFunction - paintFunction);
+    const size_t counter         = paintBlock.find("visibleCellDataReadCount");
+    const size_t increment       = paintBlock.find("++visibleCellDataReadCount", counter);
+    const size_t metric          = paintBlock.find("dxui.grid.paint_cell_data_reads");
+    Require(counter != std::string::npos, "Grid::Paint tracks visible cell-data model callback count");
+    Require(increment != std::string::npos, "Grid::Paint increments the cell-data model callback count after visible cell reads");
+    Require(metric != std::string::npos, "Grid::Paint emits a cell-data read perf metric for archived runs");
 }
 
 void TestSelectionModel()
@@ -62,9 +164,12 @@ void TestGridVisibleWorkMetricsStayBoundedForLargeDatasets()
     grid.SetModel(&model);
 
     const GridVisibleWorkMetrics metrics = grid.GetVisibleWorkMetrics();
-    Require(metrics.visibleRowCount == 4u, "large grid visible-work metrics clamp visible rows to fully visible body rows");
+    Require(metrics.visibleRowCount == 5u, "large grid visible-work metrics include the bottom partially visible body row");
     Require(metrics.visibleColumnCount == 4u, "large grid visible-work metrics clamp visible columns");
-    Require(metrics.visibleCellCount == 16u, "large grid visible-work metrics clamp visible cell work to fully visible body rows");
+    Require(metrics.visibleCellCount == 20u, "large grid visible-work metrics include cell work for partially visible body rows");
+    const std::optional<uint64_t> cellDataReadCount = TryGetVisibleCellDataReadCount(metrics);
+    Require(cellDataReadCount.has_value(), "large grid visible-work metrics expose bounded cell-data read count");
+    Require(cellDataReadCount.value_or(UINT64_MAX) == metrics.visibleCellCount, "large grid reads cell data once per visible cell for visible-work metrics");
     Require(metrics.hasVerticalScrollbar, "large grid visible-work metrics detect vertical scrollbar");
     Require(metrics.hasHorizontalScrollbar, "large grid visible-work metrics detect horizontal scrollbar");
 }
@@ -86,12 +191,47 @@ void TestGroupedGridVisibleWorkMetricsIncludeHeaders()
     grid.SetModel(&model);
 
     const GridVisibleWorkMetrics metrics = grid.GetVisibleWorkMetrics();
-    Require(metrics.visibleRowCount == 3u, "grouped grid visible-work metrics count only fully visible rows");
+    Require(metrics.visibleRowCount == 4u, "grouped grid visible-work metrics include the bottom partially visible row");
     Require(metrics.visibleGroupHeaderCount == 2u, "grouped grid visible-work metrics count visible headers");
     Require(metrics.visibleColumnCount == 1u, "grouped grid visible-work metrics keep visible column count");
-    Require(metrics.visibleCellCount == 3u, "grouped grid visible-work metrics count row cell work only for fully visible rows");
+    Require(metrics.visibleCellCount == 4u, "grouped grid visible-work metrics include cell work for partially visible rows");
     Require(metrics.hasVerticalScrollbar, "grouped grid visible-work metrics detect vertical scrollbar");
     Require(! metrics.hasHorizontalScrollbar, "grouped grid visible-work metrics avoid horizontal scrollbar when not needed");
+}
+
+void TestGridPartiallyVisibleBottomRowIsPaintedAndHitTestable()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    auto root  = std::make_unique<Panel>();
+    auto* grid = root->AddChild<Grid>();
+    grid->SetBounds(D2D1::RectF(0.0f, 0.0f, 220.0f, 100.0f));
+    grid->SetHeaderHeightDip(20.0f);
+    grid->SetRowHeightDip(30.0f);
+
+    LargeGridModel model(10u, 1u, 120.0f);
+    grid->SetModel(&model);
+    host.SetRoot(std::move(root));
+    static_cast<Panel*>(host.GetRoot())->SetBounds(D2D1::RectF(0.0f, 0.0f, 220.0f, 100.0f));
+
+    Require(grid->GetVisibleRowCount() == 3u, "grid counts the bottom partially visible body row");
+    Require(grid->GetVisibleRowAt(2u).value_or(static_cast<size_t>(-1)) == 2u, "grid exposes the bottom partially visible row by visible index");
+
+    const std::optional<D2D1_RECT_F> rowRect = grid->GetVisibleRowRect(2u);
+    Require(rowRect.has_value(), "grid exposes a rect for the bottom partially visible row");
+    Require(rowRect->top >= 79.5f && rowRect->bottom <= 100.5f && rowRect->bottom > rowRect->top,
+            "grid clips the bottom partially visible row to the viewport");
+
+    const std::optional<D2D1_RECT_F> cellRect = grid->GetVisibleCellRect(2u, 0u);
+    Require(cellRect.has_value(), "grid exposes a cell rect for the bottom partially visible row");
+    Require(cellRect->bottom > cellRect->top, "grid bottom partially visible cell rect has area");
+
+    const D2D1_POINT_2F bottomRowPoint = D2D1::Point2F(48.0f, 90.0f);
+    Require(grid->FindRowAtPoint(MakePointDip(bottomRowPoint)).value_or(static_cast<size_t>(-1)) == 2u, "grid hit-tests the bottom partially visible row");
+    Require(grid->OnMouseMove(host, bottomRowPoint, 0u), "grid hover handles the bottom partially visible row");
+    Require(grid->OnMouseDown(host, bottomRowPoint, false, 0u), "grid click handles the bottom partially visible row");
+    Require(grid->GetPrimarySelectedRow().value_or(static_cast<size_t>(-1)) == 2u, "grid click selects the bottom partially visible row");
 }
 
 void TestGroupedGridProgrammaticSelectionAllowsOffscreenExpandedRows()
@@ -888,7 +1028,9 @@ void TestGridHeaderClickMovesSortGlyphToClickedColumn()
     class ApplyingSortDelegate final : public RecordingGridDelegate
     {
     public:
-        explicit ApplyingSortDelegate(Grid& targetGrid) noexcept : grid(&targetGrid) {}
+        explicit ApplyingSortDelegate(Grid& targetGrid) noexcept : grid(&targetGrid)
+        {
+        }
 
         void OnGridSortRequested(const GridSortSpec& sortSpec) override
         {
@@ -910,7 +1052,7 @@ void TestGridHeaderClickMovesSortGlyphToClickedColumn()
     Require(grid.OnMouseDown(host, D2D1::Point2F(80.0f, 12.0f), false, 0), "grid sort glyph click handles mouse-down");
     Require(grid.OnMouseUp(host, D2D1::Point2F(80.0f, 12.0f), false, 0), "grid sort glyph click handles mouse-up");
 
-    const uint64_t settledTick = GetTickCount64() + 200u;
+    const uint64_t settledTick               = GetTickCount64() + 200u;
     const GridSortGlyphVisualState nameAfter = grid.DebugGetSortGlyphVisualState(theme, 0u, settledTick);
     const GridSortGlyphVisualState pathAfter = grid.DebugGetSortGlyphVisualState(theme, 1u, settledTick);
     Require(delegate.sortRequestedCount == 1u, "grid sort glyph click requests one delegated sort");
@@ -1422,7 +1564,7 @@ void TestGridLongTextFallbackTooltipRequiresClippedText()
     const std::array<GridColumnLayoutEntry, 1u> wideLayout{GridColumnLayoutEntry{.columnId = L"status", .displayIndex = 0u, .widthDip = 560.0f}};
     grid->ApplyColumnLayout(wideLayout);
     GridCellLayoutMetrics metrics = grid->GetCellLayoutMetrics(host, 0u, 0u);
-    D2D1_POINT_2F hoverPoint      = D2D1::Point2F((metrics.cellRect.left + metrics.cellRect.right) * 0.5f, (metrics.cellRect.top + metrics.cellRect.bottom) * 0.5f);
+    D2D1_POINT_2F hoverPoint = D2D1::Point2F((metrics.cellRect.left + metrics.cellRect.right) * 0.5f, (metrics.cellRect.top + metrics.cellRect.bottom) * 0.5f);
 
     Require(grid->OnMouseMove(host, hoverPoint, 0), "grid cell hover is handled for visible long text");
     Require(! host.HasTooltip(), "grid does not show a long-text fallback tooltip when the cell text is fully visible");
@@ -1739,9 +1881,14 @@ void RunGridTests()
 {
     TestSortCycle();
     TestVisibleSpan();
+    TestGridPaintReusesCollectedGroupsForContentAndVisibleRows();
+    TestGridTickUsesPaintDiscoveredAnimatedCellState();
+    TestGridPaintReusesCellDataScratchStorage();
+    TestGridPaintEmitsCellDataReadMetric();
     TestSelectionModel();
     TestGridVisibleWorkMetricsStayBoundedForLargeDatasets();
     TestGroupedGridVisibleWorkMetricsIncludeHeaders();
+    TestGridPartiallyVisibleBottomRowIsPaintedAndHitTestable();
     TestGroupedGridProgrammaticSelectionAllowsOffscreenExpandedRows();
     TestGridMouseWheelReportsUnhandledAtScrollEdges();
     TestGroupedGridLongRunScrollKeepsVisibleRowRects();

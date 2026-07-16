@@ -2,6 +2,7 @@
 
 #include "CompareDirectoriesWindow.Internal.h"
 #include "DxUi/DxUi.FocusRestore.h"
+#include "DxUi/DxUiNativeMenuInterop.h"
 #include "DxUiThemePalette.h"
 
 namespace CompareDirectoriesWindowInternal
@@ -17,7 +18,6 @@ using RedSalamander::DxUi::ContextMenuSessionCallbacks;
 using RedSalamander::DxUi::FontRole;
 using RedSalamander::DxUi::Label;
 using RedSalamander::DxUi::MenuBar;
-using RedSalamander::DxUi::MenuBarItem;
 using RedSalamander::DxUi::MenuFlyoutItem;
 using RedSalamander::DxUi::MenuItemKind;
 
@@ -41,213 +41,11 @@ constexpr wchar_t kCompareDxChromeHostWindowClassName[] = L"RedSalamander.Compar
     return RegisterClassW(&wc) != 0 || GetLastError() == ERROR_CLASS_ALREADY_EXISTS;
 }
 
-void SplitMenuText(std::wstring_view raw, std::wstring& outText, std::wstring& outShortcut) noexcept
-{
-    outText.clear();
-    outShortcut.clear();
-
-    const size_t tabPos = raw.find(L'\t');
-    if (tabPos == std::wstring_view::npos)
-    {
-        outText.assign(raw);
-        return;
-    }
-
-    outText.assign(raw.substr(0, tabPos));
-    outShortcut.assign(raw.substr(tabPos + 1));
-}
-
-[[nodiscard]] std::wstring StripMenuMnemonicMarkers(std::wstring_view text)
-{
-    std::wstring result;
-    result.reserve(text.size());
-
-    for (size_t index = 0; index < text.size(); ++index)
-    {
-        if (text[index] != L'&')
-        {
-            result.push_back(text[index]);
-            continue;
-        }
-
-        if ((index + 1u) < text.size() && text[index + 1u] == L'&')
-        {
-            result.push_back(L'&');
-            ++index;
-        }
-    }
-
-    return result;
-}
-
-[[nodiscard]] wchar_t FindMenuMnemonic(std::wstring_view text) noexcept
-{
-    for (size_t index = 0; index < text.size(); ++index)
-    {
-        if (text[index] != L'&')
-        {
-            continue;
-        }
-
-        if ((index + 1u) >= text.size())
-        {
-            break;
-        }
-
-        if (text[index + 1u] == L'&')
-        {
-            ++index;
-            continue;
-        }
-
-        return static_cast<wchar_t>(std::towupper(static_cast<wint_t>(text[index + 1u])));
-    }
-
-    return L'\0';
-}
-
-[[nodiscard]] bool TryGetMenuItemPresentationText(
-    HMENU menu, UINT position, const MENUITEMINFOW& itemInfo, std::wstring& outText, std::wstring& outShortcut) noexcept
-{
-    outText.clear();
-    outShortcut.clear();
-
-    if ((itemInfo.fType & MFT_SEPARATOR) != 0)
-    {
-        return false;
-    }
-
-    std::array<wchar_t, 512> buffer{};
-    const int length = GetMenuStringW(menu, position, buffer.data(), static_cast<int>(buffer.size()), MF_BYPOSITION);
-    if (length <= 0)
-    {
-        return false;
-    }
-
-    SplitMenuText(std::wstring_view(buffer.data(), static_cast<size_t>(length)), outText, outShortcut);
-    return true;
-}
-
-[[nodiscard]] std::vector<MenuFlyoutItem> ConvertHMenuToDxFlyoutItems(HMENU menu) noexcept
-{
-    std::vector<MenuFlyoutItem> items;
-    if (! menu)
-    {
-        return items;
-    }
-
-    const int itemCount = GetMenuItemCount(menu);
-    if (itemCount <= 0)
-    {
-        return items;
-    }
-
-    items.reserve(static_cast<size_t>(itemCount));
-    for (UINT position = 0; position < static_cast<UINT>(itemCount); ++position)
-    {
-        MENUITEMINFOW itemInfo{};
-        itemInfo.cbSize = sizeof(itemInfo);
-        itemInfo.fMask  = MIIM_FTYPE | MIIM_ID | MIIM_STATE | MIIM_SUBMENU;
-        if (! GetMenuItemInfoW(menu, position, TRUE, &itemInfo))
-        {
-            continue;
-        }
-
-        MenuFlyoutItem item{};
-        if ((itemInfo.fType & MFT_SEPARATOR) != 0)
-        {
-            item.kind = MenuItemKind::Separator;
-            items.push_back(std::move(item));
-            continue;
-        }
-
-        std::wstring text;
-        std::wstring shortcut;
-        if (! TryGetMenuItemPresentationText(menu, position, itemInfo, text, shortcut) || text.empty())
-        {
-            continue;
-        }
-
-        item.text            = StripMenuMnemonicMarkers(text);
-        item.acceleratorText = shortcut;
-        item.commandId       = static_cast<int>(itemInfo.wID);
-        item.enabled         = (itemInfo.fState & MFS_GRAYED) == 0;
-        item.checked         = (itemInfo.fState & MFS_CHECKED) != 0;
-
-        if ((itemInfo.fType & MFT_RADIOCHECK) != 0)
-        {
-            item.kind = MenuItemKind::Radio;
-        }
-        else if (item.checked)
-        {
-            item.kind = MenuItemKind::Toggle;
-        }
-
-        if (itemInfo.hSubMenu)
-        {
-            item.children = ConvertHMenuToDxFlyoutItems(itemInfo.hSubMenu);
-        }
-
-        items.push_back(std::move(item));
-    }
-
-    return items;
-}
-
-[[nodiscard]] std::vector<MenuBarItem> BuildDxMenuBarItems(HMENU menu) noexcept
-{
-    std::vector<MenuBarItem> items;
-    if (! menu)
-    {
-        return items;
-    }
-
-    const int itemCount = GetMenuItemCount(menu);
-    if (itemCount <= 0)
-    {
-        return items;
-    }
-
-    items.reserve(static_cast<size_t>(itemCount));
-    for (UINT position = 0; position < static_cast<UINT>(itemCount); ++position)
-    {
-        MENUITEMINFOW itemInfo{};
-        itemInfo.cbSize = sizeof(itemInfo);
-        itemInfo.fMask  = MIIM_FTYPE | MIIM_STATE | MIIM_SUBMENU;
-        if (! GetMenuItemInfoW(menu, position, TRUE, &itemInfo))
-        {
-            continue;
-        }
-
-        if ((itemInfo.fType & MFT_SEPARATOR) != 0 || itemInfo.hSubMenu == nullptr)
-        {
-            continue;
-        }
-
-        std::wstring text;
-        std::wstring shortcut;
-        if (! TryGetMenuItemPresentationText(menu, position, itemInfo, text, shortcut) || text.empty())
-        {
-            continue;
-        }
-
-        MenuBarItem item{};
-        item.text           = StripMenuMnemonicMarkers(text);
-        item.mnemonic       = FindMenuMnemonic(text);
-        item.enabled        = (itemInfo.fState & MFS_GRAYED) == 0;
-        item.rightJustified = (itemInfo.fType & MFT_RIGHTJUSTIFY) != 0;
-        item.sourceIndex    = static_cast<size_t>(position);
-        items.push_back(std::move(item));
-    }
-
-    return items;
-}
-
 } // namespace
 
 void CompareDirectoriesWindow::UpdateViewMenuChecks() noexcept
 {
-    HMENU menu = _menuHandle ? _menuHandle.get() : (_hWnd ? GetMenu(_hWnd.get()) : nullptr);
+    HMENU menu = _chrome.menuHandle ? _chrome.menuHandle.get() : (_hWnd ? GetMenu(_hWnd.get()) : nullptr);
     if (! menu)
     {
         SyncDxChrome();
@@ -266,12 +64,12 @@ void CompareDirectoriesWindow::UpdateViewMenuChecks() noexcept
     CheckMenuRadioItem(menu, IDM_PANE_DISPLAY_BRIEF, IDM_PANE_DISPLAY_EXTRA_DETAILED, checked, MF_BYCOMMAND);
 
     const Common::Settings::CompareDirectoriesSettings settings = GetEffectiveCompareSettings();
-    const bool optionsVisible                                   = _optionsDlg && IsWindowVisible(_optionsDlg.get()) != 0;
+    const bool optionsVisible                                   = _optionsPanel.dlg && IsWindowVisible(_optionsPanel.dlg.get()) != 0;
     const bool enableOptionsCommand                             = ! optionsVisible;
 
-    if (_bannerOptionsButton)
+    if (_chrome.bannerOptionsButton)
     {
-        EnableWindow(_bannerOptionsButton.get(), enableOptionsCommand ? TRUE : FALSE);
+        EnableWindow(_chrome.bannerOptionsButton.get(), enableOptionsCommand ? TRUE : FALSE);
     }
 
     EnableMenuItem(menu, IDM_COMPARE_OPTIONS, static_cast<UINT>(MF_BYCOMMAND | (enableOptionsCommand ? MF_ENABLED : (MF_DISABLED | MF_GRAYED))));
@@ -365,7 +163,7 @@ bool CompareDirectoriesWindow::EnsureDxChromeHosts() noexcept
         return false;
     }
 
-    if (! _dxMenuBarHostHwnd)
+    if (! _chrome.menuBarHostHwnd)
     {
         HWND hwnd = CreateWindowExW(0,
                                     kCompareDxMenuBarWindowClassName,
@@ -379,13 +177,13 @@ bool CompareDirectoriesWindow::EnsureDxChromeHosts() noexcept
                                     nullptr,
                                     instance,
                                     this);
-        if (hwnd && _dxMenuBarHost.Attach(hwnd))
+        if (hwnd && _chrome.menuBarHost.Attach(hwnd))
         {
-            auto menuBar = std::make_unique<MenuBar>();
-            _dxMenuBar   = menuBar.get();
-            _dxMenuBarHost.SetRoot(std::move(menuBar));
-            _dxMenuBarHostHwnd.reset(hwnd);
-            _usesDxMenuBar = true;
+            auto menuBar    = std::make_unique<MenuBar>();
+            _chrome.menuBar = menuBar.get();
+            _chrome.menuBarHost.SetRoot(std::move(menuBar));
+            _chrome.menuBarHostHwnd.reset(hwnd);
+            _chrome.usesMenuBar = true;
         }
         else if (hwnd)
         {
@@ -435,9 +233,11 @@ bool CompareDirectoriesWindow::EnsureDxChromeHosts() noexcept
         return true;
     };
 
-    const bool dxOptionsAttached = attachBannerButtonHost(_dxBannerOptionsHostHwnd, _dxBannerOptionsHost, _dxBannerOptionsDxButton, IDM_COMPARE_OPTIONS);
-    const bool dxRescanAttached  = attachBannerButtonHost(_dxBannerRescanHostHwnd, _dxBannerRescanHost, _dxBannerRescanDxButton, IDM_COMPARE_RESCAN);
-    _usesDxBannerButtons         = dxOptionsAttached && dxRescanAttached;
+    const bool dxOptionsAttached =
+        attachBannerButtonHost(_chrome.bannerOptionsHostHwnd, _chrome.bannerOptionsHost, _chrome.bannerOptionsButtonDx, IDM_COMPARE_OPTIONS);
+    const bool dxRescanAttached =
+        attachBannerButtonHost(_chrome.bannerRescanHostHwnd, _chrome.bannerRescanHost, _chrome.bannerRescanButtonDx, IDM_COMPARE_RESCAN);
+    _chrome.usesBannerButtons = dxOptionsAttached && dxRescanAttached;
 
     const auto attachBannerLabelHost =
         [&](wil::unique_hwnd& hostHwnd, RedSalamander::DxUi::WindowHost& host, Label*& label, const FontRole fontRole, const std::wstring& text) noexcept
@@ -467,152 +267,155 @@ bool CompareDirectoriesWindow::EnsureDxChromeHosts() noexcept
         return true;
     };
 
-    const bool dxTitleAttached = attachBannerLabelHost(
-        _dxBannerTitleHostHwnd, _dxBannerTitleHost, _dxBannerTitleLabel, FontRole::BodyStrong, LoadStringResource(nullptr, IDS_COMPARE_BANNER_TITLE));
-    const bool dxProgressAttached =
-        attachBannerLabelHost(_dxScanProgressTextHostHwnd, _dxScanProgressTextHost, _dxScanProgressTextLabel, FontRole::Small, std::wstring{});
-    _usesDxBannerText = dxTitleAttached && dxProgressAttached;
+    const bool dxTitleAttached    = attachBannerLabelHost(_chrome.bannerTitleHostHwnd,
+                                                          _chrome.bannerTitleHost,
+                                                          _chrome.bannerTitleLabel,
+                                                          FontRole::BodyStrong,
+                                                          LoadStringResource(nullptr, IDS_COMPARE_BANNER_TITLE));
+    const bool dxProgressAttached = attachBannerLabelHost(
+        _progress.scanProgressTextHostHwnd, _progress.scanProgressTextHost, _progress.scanProgressTextLabel, FontRole::Small, std::wstring{});
+    _chrome.usesBannerText = dxTitleAttached && dxProgressAttached;
 
     ApplyDxChromeTheme();
     SyncDxChrome();
 
-    if (_usesDxMenuBar && ! _menuHandle && _hWnd && GetMenu(_hWnd.get()) != nullptr)
+    if (_chrome.usesMenuBar && ! _chrome.menuHandle && _hWnd && GetMenu(_hWnd.get()) != nullptr)
     {
-        _menuHandle.reset(GetMenu(_hWnd.get()));
+        _chrome.menuHandle.reset(GetMenu(_hWnd.get()));
         SetMenu(_hWnd.get(), nullptr);
         DrawMenuBar(_hWnd.get());
         SetWindowPos(_hWnd.get(), nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
     }
 
-    return _usesDxMenuBar || _usesDxBannerButtons || _usesDxBannerText;
+    return _chrome.usesMenuBar || _chrome.usesBannerButtons || _chrome.usesBannerText;
 }
 
 void CompareDirectoriesWindow::DetachDxChromeHosts() noexcept
 {
-    _dxMenuBarSelectedIndexSnapshot.store(-1, std::memory_order_release);
-    _dxMenuBarFocusRestoreHwnd = nullptr;
-    _usesDxMenuBar             = false;
-    _usesDxBannerButtons       = false;
-    _usesDxBannerText          = false;
+    _chrome.menuBarSelectedIndexSnapshot.store(-1, std::memory_order_release);
+    _chrome.menuBarFocusRestoreHwnd = nullptr;
+    _chrome.usesMenuBar             = false;
+    _chrome.usesBannerButtons       = false;
+    _chrome.usesBannerText          = false;
 
-    _dxMenuBar = nullptr;
-    _dxMenuBarHost.Detach();
-    _dxMenuBarHostHwnd.reset();
+    _chrome.menuBar = nullptr;
+    _chrome.menuBarHost.Detach();
+    _chrome.menuBarHostHwnd.reset();
 
-    _dxBannerOptionsDxButton = nullptr;
-    _dxBannerOptionsHost.Detach();
-    _dxBannerOptionsHostHwnd.reset();
+    _chrome.bannerOptionsButtonDx = nullptr;
+    _chrome.bannerOptionsHost.Detach();
+    _chrome.bannerOptionsHostHwnd.reset();
 
-    _dxBannerRescanDxButton = nullptr;
-    _dxBannerRescanHost.Detach();
-    _dxBannerRescanHostHwnd.reset();
+    _chrome.bannerRescanButtonDx = nullptr;
+    _chrome.bannerRescanHost.Detach();
+    _chrome.bannerRescanHostHwnd.reset();
 
-    _dxBannerTitleLabel = nullptr;
-    _dxBannerTitleHost.Detach();
-    _dxBannerTitleHostHwnd.reset();
+    _chrome.bannerTitleLabel = nullptr;
+    _chrome.bannerTitleHost.Detach();
+    _chrome.bannerTitleHostHwnd.reset();
 
-    _dxScanProgressTextLabel = nullptr;
-    _dxScanProgressTextHost.Detach();
-    _dxScanProgressTextHostHwnd.reset();
+    _progress.scanProgressTextLabel = nullptr;
+    _progress.scanProgressTextHost.Detach();
+    _progress.scanProgressTextHostHwnd.reset();
 }
 
 void CompareDirectoriesWindow::ApplyDxChromeTheme() noexcept
 {
     const auto palette = MakeAppThemeDxPalette(_theme);
-    if (_usesDxMenuBar)
+    if (_chrome.usesMenuBar)
     {
-        _dxMenuBarHost.SetTheme(palette);
-        _dxMenuBarHost.Invalidate();
+        _chrome.menuBarHost.SetTheme(palette);
+        _chrome.menuBarHost.Invalidate();
     }
-    if (_usesDxBannerButtons)
+    if (_chrome.usesBannerButtons)
     {
-        _dxBannerOptionsHost.SetTheme(palette);
-        _dxBannerRescanHost.SetTheme(palette);
-        _dxBannerOptionsHost.Invalidate();
-        _dxBannerRescanHost.Invalidate();
+        _chrome.bannerOptionsHost.SetTheme(palette);
+        _chrome.bannerRescanHost.SetTheme(palette);
+        _chrome.bannerOptionsHost.Invalidate();
+        _chrome.bannerRescanHost.Invalidate();
     }
-    if (_usesDxBannerText)
+    if (_chrome.usesBannerText)
     {
-        _dxBannerTitleHost.SetTheme(palette);
-        _dxScanProgressTextHost.SetTheme(palette);
-        _dxBannerTitleHost.Invalidate();
-        _dxScanProgressTextHost.Invalidate();
+        _chrome.bannerTitleHost.SetTheme(palette);
+        _progress.scanProgressTextHost.SetTheme(palette);
+        _chrome.bannerTitleHost.Invalidate();
+        _progress.scanProgressTextHost.Invalidate();
     }
 }
 
 void CompareDirectoriesWindow::SyncDxMenuBar() noexcept
 {
-    if (! _usesDxMenuBar || ! _dxMenuBar)
+    if (! _chrome.usesMenuBar || ! _chrome.menuBar)
     {
-        _dxMenuBarSelectedIndexSnapshot.store(-1, std::memory_order_release);
+        _chrome.menuBarSelectedIndexSnapshot.store(-1, std::memory_order_release);
         return;
     }
 
-    HMENU menu = _menuHandle ? _menuHandle.get() : (_hWnd ? GetMenu(_hWnd.get()) : nullptr);
-    _dxMenuBar->SetItems(BuildDxMenuBarItems(menu));
-    _dxMenuBar->SetOnOpenItem([this](size_t index, POINT screenPoint, bool keyboardInvocation) noexcept
+    HMENU menu = _chrome.menuHandle ? _chrome.menuHandle.get() : (_hWnd ? GetMenu(_hWnd.get()) : nullptr);
+    _chrome.menuBar->SetItems(RedSalamander::DxUi::BuildNativeMenuBarItems(menu));
+    _chrome.menuBar->SetOnOpenItem([this](size_t index, POINT screenPoint, bool keyboardInvocation) noexcept
     { OpenDxMenuBarPopup(index, screenPoint, keyboardInvocation); });
 
-    const std::optional<size_t> selectedIndex = _dxMenuBar->GetSelectedIndex();
-    _dxMenuBarSelectedIndexSnapshot.store(selectedIndex.has_value() ? static_cast<int>(selectedIndex.value()) : -1, std::memory_order_release);
-    _dxMenuBarHost.Invalidate();
+    const std::optional<size_t> selectedIndex = _chrome.menuBar->GetSelectedIndex();
+    _chrome.menuBarSelectedIndexSnapshot.store(selectedIndex.has_value() ? static_cast<int>(selectedIndex.value()) : -1, std::memory_order_release);
+    _chrome.menuBarHost.Invalidate();
 }
 
 void CompareDirectoriesWindow::SyncDxBannerButtons() noexcept
 {
-    const bool optionsVisible      = _optionsDlg && IsWindowVisible(_optionsDlg.get()) != 0;
+    const bool optionsVisible      = _optionsPanel.dlg && IsWindowVisible(_optionsPanel.dlg.get()) != 0;
     const bool enableOptionsButton = ! optionsVisible;
-    const UINT rescanTextId        = _bannerRescanIsCancel ? IDS_COMPARE_BANNER_CANCEL : IDS_COMPARE_BANNER_RESCAN;
+    const UINT rescanTextId        = _chrome.rescanIsCancel ? IDS_COMPARE_BANNER_CANCEL : IDS_COMPARE_BANNER_RESCAN;
 
-    if (_bannerOptionsButton)
+    if (_chrome.bannerOptionsButton)
     {
-        SetWindowTextW(_bannerOptionsButton.get(), LoadStringResource(nullptr, IDS_COMPARE_BANNER_OPTIONS_ELLIPSIS).c_str());
-        EnableWindow(_bannerOptionsButton.get(), enableOptionsButton ? TRUE : FALSE);
+        SetWindowTextW(_chrome.bannerOptionsButton.get(), LoadStringResource(nullptr, IDS_COMPARE_BANNER_OPTIONS_ELLIPSIS).c_str());
+        EnableWindow(_chrome.bannerOptionsButton.get(), enableOptionsButton ? TRUE : FALSE);
     }
-    if (_bannerRescanButton)
+    if (_chrome.bannerRescanButton)
     {
-        SetWindowTextW(_bannerRescanButton.get(), LoadStringResource(nullptr, rescanTextId).c_str());
+        SetWindowTextW(_chrome.bannerRescanButton.get(), LoadStringResource(nullptr, rescanTextId).c_str());
     }
 
-    if (! _usesDxBannerButtons)
+    if (! _chrome.usesBannerButtons)
     {
         return;
     }
 
-    if (_dxBannerOptionsDxButton)
+    if (_chrome.bannerOptionsButtonDx)
     {
-        _dxBannerOptionsDxButton->SetText(LoadStringResource(nullptr, IDS_COMPARE_BANNER_OPTIONS_ELLIPSIS));
-        _dxBannerOptionsDxButton->SetEnabled(enableOptionsButton);
-        _dxBannerOptionsDxButton->SetMnemonic(L'O');
+        _chrome.bannerOptionsButtonDx->SetText(LoadStringResource(nullptr, IDS_COMPARE_BANNER_OPTIONS_ELLIPSIS));
+        _chrome.bannerOptionsButtonDx->SetEnabled(enableOptionsButton);
+        _chrome.bannerOptionsButtonDx->SetMnemonic(L'O');
     }
-    if (_dxBannerRescanDxButton)
+    if (_chrome.bannerRescanButtonDx)
     {
-        _dxBannerRescanDxButton->SetText(LoadStringResource(nullptr, rescanTextId));
-        _dxBannerRescanDxButton->SetMnemonic(_bannerRescanIsCancel ? L'C' : L'R');
+        _chrome.bannerRescanButtonDx->SetText(LoadStringResource(nullptr, rescanTextId));
+        _chrome.bannerRescanButtonDx->SetMnemonic(_chrome.rescanIsCancel ? L'C' : L'R');
     }
 
-    _dxBannerOptionsHost.Invalidate();
-    _dxBannerRescanHost.Invalidate();
+    _chrome.bannerOptionsHost.Invalidate();
+    _chrome.bannerRescanHost.Invalidate();
 }
 
 void CompareDirectoriesWindow::SyncDxBannerText() noexcept
 {
-    if (! _usesDxBannerText)
+    if (! _chrome.usesBannerText)
     {
         return;
     }
 
-    if (_dxBannerTitleLabel)
+    if (_chrome.bannerTitleLabel)
     {
-        _dxBannerTitleLabel->SetText(LoadStringResource(nullptr, IDS_COMPARE_BANNER_TITLE));
+        _chrome.bannerTitleLabel->SetText(LoadStringResource(nullptr, IDS_COMPARE_BANNER_TITLE));
     }
-    if (_dxScanProgressTextLabel)
+    if (_progress.scanProgressTextLabel)
     {
-        _dxScanProgressTextLabel->SetText(_lastProgressMessage);
+        _progress.scanProgressTextLabel->SetText(_progress.lastMessage);
     }
 
-    _dxBannerTitleHost.Invalidate();
-    _dxScanProgressTextHost.Invalidate();
+    _chrome.bannerTitleHost.Invalidate();
+    _progress.scanProgressTextHost.Invalidate();
 }
 
 void CompareDirectoriesWindow::SyncDxChrome() noexcept
@@ -632,12 +435,12 @@ int CompareDirectoriesWindow::GetDxMenuBarVisibleHeightPx() const noexcept
 
 bool CompareDirectoriesWindow::FocusFirstDxMenuBarItem() noexcept
 {
-    if (! _usesDxMenuBar || ! _dxMenuBar || ! _dxMenuBarHostHwnd)
+    if (! _chrome.usesMenuBar || ! _chrome.menuBar || ! _chrome.menuBarHostHwnd)
     {
         return false;
     }
 
-    const auto items = _dxMenuBar->GetItems();
+    const auto items = _chrome.menuBar->GetItems();
     if (items.empty())
     {
         return false;
@@ -654,60 +457,60 @@ bool CompareDirectoriesWindow::FocusFirstDxMenuBarItem() noexcept
     }
 
     CaptureDxMenuBarFocusRestoreTarget();
-    _dxMenuBar->SetSelectedIndex(firstEnabledIndex);
-    _dxMenuBarSelectedIndexSnapshot.store(static_cast<int>(firstEnabledIndex), std::memory_order_release);
-    SetFocus(_dxMenuBarHostHwnd.get());
-    _dxMenuBarHost.SetFocusControl(_dxMenuBar);
-    _dxMenuBarHost.Invalidate();
+    _chrome.menuBar->SetSelectedIndex(firstEnabledIndex);
+    _chrome.menuBarSelectedIndexSnapshot.store(static_cast<int>(firstEnabledIndex), std::memory_order_release);
+    SetFocus(_chrome.menuBarHostHwnd.get());
+    _chrome.menuBarHost.SetFocusControl(_chrome.menuBar);
+    _chrome.menuBarHost.Invalidate();
     return true;
 }
 
 bool CompareDirectoriesWindow::ActivateDxMenuBarMnemonic(wchar_t mnemonic) noexcept
 {
-    if (! _usesDxMenuBar || ! _dxMenuBar || ! _dxMenuBarHostHwnd)
+    if (! _chrome.usesMenuBar || ! _chrome.menuBar || ! _chrome.menuBarHostHwnd)
     {
         return false;
     }
 
     CaptureDxMenuBarFocusRestoreTarget();
-    SetFocus(_dxMenuBarHostHwnd.get());
-    _dxMenuBarHost.SetFocusControl(_dxMenuBar);
-    const bool activated                      = _dxMenuBar->ActivateMnemonic(_dxMenuBarHost, mnemonic);
-    const std::optional<size_t> selectedIndex = _dxMenuBar->GetSelectedIndex();
-    _dxMenuBarSelectedIndexSnapshot.store(selectedIndex.has_value() ? static_cast<int>(selectedIndex.value()) : -1, std::memory_order_release);
+    SetFocus(_chrome.menuBarHostHwnd.get());
+    _chrome.menuBarHost.SetFocusControl(_chrome.menuBar);
+    const bool activated                      = _chrome.menuBar->ActivateMnemonic(_chrome.menuBarHost, mnemonic);
+    const std::optional<size_t> selectedIndex = _chrome.menuBar->GetSelectedIndex();
+    _chrome.menuBarSelectedIndexSnapshot.store(selectedIndex.has_value() ? static_cast<int>(selectedIndex.value()) : -1, std::memory_order_release);
     return activated;
 }
 
 void CompareDirectoriesWindow::CaptureDxMenuBarFocusRestoreTarget() noexcept
 {
-    RedSalamander::DxUi::CaptureFocusRestoreTarget(_hWnd.get(), _dxMenuBarHostHwnd.get(), _dxMenuBarFocusRestoreHwnd);
+    RedSalamander::DxUi::CaptureFocusRestoreTarget(_hWnd.get(), _chrome.menuBarHostHwnd.get(), _chrome.menuBarFocusRestoreHwnd);
 }
 
 void CompareDirectoriesWindow::RestoreDxMenuBarFocus() noexcept
 {
-    static_cast<void>(RedSalamander::DxUi::RestoreCapturedFocus(_dxMenuBarFocusRestoreHwnd, _hWnd.get()));
+    static_cast<void>(RedSalamander::DxUi::RestoreCapturedFocus(_chrome.menuBarFocusRestoreHwnd, _hWnd.get()));
 }
 
 std::optional<size_t> CompareDirectoriesWindow::HitTestDxMenuBarScreenPoint(POINT screenPoint) const noexcept
 {
-    if (! _usesDxMenuBar || ! _dxMenuBar || ! _dxMenuBarHostHwnd)
+    if (! _chrome.usesMenuBar || ! _chrome.menuBar || ! _chrome.menuBarHostHwnd)
     {
         return std::nullopt;
     }
 
-    const std::optional<RedSalamander::DxUi::PointDip> pointDip = _dxMenuBarHost.ScreenPointToDipPoint(screenPoint);
+    const std::optional<RedSalamander::DxUi::PointDip> pointDip = _chrome.menuBarHost.ScreenPointToDipPoint(screenPoint);
     if (! pointDip.has_value())
     {
         return std::nullopt;
     }
 
-    return _dxMenuBar->HitTestPoint(_dxMenuBarHost, pointDip.value());
+    return _chrome.menuBar->HitTestPoint(_chrome.menuBarHost, pointDip.value());
 }
 
 std::optional<POINT> CompareDirectoriesWindow::GetDxMenuBarItemAnchorScreenPoint(size_t index) const noexcept
 {
     RECT itemRectPx{};
-    if (! _dxMenuBar || ! _dxMenuBar->TryGetItemScreenRect(_dxMenuBarHost, index, itemRectPx))
+    if (! _chrome.menuBar || ! _chrome.menuBar->TryGetItemScreenRect(_chrome.menuBarHost, index, itemRectPx))
     {
         return std::nullopt;
     }
@@ -717,12 +520,12 @@ std::optional<POINT> CompareDirectoriesWindow::GetDxMenuBarItemAnchorScreenPoint
 
 std::optional<size_t> CompareDirectoriesWindow::FindNextEnabledDxMenuBarItem(size_t currentIndex, bool forward) const noexcept
 {
-    if (! _dxMenuBar)
+    if (! _chrome.menuBar)
     {
         return std::nullopt;
     }
 
-    const auto items = _dxMenuBar->GetItems();
+    const auto items = _chrome.menuBar->GetItems();
     if (items.empty() || currentIndex >= items.size())
     {
         return std::nullopt;
@@ -742,8 +545,8 @@ std::optional<size_t> CompareDirectoriesWindow::FindNextEnabledDxMenuBarItem(siz
 
 std::optional<ContextMenuRootSwitchRequest> CompareDirectoriesWindow::BuildDxMenuBarRootSwitchRequest(size_t index) noexcept
 {
-    HMENU menu = _menuHandle ? _menuHandle.get() : (_hWnd ? GetMenu(_hWnd.get()) : nullptr);
-    if (! menu || ! _dxMenuBar)
+    HMENU menu = _chrome.menuHandle ? _chrome.menuHandle.get() : (_hWnd ? GetMenu(_hWnd.get()) : nullptr);
+    if (! menu || ! _chrome.menuBar)
     {
         return std::nullopt;
     }
@@ -756,8 +559,8 @@ std::optional<ContextMenuRootSwitchRequest> CompareDirectoriesWindow::BuildDxMen
         return std::nullopt;
     }
 
-    _dxMenuBar->SetSelectedIndex(index);
-    _dxMenuBarSelectedIndexSnapshot.store(static_cast<int>(index), std::memory_order_release);
+    _chrome.menuBar->SetSelectedIndex(index);
+    _chrome.menuBarSelectedIndexSnapshot.store(static_cast<int>(index), std::memory_order_release);
 
     const std::optional<POINT> anchorPoint = GetDxMenuBarItemAnchorScreenPoint(index);
     if (! anchorPoint.has_value())
@@ -767,7 +570,7 @@ std::optional<ContextMenuRootSwitchRequest> CompareDirectoriesWindow::BuildDxMen
 
     ContextMenuRootSwitchRequest request{};
     request.screenPoint = anchorPoint.value();
-    request.items       = ConvertHMenuToDxFlyoutItems(popupMenu);
+    request.items       = RedSalamander::DxUi::ConvertNativeHMenuToFlyoutItems(popupMenu);
     if (request.items.empty())
     {
         return std::nullopt;
@@ -779,8 +582,8 @@ std::optional<ContextMenuRootSwitchRequest> CompareDirectoriesWindow::BuildDxMen
 void CompareDirectoriesWindow::OpenDxMenuBarPopup(size_t index, POINT screenPoint, bool keyboardInvocation) noexcept
 {
     const auto startedAt = std::chrono::steady_clock::now();
-    HMENU menu           = _menuHandle ? _menuHandle.get() : (_hWnd ? GetMenu(_hWnd.get()) : nullptr);
-    if (! _hWnd || ! menu || ! _dxMenuBar)
+    HMENU menu           = _chrome.menuHandle ? _chrome.menuHandle.get() : (_hWnd ? GetMenu(_hWnd.get()) : nullptr);
+    if (! _hWnd || ! menu || ! _chrome.menuBar)
     {
         return;
     }
@@ -794,31 +597,33 @@ void CompareDirectoriesWindow::OpenDxMenuBarPopup(size_t index, POINT screenPoin
         return;
     }
 
-    _dxMenuBar->SetSelectedIndex(index);
-    _dxMenuBarSelectedIndexSnapshot.store(static_cast<int>(index), std::memory_order_release);
-    _dxMenuBarHost.Invalidate();
+    _chrome.menuBar->SetSelectedIndex(index);
+    _chrome.menuBarSelectedIndexSnapshot.store(static_cast<int>(index), std::memory_order_release);
+    _chrome.menuBarHost.Invalidate();
 
-    const auto flyoutItems = ConvertHMenuToDxFlyoutItems(popupMenu);
+    const auto flyoutItems = RedSalamander::DxUi::ConvertNativeHMenuToFlyoutItems(popupMenu);
     if (flyoutItems.empty())
     {
-        _dxMenuBar->SetSelectedIndex(std::nullopt);
-        _dxMenuBarSelectedIndexSnapshot.store(-1, std::memory_order_release);
-        _dxMenuBarHost.Invalidate();
+        _chrome.menuBar->SetSelectedIndex(std::nullopt);
+        _chrome.menuBarSelectedIndexSnapshot.store(-1, std::memory_order_release);
+        _chrome.menuBarHost.Invalidate();
         return;
     }
 
     ContextMenuSessionCallbacks sessionCallbacks{};
-    sessionCallbacks.focusFirstNavigableItem = keyboardInvocation;
+    sessionCallbacks.focusFirstNavigableItem   = keyboardInvocation;
+    sessionCallbacks.ignoreInitialLeftButtonUp  = keyboardInvocation;
+    sessionCallbacks.ignoreInitialRightButtonUp = keyboardInvocation;
     size_t activeIndex                       = index;
     sessionCallbacks.switchRootFromPointer   = [this, &activeIndex](POINT hoverScreenPoint) -> std::optional<ContextMenuRootSwitchRequest>
     {
         const std::optional<size_t> hitIndex = HitTestDxMenuBarScreenPoint(hoverScreenPoint);
-        if (! hitIndex.has_value() || hitIndex.value() == activeIndex || ! _dxMenuBar)
+        if (! hitIndex.has_value() || hitIndex.value() == activeIndex || ! _chrome.menuBar)
         {
             return std::nullopt;
         }
 
-        const auto items = _dxMenuBar->GetItems();
+        const auto items = _chrome.menuBar->GetItems();
         if (hitIndex.value() >= items.size() || ! items[hitIndex.value()].enabled)
         {
             return std::nullopt;
@@ -853,8 +658,13 @@ void CompareDirectoriesWindow::OpenDxMenuBarPopup(size_t index, POINT screenPoin
     Debug::Perf::Emit(
         L"compare.ui.menu_popup_us", L"", Debug::Perf::ElapsedUs(startedAt), static_cast<uint64_t>(flyoutItems.size()), static_cast<uint64_t>(index), S_OK);
 
-    _dxMenuBar->SetSelectedIndex(std::nullopt);
-    _dxMenuBarSelectedIndexSnapshot.store(-1, std::memory_order_release);
+    if (! _hWnd || ! _chrome.menuBar)
+    {
+        return;
+    }
+
+    _chrome.menuBar->SetSelectedIndex(std::nullopt);
+    _chrome.menuBarSelectedIndexSnapshot.store(-1, std::memory_order_release);
     SyncDxMenuBar();
     RestoreDxMenuBarFocus();
 
@@ -881,46 +691,46 @@ LRESULT CompareDirectoriesWindow::HandleDxChromeHostMessage(HWND hwnd, UINT msg,
             expectedHwnd.release();
             if (menuBarHost)
             {
-                _dxMenuBar = nullptr;
-                _dxMenuBarSelectedIndexSnapshot.store(-1, std::memory_order_release);
+                _chrome.menuBar = nullptr;
+                _chrome.menuBarSelectedIndexSnapshot.store(-1, std::memory_order_release);
             }
             return 0;
         }
 
         LRESULT result = host.HandleMessage(hwnd, msg, wp, lp, handled);
-        if (handled && menuBarHost && _dxMenuBar)
+        if (handled && menuBarHost && _chrome.menuBar)
         {
-            const std::optional<size_t> selectedIndex = _dxMenuBar->GetSelectedIndex();
-            _dxMenuBarSelectedIndexSnapshot.store(selectedIndex.has_value() ? static_cast<int>(selectedIndex.value()) : -1, std::memory_order_release);
+            const std::optional<size_t> selectedIndex = _chrome.menuBar->GetSelectedIndex();
+            _chrome.menuBarSelectedIndexSnapshot.store(selectedIndex.has_value() ? static_cast<int>(selectedIndex.value()) : -1, std::memory_order_release);
         }
 
-        if (menuBarHost && msg == WM_KILLFOCUS && _dxMenuBar)
+        if (menuBarHost && msg == WM_KILLFOCUS && _chrome.menuBar)
         {
-            _dxMenuBar->SetSelectedIndex(std::nullopt);
-            _dxMenuBarSelectedIndexSnapshot.store(-1, std::memory_order_release);
-            _dxMenuBarHost.Invalidate();
+            _chrome.menuBar->SetSelectedIndex(std::nullopt);
+            _chrome.menuBarSelectedIndexSnapshot.store(-1, std::memory_order_release);
+            _chrome.menuBarHost.Invalidate();
         }
 
         return handled ? std::optional<LRESULT>{result} : std::nullopt;
     };
 
-    if (const auto result = dispatch(_dxMenuBarHostHwnd, _dxMenuBarHost, true))
+    if (const auto result = dispatch(_chrome.menuBarHostHwnd, _chrome.menuBarHost, true))
     {
         return result.value();
     }
-    if (const auto result = dispatch(_dxBannerOptionsHostHwnd, _dxBannerOptionsHost, false))
+    if (const auto result = dispatch(_chrome.bannerOptionsHostHwnd, _chrome.bannerOptionsHost, false))
     {
         return result.value();
     }
-    if (const auto result = dispatch(_dxBannerRescanHostHwnd, _dxBannerRescanHost, false))
+    if (const auto result = dispatch(_chrome.bannerRescanHostHwnd, _chrome.bannerRescanHost, false))
     {
         return result.value();
     }
-    if (const auto result = dispatch(_dxBannerTitleHostHwnd, _dxBannerTitleHost, false))
+    if (const auto result = dispatch(_chrome.bannerTitleHostHwnd, _chrome.bannerTitleHost, false))
     {
         return result.value();
     }
-    if (const auto result = dispatch(_dxScanProgressTextHostHwnd, _dxScanProgressTextHost, false))
+    if (const auto result = dispatch(_progress.scanProgressTextHostHwnd, _progress.scanProgressTextHost, false))
     {
         return result.value();
     }

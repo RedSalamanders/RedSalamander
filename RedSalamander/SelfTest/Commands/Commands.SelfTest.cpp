@@ -5,9 +5,9 @@
 #include "Framework.h"
 
 #include <UIAutomation.h>
+#include <psapi.h>
 #include <shellapi.h>
 #include <shobjidl.h>
-#include <psapi.h>
 #include <winioctl.h>
 
 #include <algorithm>
@@ -17,6 +17,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <cwctype>
 #include <filesystem>
 #include <format>
@@ -36,6 +37,7 @@
 #pragma warning(push)
 // WIL headers: deleted copy/move and unused inline Helpers
 #pragma warning(disable : 4625 4626 5026 5027 4514 28182)
+#include <wil/filesystem.h>
 #include <wil/resource.h>
 namespace CommandsSelfTestWilWarningSilence
 {
@@ -45,6 +47,11 @@ struct ForceWilTemplateInstantiations
     wil::unique_hlocal_ptr<wchar_t*> argv;
 };
 } // namespace CommandsSelfTestWilWarningSilence
+#pragma warning(pop)
+
+#pragma warning(push)
+#pragma warning(disable : 6297 28182) // yyjson warnings
+#include <yyjson.h>
 #pragma warning(pop)
 
 #pragma warning(push)
@@ -63,6 +70,8 @@ struct ForceWilTemplateInstantiations
 #include "ConnectionCredentialPromptDialog.h"
 #include "ConnectionManagerWindow.h"
 #include "ConnectionSecrets.h"
+#include "DirectoryInfoCache.h"
+#include "DxUi/DxUi.Internal.h"
 #include "DxUi/DxUi.Typography.h"
 #include "DxUiThemePalette.h"
 #include "FileActionLauncher.h"
@@ -89,6 +98,7 @@ struct ForceWilTemplateInstantiations
 #include "SearchServiceBroker.h"
 #include "SettingsHotReload.h"
 #include "SettingsSave.h"
+#include "SelfTest/Common/SelfTestLatencyHooks.h"
 #include "ShortcutDefaults.h"
 #include "ShortcutManager.h"
 #include "ShortcutText.h"
@@ -507,19 +517,68 @@ bool CommandsSelfTest::Run(HWND mainWindow, const SelfTest::SelfTestOptions& opt
     const auto restoreAutoPrompts = wil::scope_exit([&] { HostSetAutoAcceptPrompts(autoPromptsBefore); });
     const auto releaseUiaCache    = wil::scope_exit([] { ReleaseThreadUiAutomationForSelfTest(); });
 
-    RunSettingsCommandsSelfTestCases(mainWindow, options, suite);
-    RunBatchRenameCommandsSelfTestCases(mainWindow, options, suite);
-    RunPluginConfigCommandsSelfTestCases(mainWindow, options, suite);
-    RunConnectionsCommandsSelfTestCases(mainWindow, options, suite);
-    RunPreferencesCommandsSelfTestCases(mainWindow, options, suite);
-    RunSearchCommandsSelfTestCases(mainWindow, options, suite);
-    RunShellCommandsSelfTestCases(mainWindow, options, suite);
-    RunShortcutsCommandsSelfTestCases(mainWindow, options, suite);
-    RunCompareOptionsCommandsSelfTestCases(mainWindow, options, suite);
-    RunFileOpsCommandsSelfTestCases(mainWindow, options, suite);
-    RunNavigationCommandsSelfTestCases(mainWindow, options, suite);
-    RunDialogsCommandsSelfTestCases(mainWindow, options, suite);
-    RunViewCommandsCommandsSelfTestCases(mainWindow, options, suite);
+    const auto runRegisteredCases = [&](const SelfTest::SelfTestOptions& runOptions) noexcept
+    {
+        RunSettingsCommandsSelfTestCases(mainWindow, runOptions, suite);
+        RunBatchRenameCommandsSelfTestCases(mainWindow, runOptions, suite);
+        RunPluginConfigCommandsSelfTestCases(mainWindow, runOptions, suite);
+        RunConnectionsCommandsSelfTestCases(mainWindow, runOptions, suite);
+        RunPreferencesCommandsSelfTestCases(mainWindow, runOptions, suite);
+        RunSearchCommandsSelfTestCases(mainWindow, runOptions, suite);
+        RunShellCommandsSelfTestCases(mainWindow, runOptions, suite);
+        RunShortcutsCommandsSelfTestCases(mainWindow, runOptions, suite);
+        RunCompareOptionsCommandsSelfTestCases(mainWindow, runOptions, suite);
+        RunFileOpsCommandsSelfTestCases(mainWindow, runOptions, suite);
+        RunNavigationCommandsSelfTestCases(mainWindow, runOptions, suite);
+        RunDialogsCommandsSelfTestCases(mainWindow, runOptions, suite);
+        RunViewCommandsCommandsSelfTestCases(mainWindow, runOptions, suite);
+    };
+
+    if (SelfTest::ShouldUseExplicitCaseExecutionOrder(options))
+    {
+        const std::vector<std::wstring> declaredCases = ListCases(options);
+        const std::vector<SelfTest::SelfTestCaseExecution> executionOrder = SelfTest::BuildSelfTestCaseExecutionOrder(options, declaredCases);
+        Trace(std::format(L"CommandsSelfTest: explicit execution order count={} repeat={} shuffleSeed={}",
+                          executionOrder.size(),
+                          options.repeatCount,
+                          options.shuffleSeed.has_value() ? std::format(L"{}", options.shuffleSeed.value()) : std::wstring(L"none")));
+        for (const SelfTest::SelfTestCaseExecution& execution : executionOrder)
+        {
+            SelfTest::SelfTestOptions caseOptions = options;
+            caseOptions.caseFilter                    = execution.name;
+            caseOptions.repeatCount                   = 1u;
+            caseOptions.repeatIndex                   = execution.repeatIndex;
+            caseOptions.classifierProofSuiteContext   = true;
+            caseOptions.classifierProofShuffleContext = options.shuffleSeed.has_value();
+
+            if (caseOptions.failFast && suite.failed != 0)
+            {
+                runRegisteredCases(caseOptions);
+                continue;
+            }
+
+            CaseState isolationState{};
+            const std::wstring isolationContext = std::format(L"Commands explicit-order case '{}'", execution.name);
+            if (! PrepareMainWindowForIsolatedUiCase(mainWindow, isolationState, isolationContext))
+            {
+                const std::wstring failure = isolationState.failure.empty()
+                                                 ? std::format(L"Failed to isolate the main window before {}.", isolationContext)
+                                                 : std::move(isolationState.failure);
+                SelfTest::RunCase(caseOptions, suite, execution.name, [&](CaseState& state) noexcept
+                {
+                    state.Require(false, failure);
+                    return false;
+                });
+                continue;
+            }
+
+            runRegisteredCases(caseOptions);
+        }
+    }
+    else
+    {
+        runRegisteredCases(options);
+    }
 
     const auto endedAt = std::chrono::steady_clock::now();
     suite.durationMs   = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(endedAt - startedAt).count());

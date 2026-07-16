@@ -323,6 +323,8 @@ BEGIN
     IDS_VIEWERTEXT_CAPTION_ERROR "Viewer"
     IDS_VIEWERTEXT_ERR_OPEN_FAILED "Failed to open file."
     IDS_VIEWERTEXT_ERR_SAVE_FAILED "Failed to save file."
+    IDS_VIEWERTEXT_ERR_SAVE_LOADING "Wait for the file to finish loading before saving."
+    IDS_VIEWERTEXT_ERR_SAVE_STREAM_CONVERT "This file is only partially loaded. Choose Keep Original Encoding to save it without conversion."
 
     IDS_VIEWERTEXT_DIALOG_OPEN_TITLE "Open file"
     IDS_VIEWERTEXT_DIALOG_SAVE_TITLE "Save file as"
@@ -382,4 +384,5 @@ IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_ADDED_FILE "[no left-side file: patch adds thi
 IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_DELETED_FILE "[no right-side file: patch deletes this file]"
 IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_TOO_LARGE "[unchanged lines hidden: referenced file is too large to expand]"
 IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_BINARY "[unchanged lines hidden: referenced file is binary]"
+IDS_VIEWERTEXT_MSG_HEX_COPY_TRUNCATED "The selection was too large. Only the first 256 KiB was copied."
 END

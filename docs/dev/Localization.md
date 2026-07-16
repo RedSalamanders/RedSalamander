@@ -195,6 +195,8 @@ The mapping is consumed in `RedSalamander/CommandRegistry.cpp` via `IDS_CMD_SHOR
 
 Resource forms RedConfigure can parse but cannot safely rewrite yet stay visible as inventory and are not written silently.
 
+The workbench supports ordered/pinned culture columns, rectangular TSV copy/paste, accelerator and placeholder inspection, preview-first batch changes, global validation, and explicit Review & Export. Generated satellite files are written through a sibling temporary file and reparsed after replacement. `RedConfigureTests` also compiles a generated fixture with installed Windows SDK `rc.exe`; missing SDK tooling is the only permitted skip condition for that compiler check.
+
 ## The contract gate (ResourceLocalizationContracts.Tests.ps1)
 
 `Tools/Tests/ResourceLocalizationContracts.Tests.ps1` is a Pester gate that scans every `.rc` in the repo (excluding `.build`, `packages`, `.claude`). Run it whenever you add or edit braced/formatted resource strings; it also runs as part of `Tools/Run-AllTests.ps1 -Suite Full`.

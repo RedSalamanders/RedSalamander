@@ -33,6 +33,14 @@ enum HostAlertScope : uint32_t
     HOST_ALERT_SCOPE_WINDOW       = 4, // specific HWND (request.targetWindow)
 };
 
+// Non-null pane-routing cookies for HOST_ALERT_SCOPE_PANE_CONTENT / HOST_ALERT_SCOPE_PANE.
+// nullptr preserves legacy focused-pane routing.
+enum HostPaneCookie : uintptr_t
+{
+    HOST_PANE_COOKIE_LEFT  = 1,
+    HOST_PANE_COOKIE_RIGHT = 2,
+};
+
 enum HostAlertModality : uint32_t
 {
     HOST_ALERT_MODELESS = 1,
@@ -177,6 +185,7 @@ interface __declspec(uuid("018b09cf-dd4e-47ac-b013-baef06220cff")) __declspec(no
     // connectionName is the (case-insensitive) unique ConnectionProfile.name.
     // On success, the host allocates a NUL-terminated UTF-8 string with CoTaskMemAlloc and stores it in *jsonUtf8.
     // Callers must free it with CoTaskMemFree().
+    // If the host UI window/owner state is not available, returns HRESULT_FROM_WIN32(ERROR_INVALID_WINDOW_HANDLE).
     virtual HRESULT STDMETHODCALLTYPE GetConnectionJsonUtf8(const wchar_t* connectionName, char** jsonUtf8) noexcept = 0;
 
     // Returns the requested secret (password/passphrase/refresh-token), optionally protected by Windows Hello (host policy).
@@ -185,6 +194,7 @@ interface __declspec(uuid("018b09cf-dd4e-47ac-b013-baef06220cff")) __declspec(no
     //
     // This function does NOT prompt for secret entry. If the secret is not available (not saved and no session-cached secret),
     // it returns HRESULT_FROM_WIN32(ERROR_NOT_FOUND).
+    // If the host UI window/owner state is not available, returns HRESULT_FROM_WIN32(ERROR_INVALID_WINDOW_HANDLE).
     virtual HRESULT STDMETHODCALLTYPE GetConnectionSecret(
         const wchar_t* connectionName, HostConnectionSecretKind kind, HWND ownerWindow, wchar_t** secretOut) noexcept = 0;
 
@@ -201,6 +211,7 @@ interface __declspec(uuid("018b09cf-dd4e-47ac-b013-baef06220cff")) __declspec(no
         const wchar_t* connectionName, HostConnectionSecretKind kind, HWND ownerWindow, wchar_t** secretOut) noexcept = 0;
 
     // Clears any per-session cached secret for this connection (does not modify WinCred).
+    // If the host UI window/owner state is not available, returns HRESULT_FROM_WIN32(ERROR_INVALID_WINDOW_HANDLE).
     virtual HRESULT STDMETHODCALLTYPE ClearCachedConnectionSecret(const wchar_t* connectionName, HostConnectionSecretKind kind) noexcept = 0;
 
     // FTP-only: if a server rejects anonymous login, the plugin may ask the host to:
@@ -218,11 +229,15 @@ interface __declspec(uuid("018b09cf-dd4e-47ac-b013-baef06220cff")) __declspec(no
     // - persist == TRUE: persist to WinCred when supported by the host/profile.
     // - persist == FALSE: keep it in the host's per-session in-memory cache only.
     //
+    // For persist == TRUE, durable WinCred save/delete succeeds before the host exposes the new session value.
     // secret must be non-null. An empty string clears the session value and, when persist == TRUE, deletes persisted storage.
+    // If the host UI window/owner state is not available, returns HRESULT_FROM_WIN32(ERROR_INVALID_WINDOW_HANDLE).
     virtual HRESULT STDMETHODCALLTYPE SetConnectionSecret(
         const wchar_t* connectionName, HostConnectionSecretKind kind, const wchar_t* secret, BOOL persist) noexcept = 0;
 
     // Deletes any cached and/or persisted secret for a saved connection.
+    // For deletePersisted == TRUE, durable WinCred deletion succeeds before the host clears the session value.
+    // If the host UI window/owner state is not available, returns HRESULT_FROM_WIN32(ERROR_INVALID_WINDOW_HANDLE).
     virtual HRESULT STDMETHODCALLTYPE DeleteConnectionSecret(const wchar_t* connectionName, HostConnectionSecretKind kind, BOOL deletePersisted) noexcept = 0;
 };
 

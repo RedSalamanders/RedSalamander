@@ -3,9 +3,11 @@
 #include <algorithm>
 #include <cstddef>
 #include <filesystem>
+#include <limits>
 #include <mutex>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 #pragma warning(push)
 #pragma warning(disable : 4625 4626 5026 5027 28182)
@@ -31,6 +33,7 @@ struct ResourceOwner final
     HINSTANCE embeddedInstance = nullptr;
     wil::unique_hmodule satellite;
     std::wstring loadedCulture;
+    size_t registrationCount = 1u;
 };
 
 struct LocalizationState final
@@ -154,17 +157,36 @@ void AddCultureWithParents(std::vector<std::wstring>& cultures, std::wstring_vie
         return {};
     }
 
-    const std::filesystem::path satellitePath = moduleDirectory / L"Lang" / std::format(L"{}-{}.dll", owner.moduleName, culture);
-    wil::unique_hmodule satellite(LoadLibraryExW(satellitePath.c_str(), nullptr, LOAD_LIBRARY_AS_DATAFILE | LOAD_LIBRARY_AS_IMAGE_RESOURCE));
-    if (satellite)
+    const std::wstring satelliteName = std::format(L"{}-{}.dll", owner.moduleName, culture);
+
+    std::vector<std::filesystem::path> candidateDirectories;
+    candidateDirectories.push_back(moduleDirectory);
+    const std::filesystem::path hostDirectory = GetModuleDirectory(GetModuleHandleW(nullptr));
+    if (! hostDirectory.empty() && hostDirectory != moduleDirectory)
     {
-        return satellite;
+        candidateDirectories.push_back(hostDirectory);
+    }
+
+    std::filesystem::path firstSatellitePath;
+    for (const std::filesystem::path& candidateDirectory : candidateDirectories)
+    {
+        const std::filesystem::path satellitePath = candidateDirectory / L"Lang" / satelliteName;
+        if (firstSatellitePath.empty())
+        {
+            firstSatellitePath = satellitePath;
+        }
+
+        wil::unique_hmodule satellite(LoadLibraryExW(satellitePath.c_str(), nullptr, LOAD_LIBRARY_AS_DATAFILE | LOAD_LIBRARY_AS_IMAGE_RESOURCE));
+        if (satellite)
+        {
+            return satellite;
+        }
     }
 
     const std::wstring warnKey = owner.moduleName + L"|" + std::wstring(culture);
     if (warnedLoads.insert(warnKey).second)
     {
-        Debug::Warning(L"Localization satellite '{}' could not be loaded; embedded English resources will be used.", satellitePath.c_str());
+        Debug::Warning(L"Localization satellite '{}' could not be loaded; embedded English resources will be used.", firstSatellitePath.c_str());
     }
     return {};
 }
@@ -224,6 +246,22 @@ HRESULT RegisterResourceOwner(std::wstring_view ownerName, HINSTANCE embeddedIns
     auto& state = State();
     std::scoped_lock lock(state.mutex);
 
+    if (const auto existing = state.ownersByInstance.find(instance); existing != state.ownersByInstance.end())
+    {
+        if (! OrdinalString::EqualsNoCase(existing->second.moduleName, ownerName))
+        {
+            return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+        }
+
+        if (existing->second.registrationCount == (std::numeric_limits<size_t>::max)())
+        {
+            return HRESULT_FROM_WIN32(ERROR_TOO_MANY_NAMES);
+        }
+
+        ++existing->second.registrationCount;
+        return S_OK;
+    }
+
     ResourceOwner owner;
     owner.moduleName       = std::wstring(ownerName);
     owner.embeddedInstance = instance;
@@ -242,7 +280,19 @@ void UnregisterResourceOwner(HINSTANCE embeddedInstance) noexcept
 
     auto& state = State();
     std::scoped_lock lock(state.mutex);
-    state.ownersByInstance.erase(instance);
+    const auto existing = state.ownersByInstance.find(instance);
+    if (existing == state.ownersByInstance.end())
+    {
+        return;
+    }
+
+    if (existing->second.registrationCount > 1u)
+    {
+        --existing->second.registrationCount;
+        return;
+    }
+
+    state.ownersByInstance.erase(existing);
 }
 
 HRESULT ApplyLanguagePreference(const LanguagePreference& preference) noexcept

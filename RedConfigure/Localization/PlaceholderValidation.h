@@ -12,6 +12,7 @@ enum class PlaceholderStatus
     BarePlaceholder,
     UnindexedFormatSpec,
     PrintfPlaceholder,
+    InvalidPlaceholder,
     PlaceholderMismatch,
 };
 

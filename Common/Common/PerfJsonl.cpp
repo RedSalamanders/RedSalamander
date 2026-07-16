@@ -32,7 +32,7 @@ static std::wstring g_perfJsonlRunId;
 // it once and caching the result in an atomic makes the overwhelmingly common no-sink production path a
 // single relaxed load -- no global mutex, no GetEnvironmentVariableW syscall, and no string copies per
 // metric emit (this sink is hit from the UI layout/render path and icon worker threads).
-static bool g_perfJsonlEnvResolved = false;     // guarded by g_perfJsonlMutex; env queried at most once
+static bool g_perfJsonlEnvResolved = false;      // guarded by g_perfJsonlMutex; env queried at most once
 static std::atomic<int> g_perfJsonlSinkState{0}; // 0 = unresolved, 1 = active sink, 2 = no sink (free fast-path)
 
 // ---- environment variable constants ----
@@ -52,21 +52,13 @@ namespace
 
 bool ConvertUtf8(std::wstring_view text, std::string& out) noexcept
 {
-    if (text.empty())
-    {
-        out.clear();
-        return true;
-    }
-
-    const int required = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
-    if (required <= 0)
+    const std::optional<std::string> converted = Common::Strings::TryUtf8FromUtf16Strict(text);
+    if (! converted.has_value())
     {
         return false;
     }
-
-    out.resize(static_cast<size_t>(required));
-    const int written = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), out.data(), required, nullptr, nullptr);
-    return written == required;
+    out = converted.value();
+    return true;
 }
 
 void AppendJsonEscaped(std::string& out, std::wstring_view text) noexcept
@@ -238,8 +230,17 @@ COMMON_API void WritePerfJsonl(std::wstring_view metric, std::wstring_view detai
                 std::error_code ec;
                 std::filesystem::create_directories(outputPath.parent_path(), ec);
             }
-            g_perfJsonlFile.reset(
-                CreateFileW(outputPath.c_str(), FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
+            // Include FILE_SHARE_DELETE: this append handle is cached for the process lifetime, and
+            // without delete-sharing it would block external/next-run rotation from renaming or removing
+            // the perf file -- and, more importantly, its parent run directory -- for as long as the
+            // process lives (matching the append-log convention used elsewhere, e.g. DxUi.Menu.cpp).
+            g_perfJsonlFile.reset(CreateFileW(outputPath.c_str(),
+                                              FILE_APPEND_DATA,
+                                              FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                              nullptr,
+                                              OPEN_ALWAYS,
+                                              FILE_ATTRIBUTE_NORMAL,
+                                              nullptr));
             if (g_perfJsonlFile)
             {
                 g_perfJsonlOpenPath = outputPath;

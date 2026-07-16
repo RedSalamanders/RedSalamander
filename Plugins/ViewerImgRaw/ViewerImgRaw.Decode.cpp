@@ -1,8 +1,12 @@
 #include "ViewerImgRaw.h"
 
+#include "ViewerImgRaw.AsyncProtocol.h"
 #include "ViewerImgRaw.Internal.h"
+#include "ViewerImgRaw.ResourcePolicy.h"
 
 #include <algorithm>
+#include <array>
+#include <chrono>
 #include <cmath>
 #include <cstring>
 #include <ctime>
@@ -25,6 +29,189 @@
 namespace
 {
 static const int kViewerImgRawModuleAnchor = 0;
+
+#if defined(ENABLE_TESTS)
+constexpr wchar_t kForceSmallDecodePolicyEnvVar[] = L"REDSALAMANDER_VIEWERIMGRAW_FORCE_SMALL_DECODE_POLICY";
+constexpr wchar_t kForceSmallPrefetchBudgetEnvVar[] = L"REDSALAMANDER_VIEWERIMGRAW_FORCE_SMALL_PREFETCH_BUDGET";
+constexpr wchar_t kPausePrefetchAfterReserveEnvVar[] = L"REDSALAMANDER_VIEWERIMGRAW_PAUSE_PREFETCH_AFTER_RESERVE";
+constexpr wchar_t kPausePrefetchBeforeCommitEnvVar[] = L"REDSALAMANDER_VIEWERIMGRAW_PAUSE_PREFETCH_BEFORE_COMMIT";
+constexpr wchar_t kForceOpenResultAllocationFailureEnvVar[] = L"REDSALAMANDER_VIEWERIMGRAW_FORCE_OPEN_RESULT_ALLOCATION_FAILURE";
+constexpr wchar_t kForceOpenResultPostFailureEnvVar[] = L"REDSALAMANDER_VIEWERIMGRAW_FORCE_OPEN_RESULT_POST_FAILURE";
+constexpr wchar_t kForceEmbeddedThumbnailPayloadEnvVar[] = L"REDSALAMANDER_VIEWERIMGRAW_TEST_EMBEDDED_JPEG_PAYLOAD";
+#endif
+
+enum class DecodeBackend : uint8_t
+{
+    Wic,
+    Jpeg,
+    RawPreprocess,
+    RawOutput,
+    EmbeddedJpeg,
+    EmbeddedBitmap,
+};
+
+[[nodiscard]] constexpr std::wstring_view DecodeBackendDetail(DecodeBackend backend) noexcept
+{
+    switch (backend)
+    {
+        case DecodeBackend::Wic: return L"wic";
+        case DecodeBackend::Jpeg: return L"jpeg";
+        case DecodeBackend::RawPreprocess: return L"raw-preprocess";
+        case DecodeBackend::RawOutput: return L"raw-output";
+        case DecodeBackend::EmbeddedJpeg: return L"embedded-jpeg";
+        case DecodeBackend::EmbeddedBitmap: return L"embedded-bitmap";
+        default: return L"unknown";
+    }
+}
+
+[[nodiscard]] ViewerImgRawResource::DecodedImagePolicy ActiveDecodedImagePolicy() noexcept
+{
+    ViewerImgRawResource::DecodedImagePolicy policy = ViewerImgRawResource::kProductionDecodedImagePolicy;
+#if defined(ENABLE_TESTS)
+    if (EnvironmentVariables::IsTruthyFlagSet(kForceSmallDecodePolicyEnvVar))
+    {
+        policy.maxDimension         = 4u;
+        policy.maxPixels            = 4u;
+        policy.maxBgraBytes         = 16u;
+        policy.maxEmbeddedJpegBytes = 32u;
+    }
+#endif
+    return policy;
+}
+
+[[nodiscard]] uint64_t ActiveSpeculativeDecodedByteLimit() noexcept
+{
+#if defined(ENABLE_TESTS)
+    if (EnvironmentVariables::IsTruthyFlagSet(kForceSmallPrefetchBudgetEnvVar))
+    {
+        return 32u;
+    }
+#endif
+    return ViewerImgRawResource::kProductionSpeculativeDecodedBytes;
+}
+
+[[nodiscard]] HRESULT ValidationErrorToHresult(ViewerImgRawResource::ValidationError error) noexcept
+{
+    switch (error)
+    {
+        case ViewerImgRawResource::ValidationError::None: return S_OK;
+        case ViewerImgRawResource::ValidationError::InvalidDimensions:
+        case ViewerImgRawResource::ValidationError::InvalidFormat:
+        case ViewerImgRawResource::ValidationError::SourceLength: return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        case ViewerImgRawResource::ValidationError::Overflow: return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
+        case ViewerImgRawResource::ValidationError::DimensionLimit:
+        case ViewerImgRawResource::ValidationError::PixelLimit:
+        case ViewerImgRawResource::ValidationError::ByteLimit: return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+        default: return E_FAIL;
+    }
+}
+
+[[nodiscard]] uint64_t CandidateBgraBytes(uint32_t width, uint32_t height) noexcept
+{
+    uint64_t pixels = 0u;
+    uint64_t bytes  = 0u;
+    if (! ViewerImgRawResource::TryMultiply(width, height, pixels) || ! ViewerImgRawResource::TryMultiply(pixels, 4u, bytes))
+    {
+        return std::numeric_limits<uint64_t>::max();
+    }
+    return bytes;
+}
+
+[[nodiscard]] HRESULT ValidateDecodedLayout(uint32_t width,
+                                            uint32_t height,
+                                            DecodeBackend backend,
+                                            ViewerImgRawResource::DecodedImageLayout& outLayout) noexcept
+{
+    const ViewerImgRawResource::DecodedImagePolicy policy = ActiveDecodedImagePolicy();
+    const ViewerImgRawResource::ValidationError error      = ViewerImgRawResource::ValidateDecodedImage(width, height, policy, outLayout);
+    const std::wstring_view detail                         = DecodeBackendDetail(backend);
+    if (error == ViewerImgRawResource::ValidationError::None)
+    {
+        Debug::Perf::Emit(L"viewer.imgraw.decode.accepted_bytes", detail, 0u, outLayout.bgraBytes, policy.maxBgraBytes, S_OK);
+        return S_OK;
+    }
+
+    const HRESULT hr = ValidationErrorToHresult(error);
+    Debug::Perf::Emit(L"viewer.imgraw.decode.rejected_bytes", detail, 0u, CandidateBgraBytes(width, height), policy.maxBgraBytes, hr);
+    return hr;
+}
+
+class DecodedByteReservation final
+{
+public:
+    using TryReserveFn = bool (*)(void* context, uint64_t bytes) noexcept;
+    using ReleaseFn    = void (*)(void* context, uint64_t bytes) noexcept;
+
+    DecodedByteReservation(void* context, TryReserveFn tryReserve, ReleaseFn release) noexcept
+        : _context(context), _tryReserve(tryReserve), _release(release)
+    {
+    }
+
+    DecodedByteReservation(const DecodedByteReservation&)            = delete;
+    DecodedByteReservation& operator=(const DecodedByteReservation&) = delete;
+
+    ~DecodedByteReservation() noexcept
+    {
+        Reset();
+    }
+
+    [[nodiscard]] bool Ensure(uint64_t bytes) noexcept
+    {
+        if (bytes == _bytes)
+        {
+            return true;
+        }
+        if (bytes > _bytes)
+        {
+            const uint64_t additional = bytes - _bytes;
+            if (! _tryReserve || ! _tryReserve(_context, additional))
+            {
+                return false;
+            }
+            const bool firstReservation = _bytes == 0u;
+            _bytes                      = bytes;
+#if defined(ENABLE_TESTS)
+            if (firstReservation && EnvironmentVariables::IsTruthyFlagSet(kPausePrefetchAfterReserveEnvVar))
+            {
+                Sleep(250u);
+            }
+#else
+            static_cast<void>(firstReservation);
+#endif
+            return true;
+        }
+
+        const uint64_t released = _bytes - bytes;
+        _bytes                  = bytes;
+        if (_release)
+        {
+            _release(_context, released);
+        }
+        return true;
+    }
+
+    [[nodiscard]] uint64_t Detach() noexcept
+    {
+        const uint64_t bytes = _bytes;
+        _bytes               = 0u;
+        return bytes;
+    }
+
+    void Reset() noexcept
+    {
+        if (_bytes != 0u && _release)
+        {
+            _release(_context, _bytes);
+        }
+        _bytes = 0u;
+    }
+
+private:
+    void* _context           = nullptr;
+    TryReserveFn _tryReserve = nullptr;
+    ReleaseFn _release       = nullptr;
+    uint64_t _bytes          = 0u;
+};
 
 std::wstring WideFromUtf8(std::string_view text)
 {
@@ -107,7 +294,7 @@ std::wstring TrimSpaces(std::wstring_view text);
 
 [[nodiscard]] std::wstring ReadTiffAscii(const uint8_t* tiffBase, size_t tiffSize, const uint8_t* valueBytes, uint32_t valueOrOffset, uint32_t count) noexcept
 {
-    if (! tiffBase || tiffSize == 0 || count == 0)
+    if (! tiffBase || tiffSize == 0 || count == 0u)
     {
         return {};
     }
@@ -137,57 +324,27 @@ std::wstring TrimSpaces(std::wstring_view text);
     return TrimSpaces(WideFromUtf8(bytes));
 }
 
-[[nodiscard]] bool ReadTiffShort(
-    const uint8_t* tiffBase, size_t tiffSize, bool littleEndian, const uint8_t* valueBytes, uint32_t valueOrOffset, uint32_t count, uint16_t& outValue) noexcept
+[[nodiscard]] bool ReadTiffScalarShort(const uint8_t* valueBytes, bool littleEndian, uint32_t count, uint16_t& outValue) noexcept
 {
     outValue = 0;
-    if (! tiffBase || tiffSize == 0 || count == 0)
+    if (! valueBytes || count != 1u)
     {
         return false;
     }
 
-    if (count * 2u <= 4u)
-    {
-        if (! valueBytes)
-        {
-            return false;
-        }
-        outValue = ReadU16(valueBytes, littleEndian);
-        return true;
-    }
-
-    const uint32_t offset = valueOrOffset;
-    if (! InRange(offset, 2, tiffSize))
-    {
-        return false;
-    }
-
-    outValue = ReadU16(tiffBase + offset, littleEndian);
+    outValue = ReadU16(valueBytes, littleEndian);
     return true;
 }
 
-[[nodiscard]] bool ReadTiffLong(
-    const uint8_t* tiffBase, size_t tiffSize, bool littleEndian, uint32_t valueOrOffset, uint32_t count, uint32_t& outValue) noexcept
+[[nodiscard]] bool ReadTiffScalarLong(uint32_t valueOrOffset, uint32_t count, uint32_t& outValue) noexcept
 {
     outValue = 0;
-    if (! tiffBase || tiffSize == 0 || count == 0)
+    if (count != 1u)
     {
         return false;
     }
 
-    if (count * 4u <= 4u)
-    {
-        outValue = valueOrOffset;
-        return true;
-    }
-
-    const uint32_t offset = valueOrOffset;
-    if (! InRange(offset, 4, tiffSize))
-    {
-        return false;
-    }
-
-    outValue = ReadU32(tiffBase + offset, littleEndian);
+    outValue = valueOrOffset;
     return true;
 }
 
@@ -195,7 +352,7 @@ std::wstring TrimSpaces(std::wstring_view text);
     const uint8_t* tiffBase, size_t tiffSize, bool littleEndian, uint32_t valueOrOffset, uint32_t count, float& outValue) noexcept
 {
     outValue = 0.0f;
-    if (! tiffBase || tiffSize == 0 || count == 0)
+    if (! tiffBase || tiffSize == 0 || count != 1u)
     {
         return false;
     }
@@ -315,7 +472,7 @@ ExifData ExtractExifFromJpeg(const uint8_t* data, size_t sizeBytes) noexcept
                                 }
 
                                 const uint16_t tag                   = ReadU16(tiff + entryOff, little);
-                                [[maybe_unused]] const uint16_t type = ReadU16(tiff + entryOff + 2, little);
+                                const uint16_t type                   = ReadU16(tiff + entryOff + 2, little);
                                 const uint32_t cnt                   = ReadU32(tiff + entryOff + 4, little);
                                 const uint8_t* valueBytes            = tiff + entryOff + 8;
                                 const uint32_t valueOrOffset         = ReadU32(valueBytes, little);
@@ -325,7 +482,7 @@ ExifData ExtractExifFromJpeg(const uint8_t* data, size_t sizeBytes) noexcept
                                     case 0x0112:
                                     {
                                         uint16_t v = 0;
-                                        if (ReadTiffShort(tiff, tiffSize, little, valueBytes, valueOrOffset, cnt, v))
+                                        if (type == 3u && ReadTiffScalarShort(valueBytes, little, cnt, v))
                                         {
                                             orientation = ClampExifOrientation(v);
                                         }
@@ -334,7 +491,12 @@ ExifData ExtractExifFromJpeg(const uint8_t* data, size_t sizeBytes) noexcept
                                     case 0x010F: make = ReadTiffAscii(tiff, tiffSize, valueBytes, valueOrOffset, cnt); break;
                                     case 0x0110: model = ReadTiffAscii(tiff, tiffSize, valueBytes, valueOrOffset, cnt); break;
                                     case 0x0132: dateTime = ReadTiffAscii(tiff, tiffSize, valueBytes, valueOrOffset, cnt); break;
-                                    case 0x8769: static_cast<void>(ReadTiffLong(tiff, tiffSize, little, valueOrOffset, cnt, exifIfdOff)); break;
+                                    case 0x8769:
+                                        if (type == 4u)
+                                        {
+                                            static_cast<void>(ReadTiffScalarLong(valueOrOffset, cnt, exifIfdOff));
+                                        }
+                                        break;
                                     default: break;
                                 }
                             }
@@ -364,14 +526,14 @@ ExifData ExtractExifFromJpeg(const uint8_t* data, size_t sizeBytes) noexcept
                                         case 0x8827:
                                         {
                                             uint16_t isoShort = 0;
-                                            if (type == 3 && ReadTiffShort(tiff, tiffSize, little, valueBytes, valueOrOffset, cnt, isoShort))
+                                            if (type == 3u && ReadTiffScalarShort(valueBytes, little, cnt, isoShort))
                                             {
                                                 iso = static_cast<float>(isoShort);
                                             }
                                             else
                                             {
                                                 uint32_t isoLong = 0;
-                                                if (type == 4 && ReadTiffLong(tiff, tiffSize, little, valueOrOffset, cnt, isoLong))
+                                                if (type == 4u && ReadTiffScalarLong(valueOrOffset, cnt, isoLong))
                                                 {
                                                     iso = static_cast<float>(isoLong);
                                                 }
@@ -381,14 +543,14 @@ ExifData ExtractExifFromJpeg(const uint8_t* data, size_t sizeBytes) noexcept
                                         case 0x8833:
                                         {
                                             uint16_t isoShort = 0;
-                                            if (type == 3 && ReadTiffShort(tiff, tiffSize, little, valueBytes, valueOrOffset, cnt, isoShort))
+                                            if (type == 3u && ReadTiffScalarShort(valueBytes, little, cnt, isoShort))
                                             {
                                                 iso = static_cast<float>(isoShort);
                                                 break;
                                             }
 
                                             uint32_t isoLong = 0;
-                                            if (type == 4 && ReadTiffLong(tiff, tiffSize, little, valueOrOffset, cnt, isoLong))
+                                            if (type == 4u && ReadTiffScalarLong(valueOrOffset, cnt, isoLong))
                                             {
                                                 iso = static_cast<float>(isoLong);
                                             }
@@ -566,20 +728,27 @@ int LibRawProgressCallback(void* data, enum LibRaw_progress stage, int iteration
     {
         ctx->lastStage   = stageInt;
         ctx->lastPercent = percent;
-        static_cast<void>(PostMessageW(ctx->host.hwnd, kAsyncProgressMessage, static_cast<WPARAM>(stageInt), static_cast<LPARAM>(percent)));
+        static_cast<void>(PostMessageW(ctx->host.hwnd,
+                                       kAsyncProgressMessage,
+                                       static_cast<WPARAM>(ctx->host.requestId),
+                                       ViewerImgRawAsyncProtocol::PackProgress(stageInt, percent)));
     }
 
     return 0;
 }
 
-HRESULT ReadFileAllBytes(IFileSystem* fileSystem, const std::wstring& path, std::vector<uint8_t>& outBytes, std::wstring& outStatusMessage) noexcept
+HRESULT ReadFileAllBytes(IFileSystem* fileSystem,
+                         const std::wstring& path,
+                         std::vector<uint8_t>& outBytes,
+                         std::wstring& outStatusMessage,
+                         uint64_t maxSourceBytes = ViewerImgRawResource::kProductionMainSourceBytes) noexcept
 {
     outBytes.clear();
     outStatusMessage.clear();
 
     if (! fileSystem)
     {
-        outStatusMessage = L"ViewerImgRaw: Active filesystem is missing.";
+        outStatusMessage = LoadStringResource(g_hInstance, IDS_VIEWERRAW_STATUS_FILESYSTEM_MISSING);
         return E_FAIL;
     }
 
@@ -588,7 +757,7 @@ HRESULT ReadFileAllBytes(IFileSystem* fileSystem, const std::wstring& path, std:
     if (FAILED(fileIoHr) || ! fileIo)
     {
         const HRESULT hr = FAILED(fileIoHr) ? fileIoHr : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
-        outStatusMessage = std::format(L"ViewerImgRaw: Active filesystem does not implement IFileSystemIO (hr=0x{:08X}).", static_cast<unsigned long>(hr));
+        outStatusMessage = FormatStringResource(g_hInstance, IDS_VIEWERRAW_READ_FILESYSTEM_IO_UNSUPPORTED_FMT, static_cast<unsigned long>(hr));
         return hr;
     }
 
@@ -597,7 +766,7 @@ HRESULT ReadFileAllBytes(IFileSystem* fileSystem, const std::wstring& path, std:
     if (FAILED(openHr) || ! reader)
     {
         const HRESULT hr = FAILED(openHr) ? openHr : E_FAIL;
-        outStatusMessage = std::format(L"ViewerImgRaw: Failed to create file reader (hr=0x{:08X}).", static_cast<unsigned long>(hr));
+        outStatusMessage = FormatStringResource(g_hInstance, IDS_VIEWERRAW_READ_READER_CREATE_FAILED_FMT, static_cast<unsigned long>(hr));
         return hr;
     }
 
@@ -605,24 +774,23 @@ HRESULT ReadFileAllBytes(IFileSystem* fileSystem, const std::wstring& path, std:
     const HRESULT sizeHr = reader->GetSize(&sizeBytes);
     if (FAILED(sizeHr))
     {
-        outStatusMessage = std::format(L"ViewerImgRaw: GetSize failed (hr=0x{:08X}).", static_cast<unsigned long>(sizeHr));
+        outStatusMessage = FormatStringResource(g_hInstance, IDS_VIEWERRAW_READ_GET_SIZE_FAILED_FMT, static_cast<unsigned long>(sizeHr));
         return sizeHr;
     }
 
-    static constexpr uint64_t kMaxRawFileBytes = 1024ull * 1024ull * 1024ull; // 1 GiB
     if (sizeBytes == 0)
     {
-        outStatusMessage = L"ViewerImgRaw: File is empty.";
+        outStatusMessage = LoadStringResource(g_hInstance, IDS_VIEWERRAW_READ_FILE_EMPTY);
         return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
-    if (sizeBytes > kMaxRawFileBytes)
+    if (sizeBytes > maxSourceBytes)
     {
-        outStatusMessage = std::format(L"ViewerImgRaw: File too large ({:L} bytes).", static_cast<uint64_t>(sizeBytes));
+        outStatusMessage = FormatStringResource(g_hInstance, IDS_VIEWERRAW_READ_FILE_TOO_LARGE_FMT, sizeBytes);
         return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
     }
     if (sizeBytes > static_cast<uint64_t>(std::numeric_limits<size_t>::max()))
     {
-        outStatusMessage = L"ViewerImgRaw: File too large for address space.";
+        outStatusMessage = LoadStringResource(g_hInstance, IDS_VIEWERRAW_READ_ADDRESS_SPACE_LIMIT);
         return E_OUTOFMEMORY;
     }
 
@@ -630,11 +798,12 @@ HRESULT ReadFileAllBytes(IFileSystem* fileSystem, const std::wstring& path, std:
 
     uint64_t pos         = 0;
     const HRESULT seekHr = reader->Seek(0, FILE_BEGIN, &pos);
-    if (FAILED(seekHr))
+    if (FAILED(seekHr) || pos != 0u)
     {
         outBytes.clear();
-        outStatusMessage = std::format(L"ViewerImgRaw: Seek(FILE_BEGIN, 0) failed (hr=0x{:08X}).", static_cast<unsigned long>(seekHr));
-        return seekHr;
+        const HRESULT failureHr = FAILED(seekHr) ? seekHr : HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        outStatusMessage = FormatStringResource(g_hInstance, IDS_VIEWERRAW_READ_SEEK_FAILED_FMT, static_cast<unsigned long>(failureHr));
+        return failureHr;
     }
 
     size_t offset = 0;
@@ -646,30 +815,158 @@ HRESULT ReadFileAllBytes(IFileSystem* fileSystem, const std::wstring& path, std:
         if (FAILED(readHr))
         {
             outBytes.clear();
-            outStatusMessage = std::format(L"ViewerImgRaw: Read failed (hr=0x{:08X}).", static_cast<unsigned long>(readHr));
+            outStatusMessage = FormatStringResource(g_hInstance, IDS_VIEWERRAW_READ_FAILED_FMT, static_cast<unsigned long>(readHr));
             return readHr;
+        }
+        if (! ViewerImgRawResource::IsProviderReadCountValid(want, got))
+        {
+            outBytes.clear();
+            outStatusMessage = LoadStringResource(g_hInstance, IDS_VIEWERRAW_READ_PROVIDER_COUNT_INVALID);
+            Debug::Error(L"ViewerImgRaw: IFileReader returned {0} bytes for a {1}-byte buffer.", got, want);
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
         }
         if (got == 0)
         {
             outBytes.clear();
-            outStatusMessage = L"ViewerImgRaw: Unexpected end of file.";
+            outStatusMessage = LoadStringResource(g_hInstance, IDS_VIEWERRAW_READ_UNEXPECTED_EOF);
             return HRESULT_FROM_WIN32(ERROR_HANDLE_EOF);
         }
         offset += got;
     }
 
+    uint8_t trailingByte       = 0u;
+    unsigned long trailingRead = 0u;
+    const HRESULT trailingHr   = reader->Read(&trailingByte, 1u, &trailingRead);
+    if (FAILED(trailingHr) && trailingHr != HRESULT_FROM_WIN32(ERROR_HANDLE_EOF))
+    {
+        outBytes.clear();
+        outStatusMessage = FormatStringResource(g_hInstance, IDS_VIEWERRAW_READ_FAILED_FMT, static_cast<unsigned long>(trailingHr));
+        return trailingHr;
+    }
+    if (! ViewerImgRawResource::IsProviderReadCountValid(1u, trailingRead))
+    {
+        outBytes.clear();
+        outStatusMessage = LoadStringResource(g_hInstance, IDS_VIEWERRAW_READ_PROVIDER_COUNT_INVALID);
+        Debug::Error(L"ViewerImgRaw: IFileReader returned {0} bytes for a 1-byte EOF probe.", trailingRead);
+        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+    }
+    if (trailingRead != 0u)
+    {
+        outBytes.clear();
+        outStatusMessage = LoadStringResource(g_hInstance, IDS_VIEWERRAW_READ_SIZE_CHANGED);
+        return HRESULT_FROM_WIN32(ERROR_FILE_INVALID);
+    }
+
     return S_OK;
 }
 
-HRESULT DecodeImageToBgraWic(const uint8_t* data, size_t sizeBytes, uint32_t& outWidth, uint32_t& outHeight, std::vector<uint8_t>& outBgra) noexcept
+[[nodiscard]] uint16_t ReadWicFrameOrientation(IWICBitmapFrameDecode* frame) noexcept
+{
+    if (! frame)
+    {
+        return 1;
+    }
+
+    wil::com_ptr<IWICMetadataQueryReader> metadata;
+    if (FAILED(frame->GetMetadataQueryReader(metadata.put())) || ! metadata)
+    {
+        return 1;
+    }
+
+    // WIC's photo policy resolves the canonical property when supported. The explicit
+    // JPEG/TIFF paths cover codecs that expose only their native metadata hierarchy.
+    static constexpr auto kOrientationQueries = std::to_array<const wchar_t*>({
+        L"System.Photo.Orientation",
+        L"/app1/ifd/{ushort=274}",
+        L"/ifd/{ushort=274}",
+    });
+
+    for (const wchar_t* query : kOrientationQueries)
+    {
+        PROPVARIANT value{};
+        const auto clearValue = wil::scope_exit([&value]() noexcept { static_cast<void>(PropVariantClear(&value)); });
+        if (FAILED(metadata->GetMetadataByName(query, &value)))
+        {
+            continue;
+        }
+
+        uint32_t candidate = 0;
+        switch (value.vt)
+        {
+            case VT_UI1: candidate = value.bVal; break;
+            case VT_UI2: candidate = value.uiVal; break;
+            case VT_UI4: candidate = value.ulVal; break;
+            case VT_I1:
+                if (value.cVal > 0)
+                {
+                    candidate = static_cast<uint32_t>(value.cVal);
+                }
+                break;
+            case VT_I2:
+                if (value.iVal > 0)
+                {
+                    candidate = static_cast<uint32_t>(value.iVal);
+                }
+                break;
+            case VT_I4:
+                if (value.lVal > 0)
+                {
+                    candidate = static_cast<uint32_t>(value.lVal);
+                }
+                break;
+            default: break;
+        }
+
+        if (candidate >= 1u && candidate <= 8u)
+        {
+            return static_cast<uint16_t>(candidate);
+        }
+    }
+
+    return 1;
+}
+
+HRESULT DecodeImageToBgraWic(const uint8_t* data,
+                             size_t sizeBytes,
+                             uint32_t& outWidth,
+                             uint32_t& outHeight,
+                             std::vector<uint8_t>& outBgra,
+                             uint16_t& outOrientation,
+                             DecodedByteReservation* reservation = nullptr) noexcept
 {
     outWidth  = 0;
     outHeight = 0;
     outBgra.clear();
+    outOrientation = 1;
+    if (reservation)
+    {
+        reservation->Reset();
+    }
 
     if (! data || sizeBytes == 0 || sizeBytes > static_cast<size_t>(std::numeric_limits<DWORD>::max()))
     {
         return E_INVALIDARG;
+    }
+
+    // WIC's CoCreateInstance requires COM to be initialized on the calling thread. This function
+    // runs only on threadpool workers (StartAsyncOpen / StartPrefetchNeighbors), which have no COM
+    // apartment, so without this every WIC-backed format (PNG/GIF/BMP/non-RAW TIFF/HEIC) would fail
+    // with CO_E_NOTINITIALIZED. MTA is correct (WIC is apartment-agnostic) and matches the export
+    // worker (ViewerImgRaw.Export.cpp). RPC_E_CHANGED_MODE means COM is already initialized in a
+    // different mode on this thread -> proceed without owning the lifetime; only uninitialize when
+    // our init actually succeeded (S_OK or S_FALSE), to keep the COM init refcount balanced.
+    const HRESULT coinitHr  = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    const bool shouldUninit = SUCCEEDED(coinitHr);
+    auto coUninit           = wil::scope_exit([&]() noexcept
+    {
+        if (shouldUninit)
+        {
+            CoUninitialize();
+        }
+    });
+    if (FAILED(coinitHr) && coinitHr != RPC_E_CHANGED_MODE)
+    {
+        return coinitHr;
     }
 
     wil::com_ptr<IWICImagingFactory> factory;
@@ -710,6 +1007,8 @@ HRESULT DecodeImageToBgraWic(const uint8_t* data, size_t sizeBytes, uint32_t& ou
         return FAILED(hr) ? hr : E_FAIL;
     }
 
+    outOrientation = ReadWicFrameOrientation(frame.get());
+
     UINT w = 0;
     UINT h = 0;
     hr     = frame->GetSize(&w, &h);
@@ -718,10 +1017,29 @@ HRESULT DecodeImageToBgraWic(const uint8_t* data, size_t sizeBytes, uint32_t& ou
         return FAILED(hr) ? hr : HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
 
-    if (w > 16384u || h > 16384u)
+    ViewerImgRawResource::DecodedImageLayout layout{};
+    const HRESULT validationHr = ValidateDecodedLayout(w, h, DecodeBackend::Wic, layout);
+    if (FAILED(validationHr))
     {
-        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+        return validationHr;
     }
+    if (layout.rowBytes > std::numeric_limits<UINT>::max() || layout.bgraBytes > std::numeric_limits<UINT>::max() ||
+        layout.bgraBytes > std::numeric_limits<size_t>::max())
+    {
+        return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
+    }
+    if (reservation && ! reservation->Ensure(layout.bgraBytes))
+    {
+        return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_MEMORY);
+    }
+    bool keepReservation = false;
+    auto releaseReservationOnFailure = wil::scope_exit([&]() noexcept
+    {
+        if (! keepReservation && reservation)
+        {
+            reservation->Reset();
+        }
+    });
 
     wil::com_ptr<IWICFormatConverter> converter;
     hr = factory->CreateFormatConverter(converter.addressof());
@@ -736,20 +1054,8 @@ HRESULT DecodeImageToBgraWic(const uint8_t* data, size_t sizeBytes, uint32_t& ou
         return hr;
     }
 
-    const uint64_t pixelCount = static_cast<uint64_t>(w) * static_cast<uint64_t>(h);
-    if (pixelCount == 0 || pixelCount > (static_cast<uint64_t>(std::numeric_limits<size_t>::max()) / 4ull))
-    {
-        return E_OUTOFMEMORY;
-    }
-
-    const UINT stride           = w * 4u;
-    const uint64_t bufferSize64 = pixelCount * 4ull;
-    if (bufferSize64 > static_cast<uint64_t>(std::numeric_limits<UINT>::max()))
-    {
-        return E_OUTOFMEMORY;
-    }
-
-    const UINT bufferSize = static_cast<UINT>(bufferSize64);
+    const UINT stride     = static_cast<UINT>(layout.rowBytes);
+    const UINT bufferSize = static_cast<UINT>(layout.bgraBytes);
     outBgra.resize(static_cast<size_t>(bufferSize));
     hr = converter->CopyPixels(nullptr, stride, bufferSize, outBgra.data());
     if (FAILED(hr))
@@ -760,6 +1066,7 @@ HRESULT DecodeImageToBgraWic(const uint8_t* data, size_t sizeBytes, uint32_t& ou
 
     outWidth  = static_cast<uint32_t>(w);
     outHeight = static_cast<uint32_t>(h);
+    keepReservation = true;
     return S_OK;
 }
 
@@ -976,11 +1283,21 @@ struct TurboJpegScaledDims final
 }
 
 HRESULT DecodeJpegToBgraTurboJpegScaled(
-    const uint8_t* data, size_t sizeBytes, int maxDim, uint32_t& outWidth, uint32_t& outHeight, std::vector<uint8_t>& outBgra) noexcept
+    const uint8_t* data,
+    size_t sizeBytes,
+    int maxDim,
+    uint32_t& outWidth,
+    uint32_t& outHeight,
+    std::vector<uint8_t>& outBgra,
+    DecodedByteReservation* reservation = nullptr) noexcept
 {
     outWidth  = 0;
     outHeight = 0;
     outBgra.clear();
+    if (reservation)
+    {
+        reservation->Reset();
+    }
 
     if (! data || sizeBytes == 0 || sizeBytes > static_cast<size_t>(std::numeric_limits<unsigned long>::max()))
     {
@@ -1014,13 +1331,31 @@ HRESULT DecodeJpegToBgraTurboJpegScaled(
         return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
     }
 
-    const uint64_t pixelCount = static_cast<uint64_t>(scaled.width) * static_cast<uint64_t>(scaled.height);
-    if (pixelCount == 0 || pixelCount > (static_cast<uint64_t>(std::numeric_limits<size_t>::max()) / 4ull))
+    ViewerImgRawResource::DecodedImageLayout layout{};
+    const HRESULT validationHr = ValidateDecodedLayout(
+        static_cast<uint32_t>(scaled.width), static_cast<uint32_t>(scaled.height), DecodeBackend::Jpeg, layout);
+    if (FAILED(validationHr))
     {
-        return E_OUTOFMEMORY;
+        return validationHr;
     }
+    if (layout.bgraBytes > std::numeric_limits<size_t>::max())
+    {
+        return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
+    }
+    if (reservation && ! reservation->Ensure(layout.bgraBytes))
+    {
+        return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_MEMORY);
+    }
+    bool keepReservation = false;
+    auto releaseReservationOnFailure = wil::scope_exit([&]() noexcept
+    {
+        if (! keepReservation && reservation)
+        {
+            reservation->Reset();
+        }
+    });
 
-    outBgra.resize(static_cast<size_t>(pixelCount) * 4u);
+    outBgra.resize(static_cast<size_t>(layout.bgraBytes));
 
     constexpr int flags = TJFLAG_FASTDCT | TJFLAG_FASTUPSAMPLE;
     const int rc        = tjDecompress2(handle.get(),
@@ -1040,13 +1375,19 @@ HRESULT DecodeJpegToBgraTurboJpegScaled(
 
     outWidth  = static_cast<uint32_t>(scaled.width);
     outHeight = static_cast<uint32_t>(scaled.height);
+    keepReservation = true;
     return S_OK;
 }
 
-HRESULT DecodeJpegToBgraTurboJpeg(const uint8_t* data, size_t sizeBytes, uint32_t& outWidth, uint32_t& outHeight, std::vector<uint8_t>& outBgra) noexcept
+HRESULT DecodeJpegToBgraTurboJpeg(const uint8_t* data,
+                                  size_t sizeBytes,
+                                  uint32_t& outWidth,
+                                  uint32_t& outHeight,
+                                  std::vector<uint8_t>& outBgra,
+                                  DecodedByteReservation* reservation = nullptr) noexcept
 {
     static constexpr int kMaxJpegDim = 16384;
-    return DecodeJpegToBgraTurboJpegScaled(data, sizeBytes, kMaxJpegDim, outWidth, outHeight, outBgra);
+    return DecodeJpegToBgraTurboJpegScaled(data, sizeBytes, kMaxJpegDim, outWidth, outHeight, outBgra, reservation);
 }
 
 bool TryDecodeRawEmbeddedThumbnailFromBufferToBgra(const std::vector<uint8_t>& fileBytes,
@@ -1054,13 +1395,18 @@ bool TryDecodeRawEmbeddedThumbnailFromBufferToBgra(const std::vector<uint8_t>& f
                                                    uint32_t& outHeight,
                                                    std::vector<uint8_t>& outBgra,
                                                    bool& outThumbAvailable,
-                                                   ExifData& outExif) noexcept
+                                                   ExifData& outExif,
+                                                   DecodedByteReservation* reservation = nullptr) noexcept
 {
     outWidth  = 0;
     outHeight = 0;
     outBgra.clear();
     outThumbAvailable = false;
     outExif           = {};
+    if (reservation)
+    {
+        reservation->Reset();
+    }
 
     if (fileBytes.empty())
     {
@@ -1085,13 +1431,39 @@ bool TryDecodeRawEmbeddedThumbnailFromBufferToBgra(const std::vector<uint8_t>& f
     outExif           = ExtractExifData(raw);
 
     const libraw_thumbnail_t& thumb = raw.imgdata.thumbnail;
-    if (thumb.twidth == 0 || thumb.theight == 0 || thumb.tlength == 0 || thumb.thumb == nullptr)
+    if (thumb.twidth <= 0 || thumb.theight <= 0 || thumb.tlength <= 0 || thumb.thumb == nullptr)
     {
         return false;
     }
 
     if (thumb.tformat == LIBRAW_THUMBNAIL_JPEG)
     {
+        const ViewerImgRawResource::DecodedImagePolicy policy = ActiveDecodedImagePolicy();
+        ViewerImgRawResource::DecodedImageLayout layout{};
+        const ViewerImgRawResource::ValidationError validation = ViewerImgRawResource::ValidateEmbeddedJpeg(static_cast<uint32_t>(thumb.twidth),
+                                                                                                             static_cast<uint32_t>(thumb.theight),
+                                                                                                             static_cast<uint64_t>(thumb.tlength),
+                                                                                                             fileBytes.size(),
+                                                                                                             policy,
+                                                                                                             layout);
+        if (validation != ViewerImgRawResource::ValidationError::None)
+        {
+            const HRESULT validationHr = ValidationErrorToHresult(validation);
+            Debug::Perf::Emit(L"viewer.imgraw.decode.rejected_bytes",
+                              DecodeBackendDetail(DecodeBackend::EmbeddedJpeg),
+                              0u,
+                              CandidateBgraBytes(static_cast<uint32_t>(thumb.twidth), static_cast<uint32_t>(thumb.theight)),
+                              policy.maxBgraBytes,
+                              validationHr);
+            return false;
+        }
+        Debug::Perf::Emit(L"viewer.imgraw.decode.accepted_bytes",
+                          DecodeBackendDetail(DecodeBackend::EmbeddedJpeg),
+                          0u,
+                          layout.bgraBytes,
+                          policy.maxBgraBytes,
+                          S_OK);
+
         const ExifData jpegExif = ExtractExifFromJpeg(reinterpret_cast<const uint8_t*>(thumb.thumb), static_cast<size_t>(thumb.tlength));
         outExif.orientation     = jpegExif.orientation;
         if (outExif.camera.empty() && ! jpegExif.camera.empty())
@@ -1124,8 +1496,8 @@ bool TryDecodeRawEmbeddedThumbnailFromBufferToBgra(const std::vector<uint8_t>& f
         }
         outExif.valid = outExif.valid || jpegExif.valid || outExif.orientation != 1;
 
-        const HRESULT hr =
-            DecodeJpegToBgraTurboJpeg(reinterpret_cast<const uint8_t*>(thumb.thumb), static_cast<size_t>(thumb.tlength), outWidth, outHeight, outBgra);
+        const HRESULT hr = DecodeJpegToBgraTurboJpeg(
+            reinterpret_cast<const uint8_t*>(thumb.thumb), static_cast<size_t>(thumb.tlength), outWidth, outHeight, outBgra, reservation);
         return SUCCEEDED(hr);
     }
 
@@ -1139,30 +1511,52 @@ bool TryDecodeRawEmbeddedThumbnailFromBufferToBgra(const std::vector<uint8_t>& f
     const uint32_t colors = static_cast<uint32_t>(std::max(thumb.tcolors, 0));
     const uint32_t bits   = (thumb.tformat == LIBRAW_THUMBNAIL_BITMAP16) ? 16u : 8u;
 
-    if (w == 0 || h == 0 || colors == 0)
+    const ViewerImgRawResource::DecodedImagePolicy policy = ActiveDecodedImagePolicy();
+    ViewerImgRawResource::DecodedImageLayout layout{};
+    uint64_t expectedDataBytes = 0u;
+    const ViewerImgRawResource::ValidationError validation = ViewerImgRawResource::ValidatePackedBitmap(
+        w, h, colors, bits, static_cast<uint64_t>(thumb.tlength), fileBytes.size(), policy, layout, expectedDataBytes);
+    if (validation != ViewerImgRawResource::ValidationError::None)
+    {
+        const HRESULT validationHr = ValidationErrorToHresult(validation);
+        Debug::Perf::Emit(L"viewer.imgraw.decode.rejected_bytes",
+                          DecodeBackendDetail(DecodeBackend::EmbeddedBitmap),
+                          0u,
+                          CandidateBgraBytes(w, h),
+                          policy.maxBgraBytes,
+                          validationHr);
+        return false;
+    }
+    Debug::Perf::Emit(L"viewer.imgraw.decode.accepted_bytes",
+                      DecodeBackendDetail(DecodeBackend::EmbeddedBitmap),
+                      0u,
+                      layout.bgraBytes,
+                      policy.maxBgraBytes,
+                      S_OK);
+
+    if (layout.bgraBytes > std::numeric_limits<size_t>::max() || expectedDataBytes > std::numeric_limits<size_t>::max())
     {
         return false;
     }
-
-    const uint64_t pixelCount = static_cast<uint64_t>(w) * static_cast<uint64_t>(h);
-    if (pixelCount == 0 || pixelCount > (static_cast<uint64_t>(std::numeric_limits<size_t>::max()) / 4ull))
+    if (reservation && ! reservation->Ensure(layout.bgraBytes))
     {
         return false;
     }
-
-    const size_t bytesPerSample    = bits == 16 ? 2u : 1u;
-    const size_t expectedDataBytes = static_cast<size_t>(pixelCount) * static_cast<size_t>(colors) * bytesPerSample;
-    if (static_cast<size_t>(thumb.tlength) < expectedDataBytes)
+    bool keepReservation = false;
+    auto releaseReservationOnFailure = wil::scope_exit([&]() noexcept
     {
-        return false;
-    }
+        if (! keepReservation && reservation)
+        {
+            reservation->Reset();
+        }
+    });
 
-    outBgra.resize(static_cast<size_t>(pixelCount) * 4u);
+    outBgra.resize(static_cast<size_t>(layout.bgraBytes));
 
     if (bits == 8)
     {
         const uint8_t* src = reinterpret_cast<const uint8_t*>(thumb.thumb);
-        for (uint64_t i = 0; i < pixelCount; ++i)
+        for (uint64_t i = 0; i < layout.pixels; ++i)
         {
             const size_t si = static_cast<size_t>(i) * colors;
             const uint8_t r = colors >= 1 ? src[si + 0] : uint8_t{0};
@@ -1179,7 +1573,7 @@ bool TryDecodeRawEmbeddedThumbnailFromBufferToBgra(const std::vector<uint8_t>& f
     else
     {
         const uint16_t* src = reinterpret_cast<const uint16_t*>(thumb.thumb);
-        for (uint64_t i = 0; i < pixelCount; ++i)
+        for (uint64_t i = 0; i < layout.pixels; ++i)
         {
             const size_t si    = static_cast<size_t>(i) * colors;
             const uint16_t r16 = colors >= 1 ? src[si + 0] : uint16_t{0};
@@ -1200,6 +1594,7 @@ bool TryDecodeRawEmbeddedThumbnailFromBufferToBgra(const std::vector<uint8_t>& f
 
     outWidth  = w;
     outHeight = h;
+    keepReservation = true;
     return true;
 }
 
@@ -1210,17 +1605,22 @@ HRESULT DecodeRawFullImageFromBufferToBgra(const RawDecodeSettings& cfg,
                                            std::vector<uint8_t>& outBgra,
                                            std::wstring& outStatusMessage,
                                            ExifData& outExif,
-                                           const LibRawProgressHost* progressHost) noexcept
+                                           const LibRawProgressHost* progressHost,
+                                           DecodedByteReservation* reservation = nullptr) noexcept
 {
     outWidth  = 0;
     outHeight = 0;
     outBgra.clear();
     outStatusMessage.clear();
     outExif = {};
+    if (reservation)
+    {
+        reservation->Reset();
+    }
 
     if (fileBytes.empty())
     {
-        outStatusMessage = L"ViewerImgRaw: File is empty.";
+        outStatusMessage = LoadStringResource(g_hInstance, IDS_VIEWERRAW_READ_FILE_EMPTY);
         return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
 
@@ -1241,23 +1641,49 @@ HRESULT DecodeRawFullImageFromBufferToBgra(const RawDecodeSettings& cfg,
     const int openRet = raw.open_buffer(fileBytes.data(), fileBytes.size());
     if (openRet != LIBRAW_SUCCESS)
     {
-        outStatusMessage = std::format(L"ViewerImgRaw: LibRaw open failed: {} (code={}).", WideFromUtf8(LibRaw::strerror(openRet)), openRet);
+        outStatusMessage = FormatStringResource(g_hInstance, IDS_VIEWERRAW_RAW_OPEN_FAILED_FMT, WideFromUtf8(LibRaw::strerror(openRet)), openRet);
         return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
 
     const int unpackRet = raw.unpack();
     if (unpackRet != LIBRAW_SUCCESS)
     {
-        outStatusMessage = std::format(L"ViewerImgRaw: LibRaw unpack failed: {} (code={}).", WideFromUtf8(LibRaw::strerror(unpackRet)), unpackRet);
+        outStatusMessage = FormatStringResource(g_hInstance, IDS_VIEWERRAW_RAW_UNPACK_FAILED_FMT, WideFromUtf8(LibRaw::strerror(unpackRet)), unpackRet);
         return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
 
     outExif = ExtractExifData(raw);
 
+    const uint32_t preProcessWidth = raw.imgdata.sizes.iwidth != 0u ? static_cast<uint32_t>(raw.imgdata.sizes.iwidth)
+                                                                    : static_cast<uint32_t>(raw.imgdata.sizes.width);
+    const uint32_t preProcessHeight = raw.imgdata.sizes.iheight != 0u ? static_cast<uint32_t>(raw.imgdata.sizes.iheight)
+                                                                      : static_cast<uint32_t>(raw.imgdata.sizes.height);
+    ViewerImgRawResource::DecodedImageLayout preProcessLayout{};
+    const HRESULT preProcessValidationHr =
+        ValidateDecodedLayout(preProcessWidth, preProcessHeight, DecodeBackend::RawPreprocess, preProcessLayout);
+    if (FAILED(preProcessValidationHr))
+    {
+        outStatusMessage = FormatStringResource(g_hInstance, IDS_VIEWERRAW_RAW_DIMENSIONS_LIMIT_FMT, preProcessWidth, preProcessHeight);
+        return preProcessValidationHr;
+    }
+    if (reservation && ! reservation->Ensure(preProcessLayout.bgraBytes))
+    {
+        outStatusMessage = LoadStringResource(g_hInstance, IDS_VIEWERRAW_RAW_PREFETCH_BUDGET);
+        return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_MEMORY);
+    }
+    bool keepReservation = false;
+    auto releaseReservationOnFailure = wil::scope_exit([&]() noexcept
+    {
+        if (! keepReservation && reservation)
+        {
+            reservation->Reset();
+        }
+    });
+
     const int processRet = raw.dcraw_process();
     if (processRet != LIBRAW_SUCCESS)
     {
-        outStatusMessage = std::format(L"ViewerImgRaw: LibRaw process failed: {} (code={}).", WideFromUtf8(LibRaw::strerror(processRet)), processRet);
+        outStatusMessage = FormatStringResource(g_hInstance, IDS_VIEWERRAW_RAW_PROCESS_FAILED_FMT, WideFromUtf8(LibRaw::strerror(processRet)), processRet);
         return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
 
@@ -1265,7 +1691,7 @@ HRESULT DecodeRawFullImageFromBufferToBgra(const RawDecodeSettings& cfg,
     libraw_processed_image_t* memImg = raw.dcraw_make_mem_image(&memErr);
     if (! memImg || memErr != LIBRAW_SUCCESS)
     {
-        outStatusMessage = std::format(L"ViewerImgRaw: LibRaw make_mem_image failed: {} (code={}).", WideFromUtf8(LibRaw::strerror(memErr)), memErr);
+        outStatusMessage = FormatStringResource(g_hInstance, IDS_VIEWERRAW_RAW_MEMORY_IMAGE_FAILED_FMT, WideFromUtf8(LibRaw::strerror(memErr)), memErr);
         if (memImg)
         {
             LibRaw::dcraw_clear_mem(memImg);
@@ -1284,42 +1710,51 @@ HRESULT DecodeRawFullImageFromBufferToBgra(const RawDecodeSettings& cfg,
     const uint32_t colors = static_cast<uint32_t>(memImg->colors);
     const uint32_t bits   = static_cast<uint32_t>(memImg->bits);
 
-    if (w == 0 || h == 0 || colors == 0)
+    if (colors == 0u || colors > 4u || (bits != 8u && bits != 16u))
     {
-        outStatusMessage = L"ViewerImgRaw: Invalid decoded image dimensions.";
+        outStatusMessage = LoadStringResource(g_hInstance, IDS_VIEWERRAW_RAW_PIXEL_FORMAT_INVALID);
         return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
 
-    static constexpr uint32_t kMaxBitmapDim = 16384u;
-    if (w > kMaxBitmapDim || h > kMaxBitmapDim)
+    ViewerImgRawResource::DecodedImageLayout layout{};
+    const HRESULT validationHr = ValidateDecodedLayout(w, h, DecodeBackend::RawOutput, layout);
+    if (FAILED(validationHr))
     {
-        outStatusMessage = std::format(L"ViewerImgRaw: Image too large ({}×{}).", w, h);
-        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+        outStatusMessage = FormatStringResource(g_hInstance, IDS_VIEWERRAW_RAW_DECODED_DIMENSIONS_LIMIT_FMT, w, h);
+        return validationHr;
+    }
+    if (layout.bgraBytes > std::numeric_limits<size_t>::max())
+    {
+        outStatusMessage = LoadStringResource(g_hInstance, IDS_VIEWERRAW_RAW_BYTE_COUNT_OVERFLOW);
+        return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
     }
 
-    const uint64_t pixelCount = static_cast<uint64_t>(w) * static_cast<uint64_t>(h);
-    if (pixelCount == 0 || pixelCount > (static_cast<uint64_t>(std::numeric_limits<size_t>::max()) / 4ull))
+    uint64_t sampleCount       = 0u;
+    uint64_t expectedDataBytes = 0u;
+    if (! ViewerImgRawResource::TryMultiply(layout.pixels, colors, sampleCount) ||
+        ! ViewerImgRawResource::TryMultiply(sampleCount, bits / 8u, expectedDataBytes) ||
+        expectedDataBytes > std::numeric_limits<size_t>::max())
     {
-        outStatusMessage = L"ViewerImgRaw: Decoded image is too large.";
-        return E_OUTOFMEMORY;
+        outStatusMessage = LoadStringResource(g_hInstance, IDS_VIEWERRAW_RAW_SOURCE_BYTE_COUNT_OVERFLOW);
+        return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
     }
-
-    const size_t outBytes = static_cast<size_t>(pixelCount) * 4u;
-    outBgra.assign(outBytes, 0);
-
-    const size_t bytesPerSample    = bits == 16 ? 2u : 1u;
-    const size_t expectedDataBytes = static_cast<size_t>(pixelCount) * static_cast<size_t>(colors) * bytesPerSample;
-    if (memImg->data_size < expectedDataBytes)
+    if (static_cast<uint64_t>(memImg->data_size) < expectedDataBytes)
     {
-        outStatusMessage = L"ViewerImgRaw: Decoded image buffer is truncated.";
-        outBgra.clear();
+        outStatusMessage = LoadStringResource(g_hInstance, IDS_VIEWERRAW_RAW_BUFFER_TRUNCATED);
         return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
+    if (reservation && ! reservation->Ensure(layout.bgraBytes))
+    {
+        outStatusMessage = LoadStringResource(g_hInstance, IDS_VIEWERRAW_RAW_OUTPUT_BUDGET);
+        return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_MEMORY);
+    }
+
+    outBgra.assign(static_cast<size_t>(layout.bgraBytes), 0u);
 
     if (bits == 8)
     {
         const uint8_t* src = memImg->data;
-        for (uint64_t i = 0; i < pixelCount; ++i)
+        for (uint64_t i = 0; i < layout.pixels; ++i)
         {
             const size_t si = static_cast<size_t>(i) * colors;
             const uint8_t r = colors >= 1 ? src[si + 0] : uint8_t{0};
@@ -1336,7 +1771,7 @@ HRESULT DecodeRawFullImageFromBufferToBgra(const RawDecodeSettings& cfg,
     else if (bits == 16)
     {
         const uint16_t* src = reinterpret_cast<const uint16_t*>(memImg->data);
-        for (uint64_t i = 0; i < pixelCount; ++i)
+        for (uint64_t i = 0; i < layout.pixels; ++i)
         {
             const size_t si    = static_cast<size_t>(i) * colors;
             const uint16_t r16 = colors >= 1 ? src[si + 0] : uint16_t{0};
@@ -1354,21 +1789,231 @@ HRESULT DecodeRawFullImageFromBufferToBgra(const RawDecodeSettings& cfg,
             outBgra[di + 3] = 255u;
         }
     }
-    else
-    {
-        outStatusMessage = std::format(L"ViewerImgRaw: Unsupported bit depth ({}).", bits);
-        outBgra.clear();
-        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
-    }
-
     outWidth  = w;
     outHeight = h;
+    keepReservation = true;
     return S_OK;
 }
 } // namespace
 
-void ViewerImgRaw::OnAsyncProgress(int stage, int percent) noexcept
+struct ViewerImgRaw::AsyncOpenRequest final
 {
+    AsyncOpenRequest()                                  = default;
+    AsyncOpenRequest(const AsyncOpenRequest&)            = delete;
+    AsyncOpenRequest& operator=(const AsyncOpenRequest&) = delete;
+    AsyncOpenRequest(AsyncOpenRequest&&)                 = delete;
+    AsyncOpenRequest& operator=(AsyncOpenRequest&&)      = delete;
+
+    wil::com_ptr<ViewerImgRaw> viewer;
+    uint64_t requestId = 0u;
+    std::chrono::steady_clock::time_point queuedAt = std::chrono::steady_clock::now();
+    std::function<void()> work;
+};
+
+struct ViewerImgRaw::AsyncOpenSchedulerState final
+{
+    AsyncOpenSchedulerState()                                         = default;
+    AsyncOpenSchedulerState(const AsyncOpenSchedulerState&)            = delete;
+    AsyncOpenSchedulerState& operator=(const AsyncOpenSchedulerState&) = delete;
+    AsyncOpenSchedulerState(AsyncOpenSchedulerState&&)                 = delete;
+    AsyncOpenSchedulerState& operator=(AsyncOpenSchedulerState&&)      = delete;
+
+    std::mutex mutex;
+    std::unique_ptr<AsyncOpenRequest> pending;
+    bool workerActive = false;
+    bool accepting = false;
+    uint64_t replacedPendingCount = 0u;
+
+    std::atomic<HWND> currentHwnd{nullptr};
+    std::atomic_uint64_t currentRequestId{0u};
+
+    std::atomic_bool terminalFallbackPending{false};
+    std::atomic_uint64_t terminalFallbackRequestId{0u};
+    std::atomic<HRESULT> terminalFallbackHr{E_FAIL};
+};
+
+void ViewerImgRaw::InitializeAsyncOpenScheduler()
+{
+    _asyncOpenScheduler = std::make_shared<AsyncOpenSchedulerState>();
+}
+
+uint64_t ViewerImgRaw::AdvanceOpenRequestId() noexcept
+{
+    std::scoped_lock lock(_cacheMutex);
+    return _openRequestId.fetch_add(1u, std::memory_order_acq_rel) + 1u;
+}
+
+void ViewerImgRaw::CancelAsyncOpenRequests(bool detachWindow) noexcept
+{
+    const uint64_t requestId = AdvanceOpenRequestId();
+    const std::shared_ptr<AsyncOpenSchedulerState> scheduler = _asyncOpenScheduler;
+    if (scheduler)
+    {
+        scheduler->currentRequestId.store(requestId, std::memory_order_release);
+        scheduler->currentHwnd.store(detachWindow ? nullptr : _hWnd.get(), std::memory_order_release);
+        scheduler->terminalFallbackPending.store(false, std::memory_order_release);
+
+        std::scoped_lock lock(scheduler->mutex);
+        scheduler->accepting = ! detachWindow;
+        scheduler->pending.reset();
+    }
+
+    std::scoped_lock lock(_cacheMutex);
+    _inflightDecodes.clear();
+}
+
+#if defined(ENABLE_TESTS)
+void ViewerImgRaw::PopulateAsyncOpenDebugSnapshot(WndMsg::ViewerImgRawResourceDebugSnapshot& snapshot) noexcept
+{
+    const std::shared_ptr<AsyncOpenSchedulerState> scheduler = _asyncOpenScheduler;
+    if (scheduler)
+    {
+        snapshot.currentRequestId        = scheduler->currentRequestId.load(std::memory_order_acquire);
+        snapshot.terminalFallbackPending = scheduler->terminalFallbackPending.load(std::memory_order_acquire);
+        std::scoped_lock lock(scheduler->mutex);
+        snapshot.activeMainDecodeCount  = scheduler->workerActive ? 1u : 0u;
+        snapshot.pendingMainDecodeCount = scheduler->pending ? 1u : 0u;
+        snapshot.replacedMainDecodeCount = scheduler->replacedPendingCount;
+    }
+    snapshot.finalSuccessCount   = _debugFinalSuccessCount;
+    snapshot.finalFailureCount   = _debugFinalFailureCount;
+    snapshot.previewSuccessCount = _debugPreviewSuccessCount;
+    snapshot.lastPreviewApplyOrdinal = _debugLastPreviewApplyOrdinal;
+    snapshot.lastFinalApplyOrdinal   = _debugLastFinalApplyOrdinal;
+    snapshot.loading             = _isLoading;
+}
+#endif
+
+void ViewerImgRaw::PollAsyncOpenTerminalFallback() noexcept
+{
+    const std::shared_ptr<AsyncOpenSchedulerState> scheduler = _asyncOpenScheduler;
+    if (! scheduler || ! scheduler->terminalFallbackPending.exchange(false, std::memory_order_acq_rel))
+    {
+        return;
+    }
+
+    const uint64_t requestId = scheduler->terminalFallbackRequestId.load(std::memory_order_acquire);
+    if (requestId != _openRequestId.load(std::memory_order_acquire))
+    {
+        return;
+    }
+
+    const HRESULT hr = scheduler->terminalFallbackHr.load(std::memory_order_acquire);
+#if defined(ENABLE_TESTS)
+    ++_debugFinalFailureCount;
+#endif
+    EndLoadingUi();
+    {
+        std::scoped_lock lock(_cacheMutex);
+        _inflightDecodes.erase(_currentPath);
+    }
+
+    _statusMessage = hr == E_OUTOFMEMORY ? LoadStringResource(g_hInstance, IDS_VIEWERRAW_STATUS_STORE_OOM)
+                                         : LoadStringResource(g_hInstance, IDS_VIEWERRAW_STATUS_ASYNC_RESULT_FAILED);
+    if (_hostAlerts && _hWnd)
+    {
+        HostAlertRequest request{};
+        request.version      = 1;
+        request.sizeBytes    = sizeof(request);
+        request.scope        = HOST_ALERT_SCOPE_WINDOW;
+        request.modality     = HOST_ALERT_MODELESS;
+        request.severity     = HOST_ALERT_WARNING;
+        request.targetWindow = _hWnd.get();
+        request.title        = _metaName.empty() ? nullptr : _metaName.c_str();
+        request.message      = _statusMessage.c_str();
+        request.closable     = TRUE;
+        static_cast<void>(_hostAlerts->ShowAlert(&request, nullptr));
+        _alertVisible = true;
+    }
+
+    if (_hWnd)
+    {
+        InvalidateRect(_hWnd.get(), &_contentRect, FALSE);
+        InvalidateRect(_hWnd.get(), &_statusRect, FALSE);
+    }
+}
+
+bool ViewerImgRaw::TryReserveSpeculativeDecodedBytesLocked(uint64_t bytes) noexcept
+{
+    if (bytes == 0u)
+    {
+        return true;
+    }
+
+    const uint64_t limit = ActiveSpeculativeDecodedByteLimit();
+    if (bytes > limit || _speculativeDecodedBytes > limit - bytes)
+    {
+        ++_speculativeBudgetRejectedCount;
+        return false;
+    }
+
+    _speculativeDecodedBytes += bytes;
+    _speculativeDecodedBytesPeak = std::max(_speculativeDecodedBytesPeak, _speculativeDecodedBytes);
+    ++_speculativeBudgetAcceptedCount;
+    return true;
+}
+
+uint64_t ViewerImgRaw::SpeculativeDecodedByteLimit() const noexcept
+{
+    return ActiveSpeculativeDecodedByteLimit();
+}
+
+bool ViewerImgRaw::TryReserveSpeculativeDecodedBytes(uint64_t bytes) noexcept
+{
+    bool accepted    = false;
+    uint64_t current = 0u;
+    {
+        std::scoped_lock lock(_cacheMutex);
+        accepted = TryReserveSpeculativeDecodedBytesLocked(bytes);
+        current  = _speculativeDecodedBytes;
+    }
+
+    const uint64_t limit = ActiveSpeculativeDecodedByteLimit();
+    Debug::Perf::Emit(accepted ? L"viewer.imgraw.prefetch.accepted_bytes" : L"viewer.imgraw.prefetch.rejected_bytes",
+                      L"reservation",
+                      0u,
+                      bytes,
+                      limit,
+                      accepted ? S_OK : HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_MEMORY));
+    Debug::Perf::Emit(L"viewer.imgraw.resource.decoded_bytes", L"speculative", 0u, current, limit, S_OK);
+    return accepted;
+}
+
+void ViewerImgRaw::ReleaseSpeculativeDecodedBytesLocked(uint64_t bytes) noexcept
+{
+    _speculativeDecodedBytes = bytes >= _speculativeDecodedBytes ? 0u : _speculativeDecodedBytes - bytes;
+}
+
+void ViewerImgRaw::ReleaseSpeculativeDecodedBytes(uint64_t bytes) noexcept
+{
+    uint64_t current = 0u;
+    {
+        std::scoped_lock lock(_cacheMutex);
+        ReleaseSpeculativeDecodedBytesLocked(bytes);
+        current = _speculativeDecodedBytes;
+    }
+    Debug::Perf::Emit(
+        L"viewer.imgraw.resource.decoded_bytes", L"speculative-release", 0u, current, ActiveSpeculativeDecodedByteLimit(), S_OK);
+}
+
+void ViewerImgRaw::ReleaseCachedImageBudgetLocked(CachedImage& image) noexcept
+{
+    ReleaseSpeculativeDecodedBytesLocked(image.rawBudgetBytes);
+    ReleaseSpeculativeDecodedBytesLocked(image.thumbBudgetBytes);
+    image.rawBudgetBytes   = 0u;
+    image.thumbBudgetBytes = 0u;
+}
+
+void ViewerImgRaw::OnAsyncProgress(uint64_t requestId, int stage, int percent) noexcept
+{
+    if (requestId != _openRequestId.load(std::memory_order_acquire) || ! _isLoading)
+    {
+        return;
+    }
+
+#if defined(ENABLE_TESTS)
+    ++_debugProgressApplyCount;
+#endif
     _rawProgressStage     = stage;
     _rawProgressPercent   = percent;
     _rawProgressStageText = WideFromUtf8(LibRaw::strprogress(static_cast<LibRaw_progress>(stage)));
@@ -1383,12 +2028,20 @@ void ViewerImgRaw::OnAsyncProgress(int stage, int percent) noexcept
 
 void ViewerImgRaw::ClearImageCache() noexcept
 {
-    static_cast<void>(_openRequestId.fetch_add(1, std::memory_order_acq_rel));
+    CancelAsyncOpenRequests(false);
     EndLoadingUi();
 
     {
         std::scoped_lock lock(_cacheMutex);
         _inflightDecodes.clear();
+        for (auto& [path, image] : _imageCache)
+        {
+            static_cast<void>(path);
+            if (image)
+            {
+                ReleaseCachedImageBudgetLocked(*image);
+            }
+        }
         _imageCache.clear();
     }
 
@@ -1425,6 +2078,7 @@ bool ViewerImgRaw::TryUseCachedImage(HWND hwnd, const std::wstring& path, bool& 
         {
             return false;
         }
+        ReleaseCachedImageBudgetLocked(*it->second);
         cached = it->second.get();
     }
 
@@ -1480,9 +2134,9 @@ bool ViewerImgRaw::TryUseCachedImage(HWND hwnd, const std::wstring& path, bool& 
     UpdateOrientationState();
     RebuildExifOverlayText();
 
-    if (_hostAlerts)
+    if (_hostAlerts && _hWnd)
     {
-        static_cast<void>(_hostAlerts->ClearAlert(HOST_ALERT_SCOPE_WINDOW, nullptr));
+        static_cast<void>(_hostAlerts->ClearAlert(HOST_ALERT_SCOPE_WINDOW, reinterpret_cast<void*>(_hWnd.get())));
     }
     _alertVisible = false;
 
@@ -1916,16 +2570,56 @@ void ViewerImgRaw::UpdateNeighborCache(uint64_t requestId) noexcept
         keep.insert(_otherItems[idx].primaryPath);
     }
 
-    std::scoped_lock lock(_cacheMutex);
-    for (auto it = _imageCache.begin(); it != _imageCache.end();)
     {
-        if (keep.find(it->first) == keep.end())
+        std::scoped_lock lock(_cacheMutex);
+        for (auto it = _imageCache.begin(); it != _imageCache.end();)
         {
-            it = _imageCache.erase(it);
-        }
-        else
-        {
-            ++it;
+            CachedImage* image = it->second.get();
+            bool eraseEntry    = keep.find(it->first) == keep.end() || ! image;
+            if (! eraseEntry && it->first == _currentPath)
+            {
+                ReleaseCachedImageBudgetLocked(*image);
+            }
+            else if (! eraseEntry)
+            {
+                if (image->rawBudgetBytes == 0u && ! image->rawBgra.empty())
+                {
+                    const uint64_t bytes = image->rawBgra.size();
+                    if (TryReserveSpeculativeDecodedBytesLocked(bytes))
+                    {
+                        image->rawBudgetBytes = bytes;
+                    }
+                    else
+                    {
+                        eraseEntry = true;
+                    }
+                }
+                if (! eraseEntry && image->thumbBudgetBytes == 0u && ! image->thumbBgra.empty())
+                {
+                    const uint64_t bytes = image->thumbBgra.size();
+                    if (TryReserveSpeculativeDecodedBytesLocked(bytes))
+                    {
+                        image->thumbBudgetBytes = bytes;
+                    }
+                    else
+                    {
+                        eraseEntry = true;
+                    }
+                }
+            }
+
+            if (eraseEntry)
+            {
+                if (image)
+                {
+                    ReleaseCachedImageBudgetLocked(*image);
+                }
+                it = _imageCache.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
         }
     }
 
@@ -2008,8 +2702,19 @@ void ViewerImgRaw::StartPrefetchNeighbors(uint64_t requestId) noexcept
     };
 
     auto ctx = std::unique_ptr<PrefetchWorkItem>(new (std::nothrow) PrefetchWorkItem{});
+    if (! ctx)
+    {
+        Release(); // balance the AddRef() above
+        return;
+    }
 
     ctx->moduleKeepAlive = AcquireModuleReferenceFromAddress(&kViewerImgRawModuleAnchor);
+    if (! ctx->moduleKeepAlive)
+    {
+        Debug::Error(L"ViewerImgRaw: Failed to pin the plugin module for neighbor prefetch.");
+        Release(); // balance the AddRef() above
+        return;
+    }
     ctx->work            = [this, fileSystem, items = std::move(items), requestId, prefetchMode, decodeCfg]() mutable
     {
         auto releaseSelf = wil::scope_exit([&] { Release(); });
@@ -2058,6 +2763,12 @@ void ViewerImgRaw::StartPrefetchNeighbors(uint64_t requestId) noexcept
                 _inflightDecodes.erase(path);
                 continue;
             }
+            if (requestId != _openRequestId.load(std::memory_order_acquire))
+            {
+                std::scoped_lock lock(_cacheMutex);
+                _inflightDecodes.erase(path);
+                return;
+            }
 
             bool hasRawAlready = false;
             {
@@ -2076,6 +2787,16 @@ void ViewerImgRaw::StartPrefetchNeighbors(uint64_t requestId) noexcept
             std::wstring rawStatus;
             ExifData rawExif{};
             HRESULT rawHr = S_OK;
+            DecodedByteReservation rawReservation(
+                this,
+                [](void* context, uint64_t bytes) noexcept
+            {
+                return static_cast<ViewerImgRaw*>(context)->TryReserveSpeculativeDecodedBytes(bytes);
+            },
+                [](void* context, uint64_t bytes) noexcept
+            {
+                static_cast<ViewerImgRaw*>(context)->ReleaseSpeculativeDecodedBytes(bytes);
+            });
 
             bool thumbAvailable = ! item.sidecarJpegPath.empty();
             ExifData thumbExif{};
@@ -2084,6 +2805,16 @@ void ViewerImgRaw::StartPrefetchNeighbors(uint64_t requestId) noexcept
             std::vector<uint8_t> thumbBgra;
             bool thumbDecoded                    = false;
             CachedImage::ThumbSource thumbSource = CachedImage::ThumbSource::None;
+            DecodedByteReservation thumbReservation(
+                this,
+                [](void* context, uint64_t bytes) noexcept
+            {
+                return static_cast<ViewerImgRaw*>(context)->TryReserveSpeculativeDecodedBytes(bytes);
+            },
+                [](void* context, uint64_t bytes) noexcept
+            {
+                static_cast<ViewerImgRaw*>(context)->ReleaseSpeculativeDecodedBytes(bytes);
+            });
 
             if (! item.isRaw)
             {
@@ -2092,12 +2823,14 @@ void ViewerImgRaw::StartPrefetchNeighbors(uint64_t requestId) noexcept
                     const std::wstring_view ext = PathExtensionView(path);
                     if (IsJpegExtension(ext))
                     {
-                        rawHr   = DecodeJpegToBgraTurboJpeg(fileBytes.data(), fileBytes.size(), rawW, rawH, rawBgra);
+                        rawHr   = DecodeJpegToBgraTurboJpeg(fileBytes.data(), fileBytes.size(), rawW, rawH, rawBgra, &rawReservation);
                         rawExif = ExtractExifFromJpeg(fileBytes.data(), fileBytes.size());
                     }
                     else
                     {
-                        rawHr = DecodeImageToBgraWic(fileBytes.data(), fileBytes.size(), rawW, rawH, rawBgra);
+                        rawHr = DecodeImageToBgraWic(
+                            fileBytes.data(), fileBytes.size(), rawW, rawH, rawBgra, rawExif.orientation, &rawReservation);
+                        rawExif.valid = SUCCEEDED(rawHr) && rawExif.orientation != 1;
                     }
                 }
             }
@@ -2105,12 +2838,26 @@ void ViewerImgRaw::StartPrefetchNeighbors(uint64_t requestId) noexcept
             {
                 if (! item.sidecarJpegPath.empty())
                 {
+                    if (requestId != _openRequestId.load(std::memory_order_acquire))
+                    {
+                        std::scoped_lock lock(_cacheMutex);
+                        _inflightDecodes.erase(path);
+                        return;
+                    }
                     std::vector<uint8_t> sidecarBytes;
                     std::wstring sidecarStatus;
-                    const HRESULT sidecarReadHr = ReadFileAllBytes(fileSystem.get(), item.sidecarJpegPath, sidecarBytes, sidecarStatus);
+                    const HRESULT sidecarReadHr = ReadFileAllBytes(
+                        fileSystem.get(), item.sidecarJpegPath, sidecarBytes, sidecarStatus, ViewerImgRawResource::kProductionSidecarSourceBytes);
                     if (SUCCEEDED(sidecarReadHr) && ! sidecarBytes.empty())
                     {
-                        const HRESULT sidecarDecodeHr = DecodeJpegToBgraTurboJpeg(sidecarBytes.data(), sidecarBytes.size(), thumbW, thumbH, thumbBgra);
+                        if (requestId != _openRequestId.load(std::memory_order_acquire))
+                        {
+                            std::scoped_lock lock(_cacheMutex);
+                            _inflightDecodes.erase(path);
+                            return;
+                        }
+                        const HRESULT sidecarDecodeHr =
+                            DecodeJpegToBgraTurboJpeg(sidecarBytes.data(), sidecarBytes.size(), thumbW, thumbH, thumbBgra, &thumbReservation);
                         if (SUCCEEDED(sidecarDecodeHr))
                         {
                             thumbDecoded = true;
@@ -2122,7 +2869,14 @@ void ViewerImgRaw::StartPrefetchNeighbors(uint64_t requestId) noexcept
 
                 if (! thumbDecoded)
                 {
-                    thumbDecoded = TryDecodeRawEmbeddedThumbnailFromBufferToBgra(fileBytes, thumbW, thumbH, thumbBgra, thumbAvailable, thumbExif);
+                    if (requestId != _openRequestId.load(std::memory_order_acquire))
+                    {
+                        std::scoped_lock lock(_cacheMutex);
+                        _inflightDecodes.erase(path);
+                        return;
+                    }
+                    thumbDecoded = TryDecodeRawEmbeddedThumbnailFromBufferToBgra(
+                        fileBytes, thumbW, thumbH, thumbBgra, thumbAvailable, thumbExif, &thumbReservation);
                     if (thumbDecoded)
                     {
                         thumbSource = CachedImage::ThumbSource::Embedded;
@@ -2132,15 +2886,46 @@ void ViewerImgRaw::StartPrefetchNeighbors(uint64_t requestId) noexcept
                 const bool needRawDecode = (prefetchMode == DisplayMode::Raw) || ! thumbDecoded;
                 if (needRawDecode && ! hasRawAlready)
                 {
-                    rawHr = DecodeRawFullImageFromBufferToBgra(decodeCfg, fileBytes, rawW, rawH, rawBgra, rawStatus, rawExif, nullptr);
+                    if (requestId != _openRequestId.load(std::memory_order_acquire))
+                    {
+                        std::scoped_lock lock(_cacheMutex);
+                        _inflightDecodes.erase(path);
+                        return;
+                    }
+                    rawHr = DecodeRawFullImageFromBufferToBgra(
+                        decodeCfg, fileBytes, rawW, rawH, rawBgra, rawStatus, rawExif, nullptr, &rawReservation);
                 }
             }
 
-            if (requestId == _openRequestId.load(std::memory_order_acquire))
+            if (requestId != _openRequestId.load(std::memory_order_acquire))
             {
-                std::unique_ptr<CachedImage> created(new (std::nothrow) CachedImage{});
-
                 std::scoped_lock lock(_cacheMutex);
+                _inflightDecodes.erase(path);
+                return;
+            }
+
+#if defined(ENABLE_TESTS)
+            if (EnvironmentVariables::IsTruthyFlagSet(kPausePrefetchBeforeCommitEnvVar))
+            {
+                _debugPrefetchCommitPaused.store(true, std::memory_order_release);
+                auto clearPaused = wil::scope_exit([&]() noexcept { _debugPrefetchCommitPaused.store(false, std::memory_order_release); });
+                const ULONGLONG deadline = GetTickCount64() + 5'000ull;
+                while (EnvironmentVariables::IsTruthyFlagSet(kPausePrefetchBeforeCommitEnvVar) && GetTickCount64() < deadline)
+                {
+                    Sleep(1u);
+                }
+            }
+#endif
+
+            std::unique_ptr<CachedImage> created(new (std::nothrow) CachedImage{});
+            {
+                std::scoped_lock lock(_cacheMutex);
+                if (requestId != _openRequestId.load(std::memory_order_acquire))
+                {
+                    _inflightDecodes.erase(path);
+                    return;
+                }
+
                 auto& entry = _imageCache[path];
                 if (! entry)
                 {
@@ -2153,20 +2938,24 @@ void ViewerImgRaw::StartPrefetchNeighbors(uint64_t requestId) noexcept
 
                     if (thumbDecoded && thumbW != 0 && thumbH != 0 && ! thumbBgra.empty())
                     {
+                        ReleaseSpeculativeDecodedBytesLocked(entry->thumbBudgetBytes);
                         entry->thumbWidth       = thumbW;
                         entry->thumbHeight      = thumbH;
                         entry->thumbOrientation = NormalizeExifOrientation(thumbExif.orientation);
                         entry->thumbBgra        = std::move(thumbBgra);
+                        entry->thumbBudgetBytes = thumbReservation.Detach();
                         entry->thumbDecoded     = true;
                         entry->thumbSource      = thumbSource;
                     }
 
                     if (SUCCEEDED(rawHr) && rawW != 0 && rawH != 0 && ! rawBgra.empty())
                     {
+                        ReleaseSpeculativeDecodedBytesLocked(entry->rawBudgetBytes);
                         entry->rawWidth       = rawW;
                         entry->rawHeight      = rawH;
                         entry->rawOrientation = NormalizeExifOrientation(rawExif.orientation);
                         entry->rawBgra        = std::move(rawBgra);
+                        entry->rawBudgetBytes = rawReservation.Detach();
                     }
 
                     if (rawExif.valid)
@@ -2199,16 +2988,23 @@ void ViewerImgRaw::StartPrefetchNeighbors(uint64_t requestId) noexcept
         }
     };
 
+    NotifyViewerImgRawAsyncWorkQueued();
     const BOOL queued = TrySubmitThreadpoolCallback(
-        [](PTP_CALLBACK_INSTANCE /*instance*/, void* context) noexcept
+        [](PTP_CALLBACK_INSTANCE instance, void* context) noexcept
     {
         std::unique_ptr<PrefetchWorkItem> ctx(static_cast<PrefetchWorkItem*>(context));
+        if (ctx && ctx->moduleKeepAlive)
+        {
+            TransferModulePinToCallbackReturn(instance, ctx->moduleKeepAlive);
+        }
         if (! ctx)
         {
+            NotifyViewerImgRawAsyncWorkCompleted();
             return;
         }
 
-        static_cast<void>(ctx->moduleKeepAlive);
+        auto completeAsyncWork = wil::scope_exit([]() noexcept { NotifyViewerImgRawAsyncWorkCompleted(); });
+
         if (ctx->work)
         {
             ctx->work();
@@ -2219,10 +3015,13 @@ void ViewerImgRaw::StartPrefetchNeighbors(uint64_t requestId) noexcept
 
     if (queued == 0)
     {
+        NotifyViewerImgRawAsyncWorkCompleted();
         Debug::Error(L"ViewerImgRaw: Failed to queue neighbor prefetch work item.");
+        Release(); // balance the AddRef(); ctx's destructor frees the work item
+        return;
     }
 
-    ctx.release();
+    ctx.release(); // success only — the threadpool now owns the work item
 }
 
 void ViewerImgRaw::StartAsyncOpen(HWND hwnd, std::wstring_view path, bool updateOtherFiles) noexcept
@@ -2233,7 +3032,31 @@ void ViewerImgRaw::StartAsyncOpen(HWND hwnd, std::wstring_view path, bool update
     }
 
     const bool samePath      = (_currentPath == path);
-    const uint64_t requestId = _openRequestId.fetch_add(1, std::memory_order_acq_rel) + 1;
+    const uint64_t requestId = AdvanceOpenRequestId();
+    const std::shared_ptr<AsyncOpenSchedulerState> scheduler = _asyncOpenScheduler;
+    if (! scheduler)
+    {
+        return;
+    }
+
+    scheduler->currentHwnd.store(hwnd, std::memory_order_release);
+    scheduler->currentRequestId.store(requestId, std::memory_order_release);
+    scheduler->terminalFallbackPending.store(false, std::memory_order_release);
+    bool pendingReplaced = false;
+    {
+        std::scoped_lock lock(scheduler->mutex);
+        scheduler->accepting = true;
+        pendingReplaced = scheduler->pending != nullptr;
+        scheduler->pending.reset();
+        if (pendingReplaced)
+        {
+            ++scheduler->replacedPendingCount;
+        }
+    }
+    if (pendingReplaced)
+    {
+        Debug::Perf::EmitCounter(L"viewer.imgraw.open.queue.replaced_count");
+    }
 
     EndLoadingUi();
 
@@ -2322,9 +3145,16 @@ void ViewerImgRaw::StartAsyncOpen(HWND hwnd, std::wstring_view path, bool update
     InvalidateRect(hwnd, &_contentRect, FALSE);
     InvalidateRect(hwnd, &_statusRect, FALSE);
 
+    const auto failAsyncSubmission = [&]() noexcept
+    {
+        EndLoadingUi();
+        _statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERRAW_STATUS_ERROR);
+        InvalidateRect(hwnd, &_contentRect, FALSE);
+        InvalidateRect(hwnd, &_statusRect, FALSE);
+    };
+
     const wil::com_ptr<IFileSystem> fileSystem = _fileSystem;
     const std::wstring pathCopy(_currentPath);
-    const std::wstring labelCopy(_currentLabel);
     const std::wstring sidecarPathCopy(_currentSidecarJpegPath);
 
     const bool decodeRawOnly      = ToLowerCopy(PathExtensionView(pathCopy)) == L".tif";
@@ -2337,50 +3167,105 @@ void ViewerImgRaw::StartAsyncOpen(HWND hwnd, std::wstring_view path, bool update
 
     const uint32_t cfgSignature = static_cast<uint32_t>((_config.halfSize ? 1u : 0u) | (_config.useCameraWb ? 2u : 0u) | (_config.autoWb ? 4u : 0u));
 
-    AddRef();
-
-    struct AsyncOpenWorkItem final
+    auto request = std::unique_ptr<AsyncOpenRequest>(new (std::nothrow) AsyncOpenRequest{});
+    if (! request)
     {
-        AsyncOpenWorkItem()                                    = default;
-        AsyncOpenWorkItem(const AsyncOpenWorkItem&)            = delete;
-        AsyncOpenWorkItem& operator=(const AsyncOpenWorkItem&) = delete;
+        failAsyncSubmission();
+        return;
+    }
 
-        wil::unique_hmodule moduleKeepAlive;
-        std::function<void()> work;
-    };
-
-    auto ctx = std::unique_ptr<AsyncOpenWorkItem>(new (std::nothrow) AsyncOpenWorkItem{});
-
-    ctx->moduleKeepAlive = AcquireModuleReferenceFromAddress(&kViewerImgRawModuleAnchor);
-    ctx->work            = [this,
-                            fileSystem,
-                            hwnd,
+    request->viewer    = this;
+    request->requestId = requestId;
+    request->queuedAt  = std::chrono::steady_clock::now();
+    request->work      = [this,
+                             fileSystem,
+                             scheduler,
+                             hwnd,
                             requestId,
-                            path = pathCopy,
-                            updateOtherFiles,
-                            cfgSignature,
-                            label       = labelCopy,
-                            sidecarPath = sidecarPathCopy,
+                             path = pathCopy,
+                             updateOtherFiles,
+                             cfgSignature,
+                             sidecarPath = sidecarPathCopy,
                             desiredMode,
                             decodeCfg,
-                            decodeRawOnly]() mutable
+                             decodeRawOnly]() mutable
     {
-        auto releaseSelf = wil::scope_exit([&] { Release(); });
+        const auto isCurrentRequest = [&]() noexcept
+        {
+            return requestId == _openRequestId.load(std::memory_order_acquire) &&
+                   requestId == scheduler->currentRequestId.load(std::memory_order_acquire) &&
+                   hwnd == scheduler->currentHwnd.load(std::memory_order_acquire);
+        };
+
+        const auto recordTerminalFallback = [&](HRESULT hr) noexcept
+        {
+            if (! isCurrentRequest())
+            {
+                return;
+            }
+            scheduler->terminalFallbackHr.store(hr, std::memory_order_relaxed);
+            scheduler->terminalFallbackRequestId.store(requestId, std::memory_order_relaxed);
+            scheduler->terminalFallbackPending.store(true, std::memory_order_release);
+        };
+
+        const auto staleBeforeRead = [&]() noexcept
+        {
+            if (isCurrentRequest())
+            {
+                return false;
+            }
+            Debug::Perf::EmitCounter(L"viewer.imgraw.open.queue.stale_before_read");
+            return true;
+        };
+
+        const auto staleBeforeDecode = [&]() noexcept
+        {
+            if (isCurrentRequest())
+            {
+                return false;
+            }
+            Debug::Perf::EmitCounter(L"viewer.imgraw.open.queue.stale_before_decode");
+            return true;
+        };
+
+#if defined(ENABLE_TESTS)
+        const bool forceResultAllocationFailure = EnvironmentVariables::IsTruthyFlagSet(kForceOpenResultAllocationFailureEnvVar);
+        const bool forcePostFailure = EnvironmentVariables::IsTruthyFlagSet(kForceOpenResultPostFailureEnvVar);
+        const bool forceEmbeddedThumbnailPayload = EnvironmentVariables::IsTruthyFlagSet(kForceEmbeddedThumbnailPayloadEnvVar);
+#else
+        constexpr bool forceResultAllocationFailure = false;
+        constexpr bool forcePostFailure = false;
+#endif
+        if (forceResultAllocationFailure)
+        {
+            recordTerminalFallback(E_OUTOFMEMORY);
+            return;
+        }
 
         std::unique_ptr<AsyncOpenResult> result(new (std::nothrow) AsyncOpenResult{});
         if (! result)
         {
+            recordTerminalFallback(E_OUTOFMEMORY);
             return;
         }
 
-        auto postResult = wil::scope_exit([&]
+        auto finishRequest = wil::scope_exit([&]
         {
-            if (! hwnd || GetWindowLongPtrW(hwnd, GWLP_USERDATA) != reinterpret_cast<LONG_PTR>(this))
+            {
+                std::scoped_lock lock(_cacheMutex);
+                _inflightDecodes.erase(path);
+            }
+
+            if (! result || ! isCurrentRequest())
             {
                 return;
             }
 
-            static_cast<void>(PostMessagePayload(hwnd, kAsyncOpenCompleteMessage, 0, std::move(result)));
+            Debug::Perf::EmitValue(L"viewer.imgraw.open.resource.decoded_bytes", result->bgra.size(), result->hr);
+            if (forcePostFailure || ! PostMessagePayload(hwnd, kAsyncOpenCompleteMessage, 0, std::move(result)))
+            {
+                recordTerminalFallback(HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_MEMORY));
+            }
         });
 
         result->viewer           = this;
@@ -2390,6 +3275,11 @@ void ViewerImgRaw::StartAsyncOpen(HWND hwnd, std::wstring_view path, bool update
         result->configSignature  = cfgSignature;
         result->frameMode        = desiredMode;
         result->isFinal          = true;
+
+        if (staleBeforeRead())
+        {
+            return;
+        }
 
         if (! fileSystem)
         {
@@ -2405,16 +3295,26 @@ void ViewerImgRaw::StartAsyncOpen(HWND hwnd, std::wstring_view path, bool update
 
         if (desiredMode == DisplayMode::Thumbnail && ! sidecarPath.empty() && IsLikelyRawExtension(ToLowerCopy(PathExtensionView(path))))
         {
+            if (staleBeforeRead())
+            {
+                return;
+            }
             std::vector<uint8_t> sidecarBytes;
             std::wstring sidecarStatus;
-            const HRESULT sidecarReadHr = ReadFileAllBytes(fileSystem.get(), sidecarPath, sidecarBytes, sidecarStatus);
+            const HRESULT sidecarReadHr =
+                ReadFileAllBytes(fileSystem.get(), sidecarPath, sidecarBytes, sidecarStatus, ViewerImgRawResource::kProductionSidecarSourceBytes);
             if (SUCCEEDED(sidecarReadHr) && ! sidecarBytes.empty())
             {
+                Debug::Perf::EmitValue(L"viewer.imgraw.open.resource.source_bytes", sidecarBytes.size());
+                if (staleBeforeDecode())
+                {
+                    return;
+                }
                 static constexpr int kJpegPreviewMaxDim = 2048;
                 const ExifData sidecarExif              = ExtractExifFromJpeg(sidecarBytes.data(), sidecarBytes.size());
                 const bool doPreview                    = ShouldRenderJpegProgressively(sidecarBytes.data(), sidecarBytes.size(), kJpegPreviewMaxDim);
 
-                if (doPreview && requestId == _openRequestId.load(std::memory_order_acquire))
+                if (doPreview && isCurrentRequest())
                 {
                     uint32_t previewW = 0;
                     uint32_t previewH = 0;
@@ -2458,14 +3358,23 @@ void ViewerImgRaw::StartAsyncOpen(HWND hwnd, std::wstring_view path, bool update
                                 preview->exif.valid = false;
                             }
 
-                            if (hwnd && GetWindowLongPtrW(hwnd, GWLP_USERDATA) == reinterpret_cast<LONG_PTR>(this))
+                            if (isCurrentRequest())
                             {
-                                static_cast<void>(PostMessagePayload(hwnd, kAsyncOpenCompleteMessage, 0, std::move(preview)));
+                                if (forcePostFailure || ! PostMessagePayload(hwnd, kAsyncOpenCompleteMessage, 0, std::move(preview)))
+                                {
+                                    result.reset();
+                                    recordTerminalFallback(HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_MEMORY));
+                                    return;
+                                }
                             }
                         }
                     }
                 }
 
+                if (staleBeforeDecode())
+                {
+                    return;
+                }
                 uint32_t thumbW = 0;
                 uint32_t thumbH = 0;
                 std::vector<uint8_t> thumbBgra;
@@ -2503,6 +3412,10 @@ void ViewerImgRaw::StartAsyncOpen(HWND hwnd, std::wstring_view path, bool update
             }
         }
 
+        if (staleBeforeRead())
+        {
+            return;
+        }
         std::vector<uint8_t> fileBytes;
         std::wstring readStatus;
         const HRESULT readHr = ReadFileAllBytes(fileSystem.get(), path, fileBytes, readStatus);
@@ -2513,6 +3426,11 @@ void ViewerImgRaw::StartAsyncOpen(HWND hwnd, std::wstring_view path, bool update
         }
         else
         {
+            Debug::Perf::EmitValue(L"viewer.imgraw.open.resource.source_bytes", fileBytes.size());
+            if (staleBeforeDecode())
+            {
+                return;
+            }
             const std::wstring extLower = ToLowerCopy(PathExtensionView(path));
 
             if (IsWicImageExtension(extLower))
@@ -2524,7 +3442,7 @@ void ViewerImgRaw::StartAsyncOpen(HWND hwnd, std::wstring_view path, bool update
                     const ExifData jpegExif                 = ExtractExifFromJpeg(fileBytes.data(), fileBytes.size());
 
                     const bool doPreview = ShouldRenderJpegProgressively(fileBytes.data(), fileBytes.size(), kJpegPreviewMaxDim);
-                    if (doPreview && requestId == _openRequestId.load(std::memory_order_acquire))
+                    if (doPreview && isCurrentRequest())
                     {
                         uint32_t previewW = 0;
                         uint32_t previewH = 0;
@@ -2568,14 +3486,23 @@ void ViewerImgRaw::StartAsyncOpen(HWND hwnd, std::wstring_view path, bool update
                                     preview->exif.valid = false;
                                 }
 
-                                if (hwnd && GetWindowLongPtrW(hwnd, GWLP_USERDATA) == reinterpret_cast<LONG_PTR>(this))
+                                if (isCurrentRequest())
                                 {
-                                    static_cast<void>(PostMessagePayload(hwnd, kAsyncOpenCompleteMessage, 0, std::move(preview)));
+                                    if (forcePostFailure || ! PostMessagePayload(hwnd, kAsyncOpenCompleteMessage, 0, std::move(preview)))
+                                    {
+                                        result.reset();
+                                        recordTerminalFallback(HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_MEMORY));
+                                        return;
+                                    }
                                 }
                             }
                         }
                     }
 
+                    if (staleBeforeDecode())
+                    {
+                        return;
+                    }
                     uint32_t w = 0;
                     uint32_t h = 0;
                     std::vector<uint8_t> bgra;
@@ -2613,14 +3540,19 @@ void ViewerImgRaw::StartAsyncOpen(HWND hwnd, std::wstring_view path, bool update
                 }
                 else
                 {
+                    if (staleBeforeDecode())
+                    {
+                        return;
+                    }
                     uint32_t w = 0;
                     uint32_t h = 0;
                     std::vector<uint8_t> bgra;
-                    const HRESULT decodeHr = DecodeImageToBgraWic(fileBytes.data(), fileBytes.size(), w, h, bgra);
+                    uint16_t orientation   = 1;
+                    const HRESULT decodeHr = DecodeImageToBgraWic(fileBytes.data(), fileBytes.size(), w, h, bgra, orientation);
                     if (SUCCEEDED(decodeHr))
                     {
-                        result->exif.orientation = 1;
-                        result->exif.valid       = false;
+                        result->exif.orientation = orientation;
+                        result->exif.valid       = orientation != 1;
 
                         result->hr        = S_OK;
                         result->frameMode = DisplayMode::Raw;
@@ -2656,11 +3588,21 @@ void ViewerImgRaw::StartAsyncOpen(HWND hwnd, std::wstring_view path, bool update
             {
                 if (! sidecarPath.empty())
                 {
+                    if (staleBeforeRead())
+                    {
+                        return;
+                    }
                     std::vector<uint8_t> sidecarBytes;
                     std::wstring sidecarStatus;
-                    const HRESULT sidecarReadHr = ReadFileAllBytes(fileSystem.get(), sidecarPath, sidecarBytes, sidecarStatus);
+                    const HRESULT sidecarReadHr =
+                        ReadFileAllBytes(fileSystem.get(), sidecarPath, sidecarBytes, sidecarStatus, ViewerImgRawResource::kProductionSidecarSourceBytes);
                     if (SUCCEEDED(sidecarReadHr) && ! sidecarBytes.empty())
                     {
+                        Debug::Perf::EmitValue(L"viewer.imgraw.open.resource.source_bytes", sidecarBytes.size());
+                        if (staleBeforeDecode())
+                        {
+                            return;
+                        }
                         const HRESULT sidecarDecodeHr = DecodeJpegToBgraTurboJpeg(sidecarBytes.data(), sidecarBytes.size(), thumbW, thumbH, thumbBgra);
                         if (SUCCEEDED(sidecarDecodeHr))
                         {
@@ -2673,15 +3615,56 @@ void ViewerImgRaw::StartAsyncOpen(HWND hwnd, std::wstring_view path, bool update
 
                 if (! thumbDecoded)
                 {
-                    thumbDecoded = TryDecodeRawEmbeddedThumbnailFromBufferToBgra(fileBytes, thumbW, thumbH, thumbBgra, thumbAvailable, thumbExif);
+                    if (staleBeforeDecode())
+                    {
+                        return;
+                    }
+#if defined(ENABLE_TESTS)
+                    if (forceEmbeddedThumbnailPayload)
+                    {
+                        thumbDecoded = SUCCEEDED(DecodeJpegToBgraTurboJpeg(fileBytes.data(), fileBytes.size(), thumbW, thumbH, thumbBgra));
+                        thumbAvailable = thumbDecoded;
+                    }
+                    else
+#endif
+                    {
+                        thumbDecoded =
+                            TryDecodeRawEmbeddedThumbnailFromBufferToBgra(fileBytes, thumbW, thumbH, thumbBgra, thumbAvailable, thumbExif);
+                    }
                     if (thumbDecoded)
                     {
                         thumbSource = CachedImage::ThumbSource::Embedded;
                     }
                 }
 
-                if (thumbDecoded && requestId == _openRequestId.load(std::memory_order_acquire))
+                if (thumbDecoded && isCurrentRequest())
                 {
+                    if (desiredMode == DisplayMode::Thumbnail)
+                    {
+                        result->hr               = S_OK;
+                        result->frameMode        = DisplayMode::Thumbnail;
+                        result->isFinal          = true;
+                        result->thumbAvailable   = true;
+                        result->thumbSource      = thumbSource;
+                        result->width            = thumbW;
+                        result->height           = thumbH;
+                        result->bgra             = std::move(thumbBgra);
+                        result->exif.orientation = thumbExif.orientation;
+                        if (thumbExif.valid)
+                        {
+                            result->exif.camera         = thumbExif.camera;
+                            result->exif.lens           = thumbExif.lens;
+                            result->exif.dateTime       = thumbExif.dateTime;
+                            result->exif.iso            = thumbExif.iso;
+                            result->exif.shutterSeconds = thumbExif.shutterSeconds;
+                            result->exif.aperture       = thumbExif.aperture;
+                            result->exif.focalLengthMm  = thumbExif.focalLengthMm;
+                            result->exif.valid          = true;
+                        }
+                        result->statusMessage.clear();
+                        return;
+                    }
+
                     std::unique_ptr<AsyncOpenResult> preview(new (std::nothrow) AsyncOpenResult{});
                     if (preview)
                     {
@@ -2712,23 +3695,25 @@ void ViewerImgRaw::StartAsyncOpen(HWND hwnd, std::wstring_view path, bool update
                             preview->exif.valid          = true;
                         }
 
-                        if (hwnd && GetWindowLongPtrW(hwnd, GWLP_USERDATA) == reinterpret_cast<LONG_PTR>(this))
+                        if (isCurrentRequest())
                         {
-                            static_cast<void>(PostMessagePayload(hwnd, kAsyncOpenCompleteMessage, 0, std::move(preview)));
+                            if (forcePostFailure || ! PostMessagePayload(hwnd, kAsyncOpenCompleteMessage, 0, std::move(preview)))
+                            {
+                                result.reset();
+                                recordTerminalFallback(HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_MEMORY));
+                                return;
+                            }
                         }
 
-                        if (desiredMode == DisplayMode::Thumbnail)
-                        {
-                            return;
-                        }
                     }
                 }
             }
 
             const bool needRawDecode = (desiredMode == DisplayMode::Raw) || ! thumbDecoded;
-            if (needRawDecode && requestId == _openRequestId.load(std::memory_order_acquire))
+            if (needRawDecode && isCurrentRequest())
             {
                 ExifData rawExif{};
+                uint16_t decodedOrientation = 1;
 
                 LibRawProgressHost host{};
                 host.requestIdCounter = &_openRequestId;
@@ -2739,16 +3724,26 @@ void ViewerImgRaw::StartAsyncOpen(HWND hwnd, std::wstring_view path, bool update
                 result->frameMode      = DisplayMode::Raw;
                 result->isFinal        = true;
 
+                if (staleBeforeDecode())
+                {
+                    return;
+                }
                 result->hr = DecodeRawFullImageFromBufferToBgra(
                     decodeCfg, fileBytes, result->width, result->height, result->bgra, result->statusMessage, rawExif, &host);
 
                 if (FAILED(result->hr))
                 {
+                    if (staleBeforeDecode())
+                    {
+                        return;
+                    }
                     uint32_t w = 0;
                     uint32_t h = 0;
                     std::vector<uint8_t> bgra;
-                    const HRESULT fallbackHr = IsJpegExtension(extLower) ? DecodeJpegToBgraTurboJpeg(fileBytes.data(), fileBytes.size(), w, h, bgra)
-                                                                         : DecodeImageToBgraWic(fileBytes.data(), fileBytes.size(), w, h, bgra);
+                    const bool fallbackIsJpeg = IsJpegExtension(extLower);
+                    const HRESULT fallbackHr  = fallbackIsJpeg
+                                                    ? DecodeJpegToBgraTurboJpeg(fileBytes.data(), fileBytes.size(), w, h, bgra)
+                                                    : DecodeImageToBgraWic(fileBytes.data(), fileBytes.size(), w, h, bgra, decodedOrientation);
                     if (SUCCEEDED(fallbackHr))
                     {
                         result->hr        = S_OK;
@@ -2769,25 +3764,108 @@ void ViewerImgRaw::StartAsyncOpen(HWND hwnd, std::wstring_view path, bool update
                 result->exif.shutterSeconds   = effectiveExif.shutterSeconds;
                 result->exif.aperture         = effectiveExif.aperture;
                 result->exif.focalLengthMm    = effectiveExif.focalLengthMm;
-                result->exif.orientation      = 1;
-                result->exif.valid            = effectiveExif.valid;
+                result->exif.orientation      = decodedOrientation;
+                result->exif.valid            = effectiveExif.valid || decodedOrientation != 1;
             }
         }
     };
 
+    {
+        std::scoped_lock lock(scheduler->mutex);
+        if (scheduler->workerActive)
+        {
+            scheduler->pending = std::move(request);
+        }
+        else
+        {
+            scheduler->workerActive = true;
+        }
+    }
+
+    if (! request)
+    {
+        Debug::Perf::EmitValue(L"viewer.imgraw.open.queue.pending_count", 1u);
+        return;
+    }
+
+    struct AsyncOpenWorkItem final
+    {
+        AsyncOpenWorkItem()                                    = default;
+        AsyncOpenWorkItem(const AsyncOpenWorkItem&)            = delete;
+        AsyncOpenWorkItem& operator=(const AsyncOpenWorkItem&) = delete;
+        AsyncOpenWorkItem(AsyncOpenWorkItem&&)                 = delete;
+        AsyncOpenWorkItem& operator=(AsyncOpenWorkItem&&)      = delete;
+
+        wil::unique_hmodule moduleKeepAlive;
+        std::shared_ptr<AsyncOpenSchedulerState> scheduler;
+        std::unique_ptr<AsyncOpenRequest> initialRequest;
+    };
+
+    auto ctx = std::unique_ptr<AsyncOpenWorkItem>(new (std::nothrow) AsyncOpenWorkItem{});
+    if (! ctx)
+    {
+        std::scoped_lock lock(scheduler->mutex);
+        scheduler->workerActive = false;
+        failAsyncSubmission();
+        return;
+    }
+
+    ctx->moduleKeepAlive = AcquireModuleReferenceFromAddress(&kViewerImgRawModuleAnchor);
+    if (! ctx->moduleKeepAlive)
+    {
+        Debug::Error(L"ViewerImgRaw: Failed to pin the plugin module for async open.");
+        std::scoped_lock lock(scheduler->mutex);
+        scheduler->workerActive = false;
+        failAsyncSubmission();
+        return;
+    }
+    ctx->scheduler      = scheduler;
+    ctx->initialRequest = std::move(request);
+
+    Debug::Perf::EmitValue(L"viewer.imgraw.open.queue.active_workers", 1u);
+    Debug::Perf::EmitValue(L"viewer.imgraw.open.queue.pending_count", 0u);
+    Debug::Perf::EmitValue(L"viewer.imgraw.open.resource.owned_peak_limit", ViewerImgRawResource::kProductionMainOwnedPeakBytes);
+    NotifyViewerImgRawAsyncWorkQueued();
     const BOOL queued = TrySubmitThreadpoolCallback(
-        [](PTP_CALLBACK_INSTANCE /*instance*/, void* context) noexcept
+        [](PTP_CALLBACK_INSTANCE instance, void* context) noexcept
     {
         std::unique_ptr<AsyncOpenWorkItem> ctx(static_cast<AsyncOpenWorkItem*>(context));
-        if (! ctx)
+        if (ctx && ctx->moduleKeepAlive)
         {
+            TransferModulePinToCallbackReturn(instance, ctx->moduleKeepAlive);
+        }
+        if (! ctx || ! ctx->scheduler)
+        {
+            NotifyViewerImgRawAsyncWorkCompleted();
             return;
         }
 
-        static_cast<void>(ctx->moduleKeepAlive);
-        if (ctx->work)
+        auto completeAsyncWork = wil::scope_exit([]() noexcept { NotifyViewerImgRawAsyncWorkCompleted(); });
+        const std::shared_ptr<AsyncOpenSchedulerState> scheduler = ctx->scheduler;
+        std::unique_ptr<AsyncOpenRequest> current                = std::move(ctx->initialRequest);
+        while (current)
         {
-            ctx->work();
+            Debug::Perf::EmitDurationUs(
+                L"viewer.imgraw.open.queue.wait_us", Debug::Perf::ElapsedUs(current->queuedAt), current->requestId, 0u, S_OK);
+            if (current->work)
+            {
+                current->work();
+            }
+            current.reset();
+
+            bool hasPending = false;
+            {
+                std::scoped_lock lock(scheduler->mutex);
+                if (! scheduler->accepting)
+                {
+                    scheduler->pending.reset();
+                }
+                current                  = std::move(scheduler->pending);
+                hasPending              = current != nullptr;
+                scheduler->workerActive = hasPending;
+            }
+            Debug::Perf::EmitValue(L"viewer.imgraw.open.queue.pending_count", 0u);
+            Debug::Perf::EmitValue(L"viewer.imgraw.open.queue.active_workers", hasPending ? 1u : 0u);
         }
     },
         ctx.get(),
@@ -2795,7 +3873,14 @@ void ViewerImgRaw::StartAsyncOpen(HWND hwnd, std::wstring_view path, bool update
 
     if (queued == 0)
     {
+        NotifyViewerImgRawAsyncWorkCompleted();
         Debug::Error(L"ViewerImgRaw: Failed to queue async open work item.");
+        {
+            std::scoped_lock lock(scheduler->mutex);
+            scheduler->workerActive = false;
+        }
+        failAsyncSubmission();
+        return;
     }
 
     ctx.release();
@@ -2804,6 +3889,11 @@ void ViewerImgRaw::StartAsyncOpen(HWND hwnd, std::wstring_view path, bool update
 void ViewerImgRaw::OnAsyncOpenComplete(std::unique_ptr<AsyncOpenResult> result) noexcept
 {
     if (! result)
+    {
+        return;
+    }
+
+    if (result->viewer != this)
     {
         return;
     }
@@ -2841,6 +3931,10 @@ void ViewerImgRaw::OnAsyncOpenComplete(std::unique_ptr<AsyncOpenResult> result) 
             if (! entry)
             {
                 entry = std::move(created);
+            }
+            if (entry)
+            {
+                ReleaseCachedImageBudgetLocked(*entry);
             }
             image = entry.get();
         }
@@ -2907,9 +4001,9 @@ void ViewerImgRaw::OnAsyncOpenComplete(std::unique_ptr<AsyncOpenResult> result) 
             UpdateOrientationState();
             RebuildExifOverlayText();
 
-            if (_hostAlerts)
+            if (_hostAlerts && _hWnd)
             {
-                static_cast<void>(_hostAlerts->ClearAlert(HOST_ALERT_SCOPE_WINDOW, nullptr));
+                static_cast<void>(_hostAlerts->ClearAlert(HOST_ALERT_SCOPE_WINDOW, reinterpret_cast<void*>(_hWnd.get())));
             }
             _alertVisible = false;
 
@@ -2917,11 +4011,30 @@ void ViewerImgRaw::OnAsyncOpenComplete(std::unique_ptr<AsyncOpenResult> result) 
             {
                 UpdateNeighborCache(result->requestId);
             }
+#if defined(ENABLE_TESTS)
+            const uint64_t applyOrdinal = ++_debugApplyOrdinal;
+            if (result->isFinal)
+            {
+                ++_debugFinalSuccessCount;
+                _debugLastFinalApplyOrdinal = applyOrdinal;
+            }
+            else
+            {
+                ++_debugPreviewSuccessCount;
+                _debugLastPreviewApplyOrdinal = applyOrdinal;
+            }
+#endif
         }
     }
 
     if (FAILED(result->hr))
     {
+#if defined(ENABLE_TESTS)
+        if (result->isFinal)
+        {
+            ++_debugFinalFailureCount;
+        }
+#endif
         const bool keepImage = HasDisplayImage();
         if (! keepImage)
         {

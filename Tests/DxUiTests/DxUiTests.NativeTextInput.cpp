@@ -1,13 +1,139 @@
 #include "DxUiTestHelpers.h"
 
+#include <array>
 #include <atomic>
+#include <fstream>
 #include <functional>
+#include <iterator>
+#include <string>
+#include <string_view>
 
 #include <msctf.h>
 #include <textstor.h>
 
 namespace
 {
+
+void TestNativeTextInputTextStoreGetTextExtUsesRangeRectsBeforeCaretWalk()
+{
+    const std::filesystem::path sourcePath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.TextStoreACP.cpp";
+    std::ifstream input(sourcePath);
+    Require(input.good(), "TextStoreACP source is readable for GetTextExt range-rect guard");
+    const std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+
+    const size_t helperFunction = source.find("TryResolveMultilineTextStoreRangeRect");
+    const size_t storeClass     = source.find("class DxUiTextStoreACP", helperFunction);
+    Require(helperFunction != std::string::npos && storeClass != std::string::npos && helperFunction < storeClass,
+            "multiline TextStoreACP range helper source block is found");
+
+    const std::string helperBlock = source.substr(helperFunction, storeClass - helperFunction);
+    const size_t rangeRects       = helperBlock.find("TryGetTextInputRangeRects");
+    const size_t caretRect        = helperBlock.find("TryGetTextInputCaretRect");
+    Require(rangeRects != std::string::npos, "multiline TextStoreACP GetTextExt uses control-provided range rects");
+    Require(caretRect != std::string::npos && rangeRects < caretRect,
+            "multiline TextStoreACP GetTextExt tries range rects before falling back to caret walking");
+}
+
+void TestNativeTextInputTsfDeactivateRestoresFocusAssociationBeforePoppingDocument()
+{
+    const std::filesystem::path internalHeaderPath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.Internal.h";
+    std::ifstream internalHeaderInput(internalHeaderPath);
+    Require(internalHeaderInput.good(), "DxUi internal header is readable for native text store teardown guard");
+    const std::string internalHeader((std::istreambuf_iterator<char>(internalHeaderInput)), std::istreambuf_iterator<char>());
+    Require(internalHeader.find("DisconnectNativeTextInputTextStore") != std::string::npos,
+            "DxUi exposes an internal text-store disconnect helper for teardown");
+
+    const std::filesystem::path textStorePath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.TextStoreACP.cpp";
+    std::ifstream textStoreInput(textStorePath);
+    Require(textStoreInput.good(), "TextStoreACP source is readable for teardown guard");
+    const std::string textStoreSource((std::istreambuf_iterator<char>(textStoreInput)), std::istreambuf_iterator<char>());
+    Require(textStoreSource.find("void DisconnectNativeTextInputTextStore") != std::string::npos, "TextStoreACP implements a disconnect helper");
+
+    const size_t disconnectMethod = textStoreSource.find("void Disconnect() noexcept");
+    const size_t compositionStart = textStoreSource.find("HRESULT STDMETHODCALLTYPE OnStartComposition", disconnectMethod);
+    Require(disconnectMethod != std::string::npos && compositionStart != std::string::npos && disconnectMethod < compositionStart,
+            "TextStoreACP disconnect method block is found");
+    const std::string disconnectBlock = textStoreSource.substr(disconnectMethod, compositionStart - disconnectMethod);
+    Require(disconnectBlock.find("_host") != std::string::npos && disconnectBlock.find("nullptr") != std::string::npos &&
+                disconnectBlock.find("_control") != std::string::npos,
+            "TextStoreACP disconnect severs raw host/control pointers");
+    Require(disconnectBlock.find("SecureWipe::SecureClear(_observedState.text)") != std::string::npos,
+            "TextStoreACP disconnect securely clears observed text before dropping state");
+
+    const std::filesystem::path nativeSourcePath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.NativeTextInput.cpp";
+    std::ifstream nativeSourceInput(nativeSourcePath);
+    Require(nativeSourceInput.good(), "native text input source is readable for TSF teardown guard");
+    const std::string nativeSource((std::istreambuf_iterator<char>(nativeSourceInput)), std::istreambuf_iterator<char>());
+
+    const size_t activate = nativeSource.find("bool WindowHost::ActivateNativeTextInputTsf");
+    const size_t deactivate = nativeSource.find("void WindowHost::DeactivateNativeTextInputTsf", activate);
+    Require(activate != std::string::npos && deactivate != std::string::npos && activate < deactivate,
+            "native TSF activate/deactivate source blocks are found");
+    const std::string activateBlock = nativeSource.substr(activate, deactivate - activate);
+    const size_t associateHostFocus = activateBlock.find("threadMgr->AssociateFocus(_hwnd, documentMgr.get()");
+    const size_t focusDocument      = activateBlock.find("threadMgr->SetFocus(documentMgr.get())");
+    const size_t capturePreviousFocusDocument =
+        activateBlock.find("threadMgr->AssociateFocus(_hwnd, documentMgr.get(), previousFocusDocumentMgr.put())");
+    const size_t storePreviousFocusDocument =
+        activateBlock.find("previousFocusDocumentMgr.query_to(_nativeTextInputTsfPreviousFocusDocumentMgr.put())");
+    Require(associateHostFocus != std::string::npos, "native TSF activate associates the host HWND with the active document manager");
+    Require(capturePreviousFocusDocument != std::string::npos,
+            "native TSF activate captures the previous HWND focus document manager");
+    Require(storePreviousFocusDocument != std::string::npos,
+            "native TSF activate keeps the previous HWND focus document manager alive until deactivation");
+    Require(focusDocument != std::string::npos, "native TSF activate sets thread-manager focus to the active document manager");
+    Require(associateHostFocus < focusDocument, "native TSF activate associates the host HWND before setting TSF focus");
+    Require(capturePreviousFocusDocument < storePreviousFocusDocument && storePreviousFocusDocument < focusDocument,
+            "native TSF activate stores the previous HWND focus document manager before setting TSF focus");
+
+    const size_t nextMethod = nativeSource.find("\nvoid WindowHost::SyncNativeTextInputSession", deactivate);
+    Require(deactivate != std::string::npos && nextMethod != std::string::npos && deactivate < nextMethod, "native TSF deactivate source block is found");
+    const std::string deactivateBlock = nativeSource.substr(deactivate, nextMethod - deactivate);
+
+    const size_t earlyDisconnect        = deactivateBlock.find("DisconnectNativeTextInputTextStore(textStoreToDisconnect.get())");
+    const size_t lateDisconnect = deactivateBlock.find("DisconnectNativeTextInputTextStore(textStoreToDisconnect.get())", earlyDisconnect + 1u);
+    const size_t pop                    = deactivateBlock.find("documentMgr->Pop");
+    const size_t clearThreadMgrFocus    = deactivateBlock.find("threadMgr->SetFocus(nullptr)");
+    const size_t loadPreviousFocus      = deactivateBlock.find("_nativeTextInputTsfPreviousFocusDocumentMgr.query_to(previousFocusDocumentMgr.put())");
+    const size_t restoreHostFocus       = deactivateBlock.find("threadMgr->AssociateFocus(_hwnd, previousFocusDocumentMgr.get()");
+    const size_t resetPreviousFocus     = deactivateBlock.find("_nativeTextInputTsfPreviousFocusDocumentMgr.reset()");
+    const size_t directNullDisassociate = deactivateBlock.find("threadMgr->AssociateFocus(_hwnd, nullptr");
+    const size_t holdStoreForDisconnect = deactivateBlock.find("textStoreToDisconnect");
+    const size_t resetContext           = deactivateBlock.find("_nativeTextInputTsfContext.reset()");
+    const size_t resetDocumentMgr       = deactivateBlock.find("_nativeTextInputTsfDocumentMgr.reset()");
+    const size_t resetThreadMgr         = deactivateBlock.find("_nativeTextInputTsfThreadMgr.reset()");
+    const size_t resetStore             = deactivateBlock.find("_nativeTextInputTsfTextStore.reset()");
+    Require(earlyDisconnect != std::string::npos && lateDisconnect != std::string::npos,
+            "native TSF deactivate has separate stale-control and live-control disconnect paths");
+    Require(clearThreadMgrFocus != std::string::npos, "native TSF deactivate clears the thread-manager focus");
+    Require(loadPreviousFocus != std::string::npos, "native TSF deactivate loads the previous HWND focus document manager");
+    Require(restoreHostFocus != std::string::npos, "native TSF deactivate restores the previous HWND focus document manager");
+    Require(resetPreviousFocus != std::string::npos, "native TSF deactivate releases the saved previous HWND focus document manager");
+    Require(directNullDisassociate == std::string::npos,
+            "native TSF deactivate restores the previous HWND focus document manager instead of unconditionally clearing it");
+    Require(pop != std::string::npos, "native TSF deactivate pops the active document");
+    Require(earlyDisconnect < pop, "native TSF deactivate disconnects a stale control before document Pop can call back into it");
+    Require(clearThreadMgrFocus < pop, "native TSF deactivate clears the thread-manager focus before popping the document");
+    Require(loadPreviousFocus < restoreHostFocus && restoreHostFocus < pop,
+            "native TSF deactivate restores the previous HWND focus document manager before popping the document");
+    Require(pop < resetPreviousFocus, "native TSF deactivate keeps the saved previous focus document manager through document Pop");
+    Require(holdStoreForDisconnect != std::string::npos && holdStoreForDisconnect < resetContext,
+            "native TSF deactivate holds a local text-store reference while releasing TSF-owned context objects");
+    Require(resetContext != std::string::npos && resetDocumentMgr != std::string::npos && resetThreadMgr != std::string::npos,
+            "native TSF deactivate releases TSF context/document/thread-manager objects");
+    Require(pop < resetContext && resetContext < resetDocumentMgr && resetDocumentMgr < resetThreadMgr && resetThreadMgr < lateDisconnect,
+            "native TSF deactivate releases TSF-owned context objects before severing a live text-store sink/host connection");
+    Require(resetStore != std::string::npos && lateDisconnect < resetStore,
+            "native TSF deactivate disconnects the live text store before dropping the host reference");
+
+    const size_t shutdown            = nativeSource.find("void ShutdownNativeTextInputThreadManagerState");
+    const size_t ensureThreadManager = nativeSource.find("[[nodiscard]] bool EnsureNativeTextInputThreadManager", shutdown);
+    Require(shutdown != std::string::npos && ensureThreadManager != std::string::npos && shutdown < ensureThreadManager,
+            "native TSF thread-manager shutdown source block is found");
+    const std::string shutdownBlock = nativeSource.substr(shutdown, ensureThreadManager - shutdown);
+    Require(shutdownBlock.find("state.threadMgr->Deactivate()") != std::string::npos,
+            "native TSF thread-manager shutdown owns the thread-manager Deactivate call");
+}
 
 class NativeTextStoreTestSink final : public ITextStoreACPSink
 {
@@ -396,6 +522,11 @@ void TestNativeTextInputBackendFocusesHostWithoutBridgeChild()
     field->SetBounds(D2D1::RectF(12.0f, 16.0f, 220.0f, 44.0f));
 
     window.Host().SetRoot(std::move(root));
+    if (! TryFocusDxUiTestWindow(window.Hwnd()))
+    {
+        SkipDxUiTest("native text input requires an interactive desktop for host focus assertions");
+        return;
+    }
     window.Host().SetFocusControl(field);
     window.PumpMessages();
 
@@ -449,6 +580,11 @@ void TestNativeTextInputBackendOwnsSystemCaretOnHostHwnd()
     field->SetBounds(D2D1::RectF(12.0f, 16.0f, 220.0f, 44.0f));
 
     window.Host().SetRoot(std::move(root));
+    if (! TryFocusDxUiTestWindow(window.Hwnd()))
+    {
+        SkipDxUiTest("native text input requires an interactive desktop for system caret assertions");
+        return;
+    }
     window.Host().SetFocusControl(field);
     window.PumpMessages();
 
@@ -3937,7 +4073,7 @@ void TestNativeTextInputBackendMaskedHiddenSuppressesCopyAndCut()
     Require(suppressed, "native hidden masked text suppresses copy and cut without disclosing or mutating the secret");
 }
 
-void TestNativeTextInputBackendMaskedExactPolicyCountsEmojiTextElements()
+void TestNativeTextInputBackendMaskedExactPolicyCountsTextElements()
 {
     using namespace RedSalamander::DxUi;
 
@@ -3962,7 +4098,7 @@ void TestNativeTextInputBackendMaskedExactPolicyCountsEmojiTextElements()
     Require(window.Host().TryReadNativeTextInputState(field, state), "native masked exact policy exposes readable state");
     Require(state.masked, "native masked exact policy keeps the field masked");
     Require(state.maskLengthPolicy == PasswordMaskLengthPolicy::Exact, "native masked exact policy records exact masking");
-    Require(state.secretVisibleDotCount == 4u, "native masked exact policy displays one dot per user-visible text element");
+    Require(state.secretVisibleDotCount == 4u, "native masked exact policy displays one dot per user-perceived text element");
 }
 
 void TestNativeTextInputBackendMaskedConcealedPolicyUsesStableBuckets()
@@ -4040,6 +4176,32 @@ void TestNativeTextInputBackendMaskedConcealedPolicyRegeneratesEpochs()
     const size_t refocusEpochDots = state.secretVisibleDotCount;
     Require(refocusEpochDots >= 4u && refocusEpochDots <= 7u, "native concealed refocus dots stay inside the first privacy bucket display range");
     Require(refocusEpochDots != resetEpochDots, "native concealed dot count regenerates on a new focus epoch");
+}
+
+void TestNativeTextInputDeactivateSecureClearsCachedText()
+{
+    const std::filesystem::path sourcePath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.NativeTextInput.cpp";
+    std::ifstream input(sourcePath);
+    Require(input.good(), "NativeTextInput source is readable for secure cache teardown guard");
+    const std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+
+    const size_t helperStart = source.find("void WindowHost::SecureClearNativeTextInputStateCache");
+    Require(helperStart != std::string::npos, "WindowHost has a dedicated native text input cache secure-clear helper");
+    const size_t helperEnd = source.find("\nvoid WindowHost::", helperStart + 1u);
+    Require(helperEnd != std::string::npos && helperStart < helperEnd, "native text input cache secure-clear helper block is found");
+    const std::string helperBlock = source.substr(helperStart, helperEnd - helperStart);
+    Require(helperBlock.find("SecureWipe::SecureClear(_nativeTextInputStateCache.text)") != std::string::npos,
+            "native text input cache secure-clear helper wipes the cached text copy");
+
+    const size_t deactivateStart  = source.find("void WindowHost::DeactivateNativeTextInputSession");
+    const size_t activateTsfStart = source.find("bool WindowHost::ActivateNativeTextInputTsf", deactivateStart);
+    Require(deactivateStart != std::string::npos && activateTsfStart != std::string::npos && deactivateStart < activateTsfStart,
+            "native text input deactivation block is found");
+    const std::string deactivateBlock = source.substr(deactivateStart, activateTsfStart - deactivateStart);
+    Require(deactivateBlock.find("SecureClearNativeTextInputStateCache()") != std::string::npos,
+            "native text input deactivation secure-clears cached text when ending a session");
+    Require(deactivateBlock.find("_nativeTextInputStateCacheValid = false") == std::string::npos,
+            "native text input deactivation goes through the secure cache-clear helper instead of only invalidating the cache");
 }
 
 void TestNativeTextInputBackendConcealedEditingAffordancesAndPointerPolicy()
@@ -4963,6 +5125,33 @@ void TestNativeTextInputTextStoreRequiresLockAndExposesTextSelectionGeometry()
     Require(pointAcp >= 0 && pointAcp <= endAcp, "native text store maps a screen point to an ACP");
 
     RequireSucceeded(store->UnadviseSink(&sink), "native text store unadvises the sink");
+}
+
+void TestNativeTextInputTextStoreRejectsDestroyedControlDuringTeardown()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    window.Host().SetTextInputBackend(TextInputBackend::Native);
+
+    auto root   = std::make_unique<Panel>();
+    auto* field = root->AddChild<TextField>(L"alpha beta");
+    field->SetBounds(D2D1::RectF(12.0f, 16.0f, 260.0f, 44.0f));
+    window.Host().SetRoot(std::move(root));
+
+    wil::com_ptr_nothrow<ITextStoreACP> store;
+    store.attach(CreateNativeTextInputTextStore(window.Host(), *field));
+    Require(store != nullptr, "destroy-during-teardown test creates an independent native text store");
+
+    TsViewCookie view = 0u;
+    RequireSucceeded(store->GetActiveView(&view), "destroy-during-teardown test resolves the text-store view");
+    RECT bounds{};
+    RequireSucceeded(store->GetScreenExt(view, &bounds), "destroy-during-teardown test reads live control geometry");
+
+    window.Host().SetRoot(std::make_unique<Panel>());
+
+    Require(store->GetScreenExt(view, &bounds) == TS_E_INVALIDPOS,
+            "native text store rejects a control destroyed during teardown instead of dereferencing stale state");
 }
 
 void TestNativeTextInputTextStoreExposesOwnerCompositionSink()
@@ -6180,6 +6369,8 @@ void TestNativeTextInputBackendKeyToPaintMetricScenario()
 
 void RunNativeTextInputTests()
 {
+    TestNativeTextInputTsfDeactivateRestoresFocusAssociationBeforePoppingDocument();
+    TestNativeTextInputTextStoreGetTextExtUsesRangeRectsBeforeCaretWalk();
     TestWindowHostDefaultsToNativeTextInputBackend();
     TestNativeTextInputBackendFocusesHostWithoutBridgeChild();
     TestNativeTextInputBackendActivatesTsfDocumentOnFocus();
@@ -6206,6 +6397,7 @@ void RunNativeTextInputTests()
     TestNativeTextInputBackendEditableComboDeleteKeysAndPathWordDeleteSyncState();
     TestNativeTextInputBackendSyncsPrintableSysCharIntoSessionState();
     TestNativeTextInputTextStoreRequiresLockAndExposesTextSelectionGeometry();
+    TestNativeTextInputTextStoreRejectsDestroyedControlDuringTeardown();
     TestNativeTextInputTextStoreExposesOwnerCompositionSink();
     TestNativeTextInputTextStoreExposesAcp2Surface();
     TestNativeTextInputTextStoreMixedBiDiGeometryUsesTextViewport();
@@ -6275,9 +6467,10 @@ void RunNativeTextInputTests()
     TestNativeTextInputBackendEditTransactionsNotifyOnceAndIgnoreNoOps();
     TestNativeTextInputBackendEmojiClipboardReplacementUndoRedo();
     TestNativeTextInputBackendMaskedHiddenSuppressesCopyAndCut();
-    TestNativeTextInputBackendMaskedExactPolicyCountsEmojiTextElements();
+    TestNativeTextInputBackendMaskedExactPolicyCountsTextElements();
     TestNativeTextInputBackendMaskedConcealedPolicyUsesStableBuckets();
     TestNativeTextInputBackendMaskedConcealedPolicyRegeneratesEpochs();
+    TestNativeTextInputDeactivateSecureClearsCachedText();
     TestNativeTextInputBackendConcealedEditingAffordancesAndPointerPolicy();
     TestNativeTextInputBackendRevealedMaskedFieldAllowsCopyAndCut();
     TestNativeTextInputBackendRevealedMaskedFieldRemasksOnBlurReadOnlyAndDisable();

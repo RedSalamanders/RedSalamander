@@ -12,26 +12,26 @@ class AlertOverlayUiaProvider;
 #if defined(ENABLE_TESTS)
 struct AlertOverlayWindowDebugSnapshot
 {
-    bool visible = false;
-    bool hasLayout = false;
-    bool hasBackdropBitmap = false;
-    uint64_t paintCount = 0;
-    float lastDrawOpacity = 0.0f;
-    float lastDrawScrimOpacity = 0.0f;
-    float minimumDrawOpacity = 1.0f;
+    bool visible                  = false;
+    bool hasLayout                = false;
+    bool hasBackdropBitmap        = false;
+    uint64_t paintCount           = 0;
+    float lastDrawOpacity         = 0.0f;
+    float lastDrawScrimOpacity    = 0.0f;
+    float minimumDrawOpacity      = 1.0f;
     uint64_t backdropCaptureCount = 0;
     SIZE clientSizePx{};
     SIZE backdropSizePx{};
     RECT closeRectPx{};
-    bool usesSharedCloseChrome = false;
+    bool usesSharedCloseChrome  = false;
     bool usesSharedButtonChrome = false;
-    uint64_t mouseDownCount = 0;
-    uint64_t mouseUpCount = 0;
-    uint64_t dismissCount = 0;
+    uint64_t mouseDownCount     = 0;
+    uint64_t mouseUpCount       = 0;
+    uint64_t dismissCount       = 0;
     POINT lastMouseDownPointPx{};
     POINT lastMouseUpPointPx{};
     int lastMouseDownHitPart = -1;
-    int lastMouseUpHitPart = -1;
+    int lastMouseUpHitPart   = -1;
 };
 
 [[nodiscard]] bool DebugGetAlertOverlayWindowSnapshot(HWND hwnd, AlertOverlayWindowDebugSnapshot& out) noexcept;
@@ -161,17 +161,17 @@ private:
     std::optional<uint32_t> _primaryButtonId;
     std::optional<uint32_t> _escapeButtonId;
 #if defined(ENABLE_TESTS)
-    uint64_t _debugPaintCount = 0;
-    float _debugMinimumDrawOpacity = 1.0f;
+    uint64_t _debugPaintCount           = 0;
+    float _debugMinimumDrawOpacity      = 1.0f;
     uint64_t _debugBackdropCaptureCount = 0;
     SIZE _debugBackdropSizePx{};
     uint64_t _debugMouseDownCount = 0;
-    uint64_t _debugMouseUpCount = 0;
-    uint64_t _debugDismissCount = 0;
+    uint64_t _debugMouseUpCount   = 0;
+    uint64_t _debugDismissCount   = 0;
     POINT _debugLastMouseDownPointPx{};
     POINT _debugLastMouseUpPointPx{};
     int _debugLastMouseDownHitPart = -1;
-    int _debugLastMouseUpHitPart = -1;
+    int _debugLastMouseUpHitPart   = -1;
 #endif
 };
 } // namespace RedSalamander::Ui

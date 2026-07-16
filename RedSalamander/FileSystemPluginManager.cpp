@@ -3,9 +3,13 @@
 #include "FileSystemPluginManager.h"
 
 #include <algorithm>
+#include <cassert>
+#include <cstring>
 #include <cwchar>
 #include <cwctype>
 #include <format>
+#include <limits>
+#include <optional>
 #include <unordered_set>
 
 #include "Helpers.h"
@@ -22,11 +26,11 @@
 
 namespace
 {
-using CreateFactoryFunc                = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const wchar_t*, void**);
-using EnumeratePluginsFunc             = HRESULT(__stdcall*)(REFIID, const PluginMetaData**, unsigned int*);
-using GetConfigurationSchemaExportFunc = HRESULT(__stdcall*)(REFIID, const wchar_t*, const char**);
-using PluginShutdownExportFunc         = void(__stdcall*)();
-using PluginRetainModuleUntilProcessExitExportFunc = BOOL(__stdcall*)();
+using CreateFactoryFunc                            = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const wchar_t*, void**);
+using EnumeratePluginsFunc                         = HRESULT(__stdcall*)(REFIID, const PluginMetaData**, unsigned int*);
+using GetConfigurationSchemaExportFunc             = HRESULT(__stdcall*)(REFIID, const wchar_t*, const char**);
+using BrowseConnectionTargetsExportFunc =
+    HRESULT(__stdcall*)(REFIID, const wchar_t*, const FactoryConnectionBrowseRequest*, FactoryConnectionBrowseResult*) noexcept;
 
 bool IsDllPath(const std::filesystem::path& path) noexcept
 {
@@ -53,6 +57,96 @@ std::wstring SafeCoalesce(const wchar_t* value) noexcept
 std::string SafeCoalesce(const char* value) noexcept
 {
     return value ? std::string(value) : std::string();
+}
+
+HRESULT ValidateConnectionBrowseRoot(const Common::Settings::JsonValue& root) noexcept
+{
+    const std::optional<uint32_t> version = Common::Settings::GetUInt32(root, "version");
+    return version.has_value() && version.value() == 1u ? S_OK : HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+}
+
+HRESULT ParseConnectionBrowseDevicesJson(std::string_view jsonUtf8, std::vector<FileSystemPluginManager::ConnectionBrowseDevice>& outDevices) noexcept
+{
+    outDevices.clear();
+
+    Common::Settings::JsonValue root;
+    const HRESULT parseHr = Common::Settings::ParseJsonValue(jsonUtf8, root);
+    if (FAILED(parseHr))
+    {
+        return parseHr;
+    }
+    const HRESULT validateHr = ValidateConnectionBrowseRoot(root);
+    if (FAILED(validateHr))
+    {
+        return validateHr;
+    }
+
+    const Common::Settings::JsonArray* devices = Common::Settings::GetArray(root, "devices");
+    if (! devices)
+    {
+        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+    }
+
+    outDevices.reserve(devices->items.size());
+    for (const Common::Settings::JsonValue& item : devices->items)
+    {
+        auto pnpId = Common::Settings::GetWString(item, "pnpId");
+        if (! pnpId.has_value() || pnpId->empty())
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+
+        outDevices.push_back(FileSystemPluginManager::ConnectionBrowseDevice{
+            .pnpId        = std::move(pnpId.value()),
+            .friendlyName = Common::Settings::GetWString(item, "friendlyName").value_or(std::wstring{}),
+            .devicePuid   = Common::Settings::GetWString(item, "devicePuid").value_or(std::wstring{}),
+        });
+    }
+
+    return S_OK;
+}
+
+HRESULT ParseConnectionBrowseStoragesJson(std::string_view jsonUtf8, std::vector<FileSystemPluginManager::ConnectionBrowseStorage>& outStorages) noexcept
+{
+    outStorages.clear();
+
+    Common::Settings::JsonValue root;
+    const HRESULT parseHr = Common::Settings::ParseJsonValue(jsonUtf8, root);
+    if (FAILED(parseHr))
+    {
+        return parseHr;
+    }
+    const HRESULT validateHr = ValidateConnectionBrowseRoot(root);
+    if (FAILED(validateHr))
+    {
+        return validateHr;
+    }
+
+    const Common::Settings::JsonArray* storages = Common::Settings::GetArray(root, "storages");
+    if (! storages)
+    {
+        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+    }
+
+    outStorages.reserve(storages->items.size());
+    for (const Common::Settings::JsonValue& item : storages->items)
+    {
+        auto name        = Common::Settings::GetWString(item, "name");
+        auto initialPath = Common::Settings::GetWString(item, "initialPath");
+        if (! name.has_value() || name->empty() || ! initialPath.has_value() || initialPath->empty())
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+
+        outStorages.push_back(FileSystemPluginManager::ConnectionBrowseStorage{
+            .name         = std::move(name.value()),
+            .persistentId = Common::Settings::GetWString(item, "persistentId").value_or(std::wstring{}),
+            .objectId     = Common::Settings::GetWString(item, "objectId").value_or(std::wstring{}),
+            .initialPath  = std::move(initialPath.value()),
+        });
+    }
+
+    return S_OK;
 }
 
 HRESULT RegisterPluginResourceOwner(const std::filesystem::path& path, HINSTANCE module) noexcept
@@ -190,10 +284,12 @@ struct EnumeratedPluginSet
         return result;
     }
 
-    if (! metaData || count == 0)
+    if (! IsValidEnumeratedPluginRange(metaData, count))
     {
-        result.hr        = E_INVALIDARG;
-        result.loadError = L"RedSalamanderEnumeratePlugins returned no file system plugins.";
+        result.hr        = HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        result.loadError = std::format(L"RedSalamanderEnumeratePlugins returned an invalid metadata range (pointer={}, count={}).",
+                                       metaData != nullptr,
+                                       count);
         return result;
     }
 
@@ -218,8 +314,58 @@ FileSystemPluginManager& FileSystemPluginManager::GetInstance() noexcept
     return instance;
 }
 
+HRESULT FileSystemPluginManager::ConnectionBrowseWork::Execute(std::vector<ConnectionBrowseDevice>& outDevices,
+                                                               std::vector<ConnectionBrowseStorage>& outStorages) noexcept
+{
+    outDevices.clear();
+    outStorages.clear();
+    if (! module || browseConnectionTargets == nullptr || pluginPath.empty())
+    {
+        return E_UNEXPECTED;
+    }
+
+#pragma warning(push)
+#pragma warning(disable : 4191) // unsafe conversion from FARPROC
+    const auto browse = reinterpret_cast<BrowseConnectionTargetsExportFunc>(browseConnectionTargets);
+#pragma warning(pop)
+
+    FactoryConnectionBrowseRequest request{};
+    request.sizeBytes      = sizeof(request);
+    request.kind           = kind == Kind::Devices ? FACTORY_CONNECTION_BROWSE_DEVICES : FACTORY_CONNECTION_BROWSE_STORAGES;
+    request.parentDeviceId = parentDeviceId.empty() ? nullptr : parentDeviceId.c_str();
+
+    FactoryConnectionBrowseResult result{};
+    result.sizeBytes = sizeof(result);
+
+    const HRESULT browseHr = browse(__uuidof(IFileSystem), pluginId.empty() ? nullptr : pluginId.c_str(), &request, &result);
+    wil::unique_cotaskmem_ptr<char> json(result.jsonUtf8);
+    if (FAILED(browseHr))
+    {
+        return browseHr;
+    }
+    if (! json || std::strlen(json.get()) == 0u)
+    {
+        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+    }
+
+    return kind == Kind::Devices ? ParseConnectionBrowseDevicesJson(json.get(), outDevices)
+                                 : ParseConnectionBrowseStoragesJson(json.get(), outStorages);
+}
+
+void FileSystemPluginManager::AssertUiThread() const noexcept
+{
+#ifdef _DEBUG
+    assert(_uiThreadId == 0u || _uiThreadId == GetCurrentThreadId());
+#endif
+}
+
 HRESULT FileSystemPluginManager::Initialize(Common::Settings::Settings& settings) noexcept
 {
+    if (_uiThreadId == 0u)
+    {
+        _uiThreadId = GetCurrentThreadId();
+    }
+    AssertUiThread();
     if (_initialized)
     {
         return S_OK;
@@ -245,6 +391,7 @@ HRESULT FileSystemPluginManager::Initialize(Common::Settings::Settings& settings
 
 void FileSystemPluginManager::Shutdown(Common::Settings::Settings& settings) noexcept
 {
+    AssertUiThread();
     if (! _initialized)
     {
         return;
@@ -256,24 +403,29 @@ void FileSystemPluginManager::Shutdown(Common::Settings::Settings& settings) noe
     }
 
     UnloadAll(ModuleUnloadMode::ProcessShutdown);
+    SweepDeferredUnloadEntries(ModuleUnloadMode::ProcessShutdown);
 
     _plugins.clear();
+    _deferredUnloadEntries.clear();
     _activePluginId.clear();
     _initialized = false;
 }
 
 const std::vector<FileSystemPluginManager::PluginEntry>& FileSystemPluginManager::GetPlugins() const noexcept
 {
+    AssertUiThread();
     return _plugins;
 }
 
 std::wstring_view FileSystemPluginManager::GetActivePluginId() const noexcept
 {
+    AssertUiThread();
     return _activePluginId;
 }
 
 wil::com_ptr<IFileSystem> FileSystemPluginManager::GetActiveFileSystem() const noexcept
 {
+    AssertUiThread();
     const PluginEntry* entry = FindPluginById(_activePluginId);
     if (! entry)
     {
@@ -285,6 +437,7 @@ wil::com_ptr<IFileSystem> FileSystemPluginManager::GetActiveFileSystem() const n
 
 std::optional<std::filesystem::path> FileSystemPluginManager::TryGetPluginPath(std::wstring_view pluginId) const noexcept
 {
+    AssertUiThread();
     const PluginEntry* entry = FindPluginById(pluginId);
     if (! entry)
     {
@@ -301,6 +454,7 @@ std::optional<std::filesystem::path> FileSystemPluginManager::TryGetPluginPath(s
 
 std::optional<std::filesystem::path> FileSystemPluginManager::TryGetActivePluginPath() const noexcept
 {
+    AssertUiThread();
     if (_activePluginId.empty())
     {
         return std::nullopt;
@@ -311,6 +465,7 @@ std::optional<std::filesystem::path> FileSystemPluginManager::TryGetActivePlugin
 
 HRESULT FileSystemPluginManager::Refresh(Common::Settings::Settings& settings) noexcept
 {
+    AssertUiThread();
     const HRESULT hr = Discover(settings);
     if (FAILED(hr))
     {
@@ -348,7 +503,8 @@ HRESULT FileSystemPluginManager::Refresh(Common::Settings::Settings& settings) n
 
 HRESULT FileSystemPluginManager::SetActivePlugin(std::wstring_view pluginId, Common::Settings::Settings& settings) noexcept
 {
-    PluginEntry* entry = FindPluginById(pluginId);
+    AssertUiThread();
+    PluginEntry* entry = FindMutablePluginById(pluginId);
     if (! entry)
     {
         return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
@@ -374,7 +530,8 @@ HRESULT FileSystemPluginManager::SetActivePlugin(std::wstring_view pluginId, Com
 
 HRESULT FileSystemPluginManager::DisablePlugin(std::wstring_view pluginId, Common::Settings::Settings& settings) noexcept
 {
-    PluginEntry* entry = FindPluginById(pluginId);
+    AssertUiThread();
+    PluginEntry* entry = FindMutablePluginById(pluginId);
     if (! entry)
     {
         return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
@@ -424,7 +581,8 @@ HRESULT FileSystemPluginManager::DisablePlugin(std::wstring_view pluginId, Commo
 
 HRESULT FileSystemPluginManager::EnablePlugin(std::wstring_view pluginId, Common::Settings::Settings& settings) noexcept
 {
-    PluginEntry* entry = FindPluginById(pluginId);
+    AssertUiThread();
+    PluginEntry* entry = FindMutablePluginById(pluginId);
     if (! entry)
     {
         return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
@@ -446,7 +604,8 @@ HRESULT FileSystemPluginManager::EnablePlugin(std::wstring_view pluginId, Common
 
 HRESULT FileSystemPluginManager::RemoveCustomPlugin(std::wstring_view pluginId, Common::Settings::Settings& settings) noexcept
 {
-    PluginEntry* entry = FindPluginById(pluginId);
+    AssertUiThread();
+    PluginEntry* entry = FindMutablePluginById(pluginId);
     if (! entry)
     {
         return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
@@ -499,6 +658,7 @@ HRESULT FileSystemPluginManager::RemoveCustomPlugin(std::wstring_view pluginId, 
 
 HRESULT FileSystemPluginManager::AddCustomPluginPath(const std::filesystem::path& path, Common::Settings::Settings& settings) noexcept
 {
+    AssertUiThread();
     if (path.empty())
     {
         return E_INVALIDARG;
@@ -516,10 +676,24 @@ HRESULT FileSystemPluginManager::AddCustomPluginPath(const std::filesystem::path
         return E_INVALIDARG;
     }
 
+    if (IsPluginPathDeferred(path))
+    {
+        SweepDeferredUnloadEntries(ModuleUnloadMode::FreeLibrary);
+        if (IsPluginPathDeferred(path))
+        {
+            return HRESULT_FROM_WIN32(ERROR_BUSY);
+        }
+    }
+
     const HRESULT refreshHr = Refresh(settings);
     if (FAILED(refreshHr))
     {
         return refreshHr;
+    }
+
+    if (IsPluginPathDeferred(path))
+    {
+        return HRESULT_FROM_WIN32(ERROR_BUSY);
     }
 
     EnumeratedPluginSet enumeration = EnumerateFileSystemPlugins(path, PluginOrigin::Custom);
@@ -572,13 +746,19 @@ HRESULT FileSystemPluginManager::AddCustomPluginPath(const std::filesystem::path
 HRESULT
 FileSystemPluginManager::GetConfigurationSchema(std::wstring_view pluginId, Common::Settings::Settings& settings, std::string& outSchemaJsonUtf8) noexcept
 {
-    PluginEntry* entry = FindPluginById(pluginId);
+    AssertUiThread();
+    PluginEntry* entry = FindMutablePluginById(pluginId);
     if (! entry)
     {
         return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
     }
 
     static_cast<void>(settings);
+
+    if (entry->unloadDeferred || IsPluginPathDeferred(entry->path))
+    {
+        return HRESULT_FROM_WIN32(ERROR_BUSY);
+    }
 
     wil::unique_hmodule transientModule;
     HMODULE moduleHandle = entry->module.get();
@@ -624,7 +804,8 @@ FileSystemPluginManager::GetConfigurationSchema(std::wstring_view pluginId, Comm
 HRESULT
 FileSystemPluginManager::GetConfiguration(std::wstring_view pluginId, Common::Settings::Settings& settings, std::string& outConfigurationJsonUtf8) noexcept
 {
-    PluginEntry* entry = FindPluginById(pluginId);
+    AssertUiThread();
+    PluginEntry* entry = FindMutablePluginById(pluginId);
     if (! entry)
     {
         return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
@@ -655,7 +836,8 @@ FileSystemPluginManager::GetConfiguration(std::wstring_view pluginId, Common::Se
 HRESULT
 FileSystemPluginManager::SetConfiguration(std::wstring_view pluginId, std::string_view configurationJsonUtf8, Common::Settings::Settings& settings) noexcept
 {
-    PluginEntry* entry = FindPluginById(pluginId);
+    AssertUiThread();
+    PluginEntry* entry = FindMutablePluginById(pluginId);
     if (! entry)
     {
         return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
@@ -710,9 +892,82 @@ FileSystemPluginManager::SetConfiguration(std::wstring_view pluginId, std::strin
     return S_OK;
 }
 
+HRESULT FileSystemPluginManager::PrepareConnectionBrowseWork(std::wstring_view pluginId,
+                                                             ConnectionBrowseWork::Kind kind,
+                                                             std::wstring_view parentDeviceId,
+                                                             ConnectionBrowseWork& outWork) noexcept
+{
+    AssertUiThread();
+    outWork = {};
+
+    PluginEntry* entry = FindMutablePluginById(pluginId);
+    if (! entry)
+    {
+        return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
+    }
+    if (entry->unloadDeferred || IsPluginPathDeferred(entry->path))
+    {
+        return HRESULT_FROM_WIN32(ERROR_BUSY);
+    }
+    if (entry->disabled || ! entry->loadable)
+    {
+        return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
+    }
+    if (entry->path.empty())
+    {
+        return E_INVALIDARG;
+    }
+
+    wil::unique_hmodule module(LoadLibraryExW(entry->path.c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH));
+    if (! module)
+    {
+        return HRESULT_FROM_WIN32(GetLastError());
+    }
+
+    FARPROC browseConnectionTargets = GetProcAddress(module.get(), "RedSalamanderBrowseConnectionTargets");
+    if (browseConnectionTargets == nullptr)
+    {
+        DWORD lastError = GetLastError();
+        if (lastError == ERROR_SUCCESS)
+        {
+            lastError = ERROR_PROC_NOT_FOUND;
+        }
+        return HRESULT_FROM_WIN32(lastError);
+    }
+
+    outWork.kind                    = kind;
+    outWork.pluginId                = std::wstring(RequestedPluginId(*entry));
+    outWork.pluginPath              = entry->path;
+    outWork.parentDeviceId          = std::wstring(parentDeviceId);
+    outWork.module                  = std::move(module);
+    outWork.browseConnectionTargets = browseConnectionTargets;
+    return S_OK;
+}
+
+HRESULT FileSystemPluginManager::PrepareConnectionBrowseDevices(std::wstring_view pluginId, ConnectionBrowseWork& outWork) noexcept
+{
+    AssertUiThread();
+    return PrepareConnectionBrowseWork(pluginId, ConnectionBrowseWork::Kind::Devices, {}, outWork);
+}
+
+HRESULT FileSystemPluginManager::PrepareConnectionBrowseStorages(std::wstring_view pluginId,
+                                                                 std::wstring_view parentDeviceId,
+                                                                 ConnectionBrowseWork& outWork) noexcept
+{
+    AssertUiThread();
+    if (parentDeviceId.empty())
+    {
+        outWork = {};
+        return E_INVALIDARG;
+    }
+
+    return PrepareConnectionBrowseWork(pluginId, ConnectionBrowseWork::Kind::Storages, parentDeviceId, outWork);
+}
+
 HRESULT FileSystemPluginManager::TestPlugin(std::wstring_view pluginId) noexcept
 {
-    PluginEntry* entry = FindPluginById(pluginId);
+    AssertUiThread();
+    PluginEntry* entry = FindMutablePluginById(pluginId);
     if (! entry)
     {
         return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
@@ -760,7 +1015,7 @@ std::optional<size_t> FileSystemPluginManager::FindPluginIndexById(std::wstring_
     return std::nullopt;
 }
 
-FileSystemPluginManager::PluginEntry* FileSystemPluginManager::FindPluginById(std::wstring_view pluginId) noexcept
+FileSystemPluginManager::PluginEntry* FileSystemPluginManager::FindMutablePluginById(std::wstring_view pluginId) noexcept
 {
     const std::optional<size_t> index = FindPluginIndexById(pluginId);
     if (! index.has_value())
@@ -773,6 +1028,7 @@ FileSystemPluginManager::PluginEntry* FileSystemPluginManager::FindPluginById(st
 
 const FileSystemPluginManager::PluginEntry* FileSystemPluginManager::FindPluginById(std::wstring_view pluginId) const noexcept
 {
+    AssertUiThread();
     const std::optional<size_t> index = FindPluginIndexById(pluginId);
     if (! index.has_value())
     {
@@ -784,6 +1040,7 @@ const FileSystemPluginManager::PluginEntry* FileSystemPluginManager::FindPluginB
 
 HRESULT FileSystemPluginManager::Discover(Common::Settings::Settings& settings) noexcept
 {
+    SweepDeferredUnloadEntries(ModuleUnloadMode::FreeLibrary);
     UnloadAll(ModuleUnloadMode::FreeLibrary);
     _plugins.clear();
 
@@ -824,6 +1081,11 @@ HRESULT FileSystemPluginManager::Discover(Common::Settings::Settings& settings) 
             return;
         }
 
+        if (IsPluginPathDeferred(path))
+        {
+            return;
+        }
+
         const std::wstring key = ToLowerInvariant(path.wstring());
         if (! seenPaths.insert(key).second)
         {
@@ -840,18 +1102,17 @@ HRESULT FileSystemPluginManager::Discover(Common::Settings::Settings& settings) 
     std::error_code ec;
     if (! optionalDir.empty() && std::filesystem::exists(optionalDir, ec))
     {
-        for (const auto& item : std::filesystem::directory_iterator(optionalDir, ec))
+        std::filesystem::directory_iterator item(optionalDir, ec);
+        const std::filesystem::directory_iterator end;
+        while (! ec && item != end)
         {
-            if (ec)
-            {
-                break;
-            }
-
-            const std::filesystem::path p = item.path();
+            const std::filesystem::path p = item->path();
             if (IsDllPath(p))
             {
                 tryAddCandidate(PluginOrigin::Optional, p);
             }
+
+            item.increment(ec);
         }
     }
 
@@ -862,6 +1123,19 @@ HRESULT FileSystemPluginManager::Discover(Common::Settings::Settings& settings) 
 
     std::unordered_set<std::wstring> seenIds;
     std::unordered_set<std::wstring> seenShortIds;
+
+    for (const PluginEntry& deferredEntry : _deferredUnloadEntries)
+    {
+        AddDeferredPlaceholder(deferredEntry);
+        if (! deferredEntry.id.empty())
+        {
+            seenIds.insert(ToLowerInvariant(deferredEntry.id));
+        }
+        if (! deferredEntry.shortId.empty())
+        {
+            seenShortIds.insert(ToLowerInvariant(deferredEntry.shortId));
+        }
+    }
 
     const auto addLoadedEntry = [&](PluginEntry&& entry)
     {
@@ -898,8 +1172,15 @@ HRESULT FileSystemPluginManager::Discover(Common::Settings::Settings& settings) 
         {
             entry.loadable = false;
             Debug::Error(L"Plugin '{}' skipped: {}", entry.path.wstring(), entry.loadError);
-            Unload(entry, ModuleUnloadMode::FreeLibrary);
-            _plugins.push_back(std::move(entry));
+            if (! Unload(entry, ModuleUnloadMode::FreeLibrary))
+            {
+                _deferredUnloadEntries.push_back(std::move(entry));
+                AddDeferredPlaceholder(_deferredUnloadEntries.back());
+            }
+            else
+            {
+                _plugins.push_back(std::move(entry));
+            }
             return;
         }
 
@@ -908,7 +1189,12 @@ HRESULT FileSystemPluginManager::Discover(Common::Settings::Settings& settings) 
 
         if (entry.disabled && ! EqualsNoCase(entry.id, settings.plugins.currentFileSystemPluginId))
         {
-            Unload(entry, ModuleUnloadMode::FreeLibrary);
+            if (! Unload(entry, ModuleUnloadMode::FreeLibrary))
+            {
+                _deferredUnloadEntries.push_back(std::move(entry));
+                AddDeferredPlaceholder(_deferredUnloadEntries.back());
+                return;
+            }
         }
 
         _plugins.push_back(std::move(entry));
@@ -1028,10 +1314,25 @@ HRESULT FileSystemPluginManager::EnsureLoaded(PluginEntry& entry, Common::Settin
     entry.loadError.clear();
     if (entry.module)
     {
-        Unload(entry, ModuleUnloadMode::FreeLibrary);
+        if (! Unload(entry, ModuleUnloadMode::FreeLibrary))
+        {
+            entry.loadError = L"Plugin unload is deferred until the plugin reports it can unload.";
+            return HRESULT_FROM_WIN32(ERROR_BUSY);
+        }
     }
     entry.fileSystem   = nullptr;
     entry.informations = nullptr;
+
+    if (entry.unloadDeferred || IsPluginPathDeferred(entry.path))
+    {
+        SweepDeferredUnloadEntries(ModuleUnloadMode::FreeLibrary);
+        if (IsPluginPathDeferred(entry.path))
+        {
+            entry.loadError = PluginModuleLifecycle::kDeferredUnloadError;
+            return HRESULT_FROM_WIN32(ERROR_BUSY);
+        }
+        entry.unloadDeferred = false;
+    }
 
     if (entry.path.empty())
     {
@@ -1159,54 +1460,45 @@ HRESULT FileSystemPluginManager::EnsureLoaded(PluginEntry& entry, Common::Settin
 
 void FileSystemPluginManager::UnloadAll(ModuleUnloadMode mode) noexcept
 {
-    for (auto it = _plugins.rbegin(); it != _plugins.rend(); ++it)
-    {
-        Unload(*it, mode);
-    }
+    PluginModuleLifecycle::UnloadAll(
+        _plugins, _deferredUnloadEntries, mode, [this](PluginEntry& entry, ModuleUnloadMode unloadMode) noexcept { return Unload(entry, unloadMode); });
 }
 
-void FileSystemPluginManager::Unload(PluginEntry& entry, ModuleUnloadMode mode) noexcept
+bool FileSystemPluginManager::Unload(PluginEntry& entry, ModuleUnloadMode mode) noexcept
 {
     entry.informations = nullptr;
     entry.fileSystem   = nullptr;
-    if (entry.module)
+
+    if (! entry.module)
     {
-#pragma warning(push)
-#pragma warning(disable : 4191) // C4191: unsafe conversion from FARPROC
-        if (const auto pluginShutdown = reinterpret_cast<PluginShutdownExportFunc>(GetProcAddress(entry.module.get(), "RedSalamanderPluginShutdown"));
-            pluginShutdown != nullptr)
-        {
-            pluginShutdown();
-        }
-#pragma warning(pop)
-        Localization::UnregisterResourceOwner(entry.module.get());
+        entry.unloadDeferred = false;
+        return true;
     }
 
-    bool retainModuleUntilProcessExit = false;
-    // The retain vote is a process-shutdown escape hatch only. Runtime refresh
-    // reaches this path after instances/callbacks have been quieted and must
-    // still release the old module so rediscovery can load a fresh DLL image.
-    if (mode == ModuleUnloadMode::ProcessShutdown && entry.module)
+    if (! PluginModuleLifecycle::UnloadModule(entry.module, mode, entry.path, L"File system plugin"))
     {
-#pragma warning(push)
-#pragma warning(disable : 4191) // C4191: unsafe conversion from FARPROC
-        if (const auto retainModule = reinterpret_cast<PluginRetainModuleUntilProcessExitExportFunc>(
-                GetProcAddress(entry.module.get(), "RedSalamanderPluginRetainModuleUntilProcessExit"));
-            retainModule != nullptr)
-        {
-            retainModuleUntilProcessExit = retainModule() != FALSE;
-        }
-#pragma warning(pop)
+        PluginModuleLifecycle::MarkDeferred(entry);
+        return false;
     }
 
-    if (retainModuleUntilProcessExit && entry.module)
-    {
-        static_cast<void>(entry.module.release());
-    }
-    else
-    {
-        entry.module.reset();
-    }
+    entry.unloadDeferred = false;
+    return true;
+}
+
+void FileSystemPluginManager::SweepDeferredUnloadEntries(ModuleUnloadMode mode) noexcept
+{
+    PluginModuleLifecycle::SweepDeferred(
+        _deferredUnloadEntries, mode, [this](PluginEntry& entry, ModuleUnloadMode unloadMode) noexcept { return Unload(entry, unloadMode); });
+}
+
+bool FileSystemPluginManager::IsPluginPathDeferred(const std::filesystem::path& path) const noexcept
+{
+    return PluginModuleLifecycle::IsPathDeferred(_deferredUnloadEntries, path);
+}
+
+void FileSystemPluginManager::AddDeferredPlaceholder(const PluginEntry& entry) noexcept
+{
+    _plugins.push_back(PluginModuleLifecycle::MakeDeferredPlaceholder(entry));
 }
 
 HRESULT FileSystemPluginManager::ApplyConfigurationFromSettings(PluginEntry& entry, const Common::Settings::Settings& settings) noexcept

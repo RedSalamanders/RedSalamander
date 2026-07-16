@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
@@ -9,6 +10,7 @@
 #include <limits>
 #include <mutex>
 #include <new>
+#include <span>
 #include <stop_token>
 #include <string>
 #include <string_view>
@@ -52,6 +54,7 @@
 
 #include "FileSystem7zResources.h"
 #include "Helpers.h"
+#include "YyjsonHelpers.h"
 
 #pragma comment(lib, "Ole32.lib")
 #pragma comment(lib, "OleAut32.lib")
@@ -105,31 +108,9 @@ std::wstring Utf16FromMultiByte(std::string_view text, UINT codePage, DWORD flag
 
 std::optional<std::wstring> TryGetJsonString(yyjson_val* obj, const char* key) noexcept
 {
-    if (! obj || ! key)
-    {
-        return std::nullopt;
-    }
-
-    yyjson_val* val = yyjson_obj_get(obj, key);
-    if (! val || ! yyjson_is_str(val))
-    {
-        return std::nullopt;
-    }
-
-    const char* s = yyjson_get_str(val);
-    if (! s)
-    {
-        return std::nullopt;
-    }
-
-    const size_t len        = yyjson_get_len(val);
-    const std::wstring wide = Utf16FromMultiByte(std::string_view(s, len), CP_UTF8, MB_ERR_INVALID_CHARS);
-    if (wide.empty() && len != 0u)
-    {
-        return std::nullopt;
-    }
-
-    return wide;
+    const Common::Json::MemberResult<std::wstring> value =
+        Common::Json::GetUtf16StringMemberStrict(obj, key, Common::Json::MemberRequirement::Optional);
+    return value.HasValue() ? std::optional<std::wstring>{value.value} : std::nullopt;
 }
 
 HRESULT
@@ -173,100 +154,31 @@ ULONG STDMETHODCALLTYPE FilesInformation7z::Release() noexcept
 
 HRESULT STDMETHODCALLTYPE FilesInformation7z::GetBuffer(FileInfo** ppFileInfo) noexcept
 {
-    if (ppFileInfo == nullptr)
-    {
-        return E_POINTER;
-    }
-
-    if (_usedBytes == 0 || _buffer.empty())
-    {
-        *ppFileInfo = nullptr;
-        return S_OK;
-    }
-
-    *ppFileInfo = reinterpret_cast<FileInfo*>(_buffer.data());
-    return S_OK;
+    return _packedBuffer.GetBuffer(ppFileInfo);
 }
 
 HRESULT STDMETHODCALLTYPE FilesInformation7z::GetBufferSize(unsigned long* pSize) noexcept
 {
-    if (pSize == nullptr)
-    {
-        return E_POINTER;
-    }
-
-    *pSize = _usedBytes;
-    return S_OK;
+    return _packedBuffer.GetBufferSize(pSize);
 }
 
 HRESULT STDMETHODCALLTYPE FilesInformation7z::GetAllocatedSize(unsigned long* pSize) noexcept
 {
-    if (pSize == nullptr)
-    {
-        return E_POINTER;
-    }
-
-    if (_buffer.size() > static_cast<size_t>(std::numeric_limits<unsigned long>::max()))
-    {
-        return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
-    }
-
-    *pSize = static_cast<unsigned long>(_buffer.size());
-    return S_OK;
+    return _packedBuffer.GetAllocatedSize(pSize);
 }
 
 HRESULT STDMETHODCALLTYPE FilesInformation7z::GetCount(unsigned long* pCount) noexcept
 {
-    if (pCount == nullptr)
-    {
-        return E_POINTER;
-    }
-
-    *pCount = _count;
-    return S_OK;
+    return _packedBuffer.GetCount(pCount);
 }
 
 HRESULT STDMETHODCALLTYPE FilesInformation7z::Get(unsigned long index, FileInfo** ppEntry) noexcept
 {
-    if (ppEntry == nullptr)
-    {
-        return E_POINTER;
-    }
-
-    *ppEntry = nullptr;
-
-    if (index >= _count)
-    {
-        return HRESULT_FROM_WIN32(ERROR_NO_MORE_FILES);
-    }
-
-    return LocateEntry(index, ppEntry);
-}
-
-size_t FilesInformation7z::AlignUp(size_t value, size_t alignment) noexcept
-{
-    const size_t mask = alignment - 1u;
-    return (value + mask) & ~mask;
-}
-
-size_t FilesInformation7z::ComputeEntrySizeBytes(std::wstring_view name) noexcept
-{
-    const size_t baseSize = offsetof(FileInfo, FileName);
-    const size_t nameSize = name.size() * sizeof(wchar_t);
-    return AlignUp(baseSize + nameSize + sizeof(wchar_t), sizeof(unsigned long));
+    return _packedBuffer.Get(index, ppEntry);
 }
 
 HRESULT FilesInformation7z::BuildFromEntries(std::vector<Entry> entries) noexcept
 {
-    _buffer.clear();
-    _count     = 0;
-    _usedBytes = 0;
-
-    if (entries.empty())
-    {
-        return S_OK;
-    }
-
     std::sort(entries.begin(),
               entries.end(),
               [](const Entry& a, const Entry& b)
@@ -286,100 +198,17 @@ HRESULT FilesInformation7z::BuildFromEntries(std::vector<Entry> entries) noexcep
         return a.sizeBytes < b.sizeBytes;
     });
 
-    size_t totalBytes = 0;
-    for (const auto& entry : entries)
+    return _packedBuffer.Build(entries,
+                               [](const Entry& source, FileInfo& entry) noexcept
     {
-        totalBytes += ComputeEntrySizeBytes(entry.name);
-        if (totalBytes > static_cast<size_t>(std::numeric_limits<unsigned long>::max()))
-        {
-            return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
-        }
-    }
-
-    _buffer.resize(totalBytes, std::byte{0});
-
-    std::byte* base     = _buffer.data();
-    size_t offset       = 0;
-    FileInfo* previous  = nullptr;
-    size_t previousSize = 0;
-
-    for (const auto& source : entries)
-    {
-        const size_t entrySize = ComputeEntrySizeBytes(source.name);
-        if (offset + entrySize > _buffer.size())
-        {
-            return E_FAIL;
-        }
-
-        auto* entry = reinterpret_cast<FileInfo*>(base + offset);
-        std::memset(entry, 0, entrySize);
-
-        const size_t nameBytes = source.name.size() * sizeof(wchar_t);
-        if (nameBytes > static_cast<size_t>(std::numeric_limits<unsigned long>::max()))
-        {
-            return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
-        }
-
-        entry->FileAttributes = static_cast<unsigned long>(source.attributes);
-        entry->EndOfFile      = static_cast<__int64>(source.sizeBytes);
-        entry->AllocationSize = static_cast<__int64>(source.sizeBytes);
-
-        entry->CreationTime   = source.lastWriteTime;
-        entry->LastAccessTime = source.lastWriteTime;
-        entry->LastWriteTime  = source.lastWriteTime;
-        entry->ChangeTime     = source.lastWriteTime;
-
-        entry->FileNameSize = static_cast<unsigned long>(nameBytes);
-        if (! source.name.empty())
-        {
-            std::memcpy(entry->FileName, source.name.data(), nameBytes);
-        }
-        entry->FileName[source.name.size()] = L'\0';
-
-        if (previous)
-        {
-            previous->NextEntryOffset = static_cast<unsigned long>(previousSize);
-        }
-
-        previous     = entry;
-        previousSize = entrySize;
-
-        offset += entrySize;
-        ++_count;
-    }
-
-    _usedBytes = static_cast<unsigned long>(_buffer.size());
-    return S_OK;
-}
-
-HRESULT FilesInformation7z::LocateEntry(unsigned long index, FileInfo** ppEntry) const noexcept
-{
-    const std::byte* base      = _buffer.data();
-    size_t offset              = 0;
-    unsigned long currentIndex = 0;
-
-    while (offset < _usedBytes && offset + sizeof(FileInfo) <= _buffer.size())
-    {
-        auto* entry = reinterpret_cast<const FileInfo*>(base + offset);
-        if (currentIndex == index)
-        {
-            *ppEntry = const_cast<FileInfo*>(entry);
-            return S_OK;
-        }
-
-        const size_t advance = (entry->NextEntryOffset != 0)
-                                   ? static_cast<size_t>(entry->NextEntryOffset)
-                                   : ComputeEntrySizeBytes(std::wstring_view(entry->FileName, static_cast<size_t>(entry->FileNameSize) / sizeof(wchar_t)));
-        if (advance == 0)
-        {
-            break;
-        }
-
-        offset += advance;
-        ++currentIndex;
-    }
-
-    return HRESULT_FROM_WIN32(ERROR_NO_MORE_FILES);
+        entry.FileAttributes = static_cast<unsigned long>(source.attributes);
+        entry.EndOfFile      = static_cast<__int64>(source.sizeBytes);
+        entry.AllocationSize = static_cast<__int64>(source.sizeBytes);
+        entry.CreationTime   = source.lastWriteTime;
+        entry.LastAccessTime = source.lastWriteTime;
+        entry.LastWriteTime  = source.lastWriteTime;
+        entry.ChangeTime     = source.lastWriteTime;
+    });
 }
 
 // FileSystem7z
@@ -529,7 +358,7 @@ HRESULT STDMETHODCALLTYPE FileSystem7z::SetConfiguration(const char* configurati
         return S_OK;
     }
 
-    auto freeDoc = wil::scope_exit([&] { yyjson_doc_free(doc); });
+    Common::Json::UniqueDocument docOwner{doc};
 
     yyjson_val* root = yyjson_doc_get_root(doc);
     if (! root || ! yyjson_is_obj(root))
@@ -812,7 +641,7 @@ HRESULT STDMETHODCALLTYPE FileSystem7z::Initialize(const wchar_t* rootPath, cons
             yyjson_doc* doc = yyjson_read_opts(mutableJson.data(), mutableJson.size(), YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM, nullptr, &err);
             if (doc)
             {
-                auto freeDoc     = wil::scope_exit([&] { yyjson_doc_free(doc); });
+                Common::Json::UniqueDocument docOwner{doc};
                 yyjson_val* root = yyjson_doc_get_root(doc);
                 if (root && yyjson_is_obj(root))
                 {
@@ -1256,7 +1085,7 @@ HRESULT STDMETHODCALLTYPE FileSystem7z::GetItemProperties([[maybe_unused]] const
     {
         return E_OUTOFMEMORY;
     }
-    auto freeDoc = wil::scope_exit([&] { yyjson_mut_doc_free(doc); });
+    Common::Json::UniqueMutableDocument docOwner{doc};
 
     yyjson_mut_val* root = yyjson_mut_obj(doc);
     yyjson_mut_doc_set_root(doc, root);
@@ -1724,31 +1553,7 @@ bool FileSystem7z::EqualsNoCase(std::wstring_view a, std::wstring_view b) noexce
 
 std::string FileSystem7z::Utf8FromUtf16(std::wstring_view text) noexcept
 {
-    if (text.empty())
-    {
-        return {};
-    }
-
-    if (text.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
-    {
-        return {};
-    }
-
-    const int required = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
-    if (required <= 0)
-    {
-        return {};
-    }
-
-    std::string result(static_cast<size_t>(required), '\0');
-    const int written =
-        WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), result.data(), required, nullptr, nullptr);
-    if (written != required)
-    {
-        return {};
-    }
-
-    return result;
+    return Common::Strings::Utf8FromUtf16StrictOrEmpty(text);
 }
 
 std::wstring FileSystem7z::Utf16FromUtf8OrAcp(std::string_view text) noexcept
@@ -1791,27 +1596,54 @@ std::wstring FileSystem7z::NormalizeArchiveEntryKey(std::wstring_view path) noex
     key = std::wstring(Trim(key));
     std::replace(key.begin(), key.end(), L'\\', L'/');
 
-    while (! key.empty() && (key.front() == L'/' || key.front() == L'.'))
+    if (key.empty())
     {
-        if (key.front() == L'/')
-        {
-            key.erase(key.begin());
-            continue;
-        }
-        if (key.front() == L'.')
-        {
-            if (key.size() >= 2 && key[1] == L'/')
-            {
-                key.erase(0, 2);
-                continue;
-            }
-        }
-        break;
+        return {};
+    }
+
+    if (key.size() >= 2u && key[0] == L'/' && key[1] == L'/')
+    {
+        return {};
+    }
+
+    if (key.size() >= 2u && key[1] == L':')
+    {
+        return {};
+    }
+
+    while (! key.empty() && key.front() == L'/')
+    {
+        key.erase(key.begin());
+    }
+
+    while (key.rfind(L"./", 0) == 0)
+    {
+        key.erase(0, 2);
     }
 
     while (! key.empty() && key.back() == L'/')
     {
         key.pop_back();
+    }
+
+    size_t start = 0;
+    while (start <= key.size())
+    {
+        const size_t slash = key.find(L'/', start);
+        const size_t end   = slash == std::wstring::npos ? key.size() : slash;
+        const std::wstring_view component(key.data() + start, end - start);
+        if (component.empty() || component == L"." || component == L".." || component.find(L':') != std::wstring_view::npos ||
+            component.find(L'\0') != std::wstring_view::npos)
+        {
+            return {};
+        }
+
+        if (slash == std::wstring::npos)
+        {
+            break;
+        }
+
+        start = slash + 1u;
     }
 
     return key;
@@ -2802,6 +2634,10 @@ HRESULT OpenArchiveAuto(const SevenZipExports& api,
     return lastError;
 }
 
+#if defined(_DEBUG)
+std::atomic_bool g_debugForceSevenZipExtractPipelineForSelfTest{false};
+#endif
+
 class SevenZipItemFileReader final : public IFileReader
 {
 public:
@@ -2959,13 +2795,14 @@ public:
             return E_POINTER;
         }
 
+        const HRESULT terminalStatus = _terminalReadStatus.load(std::memory_order_acquire);
+        if (FAILED(terminalStatus))
+        {
+            return terminalStatus;
+        }
+
         if (_positionBytes >= _fileSizeBytes)
         {
-            if (! _terminalStatusReported && FAILED(_terminalReadStatus))
-            {
-                _terminalStatusReported = true;
-                return _terminalReadStatus;
-            }
             return S_OK;
         }
 
@@ -2978,6 +2815,7 @@ public:
             const HRESULT spoolHr = EnsureSpooledUntil(end);
             if (FAILED(spoolHr))
             {
+                _terminalReadStatus.store(spoolHr, std::memory_order_release);
                 return spoolHr;
             }
 
@@ -3353,9 +3191,6 @@ private:
 
         if (_itemStreamPositionBytes > _positionBytes)
         {
-            _terminalReadStatus     = S_OK;
-            _terminalStatusReported = false;
-
             _itemStream.reset();
             const HRESULT streamHr = _archiveGetStream->GetStream(static_cast<UInt32>(_itemIndex), _itemStream.put());
             if (FAILED(streamHr) || ! _itemStream)
@@ -3428,17 +3263,19 @@ private:
         {
             if (processed == 0)
             {
+                _terminalReadStatus.store(hr, std::memory_order_release);
                 return hr;
             }
 
-            _terminalReadStatus     = hr;
-            _terminalStatusReported = false;
+            _terminalReadStatus.store(hr, std::memory_order_release);
             hr                      = S_OK;
         }
 
         if (processed == 0 && _positionBytes < _fileSizeBytes)
         {
-            return HRESULT_FROM_WIN32(ERROR_HANDLE_EOF);
+            const HRESULT eofHr = HRESULT_FROM_WIN32(ERROR_HANDLE_EOF);
+            _terminalReadStatus.store(eofHr, std::memory_order_release);
+            return eofHr;
         }
 
         _positionBytes += static_cast<uint64_t>(processed);
@@ -3530,8 +3367,6 @@ private:
             _extractCompletedBytes.store(0, std::memory_order_relaxed);
             _extractStatus = S_OK;
 
-            _terminalReadStatus     = S_OK;
-            _terminalStatusReported = false;
             _positionBytes          = positionBytes;
         }
 
@@ -3883,8 +3718,7 @@ private:
             _extractFinished = true;
             if (FAILED(status))
             {
-                _terminalReadStatus     = status;
-                _terminalStatusReported = false;
+                _terminalReadStatus.store(status, std::memory_order_release);
             }
         }
 
@@ -3925,10 +3759,29 @@ private:
 
         if (_spooledBytes >= endExclusive)
         {
+            const bool reachedDeclaredEnd = _fileSizeBytes != 0u && endExclusive >= _fileSizeBytes;
+            while (reachedDeclaredEnd && ! _extractFinished)
+            {
+                _extractCv.wait(lock);
+            }
+
+            if (FAILED(_extractStatus))
+            {
+                _terminalReadStatus.store(_extractStatus, std::memory_order_release);
+                return _extractStatus;
+            }
             return S_OK;
         }
 
-        return FAILED(_extractStatus) ? _extractStatus : S_OK;
+        if (FAILED(_extractStatus))
+        {
+            _terminalReadStatus.store(_extractStatus, std::memory_order_release);
+            return _extractStatus;
+        }
+
+        const HRESULT eofHr = HRESULT_FROM_WIN32(ERROR_HANDLE_EOF);
+        _terminalReadStatus.store(eofHr, std::memory_order_release);
+        return eofHr;
     }
 
     HRESULT Initialize() noexcept
@@ -3949,8 +3802,7 @@ private:
             return openHr;
         }
 
-        _terminalReadStatus      = S_OK;
-        _terminalStatusReported  = false;
+        _terminalReadStatus.store(S_OK, std::memory_order_release);
         _positionBytes           = 0;
         _itemStreamPositionBytes = 0;
 
@@ -3970,7 +3822,12 @@ private:
             _spool.reserve(static_cast<size_t>(reserveBytes));
         }
 
-        const HRESULT qiHr = _archive->QueryInterface(IID_IInArchiveGetStream, _archiveGetStream.put_void());
+#if defined(_DEBUG)
+        const bool forceExtractPipeline = g_debugForceSevenZipExtractPipelineForSelfTest.load(std::memory_order_acquire);
+#else
+        constexpr bool forceExtractPipeline = false;
+#endif
+        const HRESULT qiHr = forceExtractPipeline ? E_NOINTERFACE : _archive->QueryInterface(IID_IInArchiveGetStream, _archiveGetStream.put_void());
         if (SUCCEEDED(qiHr) && _archiveGetStream)
         {
             const HRESULT streamHr = _archiveGetStream->GetStream(static_cast<UInt32>(_itemIndex), _itemStream.put());
@@ -4070,8 +3927,7 @@ private:
     uint64_t _itemStreamPositionBytes = 0;
 
     bool _useInMemorySpool       = true;
-    HRESULT _terminalReadStatus  = S_OK;
-    bool _terminalStatusReported = false;
+    std::atomic<HRESULT> _terminalReadStatus{S_OK};
 
     std::vector<uint8_t> _spool;
     uint64_t _spooledBytes = 0;
@@ -4247,7 +4103,414 @@ bool ArchiveFileTimePropertyUtc(IInArchive* archive, UInt32 index, PROPID propId
     outFileTimeUtc = static_cast<int64_t>(uli.QuadPart);
     return true;
 }
+
+#if defined(_DEBUG)
+[[nodiscard]] uint32_t DebugZipCrc32(std::span<const uint8_t> bytes) noexcept
+{
+    uint32_t crc = 0xffffffffu;
+    for (const uint8_t byte : bytes)
+    {
+        crc ^= byte;
+        for (unsigned int bit = 0; bit < 8u; ++bit)
+        {
+            const uint32_t mask = 0u - (crc & 1u);
+            crc                 = (crc >> 1u) ^ (0xedb88320u & mask);
+        }
+    }
+    return ~crc;
+}
+
+void DebugAppendZip16(std::vector<uint8_t>& bytes, uint16_t value)
+{
+    bytes.push_back(static_cast<uint8_t>(value & 0xffu));
+    bytes.push_back(static_cast<uint8_t>((value >> 8u) & 0xffu));
+}
+
+void DebugAppendZip32(std::vector<uint8_t>& bytes, uint32_t value)
+{
+    DebugAppendZip16(bytes, static_cast<uint16_t>(value & 0xffffu));
+    DebugAppendZip16(bytes, static_cast<uint16_t>((value >> 16u) & 0xffffu));
+}
+
+[[nodiscard]] std::vector<uint8_t> BuildDebugCorruptZip()
+{
+    constexpr std::string_view kName = "payload.bin";
+    constexpr size_t kPayloadBytes   = 32u * 1024u;
+
+    std::vector<uint8_t> payload(kPayloadBytes);
+    for (size_t index = 0; index < payload.size(); ++index)
+    {
+        payload[index] = static_cast<uint8_t>(index & 0xffu);
+    }
+
+    const uint32_t expectedCrc = DebugZipCrc32(payload);
+
+    // A single raw-DEFLATE stored block. Mutating its data after calculating the CRC keeps the
+    // archive structurally valid while guaranteeing a terminal CRC failure during extraction.
+    std::vector<uint8_t> compressed;
+    compressed.reserve(payload.size() + 5u);
+    compressed.push_back(0x01u);
+    DebugAppendZip16(compressed, static_cast<uint16_t>(payload.size()));
+    DebugAppendZip16(compressed, static_cast<uint16_t>(~static_cast<uint16_t>(payload.size())));
+    compressed.insert(compressed.end(), payload.begin(), payload.end());
+    compressed[5] ^= 0x01u;
+
+    std::vector<uint8_t> archive;
+    archive.reserve(compressed.size() + 128u);
+
+    DebugAppendZip32(archive, 0x04034b50u);
+    DebugAppendZip16(archive, 20u);
+    DebugAppendZip16(archive, 0u);
+    DebugAppendZip16(archive, 8u);
+    DebugAppendZip16(archive, 0u);
+    DebugAppendZip16(archive, 0u);
+    DebugAppendZip32(archive, expectedCrc);
+    DebugAppendZip32(archive, static_cast<uint32_t>(compressed.size()));
+    DebugAppendZip32(archive, static_cast<uint32_t>(payload.size()));
+    DebugAppendZip16(archive, static_cast<uint16_t>(kName.size()));
+    DebugAppendZip16(archive, 0u);
+    archive.insert(archive.end(), kName.begin(), kName.end());
+    archive.insert(archive.end(), compressed.begin(), compressed.end());
+
+    const uint32_t centralOffset = static_cast<uint32_t>(archive.size());
+    DebugAppendZip32(archive, 0x02014b50u);
+    DebugAppendZip16(archive, 20u);
+    DebugAppendZip16(archive, 20u);
+    DebugAppendZip16(archive, 0u);
+    DebugAppendZip16(archive, 8u);
+    DebugAppendZip16(archive, 0u);
+    DebugAppendZip16(archive, 0u);
+    DebugAppendZip32(archive, expectedCrc);
+    DebugAppendZip32(archive, static_cast<uint32_t>(compressed.size()));
+    DebugAppendZip32(archive, static_cast<uint32_t>(payload.size()));
+    DebugAppendZip16(archive, static_cast<uint16_t>(kName.size()));
+    DebugAppendZip16(archive, 0u);
+    DebugAppendZip16(archive, 0u);
+    DebugAppendZip16(archive, 0u);
+    DebugAppendZip16(archive, 0u);
+    DebugAppendZip32(archive, 0u);
+    DebugAppendZip32(archive, 0u);
+    archive.insert(archive.end(), kName.begin(), kName.end());
+
+    const uint32_t centralSize = static_cast<uint32_t>(archive.size()) - centralOffset;
+    DebugAppendZip32(archive, 0x06054b50u);
+    DebugAppendZip16(archive, 0u);
+    DebugAppendZip16(archive, 0u);
+    DebugAppendZip16(archive, 1u);
+    DebugAppendZip16(archive, 1u);
+    DebugAppendZip32(archive, centralSize);
+    DebugAppendZip32(archive, centralOffset);
+    DebugAppendZip16(archive, 0u);
+    return archive;
+}
+
+struct DebugStoredZipEntry final
+{
+    std::string_view name;
+    std::string_view contents;
+};
+
+[[nodiscard]] std::vector<uint8_t> BuildDebugStoredZip(std::span<const DebugStoredZipEntry> entries)
+{
+    struct CentralRecord final
+    {
+        DebugStoredZipEntry entry;
+        uint32_t crc = 0;
+        uint32_t localOffset = 0;
+    };
+
+    std::vector<uint8_t> archive;
+    std::vector<CentralRecord> centralRecords;
+    centralRecords.reserve(entries.size());
+    for (const DebugStoredZipEntry& entry : entries)
+    {
+        const auto bytes = std::span(reinterpret_cast<const uint8_t*>(entry.contents.data()), entry.contents.size());
+        CentralRecord record{.entry = entry, .crc = DebugZipCrc32(bytes), .localOffset = static_cast<uint32_t>(archive.size())};
+
+        DebugAppendZip32(archive, 0x04034b50u);
+        DebugAppendZip16(archive, 20u);
+        DebugAppendZip16(archive, 0u);
+        DebugAppendZip16(archive, 0u);
+        DebugAppendZip16(archive, 0u);
+        DebugAppendZip16(archive, 0u);
+        DebugAppendZip32(archive, record.crc);
+        DebugAppendZip32(archive, static_cast<uint32_t>(entry.contents.size()));
+        DebugAppendZip32(archive, static_cast<uint32_t>(entry.contents.size()));
+        DebugAppendZip16(archive, static_cast<uint16_t>(entry.name.size()));
+        DebugAppendZip16(archive, 0u);
+        archive.insert(archive.end(), entry.name.begin(), entry.name.end());
+        archive.insert(archive.end(), entry.contents.begin(), entry.contents.end());
+        centralRecords.push_back(record);
+    }
+
+    const uint32_t centralOffset = static_cast<uint32_t>(archive.size());
+    for (const CentralRecord& record : centralRecords)
+    {
+        DebugAppendZip32(archive, 0x02014b50u);
+        DebugAppendZip16(archive, 20u);
+        DebugAppendZip16(archive, 20u);
+        DebugAppendZip16(archive, 0u);
+        DebugAppendZip16(archive, 0u);
+        DebugAppendZip16(archive, 0u);
+        DebugAppendZip16(archive, 0u);
+        DebugAppendZip32(archive, record.crc);
+        DebugAppendZip32(archive, static_cast<uint32_t>(record.entry.contents.size()));
+        DebugAppendZip32(archive, static_cast<uint32_t>(record.entry.contents.size()));
+        DebugAppendZip16(archive, static_cast<uint16_t>(record.entry.name.size()));
+        DebugAppendZip16(archive, 0u);
+        DebugAppendZip16(archive, 0u);
+        DebugAppendZip16(archive, 0u);
+        DebugAppendZip16(archive, 0u);
+        DebugAppendZip32(archive, 0u);
+        DebugAppendZip32(archive, record.localOffset);
+        archive.insert(archive.end(), record.entry.name.begin(), record.entry.name.end());
+    }
+
+    const uint32_t centralSize = static_cast<uint32_t>(archive.size()) - centralOffset;
+    DebugAppendZip32(archive, 0x06054b50u);
+    DebugAppendZip16(archive, 0u);
+    DebugAppendZip16(archive, 0u);
+    DebugAppendZip16(archive, static_cast<uint16_t>(centralRecords.size()));
+    DebugAppendZip16(archive, static_cast<uint16_t>(centralRecords.size()));
+    DebugAppendZip32(archive, centralSize);
+    DebugAppendZip32(archive, centralOffset);
+    DebugAppendZip16(archive, 0u);
+    return archive;
+}
+
+[[nodiscard]] HRESULT RunDebugArchiveIndexCollisionSelfTest(unsigned int& passed, unsigned int& failed) noexcept
+{
+    const auto check = [&](bool condition, const wchar_t* message) noexcept
+    {
+        if (condition)
+        {
+            ++passed;
+        }
+        else
+        {
+            ++failed;
+            Debug::Error(L"FileSystem7z collision-index selftest failed: {}", message);
+        }
+    };
+
+    wchar_t tempDirectory[MAX_PATH]{};
+    wchar_t tempPath[MAX_PATH]{};
+    check(GetTempPathW(static_cast<DWORD>(std::size(tempDirectory)), tempDirectory) != 0, L"temporary directory should resolve");
+    check(GetTempFileNameW(tempDirectory, L"RS7", 0u, tempPath) != 0, L"temporary archive path should resolve");
+    if (tempPath[0] == L'\0')
+    {
+        return E_FAIL;
+    }
+
+    std::wstring archivePath(tempPath);
+    static_cast<void>(DeleteFileW(tempPath));
+    archivePath.append(L".zip");
+    const auto deleteTemp = wil::scope_exit([&] { static_cast<void>(DeleteFileW(archivePath.c_str())); });
+
+    constexpr std::array entries{
+        DebugStoredZipEntry{"foo", "file-wins"},
+        DebugStoredZipEntry{"foo/bar.txt", "blocked-child"},
+        DebugStoredZipEntry{"dup.txt", "first"},
+        DebugStoredZipEntry{"dup.txt", "second"},
+        DebugStoredZipEntry{"root.txt", "root"},
+    };
+    const std::vector<uint8_t> archive = BuildDebugStoredZip(entries);
+    wil::unique_hfile file(CreateFileW(archivePath.c_str(), GENERIC_WRITE, 0u, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_TEMPORARY, nullptr));
+    if (! file)
+    {
+        return HRESULT_FROM_WIN32(GetLastError());
+    }
+    DWORD written = 0;
+    check(WriteFile(file.get(), archive.data(), static_cast<DWORD>(archive.size()), &written, nullptr) != 0 && written == archive.size(),
+          L"collision archive fixture should be written completely");
+    file.reset();
+
+    wil::com_ptr<IFileSystem> fileSystem;
+    fileSystem.attach(static_cast<IFileSystem*>(new (std::nothrow) FileSystem7z()));
+    if (! fileSystem)
+    {
+        return E_OUTOFMEMORY;
+    }
+    wil::com_ptr<IFileSystemInitialize> initialize;
+    if (! fileSystem.try_query_to(initialize.put()) || ! initialize)
+    {
+        return E_NOINTERFACE;
+    }
+    const HRESULT initializeHr = initialize->Initialize(archivePath.c_str(), nullptr);
+    check(SUCCEEDED(initializeHr), L"file/ancestor and duplicate collisions should not reject the archive index");
+    if (FAILED(initializeHr))
+    {
+        return initializeHr;
+    }
+
+    wil::com_ptr<IFilesInformation> rootInfo;
+    const HRESULT rootHr = fileSystem->ReadDirectoryInfo(L"/", rootInfo.put());
+    check(SUCCEEDED(rootHr) && rootInfo, L"collision archive root should remain browsable");
+    if (! rootInfo)
+    {
+        return FAILED(rootHr) ? rootHr : E_FAIL;
+    }
+
+    bool foundFoo = false;
+    bool foundDup = false;
+    bool foundRoot = false;
+    for (unsigned int index = 0u;; ++index)
+    {
+        FileInfo* entry = nullptr;
+        const HRESULT getHr = rootInfo->Get(index, &entry);
+        if (getHr == HRESULT_FROM_WIN32(ERROR_NO_MORE_FILES))
+        {
+            break;
+        }
+        if (FAILED(getHr) || ! entry)
+        {
+            return FAILED(getHr) ? getHr : E_FAIL;
+        }
+        const std::wstring_view name(entry->FileName, static_cast<size_t>(entry->FileNameSize) / sizeof(wchar_t));
+        foundFoo |= name == L"foo";
+        foundDup |= name == L"dup.txt";
+        foundRoot |= name == L"root.txt";
+    }
+    check(foundFoo && foundDup && foundRoot, L"collision archive root should retain first entries and unaffected siblings");
+
+    wil::com_ptr<IFileSystemIO> fileIo;
+    if (! fileSystem.try_query_to(fileIo.put()) || ! fileIo)
+    {
+        return E_NOINTERFACE;
+    }
+    wil::com_ptr<IFileReader> blockedReader;
+    const HRESULT blockedHr = fileIo->CreateFileReader(L"/foo/bar.txt", blockedReader.put());
+    check(blockedHr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND) || blockedHr == HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND),
+          L"an entry below a first-indexed file must be dropped instead of exposed through an invalid hierarchy");
+    return failed == 0u ? S_OK : E_FAIL;
+}
+
+[[nodiscard]] HRESULT RunDebugCorruptArchiveReaderSelfTest(unsigned int& passed, unsigned int& failed) noexcept
+{
+    const auto check = [&](bool condition, const wchar_t* message) noexcept
+    {
+        if (condition)
+        {
+            ++passed;
+            return;
+        }
+
+        ++failed;
+        Debug::Error(L"FileSystem7z corrupt-reader selftest failed: {}", message);
+    };
+
+    wchar_t tempDirectory[MAX_PATH]{};
+    wchar_t tempPath[MAX_PATH]{};
+    check(GetTempPathW(static_cast<DWORD>(std::size(tempDirectory)), tempDirectory) != 0, L"temporary directory should resolve");
+    check(GetTempFileNameW(tempDirectory, L"RS7", 0u, tempPath) != 0, L"temporary archive path should resolve");
+    if (tempPath[0] == L'\0')
+    {
+        return E_FAIL;
+    }
+
+    std::wstring archivePath(tempPath);
+    static_cast<void>(DeleteFileW(tempPath));
+    archivePath.append(L".zip");
+
+    const auto deleteTemp = wil::scope_exit([&] { static_cast<void>(DeleteFileW(archivePath.c_str())); });
+    wil::unique_hfile file(CreateFileW(archivePath.c_str(), GENERIC_WRITE, 0u, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_TEMPORARY, nullptr));
+    check(static_cast<bool>(file), L"temporary archive should open for writing");
+    if (! file)
+    {
+        return HRESULT_FROM_WIN32(GetLastError());
+    }
+
+    const std::vector<uint8_t> archive = BuildDebugCorruptZip();
+    DWORD written                      = 0;
+    check(WriteFile(file.get(), archive.data(), static_cast<DWORD>(archive.size()), &written, nullptr) != 0 && written == archive.size(),
+          L"corrupt archive fixture should be written completely");
+    file.reset();
+
+    wil::com_ptr<IFileSystem> fileSystem;
+    fileSystem.attach(static_cast<IFileSystem*>(new (std::nothrow) FileSystem7z()));
+    check(static_cast<bool>(fileSystem), L"filesystem allocation should succeed");
+    if (! fileSystem)
+    {
+        return E_OUTOFMEMORY;
+    }
+
+    wil::com_ptr<IFileSystemInitialize> initialize;
+    check(fileSystem.try_query_to(initialize.put()) && initialize, L"filesystem should expose initialization");
+    if (! initialize)
+    {
+        return E_NOINTERFACE;
+    }
+
+    check(SUCCEEDED(initialize->Initialize(archivePath.c_str(), nullptr)), L"corrupt payload archive should remain structurally openable");
+
+    wil::com_ptr<IFileSystemIO> fileIo;
+    check(fileSystem.try_query_to(fileIo.put()) && fileIo, L"filesystem should expose file readers");
+    if (! fileIo)
+    {
+        return E_NOINTERFACE;
+    }
+
+    wil::com_ptr<IFileReader> reader;
+    g_debugForceSevenZipExtractPipelineForSelfTest.store(true, std::memory_order_release);
+    const auto restoreReaderPipeline = wil::scope_exit(
+        [&] { g_debugForceSevenZipExtractPipelineForSelfTest.store(false, std::memory_order_release); });
+    const HRESULT readerHr = fileIo->CreateFileReader(L"/payload.bin", reader.put());
+    check(SUCCEEDED(readerHr) && reader, L"corrupt payload entry should create a reader");
+    if (! reader)
+    {
+        return FAILED(readerHr) ? readerHr : E_FAIL;
+    }
+
+    std::array<std::byte, 4096> output{};
+    HRESULT terminalHr       = S_OK;
+    unsigned long bytesRead  = 0;
+    for (unsigned int attempt = 0; attempt < 16u; ++attempt)
+    {
+        bytesRead       = 0;
+        const HRESULT hr = reader->Read(output.data(), static_cast<unsigned long>(output.size()), &bytesRead);
+        if (FAILED(hr))
+        {
+            terminalHr = hr;
+            break;
+        }
+        if (bytesRead == 0u)
+        {
+            break;
+        }
+    }
+    check(FAILED(terminalHr), L"corrupt payload should produce a terminal read failure");
+
+    bytesRead              = 999u;
+    const HRESULT repeatHr = reader->Read(output.data(), 1u, &bytesRead);
+    check(repeatHr == terminalHr && bytesRead == 0u, L"terminal read failure should repeat without becoming EOF success");
+
+    uint64_t position = 999u;
+    check(SUCCEEDED(reader->Seek(0, FILE_BEGIN, &position)) && position == 0u, L"seek should update position after terminal failure");
+
+    bytesRead                = 999u;
+    const HRESULT seekReadHr = reader->Read(output.data(), 1u, &bytesRead);
+    check(seekReadHr == terminalHr && bytesRead == 0u, L"seek should not clear the terminal read failure");
+    return failed == 0u ? S_OK : E_FAIL;
+}
+#endif
 } // namespace
+
+#if defined(_DEBUG)
+extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamander7zDebugSelfTests(unsigned int* passed, unsigned int* failed)
+{
+    if (passed == nullptr || failed == nullptr)
+    {
+        return E_POINTER;
+    }
+
+    *passed = 0u;
+    *failed = 0u;
+    const HRESULT collisionHr = RunDebugArchiveIndexCollisionSelfTest(*passed, *failed);
+    const HRESULT corruptHr = RunDebugCorruptArchiveReaderSelfTest(*passed, *failed);
+    const HRESULT hr = FAILED(collisionHr) ? collisionHr : corruptHr;
+    return *failed == 0u ? S_OK : (FAILED(hr) ? hr : E_FAIL);
+}
+#endif
 
 HRESULT FileSystem7z::BuildIndex(const std::wstring& archivePath,
                                  const std::wstring& password,
@@ -4359,22 +4622,29 @@ HRESULT FileSystem7z::BuildIndex(const std::wstring& archivePath,
 
     outEntries.emplace(std::wstring(), ArchiveEntry{true, 0, 0, std::nullopt});
 
-    const auto ensureDir = [&](const std::wstring& key)
+    const auto ensureDir = [&](const std::wstring& key) noexcept -> HRESULT
     {
         if (key.empty())
         {
-            return;
+            return S_OK;
         }
 
-        if (outEntries.contains(key))
+        const auto existing = outEntries.find(key);
+        if (existing != outEntries.end())
         {
-            return;
+            if (! existing->second.isDirectory)
+            {
+                Debug::Warning(L"FileSystem7z: ignoring archive hierarchy below file entry '{}'.", key);
+                return S_FALSE;
+            }
+            return S_OK;
         }
 
         outEntries.emplace(key, ArchiveEntry{true, 0, 0, std::nullopt});
 
         const std::wstring parent = ParentKey(key);
         outChildren[parent].push_back(key);
+        return S_OK;
     };
 
     for (const auto& raw : raws)
@@ -4385,6 +4655,7 @@ HRESULT FileSystem7z::BuildIndex(const std::wstring& archivePath,
         }
 
         std::wstring parent = ParentKey(raw.key);
+        bool blockedByFileAncestor = false;
         if (! parent.empty())
         {
             size_t start = 0;
@@ -4397,14 +4668,52 @@ HRESULT FileSystem7z::BuildIndex(const std::wstring& archivePath,
                 }
 
                 const std::wstring dirKey = raw.key.substr(0, slash);
-                ensureDir(dirKey);
+                hr                        = ensureDir(dirKey);
+                if (FAILED(hr))
+                {
+                    return hr;
+                }
+                if (hr == S_FALSE)
+                {
+                    blockedByFileAncestor = true;
+                    break;
+                }
                 start = slash + 1;
             }
         }
 
+        if (blockedByFileAncestor)
+        {
+            Debug::Warning(L"FileSystem7z: skipped conflicting archive entry '{}' because an ancestor is a file.", raw.key);
+            continue;
+        }
+
         if (raw.isDirectory)
         {
-            ensureDir(raw.key);
+            hr = ensureDir(raw.key);
+            if (FAILED(hr))
+            {
+                return hr;
+            }
+
+            auto dirIt = outEntries.find(raw.key);
+            if (hr == S_OK && dirIt != outEntries.end() && dirIt->second.isDirectory)
+            {
+                if (dirIt->second.itemIndex.has_value())
+                {
+                    Debug::Warning(L"FileSystem7z: skipped duplicate directory entry '{}'; the first indexed entry wins.", raw.key);
+                }
+                else
+                {
+                    dirIt->second.lastWriteTime = raw.lastWriteTime;
+                    dirIt->second.itemIndex     = raw.itemIndex;
+                }
+            }
+            else if (hr == S_FALSE)
+            {
+                Debug::Warning(L"FileSystem7z: skipped conflicting directory entry '{}' because the first indexed entry is a file.", raw.key);
+            }
+            continue;
         }
 
         ArchiveEntry entry{};
@@ -4413,7 +4722,13 @@ HRESULT FileSystem7z::BuildIndex(const std::wstring& archivePath,
         entry.lastWriteTime = raw.lastWriteTime;
         entry.itemIndex     = raw.itemIndex;
 
-        outEntries[raw.key] = entry;
+        if (outEntries.contains(raw.key))
+        {
+            Debug::Warning(L"FileSystem7z: skipped duplicate archive entry '{}'; the first indexed entry wins.", raw.key);
+            continue;
+        }
+
+        outEntries.emplace(raw.key, entry);
         outChildren[parent].push_back(raw.key);
     }
 

@@ -1,0 +1,13 @@
+#pragma code_page(65001)
+#include "../../FileSystemMtpResources.h"
+#include <winres.h>
+
+LANGUAGE LANG_FRENCH, SUBLANG_FRENCH
+
+STRINGTABLE
+BEGIN
+    IDS_FILESYSTEMMTP_DESCRIPTION "Appareils portables MTP/PTP via Windows Portable Devices."
+    IDS_FILESYSTEMMTP_MENU_NO_DEVICES "Aucun appareil portable"
+    IDS_FILESYSTEMMTP_MENU_PROPERTIES "Proprietes"
+    IDS_FILESYSTEMMTP_MENU_DISCONNECT "Deconnecter"
+END

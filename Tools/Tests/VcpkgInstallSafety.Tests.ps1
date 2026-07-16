@@ -2,8 +2,17 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$testRunPlanScript = Join-Path $repoRoot 'Tools\TestRunPlan.ps1'
 $helperScript = Join-Path $repoRoot 'Tools\VcpkgInstallSafety.ps1'
+. $testRunPlanScript
 . $helperScript
+
+function New-RSTemporaryVcpkgInstallSafetyRoot {
+    return (New-RSTestSandboxScratchDirectory `
+            -RepoRoot $repoRoot `
+            -Harness 'tools-pester' `
+            -Case "vcpkg-install-safety-$([System.Guid]::NewGuid().ToString('N'))")
+}
 
 function Assert-ThrowsTerminatingError {
     param(
@@ -36,21 +45,28 @@ Describe 'Vcpkg install safety helper' {
     }
 
     It 'resolves child paths under the intended root' {
-        $root = Join-Path ([System.IO.Path]::GetTempPath()) 'rs-vcpkg-install-root-test'
-        $path = Resolve-RSVcpkgSafeChildPath -Root $root -Child 'x64-windows' -Description 'test triplet'
+        $root = New-RSTemporaryVcpkgInstallSafetyRoot
+        try {
+            $path = Resolve-RSVcpkgSafeChildPath -Root $root -Child 'x64-windows' -Description 'test triplet'
 
-        $path | Should Be (Join-Path $root 'x64-windows')
+            $path | Should Be (Join-Path $root 'x64-windows')
+        } finally {
+            Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+        }
     }
 
     It 'rejects child paths that escape the intended root' {
-        $root = Join-Path ([System.IO.Path]::GetTempPath()) 'rs-vcpkg-install-root-test'
-
-        Assert-ThrowsTerminatingError { Resolve-RSVcpkgSafeChildPath -Root $root -Child '..\outside' -Description 'test triplet' }
-        Assert-ThrowsTerminatingError { Resolve-RSVcpkgSafeChildPath -Root $root -Child '..\..' -Description 'test triplet' }
+        $root = New-RSTemporaryVcpkgInstallSafetyRoot
+        try {
+            Assert-ThrowsTerminatingError { Resolve-RSVcpkgSafeChildPath -Root $root -Child '..\outside' -Description 'test triplet' }
+            Assert-ThrowsTerminatingError { Resolve-RSVcpkgSafeChildPath -Root $root -Child '..\..' -Description 'test triplet' }
+        } finally {
+            Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+        }
     }
 
     It 'merges a single source file while StrictMode is active' {
-        $root = Join-Path ([System.IO.Path]::GetTempPath()) "rs-vcpkg-single-file-merge-$([System.Guid]::NewGuid())"
+        $root = New-RSTemporaryVcpkgInstallSafetyRoot
         try {
             $src = Join-Path $root 'src\test-triplet'
             $dst = Join-Path $root 'dst\test-triplet'

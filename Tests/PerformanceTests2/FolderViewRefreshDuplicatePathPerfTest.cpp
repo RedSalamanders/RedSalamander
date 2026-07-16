@@ -371,9 +371,9 @@ void WriteSmallTextFile(const std::filesystem::path& path, std::string_view cont
     }
 }
 
-[[nodiscard]] std::filesystem::path GetSharedDuplicatePluginFolderRoot()
+[[nodiscard]] std::filesystem::path GetSharedDuplicatePluginFolderRoot(std::error_code& ec)
 {
-    return std::filesystem::temp_directory_path() / L"RedSalamander_FolderViewRefreshDuplicatePathPerf_Shared";
+    return PerformanceTests2::AcquirePerformanceTestSandbox(L"folder_view_refresh_duplicate_path_perf_shared", ec);
 }
 
 void PopulateDuplicatePluginEntries(std::vector<DuplicatePathFileSystem::Entry>& entries)
@@ -794,7 +794,10 @@ public:
 #pragma warning(disable : 5246) // CppUnitTest TEST_CLASS_* macros expand to framework-owned registration initializers.
     TEST_CLASS_INITIALIZE(ClassInitialize)
     {
-        s_root = GetSharedDuplicatePluginFolderRoot();
+        std::error_code ec;
+        s_root = GetSharedDuplicatePluginFolderRoot(ec);
+        Assert::IsFalse(static_cast<bool>(ec), L"Failed to create PerformanceTests2 duplicate-path refresh TestSandbox root.");
+        Assert::IsFalse(s_root.empty(), L"PerformanceTests2 duplicate-path refresh TestSandbox root is empty.");
         EnsurePhysicalDuplicatePluginFolder(s_root);
 
         std::vector<DuplicatePathFileSystem::Entry> entries;
@@ -805,6 +808,8 @@ public:
     TEST_CLASS_CLEANUP(ClassCleanup)
     {
         s_fileSystem.reset();
+        std::error_code ec;
+        std::filesystem::remove_all(s_root, ec);
         s_root.clear();
     }
 #pragma warning(pop)

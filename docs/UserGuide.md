@@ -413,8 +413,10 @@ Built-in choices:
 Theme features:
 
 - Panes, navigation bars, status bars, file operations UI, dialogs, and viewers follow the active theme.
-- Themes can be loaded from `Themes\*.theme.json5`.
-- User themes can be created, duplicated, edited, previewed, and saved.
+- Version 2 themes can be loaded from `Themes\*.theme.json5`; shipped choices include Dracula and Catppuccin Latte, Frappé, and Mocha.
+- User themes can define reusable palette entries, semantic references, derived colors, system colors, and stable runtime Rainbow/choice sources.
+- Rainbow follows the Windows light/dark base and gives multiple selected items stable, repeatable color variation; Windows Contrast Themes still take precedence.
+- User themes can be created, duplicated, edited, previewed, and saved without flattening their authored sources.
 - Temporary theme previews are restored if Preferences is canceled.
 
 More detail: [Themes](Themes.md)

@@ -108,17 +108,7 @@ constexpr uint64_t kGroupStableIdFolderView  = 2u;
 
 [[nodiscard]] std::wstring_view TrimWhitespace(std::wstring_view text) noexcept
 {
-    while (! text.empty() && std::iswspace(static_cast<wint_t>(text.front())) != 0)
-    {
-        text.remove_prefix(1);
-    }
-
-    while (! text.empty() && std::iswspace(static_cast<wint_t>(text.back())) != 0)
-    {
-        text.remove_suffix(1);
-    }
-
-    return text;
+    return StringUtils::TrimWhitespace(text);
 }
 
 [[nodiscard]] bool ContainsNoCase(std::wstring_view haystack, std::wstring_view needle) noexcept
@@ -666,6 +656,7 @@ public:
     [[nodiscard]] bool DebugSetSearchText(std::wstring_view text) noexcept;
     [[nodiscard]] bool DebugFocusSearch() noexcept;
     [[nodiscard]] bool DebugFocusGrid() noexcept;
+    [[nodiscard]] bool DebugCopySelection() noexcept;
     [[nodiscard]] bool DebugCycleGridSortByColumn(size_t columnIndex) noexcept;
     [[nodiscard]] bool DebugApplyGridLayout(const std::vector<Common::Settings::GridColumnLayoutEntry>& layout) noexcept;
     [[nodiscard]] bool DebugSetGroupCollapsed(size_t groupIndex, bool collapsed) noexcept;
@@ -783,6 +774,7 @@ private:
     std::optional<uint64_t> _selectedRowId;
     size_t _dispatchDepth           = 0u;
     bool _deletePending             = false;
+    bool _createInProgress          = false;
     bool _settingsPersistedForClose = false;
     HWND _ownerWindow               = nullptr;
 
@@ -846,18 +838,20 @@ HWND ShortcutsWindow::Create(HWND owner,
 
     const bool hasSavedPlacement = _settings->windows.find(std::wstring(kShortcutsWindowId)) != _settings->windows.end();
 
-    const HWND hwnd = CreateWindowExW(0,
-                                      kClassName,
-                                      title.c_str(),
-                                      WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
-                                      CW_USEDEFAULT,
-                                      CW_USEDEFAULT,
-                                      defaultWidth,
-                                      defaultHeight,
-                                      nullptr,
-                                      nullptr,
-                                      _instance,
-                                      this);
+    _createInProgress                = true;
+    const auto clearCreateInProgress = wil::scope_exit([&]() noexcept { _createInProgress = false; });
+    const HWND hwnd                  = CreateWindowExW(0,
+                                                       kClassName,
+                                                       title.c_str(),
+                                                       WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
+                                                       CW_USEDEFAULT,
+                                                       CW_USEDEFAULT,
+                                                       defaultWidth,
+                                                       defaultHeight,
+                                                       nullptr,
+                                                       nullptr,
+                                                       _instance,
+                                                       this);
     if (! hwnd)
     {
         return nullptr;
@@ -935,7 +929,7 @@ LRESULT CALLBACK ShortcutsWindow::WndProcThunk(HWND hwnd, UINT message, WPARAM w
         {
             --self->_dispatchDepth;
         }
-        if (self->_dispatchDepth == 0u && self->_deletePending)
+        if (self->_dispatchDepth == 0u && self->_deletePending && ! self->_createInProgress)
         {
             delete self;
         }
@@ -1115,7 +1109,7 @@ void ShortcutsWindow::OnNcDestroy(HWND hwnd) noexcept
         g_shortcutsWindow = nullptr;
     }
     _deletePending = true;
-    if (_dispatchDepth == 0u)
+    if (_dispatchDepth == 0u && ! _createInProgress)
     {
         delete this;
     }
@@ -1637,6 +1631,18 @@ bool ShortcutsWindow::DebugFocusGrid() noexcept
     return true;
 }
 
+bool ShortcutsWindow::DebugCopySelection() noexcept
+{
+    const HWND hwnd = GetHwnd();
+    if (! hwnd || IsWindow(hwnd) == FALSE || ! _grid)
+    {
+        return false;
+    }
+
+    _dxHost.SetFocusControl(_grid);
+    return _grid->OnCopy(_dxHost);
+}
+
 bool ShortcutsWindow::DebugCycleGridSortByColumn(const size_t columnIndex) noexcept
 {
     const HWND hwnd = GetHwnd();
@@ -1707,22 +1713,25 @@ void ShowShortcutsWindow(HWND owner,
                          const ShortcutManager& shortcutManager,
                          const AppTheme& theme) noexcept
 {
-    if (g_shortcutsWindow && g_shortcutsWindow->GetHwnd())
+    if (g_shortcutsWindow)
     {
-        g_shortcutsWindow->UpdateData(shortcuts, shortcutManager);
-        g_shortcutsWindow->UpdateTheme(theme);
-
         const HWND hwnd = g_shortcutsWindow->GetHwnd();
-        if (IsIconic(hwnd))
+        if (hwnd && IsWindow(hwnd) != FALSE)
         {
-            ShowWindow(hwnd, SW_RESTORE);
+            g_shortcutsWindow->UpdateData(shortcuts, shortcutManager);
+            g_shortcutsWindow->UpdateTheme(theme);
+
+            if (IsIconic(hwnd))
+            {
+                ShowWindow(hwnd, SW_RESTORE);
+            }
+            else
+            {
+                ShowWindow(hwnd, SW_SHOW);
+            }
+            SetForegroundWindow(hwnd);
+            return;
         }
-        else
-        {
-            ShowWindow(hwnd, SW_SHOW);
-        }
-        SetForegroundWindow(hwnd);
-        return;
     }
 
     auto window = std::make_unique<ShortcutsWindow>();
@@ -1786,6 +1795,11 @@ bool DebugFocusShortcutsWindowSearch() noexcept
 bool DebugFocusShortcutsWindowGrid() noexcept
 {
     return g_shortcutsWindow && g_shortcutsWindow->DebugFocusGrid();
+}
+
+bool DebugCopyShortcutsWindowSelection() noexcept
+{
+    return g_shortcutsWindow && g_shortcutsWindow->DebugCopySelection();
 }
 
 bool DebugCycleShortcutsWindowGridSortByColumn(const size_t columnIndex) noexcept

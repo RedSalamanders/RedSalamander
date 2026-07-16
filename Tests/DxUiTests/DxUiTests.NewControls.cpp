@@ -1,6 +1,8 @@
 #include "DxUiTestHelpers.h"
 
 #include <chrono>
+#include <fstream>
+#include <string>
 #include <thread>
 
 namespace
@@ -154,20 +156,20 @@ void TestButtonChromeCustomStylePreservesOverlayMetrics()
     using namespace RedSalamander::DxUi;
 
     ButtonChromeDrawSpec spec{};
-    spec.bounds            = D2D1::RectF(10.0f, 12.0f, 110.0f, 44.0f);
-    spec.text              = L"Close";
-    spec.customStyle       = ButtonChromeCustomStyle{
-        .fill              = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f),
-        .border            = D2D1::ColorF(0.2f, 0.3f, 0.4f, 1.0f),
-        .focus             = D2D1::ColorF(0.1f, 0.6f, 0.9f, 1.0f),
-        .text              = D2D1::ColorF(0.7f, 0.8f, 0.9f, 1.0f),
-        .showFill          = false,
-        .showBorder        = true,
-        .showFocus         = true,
-        .cornerRadiusDip   = 6.0f,
-        .borderStrokeDip   = 1.0f,
-        .focusOutsetDip    = 2.0f,
-        .focusStrokeDip    = 2.0f,
+    spec.bounds      = D2D1::RectF(10.0f, 12.0f, 110.0f, 44.0f);
+    spec.text        = L"Close";
+    spec.customStyle = ButtonChromeCustomStyle{
+        .fill            = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f),
+        .border          = D2D1::ColorF(0.2f, 0.3f, 0.4f, 1.0f),
+        .focus           = D2D1::ColorF(0.1f, 0.6f, 0.9f, 1.0f),
+        .text            = D2D1::ColorF(0.7f, 0.8f, 0.9f, 1.0f),
+        .showFill        = false,
+        .showBorder      = true,
+        .showFocus       = true,
+        .cornerRadiusDip = 6.0f,
+        .borderStrokeDip = 1.0f,
+        .focusOutsetDip  = 2.0f,
+        .focusStrokeDip  = 2.0f,
     };
 
     const ButtonChromeResolvedStyle resolved = ResolveButtonChromeResolvedStyle(MakeDefaultThemePalette(false), spec);
@@ -462,6 +464,36 @@ void TestRadioButtonClickSelectsAndDeselectsOthers()
     Require(! itemA->IsChecked(), "radio button A is deselected after clicking B");
     Require(group->GetSelectedIndex() == 1, "radio buttons group reports index 1 after clicking B");
     Require(callbackCount == 2u, "radio buttons fires two selection-changed callbacks total");
+}
+
+void TestRadioButtonSelectionChangedCanReplaceRootSafely()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    auto root   = std::make_unique<Panel>();
+    auto* group = root->AddChild<RadioButtons>();
+    group->SetBounds(D2D1::RectF(0.0f, 0.0f, 200.0f, 120.0f));
+
+    auto* item = group->AddItem(L"Beta");
+    item->SetBounds(D2D1::RectF(0.0f, 0.0f, 200.0f, 32.0f));
+
+    size_t selectionChangedCount = 0u;
+    size_t itemSelectedCount     = 0u;
+    group->SetOnSelectionChanged([&](int)
+    {
+        ++selectionChangedCount;
+        host.SetRoot(std::make_unique<Panel>());
+    });
+    item->SetOnSelected([&] { ++itemSelectedCount; });
+
+    host.SetRoot(std::move(root));
+
+    Require(item->OnMouseDown(host, D2D1::Point2F(16.0f, 16.0f), false, 0), "radio button handles mouse-down before root replacement");
+    Require(item->OnMouseUp(host, D2D1::Point2F(16.0f, 16.0f), false, 0), "radio button survives root replacement during group selection callback");
+    Require(selectionChangedCount == 1u, "radio group selection callback ran before replacing the root");
+    Require(itemSelectedCount == 0u, "destroyed radio button does not invoke its item-selected callback after root replacement");
+    Require(host.GetRoot() != nullptr, "radio group selection callback can replace the host root safely");
 }
 
 void TestRadioButtonPaintHandlesMissingDeviceContext()
@@ -1037,6 +1069,7 @@ void TestTabControlCloseButtonRemovesTabsAndInvokesCallback()
     tabControl->AddTab<Label>(L"View", L"Page 1");
     tabControl->AddTab<Label>(L"Help", L"Page 2");
     tabControl->SetTabClosable(1u, true);
+    tabControl->SetSelectedIndex(1u);
 
     size_t closedIndex = std::numeric_limits<size_t>::max();
     size_t closeCount  = 0u;
@@ -1056,6 +1089,82 @@ void TestTabControlCloseButtonRemovesTabsAndInvokesCallback()
     Require(tabControl->OnMouseUp(host, closePoint, false, 0), "tab control handles close-button release");
     Require(closeCount == 1u && closedIndex == 1u, "tab control invokes the close callback with the closed tab index");
     Require(tabControl->GetTabCount() == 2u, "tab control removes the closed tab");
+}
+
+void TestTabControlCloseCallbacksCanReplaceRootSafely()
+{
+    using namespace RedSalamander::DxUi;
+
+    {
+        WindowHost host;
+        auto root        = std::make_unique<Panel>();
+        auto* tabControl = root->AddChild<TabControl>();
+        tabControl->SetBounds(D2D1::RectF(0.0f, 0.0f, 360.0f, 200.0f));
+        tabControl->AddTab<Label>(L"Home", L"Page 0");
+        tabControl->AddTab<Label>(L"View", L"Page 1");
+        tabControl->SetTabClosable(1u, true);
+        tabControl->SetSelectedIndex(1u);
+
+        size_t closeRequestCount = 0u;
+        tabControl->SetOnTabCloseRequested([&](size_t index)
+        {
+            Require(index == 1u, "tab close request callback receives the requested tab index");
+            ++closeRequestCount;
+            host.SetRoot(std::make_unique<Panel>());
+            return true;
+        });
+
+        host.SetRoot(std::move(root));
+        const D2D1_POINT_2F closePoint = RectCenter(tabControl->DebugGetCloseButtonRect(1u));
+        Require(tabControl->OnMouseDown(host, closePoint, false, 0), "tab control handles close-request replacement press");
+        Require(tabControl->OnMouseUp(host, closePoint, false, 0), "tab control handles close-request replacement release");
+        Require(closeRequestCount == 1u, "tab close request callback runs once before replacing the root");
+    }
+
+    {
+        WindowHost host;
+        auto root        = std::make_unique<Panel>();
+        auto* tabControl = root->AddChild<TabControl>();
+        tabControl->SetBounds(D2D1::RectF(0.0f, 0.0f, 360.0f, 200.0f));
+        tabControl->AddTab<Label>(L"Home", L"Page 0");
+        tabControl->AddTab<Label>(L"View", L"Page 1");
+        tabControl->SetTabClosable(1u, true);
+        tabControl->SetSelectedIndex(1u);
+
+        size_t closeCount = 0u;
+        tabControl->SetOnTabClosed([&](size_t index)
+        {
+            Require(index == 1u, "tab closed callback receives the closed tab index");
+            ++closeCount;
+            host.SetRoot(std::make_unique<Panel>());
+        });
+
+        host.SetRoot(std::move(root));
+        const D2D1_POINT_2F closePoint = RectCenter(tabControl->DebugGetCloseButtonRect(1u));
+        Require(tabControl->OnMouseDown(host, closePoint, false, 0), "tab control handles close replacement press");
+        Require(tabControl->OnMouseUp(host, closePoint, false, 0), "tab control handles close replacement release");
+        Require(closeCount == 1u, "tab closed callback runs once before replacing the root");
+    }
+
+    const std::filesystem::path sourcePath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.Controls.cpp";
+    std::ifstream input(sourcePath);
+    Require(input.good(), "Controls source is readable for tab close reentrancy guard");
+    const std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+    const size_t closeTab = source.find("void TabControl::CloseTab");
+    Require(closeTab != std::string::npos, "TabControl::CloseTab source exists");
+    const size_t closeRequestedCall = source.find("onTabCloseRequested(index)", closeTab);
+    const size_t removeTabCall      = source.find("RemoveTab(index)", closeRequestedCall);
+    const size_t closedCall         = source.find("onTabClosed(index)", removeTabCall);
+    const size_t invalidateCall     = source.find("Invalidate(host)", closedCall);
+    Require(closeRequestedCall != std::string::npos && removeTabCall != std::string::npos && closedCall != std::string::npos &&
+                invalidateCall != std::string::npos,
+            "TabControl::CloseTab callback and invalidate calls are found");
+    const std::string requestedPostCallbackBlock = source.substr(closeRequestedCall, removeTabCall - closeRequestedCall);
+    const std::string closedPostCallbackBlock    = source.substr(closedCall, invalidateCall - closedCall);
+    Require(requestedPostCallbackBlock.find("closeLifetime.expired()") != std::string::npos,
+            "TabControl::CloseTab checks its lifetime after close-request callbacks");
+    Require(closedPostCallbackBlock.find("closeLifetime.expired()") != std::string::npos,
+            "TabControl::CloseTab checks its lifetime after close-completed callbacks");
 }
 
 void TestTabControlOverflowButtonsAndWheelScroll()
@@ -1329,9 +1438,9 @@ void TestStatusStripRightAlignedLeadingEllipsisSections()
 
     StatusStrip strip;
     strip.SetSections({
-        StatusStrip::Section{.text = L"Completed with scan: 1872 matches, 2416 files scanned",
-                             .widthDip = 120.0f,
-                             .alignment = DWRITE_TEXT_ALIGNMENT_TRAILING,
+        StatusStrip::Section{.text            = L"Completed with scan: 1872 matches, 2416 files scanned",
+                             .widthDip        = 120.0f,
+                             .alignment       = DWRITE_TEXT_ALIGNMENT_TRAILING,
                              .leadingEllipsis = true},
     });
 
@@ -1339,8 +1448,7 @@ void TestStatusStripRightAlignedLeadingEllipsisSections()
     Require(strip.GetSectionAlignment(0u) == DWRITE_TEXT_ALIGNMENT_TRAILING, "status strip stores trailing section alignment");
     Require(strip.GetSectionLeadingEllipsis(0u), "status strip stores leading-ellipsis section trim mode");
 
-    const std::wstring displayText =
-        StatusStrip::DebugElideLeadingForWidth(nullptr, strip.GetSectionText(0u), FontRole::Small, 96.0f, 22.0f);
+    const std::wstring displayText = StatusStrip::DebugElideLeadingForWidth(nullptr, strip.GetSectionText(0u), FontRole::Small, 96.0f, 22.0f);
     Require(displayText.starts_with(L"..."), "status strip leading ellipsis starts with dots when clipped");
     Require(displayText.ends_with(L"scanned"), "status strip leading ellipsis preserves the message tail");
 }
@@ -1469,6 +1577,7 @@ void RunNewControlTests()
     TestRadioButtonsAddItemCreatesChildren();
     TestRadioButtonsSetSelectedIndexUpdatesState();
     TestRadioButtonClickSelectsAndDeselectsOthers();
+    TestRadioButtonSelectionChangedCanReplaceRootSafely();
     TestRadioButtonPaintHandlesMissingDeviceContext();
 
     // ProgressBar
@@ -1506,6 +1615,7 @@ void RunNewControlTests()
     // TabControl
     TestTabControlSelectionShowsOnlyTheActivePage();
     TestTabControlCloseButtonRemovesTabsAndInvokesCallback();
+    TestTabControlCloseCallbacksCanReplaceRootSafely();
     TestTabControlOverflowButtonsAndWheelScroll();
     TestTabControlHeaderDividerExposesPaintableGeometry();
     TestTabControlKeyboardNavigationHonorsRightToLeft();

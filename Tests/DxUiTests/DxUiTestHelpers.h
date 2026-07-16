@@ -4,6 +4,7 @@
 #include "DxUi/DxUi.h"
 #include "Helpers.h"
 #include "WindowMessages.h"
+#include "TestSupport/TestSupport.h"
 
 #include <UIAutomation.h>
 #include <imm.h>
@@ -22,6 +23,8 @@
 #include <iostream>
 #include <mutex>
 #include <string>
+#include <string_view>
+#include <system_error>
 #include <vector>
 
 #pragma comment(lib, "imm32.lib")
@@ -33,6 +36,73 @@ inline void Require(bool condition, const char* message)
         std::cerr << "FAILED: " << message << '\n';
         std::exit(1);
     }
+}
+
+inline void SkipDxUiTest(const char* reason)
+{
+    std::cerr << "SKIPPED: " << reason << '\n';
+}
+
+[[nodiscard]] inline bool WaitForDxUiThreadFocus(HWND hwnd, DWORD timeoutMs = 800u) noexcept
+{
+    const ULONGLONG deadline = GetTickCount64() + timeoutMs;
+    do
+    {
+        if (GetFocus() == hwnd)
+        {
+            return true;
+        }
+
+        Sleep(10);
+    } while (GetTickCount64() < deadline);
+
+    return GetFocus() == hwnd;
+}
+
+[[nodiscard]] inline bool TryFocusDxUiTestWindow(HWND hwnd, DWORD timeoutMs = 800u) noexcept
+{
+    if (hwnd == nullptr || IsWindow(hwnd) == FALSE)
+    {
+        return false;
+    }
+
+    ShowWindow(hwnd, SW_SHOW);
+    static_cast<void>(UpdateWindow(hwnd));
+    static_cast<void>(SetActiveWindow(hwnd));
+    static_cast<void>(SetFocus(hwnd));
+
+    return WaitForDxUiThreadFocus(hwnd, timeoutMs);
+}
+
+[[nodiscard]] inline bool TryActivateDxUiTestWindow(HWND hwnd, DWORD timeoutMs = 800u) noexcept
+{
+    if (! TryFocusDxUiTestWindow(hwnd, timeoutMs))
+    {
+        return false;
+    }
+
+    if (GetForegroundWindow() == hwnd)
+    {
+        return true;
+    }
+
+    if (SetForegroundWindow(hwnd) == FALSE && GetForegroundWindow() != hwnd)
+    {
+        return false;
+    }
+
+    const ULONGLONG deadline = GetTickCount64() + timeoutMs;
+    do
+    {
+        if (GetForegroundWindow() == hwnd)
+        {
+            return true;
+        }
+
+        Sleep(10);
+    } while (GetTickCount64() < deadline);
+
+    return GetForegroundWindow() == hwnd;
 }
 
 inline void RequireColorNear(const D2D1_COLOR_F& actual, const D2D1_COLOR_F& expected, const char* message)
@@ -122,6 +192,31 @@ inline void SetDxUiWriteBaselines(bool value) noexcept
 inline bool ShouldWriteDxUiBaselines() noexcept
 {
     return DxUiWriteBaselinesFlag();
+}
+
+inline constexpr std::wstring_view kDxUiHarnessArtifactSegment{L"dxui"};
+
+[[nodiscard]] inline std::filesystem::path GetDxUiTestArtifactDirectory(std::error_code& ec) noexcept
+{
+    return RedSalamander::TestSupport::AcquireTestDirectory({.harnessSegment      = kDxUiHarnessArtifactSegment,
+                                                             .fallbackRunIdPrefix = L"dxui",
+                                                             .kind                = RedSalamander::TestSupport::TestDirectoryKind::Artifacts,
+                                                             .includeLeafSegment  = false,
+                                                             .cleanExisting       = false},
+                                                            ec);
+}
+
+[[nodiscard]] inline std::filesystem::path GetDxUiTestArtifactDirectory()
+{
+    std::error_code ec;
+    const std::filesystem::path directory = GetDxUiTestArtifactDirectory(ec);
+    Require(! ec && ! directory.empty(), "DxUiTests artifact TestSandbox root is available");
+    return directory;
+}
+
+[[nodiscard]] inline std::filesystem::path GetDxUiTestArtifactPath(std::wstring_view fileName)
+{
+    return GetDxUiTestArtifactDirectory() / std::filesystem::path(fileName);
 }
 
 inline std::filesystem::path FindRepoRootForDxUiTests()

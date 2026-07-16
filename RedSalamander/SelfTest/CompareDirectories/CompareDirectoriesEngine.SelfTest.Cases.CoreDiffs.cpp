@@ -79,6 +79,10 @@ SelfTest::RunCase(options,
 
     wil::unique_cotaskmem_string secret;
     HRESULT hr = hostConnections->GetConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_PASSWORD, nullptr, secret.put());
+    if (SkipIfHostConnectionUiUnavailable(state, hr, L"Windows Hello cache"))
+    {
+        return true;
+    }
     state.Require(SUCCEEDED(hr), std::format(L"GetConnectionSecret failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
     state.Require(secret && std::wstring_view(secret.get()) == password, L"Unexpected secret value.");
     SecureClearAndFreeSecret(secret);
@@ -86,6 +90,10 @@ SelfTest::RunCase(options,
 
     wil::unique_cotaskmem_string secret2;
     hr = hostConnections->GetConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_PASSWORD, nullptr, secret2.put());
+    if (SkipIfHostConnectionUiUnavailable(state, hr, L"Windows Hello cache second read"))
+    {
+        return true;
+    }
     state.Require(SUCCEEDED(hr), std::format(L"GetConnectionSecret (second call) failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
     SecureClearAndFreeSecret(secret2);
     state.Require(g_windowsHelloVerifierCalls.load(std::memory_order_relaxed) == 1u, L"Expected Windows Hello to be cached (no second prompt).");
@@ -96,6 +104,10 @@ SelfTest::RunCase(options,
 
     wil::unique_cotaskmem_string secretExpired;
     hr = hostConnections->GetConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_PASSWORD, nullptr, secretExpired.put());
+    if (SkipIfHostConnectionUiUnavailable(state, hr, L"Windows Hello cache expired-auth read"))
+    {
+        return true;
+    }
     state.Require(SUCCEEDED(hr), std::format(L"GetConnectionSecret (expired auth) failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
     SecureClearAndFreeSecret(secretExpired);
     state.Require(g_windowsHelloVerifierCalls.load(std::memory_order_relaxed) == 1u, L"Expected Windows Hello not to re-prompt after session auth.");
@@ -107,6 +119,10 @@ SelfTest::RunCase(options,
 
     wil::unique_cotaskmem_string secret3;
     hr = hostConnections->GetConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_PASSWORD, nullptr, secret3.put());
+    if (SkipIfHostConnectionUiUnavailable(state, hr, L"Windows Hello cache manual-auth read"))
+    {
+        return true;
+    }
     state.Require(SUCCEEDED(hr), std::format(L"GetConnectionSecret (manual auth) failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
     SecureClearAndFreeSecret(secret3);
     state.Require(g_windowsHelloVerifierCalls.load(std::memory_order_relaxed) == 0u, L"Manual secret entry should suppress Windows Hello prompts.");
@@ -185,46 +201,114 @@ SelfTest::RunCase(options,
 
     const std::wstring refreshToken = L"refresh-token-selftest";
     HRESULT hr = hostConnections->SetConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN, refreshToken.c_str(), TRUE);
+    if (SkipIfHostConnectionUiUnavailable(state, hr, L"OAuth refresh token persisted store"))
+    {
+        return true;
+    }
     state.Require(SUCCEEDED(hr), std::format(L"SetConnectionSecret failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
 
     hr = hostConnections->ClearCachedConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN);
+    if (SkipIfHostConnectionUiUnavailable(state, hr, L"OAuth refresh token persisted cache clear"))
+    {
+        return true;
+    }
     state.Require(SUCCEEDED(hr), std::format(L"ClearCachedConnectionSecret failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
 
     wil::unique_cotaskmem_string secret;
     hr = hostConnections->GetConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN, nullptr, secret.put());
+    if (SkipIfHostConnectionUiUnavailable(state, hr, L"OAuth refresh token persisted read"))
+    {
+        return true;
+    }
     state.Require(SUCCEEDED(hr), std::format(L"GetConnectionSecret failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
     state.Require(secret && std::wstring_view(secret.get()) == refreshToken, L"Unexpected OAuth refresh token value.");
     SecureClearAndFreeSecret(secret);
     state.Require(g_windowsHelloVerifierCalls.load(std::memory_order_relaxed) == 1u, L"Expected Windows Hello to guard persisted refresh tokens.");
 
     hr = hostConnections->DeleteConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN, TRUE);
+    if (SkipIfHostConnectionUiUnavailable(state, hr, L"OAuth refresh token persisted delete"))
+    {
+        return true;
+    }
     state.Require(SUCCEEDED(hr), std::format(L"DeleteConnectionSecret failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
 
     hr = hostConnections->ClearCachedConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN);
+    if (SkipIfHostConnectionUiUnavailable(state, hr, L"OAuth refresh token post-delete cache clear"))
+    {
+        return true;
+    }
     state.Require(SUCCEEDED(hr), std::format(L"ClearCachedConnectionSecret (post-delete) failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
 
     wil::unique_cotaskmem_string missingSecret;
     hr = hostConnections->GetConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN, nullptr, missingSecret.put());
+    if (SkipIfHostConnectionUiUnavailable(state, hr, L"OAuth refresh token post-delete read"))
+    {
+        return true;
+    }
     state.Require(hr == HRESULT_FROM_WIN32(ERROR_NOT_FOUND),
                   std::format(L"Expected ERROR_NOT_FOUND after deleting saved refresh token. hr=0x{:08X}", static_cast<unsigned long>(hr)));
 
     const std::wstring sessionRefreshToken = L"session-refresh-token";
     hr = hostConnections->SetConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN, sessionRefreshToken.c_str(), FALSE);
+    if (SkipIfHostConnectionUiUnavailable(state, hr, L"OAuth refresh token session store"))
+    {
+        return true;
+    }
     state.Require(SUCCEEDED(hr), std::format(L"SetConnectionSecret (session only) failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
 
     wil::unique_cotaskmem_string sessionSecret;
     hr = hostConnections->GetConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN, nullptr, sessionSecret.put());
+    if (SkipIfHostConnectionUiUnavailable(state, hr, L"OAuth refresh token session read"))
+    {
+        return true;
+    }
     state.Require(SUCCEEDED(hr), std::format(L"GetConnectionSecret (session only) failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
     state.Require(sessionSecret && std::wstring_view(sessionSecret.get()) == sessionRefreshToken, L"Unexpected session OAuth refresh token value.");
     SecureClearAndFreeSecret(sessionSecret);
 
     hr = hostConnections->ClearCachedConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN);
+    if (SkipIfHostConnectionUiUnavailable(state, hr, L"OAuth refresh token session cache clear"))
+    {
+        return true;
+    }
     state.Require(SUCCEEDED(hr), std::format(L"ClearCachedConnectionSecret (session only) failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
 
     wil::unique_cotaskmem_string sessionMissing;
     hr = hostConnections->GetConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN, nullptr, sessionMissing.put());
+    if (SkipIfHostConnectionUiUnavailable(state, hr, L"OAuth refresh token session missing read"))
+    {
+        return true;
+    }
     state.Require(hr == HRESULT_FROM_WIN32(ERROR_NOT_FOUND),
                   std::format(L"Expected ERROR_NOT_FOUND after clearing session-only refresh token. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+
+#ifdef ENABLE_TESTS
+    const std::wstring durableOldToken = L"durable-old-refresh-token";
+    hr = hostConnections->SetConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN, durableOldToken.c_str(), TRUE);
+    state.Require(SUCCEEDED(hr), std::format(L"Failed to seed durable token for persistence-failure proof. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+
+    const std::wstring rotatedSessionToken = L"rotated-session-token";
+    RedSalamander::Connections::SetCredentialPersistenceFaultForTesting(RedSalamander::Connections::CredentialPersistenceFault::SaveOnce);
+    hr = hostConnections->SetConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN, rotatedSessionToken.c_str(), TRUE);
+    state.Require(hr == HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED),
+                  std::format(L"Injected credential save failure expected ACCESS_DENIED, got 0x{:08X}", static_cast<unsigned long>(hr)));
+
+    wil::unique_cotaskmem_string rotatedSecret;
+    hr = hostConnections->GetConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN, nullptr, rotatedSecret.put());
+    state.Require(SUCCEEDED(hr) && rotatedSecret && std::wstring_view(rotatedSecret.get()) == rotatedSessionToken,
+                  L"Credential save failure exposed the stale durable token instead of the rotated session token.");
+    SecureClearAndFreeSecret(rotatedSecret);
+
+    RedSalamander::Connections::SetCredentialPersistenceFaultForTesting(RedSalamander::Connections::CredentialPersistenceFault::DeleteOnce);
+    hr = hostConnections->DeleteConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN, TRUE);
+    state.Require(hr == HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED),
+                  std::format(L"Injected credential delete failure expected ACCESS_DENIED, got 0x{:08X}", static_cast<unsigned long>(hr)));
+
+    wil::unique_cotaskmem_string deletedSessionSecret;
+    hr = hostConnections->GetConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN, nullptr, deletedSessionSecret.put());
+    state.Require(hr == HRESULT_FROM_WIN32(ERROR_NOT_FOUND) && ! deletedSessionSecret,
+                  L"Credential delete failure re-exposed the stale durable token after the session tombstone was installed.");
+#endif
 
     return state.failure.empty();
 });
@@ -680,6 +764,10 @@ SelfTest::RunCase(options,
     const std::wstring connectionRoot = std::format(L"/@conn:{}/", profile.name);
     wil::com_ptr<IFilesInformation> filesInformation;
     hr = created.fileSystem->ReadDirectoryInfo(connectionRoot.c_str(), filesInformation.put());
+    if (SkipIfHostConnectionUiUnavailable(state, hr, L"Google Drive clientId gate"))
+    {
+        return true;
+    }
     state.Require(hr == HRESULT_FROM_WIN32(ERROR_BAD_CONFIGURATION),
                   std::format(L"Google Drive clientId gate: expected ERROR_BAD_CONFIGURATION. hr=0x{:08X}", static_cast<unsigned long>(hr)));
     state.Require(! filesInformation, L"Google Drive clientId gate: files information should not be produced on configuration failure.");
@@ -760,6 +848,10 @@ SelfTest::RunCase(options,
     const std::wstring connectionRoot = std::format(L"/@conn:{}/", profile.name);
     wil::com_ptr<IFilesInformation> filesInformation;
     hr = created.fileSystem->ReadDirectoryInfo(connectionRoot.c_str(), filesInformation.put());
+    if (SkipIfHostConnectionUiUnavailable(state, hr, L"Google Drive refresh-token gate"))
+    {
+        return true;
+    }
     state.Require(
         hr == HRESULT_FROM_WIN32(ERROR_NOT_FOUND),
         std::format(L"Google Drive refresh-token gate: expected ERROR_NOT_FOUND when no refresh token is saved. hr=0x{:08X}", static_cast<unsigned long>(hr)));
@@ -866,6 +958,10 @@ SelfTest::RunCase(options,
     const std::wstring connectionRoot = std::format(L"/@conn:{}/", profile.name);
     wil::com_ptr<IFilesInformation> filesInformation;
     hr = created.fileSystem->ReadDirectoryInfo(connectionRoot.c_str(), filesInformation.put());
+    if (SkipIfHostConnectionUiUnavailable(state, hr, L"OneDrive Personal clientId gate"))
+    {
+        return true;
+    }
     state.Require(hr == HRESULT_FROM_WIN32(ERROR_BAD_CONFIGURATION),
                   std::format(L"OneDrive Personal clientId gate: expected ERROR_BAD_CONFIGURATION. hr=0x{:08X}", static_cast<unsigned long>(hr)));
     state.Require(! filesInformation, L"OneDrive Personal clientId gate: files information should not be produced on configuration failure.");
@@ -1206,6 +1302,131 @@ SelfTest::RunCase(options,
     else
     {
         state.Require(false, L"Failed to create case folders: content_dual_io.");
+    }
+
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"content_equal_size_equal_mtime_differs",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    // Case: equal size and equal mtime still require byte comparison when compareContent=true.
+    if (const auto foldersOpt = CreateCaseFolders(root, L"content_equal_size_equal_mtime_differs"))
+    {
+        const auto& folders = foldersOpt.value();
+        state.Require(SelfTest::WriteTextFile(folders.left / L"diff.bin", "ABCD"), L"content equal metadata: failed to write left diff.bin.");
+        state.Require(SelfTest::WriteTextFile(folders.right / L"diff.bin", "WXYZ"), L"content equal metadata: failed to write right diff.bin.");
+        state.Require(SelfTest::WriteTextFile(folders.left / L"same.bin", "SAME"), L"content equal metadata: failed to write left same.bin.");
+        state.Require(SelfTest::WriteTextFile(folders.right / L"same.bin", "SAME"), L"content equal metadata: failed to write right same.bin.");
+
+        FILETIME fixedTime{};
+        ::GetSystemTimeAsFileTime(&fixedTime);
+        state.Require(SetFileLastWriteTime(folders.left / L"diff.bin", fixedTime), L"content equal metadata: failed to set left diff.bin mtime.");
+        state.Require(SetFileLastWriteTime(folders.right / L"diff.bin", fixedTime), L"content equal metadata: failed to set right diff.bin mtime.");
+        state.Require(SetFileLastWriteTime(folders.left / L"same.bin", fixedTime), L"content equal metadata: failed to set left same.bin mtime.");
+        state.Require(SetFileLastWriteTime(folders.right / L"same.bin", fixedTime), L"content equal metadata: failed to set right same.bin mtime.");
+
+        Common::Settings::CompareDirectoriesSettings settings{};
+        settings.compareContent     = true;
+        settings.keepIdenticalItems = true;
+
+        auto session      = std::make_shared<CompareDirectoriesSession>(baseFs, baseFs, folders.left, folders.right, settings);
+        auto diffDecision = WaitForContentCompare(session, std::filesystem::path{}, L"diff.bin", state);
+        if (diffDecision)
+        {
+            const auto* item = FindItem(*diffDecision, L"diff.bin");
+            state.Require(item != nullptr, L"content equal metadata: diff.bin missing.");
+            if (item)
+            {
+                state.Require(item->isDifferent, L"content equal metadata: diff.bin must be different despite equal size/mtime.");
+                state.Require(item->selectLeft && item->selectRight, L"content equal metadata: diff.bin must select both sides.");
+                state.Require(HasFlag(item->differenceMask, CompareDirectoriesDiffBit::Content), L"content equal metadata: diff.bin missing Content bit.");
+            }
+        }
+
+        auto sameDecision = WaitForContentCompare(session, std::filesystem::path{}, L"same.bin", state);
+        if (sameDecision)
+        {
+            const auto* item = FindItem(*sameDecision, L"same.bin");
+            state.Require(item != nullptr, L"content equal metadata: same.bin missing with keepIdenticalItems=true.");
+            if (item)
+            {
+                state.Require(! item->isDifferent, L"content equal metadata: same.bin must remain identical after byte compare.");
+                state.Require(item->differenceMask == 0u, L"content equal metadata: same.bin expected no difference bits.");
+                state.Require(! item->selectLeft && ! item->selectRight, L"content equal metadata: same.bin expected no selection.");
+            }
+        }
+    }
+    else
+    {
+        state.Require(false, L"Failed to create case folders: content_equal_size_equal_mtime_differs.");
+    }
+
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"content_unknown_size_streaming_compare",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    // Case: unknown-size readers use streaming EOF comparison for equal, prefix, and mismatch files.
+    if (const auto foldersOpt = CreateCaseFolders(root, L"content_unknown_size_streaming_compare"))
+    {
+        const auto& folders = foldersOpt.value();
+        state.Require(WriteFileFill(folders.left / L"empty.bin", 'E', 0), L"unknown size: failed to write left empty.bin.");
+        state.Require(WriteFileFill(folders.right / L"empty.bin", 'E', 0), L"unknown size: failed to write right empty.bin.");
+        state.Require(SelfTest::WriteTextFile(folders.left / L"equal.bin", "abcdef"), L"unknown size: failed to write left equal.bin.");
+        state.Require(SelfTest::WriteTextFile(folders.right / L"equal.bin", "abcdef"), L"unknown size: failed to write right equal.bin.");
+        state.Require(SelfTest::WriteTextFile(folders.left / L"left_prefix.bin", "abc"), L"unknown size: failed to write left_prefix left.");
+        state.Require(SelfTest::WriteTextFile(folders.right / L"left_prefix.bin", "abcdef"), L"unknown size: failed to write left_prefix right.");
+        state.Require(SelfTest::WriteTextFile(folders.left / L"right_prefix.bin", "abcdef"), L"unknown size: failed to write right_prefix left.");
+        state.Require(SelfTest::WriteTextFile(folders.right / L"right_prefix.bin", "abc"), L"unknown size: failed to write right_prefix right.");
+        state.Require(SelfTest::WriteTextFile(folders.left / L"mid_mismatch.bin", "abcXef"), L"unknown size: failed to write mid_mismatch left.");
+        state.Require(SelfTest::WriteTextFile(folders.right / L"mid_mismatch.bin", "abcYef"), L"unknown size: failed to write mid_mismatch right.");
+
+        Common::Settings::CompareDirectoriesSettings settings{};
+        settings.compareContent     = true;
+        settings.keepIdenticalItems = true;
+
+        wil::com_ptr<IFileSystem> wrapped = CreateShortReadFileSystem(baseFs, folders.left.parent_path(), 2u, 0u, true);
+        state.Require(static_cast<bool>(wrapped), L"unknown size: failed to create unknown-size wrapper.");
+
+        auto session =
+            std::make_shared<CompareDirectoriesSession>(wrapped ? wrapped : baseFs, wrapped ? wrapped : baseFs, folders.left, folders.right, settings);
+
+        const auto assertItem = [&](std::wstring_view name, bool expectedDifferent) noexcept
+        {
+            auto decision = WaitForContentCompare(session, std::filesystem::path{}, name, state);
+            if (! decision)
+            {
+                return;
+            }
+            const auto* item = FindItem(*decision, name);
+            state.Require(item != nullptr, std::format(L"unknown size: {} missing.", name));
+            if (! item)
+            {
+                return;
+            }
+            state.Require(item->isDifferent == expectedDifferent, std::format(L"unknown size: {} different state mismatch.", name));
+            state.Require(HasFlag(item->differenceMask, CompareDirectoriesDiffBit::Content) == expectedDifferent,
+                          std::format(L"unknown size: {} Content bit mismatch.", name));
+            state.Require(! HasFlag(item->differenceMask, CompareDirectoriesDiffBit::ContentPending),
+                          std::format(L"unknown size: {} ContentPending must be cleared.", name));
+            state.Require((item->selectLeft && item->selectRight) == expectedDifferent, std::format(L"unknown size: {} selection mismatch.", name));
+        };
+
+        assertItem(L"empty.bin", false);
+        assertItem(L"equal.bin", false);
+        assertItem(L"left_prefix.bin", true);
+        assertItem(L"right_prefix.bin", true);
+        assertItem(L"mid_mismatch.bin", true);
+    }
+    else
+    {
+        state.Require(false, L"Failed to create case folders: content_unknown_size_streaming_compare.");
     }
 
     return state.failure.empty();
@@ -1624,6 +1845,419 @@ SelfTest::RunCase(options,
 
 SelfTest::RunCase(options,
                   suite,
+                  L"select_subdirs_only_in_one_pane",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    // Case: one-sided directory selection follows selectSubdirsOnlyInOnePane.
+    if (const auto foldersOpt = CreateCaseFolders(root, L"select_subdirs_only_in_one_pane"))
+    {
+        const auto& folders = foldersOpt.value();
+        state.Require(SelfTest::EnsureDirectory(folders.left / L"left_only_dir"), L"select subdirs: failed to create left_only_dir.");
+        state.Require(SelfTest::WriteTextFile(folders.left / L"left_only_dir" / L"child.txt", "L"), L"select subdirs: failed to write child.");
+
+        const auto assertSelection = [&](bool selectSubdirsOnlyInOnePane) noexcept
+        {
+            Common::Settings::CompareDirectoriesSettings settings{};
+            settings.compareSubdirectories      = true;
+            settings.selectSubdirsOnlyInOnePane = selectSubdirsOnlyInOnePane;
+
+            auto session = std::make_shared<CompareDirectoriesSession>(baseFs, baseFs, folders.left, folders.right, settings);
+            state.Require(StartScanAndWaitForIdle(session, std::chrono::milliseconds{SelfTest::ScaleTimeout(10'000)}),
+                          L"select subdirs: scan did not become idle.");
+            state.Require(DrainPendingSubdirUpdates(session, 256), L"select subdirs: pending subdir updates did not drain.");
+
+            auto decision = session->GetOrComputeDecision(std::filesystem::path{});
+            state.Require(static_cast<bool>(decision), L"select subdirs: decision is null.");
+            if (! decision)
+            {
+                return;
+            }
+
+            const auto* item = FindItem(*decision, L"left_only_dir");
+            state.Require(item != nullptr, L"select subdirs: left_only_dir missing.");
+            if (! item)
+            {
+                return;
+            }
+
+            state.Require(item->isDirectory, L"select subdirs: expected directory item.");
+            state.Require(item->isDifferent, L"select subdirs: expected one-sided directory to be different.");
+            state.Require(HasFlag(item->differenceMask, CompareDirectoriesDiffBit::OnlyInLeft), L"select subdirs: expected OnlyInLeft bit.");
+            state.Require(item->selectLeft == selectSubdirsOnlyInOnePane, L"select subdirs: selectLeft must follow selectSubdirsOnlyInOnePane.");
+            state.Require(! item->selectRight, L"select subdirs: right side must not be selected.");
+        };
+
+        assertSelection(false);
+        assertSelection(true);
+    }
+    else
+    {
+        state.Require(false, L"Failed to create case folders: select_subdirs_only_in_one_pane.");
+    }
+
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"sync_manifest_nested_differences_only",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    // Case: Compare sync expands a selected folder into exact per-item destinations, not a recursive whole-folder copy.
+    if (const auto foldersOpt = CreateCaseFolders(root, L"sync_manifest_nested_differences_only"))
+    {
+        const auto& folders = foldersOpt.value();
+        state.Require(SelfTest::EnsureDirectory(folders.left / L"sub" / L"left-only-dir"), L"sync manifest: failed to create left-only-dir.");
+        state.Require(SelfTest::EnsureDirectory(folders.right / L"sub"), L"sync manifest: failed to create right sub.");
+        state.Require(WriteFileFill(folders.left / L"sub" / L"diff.bin", 'L', 8), L"sync manifest: failed to write left diff.bin.");
+        state.Require(WriteFileFill(folders.right / L"sub" / L"diff.bin", 'R', 3), L"sync manifest: failed to write right diff.bin.");
+        state.Require(SelfTest::WriteTextFile(folders.left / L"sub" / L"same.txt", "same"), L"sync manifest: failed to write left same.txt.");
+        state.Require(SelfTest::WriteTextFile(folders.right / L"sub" / L"same.txt", "same"), L"sync manifest: failed to write right same.txt.");
+        state.Require(SelfTest::WriteTextFile(folders.left / L"sub" / L"left-only.txt", "left"), L"sync manifest: failed to write left-only.txt.");
+        state.Require(SelfTest::WriteTextFile(folders.left / L"sub" / L"left-only-dir" / L"nested.txt", "nested"),
+                      L"sync manifest: failed to write nested.txt.");
+        state.Require(SelfTest::WriteTextFile(folders.right / L"sub" / L"right-only.txt", "right"), L"sync manifest: failed to write right-only.txt.");
+
+        const std::filesystem::path reparseTarget = folders.left / L"target";
+        state.Require(SelfTest::EnsureDirectory(reparseTarget), L"sync manifest: failed to create reparse target.");
+        state.Require(SelfTest::WriteTextFile(reparseTarget / L"child.txt", "linked"), L"sync manifest: failed to write reparse target child.");
+        const std::filesystem::path leftOnlyReparsePath = folders.left / L"sub" / L"left-only-reparse";
+        const bool leftOnlyReparseCreated               = TryCreateDirectorySymlink(leftOnlyReparsePath, reparseTarget);
+        if (! leftOnlyReparseCreated)
+        {
+            const DWORD err = ::GetLastError();
+            if (err == ERROR_PRIVILEGE_NOT_HELD || err == ERROR_ACCESS_DENIED || err == ERROR_INVALID_PARAMETER)
+            {
+                Debug::Warning(L"CompareSelfTest: skipping sync manifest source-only reparse assertion (CreateSymbolicLinkW failed: {}).", err);
+            }
+            else
+            {
+                state.Require(false, std::format(L"sync manifest: CreateSymbolicLinkW failed unexpectedly: {}.", err));
+            }
+        }
+
+        Common::Settings::CompareDirectoriesSettings settings{};
+        settings.compareSize           = true;
+        settings.compareDateTime       = false;
+        settings.compareAttributes     = false;
+        settings.compareContent        = false;
+        settings.compareSubdirectories = true;
+
+        auto session = std::make_shared<CompareDirectoriesSession>(baseFs, baseFs, folders.left, folders.right, settings);
+        state.Require(StartScanAndWaitForIdle(session, std::chrono::milliseconds{SelfTest::ScaleTimeout(10'000)}), L"sync manifest: scan did not become idle.");
+        state.Require(DrainPendingSubdirUpdates(session, 256), L"sync manifest: failed to drain pending subtree updates.");
+        state.Require(static_cast<bool>(session->GetOrComputeDecision(std::filesystem::path(L"sub"))), L"sync manifest: sub decision is null.");
+
+        CompareSyncManifest manifest{};
+        CompareSyncManifestBlocker blocker{};
+        const CompareSyncManifestStatus status = session->TryBuildSyncManifest(ComparePane::Left, {std::filesystem::path(L"sub")}, manifest, blocker);
+        state.Require(
+            status == CompareSyncManifestStatus::Ready,
+            std::format(L"sync manifest: expected Ready, got {} hr=0x{:08X}.", static_cast<unsigned int>(status), static_cast<unsigned long>(blocker.hr)));
+
+        const auto findItem = [&](CompareSyncManifestItemKind kind, const std::filesystem::path& relativePath) noexcept -> const CompareSyncManifestItem*
+        {
+            const std::wstring expected = relativePath.lexically_normal().generic_wstring();
+            for (const CompareSyncManifestItem& item : manifest.items)
+            {
+                if (item.kind == kind &&
+                    CompareStringOrdinal(item.relativePath.lexically_normal().generic_wstring().c_str(), -1, expected.c_str(), -1, TRUE) == CSTR_EQUAL)
+                {
+                    return &item;
+                }
+            }
+            return nullptr;
+        };
+
+        const CompareSyncManifestItem* shell = findItem(CompareSyncManifestItemKind::DirectoryShell, L"sub");
+        state.Require(shell != nullptr, L"sync manifest: expected directory shell for sub.");
+        const CompareSyncManifestItem* diff = findItem(CompareSyncManifestItemKind::File, L"sub/diff.bin");
+        state.Require(diff != nullptr, L"sync manifest: expected diff.bin file transfer.");
+        const CompareSyncManifestItem* leftOnly = findItem(CompareSyncManifestItemKind::File, L"sub/left-only.txt");
+        state.Require(leftOnly != nullptr, L"sync manifest: expected left-only.txt file transfer.");
+        const CompareSyncManifestItem* leftOnlyDir = findItem(CompareSyncManifestItemKind::WholeSubtree, L"sub/left-only-dir");
+        state.Require(leftOnlyDir != nullptr, L"sync manifest: expected whole subtree transfer for left-only-dir.");
+        const CompareSyncManifestItem* leftOnlyReparse = findItem(CompareSyncManifestItemKind::File, L"sub/left-only-reparse");
+        if (leftOnlyReparseCreated)
+        {
+            state.Require(leftOnlyReparse != nullptr, L"sync manifest: source-only directory reparse must transfer as a normal item.");
+            state.Require(findItem(CompareSyncManifestItemKind::WholeSubtree, L"sub/left-only-reparse") == nullptr,
+                          L"sync manifest: source-only directory reparse must not be emitted as a recursive whole subtree.");
+        }
+        state.Require(findItem(CompareSyncManifestItemKind::File, L"sub/same.txt") == nullptr, L"sync manifest: identical same.txt must not be transferred.");
+        state.Require(findItem(CompareSyncManifestItemKind::File, L"sub/right-only.txt") == nullptr,
+                      L"sync manifest: destination-only right-only.txt must not be transferred from left.");
+
+        if (diff)
+        {
+            state.Require(diff->sourceAbsolutePath == folders.left / L"sub" / L"diff.bin", L"sync manifest: diff source path mismatch.");
+            state.Require(diff->destinationAbsolutePath == folders.right / L"sub" / L"diff.bin", L"sync manifest: diff destination path mismatch.");
+            state.Require((diff->flags & FILESYSTEM_FLAG_RECURSIVE) == 0, L"sync manifest: file item must not be recursive.");
+        }
+        if (leftOnlyDir)
+        {
+            state.Require(leftOnlyDir->sourceAbsolutePath == folders.left / L"sub" / L"left-only-dir", L"sync manifest: left-only-dir source path mismatch.");
+            state.Require(leftOnlyDir->destinationAbsolutePath == folders.right / L"sub" / L"left-only-dir",
+                          L"sync manifest: left-only-dir destination path mismatch.");
+            state.Require((leftOnlyDir->flags & FILESYSTEM_FLAG_RECURSIVE) != 0, L"sync manifest: whole subtree item must be recursive.");
+        }
+        if (leftOnlyReparse)
+        {
+            state.Require((leftOnlyReparse->flags & FILESYSTEM_FLAG_RECURSIVE) == 0, L"sync manifest: source-only directory reparse must not be recursive.");
+        }
+    }
+    else
+    {
+        state.Require(false, L"Failed to create case folders: sync_manifest_nested_differences_only.");
+    }
+
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"sync_manifest_move_preserves_identical_children",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    // Case: a selected existing directory expands to changed children only, so Move does not delete identical source children.
+    if (const auto foldersOpt = CreateCaseFolders(root, L"sync_manifest_move_preserves_identical_children"))
+    {
+        const auto& folders = foldersOpt.value();
+        state.Require(SelfTest::EnsureDirectory(folders.left / L"move"), L"sync move manifest: failed to create left move.");
+        state.Require(SelfTest::EnsureDirectory(folders.right / L"move"), L"sync move manifest: failed to create right move.");
+        state.Require(WriteFileFill(folders.left / L"move" / L"changed.bin", 'L', 9), L"sync move manifest: failed to write left changed.bin.");
+        state.Require(WriteFileFill(folders.right / L"move" / L"changed.bin", 'R', 2), L"sync move manifest: failed to write right changed.bin.");
+        state.Require(SelfTest::WriteTextFile(folders.left / L"move" / L"identical.txt", "same"), L"sync move manifest: failed to write left identical.txt.");
+        state.Require(SelfTest::WriteTextFile(folders.right / L"move" / L"identical.txt", "same"), L"sync move manifest: failed to write right identical.txt.");
+
+        Common::Settings::CompareDirectoriesSettings settings{};
+        settings.compareSize           = true;
+        settings.compareDateTime       = false;
+        settings.compareAttributes     = false;
+        settings.compareContent        = false;
+        settings.compareSubdirectories = true;
+
+        auto session = std::make_shared<CompareDirectoriesSession>(baseFs, baseFs, folders.left, folders.right, settings);
+        state.Require(StartScanAndWaitForIdle(session, std::chrono::milliseconds{SelfTest::ScaleTimeout(10'000)}),
+                      L"sync move manifest: scan did not become idle.");
+        state.Require(DrainPendingSubdirUpdates(session, 256), L"sync move manifest: failed to drain pending subtree updates.");
+        state.Require(static_cast<bool>(session->GetOrComputeDecision(std::filesystem::path(L"move"))), L"sync move manifest: move decision is null.");
+
+        CompareSyncManifest manifest{};
+        CompareSyncManifestBlocker blocker{};
+        const CompareSyncManifestStatus status = session->TryBuildSyncManifest(ComparePane::Left, {std::filesystem::path(L"move")}, manifest, blocker);
+        state.Require(
+            status == CompareSyncManifestStatus::Ready,
+            std::format(L"sync move manifest: expected Ready, got {} hr=0x{:08X}.", static_cast<unsigned int>(status), static_cast<unsigned long>(blocker.hr)));
+
+        const auto contains = [&](CompareSyncManifestItemKind kind, const std::filesystem::path& relativePath) noexcept
+        {
+            const std::wstring expected = relativePath.lexically_normal().generic_wstring();
+            return std::any_of(manifest.items.begin(),
+                               manifest.items.end(),
+                               [&](const CompareSyncManifestItem& item) noexcept
+            {
+                return item.kind == kind &&
+                       CompareStringOrdinal(item.relativePath.lexically_normal().generic_wstring().c_str(), -1, expected.c_str(), -1, TRUE) == CSTR_EQUAL;
+            });
+        };
+
+        state.Require(contains(CompareSyncManifestItemKind::DirectoryShell, L"move"), L"sync move manifest: expected move directory shell.");
+        state.Require(contains(CompareSyncManifestItemKind::File, L"move/changed.bin"), L"sync move manifest: expected changed.bin file transfer.");
+        state.Require(! contains(CompareSyncManifestItemKind::WholeSubtree, L"move"),
+                      L"sync move manifest: existing move directory must not be whole-subtree.");
+        state.Require(! contains(CompareSyncManifestItemKind::File, L"move/identical.txt"),
+                      L"sync move manifest: identical child must not be included in move manifest.");
+    }
+    else
+    {
+        state.Require(false, L"Failed to create case folders: sync_manifest_move_preserves_identical_children.");
+    }
+
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"sync_manifest_not_ready_without_cached_decision",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    // Case: sync planning is cache-only; missing decisions block instead of producing a partial manifest.
+    if (const auto foldersOpt = CreateCaseFolders(root, L"sync_manifest_not_ready_without_cached_decision"))
+    {
+        const auto& folders = foldersOpt.value();
+        state.Require(SelfTest::EnsureDirectory(folders.left / L"sub"), L"sync manifest not-ready: failed to create left sub.");
+        state.Require(SelfTest::EnsureDirectory(folders.right / L"sub"), L"sync manifest not-ready: failed to create right sub.");
+        state.Require(SelfTest::WriteTextFile(folders.left / L"sub" / L"changed.txt", "left"), L"sync manifest not-ready: failed to create left changed.txt.");
+        state.Require(SelfTest::WriteTextFile(folders.right / L"sub" / L"changed.txt", "right"),
+                      L"sync manifest not-ready: failed to create right changed.txt.");
+
+        Common::Settings::CompareDirectoriesSettings settings{};
+        settings.compareSize           = true;
+        settings.compareDateTime       = false;
+        settings.compareAttributes     = false;
+        settings.compareContent        = false;
+        settings.compareSubdirectories = true;
+
+        auto session = std::make_shared<CompareDirectoriesSession>(baseFs, baseFs, folders.left, folders.right, settings);
+
+        CompareSyncManifest manifest{};
+        CompareSyncManifestBlocker blocker{};
+        const CompareSyncManifestStatus status = session->TryBuildSyncManifest(ComparePane::Left, {std::filesystem::path(L"sub")}, manifest, blocker);
+        state.Require(status == CompareSyncManifestStatus::NotReady,
+                      std::format(L"sync manifest not-ready: expected NotReady, got {} hr=0x{:08X}.",
+                                  static_cast<unsigned int>(status),
+                                  static_cast<unsigned long>(blocker.hr)));
+        state.Require(blocker.status == CompareSyncManifestStatus::NotReady, L"sync manifest not-ready: blocker status mismatch.");
+        state.Require(blocker.relativePath.empty(), L"sync manifest not-ready: expected missing root decision blocker.");
+        state.Require(blocker.hr == S_FALSE, L"sync manifest not-ready: expected S_FALSE blocker hr.");
+        state.Require(manifest.items.empty(), L"sync manifest not-ready: partial manifest items must not be returned.");
+    }
+    else
+    {
+        state.Require(false, L"Failed to create case folders: sync_manifest_not_ready_without_cached_decision.");
+    }
+
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"sync_manifest_pending_blocks_and_schedules",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    // Case: pending content/subdir decisions block sync and map to high-priority scan requests.
+    if (const auto foldersOpt = CreateCaseFolders(root, L"sync_manifest_pending_blocks_and_schedules"))
+    {
+        const auto& folders = foldersOpt.value();
+        state.Require(SelfTest::EnsureDirectory(folders.left / L"sub"), L"sync manifest pending: failed to create left sub.");
+        state.Require(SelfTest::EnsureDirectory(folders.right / L"sub"), L"sync manifest pending: failed to create right sub.");
+        state.Require(WriteFileFill(folders.left / L"sub" / L"a.bin", 'A', 512 * 1024), L"sync manifest pending: failed to create left a.bin.");
+        state.Require(WriteFileFill(folders.right / L"sub" / L"a.bin", 'A', 512 * 1024), L"sync manifest pending: failed to create right a.bin.");
+
+        Common::Settings::CompareDirectoriesSettings settings{};
+        settings.compareContent        = true;
+        settings.compareSubdirectories = true;
+        settings.keepIdenticalItems    = true;
+
+        wil::com_ptr<IFileSystem> wrapped = CreateShortReadFileSystem(baseFs, folders.left, 4096u, static_cast<DWORD>(SelfTest::ScaleTimeout(2)));
+        state.Require(static_cast<bool>(wrapped), L"sync manifest pending: failed to create short-read wrapper.");
+
+        auto session =
+            std::make_shared<CompareDirectoriesSession>(wrapped ? wrapped : baseFs, wrapped ? wrapped : baseFs, folders.left, folders.right, settings);
+
+        std::mutex progressMutex;
+        std::condition_variable progressCv;
+        bool contentDone = false;
+
+        session->SetContentProgressCallback([&](uint32_t,
+                                                const std::filesystem::path&,
+                                                std::wstring_view,
+                                                uint64_t,
+                                                uint64_t,
+                                                uint64_t,
+                                                uint64_t,
+                                                uint64_t pendingContentCompares,
+                                                uint64_t totalContentCompares,
+                                                uint64_t completedContentCompares) noexcept
+        {
+            if (pendingContentCompares != 0u || totalContentCompares == 0u || completedContentCompares != totalContentCompares)
+            {
+                return;
+            }
+
+            std::lock_guard lock(progressMutex);
+            contentDone = true;
+            progressCv.notify_all();
+        });
+
+        auto rootDecision = session->GetOrComputeDecision(std::filesystem::path{});
+        state.Require(static_cast<bool>(rootDecision), L"sync manifest pending: root decision is null.");
+        if (rootDecision)
+        {
+            const auto* subItem = FindItem(*rootDecision, L"sub");
+            state.Require(subItem != nullptr, L"sync manifest pending: sub missing from root decision.");
+            if (subItem)
+            {
+                state.Require(HasFlag(subItem->differenceMask, CompareDirectoriesDiffBit::SubdirPending),
+                              L"sync manifest pending: sub expected SubdirPending.");
+            }
+        }
+
+        auto subDecision = session->GetOrComputeDecision(std::filesystem::path(L"sub"));
+        state.Require(static_cast<bool>(subDecision), L"sync manifest pending: sub decision is null.");
+        if (subDecision)
+        {
+            const auto* fileItem = FindItem(*subDecision, L"a.bin");
+            state.Require(fileItem != nullptr, L"sync manifest pending: a.bin missing from sub decision.");
+            if (fileItem)
+            {
+                state.Require(HasFlag(fileItem->differenceMask, CompareDirectoriesDiffBit::ContentPending),
+                              L"sync manifest pending: a.bin expected ContentPending.");
+            }
+        }
+
+        CompareSyncManifest subManifest{};
+        CompareSyncManifestBlocker subBlocker{};
+        const CompareSyncManifestStatus subStatus = session->TryBuildSyncManifest(ComparePane::Left, {std::filesystem::path(L"sub")}, subManifest, subBlocker);
+        state.Require(subStatus == CompareSyncManifestStatus::NotReady,
+                      std::format(L"sync manifest pending: expected SubdirPending NotReady, got status={} reason={}.",
+                                  static_cast<unsigned int>(subStatus),
+                                  static_cast<unsigned int>(subBlocker.reason)));
+        state.Require(subBlocker.reason == CompareSyncManifestBlockerReason::SubdirPending,
+                      L"sync manifest pending: selected folder should block on SubdirPending.");
+        state.Require(subBlocker.relativePath == std::filesystem::path(L"sub"), L"sync manifest pending: SubdirPending blocker path mismatch.");
+        state.Require(subManifest.items.empty(), L"sync manifest pending: SubdirPending blocker returned partial items.");
+
+        const std::filesystem::path fileRelative = std::filesystem::path(L"sub") / L"a.bin";
+        CompareSyncManifest fileManifest{};
+        CompareSyncManifestBlocker fileBlocker{};
+        const CompareSyncManifestStatus fileStatus = session->TryBuildSyncManifest(ComparePane::Left, {fileRelative}, fileManifest, fileBlocker);
+        state.Require(fileStatus == CompareSyncManifestStatus::NotReady,
+                      std::format(L"sync manifest pending: expected ContentPending NotReady, got status={} reason={}.",
+                                  static_cast<unsigned int>(fileStatus),
+                                  static_cast<unsigned int>(fileBlocker.reason)));
+        state.Require(fileBlocker.reason == CompareSyncManifestBlockerReason::ContentPending,
+                      L"sync manifest pending: selected file should block on ContentPending.");
+        state.Require(fileBlocker.relativePath == fileRelative, L"sync manifest pending: ContentPending blocker path mismatch.");
+        state.Require(fileManifest.items.empty(), L"sync manifest pending: ContentPending blocker returned partial items.");
+
+        session->StartScan();
+        const CompareDirectoriesPerfStats beforeSchedule = session->GetPerfStats();
+        const auto scheduleLikeWindow                    = [&](const CompareSyncManifestBlocker& blocker) noexcept
+        {
+            session->RequestScanForFolder(blocker.relativePath);
+            const std::filesystem::path parent = blocker.relativePath.parent_path().lexically_normal();
+            if (parent != blocker.relativePath)
+            {
+                session->RequestScanForFolder(parent);
+            }
+        };
+        scheduleLikeWindow(subBlocker);
+        scheduleLikeWindow(fileBlocker);
+        const CompareDirectoriesPerfStats afterSchedule = session->GetPerfStats();
+        state.Require(afterSchedule.scanQueueHighHighWater > beforeSchedule.scanQueueHighHighWater ||
+                          afterSchedule.scanScheduledHighWater > beforeSchedule.scanScheduledHighWater,
+                      L"sync manifest pending: blocker scheduling did not enqueue high-priority scan work.");
+
+        {
+            std::unique_lock lock(progressMutex);
+            static_cast<void>(progressCv.wait_for(lock, std::chrono::milliseconds(SelfTest::ScaleTimeout(30'000)), [&] { return contentDone; }));
+        }
+        state.Require(contentDone, L"sync manifest pending: timed out waiting for content compare cleanup.");
+        session->FlushPendingContentCompareUpdates();
+        session->SetContentProgressCallback({});
+    }
+    else
+    {
+        state.Require(false, L"Failed to create case folders: sync_manifest_pending_blocks_and_schedules.");
+    }
+
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
                   L"no_sync_deep_scan",
                   [&](SelfTest::CaseState& state) noexcept
 {
@@ -1744,6 +2378,110 @@ SelfTest::RunCase(options,
 
 SelfTest::RunCase(options,
                   suite,
+                  L"missing_side_empty_enumeration",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    // Case: the compare wrapper enumerates a missing-side folder as an empty success.
+    if (const auto foldersOpt = CreateCaseFolders(root, L"missing_side_empty_enumeration"))
+    {
+        const auto& folders = foldersOpt.value();
+        state.Require(SelfTest::EnsureDirectory(folders.left / L"sub"), L"missing side empty: failed to create left sub.");
+        state.Require(SelfTest::WriteTextFile(folders.left / L"sub" / L"a.txt", "A"), L"missing side empty: failed to write left sub file.");
+
+        auto session = std::make_shared<CompareDirectoriesSession>(baseFs, baseFs, folders.left, folders.right, Common::Settings::CompareDirectoriesSettings{});
+        session->SetCompareEnabled(true);
+        const auto fsRight = CreateCompareDirectoriesFileSystem(ComparePane::Right, session);
+        state.Require(static_cast<bool>(fsRight), L"missing side empty: failed to create right compare wrapper.");
+
+        wil::com_ptr<IFilesInformation> info;
+        const HRESULT hr = fsRight->ReadDirectoryInfo((folders.right / L"sub").c_str(), info.put());
+        state.Require(SUCCEEDED(hr), std::format(L"missing side empty: ReadDirectoryInfo failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+        state.Require(static_cast<bool>(info), L"missing side empty: info is null.");
+        if (info)
+        {
+            unsigned long count   = 1;
+            const HRESULT countHr = info->GetCount(&count);
+            state.Require(SUCCEEDED(countHr), L"missing side empty: GetCount failed.");
+            state.Require(count == 0u, L"missing side empty: missing-side enumeration must be empty.");
+        }
+    }
+    else
+    {
+        state.Require(false, L"Failed to create case folders: missing_side_empty_enumeration.");
+    }
+
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"failed_enumeration_retries_without_version_bump",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    // Case: Transient enumeration failures are returned to the caller but not cached.
+    if (const auto foldersOpt = CreateCaseFolders(root, L"failed_enumeration_retries_without_version_bump"))
+    {
+        const auto& folders = foldersOpt.value();
+        state.Require(SelfTest::WriteTextFile(folders.left / L"retry.txt", "L"), L"Failed to create retry.txt (left).");
+
+        auto forcedHr = std::make_shared<std::atomic<HRESULT>>(E_ACCESSDENIED);
+
+        ReadDirectoryTestBehavior behavior{};
+        behavior.targetPath       = folders.left;
+        behavior.forcedHrOverride = forcedHr;
+
+        wil::com_ptr<IFileSystem> flakyLeft = CreateReadDirectoryBehaviorFileSystem(baseFs, behavior);
+        state.Require(static_cast<bool>(flakyLeft), L"Failed to create retry ReadDirectoryInfo wrapper.");
+
+        auto session = std::make_shared<CompareDirectoriesSession>(
+            flakyLeft ? flakyLeft : baseFs, baseFs, folders.left, folders.right, Common::Settings::CompareDirectoriesSettings{});
+        const uint64_t versionBefore = session->GetVersion();
+
+        const auto failedDecision = session->GetOrComputeDecision(std::filesystem::path{});
+        state.Require(static_cast<bool>(failedDecision), L"failed_enumeration_retries_without_version_bump: failed decision is null.");
+        if (failedDecision)
+        {
+            state.Require(failedDecision->hr == E_ACCESSDENIED,
+                          std::format(L"failed_enumeration_retries_without_version_bump: expected E_ACCESSDENIED, got 0x{:08X}.",
+                                      static_cast<unsigned long>(failedDecision->hr)));
+        }
+
+        const CompareDirectoriesPerfStats failedStats = session->GetPerfStats();
+        state.Require(failedStats.decisionCacheEntries == 0u, L"failed_enumeration_retries_without_version_bump: failed decision should not be cached.");
+        state.Require(failedStats.decisionCacheEstimatedBytes == 0u,
+                      L"failed_enumeration_retries_without_version_bump: failed decision should not contribute cache bytes.");
+
+        forcedHr->store(S_OK, std::memory_order_release);
+
+        const auto successDecision = session->GetOrComputeDecision(std::filesystem::path{});
+        state.Require(static_cast<bool>(successDecision), L"failed_enumeration_retries_without_version_bump: retry decision is null.");
+        state.Require(session->GetVersion() == versionBefore, L"failed_enumeration_retries_without_version_bump: retry should not need a version bump.");
+        if (successDecision)
+        {
+            state.Require(SUCCEEDED(successDecision->hr), L"failed_enumeration_retries_without_version_bump: retry should succeed.");
+            const auto* item = FindItem(*successDecision, L"retry.txt");
+            state.Require(item != nullptr, L"failed_enumeration_retries_without_version_bump: retry.txt missing after retry.");
+            if (item)
+            {
+                state.Require(item->existsLeft && ! item->existsRight, L"failed_enumeration_retries_without_version_bump: retry.txt should be left-only.");
+                state.Require(HasFlag(item->differenceMask, CompareDirectoriesDiffBit::OnlyInLeft),
+                              L"failed_enumeration_retries_without_version_bump: retry.txt expected OnlyInLeft.");
+            }
+        }
+
+        const CompareDirectoriesPerfStats successStats = session->GetPerfStats();
+        state.Require(successStats.decisionCacheEntries != 0u, L"failed_enumeration_retries_without_version_bump: successful retry should be cacheable.");
+    }
+    else
+    {
+        state.Require(false, L"Failed to create case folders: failed_enumeration_retries_without_version_bump.");
+    }
+
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
                   L"reparse",
                   [&](SelfTest::CaseState& state) noexcept
 {
@@ -1807,7 +2545,14 @@ SelfTest::RunCase(options,
     // Case: Dummy filesystem paths use plugin I/O for content compare (cross-filesystem support).
     if (dummyFs && dummyIo && dummyOps)
     {
-        const std::filesystem::path baseRoot  = std::filesystem::path(L"Y:\\") / (L"CompareSelfTest_" + guid) / L"compare";
+        const SelfTest::TestSandbox sandbox =
+            SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::CompareDirectories, L"dummy_content");
+        if (! state.Require(sandbox.IsValid(), L"Dummy: failed to acquire TestSandbox root (content compare)."))
+        {
+            return state.failure.empty();
+        }
+
+        const std::filesystem::path baseRoot  = sandbox.root;
         const std::filesystem::path leftRoot  = baseRoot / L"left";
         const std::filesystem::path rightRoot = baseRoot / L"right";
         state.Require(EnsureDirectoryExistsFsOps(dummyOps, leftRoot), L"Dummy: failed to create left root.");
@@ -1843,13 +2588,92 @@ SelfTest::RunCase(options,
 
 SelfTest::RunCase(options,
                   suite,
+                  L"normalized_name_collision_preserves_same_side_entries",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    // Case: Same-side entries that collide after Win32 trailing dot/space normalization must not overwrite each other.
+    if (dummyFs && dummyIo && dummyOps)
+    {
+        const SelfTest::TestSandbox sandbox = SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::CompareDirectories,
+                                                                           L"normalized_name_collision_preserves_same_side_entries");
+        if (! state.Require(sandbox.IsValid(), L"Normalized collision: failed to acquire TestSandbox root."))
+        {
+            return state.failure.empty();
+        }
+
+        const std::filesystem::path baseRoot  = sandbox.root;
+        const std::filesystem::path leftRoot  = baseRoot / L"left";
+        const std::filesystem::path rightRoot = baseRoot / L"right";
+        state.Require(EnsureDirectoryExistsFsOps(dummyOps, leftRoot), L"Normalized collision: failed to create left root.");
+        state.Require(EnsureDirectoryExistsFsOps(dummyOps, rightRoot), L"Normalized collision: failed to create right root.");
+
+        state.Require(WriteFileTextFsIo(dummyIo, leftRoot / L"report.", "DOT"), L"Normalized collision: failed to write report. (left).");
+        state.Require(WriteFileTextFsIo(dummyIo, leftRoot / L"report", "SAME"), L"Normalized collision: failed to write report (left).");
+        state.Require(WriteFileTextFsIo(dummyIo, rightRoot / L"report", "SAME"), L"Normalized collision: failed to write report (right).");
+        state.Require(WriteFileTextFsIo(dummyIo, baseRoot / L"sentinel.txt", "OUT"), L"Normalized collision: failed to write out-of-scope sentinel.");
+
+        Common::Settings::CompareDirectoriesSettings settings{};
+        settings.keepIdenticalItems = true;
+
+        auto session = std::make_shared<CompareDirectoriesSession>(dummyFs, dummyFs, leftRoot, rightRoot, settings);
+        std::shared_ptr<const CompareDirectoriesFolderDecision> decision;
+        if (! TryGetRootDecisionWithSeh(*session, decision))
+        {
+            state.Require(false, L"Normalized collision: GetOrComputeDecision crashed.");
+        }
+
+        state.Require(static_cast<bool>(decision), L"Normalized collision: decision is null.");
+        if (decision)
+        {
+            state.Require(SUCCEEDED(decision->hr), L"Normalized collision: decision hr is failure.");
+            state.Require(FindItem(*decision, L"sentinel.txt") == nullptr, L"Normalized collision: out-of-scope sentinel leaked into decision.");
+
+            const auto* pairedItem = FindItem(*decision, L"report");
+            state.Require(pairedItem != nullptr, L"Normalized collision: report missing from decision.");
+            if (pairedItem)
+            {
+                state.Require(pairedItem->existsLeft && pairedItem->existsRight, L"Normalized collision: report expected on both sides.");
+                state.Require(! pairedItem->isDifferent, L"Normalized collision: report should pair the untrimmed same-name entries.");
+                state.Require(pairedItem->leftSizeBytes == 4u && pairedItem->rightSizeBytes == 4u,
+                              L"Normalized collision: report sizes should come from the untrimmed entries.");
+            }
+
+            const auto* dotItem = FindItem(*decision, L"report.");
+            state.Require(dotItem != nullptr, L"Normalized collision: report. missing from decision.");
+            if (dotItem)
+            {
+                state.Require(dotItem->existsLeft && ! dotItem->existsRight, L"Normalized collision: report. expected only on the left side.");
+                state.Require(dotItem->isDifferent, L"Normalized collision: report. expected isDifferent.");
+                state.Require(HasFlag(dotItem->differenceMask, CompareDirectoriesDiffBit::OnlyInLeft),
+                              L"Normalized collision: report. expected differenceMask=OnlyInLeft.");
+                state.Require(dotItem->leftSizeBytes == 3u, L"Normalized collision: report. size should come from the trailing-dot entry.");
+            }
+        }
+    }
+    else
+    {
+        state.Require(false, L"CompareSelfTest: FileSystemDummy unavailable for normalized name collision test.");
+    }
+
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
                   L"deep_tree",
                   [&](SelfTest::CaseState& state) noexcept
 {
     // Case: Deep directory trees do not overflow the stack (iterative traversal).
     if (dummyFs && dummyIo && dummyOps)
     {
-        const std::filesystem::path baseRoot  = std::filesystem::path(L"Z:\\") / (L"CompareSelfTest_" + guid) / L"deep";
+        const SelfTest::TestSandbox sandbox =
+            SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::CompareDirectories, L"deep_tree");
+        if (! state.Require(sandbox.IsValid(), L"Dummy: failed to acquire TestSandbox root (deep_tree)."))
+        {
+            return state.failure.empty();
+        }
+
+        const std::filesystem::path baseRoot  = sandbox.root;
         const std::filesystem::path leftRoot  = baseRoot / L"left";
         const std::filesystem::path rightRoot = baseRoot / L"right";
         state.Require(EnsureDirectoryExistsFsOps(dummyOps, leftRoot), L"Dummy: failed to create deep left root.");
@@ -1913,7 +2737,14 @@ SelfTest::RunCase(options,
     // Case: Version invalidation mid-scan does not cache stale results.
     if (dummyFs && dummyIo && dummyOps)
     {
-        const std::filesystem::path baseRoot  = std::filesystem::path(L"W:\\") / (L"CompareSelfTest_" + guid) / L"invalidate";
+        const SelfTest::TestSandbox sandbox =
+            SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::CompareDirectories, L"invalidate");
+        if (! state.Require(sandbox.IsValid(), L"Dummy: failed to acquire TestSandbox root (invalidate)."))
+        {
+            return state.failure.empty();
+        }
+
+        const std::filesystem::path baseRoot  = sandbox.root;
         const std::filesystem::path leftRoot  = baseRoot / L"left";
         const std::filesystem::path rightRoot = baseRoot / L"right";
         state.Require(EnsureDirectoryExistsFsOps(dummyOps, leftRoot), L"Dummy: failed to create invalidate left root.");
@@ -2123,6 +2954,63 @@ SelfTest::RunCase(options,
     else
     {
         state.Require(false, L"Failed to create case folders: ignore.");
+    }
+
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"ignore_direct_navigation_subtree",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    // Case: Direct navigation into an ignored directory subtree must stay excluded.
+    if (const auto foldersOpt = CreateCaseFolders(root, L"ignore_direct_navigation_subtree"))
+    {
+        const auto& folders = foldersOpt.value();
+        state.Require(SelfTest::EnsureDirectory(folders.left / L"ignored_dir" / L"nested"), L"Ignore direct: failed to create ignored nested dir (left).");
+        state.Require(SelfTest::EnsureDirectory(folders.right / L"ignored_dir" / L"nested"), L"Ignore direct: failed to create ignored nested dir (right).");
+        state.Require(SelfTest::WriteTextFile(folders.left / L"ignored_dir" / L"left_only.txt", "L"), L"Ignore direct: failed to write left_only.txt.");
+        state.Require(SelfTest::WriteTextFile(folders.right / L"ignored_dir" / L"right_only.txt", "R"), L"Ignore direct: failed to write right_only.txt.");
+        state.Require(SelfTest::WriteTextFile(folders.left / L"ignored_dir" / L"nested" / L"left_nested.txt", "L"),
+                      L"Ignore direct: failed to write left nested file.");
+        state.Require(SelfTest::WriteTextFile(folders.right / L"ignored_dir" / L"nested" / L"right_nested.txt", "R"),
+                      L"Ignore direct: failed to write right nested file.");
+        state.Require(SelfTest::WriteTextFile(folders.left / L"keep.txt", "L"), L"Ignore direct: failed to write keep.txt (left).");
+
+        Common::Settings::CompareDirectoriesSettings settings{};
+        settings.ignoreDirectories         = true;
+        settings.ignoreDirectoriesPatterns = L"ignored*";
+
+        auto session = std::make_shared<CompareDirectoriesSession>(baseFs, baseFs, folders.left, folders.right, settings);
+        std::shared_ptr<const CompareDirectoriesFolderDecision> rootDecision;
+        state.Require(TryGetRootDecisionWithSeh(*session, rootDecision), L"Ignore direct: root GetOrComputeDecision crashed.");
+        if (rootDecision)
+        {
+            state.Require(SUCCEEDED(rootDecision->hr), L"Ignore direct: root decision hr is failure.");
+            state.Require(FindItem(*rootDecision, L"keep.txt") != nullptr, L"Ignore direct: keep.txt expected in root decision.");
+            state.Require(FindItem(*rootDecision, L"ignored_dir") == nullptr, L"Ignore direct: ignored_dir expected excluded from root decision.");
+        }
+
+        const auto ignoredDecision = session->GetOrComputeDecision(std::filesystem::path(L"ignored_dir"));
+        state.Require(static_cast<bool>(ignoredDecision), L"Ignore direct: ignored_dir decision is null.");
+        if (ignoredDecision)
+        {
+            state.Require(SUCCEEDED(ignoredDecision->hr), L"Ignore direct: ignored_dir decision hr is failure.");
+            state.Require(ignoredDecision->items.empty(), L"Ignore direct: ignored_dir direct decision should be empty.");
+        }
+
+        const auto nestedDecision = session->GetOrComputeDecision(std::filesystem::path(L"ignored_dir") / L"nested");
+        state.Require(static_cast<bool>(nestedDecision), L"Ignore direct: ignored nested decision is null.");
+        if (nestedDecision)
+        {
+            state.Require(SUCCEEDED(nestedDecision->hr), L"Ignore direct: ignored nested decision hr is failure.");
+            state.Require(nestedDecision->items.empty(), L"Ignore direct: ignored nested direct decision should be empty.");
+        }
+    }
+    else
+    {
+        state.Require(false, L"Failed to create case folders: ignore_direct_navigation_subtree.");
     }
 
     return state.failure.empty();

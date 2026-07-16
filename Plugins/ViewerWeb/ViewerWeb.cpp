@@ -1,4 +1,6 @@
 #include "ViewerWeb.h"
+#include "HandleIo.h"
+#include "PathUtils.h"
 
 #include <algorithm>
 #include <array>
@@ -16,6 +18,7 @@
 #include <memory>
 #include <new>
 #include <optional>
+#include <span>
 #include <string_view>
 #include <type_traits>
 #include <utility>
@@ -46,8 +49,12 @@
 
 #include "DxUi/DxUi.Typography.h"
 #include "Helpers.h"
+#include "JsStringEscape.h"
 #include "LocalizationManager.h"
+#include "UnicodeClipboard.h"
+#include "ViewerWebCleanupTracker.h"
 #include "ViewerFileComboHost.h"
+#include "ViewerTitleBarTheme.h"
 #include "WindowMessages.h"
 #include "WindowSizing.h"
 
@@ -62,13 +69,32 @@ using RedSalamander::DxUi::ComboBoxVariant;
 using RedSalamander::DxUi::MakeDefaultThemePalette;
 using RedSalamander::DxUi::MakeThemePaletteFromViewerTheme;
 
+// Defined in JsStringEscape.h; hoisted to global scope so the unqualified call sites inside the
+// anonymous namespaces below (and the ViewerWeb:: members) resolve to the shared, hardened escapers.
+using ViewerWebDetail::EscapeJavaScriptString;
+using ViewerWebDetail::EscapeJavaScriptStringUtf8;
+
 namespace
 {
 constexpr UINT kAsyncLoadCompleteMessage          = WndMsg::kViewerWebAsyncLoadComplete;
+constexpr UINT kAsyncSaveCompleteMessage          = WM_APP + 0x634u;
+constexpr UINT kAsyncPostFailureMessage           = WM_APP + 0x635u;
+constexpr UINT kAsyncPostFailureLoad              = 1u;
+constexpr UINT kAsyncPostFailureSave              = 2u;
 constexpr int kHeaderHeightDip                    = 28;
-constexpr size_t kViewerComboPopupMaxVisibleItems = 8u;
-
 static const int kViewerWebModuleAnchor = 0;
+
+std::atomic<uint64_t> g_liveComCallbackCount{0u};
+std::atomic<uint64_t> g_comCallbackReleaseEpoch{0u};
+std::atomic<uint64_t> g_observedComCallbackReleaseEpoch{0u};
+std::atomic<uint64_t> g_activeAsyncWorkerCount{0u};
+std::atomic<DWORD> g_comCallbackOwnerThreadId{0u};
+std::atomic<bool> g_comCallbackThreadViolation{false};
+std::atomic<bool> g_shutdownCleanupComplete{false};
+#ifdef ENABLE_TESTS
+std::atomic<bool> g_failNextAsyncLoadCompletionPost{false};
+std::atomic<bool> g_failNextAsyncSaveCompletionPost{false};
+#endif
 
 constexpr wchar_t kFileComboHostOriginalWndProcProp[] = L"RS.ViewerWeb.FileComboHostOriginalWndProc";
 constexpr wchar_t kFileComboHostStateProp[]           = L"RS.ViewerWeb.FileComboHostState";
@@ -78,29 +104,6 @@ LRESULT CALLBACK FileComboHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 void UnhookFileComboHostWindow(HWND hwnd) noexcept
 {
     RedSalamander::ViewerFileComboHost::UnhookFileComboHostWindow(hwnd, kFileComboHostStateProp, kFileComboHostOriginalWndProcProp, FileComboHostWndProc);
-}
-
-[[nodiscard]] bool MessageMayOpenWindowComboPopup(UINT msg, WPARAM wp) noexcept
-{
-    switch (msg)
-    {
-        case WM_LBUTTONDOWN:
-        case WM_LBUTTONDBLCLK: return true;
-        case WM_SYSKEYDOWN: return static_cast<UINT>(wp) == VK_DOWN || static_cast<UINT>(wp) == VK_UP;
-        case WM_KEYDOWN:
-        {
-            const UINT vk = static_cast<UINT>(wp);
-            return vk == VK_SPACE || vk == VK_RETURN || vk == VK_F4 || vk == VK_DOWN || vk == VK_UP;
-        }
-        default: return false;
-    }
-}
-
-[[nodiscard]] int ComputeWindowComboPopupHeightPx(size_t itemCount, UINT dpi) noexcept
-{
-    const size_t visibleRows = std::max<size_t>(1u, std::min(itemCount, kViewerComboPopupMaxVisibleItems));
-    const int popupHeightDip = 2 + 8 + (24 * static_cast<int>(visibleRows));
-    return std::max(0, MulDiv(popupHeightDip, static_cast<int>(dpi), 96));
 }
 
 [[nodiscard]] size_t CountOwnerDrawMenuItems(HMENU menu) noexcept
@@ -316,6 +319,18 @@ template <typename TInterface, typename TFn, typename... TInvokeArgs> class ComC
 public:
     explicit ComCallback(TFn fn) noexcept : _fn(std::move(fn))
     {
+        const DWORD currentThread = GetCurrentThreadId();
+        DWORD ownerThread         = 0u;
+        if (! g_comCallbackOwnerThreadId.compare_exchange_strong(
+                ownerThread, currentThread, std::memory_order_acq_rel, std::memory_order_acquire) &&
+            ownerThread != currentThread)
+        {
+            // WebView2 callbacks are STA-affine. If that contract is ever
+            // violated, retain the module rather than claim a safe runtime
+            // unload from a thread that cannot prove the Release stack is gone.
+            g_comCallbackThreadViolation.store(true, std::memory_order_release);
+        }
+        g_liveComCallbackCount.fetch_add(1u, std::memory_order_relaxed);
     }
 
     ComCallback(const ComCallback&)            = delete;
@@ -352,13 +367,28 @@ public:
         const ULONG refs = _refCount.fetch_sub(1, std::memory_order_acq_rel) - 1;
         if (refs == 0)
         {
+            if (GetCurrentThreadId() != g_comCallbackOwnerThreadId.load(std::memory_order_acquire))
+            {
+                g_comCallbackThreadViolation.store(true, std::memory_order_release);
+            }
             delete this;
+            // WebView2 creates, invokes, and releases these callbacks on the
+            // recorded owner STA. Publish a new release epoch before dropping
+            // the live count; CanUnloadNow also requires that same STA and one
+            // later poll, so the final Release stack has returned first.
+            g_comCallbackReleaseEpoch.fetch_add(1u, std::memory_order_release);
+            g_liveComCallbackCount.fetch_sub(1u, std::memory_order_release);
         }
         return refs;
     }
 
     HRESULT STDMETHODCALLTYPE Invoke(TInvokeArgs... args) noexcept override
     {
+        if (GetCurrentThreadId() != g_comCallbackOwnerThreadId.load(std::memory_order_acquire))
+        {
+            g_comCallbackThreadViolation.store(true, std::memory_order_release);
+            return RPC_E_WRONG_THREAD;
+        }
         return _fn(args...);
     }
 
@@ -380,104 +410,10 @@ template <typename TInterface, typename... TInvokeArgs, typename TFn> wil::com_p
     return out;
 }
 
-int PxFromDip(int dip, UINT dpi) noexcept
-{
-    return MulDiv(dip, static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI);
-}
-
-COLORREF ColorRefFromArgb(uint32_t argb) noexcept
-{
-    const BYTE r = static_cast<BYTE>((argb >> 16) & 0xFFu);
-    const BYTE g = static_cast<BYTE>((argb >> 8) & 0xFFu);
-    const BYTE b = static_cast<BYTE>(argb & 0xFFu);
-    return RGB(r, g, b);
-}
-
-COLORREF BlendColor(COLORREF under, COLORREF over, uint8_t alpha) noexcept
-{
-    const uint32_t inv = static_cast<uint32_t>(255u - alpha);
-
-    const uint32_t ur = static_cast<uint32_t>(GetRValue(under));
-    const uint32_t ug = static_cast<uint32_t>(GetGValue(under));
-    const uint32_t ub = static_cast<uint32_t>(GetBValue(under));
-
-    const uint32_t or_ = static_cast<uint32_t>(GetRValue(over));
-    const uint32_t og  = static_cast<uint32_t>(GetGValue(over));
-    const uint32_t ob  = static_cast<uint32_t>(GetBValue(over));
-
-    const uint8_t r = static_cast<uint8_t>((ur * inv + or_ * static_cast<uint32_t>(alpha)) / 255u);
-    const uint8_t g = static_cast<uint8_t>((ug * inv + og * static_cast<uint32_t>(alpha)) / 255u);
-    const uint8_t b = static_cast<uint8_t>((ub * inv + ob * static_cast<uint32_t>(alpha)) / 255u);
-    return RGB(r, g, b);
-}
-
-COLORREF ContrastingTextColor(COLORREF background) noexcept
-{
-    const uint32_t r    = static_cast<uint32_t>(GetRValue(background));
-    const uint32_t g    = static_cast<uint32_t>(GetGValue(background));
-    const uint32_t b    = static_cast<uint32_t>(GetBValue(background));
-    const uint32_t luma = (r * 299u + g * 587u + b * 114u) / 1000u;
-    return luma < 128u ? RGB(255, 255, 255) : RGB(0, 0, 0);
-}
-
-COLORREF ColorFromHSV(float hDegrees, float s, float v) noexcept
-{
-    const float h = std::fmod(std::fmod(hDegrees, 360.0f) + 360.0f, 360.0f);
-    const float c = v * s;
-    const float x = c * (1.0f - std::fabs(std::fmod(h / 60.0f, 2.0f) - 1.0f));
-    const float m = v - c;
-
-    float rf = 0.0f;
-    float gf = 0.0f;
-    float bf = 0.0f;
-    if (h < 60.0f)
-    {
-        rf = c;
-        gf = x;
-        bf = 0.0f;
-    }
-    else if (h < 120.0f)
-    {
-        rf = x;
-        gf = c;
-        bf = 0.0f;
-    }
-    else if (h < 180.0f)
-    {
-        rf = 0.0f;
-        gf = c;
-        bf = x;
-    }
-    else if (h < 240.0f)
-    {
-        rf = 0.0f;
-        gf = x;
-        bf = c;
-    }
-    else if (h < 300.0f)
-    {
-        rf = x;
-        gf = 0.0f;
-        bf = c;
-    }
-    else
-    {
-        rf = c;
-        gf = 0.0f;
-        bf = x;
-    }
-
-    const auto toByte = [](float v01) noexcept
-    {
-        const float scaled = std::clamp(v01 * 255.0f, 0.0f, 255.0f);
-        return static_cast<BYTE>(std::lround(scaled));
-    };
-
-    const BYTE r = toByte(rf + m);
-    const BYTE g = toByte(gf + m);
-    const BYTE b = toByte(bf + m);
-    return RGB(r, g, b);
-}
+using Common::Colors::BlendColorRefTruncate;
+using Common::Colors::ColorRefFromArgb;
+using Common::Colors::ColorRefFromHsvWrappedHue;
+using Common::Colors::StableVisualHash32Utf16V1;
 
 struct HsvColor
 {
@@ -538,9 +474,9 @@ struct JsonTokenColors
 [[nodiscard]] COLORREF ThemeAwareSemanticColor(
     float hue, float saturation, float value, COLORREF accent, COLORREF fg, uint8_t accentAlpha, uint8_t fgAlpha) noexcept
 {
-    const COLORREF semantic   = ColorFromHSV(hue, saturation, value);
-    const COLORREF harmonized = BlendColor(semantic, accent, accentAlpha);
-    return BlendColor(harmonized, fg, fgAlpha);
+    const COLORREF semantic   = ColorRefFromHsvWrappedHue(hue, saturation, value);
+    const COLORREF harmonized = BlendColorRefTruncate(semantic, accent, accentAlpha);
+    return BlendColorRefTruncate(harmonized, fg, fgAlpha);
 }
 
 [[nodiscard]] JsonTokenColors BuildJsonTokenColors(COLORREF accent, COLORREF fg, bool darkMode) noexcept
@@ -549,10 +485,10 @@ struct JsonTokenColors
     const float keyHue       = accentHsv.sat > 0.05f ? accentHsv.hue : 195.0f;
     const float keySat       = std::clamp(std::max(accentHsv.sat, darkMode ? 0.60f : 0.72f), 0.0f, 1.0f);
     const float keyVal       = darkMode ? std::max(accentHsv.val, 0.95f) : std::clamp(std::max(accentHsv.val * 0.62f, 0.46f), 0.46f, 0.70f);
-    const COLORREF keyBase   = ColorFromHSV(keyHue, keySat, keyVal);
+    const COLORREF keyBase   = ColorRefFromHsvWrappedHue(keyHue, keySat, keyVal);
 
     return {
-        .key = BlendColor(keyBase, fg, darkMode ? 12u : 18u),
+        .key = BlendColorRefTruncate(keyBase, fg, darkMode ? 12u : 18u),
         .stringValue =
             ThemeAwareSemanticColor(145.0f, darkMode ? 0.58f : 0.76f, darkMode ? 0.94f : 0.44f, accent, fg, darkMode ? 24u : 18u, darkMode ? 16u : 18u),
         .numberValue =
@@ -562,27 +498,15 @@ struct JsonTokenColors
     };
 }
 
-uint32_t StableHash32(std::wstring_view text) noexcept
-{
-    // FNV-1a
-    uint32_t hash = 2166136261u;
-    for (const wchar_t ch : text)
-    {
-        hash ^= static_cast<uint32_t>(ch);
-        hash *= 16777619u;
-    }
-    return hash;
-}
-
 COLORREF ResolveAccentColor(const ViewerTheme& theme, std::wstring_view seed) noexcept
 {
     if (theme.rainbowMode)
     {
-        const uint32_t h = StableHash32(seed);
+        const uint32_t h = StableVisualHash32Utf16V1(seed);
         const float hue  = static_cast<float>(h % 360u);
         const float sat  = theme.darkBase ? 0.70f : 0.55f;
         const float val  = theme.darkBase ? 0.95f : 0.85f;
-        return ColorFromHSV(hue, sat, val);
+        return ColorRefFromHsvWrappedHue(hue, sat, val);
     }
 
     return ColorRefFromArgb(theme.accentArgb);
@@ -604,36 +528,8 @@ std::wstring LeafNameFromPath(std::wstring_view path)
     return std::wstring(path.substr(slash + 1));
 }
 
-std::string Utf8FromUtf16(std::wstring_view text) noexcept
-{
-    if (text.empty())
-    {
-        return {};
-    }
-
-    const int required = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
-    if (required <= 0)
-    {
-        return {};
-    }
-
-    std::string result(static_cast<size_t>(required), '\0');
-    const int written =
-        WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), result.data(), required, nullptr, nullptr);
-    if (written != required)
-    {
-        return {};
-    }
-
-    return result;
-}
-
 // Forward declarations for file-scope helpers defined later in this file.
-bool CopyUnicodeTextToClipboard(HWND hwnd, std::wstring_view text) noexcept;
-[[nodiscard]] bool IsProbablyWin32Path(std::wstring_view path) noexcept;
 std::optional<std::filesystem::path> ShowSaveAsDialog(HWND hwnd, std::wstring_view suggestedFileName) noexcept;
-[[nodiscard]] std::wstring EscapeJavaScriptString(std::wstring_view text) noexcept;
-[[nodiscard]] std::string EscapeJavaScriptStringUtf8(std::string_view text) noexcept;
 
 struct ViewerWebClassBackgroundBrushState
 {
@@ -710,6 +606,29 @@ void ApplyPendingViewerWebClassBackgroundBrush(HWND hwnd) noexcept
     SetClassLongPtrW(hwnd, GCLP_HBRBACKGROUND, reinterpret_cast<LONG_PTR>(g_viewerWebClassBackgroundBrush.activeBrush.get()));
 }
 
+[[nodiscard]] bool ResetViewerWebClassBackgroundBrushAtQuietPoint() noexcept
+{
+    if (g_viewerWebClassBackgroundBrush.classRegistered)
+    {
+        if (UnregisterClassW(L"RedSalamander.ViewerWeb", g_hInstance) == FALSE)
+        {
+            const DWORD error = GetLastError();
+            if (error != ERROR_CLASS_DOES_NOT_EXIST)
+            {
+                Debug::Warning(L"ViewerWeb: class/brush quiet-point cleanup deferred (error={}).", error);
+                return false;
+            }
+        }
+        g_viewerWebClassBackgroundBrush.classRegistered = false;
+    }
+
+    g_viewerWebClassBackgroundBrush.pendingBrush.reset();
+    g_viewerWebClassBackgroundBrush.pendingColor = CLR_INVALID;
+    g_viewerWebClassBackgroundBrush.activeBrush.reset();
+    g_viewerWebClassBackgroundBrush.activeColor = CLR_INVALID;
+    return true;
+}
+
 std::string ResourceBytesString(HINSTANCE hinst, UINT id) noexcept
 {
     std::vector<std::byte> bytes;
@@ -742,9 +661,13 @@ struct SharedEnvironmentState
 };
 
 SharedEnvironmentState g_sharedEnvironment;
+ViewerWebSecurity::StagedCleanupTracker g_stagedCleanupTracker;
+
+void RetryStagedFileCleanup() noexcept;
 
 [[nodiscard]] uint64_t BeginSharedEnvironmentUse() noexcept
 {
+    g_shutdownCleanupComplete.store(false, std::memory_order_release);
     g_sharedEnvironment.shuttingDown = false;
     return g_sharedEnvironment.generation;
 }
@@ -786,6 +709,7 @@ void ResetSharedEnvironmentImpl() noexcept
 
     g_sharedEnvironment.createInProgress = false;
     g_sharedEnvironment.environment.reset();
+    RetryStagedFileCleanup();
 }
 
 std::wstring UrlFromFilePath(std::wstring_view path)
@@ -827,8 +751,124 @@ std::wstring UrlFromFilePath(std::wstring_view path)
     return {};
 }
 
-constexpr std::wstring_view kInternalDocumentOrigin = L"https://viewer.redsalamander.invalid";
-constexpr std::wstring_view kInternalDocumentFilter = L"https://viewer.redsalamander.invalid/*";
+[[nodiscard]] bool TryDeleteStagedFile([[maybe_unused]] void* context, std::wstring_view path) noexcept
+{
+    if (path.empty())
+    {
+        return true;
+    }
+
+    const std::wstring pathCopy(path);
+    if (DeleteFileW(pathCopy.c_str()) != FALSE)
+    {
+        return true;
+    }
+
+    const DWORD deleteError = GetLastError();
+    return deleteError == ERROR_FILE_NOT_FOUND || deleteError == ERROR_PATH_NOT_FOUND;
+}
+
+[[nodiscard]] bool TryScheduleStagedFileCleanup([[maybe_unused]] void* context, std::wstring_view path) noexcept
+{
+    if (path.empty())
+    {
+        return true;
+    }
+
+    const std::wstring pathCopy(path);
+    return MoveFileExW(pathCopy.c_str(), nullptr, MOVEFILE_DELAY_UNTIL_REBOOT) != FALSE;
+}
+
+void RetryStagedFileCleanup() noexcept
+{
+    const ViewerWebSecurity::StagedCleanupTracker::Operations operations{
+        .context       = nullptr,
+        .deleteNow     = &TryDeleteStagedFile,
+        .scheduleLater = &TryScheduleStagedFileCleanup,
+    };
+    g_stagedCleanupTracker.Retry(operations);
+}
+
+void DeleteStagedFileOrSchedule(const std::filesystem::path& path) noexcept
+{
+    if (path.empty())
+    {
+        return;
+    }
+
+    g_stagedCleanupTracker.Track(path.wstring());
+    RetryStagedFileCleanup();
+    if (g_stagedCleanupTracker.PendingCount() != 0u)
+    {
+        Debug::Warning(L"ViewerWeb: staged PDF cleanup remains queued for a later quiet-point retry.");
+    }
+}
+
+constexpr unsigned long kProviderReadChunkBytes = 256u * 1024u;
+
+template <typename TConsume>
+[[nodiscard]] HRESULT ReadProviderExactly(
+    IFileReader* reader, uint64_t expectedBytes, TConsume&& consume, uint64_t& consumedBytes, bool seekToStart = true) noexcept
+{
+    consumedBytes = 0u;
+    if (! reader)
+    {
+        return E_POINTER;
+    }
+
+    if (seekToStart)
+    {
+        uint64_t position    = 0u;
+        const HRESULT seekHr = reader->Seek(0, FILE_BEGIN, &position);
+        if (FAILED(seekHr) || position != 0u)
+        {
+            return FAILED(seekHr) ? seekHr : HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+    }
+
+    std::array<uint8_t, kProviderReadChunkBytes> buffer{};
+    while (consumedBytes < expectedBytes)
+    {
+        const uint64_t remaining = expectedBytes - consumedBytes;
+        const unsigned long requested = static_cast<unsigned long>(std::min<uint64_t>(remaining, buffer.size()));
+        unsigned long returned         = 0u;
+        const HRESULT readHr           = reader->Read(buffer.data(), requested, &returned);
+        if (FAILED(readHr))
+        {
+            return readHr;
+        }
+        if (! ViewerWebSecurity::IsProviderReadCountValid(requested, returned))
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+        if (returned == 0u)
+        {
+            return HRESULT_FROM_WIN32(ERROR_HANDLE_EOF);
+        }
+
+        const HRESULT consumeHr = consume(std::span<const uint8_t>(buffer.data(), returned));
+        if (FAILED(consumeHr))
+        {
+            return consumeHr;
+        }
+        consumedBytes += static_cast<uint64_t>(returned);
+    }
+
+    uint8_t trailingByte      = 0u;
+    unsigned long trailingRead = 0u;
+    const HRESULT trailingHr   = reader->Read(&trailingByte, 1u, &trailingRead);
+    if (FAILED(trailingHr))
+    {
+        return trailingHr;
+    }
+    if (! ViewerWebSecurity::IsProviderReadCountValid(1u, trailingRead) || trailingRead != 0u)
+    {
+        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+    }
+    return S_OK;
+}
+
+constexpr char kInternalHtmlHead[] = "<!doctype html><html><head><meta charset=\"utf-8\">";
 
 [[nodiscard]] std::wstring_view InternalDocumentKindSegment(ViewerWebKind kind) noexcept
 {
@@ -843,12 +883,12 @@ constexpr std::wstring_view kInternalDocumentFilter = L"https://viewer.redsalama
 
 [[nodiscard]] std::wstring BuildInternalDocumentUrl(ViewerWebKind kind, uint64_t requestId)
 {
-    return std::format(L"{}/{}/{}.html", kInternalDocumentOrigin, InternalDocumentKindSegment(kind), requestId);
+    return std::format(L"{}/{}/{}.html", ViewerWebSecurity::kInternalDocumentOrigin, InternalDocumentKindSegment(kind), requestId);
 }
 
 [[nodiscard]] bool IsInternalDocumentUrl(std::wstring_view url) noexcept
 {
-    return OrdinalString::StartsWithNoCase(url, kInternalDocumentOrigin);
+    return ViewerWebSecurity::StartsWithNoCase(url, ViewerWebSecurity::kInternalDocumentOrigin);
 }
 
 [[nodiscard]] std::string_view TrimAsciiWhitespace(std::string_view text) noexcept
@@ -877,6 +917,15 @@ constexpr std::wstring_view kInternalDocumentFilter = L"https://viewer.redsalama
     return OrdinalString::EqualsNoCase(extension, L".jsonl") || OrdinalString::EqualsNoCase(extension, L".ndjson");
 }
 
+[[nodiscard]] bool IsPdfPath(std::wstring_view path) noexcept
+{
+    if (path.empty())
+    {
+        return false;
+    }
+    return OrdinalString::EqualsNoCase(std::filesystem::path(path).extension().wstring(), L".pdf");
+}
+
 [[nodiscard]] std::string CssRgb(COLORREF c)
 {
     return std::format("rgb({},{},{})", GetRValue(c), GetGValue(c), GetBValue(c));
@@ -892,12 +941,12 @@ struct ScrollbarColors
 
 [[nodiscard]] ScrollbarColors BuildScrollbarColors(COLORREF bg, COLORREF fg, COLORREF accent, bool darkMode) noexcept
 {
-    const COLORREF thumbBase = BlendColor(bg, accent, darkMode ? 52u : 36u);
+    const COLORREF thumbBase = BlendColorRefTruncate(bg, accent, darkMode ? 52u : 36u);
     return {
-        .track      = BlendColor(bg, fg, darkMode ? 20u : 12u),
-        .thumb      = BlendColor(thumbBase, fg, darkMode ? 92u : 120u),
-        .thumbHover = BlendColor(thumbBase, fg, darkMode ? 128u : 152u),
-        .corner     = BlendColor(bg, fg, darkMode ? 16u : 8u),
+        .track      = BlendColorRefTruncate(bg, fg, darkMode ? 20u : 12u),
+        .thumb      = BlendColorRefTruncate(thumbBase, fg, darkMode ? 92u : 120u),
+        .thumbHover = BlendColorRefTruncate(thumbBase, fg, darkMode ? 128u : 152u),
+        .corner     = BlendColorRefTruncate(bg, fg, darkMode ? 16u : 8u),
     };
 }
 
@@ -912,100 +961,208 @@ struct JsonLinesEntry
     std::string prettyJson;
 };
 
-[[nodiscard]] std::string JsonStringFromScalar(yyjson_val* value)
+[[nodiscard]] std::string Utf8FromWide(std::wstring_view text)
 {
+    return Common::Strings::Utf8FromUtf16StrictOrEmpty(text);
+}
+
+struct JsonLinesUiStrings final
+{
+    std::string badge;
+    std::string title;
+    std::string recordSummary;
+    std::string expandAll;
+    std::string collapseAll;
+    std::string genericValue;
+};
+
+struct LimitedYyjsonAllocatorState final
+{
+    size_t committedBytes = 0u;
+    size_t limitBytes     = 0u;
+};
+
+void* LimitedYyjsonMalloc(void* context, size_t size) noexcept
+{
+    auto* state = static_cast<LimitedYyjsonAllocatorState*>(context);
+    if (! state || state->committedBytes > state->limitBytes || size > state->limitBytes - state->committedBytes)
+    {
+        return nullptr;
+    }
+    void* memory = ::malloc(size);
+    if (memory)
+    {
+        state->committedBytes += size;
+    }
+    return memory;
+}
+
+void* LimitedYyjsonRealloc(void* context, void* memory, size_t oldSize, size_t newSize) noexcept
+{
+    auto* state = static_cast<LimitedYyjsonAllocatorState*>(context);
+    if (! state || state->committedBytes > state->limitBytes || oldSize > state->committedBytes)
+    {
+        return nullptr;
+    }
+    if (newSize > oldSize && newSize - oldSize > state->limitBytes - state->committedBytes)
+    {
+        return nullptr;
+    }
+
+    void* resized = ::realloc(memory, newSize);
+    if (! resized && newSize != 0u)
+    {
+        return nullptr;
+    }
+    state->committedBytes = state->committedBytes - oldSize + newSize;
+    return resized;
+}
+
+void LimitedYyjsonFree(void* /*context*/, void* memory) noexcept
+{
+    ::free(memory);
+}
+
+[[nodiscard]] yyjson_alc MakeLimitedYyjsonAllocator(LimitedYyjsonAllocatorState& state) noexcept
+{
+    return yyjson_alc{&LimitedYyjsonMalloc, &LimitedYyjsonRealloc, &LimitedYyjsonFree, &state};
+}
+
+[[nodiscard]] bool TryJsonStringFromScalar(yyjson_val* value, size_t maxBytes, std::string& output)
+{
+    output.clear();
     if (! value)
     {
-        return {};
+        return true;
     }
     if (yyjson_is_str(value))
     {
-        const char* s = yyjson_get_str(value);
-        return s ? std::string(s) : std::string{};
+        const char* text = yyjson_get_str(value);
+        const size_t length = yyjson_get_len(value);
+        if (! text || length > maxBytes)
+        {
+            return false;
+        }
+        output.assign(text, length);
+        return true;
     }
+
+    std::string text;
     if (yyjson_is_int(value))
     {
-        return std::to_string(yyjson_get_int(value));
+        text = std::to_string(yyjson_get_int(value));
     }
-    if (yyjson_is_uint(value))
+    else if (yyjson_is_uint(value))
     {
-        return std::to_string(yyjson_get_uint(value));
+        text = std::to_string(yyjson_get_uint(value));
     }
-    if (yyjson_is_real(value))
+    else if (yyjson_is_real(value))
     {
-        return std::format("{}", yyjson_get_real(value));
+        text = std::format("{}", yyjson_get_real(value));
     }
-    if (yyjson_is_bool(value))
+    else if (yyjson_is_bool(value))
     {
-        return yyjson_get_bool(value) ? "true" : "false";
+        text = yyjson_get_bool(value) ? "true" : "false";
     }
-    if (yyjson_is_null(value))
+    else if (yyjson_is_null(value))
     {
-        return "null";
+        text = "null";
     }
-    return {};
+
+    if (text.size() > maxBytes)
+    {
+        return false;
+    }
+    output = std::move(text);
+    return true;
 }
 
 [[nodiscard]] std::string DescribeJsonValue(yyjson_val* value)
 {
     if (! value)
     {
-        return "JSON value";
+        return Utf8FromWide(LoadStringResource(g_hInstance, IDS_VIEWERWEB_JSONL_VALUE_GENERIC));
     }
     if (yyjson_is_obj(value))
     {
         const size_t fieldCount = yyjson_obj_size(value);
-        return std::format("Object with {} field{}", fieldCount, fieldCount == 1 ? "" : "s");
+        return Utf8FromWide(FormatStringResource(g_hInstance,
+                                               fieldCount == 1u ? IDS_VIEWERWEB_JSONL_OBJECT_ONE_FMT : IDS_VIEWERWEB_JSONL_OBJECT_MANY_FMT,
+                                               fieldCount));
     }
     if (yyjson_is_arr(value))
     {
         const size_t itemCount = yyjson_arr_size(value);
-        return std::format("Array with {} item{}", itemCount, itemCount == 1 ? "" : "s");
+        return Utf8FromWide(FormatStringResource(g_hInstance,
+                                               itemCount == 1u ? IDS_VIEWERWEB_JSONL_ARRAY_ONE_FMT : IDS_VIEWERWEB_JSONL_ARRAY_MANY_FMT,
+                                               itemCount));
     }
     if (yyjson_is_str(value))
     {
-        return "String value";
+        return Utf8FromWide(LoadStringResource(g_hInstance, IDS_VIEWERWEB_JSONL_VALUE_STRING));
     }
     if (yyjson_is_bool(value))
     {
-        return std::format("Boolean {}", yyjson_get_bool(value) ? "true" : "false");
+        return Utf8FromWide(LoadStringResource(
+            g_hInstance, yyjson_get_bool(value) ? IDS_VIEWERWEB_JSONL_VALUE_BOOLEAN_TRUE : IDS_VIEWERWEB_JSONL_VALUE_BOOLEAN_FALSE));
     }
     if (yyjson_is_null(value))
     {
-        return "Null value";
+        return Utf8FromWide(LoadStringResource(g_hInstance, IDS_VIEWERWEB_JSONL_VALUE_NULL));
     }
     if (yyjson_is_num(value))
     {
-        return std::format("Numeric {}", JsonStringFromScalar(value));
+        std::string number;
+        static_cast<void>(TryJsonStringFromScalar(value, 64u, number));
+        return Utf8FromWide(FormatStringResource(
+            g_hInstance, IDS_VIEWERWEB_JSONL_VALUE_NUMERIC_FMT, std::wstring(number.begin(), number.end())));
     }
-    return "JSON value";
+    return Utf8FromWide(LoadStringResource(g_hInstance, IDS_VIEWERWEB_JSONL_VALUE_GENERIC));
 }
 
-[[nodiscard]] std::string ReadJsonObjectSummaryValue(yyjson_val* value, std::initializer_list<const char*> keys)
+[[nodiscard]] bool TryReadJsonObjectSummaryValue(
+    yyjson_val* value, std::initializer_list<const char*> keys, size_t maxBytes, std::string& output)
 {
+    output.clear();
     if (! yyjson_is_obj(value))
     {
-        return {};
+        return true;
     }
 
     for (const char* key : keys)
     {
-        const std::string text = JsonStringFromScalar(yyjson_obj_get(value, key));
+        std::string text;
+        if (! TryJsonStringFromScalar(yyjson_obj_get(value, key), maxBytes, text))
+        {
+            return false;
+        }
         if (! text.empty())
         {
-            return text;
+            output = std::move(text);
+            return true;
         }
     }
 
-    return {};
+    return true;
 }
 
-[[nodiscard]] bool TryParseJsonLinesEntries(std::string_view textUtf8, bool allowSingleEntry, std::vector<JsonLinesEntry>& outEntries)
+[[nodiscard]] bool TryParseJsonLinesEntries(
+    std::string_view textUtf8, bool allowSingleEntry, size_t publicationLimit, std::vector<JsonLinesEntry>& outEntries)
 {
     outEntries.clear();
+    constexpr size_t kAbsoluteEntryLimit = 100'000u;
+    constexpr size_t kMinimumPublishedBytesPerEntry = 128u;
+    const size_t maxEntries = std::min(kAbsoluteEntryLimit, publicationLimit / kMinimumPublishedBytesPerEntry);
+    const size_t retainedLimit = publicationLimit / 2u;
+    if (maxEntries == 0u || retainedLimit == 0u)
+    {
+        return false;
+    }
+    outEntries.reserve(std::min<size_t>(maxEntries, 4096u));
 
     size_t lineNumber = 1;
     size_t offset     = 0;
+    size_t retainedBytes = 0u;
     while (offset < textUtf8.size())
     {
         size_t lineEnd = textUtf8.find('\n', offset);
@@ -1023,9 +1180,18 @@ struct JsonLinesEntry
 
         if (! line.empty())
         {
+            if (outEntries.size() >= maxEntries || retainedBytes > retainedLimit || line.size() > retainedLimit - retainedBytes)
+            {
+                outEntries.clear();
+                return false;
+            }
+
             std::string mutableLine(line);
             yyjson_read_err lineErr{};
-            unique_yyjson_doc lineDoc(yyjson_read_opts(mutableLine.data(), mutableLine.size(), YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM, nullptr, &lineErr));
+            LimitedYyjsonAllocatorState readAllocatorState{.limitBytes = retainedLimit - retainedBytes};
+            yyjson_alc readAllocator = MakeLimitedYyjsonAllocator(readAllocatorState);
+            unique_yyjson_doc lineDoc(
+                yyjson_read_opts(mutableLine.data(), mutableLine.size(), YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM, &readAllocator, &lineErr));
             if (! lineDoc)
             {
                 outEntries.clear();
@@ -1040,7 +1206,10 @@ struct JsonLinesEntry
             }
 
             size_t prettyLen = 0;
-            unique_malloc_string pretty(yyjson_write_opts(lineDoc.get(), YYJSON_WRITE_PRETTY | YYJSON_WRITE_ESCAPE_UNICODE, nullptr, &prettyLen, nullptr));
+            LimitedYyjsonAllocatorState writeAllocatorState{.limitBytes = retainedLimit - retainedBytes};
+            yyjson_alc writeAllocator = MakeLimitedYyjsonAllocator(writeAllocatorState);
+            unique_malloc_string pretty(
+                yyjson_write_opts(lineDoc.get(), YYJSON_WRITE_PRETTY | YYJSON_WRITE_ESCAPE_UNICODE, &writeAllocator, &prettyLen, nullptr));
             if (! pretty)
             {
                 outEntries.clear();
@@ -1049,18 +1218,45 @@ struct JsonLinesEntry
 
             JsonLinesEntry entry{};
             entry.lineNumber = lineNumber;
+            if (prettyLen > retainedLimit - retainedBytes)
+            {
+                outEntries.clear();
+                return false;
+            }
             entry.prettyJson.assign(pretty.get(), prettyLen);
-            entry.timestampText = ReadJsonObjectSummaryValue(root, {"ts", "timestamp", "@timestamp", "time"});
-            entry.levelText     = ReadJsonObjectSummaryValue(root, {"level", "severity", "lvl", "type"});
-            entry.categoryText  = ReadJsonObjectSummaryValue(root, {"category", "op", "operation", "event", "logger"});
-            entry.messageText   = ReadJsonObjectSummaryValue(root, {"message", "msg", "text", "summary", "description"});
+            retainedBytes += prettyLen;
+
+            const auto readSummary = [&](std::initializer_list<const char*> keys, std::string& value) -> bool
+            {
+                const size_t remaining = retainedLimit - retainedBytes;
+                if (! TryReadJsonObjectSummaryValue(root, keys, remaining, value) || value.size() > remaining)
+                {
+                    return false;
+                }
+                retainedBytes += value.size();
+                return true;
+            };
+            if (! readSummary({"ts", "timestamp", "@timestamp", "time"}, entry.timestampText) ||
+                ! readSummary({"level", "severity", "lvl", "type"}, entry.levelText) ||
+                ! readSummary({"category", "op", "operation", "event", "logger"}, entry.categoryText) ||
+                ! readSummary({"message", "msg", "text", "summary", "description"}, entry.messageText))
+            {
+                outEntries.clear();
+                return false;
+            }
             entry.summaryText   = DescribeJsonValue(root);
+            if (entry.summaryText.size() > retainedLimit - retainedBytes)
+            {
+                outEntries.clear();
+                return false;
+            }
+            retainedBytes += entry.summaryText.size();
             if (entry.messageText.empty())
             {
-                const std::string nameText = ReadJsonObjectSummaryValue(root, {"name", "srcLeaf", "dstLeaf", "path"});
-                if (! nameText.empty())
+                if (! readSummary({"name", "srcLeaf", "dstLeaf", "path"}, entry.messageText))
                 {
-                    entry.messageText = nameText;
+                    outEntries.clear();
+                    return false;
                 }
             }
 
@@ -1115,56 +1311,34 @@ constexpr char kCommonScrollbarCss[] =
     "*::-webkit-scrollbar-button{display:none;width:0;height:0;}"
     "*::-webkit-scrollbar-corner{background:var(--rs-scroll-corner);}";
 
-[[nodiscard]] std::string BuildJsonLinesHtml(const std::vector<JsonLinesEntry>& entries,
-                                             std::string_view highlightJs,
-                                             std::string_view themeObj,
-                                             COLORREF bg,
-                                             COLORREF fg,
-                                             COLORREF selBg,
-                                             COLORREF selFg,
-                                             COLORREF accent,
-                                             bool darkMode)
+[[nodiscard]] bool BuildJsonLinesHtml(const std::vector<JsonLinesEntry>& entries,
+                                      const JsonLinesUiStrings& strings,
+                                      std::string_view highlightJs,
+                                      std::string_view themeObj,
+                                      COLORREF bg,
+                                      COLORREF fg,
+                                      COLORREF selBg,
+                                      COLORREF selFg,
+                                      COLORREF accent,
+                                      bool darkMode,
+                                      size_t publicationLimit,
+                                      std::string& html)
 {
-    const COLORREF codeBg             = BlendColor(bg, fg, darkMode ? 18u : 8u);
-    const COLORREF cardBg             = BlendColor(bg, fg, darkMode ? 12u : 5u);
-    const COLORREF cardBgOpen         = BlendColor(bg, fg, darkMode ? 18u : 10u);
-    const COLORREF border             = BlendColor(bg, fg, darkMode ? 36u : 58u);
-    const COLORREF mutedFg            = BlendColor(bg, fg, 140u);
+    const COLORREF codeBg             = BlendColorRefTruncate(bg, fg, darkMode ? 18u : 8u);
+    const COLORREF cardBg             = BlendColorRefTruncate(bg, fg, darkMode ? 12u : 5u);
+    const COLORREF cardBgOpen         = BlendColorRefTruncate(bg, fg, darkMode ? 18u : 10u);
+    const COLORREF border             = BlendColorRefTruncate(bg, fg, darkMode ? 36u : 58u);
+    const COLORREF mutedFg            = BlendColorRefTruncate(bg, fg, 140u);
     const JsonTokenColors tokenColors = BuildJsonTokenColors(accent, fg, darkMode);
     const ScrollbarColors scrollbar   = BuildScrollbarColors(bg, fg, accent, darkMode);
 
-    std::string entriesJs;
-    entriesJs.reserve(entries.size() * 256u);
-    entriesJs.push_back('[');
-    for (size_t i = 0; i < entries.size(); ++i)
+    html.clear();
+    if (highlightJs.size() > publicationLimit || publicationLimit - highlightJs.size() < 16384u)
     {
-        const JsonLinesEntry& entry = entries[i];
-        if (i != 0)
-        {
-            entriesJs.push_back(',');
-        }
-
-        entriesJs += "{line:";
-        entriesJs += std::to_string(entry.lineNumber);
-        entriesJs += ",ts:'";
-        entriesJs += EscapeJavaScriptStringUtf8(entry.timestampText);
-        entriesJs += "',level:'";
-        entriesJs += EscapeJavaScriptStringUtf8(entry.levelText);
-        entriesJs += "',category:'";
-        entriesJs += EscapeJavaScriptStringUtf8(entry.categoryText);
-        entriesJs += "',message:'";
-        entriesJs += EscapeJavaScriptStringUtf8(entry.messageText);
-        entriesJs += "',summary:'";
-        entriesJs += EscapeJavaScriptStringUtf8(entry.summaryText);
-        entriesJs += "',json:'";
-        entriesJs += EscapeJavaScriptStringUtf8(entry.prettyJson);
-        entriesJs += "'}";
+        return false;
     }
-    entriesJs.push_back(']');
-
-    std::string html;
-    html.reserve(highlightJs.size() + entriesJs.size() + 16384);
-    html += "<!doctype html><html><head><meta charset=\"utf-8\">";
+    html.reserve(std::min(publicationLimit, highlightJs.size() + 16384u));
+    html += kInternalHtmlHead;
     html += "<style>";
     html += ":root{--rs-bg:" + CssRgb(bg) + ";--rs-fg:" + CssRgb(fg) + ";--rs-sel-bg:" + CssRgb(selBg) + ";--rs-sel-fg:" + CssRgb(selFg) +
             ";--rs-accent:" + CssRgb(accent) + ";--rs-code-bg:" + CssRgb(codeBg) + ";--rs-card-bg:" + CssRgb(cardBg) +
@@ -1208,10 +1382,10 @@ constexpr char kCommonScrollbarCss[] =
     html += "@media (max-width:720px){.rs-toolbar{flex-direction:column;align-items:stretch;}.rs-toolbar-actions{justify-content:flex-end;}.rs-entry-summary"
             "{flex-wrap:wrap;}.rs-entry-body{padding-left:12px;}}";
     html += "</style></head><body><div class=\"rs-shell\"><div class=\"rs-toolbar\">";
-    html += "<div class=\"rs-toolbar-left\"><span class=\"rs-pill\">JSONL</span><span class=\"rs-toolbar-title\">Structured log view</span>"
+    html += "<div class=\"rs-toolbar-left\"><span id=\"typeBadge\" class=\"rs-pill\"></span><span id=\"viewTitle\" class=\"rs-toolbar-title\"></span>"
             "<span id=\"summary\" class=\"rs-toolbar-meta\"></span></div>";
-    html += "<div class=\"rs-toolbar-actions\"><button id=\"expandAll\" type=\"button\" class=\"rs-btn\">Expand all</button>"
-            "<button id=\"collapseAll\" type=\"button\" class=\"rs-btn\">Collapse all</button></div>";
+    html += "<div class=\"rs-toolbar-actions\"><button id=\"expandAll\" type=\"button\" class=\"rs-btn\"></button>"
+            "<button id=\"collapseAll\" type=\"button\" class=\"rs-btn\"></button></div>";
     html += "</div><div id=\"list\" class=\"rs-list\"></div></div>";
     html += "<script>";
     html.append(highlightJs);
@@ -1224,40 +1398,74 @@ constexpr char kCommonScrollbarCss[] =
             "r.setProperty('--rs-code-bg',rgb(blend(bg,fg,dark?18:8)));r.setProperty('--rs-card-bg',rgb(blend(bg,fg,dark?12:5)));"
             "r.setProperty('--rs-card-bg-open',rgb(blend(bg,fg,dark?18:10)));r.setProperty('--rs-border',rgb(blend(bg,fg,dark?36:58)));"
             "r.setProperty('--rs-muted-fg',rgb(blend(bg,fg,140)));setJsonTokenVars(r,bg,fg,acc);setScrollbarVars(r,bg,fg,acc);}";
-    html += "const entries=" + entriesJs +
-            ";const list=document.getElementById('list');"
-            "document.getElementById('summary').textContent=`${entries.length} record${entries.length===1?'':'s'}`;";
-    html += "function makeBadge(text,kind,level){if(!text){return null;}const el=document.createElement('span');el.className='rs-badge';"
-            "el.textContent=text;el.dataset.kind=kind;if(level){el.dataset.level=String(level).toLowerCase();}return el;}";
-    html += "function renderCode(code,text){code.textContent=text;try{hljs.highlightElement(code);}catch(e){}}";
-    html += "function setEntryOpen(entryEl,open,scrollIntoView){if(!entryEl){return;}entryEl.classList.toggle('is-open',open);"
+    const auto appendPublished = [&](std::string_view value) noexcept
+    { return ViewerWebDetail::TryAppendWithinLimit(html, value, publicationLimit); };
+    const auto appendEscaped = [&](std::string_view value) noexcept
+    { return ViewerWebDetail::TryAppendEscapedJavaScriptStringUtf8(value, html, publicationLimit); };
+
+    if (! appendPublished("const labels={badge:'") || ! appendEscaped(strings.badge) || ! appendPublished("',title:'") ||
+        ! appendEscaped(strings.title) || ! appendPublished("',summary:'") || ! appendEscaped(strings.recordSummary) ||
+        ! appendPublished("',expand:'") || ! appendEscaped(strings.expandAll) || ! appendPublished("',collapse:'") ||
+        ! appendEscaped(strings.collapseAll) || ! appendPublished("',value:'") || ! appendEscaped(strings.genericValue) ||
+        ! appendPublished("'};document.getElementById('typeBadge').textContent=labels.badge;"
+                          "document.getElementById('viewTitle').textContent=labels.title;"
+                          "document.getElementById('summary').textContent=labels.summary;"
+                          "document.getElementById('expandAll').textContent=labels.expand;"
+                          "document.getElementById('collapseAll').textContent=labels.collapse;const entries=["))
+    {
+        html.clear();
+        return false;
+    }
+    for (size_t index = 0u; index < entries.size(); ++index)
+    {
+        const JsonLinesEntry& entry = entries[index];
+        const std::string lineNumber = std::to_string(entry.lineNumber);
+        if ((index != 0u && ! appendPublished(",")) || ! appendPublished("{line:") || ! appendPublished(lineNumber) || ! appendPublished(",ts:'") ||
+            ! appendEscaped(entry.timestampText) || ! appendPublished("',level:'") || ! appendEscaped(entry.levelText) ||
+            ! appendPublished("',category:'") || ! appendEscaped(entry.categoryText) || ! appendPublished("',message:'") ||
+            ! appendEscaped(entry.messageText) || ! appendPublished("',summary:'") || ! appendEscaped(entry.summaryText) ||
+            ! appendPublished("',json:'") || ! appendEscaped(entry.prettyJson) || ! appendPublished("'}"))
+        {
+            html.clear();
+            return false;
+        }
+    }
+    if (! appendPublished("];const list=document.getElementById('list');"))
+    {
+        html.clear();
+        return false;
+    }
+    if (! appendPublished(
+            "function makeBadge(text,kind,level){if(!text){return null;}const el=document.createElement('span');el.className='rs-badge';"
+            "el.textContent=text;el.dataset.kind=kind;if(level){el.dataset.level=String(level).toLowerCase();}return el;}"
+            "function renderCode(code,text){code.textContent=text;try{hljs.highlightElement(code);}catch(e){}}"
+            "function setEntryOpen(entryEl,open,scrollIntoView){if(!entryEl){return;}entryEl.classList.toggle('is-open',open);"
             "const header=entryEl.querySelector('.rs-entry-summary');const body=entryEl.querySelector('.rs-entry-body');"
             "if(header){header.setAttribute('aria-expanded',open?'true':'false');}if(body){body.hidden=!open;}"
-            "if(open&&typeof entryEl._ensureRendered==='function'){entryEl._ensureRendered();if(scrollIntoView){entryEl.scrollIntoView({block:'nearest'});}}}";
-    html += "function makeEntry(entry,index){const entryEl=document.createElement('article');entryEl.className='rs-entry';"
-            "const "
-            "summary=document.createElement('button');summary.type='button';summary.className='rs-entry-summary';summary.setAttribute('aria-expanded','false');"
-            "const linePill=document.createElement('span');linePill.className='rs-pill "
-            "rs-line-pill';linePill.textContent=`#${entry.line}`;summary.appendChild(linePill);"
+            "if(open&&typeof entryEl._ensureRendered==='function'){entryEl._ensureRendered();if(scrollIntoView){entryEl.scrollIntoView({block:'nearest'});}}}"
+            "function makeEntry(entry,index){const entryEl=document.createElement('article');entryEl.className='rs-entry';"
+            "const summary=document.createElement('button');summary.type='button';summary.className='rs-entry-summary';summary.setAttribute('aria-expanded','false');"
+            "const linePill=document.createElement('span');linePill.className='rs-pill rs-line-pill';linePill.textContent=`#${entry.line}`;summary.appendChild(linePill);"
             "if(entry.ts){const ts=document.createElement('span');ts.className='rs-toolbar-meta';ts.textContent=entry.ts;summary.appendChild(ts);}"
-            "const levelBadge=makeBadge(entry.level,'level',entry.level);if(levelBadge){summary.appendChild(levelBadge);}const "
-            "categoryBadge=makeBadge(entry.category,'category','');"
-            "if(categoryBadge){summary.appendChild(categoryBadge);}const text=document.createElement('span');text.className='rs-summary-text';"
-            "text.textContent=entry.message||entry.summary||'JSON value';summary.appendChild(text);entryEl.appendChild(summary);"
-            "const body=document.createElement('div');body.className='rs-entry-body';body.hidden=true;const pre=document.createElement('pre');const "
-            "code=document.createElement('code');"
-            "code.className='language-json';pre.appendChild(code);body.appendChild(pre);entryEl.appendChild(body);let rendered=false;"
-            "entryEl._ensureRendered=()=>{if(rendered){return;}renderCode(code,entry.json);rendered=true;};"
+            "const levelBadge=makeBadge(entry.level,'level',entry.level);if(levelBadge){summary.appendChild(levelBadge);}"
+            "const categoryBadge=makeBadge(entry.category,'category','');if(categoryBadge){summary.appendChild(categoryBadge);}"
+            "const text=document.createElement('span');text.className='rs-summary-text';text.textContent=entry.message||entry.summary||labels.value;"
+            "summary.appendChild(text);entryEl.appendChild(summary);const body=document.createElement('div');body.className='rs-entry-body';body.hidden=true;"
+            "const pre=document.createElement('pre');const code=document.createElement('code');code.className='language-json';pre.appendChild(code);"
+            "body.appendChild(pre);entryEl.appendChild(body);let rendered=false;entryEl._ensureRendered=()=>{if(rendered){return;}renderCode(code,entry.json);rendered=true;};"
             "summary.addEventListener('click',()=>setEntryOpen(entryEl,!entryEl.classList.contains('is-open'),true));"
-            "if(index<2){setEntryOpen(entryEl,true,false);}return entryEl;}";
-    html += "function renderList(){const frag=document.createDocumentFragment();entries.forEach((entry,index)=>frag.appendChild(makeEntry(entry,index)));"
+            "if(index<2){setEntryOpen(entryEl,true,false);}return entryEl;}"
+            "function renderList(){const frag=document.createDocumentFragment();entries.forEach((entry,index)=>frag.appendChild(makeEntry(entry,index)));"
             "list.replaceChildren(frag);}function expandAll(){document.querySelectorAll('.rs-entry').forEach((entryEl)=>setEntryOpen(entryEl,true,false));}"
-            "function collapseAll(){document.querySelectorAll('.rs-entry').forEach((entryEl)=>setEntryOpen(entryEl,false,false));}";
-    html +=
-        "document.getElementById('expandAll').addEventListener('click',expandAll);document.getElementById('collapseAll').addEventListener('click',collapseAll);"
-        "window.RS={applyTheme:applyTheme,expandAll:expandAll,collapseAll:collapseAll};applyTheme(initialTheme);renderList();})();";
-    html += "</script></body></html>";
-    return html;
+            "function collapseAll(){document.querySelectorAll('.rs-entry').forEach((entryEl)=>setEntryOpen(entryEl,false,false));}"
+            "document.getElementById('expandAll').addEventListener('click',expandAll);document.getElementById('collapseAll').addEventListener('click',collapseAll);"
+            "window.RS={applyTheme:applyTheme,expandAll:expandAll,collapseAll:collapseAll};applyTheme(initialTheme);renderList();})();"
+            "</script></body></html>"))
+    {
+        html.clear();
+        return false;
+    }
+    return true;
 }
 
 constexpr char kViewerWebSchemaJson[] = R"json({
@@ -1265,11 +1473,20 @@ constexpr char kViewerWebSchemaJson[] = R"json({
     "title": "Web Viewer",
     "fields": [
         {
+            "key": "maxDocumentMiB",
+            "type": "value",
+            "label": "Max document size (MiB)",
+            "description": "Maximum size for private-origin HTML and staged PDF loads.",
+            "default": 32,
+            "min": 1,
+            "max": 64
+        },
+        {
             "key": "allowExternalNavigation",
             "type": "option",
             "label": "External navigation",
-            "description": "Allow navigating to http/https links (Web/Markdown).",
-            "default": "1",
+            "description": "Allow user-activated http/https links to open in the system browser.",
+            "default": "0",
             "options": [
                 { "value": "0", "label": "Block" },
                 { "value": "1", "label": "Allow" }
@@ -1300,7 +1517,7 @@ constexpr char kViewerJsonSchemaJson[] = R"json({
             "description": "Maximum size for in-memory loads.",
             "default": 32,
             "min": 1,
-            "max": 512
+            "max": 64
         },
         {
             "key": "viewMode",
@@ -1339,14 +1556,14 @@ constexpr char kViewerMarkdownSchemaJson[] = R"json({
             "description": "Maximum size for in-memory loads.",
             "default": 32,
             "min": 1,
-            "max": 512
+            "max": 64
         },
         {
             "key": "allowExternalNavigation",
             "type": "option",
             "label": "External navigation",
-            "description": "Allow navigating to http/https links.",
-            "default": "1",
+            "description": "Allow user-activated http/https links to open in the system browser.",
+            "default": "0",
             "options": [
                 { "value": "0", "label": "Block" },
                 { "value": "1", "label": "Allow" }
@@ -1476,7 +1693,8 @@ const char* GetViewerWebStaticConfigurationSchema(ViewerWebKind kind) noexcept
 LRESULT ViewerWeb::HandleFileComboHostMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, bool& handled) noexcept
 {
     const bool popupWasOpen      = _fileComboControl && _fileComboControl->DebugIsPopupOpen();
-    const bool preExpandForPopup = ! popupWasOpen && _fileComboControl && MessageMayOpenWindowComboPopup(msg, wp);
+    const bool preExpandForPopup =
+        ! popupWasOpen && _fileComboControl && RedSalamander::ViewerFileComboHost::MessageMayOpenWindowComboPopup(msg, wp);
     if (preExpandForPopup)
     {
         _fileComboHostPreExpandPopup = true;
@@ -1617,20 +1835,28 @@ void ViewerWeb::OnCreate(HWND hwnd)
 
 void ViewerWeb::OnDestroy() noexcept
 {
+    _saveRequestId.fetch_add(1u, std::memory_order_acq_rel);
+    _loadPostFailureTerminal = false;
+    _saveInProgress = false;
     _hFindDialog.reset();
     DiscardWebView2();
 
-    if (_tempExtractedPath.has_value() && ! _tempExtractedPath.value().empty())
+    if (_tempExtractedPath.has_value())
     {
-        std::error_code ec;
-        static_cast<void>(std::filesystem::remove(_tempExtractedPath.value(), ec));
-        _tempExtractedPath.reset();
+        DeleteStagedFileOrSchedule(_tempExtractedPath.value());
     }
+    _tempExtractedPath.reset();
 
     _pendingPath.reset();
     _pendingWebContent.reset();
     _pendingDocumentUtf8.reset();
     _internalDocumentUrl.reset();
+    _allowedDocumentUrl.clear();
+    _documentRoute          = ViewerWebSecurity::DocumentRoute::None;
+    _loadedSourceBytes      = 0u;
+    _documentScriptsEnabled = false;
+    _navigationCompleted    = false;
+    _navigationSucceeded    = false;
 
     NotifyViewerClosed();
 }
@@ -1876,7 +2102,7 @@ void ViewerWeb::OnPaint(HWND hwnd) noexcept
     {
         const UINT dpi          = GetDpiForWindow(hwnd);
         const COLORREF accent   = ResolveAccentColor(_theme, _currentPath.empty() ? _metaId : _currentPath);
-        const int lineThickness = std::max(1, PxFromDip(1, dpi));
+        const int lineThickness = std::max(1, static_cast<int>(Common::WindowSizing::DipToPixelRounded(dpi, 1)));
         RECT line               = _headerRect;
         line.top                = std::max(line.top, line.bottom - lineThickness);
         line.bottom             = std::max(line.bottom, line.top);
@@ -1887,7 +2113,7 @@ void ViewerWeb::OnPaint(HWND hwnd) noexcept
     if (! _statusMessage.empty())
     {
         const UINT dpi    = GetDpiForWindow(hwnd);
-        const int padding = PxFromDip(8, dpi);
+        const int padding = static_cast<int>(Common::WindowSizing::DipToPixelRounded(dpi, 8));
         RECT rc           = _headerRect;
         rc.left           = std::min(rc.right, rc.left + padding);
         rc.right          = std::max(rc.left, rc.right - padding);
@@ -2016,21 +2242,18 @@ ViewerWeb::~ViewerWeb()
     // WebView2 cleanup is handled in OnDestroy() to allow async shutdown to complete
     // before the object is destroyed. Do not call DiscardWebView2() here.
 
-    if (! _hFileComboHost)
+    if (_hFileComboHost)
     {
-        return;
+        _fileComboControl            = nullptr;
+        _fileComboHostPreExpandPopup = false;
+        UnhookFileComboHostWindow(_hFileComboHost.get());
+        _fileComboHost.Detach();
+        _hFileComboHost.reset();
     }
 
-    _fileComboControl            = nullptr;
-    _fileComboHostPreExpandPopup = false;
-    UnhookFileComboHostWindow(_hFileComboHost.get());
-    _fileComboHost.Detach();
-    _hFileComboHost.reset();
-
-    if (_tempExtractedPath.has_value() && ! _tempExtractedPath.value().empty())
+    if (_tempExtractedPath.has_value())
     {
-        std::error_code ec;
-        static_cast<void>(std::filesystem::remove(_tempExtractedPath.value(), ec));
+        DeleteStagedFileOrSchedule(_tempExtractedPath.value());
         _tempExtractedPath.reset();
     }
 }
@@ -2125,8 +2348,8 @@ HRESULT STDMETHODCALLTYPE ViewerWeb::GetConfigurationSchema(const char** schemaJ
 
 HRESULT STDMETHODCALLTYPE ViewerWeb::SetConfiguration(const char* configurationJsonUtf8) noexcept
 {
-    uint32_t maxDocumentMiB      = 32;
-    bool allowExternalNavigation = true;
+    uint32_t maxDocumentMiB      = ViewerWebSecurity::kDefaultMaxDocumentMiB;
+    bool allowExternalNavigation = ViewerWebSecurity::kDefaultAllowExternalNavigation;
     bool devToolsEnabled         = false;
     JsonViewMode jsonViewMode    = JsonViewMode::Pretty;
 
@@ -2149,12 +2372,13 @@ HRESULT STDMETHODCALLTYPE ViewerWeb::SetConfiguration(const char* configurationJ
                         const int64_t value = yyjson_get_int(maxDoc);
                         if (value >= 1)
                         {
-                            maxDocumentMiB = static_cast<uint32_t>(std::min<int64_t>(value, 512));
+                            maxDocumentMiB = static_cast<uint32_t>(std::min<int64_t>(value, ViewerWebSecurity::kMaximumDocumentMiB));
                         }
                     }
                     else if (yyjson_is_uint(maxDoc))
                     {
-                        maxDocumentMiB = static_cast<uint32_t>(std::min<uint64_t>(yyjson_get_uint(maxDoc), 512u));
+                        maxDocumentMiB =
+                            static_cast<uint32_t>(std::min<uint64_t>(yyjson_get_uint(maxDoc), ViewerWebSecurity::kMaximumDocumentMiB));
                         maxDocumentMiB = std::max(maxDocumentMiB, 1u);
                     }
 
@@ -2250,9 +2474,11 @@ HRESULT STDMETHODCALLTYPE ViewerWeb::SetConfiguration(const char* configurationJ
         default:
             _configurationJson = std::format(
                 R"json({{
+    "maxDocumentMiB": {},
     "allowExternalNavigation": {},
     "devToolsEnabled": {}
 }})json",
+                _config.maxDocumentMiB,
                 _config.allowExternalNavigation ? "true" : "false",
                 _config.devToolsEnabled ? "true" : "false");
             break;
@@ -2260,10 +2486,12 @@ HRESULT STDMETHODCALLTYPE ViewerWeb::SetConfiguration(const char* configurationJ
 
     if (_webView)
     {
-        wil::com_ptr<ICoreWebView2Settings> settings;
-        if (SUCCEEDED(_webView->get_Settings(settings.put())) && settings)
+        const HRESULT settingsHr = ConfigureWebViewSettings();
+        if (FAILED(settingsHr))
         {
-            static_cast<void>(settings->put_AreDevToolsEnabled(_config.devToolsEnabled ? TRUE : FALSE));
+            _statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_WEBVIEW2_INIT_FAILED);
+            DiscardWebView2();
+            return settingsHr;
         }
     }
 
@@ -2297,10 +2525,19 @@ HRESULT STDMETHODCALLTYPE ViewerWeb::SomethingToSave(BOOL* pSomethingToSave) noe
     bool isDefault = false;
     switch (_kind)
     {
-        case ViewerWebKind::Json: isDefault = _config.maxDocumentMiB == 32u && _config.jsonViewMode == JsonViewMode::Pretty && ! _config.devToolsEnabled; break;
-        case ViewerWebKind::Markdown: isDefault = _config.maxDocumentMiB == 32u && _config.allowExternalNavigation && ! _config.devToolsEnabled; break;
+        case ViewerWebKind::Json:
+            isDefault = _config.maxDocumentMiB == ViewerWebSecurity::kDefaultMaxDocumentMiB && _config.jsonViewMode == JsonViewMode::Pretty &&
+                        ! _config.devToolsEnabled;
+            break;
+        case ViewerWebKind::Markdown:
+            isDefault = _config.maxDocumentMiB == ViewerWebSecurity::kDefaultMaxDocumentMiB && ! _config.allowExternalNavigation &&
+                        ! _config.devToolsEnabled;
+            break;
         case ViewerWebKind::Web:
-        default: isDefault = _config.allowExternalNavigation && ! _config.devToolsEnabled; break;
+        default:
+            isDefault = _config.maxDocumentMiB == ViewerWebSecurity::kDefaultMaxDocumentMiB && ! _config.allowExternalNavigation &&
+                        ! _config.devToolsEnabled;
+            break;
     }
     *pSomethingToSave = isDefault ? FALSE : TRUE;
     return S_OK;
@@ -2548,6 +2785,82 @@ LRESULT ViewerWeb::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
         return 0;
     }
 
+    const UINT debugSnapshotMessage = ViewerWebSecurity::GetDebugSnapshotMessage();
+    if (debugSnapshotMessage != 0u && msg == debugSnapshotMessage)
+    {
+        auto* snapshot = reinterpret_cast<ViewerWebSecurity::DebugSnapshot*>(lp);
+        if (! snapshot || snapshot->sizeBytes < sizeof(ViewerWebSecurity::DebugSnapshot))
+        {
+            return FALSE;
+        }
+
+        *snapshot                     = {};
+        snapshot->route               = _documentRoute;
+        snapshot->privateOrigin       = _internalDocumentUrl.has_value() ? TRUE : FALSE;
+        snapshot->stagedFileTracked   = _tempExtractedPath.has_value() ? TRUE : FALSE;
+        snapshot->navigationCompleted = _navigationCompleted ? TRUE : FALSE;
+        snapshot->navigationSucceeded = _navigationSucceeded ? TRUE : FALSE;
+        snapshot->generatedOutputRejected = _generatedOutputRejected ? TRUE : FALSE;
+        snapshot->loadedSourceBytes   = _loadedSourceBytes;
+        snapshot->pendingCleanupCount = g_stagedCleanupTracker.PendingCount();
+        snapshot->generatedOutputBytes = _generatedOutputBytes;
+        snapshot->generatedOutputLimit = _generatedOutputLimit;
+        snapshot->asyncLoadPostFailures = _asyncLoadPostFailureCount.load(std::memory_order_acquire);
+        snapshot->asyncSavePostFailures = _asyncSavePostFailureCount.load(std::memory_order_acquire);
+        snapshot->loadPostFailureTerminal = _loadPostFailureTerminal ? TRUE : FALSE;
+        snapshot->saveInProgress        = _saveInProgress ? TRUE : FALSE;
+        const size_t copyLength       = std::min(_allowedDocumentUrl.size(), snapshot->allowedDocumentUrl.size() - 1u);
+        std::copy_n(_allowedDocumentUrl.begin(), copyLength, snapshot->allowedDocumentUrl.begin());
+        snapshot->allowedDocumentUrl[copyLength] = L'\0';
+        snapshot->scriptsEnabled = _documentScriptsEnabled ? TRUE : FALSE;
+        if (_webView)
+        {
+            wil::com_ptr<ICoreWebView2Settings> settings;
+            if (SUCCEEDED(_webView->get_Settings(settings.put())) && settings)
+            {
+                static_cast<void>(settings->get_IsScriptEnabled(&snapshot->scriptsEnabled));
+            }
+
+            wil::unique_cotaskmem_string source;
+            if (SUCCEEDED(_webView->get_Source(source.put())) && source)
+            {
+                const std::wstring_view sourceView(source.get());
+                const size_t sourceLength = std::min(sourceView.size(), snapshot->webViewSourceUrl.size() - 1u);
+                std::copy_n(sourceView.begin(), sourceLength, snapshot->webViewSourceUrl.begin());
+                snapshot->webViewSourceUrl[sourceLength] = L'\0';
+            }
+        }
+        return TRUE;
+    }
+
+#ifdef ENABLE_TESTS
+    const UINT debugControlMessage = ViewerWebSecurity::GetDebugControlMessage();
+    if (debugControlMessage != 0u && msg == debugControlMessage)
+    {
+        switch (static_cast<ViewerWebSecurity::DebugControlAction>(wp))
+        {
+            case ViewerWebSecurity::DebugControlAction::FailNextAsyncLoadCompletionPost:
+                g_failNextAsyncLoadCompletionPost.store(true, std::memory_order_release);
+                return TRUE;
+            case ViewerWebSecurity::DebugControlAction::FailNextAsyncSaveCompletionPost:
+                g_failNextAsyncSaveCompletionPost.store(true, std::memory_order_release);
+                return TRUE;
+            case ViewerWebSecurity::DebugControlAction::SaveAsToPath:
+            {
+                auto* request = reinterpret_cast<ViewerWebSecurity::DebugSaveAsRequest*>(lp);
+                if (! request || request->sizeBytes < sizeof(ViewerWebSecurity::DebugSaveAsRequest) || ! request->destinationPath ||
+                    request->destinationPath[0] == L'\0')
+                {
+                    return FALSE;
+                }
+                request->submissionHr = StartAsyncSave(hwnd, std::filesystem::path(request->destinationPath), request->faultMask);
+                return TRUE;
+            }
+            default: return FALSE;
+        }
+    }
+#endif
+
     switch (msg)
     {
 #ifdef ENABLE_TESTS
@@ -2593,7 +2906,17 @@ LRESULT ViewerWeb::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
                 return 0;
             }
             return DefWindowProcW(hwnd, msg, wp, lp);
-        case WM_PAINT: OnPaint(hwnd); return 0;
+        case WM_PAINT:
+            if (_asyncLoadPostFailureRequestId.load(std::memory_order_acquire) != 0u)
+            {
+                OnAsyncPostFailure(kAsyncPostFailureLoad);
+            }
+            if (_asyncSavePostFailureRequestId.load(std::memory_order_acquire) != 0u)
+            {
+                OnAsyncPostFailure(kAsyncPostFailureSave);
+            }
+            OnPaint(hwnd);
+            return 0;
         case WM_ERASEBKGND: return OnEraseBkgnd(hwnd, reinterpret_cast<HDC>(wp));
         case WM_DPICHANGED: OnDpiChanged(hwnd, HIWORD(wp), reinterpret_cast<const RECT*>(lp)); return 0;
         case kAsyncLoadCompleteMessage:
@@ -2602,6 +2925,13 @@ LRESULT ViewerWeb::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
             OnAsyncLoadComplete(std::move(result));
             return 0;
         }
+        case kAsyncSaveCompleteMessage:
+        {
+            auto result = TakeMessagePayload<AsyncSaveWorkItem>(lp);
+            OnAsyncSaveComplete(std::move(result));
+            return 0;
+        }
+        case kAsyncPostFailureMessage: OnAsyncPostFailure(static_cast<UINT>(wp)); return 0;
         case WM_CLOSE: static_cast<void>(Close()); return 0;
         case WM_NCACTIVATE:
         {
@@ -2616,22 +2946,32 @@ LRESULT ViewerWeb::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
 
 void ViewerWeb::OnAsyncLoadComplete(std::unique_ptr<AsyncLoadResult> result) noexcept
 {
-    if (! result || result->viewer != this)
+    if (! result)
     {
         return;
     }
-
-    if (result->requestId != _openRequestId)
+    if (result->viewer != this)
     {
-        if (result->extractedWin32Path.has_value() && ! result->extractedWin32Path->empty())
+        if (result->extractedWin32Path.has_value())
         {
-            std::error_code ec;
-            static_cast<void>(std::filesystem::remove(result->extractedWin32Path.value(), ec));
+            DeleteStagedFileOrSchedule(result->extractedWin32Path.value());
+        }
+        return;
+    }
+
+    if (result->hwnd != _hWnd.get() || result->requestId != _openRequestId)
+    {
+        if (result->extractedWin32Path.has_value())
+        {
+            DeleteStagedFileOrSchedule(result->extractedWin32Path.value());
         }
         return;
     }
 
     _statusMessage               = result->statusMessage;
+    _generatedOutputRejected     = result->generatedOutputRejected;
+    _generatedOutputBytes        = result->generatedOutputBytes;
+    _generatedOutputLimit        = result->generatedOutputLimit;
     _jsonExpandCollapseAvailable = SUCCEEDED(result->hr) && result->jsonExpandCollapseAvailable;
     UpdateMenuState(_hWnd.get());
 
@@ -2661,61 +3001,25 @@ void ViewerWeb::OnAsyncLoadComplete(std::unique_ptr<AsyncLoadResult> result) noe
 
     _pendingPath.reset();
     _pendingWebContent.reset();
+    _generatedOutputRejected = false;
+    _generatedOutputBytes    = 0u;
+    _generatedOutputLimit    = 0u;
     _pendingDocumentUtf8.reset();
     _internalDocumentUrl.reset();
-
-    if (_kind == ViewerWebKind::Web)
+    _allowedDocumentUrl.clear();
+    if (_tempExtractedPath.has_value())
     {
-        std::optional<std::filesystem::path> navPath;
-        bool navIsTemp = false;
-
-        if (result->extractedWin32Path.has_value() && ! result->extractedWin32Path->empty())
-        {
-            navPath   = result->extractedWin32Path.value();
-            navIsTemp = true;
-        }
-        else if (IsProbablyWin32Path(result->path))
-        {
-            navPath   = std::filesystem::path(result->path);
-            navIsTemp = false;
-        }
-
-        if (navPath.has_value())
-        {
-            if (navIsTemp)
-            {
-                if (_tempExtractedPath.has_value() && _tempExtractedPath != navPath)
-                {
-                    std::error_code ec;
-                    static_cast<void>(std::filesystem::remove(_tempExtractedPath.value(), ec));
-                }
-                _tempExtractedPath = navPath;
-            }
-            else if (_tempExtractedPath.has_value())
-            {
-                std::error_code ec;
-                static_cast<void>(std::filesystem::remove(_tempExtractedPath.value(), ec));
-                _tempExtractedPath.reset();
-            }
-
-            const std::wstring url = UrlFromFilePath(navPath.value().wstring());
-            if (url.empty())
-            {
-                _statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_BUILD_FILE_URL);
-                ShowHostAlert(_hWnd.get(), HOST_ALERT_ERROR, _statusMessage);
-                if (_hWnd)
-                {
-                    InvalidateRect(_hWnd.get(), &_headerRect, FALSE);
-                }
-                return;
-            }
-
-            _pendingPath = url;
-        }
+        DeleteStagedFileOrSchedule(_tempExtractedPath.value());
     }
-    else
+    _tempExtractedPath.reset();
+    _documentRoute          = result->documentRoute;
+    _loadedSourceBytes      = result->loadedSourceBytes;
+    _documentScriptsEnabled = result->documentRoute == ViewerWebSecurity::DocumentRoute::GeneratedPrivateOrigin;
+
+    if (result->documentRoute == ViewerWebSecurity::DocumentRoute::RawHtmlPrivateOrigin ||
+        result->documentRoute == ViewerWebSecurity::DocumentRoute::GeneratedPrivateOrigin)
     {
-        if (result->utf8.empty())
+        if (result->documentRoute == ViewerWebSecurity::DocumentRoute::GeneratedPrivateOrigin && result->utf8.empty())
         {
             _statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_BUILD_HTML_DOCUMENT);
             ShowHostAlert(_hWnd.get(), HOST_ALERT_ERROR, _statusMessage);
@@ -2728,16 +3032,56 @@ void ViewerWeb::OnAsyncLoadComplete(std::unique_ptr<AsyncLoadResult> result) noe
 
         _pendingDocumentUtf8 = std::move(result->utf8);
         _internalDocumentUrl = BuildInternalDocumentUrl(_kind, result->requestId);
+        _allowedDocumentUrl  = _internalDocumentUrl.value();
         _pendingPath         = _internalDocumentUrl;
     }
+    else if (result->documentRoute == ViewerWebSecurity::DocumentRoute::StagedPdf)
+    {
+        if (! result->extractedWin32Path.has_value() || result->extractedWin32Path->empty())
+        {
+            _statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_WRITE_TEMP_FILE_FAILED);
+            ShowHostAlert(_hWnd.get(), HOST_ALERT_ERROR, _statusMessage);
+            return;
+        }
+
+        const std::filesystem::path navigationPath = result->extractedWin32Path.value();
+        _tempExtractedPath                         = navigationPath;
+        _allowedDocumentUrl = UrlFromFilePath(navigationPath.wstring());
+        if (_allowedDocumentUrl.empty())
+        {
+            _statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_BUILD_FILE_URL);
+            ShowHostAlert(_hWnd.get(), HOST_ALERT_ERROR, _statusMessage);
+            return;
+        }
+        _pendingPath = _allowedDocumentUrl;
+    }
+    else
+    {
+        _statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_BUILD_HTML_DOCUMENT);
+        ShowHostAlert(_hWnd.get(), HOST_ALERT_ERROR, _statusMessage);
+        return;
+    }
+
+    _loadPostFailureTerminal = false;
 
     if (_hWnd)
     {
         InvalidateRect(_hWnd.get(), &_headerRect, FALSE);
     }
 
-    if (SUCCEEDED(EnsureWebView2(_hWnd.get())) && _webView)
+    const HRESULT ensureHr = EnsureWebView2(_hWnd.get());
+    if (SUCCEEDED(ensureHr) && _webView)
     {
+        const HRESULT settingsHr = ConfigureWebViewSettings();
+        if (FAILED(settingsHr))
+        {
+            _statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_WEBVIEW2_INIT_FAILED);
+            Debug::Error(std::format(L"ViewerWeb: security settings could not be applied (hr=0x{:08X}).",
+                                     static_cast<unsigned long>(settingsHr)));
+            DiscardWebView2();
+            ShowHostAlert(_hWnd.get(), HOST_ALERT_ERROR, _statusMessage);
+            return;
+        }
         const HRESULT navHr = NavigatePendingContent(_hWnd.get());
         if (FAILED(navHr))
         {
@@ -2746,6 +3090,76 @@ void ViewerWeb::OnAsyncLoadComplete(std::unique_ptr<AsyncLoadResult> result) noe
                                              : _statusMessage;
             ShowHostAlert(_hWnd.get(), HOST_ALERT_ERROR, message);
         }
+    }
+}
+
+void ViewerWeb::OnAsyncSaveComplete(std::unique_ptr<AsyncSaveWorkItem> result) noexcept
+{
+    if (! result || result->viewer != this || result->hwnd != _hWnd.get() ||
+        result->requestId != _saveRequestId.load(std::memory_order_acquire))
+    {
+        return;
+    }
+
+    _saveInProgress = false;
+    if (FAILED(result->hr))
+    {
+        _statusMessage = result->statusMessage.empty() ? LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_SAVE_AS_FAILED)
+                                                        : std::move(result->statusMessage);
+        if (_hWnd)
+        {
+            InvalidateRect(_hWnd.get(), &_headerRect, FALSE);
+        }
+        ShowHostAlert(_hWnd.get(), HOST_ALERT_ERROR, _statusMessage);
+    }
+    else
+    {
+        _statusMessage.clear();
+        if (_hWnd)
+        {
+            InvalidateRect(_hWnd.get(), &_headerRect, FALSE);
+        }
+    }
+}
+
+void ViewerWeb::OnAsyncPostFailure(UINT operationKind) noexcept
+{
+    if (operationKind == kAsyncPostFailureLoad)
+    {
+        const uint64_t requestId = _asyncLoadPostFailureRequestId.exchange(0u, std::memory_order_acq_rel);
+        if (requestId == 0u || requestId != _openRequestId)
+        {
+            return;
+        }
+        _jsonExpandCollapseAvailable = false;
+        _loadPostFailureTerminal = true;
+        _statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_READ_FILE_FAILED);
+    }
+    else if (operationKind == kAsyncPostFailureSave)
+    {
+        const uint64_t requestId = _asyncSavePostFailureRequestId.exchange(0u, std::memory_order_acq_rel);
+        if (requestId == 0u || requestId != _saveRequestId.load(std::memory_order_acquire))
+        {
+            return;
+        }
+        _saveInProgress = false;
+        const HRESULT saveHr = _asyncSavePostFailureHr.load(std::memory_order_relaxed);
+        if (SUCCEEDED(saveHr))
+        {
+            return;
+        }
+        _statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_SAVE_AS_FAILED);
+    }
+    else
+    {
+        return;
+    }
+
+    UpdateMenuState(_hWnd.get());
+    if (_hWnd)
+    {
+        InvalidateRect(_hWnd.get(), &_headerRect, FALSE);
+        ShowHostAlert(_hWnd.get(), HOST_ALERT_ERROR, _statusMessage);
     }
 }
 
@@ -2760,9 +3174,9 @@ void ViewerWeb::Layout(HWND hwnd) noexcept
     ComputeLayoutRects(hwnd);
 
     const UINT dpi       = GetDpiForWindow(hwnd);
-    const int minPadding = PxFromDip(RedSalamander::ViewerFileComboHost::kStandaloneComboChromePaddingDip, dpi);
-    const int accentH    = std::max(1, PxFromDip(RedSalamander::ViewerFileComboHost::kStandaloneComboAccentHeightDip, dpi));
-    const int accentGap  = std::max(1, PxFromDip(RedSalamander::ViewerFileComboHost::kStandaloneComboAccentGapDip, dpi));
+    const int minPadding = static_cast<int>(Common::WindowSizing::DipToPixelRounded(dpi, RedSalamander::ViewerFileComboHost::kStandaloneComboChromePaddingDip));
+    const int accentH    = std::max(1, static_cast<int>(Common::WindowSizing::DipToPixelRounded(dpi, RedSalamander::ViewerFileComboHost::kStandaloneComboAccentHeightDip)));
+    const int accentGap  = std::max(1, static_cast<int>(Common::WindowSizing::DipToPixelRounded(dpi, RedSalamander::ViewerFileComboHost::kStandaloneComboAccentGapDip)));
     const bool showCombo = _hFileComboHost && ! _embeddedMode && _otherFiles.size() > 1;
 
     RECT headerContentRect{};
@@ -2787,8 +3201,8 @@ void ViewerWeb::Layout(HWND hwnd) noexcept
 
         if (showCombo)
         {
-            const int statusReserveW = _statusMessage.empty() ? 0 : PxFromDip(160, dpi);
-            const int margin         = PxFromDip(10, dpi);
+            const int statusReserveW = _statusMessage.empty() ? 0 : static_cast<int>(Common::WindowSizing::DipToPixelRounded(dpi, 160));
+            const int margin         = static_cast<int>(Common::WindowSizing::DipToPixelRounded(dpi, 10));
 
             const int comboX = headerContentRect.left + margin;
             int rightLimit   = std::max<LONG>(headerContentRect.left, headerContentRect.right) - margin;
@@ -2798,7 +3212,7 @@ void ViewerWeb::Layout(HWND hwnd) noexcept
             }
             const int comboW = std::max(0, rightLimit - comboX);
 
-            int comboH = std::max(1, MulDiv(32, static_cast<int>(dpi), 96));
+            int comboH = std::max(1L, Common::WindowSizing::DipToPixelRounded(dpi, 32));
             comboH     = std::clamp(comboH, 1, std::max(1, headerContentH));
 
             int comboY          = headerContentRect.top + std::max(0, (headerContentH - comboH) / 2);
@@ -2809,12 +3223,17 @@ void ViewerWeb::Layout(HWND hwnd) noexcept
             }
 
             const bool expandPopupHost = _fileComboHostPreExpandPopup || (_fileComboControl && _fileComboControl->DebugIsPopupOpen());
-            const int hostHeight       = comboH + (expandPopupHost ? ComputeWindowComboPopupHeightPx(_otherFiles.size(), dpi) : 0);
+            const int hostHeight = comboH +
+                                   (expandPopupHost ? RedSalamander::ViewerFileComboHost::ComputeStandaloneComboPopupHeightPx(
+                                                          _otherFiles.size(), dpi)
+                                                    : 0);
             SetWindowPos(_hFileComboHost.get(), HWND_TOP, comboX, comboY, comboW, hostHeight, SWP_NOACTIVATE);
             if (_fileComboControl)
             {
-                _fileComboControl->SetBounds(D2D1::RectF(
-                    0.0f, 0.0f, static_cast<float>(comboW) * 96.0f / static_cast<float>(dpi), static_cast<float>(comboH) * 96.0f / static_cast<float>(dpi)));
+                _fileComboControl->SetBounds(D2D1::RectF(0.0f,
+                                                         0.0f,
+                                                         Common::WindowSizing::PixelToDip(static_cast<float>(comboW), static_cast<float>(dpi)),
+                                                         Common::WindowSizing::PixelToDip(static_cast<float>(comboH), static_cast<float>(dpi))));
                 _fileComboHost.Invalidate();
             }
         }
@@ -2841,15 +3260,17 @@ void ViewerWeb::ComputeLayoutRects(HWND hwnd) noexcept
 
     client.top += _menuBarHost.GetHwnd() ? _menuBarHost.GetVisibleHeightPx() : 0;
 
-    const UINT dpi               = GetDpiForWindow(hwnd);
-    const int baseHeaderHeight   = _embeddedMode ? 0 : MulDiv(kHeaderHeightDip, static_cast<int>(dpi), 96);
-    const int accentH            = std::max(1, PxFromDip(RedSalamander::ViewerFileComboHost::kStandaloneComboAccentHeightDip, dpi));
-    const int accentGap          = std::max(1, PxFromDip(RedSalamander::ViewerFileComboHost::kStandaloneComboAccentGapDip, dpi));
-    const int minPadding         = PxFromDip(RedSalamander::ViewerFileComboHost::kStandaloneComboChromePaddingDip, dpi);
+    const UINT dpi             = GetDpiForWindow(hwnd);
+    const int baseHeaderHeight = _embeddedMode ? 0 : Common::WindowSizing::DipToPixelRounded(dpi, kHeaderHeightDip);
+    const int accentH =
+        std::max(1L, Common::WindowSizing::DipToPixelRounded(dpi, RedSalamander::ViewerFileComboHost::kStandaloneComboAccentHeightDip));
+    const int accentGap =
+        std::max(1L, Common::WindowSizing::DipToPixelRounded(dpi, RedSalamander::ViewerFileComboHost::kStandaloneComboAccentGapDip));
+    const int minPadding = Common::WindowSizing::DipToPixelRounded(dpi, RedSalamander::ViewerFileComboHost::kStandaloneComboChromePaddingDip);
     const bool showCombo         = _hFileComboHost && ! _embeddedMode && _otherFiles.size() > 1;
-    const int desiredComboHeight = std::max(1, PxFromDip(RedSalamander::ViewerFileComboHost::kStandaloneComboHeightDip, dpi));
+    const int desiredComboHeight = std::max(1, static_cast<int>(Common::WindowSizing::DipToPixelRounded(dpi, RedSalamander::ViewerFileComboHost::kStandaloneComboHeightDip)));
 
-    const int minChromeHeight = MulDiv(22, static_cast<int>(dpi), 96) + accentH + accentGap + 2 * minPadding;
+    const int minChromeHeight = Common::WindowSizing::DipToPixelRounded(dpi, 22) + accentH + accentGap + 2 * minPadding;
     int headerH               = _embeddedMode ? 0 : std::max(baseHeaderHeight, minChromeHeight);
     if (showCombo)
     {
@@ -2912,7 +3333,12 @@ void ViewerWeb::UpdateMenuState(HWND hwnd, bool syncDxMenuBar) noexcept
 
     const bool jsonInteractiveMode = _kind == ViewerWebKind::Json && _jsonExpandCollapseAvailable;
 
-    EnableMenuItem(menu, IDM_VIEWERWEB_VIEW_DEVTOOLS, static_cast<UINT>(MF_BYCOMMAND | (_config.devToolsEnabled ? MF_ENABLED : MF_GRAYED)));
+    EnableMenuItem(menu,
+                   IDM_VIEWERWEB_VIEW_DEVTOOLS,
+                   static_cast<UINT>(MF_BYCOMMAND | (_documentScriptsEnabled && _config.devToolsEnabled ? MF_ENABLED : MF_GRAYED)));
+    EnableMenuItem(menu,
+                   IDM_VIEWERWEB_TOOLS_OPEN_EXTERNAL,
+                   static_cast<UINT>(MF_BYCOMMAND | (_config.allowExternalNavigation ? MF_ENABLED : MF_GRAYED)));
 
     EnableMenuItem(menu, IDM_VIEWERWEB_TOOLS_JSON_EXPAND_ALL, static_cast<UINT>(MF_BYCOMMAND | (jsonInteractiveMode ? MF_ENABLED : MF_GRAYED)));
     EnableMenuItem(menu, IDM_VIEWERWEB_TOOLS_JSON_COLLAPSE_ALL, static_cast<UINT>(MF_BYCOMMAND | (jsonInteractiveMode ? MF_ENABLED : MF_GRAYED)));
@@ -2940,39 +3366,7 @@ void ViewerWeb::ApplyTitleBarTheme(bool windowActive) noexcept
         return;
     }
 
-    static constexpr DWORD kDwmwaUseImmersiveDarkMode19 = 19u;
-    static constexpr DWORD kDwmwaUseImmersiveDarkMode20 = 20u;
-    static constexpr DWORD kDwmwaBorderColor            = 34u;
-    static constexpr DWORD kDwmwaCaptionColor           = 35u;
-    static constexpr DWORD kDwmwaTextColor              = 36u;
-    static constexpr DWORD kDwmColorDefault             = 0xFFFFFFFFu;
-
-    const BOOL darkMode = (_theme.darkMode && ! _theme.highContrast) ? TRUE : FALSE;
-    DwmSetWindowAttribute(_hWnd.get(), kDwmwaUseImmersiveDarkMode20, &darkMode, sizeof(darkMode));
-    DwmSetWindowAttribute(_hWnd.get(), kDwmwaUseImmersiveDarkMode19, &darkMode, sizeof(darkMode));
-
-    DWORD borderValue  = kDwmColorDefault;
-    DWORD captionValue = kDwmColorDefault;
-    DWORD textValue    = kDwmColorDefault;
-    if (! _theme.highContrast && _theme.rainbowMode)
-    {
-        COLORREF accent = ResolveAccentColor(_theme, L"title");
-        if (! windowActive)
-        {
-            static constexpr uint8_t kInactiveTitleBlendAlpha = 223u; // ~7/8 toward background
-            const COLORREF bg                                 = ColorRefFromArgb(_theme.backgroundArgb);
-            accent                                            = BlendColor(accent, bg, kInactiveTitleBlendAlpha);
-        }
-
-        const COLORREF text = ContrastingTextColor(accent);
-        borderValue         = static_cast<DWORD>(accent);
-        captionValue        = static_cast<DWORD>(accent);
-        textValue           = static_cast<DWORD>(text);
-    }
-
-    DwmSetWindowAttribute(_hWnd.get(), kDwmwaBorderColor, &borderValue, sizeof(borderValue));
-    DwmSetWindowAttribute(_hWnd.get(), kDwmwaCaptionColor, &captionValue, sizeof(captionValue));
-    DwmSetWindowAttribute(_hWnd.get(), kDwmwaTextColor, &textValue, sizeof(textValue));
+    RedSalamander::ViewerChrome::ApplyTitleBarTheme(_hWnd.get(), _theme, windowActive, L"title");
 }
 
 void ViewerWeb::ApplyMenuTheme(HWND hwnd) noexcept
@@ -3137,15 +3531,120 @@ HRESULT ViewerWeb::OpenCurrentDocumentInTextViewer() noexcept
     return hostViewers->OpenViewer(&request);
 }
 
+HRESULT ViewerWeb::HandleNavigationStarting(ICoreWebView2NavigationStartingEventArgs* args,
+                                            ViewerWebSecurity::NavigationSurface surface) noexcept
+{
+    if (! args)
+    {
+        return E_POINTER;
+    }
+
+    wil::unique_cotaskmem_string uri;
+    const HRESULT uriHr = args->get_Uri(uri.put());
+    BOOL userInitiated  = FALSE;
+    static_cast<void>(args->get_IsUserInitiated(&userInitiated));
+    if (FAILED(uriHr) || ! uri)
+    {
+        const HRESULT cancelHr = args->put_Cancel(TRUE);
+        if (FAILED(cancelHr))
+        {
+            _statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_WEBVIEW2_INIT_FAILED);
+            Debug::Error(std::format(L"ViewerWeb: failed to cancel an unreadable navigation request (hr=0x{:08X}).",
+                                     static_cast<unsigned long>(cancelHr)));
+            DiscardWebView2();
+            ShowHostAlert(_hWnd.get(), HOST_ALERT_ERROR, _statusMessage);
+            return cancelHr;
+        }
+        return S_OK;
+    }
+
+    const ViewerWebSecurity::NavigationAction action = ViewerWebSecurity::EvaluateNavigation(
+        uri.get(), surface, userInitiated != FALSE, _config.allowExternalNavigation, _allowedDocumentUrl);
+    if (action == ViewerWebSecurity::NavigationAction::AllowInViewer)
+    {
+        return S_OK;
+    }
+
+    const HRESULT cancelHr = args->put_Cancel(TRUE);
+    if (FAILED(cancelHr))
+    {
+        // Do not launch an external browser unless the in-view request was
+        // successfully canceled first. Close the partially trusted controller
+        // so a failed Cancel call cannot continue the navigation in-view.
+        _statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_WEBVIEW2_INIT_FAILED);
+        Debug::Error(std::format(L"ViewerWeb: failed to cancel a blocked navigation (hr=0x{:08X}).", static_cast<unsigned long>(cancelHr)));
+        DiscardWebView2();
+        ShowHostAlert(_hWnd.get(), HOST_ALERT_ERROR, _statusMessage);
+        return cancelHr;
+    }
+    if (action == ViewerWebSecurity::NavigationAction::OpenExternal)
+    {
+        const HINSTANCE shellResult = ShellExecuteW(_hWnd.get(), L"open", uri.get(), nullptr, nullptr, SW_SHOWNORMAL);
+        if (reinterpret_cast<INT_PTR>(shellResult) <= 32)
+        {
+            Debug::Warning(L"ViewerWeb: the system browser rejected an allowlisted external navigation.");
+        }
+    }
+    return S_OK;
+}
+
+HRESULT ViewerWeb::HandleNewWindowRequested(ICoreWebView2NewWindowRequestedEventArgs* args) noexcept
+{
+    if (! args)
+    {
+        return E_POINTER;
+    }
+
+    wil::unique_cotaskmem_string uri;
+    const HRESULT uriHr = args->get_Uri(uri.put());
+    BOOL userInitiated  = FALSE;
+    static_cast<void>(args->get_IsUserInitiated(&userInitiated));
+    const HRESULT handledHr = args->put_Handled(TRUE);
+    if (FAILED(handledHr))
+    {
+        // Failing to suppress the WebView popup is a terminal policy failure;
+        // close the controller and never launch a second external copy.
+        _statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_WEBVIEW2_INIT_FAILED);
+        Debug::Error(std::format(L"ViewerWeb: failed to suppress a new-window request (hr=0x{:08X}).", static_cast<unsigned long>(handledHr)));
+        DiscardWebView2();
+        ShowHostAlert(_hWnd.get(), HOST_ALERT_ERROR, _statusMessage);
+        return handledHr;
+    }
+    if (FAILED(uriHr) || ! uri)
+    {
+        return S_OK;
+    }
+
+    const ViewerWebSecurity::NavigationAction action = ViewerWebSecurity::EvaluateNavigation(uri.get(),
+                                                                                              ViewerWebSecurity::NavigationSurface::NewWindow,
+                                                                                              userInitiated != FALSE,
+                                                                                              _config.allowExternalNavigation,
+                                                                                              _allowedDocumentUrl);
+    if (action == ViewerWebSecurity::NavigationAction::OpenExternal)
+    {
+        const HINSTANCE shellResult = ShellExecuteW(_hWnd.get(), L"open", uri.get(), nullptr, nullptr, SW_SHOWNORMAL);
+        if (reinterpret_cast<INT_PTR>(shellResult) <= 32)
+        {
+            Debug::Warning(L"ViewerWeb: the system browser rejected an allowlisted new-window navigation.");
+        }
+    }
+    return S_OK;
+}
+
 HRESULT ViewerWeb::CreateControllerFromEnvironment(HWND hwnd, ICoreWebView2Environment* environment, uint64_t sharedEnvironmentGeneration) noexcept
 {
-    auto moduleKeepAlive = AcquireModuleReferenceFromAddress(&kViewerWebModuleAnchor);
-    auto callback =
-        MakeComCallback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler, HRESULT, ICoreWebView2Controller*>(
-            [this, hwnd, sharedEnvironmentGeneration, moduleKeepAlive = std::move(moduleKeepAlive)](
-                HRESULT controllerResult, ICoreWebView2Controller* controller) -> HRESULT
+    if (! environment)
     {
-        static_cast<void>(moduleKeepAlive);
+        _webViewInitInProgress = false;
+        Release();
+        return E_POINTER;
+    }
+
+    wil::com_ptr<ICoreWebView2Environment> controllerEnvironment = environment;
+    auto callback        = MakeComCallback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler, HRESULT, ICoreWebView2Controller*>(
+        [this, hwnd, sharedEnvironmentGeneration, controllerEnvironment = std::move(controllerEnvironment)](
+            HRESULT controllerResult, ICoreWebView2Controller* controller) -> HRESULT
+    {
         _webViewInitInProgress = false;
         auto releaseSelf       = wil::scope_exit([&] { Release(); });
 
@@ -3177,95 +3676,114 @@ HRESULT ViewerWeb::CreateControllerFromEnvironment(HWND hwnd, ICoreWebView2Envir
         if (FAILED(webViewHr) || ! webView)
         {
             ShowHostAlert(hwnd, HOST_ALERT_ERROR, LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_WEBVIEW2_INIT_FAILED));
-            _webViewController = nullptr;
+            DiscardWebView2();
             return S_OK;
         }
 
         _webView = std::move(webView);
 
-        // Configure settings once — these don't change between navigations.
-        ConfigureWebViewSettings();
+        const auto failSecuritySetup = [&](HRESULT failureHr) noexcept -> HRESULT
+        {
+            Debug::Error(std::format(L"ViewerWeb: fail-closed WebView2 security setup failed (hr=0x{:08X}).",
+                                     static_cast<unsigned long>(failureHr)));
+            _statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_WEBVIEW2_INIT_FAILED);
+            DiscardWebView2();
+            ShowHostAlert(hwnd, HOST_ALERT_ERROR, _statusMessage);
+            if (_hWnd)
+            {
+                InvalidateRect(_hWnd.get(), &_headerRect, FALSE);
+            }
+            return S_OK;
+        };
 
-        static_cast<void>(_webView->add_NavigationStarting(
+        // Security-critical settings and event hooks must all exist before the
+        // first navigation. A partially configured controller is discarded.
+        HRESULT securityHr = ConfigureWebViewSettings();
+        if (FAILED(securityHr))
+        {
+            return failSecuritySetup(securityHr);
+        }
+
+        auto topNavigationHandler =
             MakeComCallback<ICoreWebView2NavigationStartingEventHandler, ICoreWebView2*, ICoreWebView2NavigationStartingEventArgs*>(
                 [this](ICoreWebView2* /*sender*/, ICoreWebView2NavigationStartingEventArgs* args) -> HRESULT
+        { return HandleNavigationStarting(args, ViewerWebSecurity::NavigationSurface::TopLevel); });
+        if (! topNavigationHandler)
         {
-            if (! args)
-            {
-                return S_OK;
-            }
-
-            wil::unique_cotaskmem_string uri;
-            static_cast<void>(args->get_Uri(uri.put()));
-            if (! uri)
-            {
-                return S_OK;
-            }
-
-            const std::wstring_view url(uri.get());
-            const bool isHttp             = OrdinalString::StartsWithNoCase(url, L"http://") || OrdinalString::StartsWithNoCase(url, L"https://");
-            const bool isAbout            = OrdinalString::StartsWithNoCase(url, L"about:");
-            const bool isData             = OrdinalString::StartsWithNoCase(url, L"data:");
-            const bool isInternalDocument = _internalDocumentUrl.has_value() && OrdinalString::EqualsNoCase(url, _internalDocumentUrl.value());
-
-            if (_kind == ViewerWebKind::Web)
-            {
-                if (isHttp && ! _config.allowExternalNavigation)
-                {
-                    static_cast<void>(args->put_Cancel(TRUE));
-                }
-                return S_OK;
-            }
-
-            // JSON/Markdown: keep viewer content stable and open external links in the system browser.
-            if (isInternalDocument)
-            {
-                return S_OK;
-            }
-
-            if (isHttp)
-            {
-                static_cast<void>(args->put_Cancel(TRUE));
-                ShellExecuteW(nullptr, L"open", uri.get(), nullptr, nullptr, SW_SHOWNORMAL);
-                return S_OK;
-            }
-
-            if (! isAbout && ! isData)
-            {
-                static_cast<void>(args->put_Cancel(TRUE));
-            }
-
-            return S_OK;
-        }).get(),
-            &_navStartingToken));
-
-        static_cast<void>(_webView->AddWebResourceRequestedFilter(kInternalDocumentFilter.data(), COREWEBVIEW2_WEB_RESOURCE_CONTEXT_DOCUMENT));
-        static_cast<void>(_webView->add_WebResourceRequested(
-            MakeComCallback<ICoreWebView2WebResourceRequestedEventHandler, ICoreWebView2*, ICoreWebView2WebResourceRequestedEventArgs*>(
-                [this](ICoreWebView2* /*sender*/, ICoreWebView2WebResourceRequestedEventArgs* args) -> HRESULT
+            return failSecuritySetup(E_OUTOFMEMORY);
+        }
+        securityHr = _webView->add_NavigationStarting(topNavigationHandler.get(), &_navStartingToken);
+        if (FAILED(securityHr))
         {
-            if (! args || ! g_sharedEnvironment.environment)
+            return failSecuritySetup(securityHr);
+        }
+
+        auto frameNavigationHandler =
+            MakeComCallback<ICoreWebView2NavigationStartingEventHandler, ICoreWebView2*, ICoreWebView2NavigationStartingEventArgs*>(
+                [this](ICoreWebView2* /*sender*/, ICoreWebView2NavigationStartingEventArgs* args) -> HRESULT
+        { return HandleNavigationStarting(args, ViewerWebSecurity::NavigationSurface::Frame); });
+        if (! frameNavigationHandler)
+        {
+            return failSecuritySetup(E_OUTOFMEMORY);
+        }
+        securityHr = _webView->add_FrameNavigationStarting(frameNavigationHandler.get(), &_frameNavStartingToken);
+        if (FAILED(securityHr))
+        {
+            return failSecuritySetup(securityHr);
+        }
+
+        auto newWindowHandler =
+            MakeComCallback<ICoreWebView2NewWindowRequestedEventHandler, ICoreWebView2*, ICoreWebView2NewWindowRequestedEventArgs*>(
+                [this](ICoreWebView2* /*sender*/, ICoreWebView2NewWindowRequestedEventArgs* args) -> HRESULT
+        { return HandleNewWindowRequested(args); });
+        if (! newWindowHandler)
+        {
+            return failSecuritySetup(E_OUTOFMEMORY);
+        }
+        securityHr = _webView->add_NewWindowRequested(newWindowHandler.get(), &_newWindowRequestedToken);
+        if (FAILED(securityHr))
+        {
+            return failSecuritySetup(securityHr);
+        }
+
+        wil::com_ptr<ICoreWebView2Environment> environmentKeepAlive = controllerEnvironment;
+        auto webResourceHandler = MakeComCallback<ICoreWebView2WebResourceRequestedEventHandler, ICoreWebView2*, ICoreWebView2WebResourceRequestedEventArgs*>(
+            [this, environmentKeepAlive = std::move(environmentKeepAlive)](ICoreWebView2* /*sender*/,
+                                                                           ICoreWebView2WebResourceRequestedEventArgs* args) -> HRESULT
+        {
+            const auto failInternalRequest = [&](HRESULT failureHr) noexcept -> HRESULT
             {
-                return S_OK;
+                _statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_WEBVIEW2_INIT_FAILED);
+                Debug::Error(std::format(L"ViewerWeb: failed to intercept the private-origin document request (hr=0x{:08X}).",
+                                         static_cast<unsigned long>(failureHr)));
+                DiscardWebView2();
+                ShowHostAlert(_hWnd.get(), HOST_ALERT_ERROR, _statusMessage);
+                return failureHr;
+            };
+
+            if (! args || ! environmentKeepAlive)
+            {
+                return failInternalRequest(E_POINTER);
             }
 
             wil::com_ptr<ICoreWebView2WebResourceRequest> request;
-            if (FAILED(args->get_Request(request.put())) || ! request)
+            const HRESULT requestHr = args->get_Request(request.put());
+            if (FAILED(requestHr) || ! request)
             {
-                return S_OK;
+                return failInternalRequest(FAILED(requestHr) ? requestHr : E_NOINTERFACE);
             }
 
             wil::unique_cotaskmem_string uri;
-            static_cast<void>(request->get_Uri(uri.put()));
-            if (! uri)
+            const HRESULT uriHr = request->get_Uri(uri.put());
+            if (FAILED(uriHr) || ! uri)
             {
-                return S_OK;
+                return failInternalRequest(FAILED(uriHr) ? uriHr : E_INVALIDARG);
             }
 
             const std::wstring_view requestUrl(uri.get());
             if (! IsInternalDocumentUrl(requestUrl))
             {
-                return S_OK;
+                return failInternalRequest(E_ACCESSDENIED);
             }
 
             wil::com_ptr<ICoreWebView2WebResourceResponse> response;
@@ -3277,34 +3795,59 @@ HRESULT ViewerWeb::CreateControllerFromEnvironment(HWND hwnd, ICoreWebView2Envir
                 stream.attach(SHCreateMemStream(data, size));
                 if (! stream)
                 {
-                    return E_OUTOFMEMORY;
+                    return failInternalRequest(E_OUTOFMEMORY);
                 }
 
-                const HRESULT responseHr = g_sharedEnvironment.environment->CreateWebResourceResponse(
-                    stream.get(), 200, L"OK", L"Content-Type: text/html; charset=utf-8\r\nCache-Control: no-store\r\n", response.put());
+                const wchar_t* responseHeaders = _documentRoute == ViewerWebSecurity::DocumentRoute::RawHtmlPrivateOrigin
+                                                     ? ViewerWebSecurity::kRawHtmlResponseHeaders
+                                                     : ViewerWebSecurity::kGeneratedDocumentResponseHeaders;
+                const HRESULT responseHr =
+                    environmentKeepAlive->CreateWebResourceResponse(stream.get(), 200, L"OK", responseHeaders, response.put());
                 if (FAILED(responseHr) || ! response)
                 {
-                    return responseHr;
+                    return failInternalRequest(FAILED(responseHr) ? responseHr : E_NOINTERFACE);
                 }
             }
             else
             {
-                const HRESULT responseHr = g_sharedEnvironment.environment->CreateWebResourceResponse(
+                const HRESULT responseHr = environmentKeepAlive->CreateWebResourceResponse(
                     nullptr, 404, L"Not Found", L"Content-Type: text/plain; charset=utf-8\r\nCache-Control: no-store\r\n", response.put());
                 if (FAILED(responseHr) || ! response)
                 {
-                    return responseHr;
+                    return failInternalRequest(FAILED(responseHr) ? responseHr : E_NOINTERFACE);
                 }
             }
 
-            return args->put_Response(response.get());
-        }).get(),
-            &_webResourceRequestedToken));
+            const HRESULT installResponseHr = args->put_Response(response.get());
+            return FAILED(installResponseHr) ? failInternalRequest(installResponseHr) : S_OK;
+        });
+        if (! webResourceHandler)
+        {
+            return failSecuritySetup(E_OUTOFMEMORY);
+        }
+        securityHr = _webView->add_WebResourceRequested(webResourceHandler.get(), &_webResourceRequestedToken);
+        if (FAILED(securityHr))
+        {
+            return failSecuritySetup(securityHr);
+        }
+        securityHr =
+            _webView->AddWebResourceRequestedFilter(ViewerWebSecurity::kInternalDocumentFilter.data(), COREWEBVIEW2_WEB_RESOURCE_CONTEXT_DOCUMENT);
+        if (FAILED(securityHr))
+        {
+            return failSecuritySetup(securityHr);
+        }
 
         static_cast<void>(_webView->add_NavigationCompleted(
             MakeComCallback<ICoreWebView2NavigationCompletedEventHandler, ICoreWebView2*, ICoreWebView2NavigationCompletedEventArgs*>(
-                [this](ICoreWebView2* /*sender*/, ICoreWebView2NavigationCompletedEventArgs* /*args*/) -> HRESULT
+                [this](ICoreWebView2* /*sender*/, ICoreWebView2NavigationCompletedEventArgs* args) -> HRESULT
         {
+            BOOL succeeded = FALSE;
+            if (args)
+            {
+                static_cast<void>(args->get_IsSuccess(&succeeded));
+            }
+            _navigationCompleted = true;
+            _navigationSucceeded = succeeded != FALSE;
             ApplyWebViewThemeScript();
             return S_OK;
         }).get(),
@@ -3529,6 +4072,8 @@ HRESULT ViewerWeb::NavigatePendingContent(HWND /*hwnd*/) noexcept
     {
         const std::wstring url = std::move(_pendingPath.value());
         _pendingPath.reset();
+        _navigationCompleted = false;
+        _navigationSucceeded = false;
         return _webView->Navigate(url.c_str());
     }
 
@@ -3542,6 +4087,8 @@ HRESULT ViewerWeb::NavigatePendingContent(HWND /*hwnd*/) noexcept
             return E_INVALIDARG;
         }
 
+        _navigationCompleted = false;
+        _navigationSucceeded = false;
         const HRESULT navHr = _webView->NavigateToString(html.c_str());
         if (FAILED(navHr))
         {
@@ -3552,6 +4099,8 @@ HRESULT ViewerWeb::NavigatePendingContent(HWND /*hwnd*/) noexcept
 
     if (_pendingDocumentUtf8.has_value() && _internalDocumentUrl.has_value())
     {
+        _navigationCompleted = false;
+        _navigationSucceeded = false;
         return _webView->Navigate(_internalDocumentUrl->c_str());
     }
 
@@ -3597,12 +4146,9 @@ HRESULT ViewerWeb::EnsureWebView2(HWND hwnd) noexcept
 
     const std::wstring userDataFolder = GetWebView2UserDataFolder();
 
-    auto moduleKeepAlive = AcquireModuleReferenceFromAddress(&kViewerWebModuleAnchor);
     auto callback        = MakeComCallback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler, HRESULT, ICoreWebView2Environment*>(
-        [this, hwnd, sharedEnvironmentGeneration, moduleKeepAlive = std::move(moduleKeepAlive)](
-            HRESULT result, ICoreWebView2Environment* environment) -> HRESULT
+        [this, hwnd, sharedEnvironmentGeneration](HRESULT result, ICoreWebView2Environment* environment) -> HRESULT
     {
-        static_cast<void>(moduleKeepAlive);
         if (! IsSharedEnvironmentGenerationCurrent(sharedEnvironmentGeneration))
         {
             _webViewInitInProgress = false;
@@ -3659,12 +4205,13 @@ HRESULT ViewerWeb::EnsureWebView2(HWND hwnd) noexcept
     {
         g_sharedEnvironment.createInProgress = false;
         _webViewInitInProgress               = false;
+        _statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_WEBVIEW2_INIT_FAILED);
+        ShowHostAlert(hwnd, HOST_ALERT_ERROR, _statusMessage);
         Release();
         return E_OUTOFMEMORY;
     }
 
-    const HRESULT hr = CreateCoreWebView2EnvironmentWithOptions(
-        nullptr, userDataFolder.empty() ? nullptr : userDataFolder.c_str(), nullptr, callback.get());
+    const HRESULT hr = CreateCoreWebView2EnvironmentWithOptions(nullptr, userDataFolder.empty() ? nullptr : userDataFolder.c_str(), nullptr, callback.get());
 
     if (FAILED(hr))
     {
@@ -3690,11 +4237,15 @@ void ViewerWeb::DiscardWebView2() noexcept
     if (_webView)
     {
         static_cast<void>(_webView->remove_NavigationStarting(_navStartingToken));
+        static_cast<void>(_webView->remove_FrameNavigationStarting(_frameNavStartingToken));
+        static_cast<void>(_webView->remove_NewWindowRequested(_newWindowRequestedToken));
         static_cast<void>(_webView->remove_NavigationCompleted(_navCompletedToken));
         static_cast<void>(_webView->remove_WebResourceRequested(_webResourceRequestedToken));
     }
 
     _navStartingToken          = {};
+    _frameNavStartingToken     = {};
+    _newWindowRequestedToken   = {};
     _navCompletedToken         = {};
     _accelToken                = {};
     _webResourceRequestedToken = {};
@@ -3720,28 +4271,49 @@ void ViewerWeb::CancelPendingWebView2Initialization() noexcept
     _webViewInitInProgress = false;
 }
 
-void ViewerWeb::ConfigureWebViewSettings() noexcept
+HRESULT ViewerWeb::ConfigureWebViewSettings() noexcept
 {
     if (! _webView)
     {
-        return;
+        return E_UNEXPECTED;
     }
 
     wil::com_ptr<ICoreWebView2Settings> settings;
-    if (SUCCEEDED(_webView->get_Settings(settings.put())) && settings)
+    const HRESULT settingsHr = _webView->get_Settings(settings.put());
+    if (FAILED(settingsHr) || ! settings)
     {
-        static_cast<void>(settings->put_IsScriptEnabled(TRUE));
-        static_cast<void>(settings->put_IsWebMessageEnabled(TRUE));
-        static_cast<void>(settings->put_AreDefaultContextMenusEnabled(TRUE));
-        static_cast<void>(settings->put_IsZoomControlEnabled(TRUE));
-        static_cast<void>(settings->put_AreDevToolsEnabled(_config.devToolsEnabled ? TRUE : FALSE));
-
-        wil::com_ptr<ICoreWebView2Settings3> settings3;
-        if (SUCCEEDED(settings->QueryInterface(IID_PPV_ARGS(settings3.put()))) && settings3)
-        {
-            static_cast<void>(settings3->put_AreBrowserAcceleratorKeysEnabled(TRUE));
-        }
+        return FAILED(settingsHr) ? settingsHr : E_NOINTERFACE;
     }
+
+    // These settings are part of the document isolation boundary. A prior
+    // generated page may have enabled scripting, so every route transition
+    // must apply all three successfully before navigation can proceed.
+    HRESULT hr = settings->put_IsScriptEnabled(_documentScriptsEnabled ? TRUE : FALSE);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+    hr = settings->put_IsWebMessageEnabled(_documentScriptsEnabled ? TRUE : FALSE);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+    hr = settings->put_AreDevToolsEnabled(_documentScriptsEnabled && _config.devToolsEnabled ? TRUE : FALSE);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    static_cast<void>(settings->put_AreDefaultContextMenusEnabled(TRUE));
+    static_cast<void>(settings->put_IsZoomControlEnabled(TRUE));
+
+    wil::com_ptr<ICoreWebView2Settings3> settings3;
+    if (SUCCEEDED(settings->QueryInterface(IID_PPV_ARGS(settings3.put()))) && settings3)
+    {
+        static_cast<void>(settings3->put_AreBrowserAcceleratorKeysEnabled(TRUE));
+    }
+
+    return S_OK;
 }
 
 void ViewerWeb::ApplyWebViewThemeScript() noexcept
@@ -3761,7 +4333,7 @@ void ViewerWeb::ApplyWebViewThemeScript() noexcept
         }
     }
 
-    if (_webView)
+    if (_webView && _documentScriptsEnabled)
     {
         if (_hasTheme)
         {
@@ -3848,6 +4420,9 @@ HRESULT ViewerWeb::OpenPath(HWND hwnd, const std::wstring& path, bool updateOthe
 
     _statusMessage               = LoadStringResource(g_hInstance, IDS_VIEWERWEB_STATUS_LOADING);
     _jsonExpandCollapseAvailable = false;
+    _generatedOutputRejected     = false;
+    _generatedOutputBytes        = 0u;
+    _generatedOutputLimit        = 0u;
     _pendingPath.reset();
     _pendingWebContent.reset();
 
@@ -3899,6 +4474,8 @@ void ViewerWeb::RefreshFileCombo(HWND hwnd) noexcept
 
 HRESULT ViewerWeb::StartAsyncLoad(HWND hwnd, const std::wstring& path) noexcept
 {
+    RetryStagedFileCleanup();
+
     if (! hwnd)
     {
         return E_INVALIDARG;
@@ -3914,13 +4491,26 @@ HRESULT ViewerWeb::StartAsyncLoad(HWND hwnd, const std::wstring& path) noexcept
         return E_FAIL;
     }
 
+    const auto failSubmission = [&](HRESULT failureHr) noexcept -> HRESULT
+    {
+        _statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_READ_FILE_FAILED);
+        Debug::Error(std::format(L"ViewerWeb: async load submission failed (hr=0x{:08X}).", static_cast<unsigned long>(failureHr)));
+        ShowHostAlert(hwnd, HOST_ALERT_ERROR, _statusMessage);
+        if (_hWnd)
+        {
+            InvalidateRect(_hWnd.get(), &_headerRect, FALSE);
+        }
+        return failureHr;
+    };
+
     _openRequestId += 1u;
     const uint64_t requestId = _openRequestId;
+    _loadPostFailureTerminal = false;
 
     std::unique_ptr<AsyncLoadResult> payload(new (std::nothrow) AsyncLoadResult{});
     if (! payload)
     {
-        return E_OUTOFMEMORY;
+        return failSubmission(E_OUTOFMEMORY);
     }
 
     payload->viewer    = this;
@@ -3928,6 +4518,15 @@ HRESULT ViewerWeb::StartAsyncLoad(HWND hwnd, const std::wstring& path) noexcept
     payload->requestId = requestId;
     payload->path      = path;
     payload->hr        = E_FAIL;
+
+    payload->kindSnapshot               = _kind;
+    payload->configSnapshot             = _config;
+    payload->hasThemeSnapshot           = _hasTheme;
+    payload->themeSnapshot              = _theme;
+    payload->markdownShowSourceSnapshot = _markdownShowSource;
+    payload->fileSystemSnapshot         = _fileSystem;
+    payload->metaIdSnapshot             = _metaId;
+    payload->metaNameSnapshot           = _metaName;
 
     AddRef();
 
@@ -3945,22 +4544,33 @@ HRESULT ViewerWeb::StartAsyncLoad(HWND hwnd, const std::wstring& path) noexcept
     if (! ctx)
     {
         Release();
-        return E_OUTOFMEMORY;
+        return failSubmission(E_OUTOFMEMORY);
     }
 
     ctx->payload         = std::move(payload);
     ctx->moduleKeepAlive = AcquireModuleReferenceFromAddress(&kViewerWebModuleAnchor);
+    if (! ctx->moduleKeepAlive)
+    {
+        Release();
+        return failSubmission(E_FAIL);
+    }
 
+    g_activeAsyncWorkerCount.fetch_add(1u, std::memory_order_acq_rel);
     const BOOL queued = TrySubmitThreadpoolCallback(
-        [](PTP_CALLBACK_INSTANCE /*instance*/, void* context) noexcept
+        [](PTP_CALLBACK_INSTANCE instance, void* context) noexcept
     {
         std::unique_ptr<AsyncLoadWorkItem> ctx(static_cast<AsyncLoadWorkItem*>(context));
+        auto releaseWorkerGate = wil::scope_exit(
+            []() noexcept { g_activeAsyncWorkerCount.fetch_sub(1u, std::memory_order_acq_rel); });
+        if (ctx && ctx->moduleKeepAlive)
+        {
+            TransferModulePinToCallbackReturn(instance, ctx->moduleKeepAlive);
+        }
         if (! ctx || ! ctx->payload)
         {
             return;
         }
 
-        static_cast<void>(ctx->moduleKeepAlive);
         AsyncLoadProc(ctx->payload.release());
     },
         ctx.get(),
@@ -3968,8 +4578,9 @@ HRESULT ViewerWeb::StartAsyncLoad(HWND hwnd, const std::wstring& path) noexcept
 
     if (queued == 0)
     {
+        g_activeAsyncWorkerCount.fetch_sub(1u, std::memory_order_acq_rel);
         Release();
-        return E_FAIL;
+        return failSubmission(E_FAIL);
     }
 
     ctx.release();
@@ -3987,48 +4598,13 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
     ViewerWeb* self  = result->viewer;
     auto releaseSelf = wil::scope_exit([&] { self->Release(); });
 
-    const ViewerWebKind kind      = self->_kind;
-    const ViewerWebConfig config  = self->_config;
-    const bool hasTheme           = self->_hasTheme;
-    const ViewerTheme theme       = self->_theme;
-    const bool markdownShowSource = self->_markdownShowSource;
+    const ViewerWebKind kind      = result->kindSnapshot;
+    const ViewerWebConfig config  = result->configSnapshot;
+    const bool hasTheme           = result->hasThemeSnapshot;
+    const ViewerTheme theme       = result->themeSnapshot;
+    const bool markdownShowSource = result->markdownShowSourceSnapshot;
 
-    wil::com_ptr<IFileSystem> fileSystem = self->_fileSystem;
-
-    const auto normalizeTextUtf8 = [&](std::string_view bytes) noexcept -> std::string
-    {
-        const auto asU8 = [&](size_t offset) noexcept -> std::string { return std::string(bytes.data() + offset, bytes.data() + bytes.size()); };
-
-        if (bytes.size() >= 3 && static_cast<uint8_t>(bytes[0]) == 0xEF && static_cast<uint8_t>(bytes[1]) == 0xBB && static_cast<uint8_t>(bytes[2]) == 0xBF)
-        {
-            return asU8(3);
-        }
-
-        if (bytes.size() >= 2 && static_cast<uint8_t>(bytes[0]) == 0xFF && static_cast<uint8_t>(bytes[1]) == 0xFE)
-        {
-            const size_t payloadBytes = bytes.size() - 2;
-            const size_t wcharCount   = payloadBytes / 2;
-            std::wstring w(static_cast<size_t>(wcharCount), L'\0');
-            memcpy(w.data(), bytes.data() + 2, wcharCount * sizeof(wchar_t));
-            return Utf8FromUtf16(w);
-        }
-
-        if (bytes.size() >= 2 && static_cast<uint8_t>(bytes[0]) == 0xFE && static_cast<uint8_t>(bytes[1]) == 0xFF)
-        {
-            const size_t payloadBytes = bytes.size() - 2;
-            const size_t wcharCount   = payloadBytes / 2;
-            std::wstring w(static_cast<size_t>(wcharCount), L'\0');
-            for (size_t i = 0; i < wcharCount; ++i)
-            {
-                const uint8_t hi = static_cast<uint8_t>(bytes[2 + i * 2]);
-                const uint8_t lo = static_cast<uint8_t>(bytes[2 + i * 2 + 1]);
-                w[i]             = static_cast<wchar_t>((static_cast<uint16_t>(hi) << 8) | static_cast<uint16_t>(lo));
-            }
-            return Utf8FromUtf16(w);
-        }
-
-        return std::string(bytes);
-    };
+    wil::com_ptr<IFileSystem> fileSystem = result->fileSystemSnapshot;
 
     const auto cssRgb = [](COLORREF c) { return std::format("rgb({},{},{})", GetRValue(c), GetGValue(c), GetBValue(c)); };
 
@@ -4037,32 +4613,83 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
     const COLORREF selBg = hasTheme ? ColorRefFromArgb(theme.selectionBackgroundArgb) : GetSysColor(COLOR_HIGHLIGHT);
     const COLORREF selFg = hasTheme ? ColorRefFromArgb(theme.selectionTextArgb) : GetSysColor(COLOR_HIGHLIGHTTEXT);
     const COLORREF accent =
-        hasTheme ? ResolveAccentColor(theme, result->path.empty() ? self->_metaId : std::wstring_view(result->path)) : GetSysColor(COLOR_HIGHLIGHT);
+        hasTheme ? ResolveAccentColor(theme, result->path.empty() ? result->metaIdSnapshot : std::wstring_view(result->path)) : GetSysColor(COLOR_HIGHLIGHT);
 
     const std::string themeObj =
         std::format("{{bg:'{}',fg:'{}',selBg:'{}',selFg:'{}',accent:'{}'}}", cssRgb(bg), cssRgb(fg), cssRgb(selBg), cssRgb(selFg), cssRgb(accent));
 
     const std::wstring leafW  = LeafNameFromPath(result->path);
-    const std::wstring titleW = leafW.empty() ? self->_metaName : std::format(L"{} - {}", leafW, self->_metaName);
+    const std::wstring titleW = leafW.empty() ? result->metaNameSnapshot : std::format(L"{} - {}", leafW, result->metaNameSnapshot);
     result->title             = titleW;
 
     result->statusMessage.clear();
+    const uint64_t configuredMaxBytes = static_cast<uint64_t>(config.maxDocumentMiB) * 1024ull * 1024ull;
 
-    auto postBack = [&](bool cleanupTempOnFailure) noexcept
+    auto postBack = [&]([[maybe_unused]] bool cleanupTempOnFailure) noexcept
     {
         const HWND hwnd = result->hwnd;
-        std::optional<std::filesystem::path> extractedPath;
-        if (cleanupTempOnFailure)
+        const uint64_t requestId = result->requestId;
+        const std::optional<std::filesystem::path> stagedPath = result->extractedWin32Path;
+        const uint64_t generatedOutputBytes = static_cast<uint64_t>(result->utf8.size());
+        const uint64_t generatedOutputLimit = ViewerWebSecurity::GeneratedOutputLimit(configuredMaxBytes);
+        if (result->documentRoute == ViewerWebSecurity::DocumentRoute::GeneratedPrivateOrigin)
         {
-            extractedPath = result->extractedWin32Path;
+            if (! result->generatedOutputRejected)
+            {
+                result->generatedOutputBytes = generatedOutputBytes;
+                result->generatedOutputLimit = generatedOutputLimit;
+            }
+        }
+        if (result->documentRoute == ViewerWebSecurity::DocumentRoute::GeneratedPrivateOrigin && SUCCEEDED(result->hr) &&
+            ! ViewerWebSecurity::IsGeneratedOutputWithinLimit(generatedOutputBytes, configuredMaxBytes))
+        {
+            result->hr                      = HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+            result->offerTextViewerFallback = true;
+            result->generatedOutputRejected = true;
+            result->jsonExpandCollapseAvailable = false;
+            result->statusMessage = FormatStringResource(g_hInstance,
+                                                         IDS_VIEWERWEB_ERROR_FILE_TOO_LARGE_FMT,
+                                                         FormatBytesCompact(generatedOutputBytes),
+                                                         FormatBytesCompact(generatedOutputLimit));
+            std::string{}.swap(result->utf8);
+        }
+        std::wstring_view detail = L"unknown";
+        switch (result->documentRoute)
+        {
+            case ViewerWebSecurity::DocumentRoute::RawHtmlPrivateOrigin: detail = L"raw-html-private-origin"; break;
+            case ViewerWebSecurity::DocumentRoute::GeneratedPrivateOrigin: detail = L"generated-private-origin"; break;
+            case ViewerWebSecurity::DocumentRoute::StagedPdf: detail = L"staged-pdf"; break;
+            case ViewerWebSecurity::DocumentRoute::None:
+            default: detail = kind == ViewerWebKind::Web ? L"web" : kind == ViewerWebKind::Json ? L"json" : L"markdown"; break;
+        }
+        Debug::Perf::Emit(L"viewer.web.load_bytes", detail, 0u, result->loadedSourceBytes, configuredMaxBytes, result->hr);
+        if (result->documentRoute == ViewerWebSecurity::DocumentRoute::GeneratedPrivateOrigin)
+        {
+            Debug::Perf::Emit(
+                L"viewer.web.output_bytes", detail, 0u, result->generatedOutputBytes, result->generatedOutputLimit, result->hr);
+        }
+        if (result->hr == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE))
+        {
+            Debug::Perf::Emit(L"viewer.web.rejected_bytes", detail, 0u, result->loadedSourceBytes, configuredMaxBytes, result->hr);
         }
 
-        if (! hwnd || ! PostMessagePayload(hwnd, kAsyncLoadCompleteMessage, 0, std::move(result)))
+        bool forcePostFailure = false;
+#ifdef ENABLE_TESTS
+        forcePostFailure = g_failNextAsyncLoadCompletionPost.exchange(false, std::memory_order_acq_rel);
+#endif
+        const bool posted = hwnd && ! forcePostFailure && PostMessagePayload(hwnd, kAsyncLoadCompleteMessage, 0, std::move(result));
+        if (! posted)
         {
-            if (cleanupTempOnFailure && extractedPath.has_value() && ! extractedPath->empty())
+            if (stagedPath.has_value())
             {
-                std::error_code ec;
-                static_cast<void>(std::filesystem::remove(extractedPath.value(), ec));
+                DeleteStagedFileOrSchedule(stagedPath.value());
+            }
+            self->_asyncLoadPostFailureRequestId.store(requestId, std::memory_order_release);
+            self->_asyncLoadPostFailureCount.fetch_add(1u, std::memory_order_relaxed);
+            if (hwnd)
+            {
+                static_cast<void>(PostMessageW(hwnd, kAsyncPostFailureMessage, kAsyncPostFailureLoad, 0));
+                static_cast<void>(InvalidateRect(hwnd, nullptr, FALSE));
             }
             return;
         }
@@ -4088,13 +4715,6 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
 
     if (kind == ViewerWebKind::Web)
     {
-        if (IsProbablyWin32Path(result->path))
-        {
-            result->hr = S_OK;
-            postBack(false);
-            return;
-        }
-
         wil::com_ptr<IFileReader> reader;
         const HRESULT openHr = fileIo->CreateFileReader(result->path.c_str(), reader.put());
         if (FAILED(openHr) || ! reader)
@@ -4105,82 +4725,124 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
             return;
         }
 
+        uint64_t advertisedBytes = 0u;
+        const HRESULT sizeHr = reader->GetSize(&advertisedBytes);
+        if (FAILED(sizeHr))
+        {
+            result->hr            = sizeHr;
+            result->statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_READ_FILE_SIZE_FAILED);
+            postBack(false);
+            return;
+        }
+
+        result->loadedSourceBytes = advertisedBytes;
+        if (advertisedBytes > configuredMaxBytes)
+        {
+            result->hr = HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+            result->statusMessage = FormatStringResource(
+                g_hInstance, IDS_VIEWERWEB_ERROR_FILE_TOO_LARGE_FMT, FormatBytesCompact(advertisedBytes), FormatBytesCompact(configuredMaxBytes));
+            postBack(false);
+            return;
+        }
+
+        const bool pdfDocument = IsPdfPath(result->path);
+        if (! pdfDocument)
+        {
+            std::string bytes;
+            bytes.reserve(static_cast<size_t>(advertisedBytes));
+            uint64_t consumedBytes = 0u;
+            const HRESULT readHr = ReadProviderExactly(
+                reader.get(),
+                advertisedBytes,
+                [&](std::span<const uint8_t> chunk) noexcept -> HRESULT
+                {
+                    bytes.append(reinterpret_cast<const char*>(chunk.data()), chunk.size());
+                    return S_OK;
+                },
+                consumedBytes);
+            result->loadedSourceBytes = consumedBytes;
+            if (FAILED(readHr))
+            {
+                result->hr            = readHr;
+                result->statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_READ_FILE_FAILED);
+                postBack(false);
+                return;
+            }
+
+            result->utf8              = std::move(bytes);
+            result->documentRoute     = ViewerWebSecurity::DocumentRoute::RawHtmlPrivateOrigin;
+            result->hr                = S_OK;
+            postBack(false);
+            return;
+        }
+
+        // Every PDF is staged through the provider reader. Path syntax is not
+        // proof of provider identity and must never authorize host-local file
+        // access through a direct file:// navigation.
         wchar_t tempDir[MAX_PATH]{};
         const DWORD tempDirLen = GetTempPathW(static_cast<DWORD>(std::size(tempDir)), tempDir);
         if (tempDirLen == 0 || tempDirLen >= std::size(tempDir))
         {
-            result->hr            = HRESULT_FROM_WIN32(GetLastError());
+            const DWORD error = tempDirLen == 0u ? GetLastError() : ERROR_INSUFFICIENT_BUFFER;
+            result->hr            = HRESULT_FROM_WIN32(error);
             result->statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_GET_TEMP_FOLDER_FAILED);
             postBack(false);
             return;
         }
 
-        wchar_t tempName[MAX_PATH]{};
-        if (GetTempFileNameW(tempDir, L"rsw", 0, tempName) == 0)
+        std::wstring tempPathText;
+        wil::unique_hfile outFile;
+        const Common::Paths::UniqueSiblingFileOptions options{.prefix = L"rsw-", .suffix = L".pdf"};
+        const HRESULT createHr = Common::Paths::CreateUniqueFileInDirectory(tempDir, options, tempPathText, outFile);
+        if (FAILED(createHr) || ! outFile || tempPathText.empty())
         {
-            result->hr            = HRESULT_FROM_WIN32(GetLastError());
+            result->hr            = FAILED(createHr) ? createHr : E_FAIL;
             result->statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_CREATE_TEMP_FILE_FAILED);
             postBack(false);
             return;
         }
+        const std::filesystem::path tempPath(tempPathText);
 
-        std::filesystem::path tempPath(tempName);
-        const std::wstring ext = std::filesystem::path(result->path).extension().wstring();
-        if (! ext.empty())
+        auto cleanupUntrackedTemp = wil::scope_exit([&]() noexcept
         {
-            std::filesystem::path newPath = tempPath;
-            newPath.replace_extension(ext);
-            if (MoveFileExW(tempPath.c_str(), newPath.c_str(), MOVEFILE_REPLACE_EXISTING) != 0)
+            DeleteStagedFileOrSchedule(tempPath);
+        });
+
+        bool writeFailed = false;
+        uint64_t consumedBytes = 0u;
+        const HRESULT readHr = ReadProviderExactly(
+            reader.get(),
+            advertisedBytes,
+            [&](std::span<const uint8_t> chunk) noexcept -> HRESULT
             {
-                tempPath = std::move(newPath);
-            }
-        }
-
-        wil::unique_handle outFile(CreateFileW(tempPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
-        if (! outFile)
+                const HRESULT writeHr = Common::HandleIo::WriteAll(
+                    outFile.get(), std::as_bytes(std::span<const uint8_t>(chunk.data(), chunk.size())));
+                writeFailed           = FAILED(writeHr);
+                return writeHr;
+            },
+            consumedBytes);
+        result->loadedSourceBytes = consumedBytes;
+        if (FAILED(readHr))
         {
-            result->hr            = HRESULT_FROM_WIN32(GetLastError());
-            result->statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_WRITE_TEMP_FILE_FAILED);
-            std::error_code ec;
-            static_cast<void>(std::filesystem::remove(tempPath, ec));
+            result->hr            = readHr;
+            result->statusMessage = LoadStringResource(
+                g_hInstance, writeFailed ? IDS_VIEWERWEB_ERROR_WRITE_TEMP_FILE_FAILED : IDS_VIEWERWEB_ERROR_READ_FILE_FAILED);
             postBack(false);
             return;
         }
 
-        std::vector<uint8_t> buffer(256u * 1024u);
-        for (;;)
+        if (FlushFileBuffers(outFile.get()) == FALSE)
         {
-            unsigned long read   = 0;
-            const HRESULT readHr = reader->Read(buffer.data(), static_cast<unsigned long>(buffer.size()), &read);
-            if (FAILED(readHr))
-            {
-                result->hr            = readHr;
-                result->statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_READ_FILE_FAILED);
-                std::error_code ec;
-                static_cast<void>(std::filesystem::remove(tempPath, ec));
-                postBack(false);
-                return;
-            }
-
-            if (read == 0)
-            {
-                break;
-            }
-
-            DWORD written = 0;
-            if (WriteFile(outFile.get(), buffer.data(), read, &written, nullptr) == 0 || written != read)
-            {
-                result->hr            = HRESULT_FROM_WIN32(GetLastError());
-                result->statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_WRITE_TEMP_FILE_FAILED);
-                std::error_code ec;
-                static_cast<void>(std::filesystem::remove(tempPath, ec));
-                postBack(false);
-                return;
-            }
+            result->hr            = HRESULT_FROM_WIN32(GetLastError());
+            result->statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_WRITE_TEMP_FILE_FAILED);
+            postBack(false);
+            return;
         }
-
+        outFile.reset();
         result->extractedWin32Path = tempPath;
+        result->documentRoute      = ViewerWebSecurity::DocumentRoute::StagedPdf;
         result->hr                 = S_OK;
+        cleanupUntrackedTemp.release();
         postBack(true);
         return;
     }
@@ -4206,9 +4868,10 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
         return;
     }
 
-    const uint64_t maxBytes = static_cast<uint64_t>(config.maxDocumentMiB) * 1024ull * 1024ull;
+    const uint64_t maxBytes = configuredMaxBytes;
     if (sizeBytes > maxBytes)
     {
+        result->loadedSourceBytes       = sizeBytes;
         result->hr                      = HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
         result->offerTextViewerFallback = true;
         result->statusMessage =
@@ -4219,47 +4882,103 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
 
     std::string bytes;
     bytes.reserve(static_cast<size_t>(sizeBytes));
-    std::vector<uint8_t> buffer(256u * 1024u);
-    for (;;)
+    uint64_t consumedBytes = 0u;
+    const HRESULT readHr = ReadProviderExactly(
+        reader.get(),
+        sizeBytes,
+        [&](std::span<const uint8_t> chunk) noexcept -> HRESULT
+        {
+            bytes.append(reinterpret_cast<const char*>(chunk.data()), chunk.size());
+            return S_OK;
+        },
+        consumedBytes);
+    result->loadedSourceBytes = consumedBytes;
+    if (FAILED(readHr))
     {
-        unsigned long read   = 0;
-        const HRESULT readHr = reader->Read(buffer.data(), static_cast<unsigned long>(buffer.size()), &read);
-        if (FAILED(readHr))
-        {
-            result->hr            = readHr;
-            result->statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_READ_FILE_FAILED);
-            postBack(false);
-            return;
-        }
-
-        if (read == 0)
-        {
-            break;
-        }
-
-        bytes.append(reinterpret_cast<const char*>(buffer.data()), reinterpret_cast<const char*>(buffer.data() + read));
-        if (bytes.size() > maxBytes)
-        {
-            result->hr                      = HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
-            result->offerTextViewerFallback = true;
-            result->statusMessage           = FormatStringResource(
-                g_hInstance, IDS_VIEWERWEB_ERROR_FILE_TOO_LARGE_FMT, FormatBytesCompact(static_cast<uint64_t>(bytes.size())), FormatBytesCompact(maxBytes));
-            postBack(false);
-            return;
-        }
+        result->hr                      = readHr;
+        result->offerTextViewerFallback = true;
+        result->statusMessage            = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_READ_FILE_FAILED);
+        postBack(false);
+        return;
     }
 
-    const std::string textUtf8 = normalizeTextUtf8(bytes);
+    std::string textUtf8;
+    const ViewerWebSecurity::NormalizeTextResult normalizeResult =
+        ViewerWebSecurity::NormalizeTextUtf8Bounded(bytes, static_cast<size_t>(maxBytes), textUtf8);
+    std::string{}.swap(bytes);
+    if (normalizeResult != ViewerWebSecurity::NormalizeTextResult::Ok)
+    {
+        result->hr = normalizeResult == ViewerWebSecurity::NormalizeTextResult::TooLarge ? HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE)
+                                                                                          : HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION);
+        result->offerTextViewerFallback = true;
+        result->statusMessage = normalizeResult == ViewerWebSecurity::NormalizeTextResult::TooLarge
+                                    ? FormatStringResource(g_hInstance,
+                                                           IDS_VIEWERWEB_ERROR_FILE_TOO_LARGE_FMT,
+                                                           FormatBytesCompact(result->loadedSourceBytes),
+                                                           FormatBytesCompact(maxBytes))
+                                    : LoadStringResource(g_hInstance,
+                                                         kind == ViewerWebKind::Json ? IDS_VIEWERWEB_ERROR_PARSE_JSON_FAILED
+                                                                                     : IDS_VIEWERWEB_ERROR_READ_FILE_FAILED);
+        postBack(false);
+        return;
+    }
+
+    result->documentRoute = ViewerWebSecurity::DocumentRoute::GeneratedPrivateOrigin;
+    Debug::Perf::Emit(L"viewer.web.normalized_bytes", kind == ViewerWebKind::Json ? L"json" : L"markdown", 0u, textUtf8.size(), maxBytes, S_OK);
 
     if (kind == ViewerWebKind::Json)
     {
         std::vector<JsonLinesEntry> jsonLinesEntries;
         const bool forceJsonLines     = config.jsonViewMode == JsonViewMode::JsonLines;
         const bool pathLooksJsonLines = IsJsonLinesPath(result->path);
+        const size_t publicationLimit = static_cast<size_t>(ViewerWebSecurity::GeneratedOutputLimit(maxBytes));
+        JsonLinesUiStrings jsonLinesStrings{
+            .badge        = Utf8FromWide(LoadStringResource(g_hInstance, IDS_VIEWERWEB_JSONL_BADGE)),
+            .title        = Utf8FromWide(LoadStringResource(g_hInstance, IDS_VIEWERWEB_JSONL_TITLE)),
+            .expandAll    = Utf8FromWide(LoadStringResource(g_hInstance, IDS_VIEWERWEB_JSONL_EXPAND_ALL)),
+            .collapseAll  = Utf8FromWide(LoadStringResource(g_hInstance, IDS_VIEWERWEB_JSONL_COLLAPSE_ALL)),
+            .genericValue = Utf8FromWide(LoadStringResource(g_hInstance, IDS_VIEWERWEB_JSONL_VALUE_GENERIC)),
+        };
+        const auto publishJsonLines = [&]() noexcept -> bool
+        {
+            std::string{}.swap(textUtf8);
+            jsonLinesStrings.recordSummary = Utf8FromWide(FormatStringResource(
+                g_hInstance,
+                jsonLinesEntries.size() == 1u ? IDS_VIEWERWEB_JSONL_RECORD_ONE_FMT : IDS_VIEWERWEB_JSONL_RECORD_MANY_FMT,
+                jsonLinesEntries.size()));
+            if (! BuildJsonLinesHtml(jsonLinesEntries,
+                                     jsonLinesStrings,
+                                     GetHighlightJs(),
+                                     themeObj,
+                                     bg,
+                                     fg,
+                                     selBg,
+                                     selFg,
+                                     accent,
+                                     theme.darkMode != FALSE,
+                                     publicationLimit,
+                                     result->utf8))
+            {
+                result->hr                      = HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+                result->generatedOutputRejected = true;
+                result->generatedOutputBytes    = publicationLimit + 1u;
+                result->generatedOutputLimit    = publicationLimit;
+                result->statusMessage = FormatStringResource(g_hInstance,
+                                                             IDS_VIEWERWEB_ERROR_FILE_TOO_LARGE_FMT,
+                                                             FormatBytesCompact(result->generatedOutputBytes),
+                                                             FormatBytesCompact(publicationLimit));
+                postBack(false);
+                return false;
+            }
+            result->jsonExpandCollapseAvailable = true;
+            result->hr                          = S_OK;
+            postBack(false);
+            return true;
+        };
 
         if (forceJsonLines)
         {
-            if (! TryParseJsonLinesEntries(textUtf8, true, jsonLinesEntries))
+            if (! TryParseJsonLinesEntries(textUtf8, true, publicationLimit, jsonLinesEntries))
             {
                 result->hr            = E_FAIL;
                 result->statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_PARSE_JSON_FAILED);
@@ -4267,19 +4986,13 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
                 return;
             }
 
-            result->utf8 = BuildJsonLinesHtml(jsonLinesEntries, GetHighlightJs(), themeObj, bg, fg, selBg, selFg, accent, theme.darkMode != FALSE);
-            result->jsonExpandCollapseAvailable = true;
-            result->hr                          = S_OK;
-            postBack(false);
+            static_cast<void>(publishJsonLines());
             return;
         }
 
-        if (pathLooksJsonLines && TryParseJsonLinesEntries(textUtf8, true, jsonLinesEntries))
+        if (pathLooksJsonLines && TryParseJsonLinesEntries(textUtf8, true, publicationLimit, jsonLinesEntries))
         {
-            result->utf8 = BuildJsonLinesHtml(jsonLinesEntries, GetHighlightJs(), themeObj, bg, fg, selBg, selFg, accent, theme.darkMode != FALSE);
-            result->jsonExpandCollapseAvailable = true;
-            result->hr                          = S_OK;
-            postBack(false);
+            static_cast<void>(publishJsonLines());
             return;
         }
 
@@ -4288,12 +5001,10 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
         unique_yyjson_doc doc(yyjson_read_opts(jsonMutable.data(), jsonMutable.size(), YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM, nullptr, &err));
         if (! doc)
         {
-            if (TryParseJsonLinesEntries(textUtf8, false, jsonLinesEntries))
+            if (TryParseJsonLinesEntries(textUtf8, false, publicationLimit, jsonLinesEntries))
             {
-                result->utf8 = BuildJsonLinesHtml(jsonLinesEntries, GetHighlightJs(), themeObj, bg, fg, selBg, selFg, accent, theme.darkMode != FALSE);
-                result->jsonExpandCollapseAvailable = true;
-                result->hr                          = S_OK;
-                postBack(false);
+                std::string{}.swap(jsonMutable);
+                static_cast<void>(publishJsonLines());
                 return;
             }
 
@@ -4320,15 +5031,15 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
         {
             const std::string_view highlightJs = GetHighlightJs();
 
-            const COLORREF codeBg             = BlendColor(bg, fg, theme.darkMode ? 20u : 10u);
-            const COLORREF border             = BlendColor(bg, fg, theme.darkMode ? 35u : 45u);
-            const COLORREF mutedFg            = BlendColor(bg, fg, 140u);
+            const COLORREF codeBg             = BlendColorRefTruncate(bg, fg, theme.darkMode ? 20u : 10u);
+            const COLORREF border             = BlendColorRefTruncate(bg, fg, theme.darkMode ? 35u : 45u);
+            const COLORREF mutedFg            = BlendColorRefTruncate(bg, fg, 140u);
             const JsonTokenColors tokenColors = BuildJsonTokenColors(accent, fg, theme.darkMode != FALSE);
             const ScrollbarColors scrollbar   = BuildScrollbarColors(bg, fg, accent, theme.darkMode != FALSE);
 
             std::string html;
             html.reserve(highlightJs.size() + escapedJson.size() + 8192);
-            html += "<!doctype html><html><head><meta charset=\"utf-8\">";
+            html += kInternalHtmlHead;
             html += "<style>";
             html += ":root{--rs-bg:" + cssRgb(bg) + ";--rs-fg:" + cssRgb(fg) + ";--rs-sel-bg:" + cssRgb(selBg) + ";--rs-sel-fg:" + cssRgb(selFg) +
                     ";--rs-accent:" + cssRgb(accent) + ";--rs-code-bg:" + cssRgb(codeBg) + ";--rs-border:" + cssRgb(border) +
@@ -4377,14 +5088,14 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
         const std::string_view jsonEditorJs = GetJsonEditorJs();
         const std::string& jsonEditorCss    = GetJsonEditorCssWithIcons();
 
-        const COLORREF border             = BlendColor(bg, fg, theme.darkMode ? 45u : 80u);
-        const COLORREF mutedFg            = BlendColor(bg, fg, 140u);
+        const COLORREF border             = BlendColorRefTruncate(bg, fg, theme.darkMode ? 45u : 80u);
+        const COLORREF mutedFg            = BlendColorRefTruncate(bg, fg, 140u);
         const JsonTokenColors tokenColors = BuildJsonTokenColors(accent, fg, theme.darkMode != FALSE);
         const ScrollbarColors scrollbar   = BuildScrollbarColors(bg, fg, accent, theme.darkMode != FALSE);
 
         std::string html;
         html.reserve(jsonEditorJs.size() + jsonEditorCss.size() + escapedJson.size() + 8192);
-        html += "<!doctype html><html><head><meta charset=\"utf-8\">";
+        html += kInternalHtmlHead;
         html += "<style>";
         html += ":root{--rs-bg:" + cssRgb(bg) + ";--rs-fg:" + cssRgb(fg) + ";--rs-sel-bg:" + cssRgb(selBg) + ";--rs-sel-fg:" + cssRgb(selFg) +
                 ";--rs-accent:" + cssRgb(accent) + ";--rs-border:" + cssRgb(border) + ";--rs-muted-fg:" + cssRgb(mutedFg) +
@@ -4451,16 +5162,16 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
     const std::string_view markdownItJs = GetMarkdownItJs();
     const std::string_view highlightJs  = GetHighlightJs();
 
-    const COLORREF codeBg           = BlendColor(bg, fg, theme.darkMode ? 20u : 10u);
-    const COLORREF border           = BlendColor(bg, fg, theme.darkMode ? 35u : 45u);
-    const COLORREF mutedFg          = BlendColor(bg, fg, 140u);
-    const COLORREF stringColor      = BlendColor(accent, fg, 60u);
-    const COLORREF numberColor      = BlendColor(accent, fg, 90u);
+    const COLORREF codeBg           = BlendColorRefTruncate(bg, fg, theme.darkMode ? 20u : 10u);
+    const COLORREF border           = BlendColorRefTruncate(bg, fg, theme.darkMode ? 35u : 45u);
+    const COLORREF mutedFg          = BlendColorRefTruncate(bg, fg, 140u);
+    const COLORREF stringColor      = BlendColorRefTruncate(accent, fg, 60u);
+    const COLORREF numberColor      = BlendColorRefTruncate(accent, fg, 90u);
     const ScrollbarColors scrollbar = BuildScrollbarColors(bg, fg, accent, theme.darkMode != FALSE);
 
     std::string html;
     html.reserve(markdownItJs.size() + highlightJs.size() + escapedMarkdown.size() + 8192);
-    html += "<!doctype html><html><head><meta charset=\"utf-8\">";
+    html += kInternalHtmlHead;
     html += "<style>";
     html += ":root{--rs-bg:" + cssRgb(bg) + ";--rs-fg:" + cssRgb(fg) + ";--rs-sel-bg:" + cssRgb(selBg) + ";--rs-sel-fg:" + cssRgb(selFg) +
             ";--rs-accent:" + cssRgb(accent) + ";--rs-code-bg:" + cssRgb(codeBg) + ";--rs-border:" + cssRgb(border) + ";--rs-muted-fg:" + cssRgb(mutedFg) +
@@ -4510,6 +5221,226 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
     postBack(false);
 }
 
+void ViewerWeb::AsyncSaveProc(AsyncSaveWorkItem* payload) noexcept
+{
+    std::unique_ptr<AsyncSaveWorkItem> work(payload);
+    if (! work || ! work->viewer)
+    {
+        return;
+    }
+
+    ViewerWeb* self = work->viewer;
+    auto releaseSelf = wil::scope_exit([&]() noexcept { self->Release(); });
+    const auto isCurrent = [&]() noexcept
+    { return self->_saveRequestId.load(std::memory_order_acquire) == work->requestId; };
+
+    wil::com_ptr<IFileSystem> fileSystem;
+    wil::com_ptr<IFileSystemIO> fileIo;
+    wil::com_ptr<IFileReader> reader;
+    wil::unique_hfile tempFile;
+    std::wstring tempPath;
+    bool committed = false;
+
+    const auto closeOpenResources = [&]() noexcept
+    {
+        tempFile.reset();
+        reader.reset();
+        fileIo.reset();
+        fileSystem.reset();
+    };
+    const auto cleanupUncommitted = [&]() noexcept
+    {
+        closeOpenResources();
+        if (committed || tempPath.empty())
+        {
+            return;
+        }
+        if (DeleteFileW(tempPath.c_str()) != FALSE)
+        {
+            tempPath.clear();
+            return;
+        }
+
+        const DWORD error = GetLastError();
+        if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND)
+        {
+            tempPath.clear();
+            return;
+        }
+        Debug::Warning(L"ViewerWeb: failed to remove an uncommitted Save As temp (error={}).", error);
+    };
+    auto cleanupAtExit = wil::scope_exit([&]() noexcept { cleanupUncommitted(); });
+
+    const auto postResult = [&]() noexcept
+    {
+        // A visible completion is also the cleanup boundary: provider COM
+        // references and any uncommitted sibling temp are gone before the UI
+        // can observe that Save As has finished.
+        cleanupUncommitted();
+        work->fileSystemSnapshot.reset();
+        if (! isCurrent())
+        {
+            return;
+        }
+
+        const HWND hwnd          = work->hwnd;
+        const uint64_t requestId = work->requestId;
+        const HRESULT resultHr   = work->hr;
+        bool forcePostFailure    = false;
+#ifdef ENABLE_TESTS
+        forcePostFailure = g_failNextAsyncSaveCompletionPost.exchange(false, std::memory_order_acq_rel);
+#endif
+        const bool posted = hwnd && ! forcePostFailure && PostMessagePayload(hwnd, kAsyncSaveCompleteMessage, 0, std::move(work));
+        if (! posted)
+        {
+            self->_asyncSavePostFailureHr.store(resultHr, std::memory_order_relaxed);
+            self->_asyncSavePostFailureRequestId.store(requestId, std::memory_order_release);
+            self->_asyncSavePostFailureCount.fetch_add(1u, std::memory_order_relaxed);
+            if (hwnd)
+            {
+                static_cast<void>(PostMessageW(hwnd, kAsyncPostFailureMessage, kAsyncPostFailureSave, 0));
+                static_cast<void>(InvalidateRect(hwnd, nullptr, FALSE));
+            }
+        }
+    };
+
+    const auto fail = [&](HRESULT hr, UINT messageId) noexcept
+    {
+        work->hr            = hr;
+        work->statusMessage = LoadStringResource(g_hInstance, messageId);
+        postResult();
+    };
+
+    if (! isCurrent())
+    {
+        return;
+    }
+
+    fileSystem = work->fileSystemSnapshot;
+    if (! fileSystem)
+    {
+        fail(E_FAIL, IDS_VIEWERWEB_ERROR_SAVE_AS_NO_FILE_IO);
+        return;
+    }
+
+    const HRESULT ioHr = fileSystem->QueryInterface(__uuidof(IFileSystemIO), fileIo.put_void());
+    if (FAILED(ioHr) || ! fileIo)
+    {
+        fail(FAILED(ioHr) ? ioHr : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED), IDS_VIEWERWEB_ERROR_SAVE_AS_NO_FILE_IO);
+        return;
+    }
+
+    const HRESULT openHr = fileIo->CreateFileReader(work->sourcePath.c_str(), reader.put());
+    if (FAILED(openHr) || ! reader)
+    {
+        fail(FAILED(openHr) ? openHr : E_FAIL, IDS_VIEWERWEB_ERROR_SAVE_AS_OPEN_FAILED);
+        return;
+    }
+
+    uint64_t expectedBytes = 0u;
+    const HRESULT sizeHr = reader->GetSize(&expectedBytes);
+    if (FAILED(sizeHr))
+    {
+        fail(sizeHr, IDS_VIEWERWEB_ERROR_SAVE_AS_READ_FAILED);
+        return;
+    }
+    if (expectedBytes > work->maxBytes)
+    {
+        work->hr = HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+        work->statusMessage = FormatStringResource(g_hInstance,
+                                                   IDS_VIEWERWEB_ERROR_FILE_TOO_LARGE_FMT,
+                                                   FormatBytesCompact(expectedBytes),
+                                                   FormatBytesCompact(work->maxBytes));
+        postResult();
+        return;
+    }
+
+    uint64_t position = 0u;
+    const HRESULT seekHr = reader->Seek(0, FILE_BEGIN, &position);
+    if (FAILED(seekHr) || position != 0u)
+    {
+        fail(FAILED(seekHr) ? seekHr : HRESULT_FROM_WIN32(ERROR_INVALID_DATA), IDS_VIEWERWEB_ERROR_SAVE_AS_SEEK_FAILED);
+        return;
+    }
+    if (! isCurrent())
+    {
+        return;
+    }
+
+    const std::wstring destination = Common::Paths::ToExtendedWin32Path(work->destinationPath);
+    const Common::Paths::UniqueSiblingFileOptions options{.prefix = L".rsw-save-", .suffix = L".tmp"};
+    const HRESULT tempHr = Common::Paths::CreateUniqueSiblingFile(destination, options, tempPath, tempFile);
+    if (FAILED(tempHr) || ! tempFile)
+    {
+        fail(FAILED(tempHr) ? tempHr : E_FAIL, IDS_VIEWERWEB_ERROR_SAVE_AS_WRITE_FAILED);
+        return;
+    }
+
+    bool writeFailed = false;
+    uint64_t copiedBytes = 0u;
+    const HRESULT copyHr = ReadProviderExactly(
+        reader.get(),
+        expectedBytes,
+        [&](std::span<const uint8_t> chunk) noexcept -> HRESULT
+        {
+            if (! isCurrent())
+            {
+                return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+            }
+            if ((work->testFaultMask & ViewerWebSecurity::DebugSaveFaultWrite) != 0u)
+            {
+                writeFailed = true;
+                return HRESULT_FROM_WIN32(ERROR_WRITE_FAULT);
+            }
+            const HRESULT writeHr = Common::HandleIo::WriteAll(
+                tempFile.get(), std::as_bytes(std::span<const uint8_t>(chunk.data(), chunk.size())));
+            writeFailed           = FAILED(writeHr);
+            return writeHr;
+        },
+        copiedBytes,
+        false);
+    if (FAILED(copyHr))
+    {
+        if (copyHr == HRESULT_FROM_WIN32(ERROR_CANCELLED) || ! isCurrent())
+        {
+            return;
+        }
+        fail(copyHr, writeFailed ? IDS_VIEWERWEB_ERROR_SAVE_AS_WRITE_FAILED : IDS_VIEWERWEB_ERROR_SAVE_AS_READ_FAILED);
+        return;
+    }
+
+    if (! isCurrent())
+    {
+        return;
+    }
+    if ((work->testFaultMask & ViewerWebSecurity::DebugSaveFaultFlush) != 0u || FlushFileBuffers(tempFile.get()) == FALSE)
+    {
+        const DWORD error = (work->testFaultMask & ViewerWebSecurity::DebugSaveFaultFlush) != 0u ? ERROR_WRITE_FAULT : GetLastError();
+        fail(HRESULT_FROM_WIN32(error), IDS_VIEWERWEB_ERROR_SAVE_AS_WRITE_FAILED);
+        return;
+    }
+
+    closeOpenResources();
+    work->fileSystemSnapshot.reset();
+    if (! isCurrent())
+    {
+        return;
+    }
+
+    if ((work->testFaultMask & ViewerWebSecurity::DebugSaveFaultCommit) != 0u ||
+        MoveFileExW(tempPath.c_str(), destination.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) == FALSE)
+    {
+        const DWORD error = (work->testFaultMask & ViewerWebSecurity::DebugSaveFaultCommit) != 0u ? ERROR_ACCESS_DENIED : GetLastError();
+        fail(HRESULT_FROM_WIN32(error), IDS_VIEWERWEB_ERROR_SAVE_AS_WRITE_FAILED);
+        return;
+    }
+
+    committed = true;
+    work->hr   = S_OK;
+    Debug::Perf::Emit(L"viewer.web.save_as_bytes", L"committed", 0u, copiedBytes, work->maxBytes, S_OK);
+    postResult();
+}
+
 HRESULT ViewerWeb::CommandSaveAs(HWND hwnd) noexcept
 {
     if (_currentPath.empty() || ! _fileSystem)
@@ -4524,63 +5455,91 @@ HRESULT ViewerWeb::CommandSaveAs(HWND hwnd) noexcept
         return S_FALSE;
     }
 
-    wil::unique_handle outFile(CreateFileW(dest->c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
-    if (! outFile)
+    return StartAsyncSave(hwnd, dest.value());
+}
+
+HRESULT ViewerWeb::StartAsyncSave(HWND hwnd, const std::filesystem::path& destination, uint32_t testFaultMask) noexcept
+{
+    constexpr uint32_t kSupportedTestFaults = ViewerWebSecurity::DebugSaveFaultWrite | ViewerWebSecurity::DebugSaveFaultFlush |
+                                               ViewerWebSecurity::DebugSaveFaultCommit;
+    if (! hwnd || ! _hWnd || hwnd != _hWnd.get() || _currentPath.empty() || ! _fileSystem || destination.empty() ||
+        (testFaultMask & ~kSupportedTestFaults) != 0u)
     {
-        const DWORD lastError = GetLastError();
+        return E_INVALIDARG;
+    }
+
+    const auto failSubmission = [&](HRESULT failureHr) noexcept -> HRESULT
+    {
+        _saveInProgress = false;
+        _statusMessage  = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_SAVE_AS_FAILED);
+        Debug::Error(L"ViewerWeb: asynchronous Save As submission failed (hr=0x{:08X}).", static_cast<unsigned long>(failureHr));
         ShowHostAlert(hwnd, HOST_ALERT_ERROR, LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_SAVE_AS_FAILED));
-        return HRESULT_FROM_WIN32(lastError);
-    }
-
-    wil::com_ptr<IFileSystemIO> fileIo;
-    const HRESULT ioHr = _fileSystem->QueryInterface(__uuidof(IFileSystemIO), fileIo.put_void());
-    if (FAILED(ioHr) || ! fileIo)
-    {
-        ShowHostAlert(hwnd, HOST_ALERT_ERROR, LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_SAVE_AS_NO_FILE_IO));
-        return FAILED(ioHr) ? ioHr : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
-    }
-
-    wil::com_ptr<IFileReader> reader;
-    const HRESULT openHr = fileIo->CreateFileReader(_currentPath.c_str(), reader.put());
-    if (FAILED(openHr) || ! reader)
-    {
-        ShowHostAlert(hwnd, HOST_ALERT_ERROR, LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_SAVE_AS_OPEN_FAILED));
-        return FAILED(openHr) ? openHr : E_FAIL;
-    }
-
-    uint64_t pos         = 0;
-    const HRESULT seekHr = reader->Seek(0, FILE_BEGIN, &pos);
-    if (FAILED(seekHr))
-    {
-        ShowHostAlert(hwnd, HOST_ALERT_ERROR, LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_SAVE_AS_SEEK_FAILED));
-        return seekHr;
-    }
-
-    std::vector<uint8_t> buffer(256u * 1024u);
-    for (;;)
-    {
-        unsigned long read   = 0;
-        const HRESULT readHr = reader->Read(buffer.data(), static_cast<unsigned long>(buffer.size()), &read);
-        if (FAILED(readHr))
+        if (_hWnd)
         {
-            ShowHostAlert(hwnd, HOST_ALERT_ERROR, LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_SAVE_AS_READ_FAILED));
-            return readHr;
+            InvalidateRect(_hWnd.get(), &_headerRect, FALSE);
         }
+        return failureHr;
+    };
 
-        if (read == 0)
-        {
-            break;
-        }
-
-        DWORD written = 0;
-        if (WriteFile(outFile.get(), buffer.data(), read, &written, nullptr) == 0 || written != read)
-        {
-            const DWORD lastError = GetLastError();
-            ShowHostAlert(hwnd, HOST_ALERT_ERROR, LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_SAVE_AS_WRITE_FAILED));
-            return HRESULT_FROM_WIN32(lastError);
-        }
+    uint64_t requestId = _saveRequestId.fetch_add(1u, std::memory_order_acq_rel) + 1u;
+    if (requestId == 0u)
+    {
+        requestId = _saveRequestId.fetch_add(1u, std::memory_order_acq_rel) + 1u;
     }
 
+    auto work = std::unique_ptr<AsyncSaveWorkItem>(new (std::nothrow) AsyncSaveWorkItem{});
+    if (! work)
+    {
+        return failSubmission(E_OUTOFMEMORY);
+    }
+    work->viewer             = this;
+    work->hwnd               = hwnd;
+    work->requestId          = requestId;
+    work->maxBytes = static_cast<uint64_t>(std::min(_config.maxDocumentMiB, ViewerWebSecurity::kMaximumDocumentMiB)) * 1024ull * 1024ull;
+    work->testFaultMask      = testFaultMask;
+    work->sourcePath         = _currentPath;
+    work->destinationPath    = destination.wstring();
+    work->fileSystemSnapshot = _fileSystem;
+    work->moduleKeepAlive    = AcquireModuleReferenceFromAddress(&kViewerWebModuleAnchor);
+    if (! work->moduleKeepAlive)
+    {
+        return failSubmission(E_FAIL);
+    }
+
+    _saveInProgress = true;
+    _statusMessage.clear();
+    if (_hWnd)
+    {
+        InvalidateRect(_hWnd.get(), &_headerRect, FALSE);
+    }
+    AddRef();
+    g_activeAsyncWorkerCount.fetch_add(1u, std::memory_order_acq_rel);
+    const BOOL queued = TrySubmitThreadpoolCallback(
+        [](PTP_CALLBACK_INSTANCE instance, void* context) noexcept
+        {
+            std::unique_ptr<AsyncSaveWorkItem> work(static_cast<AsyncSaveWorkItem*>(context));
+            auto releaseWorkerGate = wil::scope_exit(
+                []() noexcept { g_activeAsyncWorkerCount.fetch_sub(1u, std::memory_order_acq_rel); });
+            if (work && work->moduleKeepAlive)
+            {
+                TransferModulePinToCallbackReturn(instance, work->moduleKeepAlive);
+            }
+            if (! work)
+            {
+                return;
+            }
+            AsyncSaveProc(work.release());
+        },
+        work.get(),
+        nullptr);
+    if (queued == FALSE)
+    {
+        g_activeAsyncWorkerCount.fetch_sub(1u, std::memory_order_acq_rel);
+        Release();
+        return failSubmission(E_FAIL);
+    }
+
+    work.release();
     return S_OK;
 }
 
@@ -4681,10 +5640,6 @@ void ViewerWeb::CommandCopyUrl(HWND hwnd) noexcept
             {
                 toCopy = UrlFromFilePath(_tempExtractedPath.value().wstring());
             }
-            else if (IsProbablyWin32Path(_currentPath))
-            {
-                toCopy = UrlFromFilePath(_currentPath);
-            }
         }
     }
 
@@ -4693,11 +5648,16 @@ void ViewerWeb::CommandCopyUrl(HWND hwnd) noexcept
         toCopy = _currentPath;
     }
 
-    static_cast<void>(CopyUnicodeTextToClipboard(hwnd, toCopy));
+    static_cast<void>(Common::Clipboard::TrySetUnicodeText(hwnd, toCopy, Common::Clipboard::EmptyUnicodeTextPolicy::Reject));
 }
 
 void ViewerWeb::CommandOpenExternal(HWND hwnd) noexcept
 {
+    if (! _config.allowExternalNavigation)
+    {
+        return;
+    }
+
     std::wstring url;
 
     if (_webView)
@@ -4706,24 +5666,9 @@ void ViewerWeb::CommandOpenExternal(HWND hwnd) noexcept
         if (SUCCEEDED(_webView->get_Source(source.put())) && source && source.get()[0] != L'\0')
         {
             const std::wstring_view src(source.get());
-            if (! OrdinalString::StartsWithNoCase(src, L"about:") && ! IsInternalDocumentUrl(src))
+            if (ViewerWebSecurity::IsHttpOrHttps(src))
             {
                 url.assign(src);
-            }
-        }
-    }
-
-    if (url.empty())
-    {
-        if (_kind == ViewerWebKind::Web)
-        {
-            if (_tempExtractedPath.has_value() && ! _tempExtractedPath.value().empty())
-            {
-                url = UrlFromFilePath(_tempExtractedPath.value().wstring());
-            }
-            else if (IsProbablyWin32Path(_currentPath))
-            {
-                url = UrlFromFilePath(_currentPath);
             }
         }
     }
@@ -4774,7 +5719,7 @@ void ViewerWeb::CommandZoomReset() noexcept
 
 void ViewerWeb::CommandToggleDevTools() noexcept
 {
-    if (! _config.devToolsEnabled)
+    if (! _documentScriptsEnabled || ! _config.devToolsEnabled)
     {
         ShowHostAlert(_hWnd.get(), HOST_ALERT_WARNING, LoadStringResource(g_hInstance, IDS_VIEWERWEB_WARNING_DEVTOOLS_DISABLED));
         return;
@@ -4843,66 +5788,6 @@ void ViewerWeb::CommandMarkdownToggleSource() noexcept
 
 namespace
 {
-bool CopyUnicodeTextToClipboard(HWND hwnd, std::wstring_view text) noexcept
-{
-    if (text.empty())
-    {
-        return false;
-    }
-
-    if (OpenClipboard(hwnd) == 0)
-    {
-        return false;
-    }
-    auto closeClipboard = wil::scope_exit([&] { CloseClipboard(); });
-
-    if (EmptyClipboard() == 0)
-    {
-        return false;
-    }
-
-    const size_t bytes = (text.size() + 1) * sizeof(wchar_t);
-    wil::unique_hglobal storage(GlobalAlloc(GMEM_MOVEABLE, bytes));
-    if (! storage)
-    {
-        return false;
-    }
-
-    void* mem = GlobalLock(storage.get());
-    if (! mem)
-    {
-        return false;
-    }
-
-    memcpy(mem, text.data(), text.size() * sizeof(wchar_t));
-    static_cast<wchar_t*>(mem)[text.size()] = L'\0';
-    GlobalUnlock(storage.get());
-
-    if (SetClipboardData(CF_UNICODETEXT, storage.get()) == nullptr)
-    {
-        return false;
-    }
-
-    storage.release();
-    return true;
-}
-
-[[nodiscard]] bool IsProbablyWin32Path(std::wstring_view path) noexcept
-{
-    if (path.size() >= 3 && ((path[0] >= L'A' && path[0] <= L'Z') || (path[0] >= L'a' && path[0] <= L'z')) && path[1] == L':' &&
-        (path[2] == L'\\' || path[2] == L'/'))
-    {
-        return true;
-    }
-
-    if (OrdinalString::StartsWithNoCase(path, L"\\\\") || OrdinalString::StartsWithNoCase(path, L"//"))
-    {
-        return true;
-    }
-
-    return false;
-}
-
 std::optional<std::filesystem::path> ShowSaveAsDialog(HWND hwnd, std::wstring_view suggestedFileName) noexcept
 {
     wil::com_ptr<IFileSaveDialog> dialog;
@@ -4948,68 +5833,33 @@ std::optional<std::filesystem::path> ShowSaveAsDialog(HWND hwnd, std::wstring_vi
 
     return std::filesystem::path(path.get());
 }
-
-[[nodiscard]] std::wstring EscapeJavaScriptString(std::wstring_view text) noexcept
-{
-    std::wstring out;
-    out.reserve(text.size() + 16);
-    for (wchar_t ch : text)
-    {
-        switch (ch)
-        {
-            case L'\\': out += L"\\\\"; break;
-            case L'\'': out += L"\\'"; break;
-            case L'\"': out += L"\\\""; break;
-            case L'\r': out += L"\\r"; break;
-            case L'\n': out += L"\\n"; break;
-            case L'\t': out += L"\\t"; break;
-            default:
-                if (ch < 0x20)
-                {
-                    out += std::format(L"\\x{:02X}", static_cast<unsigned int>(ch));
-                }
-                else
-                {
-                    out.push_back(ch);
-                }
-                break;
-        }
-    }
-    return out;
-}
-
-[[nodiscard]] std::string EscapeJavaScriptStringUtf8(std::string_view text) noexcept
-{
-    std::string out;
-    out.reserve(text.size() + text.size() / 8);
-    for (const char ch : text)
-    {
-        const auto u = static_cast<uint8_t>(ch);
-        switch (ch)
-        {
-            case '\\': out += "\\\\"; break;
-            case '\'': out += "\\'"; break;
-            case '\"': out += "\\\""; break;
-            case '\r': out += "\\r"; break;
-            case '\n': out += "\\n"; break;
-            case '\t': out += "\\t"; break;
-            default:
-                if (u < 0x20)
-                {
-                    out += std::format("\\x{:02X}", static_cast<unsigned int>(u));
-                }
-                else
-                {
-                    out.push_back(ch);
-                }
-                break;
-        }
-    }
-    return out;
-}
 } // namespace
 
 void ResetSharedEnvironment() noexcept
 {
+    g_shutdownCleanupComplete.store(false, std::memory_order_release);
     ResetSharedEnvironmentImpl();
+    g_shutdownCleanupComplete.store(ResetViewerWebClassBackgroundBrushAtQuietPoint(), std::memory_order_release);
+}
+
+[[nodiscard]] bool CanUnloadViewerWebModuleNow() noexcept
+{
+    RetryStagedFileCleanup();
+    const DWORD callbackOwnerThread = g_comCallbackOwnerThreadId.load(std::memory_order_acquire);
+    if (! g_shutdownCleanupComplete.load(std::memory_order_acquire) || g_activeAsyncWorkerCount.load(std::memory_order_acquire) != 0u ||
+        g_liveComCallbackCount.load(std::memory_order_acquire) != 0u || g_stagedCleanupTracker.PendingCount() != 0u ||
+        g_comCallbackThreadViolation.load(std::memory_order_acquire) ||
+        (callbackOwnerThread != 0u && callbackOwnerThread != GetCurrentThreadId()))
+    {
+        return false;
+    }
+
+    const uint64_t releaseEpoch = g_comCallbackReleaseEpoch.load(std::memory_order_acquire);
+    const uint64_t observedEpoch = g_observedComCallbackReleaseEpoch.load(std::memory_order_acquire);
+    if (releaseEpoch != observedEpoch)
+    {
+        g_observedComCallbackReleaseEpoch.store(releaseEpoch, std::memory_order_release);
+        return false;
+    }
+    return true;
 }

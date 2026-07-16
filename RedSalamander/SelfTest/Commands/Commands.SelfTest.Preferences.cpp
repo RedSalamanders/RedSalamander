@@ -29,9 +29,10 @@ void SendScaledHeaderResizeDrag(HWND activePage, const RECT& headerRect) noexcep
     constexpr size_t kRequiredStableSamples = 24u;
 
     const auto deadline          = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
-    uint64_t previousRenderCount = 0u;
-    size_t stableSamples         = 0u;
-    bool haveSample              = false;
+    uint64_t previousRenderCount     = 0u;
+    uint64_t previousInvalidateCount = 0u;
+    size_t stableSamples             = 0u;
+    bool haveSample                  = false;
 
     while (std::chrono::steady_clock::now() < deadline)
     {
@@ -44,7 +45,8 @@ void SendScaledHeaderResizeDrag(HWND activePage, const RECT& headerRect) noexcep
             continue;
         }
 
-        if (haveSample && snapshot.categoryTreeDxHostRenderCount == previousRenderCount)
+        if (haveSample && snapshot.categoryTreeDxHostRenderCount == previousRenderCount &&
+            snapshot.categoryTreeDxHostInvalidateCount == previousInvalidateCount)
         {
             ++stableSamples;
             if (stableSamples >= kRequiredStableSamples)
@@ -55,9 +57,10 @@ void SendScaledHeaderResizeDrag(HWND activePage, const RECT& headerRect) noexcep
         }
         else
         {
-            previousRenderCount = snapshot.categoryTreeDxHostRenderCount;
-            stableSamples       = 0u;
-            haveSample          = true;
+            previousRenderCount     = snapshot.categoryTreeDxHostRenderCount;
+            previousInvalidateCount = snapshot.categoryTreeDxHostInvalidateCount;
+            stableSamples           = 0u;
+            haveSample              = true;
         }
 
         std::this_thread::sleep_for(20ms);
@@ -77,31 +80,72 @@ void SendScaledHeaderResizeDrag(HWND activePage, const RECT& headerRect) noexcep
         return false;
     }
 
-    if (const HWND root = GetAncestor(hwnd, GA_ROOT); root && IsWindow(root) != FALSE)
+    const HWND ancestor = GetAncestor(hwnd, GA_ROOT);
+    const HWND root     = ancestor ? ancestor : hwnd;
+    const auto targetHasFocus = [&]() noexcept
     {
-        SetActiveWindow(root);
-    }
+        const HWND focused = GetFocus();
+        return focused == hwnd || IsChild(hwnd, focused) != FALSE;
+    };
+    const auto tryFocus = [&]() noexcept
+    {
+        if (root && IsWindow(root) != FALSE)
+        {
+            const HWND foregroundWindow    = GetForegroundWindow();
+            const DWORD currentThreadId    = GetCurrentThreadId();
+            const DWORD foregroundThreadId = foregroundWindow ? GetWindowThreadProcessId(foregroundWindow, nullptr) : 0u;
+            const bool attachedForegroundThread =
+                foregroundThreadId != 0u && foregroundThreadId != currentThreadId && AttachThreadInput(foregroundThreadId, currentThreadId, TRUE) != FALSE;
+            const auto detachForegroundThread = wil::scope_exit([&]() noexcept
+            {
+                if (attachedForegroundThread)
+                {
+                    static_cast<void>(AttachThreadInput(foregroundThreadId, currentThreadId, FALSE));
+                }
+            });
 
-    SetFocus(hwnd);
+            ShowWindow(root, SW_SHOWNORMAL);
+            static_cast<void>(BringWindowToTop(root));
+            static_cast<void>(SetActiveWindow(root));
+            static_cast<void>(SetForegroundWindow(root));
+        }
+
+        static_cast<void>(SetFocus(hwnd));
+        if (root && IsWindow(root) != FALSE)
+        {
+            SetWindowPos(root, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+            SetWindowPos(root, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+            UpdateWindow(root);
+        }
+        PumpPendingMessages();
+        return targetHasFocus();
+    };
+
+    if (tryFocus())
+    {
+        return true;
+    }
     const auto deadline = std::chrono::steady_clock::now() + timeout;
     while (std::chrono::steady_clock::now() < deadline)
     {
         PumpPendingMessages();
-        if (GetFocus() == hwnd)
+        if (targetHasFocus())
         {
             return true;
         }
 
+        static_cast<void>(tryFocus());
         std::this_thread::sleep_for(10ms);
     }
 
     PumpPendingMessages();
-    return GetFocus() == hwnd;
+    static_cast<void>(tryFocus());
+    return targetHasFocus();
 }
 
 struct ScopedSettingsArtifactBackup final
 {
-    ScopedSettingsArtifactBackup() = default;
+    ScopedSettingsArtifactBackup()                                               = default;
     ScopedSettingsArtifactBackup(const ScopedSettingsArtifactBackup&)            = delete;
     ScopedSettingsArtifactBackup& operator=(const ScopedSettingsArtifactBackup&) = delete;
 

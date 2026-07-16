@@ -1,6 +1,7 @@
 #include "ViewerImgRaw.h"
 
 #include "ViewerImgRaw.Internal.h"
+#include "ViewerImgRaw.ResourcePolicy.h"
 
 #include <algorithm>
 #include <array>
@@ -21,11 +22,17 @@
 #include <wincodec.h>
 
 #include "Helpers.h"
+#include "PathUtils.h"
 #include "resource.h"
 
 namespace
 {
 static const int kViewerImgRawModuleAnchor = 0;
+
+[[nodiscard]] std::wstring FormatExportError(const UINT resourceId, const HRESULT hr)
+{
+    return FormatStringResource(g_hInstance, resourceId, static_cast<uint32_t>(hr));
+}
 
 std::wstring SanitizeFileName(std::wstring_view name) noexcept
 {
@@ -364,25 +371,61 @@ HRESULT EncodeBgraToImageFileWic(const std::wstring& outputPath,
         return E_INVALIDARG;
     }
 
-    const uint64_t pixelCount = static_cast<uint64_t>(width) * static_cast<uint64_t>(height);
-    if (pixelCount == 0 || pixelCount > (static_cast<uint64_t>(std::numeric_limits<size_t>::max()) / 4ull))
+    ViewerImgRawResource::DecodedImageLayout layout{};
+    const ViewerImgRawResource::ValidationError validation =
+        ViewerImgRawResource::ValidateDecodedImage(width, height, ViewerImgRawResource::kProductionDecodedImagePolicy, layout);
+    if (validation != ViewerImgRawResource::ValidationError::None || layout.bgraBytes > std::numeric_limits<UINT>::max() ||
+        layout.rowBytes > std::numeric_limits<UINT>::max())
     {
-        outStatusMessage = L"ViewerImgRaw: Image too large to export.";
-        return E_OUTOFMEMORY;
+        outStatusMessage = LoadStringResource(g_hInstance, IDS_VIEWERRAW_EXPORT_IMAGE_TOO_LARGE);
+        return validation == ViewerImgRawResource::ValidationError::InvalidDimensions ? E_INVALIDARG
+                                                                                       : HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+    }
+    if (layout.bgraBytes > bgra.size())
+    {
+        outStatusMessage = LoadStringResource(g_hInstance, IDS_VIEWERRAW_EXPORT_BUFFER_TRUNCATED);
+        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
 
-    const uint64_t bufferSize64 = pixelCount * 4ull;
-    if (bufferSize64 > static_cast<uint64_t>(std::numeric_limits<UINT>::max()))
+    // Atomic export: encode into a sibling temp file in the destination's own directory, then
+    // rename over the destination only after a fully successful encode. Any failure (disk full,
+    // device removed, encoder error, GIF palette quantization failure, oversized dimensions, ...)
+    // must never destroy the original the user confirmed overwriting. Mirrors ViewerWeb's
+    // temp-file + MoveFileExW export pattern. The directory is derived with std::wstring (not
+    // std::filesystem) to keep this noexcept function's existing exception profile — only
+    // std::bad_alloc, as with the std::format calls below. Extended Win32 paths preserve the
+    // sibling-temp guarantee for destinations beyond MAX_PATH.
+    const std::wstring outputWin32Path = Common::Paths::ToExtendedWin32Path(outputPath);
+    std::wstring tempPath;
+    wil::unique_hfile reservation;
+    const Common::Paths::UniqueSiblingFileOptions options{.prefix = L".rsi-", .suffix = L".tmp", .maximumAttempts = 16u};
+    const HRESULT tempHr = Common::Paths::CreateUniqueSiblingFile(outputWin32Path, options, tempPath, reservation);
+    if (FAILED(tempHr))
     {
-        outStatusMessage = L"ViewerImgRaw: Image too large to export.";
-        return E_OUTOFMEMORY;
+        outStatusMessage = FormatExportError(IDS_VIEWERRAW_EXPORT_TEMP_CREATE_FAILED_FMT, tempHr);
+        return tempHr;
     }
+    reservation.reset();
+
+    // The CREATE_NEW reservation already created a zero-byte temp file. Arm cleanup BEFORE the
+    // WIC objects are created so that on every early-return failure path the WIC stream (declared
+    // below) is destroyed first — closing its file handle — and this scope_exit fires last,
+    // deleting the temp after the handle is gone. On success, `committed` is set only after the
+    // rename, so the (already renamed-away) temp is never deleted.
+    bool committed = false;
+    auto cleanupTemp            = wil::scope_exit([&tempPath, &committed]() noexcept
+    {
+        if (! committed)
+        {
+            static_cast<void>(DeleteFileW(tempPath.c_str())); // best-effort; the original destination is untouched
+        }
+    });
 
     wil::com_ptr<IWICImagingFactory> factory;
     HRESULT hr = CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(factory.put()));
     if (FAILED(hr) || ! factory)
     {
-        outStatusMessage = std::format(L"ViewerImgRaw: Failed to create WIC factory (hr=0x{:08X}).", static_cast<unsigned long>(hr));
+        outStatusMessage = FormatExportError(IDS_VIEWERRAW_EXPORT_WIC_FACTORY_FAILED_FMT, hr);
         return FAILED(hr) ? hr : E_FAIL;
     }
 
@@ -390,14 +433,14 @@ HRESULT EncodeBgraToImageFileWic(const std::wstring& outputPath,
     hr = factory->CreateStream(stream.put());
     if (FAILED(hr) || ! stream)
     {
-        outStatusMessage = std::format(L"ViewerImgRaw: Failed to create WIC stream (hr=0x{:08X}).", static_cast<unsigned long>(hr));
+        outStatusMessage = FormatExportError(IDS_VIEWERRAW_EXPORT_WIC_STREAM_FAILED_FMT, hr);
         return FAILED(hr) ? hr : E_FAIL;
     }
 
-    hr = stream->InitializeFromFilename(outputPath.c_str(), GENERIC_WRITE);
+    hr = stream->InitializeFromFilename(tempPath.c_str(), GENERIC_WRITE);
     if (FAILED(hr))
     {
-        outStatusMessage = std::format(L"ViewerImgRaw: Failed to open export file (hr=0x{:08X}).", static_cast<unsigned long>(hr));
+        outStatusMessage = FormatExportError(IDS_VIEWERRAW_EXPORT_FILE_OPEN_FAILED_FMT, hr);
         return hr;
     }
 
@@ -420,21 +463,21 @@ HRESULT EncodeBgraToImageFileWic(const std::wstring& outputPath,
             container   = GUID_ContainerFormatWmp;
             pixelFormat = GUID_WICPixelFormat24bppBGR;
             break;
-        default: outStatusMessage = L"ViewerImgRaw: Unsupported export format."; return E_INVALIDARG;
+        default: outStatusMessage = LoadStringResource(g_hInstance, IDS_VIEWERRAW_EXPORT_FORMAT_UNSUPPORTED); return E_INVALIDARG;
     }
 
     wil::com_ptr<IWICBitmapEncoder> encoder;
     hr = factory->CreateEncoder(container, nullptr, encoder.put());
     if (FAILED(hr) || ! encoder)
     {
-        outStatusMessage = std::format(L"ViewerImgRaw: Failed to create encoder (hr=0x{:08X}).", static_cast<unsigned long>(hr));
+        outStatusMessage = FormatExportError(IDS_VIEWERRAW_EXPORT_ENCODER_CREATE_FAILED_FMT, hr);
         return FAILED(hr) ? hr : E_FAIL;
     }
 
     hr = encoder->Initialize(stream.get(), WICBitmapEncoderNoCache);
     if (FAILED(hr))
     {
-        outStatusMessage = std::format(L"ViewerImgRaw: Failed to initialize encoder (hr=0x{:08X}).", static_cast<unsigned long>(hr));
+        outStatusMessage = FormatExportError(IDS_VIEWERRAW_EXPORT_ENCODER_INIT_FAILED_FMT, hr);
         return hr;
     }
 
@@ -443,7 +486,7 @@ HRESULT EncodeBgraToImageFileWic(const std::wstring& outputPath,
     hr = encoder->CreateNewFrame(frame.put(), frameOptions.put());
     if (FAILED(hr) || ! frame)
     {
-        outStatusMessage = std::format(L"ViewerImgRaw: Failed to create frame (hr=0x{:08X}).", static_cast<unsigned long>(hr));
+        outStatusMessage = FormatExportError(IDS_VIEWERRAW_EXPORT_FRAME_CREATE_FAILED_FMT, hr);
         return FAILED(hr) ? hr : E_FAIL;
     }
 
@@ -451,14 +494,14 @@ HRESULT EncodeBgraToImageFileWic(const std::wstring& outputPath,
     hr = frame->Initialize(frameOptions.get());
     if (FAILED(hr))
     {
-        outStatusMessage = std::format(L"ViewerImgRaw: Failed to initialize frame (hr=0x{:08X}).", static_cast<unsigned long>(hr));
+        outStatusMessage = FormatExportError(IDS_VIEWERRAW_EXPORT_FRAME_INIT_FAILED_FMT, hr);
         return hr;
     }
 
     hr = frame->SetSize(width, height);
     if (FAILED(hr))
     {
-        outStatusMessage = std::format(L"ViewerImgRaw: Failed to set output size (hr=0x{:08X}).", static_cast<unsigned long>(hr));
+        outStatusMessage = FormatExportError(IDS_VIEWERRAW_EXPORT_SIZE_FAILED_FMT, hr);
         return hr;
     }
 
@@ -466,18 +509,18 @@ HRESULT EncodeBgraToImageFileWic(const std::wstring& outputPath,
     hr                        = frame->SetPixelFormat(&format);
     if (FAILED(hr))
     {
-        outStatusMessage = std::format(L"ViewerImgRaw: Failed to set output pixel format (hr=0x{:08X}).", static_cast<unsigned long>(hr));
+        outStatusMessage = FormatExportError(IDS_VIEWERRAW_EXPORT_PIXEL_FORMAT_FAILED_FMT, hr);
         return hr;
     }
 
-    const UINT stride     = width * 4u;
-    const UINT bufferSize = static_cast<UINT>(bufferSize64);
+    const UINT stride     = static_cast<UINT>(layout.rowBytes);
+    const UINT bufferSize = static_cast<UINT>(layout.bgraBytes);
 
     wil::com_ptr<IWICBitmap> bitmap;
     hr = factory->CreateBitmapFromMemory(width, height, GUID_WICPixelFormat32bppBGRA, stride, bufferSize, const_cast<BYTE*>(bgra.data()), bitmap.put());
     if (FAILED(hr) || ! bitmap)
     {
-        outStatusMessage = std::format(L"ViewerImgRaw: Failed to create source bitmap (hr=0x{:08X}).", static_cast<unsigned long>(hr));
+        outStatusMessage = FormatExportError(IDS_VIEWERRAW_EXPORT_BITMAP_CREATE_FAILED_FMT, hr);
         return FAILED(hr) ? hr : E_FAIL;
     }
 
@@ -489,14 +532,14 @@ HRESULT EncodeBgraToImageFileWic(const std::wstring& outputPath,
         hr = factory->CreatePalette(palette.put());
         if (FAILED(hr) || ! palette)
         {
-            outStatusMessage = std::format(L"ViewerImgRaw: Failed to create palette (hr=0x{:08X}).", static_cast<unsigned long>(hr));
+            outStatusMessage = FormatExportError(IDS_VIEWERRAW_EXPORT_PALETTE_CREATE_FAILED_FMT, hr);
             return FAILED(hr) ? hr : E_FAIL;
         }
 
         hr = palette->InitializeFromBitmap(bitmap.get(), 256, FALSE);
         if (FAILED(hr))
         {
-            outStatusMessage = std::format(L"ViewerImgRaw: Failed to initialize palette (hr=0x{:08X}).", static_cast<unsigned long>(hr));
+            outStatusMessage = FormatExportError(IDS_VIEWERRAW_EXPORT_PALETTE_INIT_FAILED_FMT, hr);
             return hr;
         }
 
@@ -504,14 +547,14 @@ HRESULT EncodeBgraToImageFileWic(const std::wstring& outputPath,
         hr = factory->CreateFormatConverter(converter.put());
         if (FAILED(hr) || ! converter)
         {
-            outStatusMessage = std::format(L"ViewerImgRaw: Failed to create converter (hr=0x{:08X}).", static_cast<unsigned long>(hr));
+            outStatusMessage = FormatExportError(IDS_VIEWERRAW_EXPORT_CONVERTER_CREATE_FAILED_FMT, hr);
             return FAILED(hr) ? hr : E_FAIL;
         }
 
         hr = converter->Initialize(bitmap.get(), format, WICBitmapDitherTypeErrorDiffusion, palette.get(), 0.0, WICBitmapPaletteTypeCustom);
         if (FAILED(hr))
         {
-            outStatusMessage = std::format(L"ViewerImgRaw: Failed to convert to indexed format (hr=0x{:08X}).", static_cast<unsigned long>(hr));
+            outStatusMessage = FormatExportError(IDS_VIEWERRAW_EXPORT_INDEXED_CONVERT_FAILED_FMT, hr);
             return hr;
         }
 
@@ -524,14 +567,14 @@ HRESULT EncodeBgraToImageFileWic(const std::wstring& outputPath,
         hr = factory->CreateFormatConverter(converter.put());
         if (FAILED(hr) || ! converter)
         {
-            outStatusMessage = std::format(L"ViewerImgRaw: Failed to create converter (hr=0x{:08X}).", static_cast<unsigned long>(hr));
+            outStatusMessage = FormatExportError(IDS_VIEWERRAW_EXPORT_CONVERTER_CREATE_FAILED_FMT, hr);
             return FAILED(hr) ? hr : E_FAIL;
         }
 
         hr = converter->Initialize(bitmap.get(), format, WICBitmapDitherTypeNone, nullptr, 0.0, WICBitmapPaletteTypeCustom);
         if (FAILED(hr))
         {
-            outStatusMessage = std::format(L"ViewerImgRaw: Failed to convert to target format (hr=0x{:08X}).", static_cast<unsigned long>(hr));
+            outStatusMessage = FormatExportError(IDS_VIEWERRAW_EXPORT_TARGET_CONVERT_FAILED_FMT, hr);
             return hr;
         }
 
@@ -546,29 +589,53 @@ HRESULT EncodeBgraToImageFileWic(const std::wstring& outputPath,
     hr = frame->WriteSource(source.get(), nullptr);
     if (FAILED(hr))
     {
-        outStatusMessage = std::format(L"ViewerImgRaw: Failed to write frame (hr=0x{:08X}).", static_cast<unsigned long>(hr));
+        outStatusMessage = FormatExportError(IDS_VIEWERRAW_EXPORT_FRAME_WRITE_FAILED_FMT, hr);
         return hr;
     }
 
     hr = frame->Commit();
     if (FAILED(hr))
     {
-        outStatusMessage = std::format(L"ViewerImgRaw: Failed to commit frame (hr=0x{:08X}).", static_cast<unsigned long>(hr));
+        outStatusMessage = FormatExportError(IDS_VIEWERRAW_EXPORT_FRAME_COMMIT_FAILED_FMT, hr);
         return hr;
     }
 
     hr = encoder->Commit();
     if (FAILED(hr))
     {
-        outStatusMessage = std::format(L"ViewerImgRaw: Failed to commit encoder (hr=0x{:08X}).", static_cast<unsigned long>(hr));
+        outStatusMessage = FormatExportError(IDS_VIEWERRAW_EXPORT_ENCODER_COMMIT_FAILED_FMT, hr);
         return hr;
     }
 
+    // encoder->Commit() flushed all encoded bytes into the stream, but the WIC encoder still holds
+    // an AddRef on the IWICStream (taken in encoder->Initialize(stream.get(), ...)), and the frame
+    // holds the encoder, so the temp file's OS handle stays open. Release the entire WIC object
+    // graph that pins the stream BEFORE the rename, or MoveFileExW fails with a sharing violation.
+    frame.reset();
+    encoder.reset();
+    source.reset();
+    bitmap.reset();
+    paletteToSet.reset();
+    stream.reset();
+
+    if (MoveFileExW(tempPath.c_str(), outputWin32Path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) == 0)
+    {
+        const DWORD lastError = GetLastError();
+        outStatusMessage = FormatExportError(IDS_VIEWERRAW_EXPORT_FINALIZE_FAILED_FMT, HRESULT_FROM_WIN32(lastError));
+        return HRESULT_FROM_WIN32(lastError); // cleanupTemp removes the temp; the original is untouched
+    }
+
+    committed = true; // the temp has been renamed onto the destination — do not delete it
     return S_OK;
 }
 } // namespace
 
 void ViewerImgRaw::BeginExport(HWND hwnd)
+{
+    BeginExportImpl(hwnd, nullptr);
+}
+
+void ViewerImgRaw::BeginExportImpl(HWND hwnd, const wchar_t* outputPathOverride)
 {
     if (! hwnd)
     {
@@ -596,13 +663,19 @@ void ViewerImgRaw::BeginExport(HWND hwnd)
         return;
     }
 
-    const CachedImage* image         = _currentImage;
-    const bool exportingThumb        = IsDisplayingThumbnail();
-    const uint32_t w                 = exportingThumb ? image->thumbWidth : image->rawWidth;
-    const uint32_t h                 = exportingThumb ? image->thumbHeight : image->rawHeight;
-    const std::vector<uint8_t>& bgra = exportingThumb ? image->thumbBgra : image->rawBgra;
+    uint32_t w = 0;
+    uint32_t h = 0;
+    std::vector<uint8_t> pixels; // owned snapshot — survives the modal save dialog's nested message pump
+    const bool exportingThumb = IsDisplayingThumbnail();
+    const CachedImage* image  = _currentImage; // UI-thread-affine; non-null here per the guard at the top of BeginExport
+    if (image != nullptr)                      // defensive re-check; no message pump runs between that guard and here
+    {
+        w      = exportingThumb ? image->thumbWidth : image->rawWidth;
+        h      = exportingThumb ? image->thumbHeight : image->rawHeight;
+        pixels = exportingThumb ? image->thumbBgra : image->rawBgra; // deep copy BEFORE the modal dialog pumps
+    }
 
-    if (w == 0 || h == 0 || bgra.empty())
+    if (w == 0 || h == 0 || pixels.empty())
     {
         if (_hostAlerts)
         {
@@ -645,7 +718,18 @@ void ViewerImgRaw::BeginExport(HWND hwnd)
     suggested.push_back(L'.');
     suggested.append(DefaultExtensionForExportFormat(defaultFormat).data());
 
-    const std::optional<ExportSaveDialogResult> save = ShowExportSaveDialog(hwnd, defaultFormat, suggested);
+    std::optional<ExportSaveDialogResult> save;
+    if (outputPathOverride && outputPathOverride[0] != L'\0')
+    {
+        ExportSaveDialogResult overridden{};
+        overridden.path             = outputPathOverride;
+        overridden.formatFromFilter = ExportFormatFromExtension(PathExtensionView(overridden.path)).value_or(defaultFormat);
+        save                         = std::move(overridden);
+    }
+    else
+    {
+        save = ShowExportSaveDialog(hwnd, defaultFormat, suggested);
+    }
     if (! save || save->path.empty())
     {
         return;
@@ -688,9 +772,6 @@ void ViewerImgRaw::BeginExport(HWND hwnd)
         output.append(DefaultExtensionForExportFormat(exportFormat).data());
     }
 
-    std::vector<uint8_t> pixels;
-    pixels = bgra;
-
     ExportEncoderOptions encoderOptions{};
     encoderOptions.jpegQualityPercent      = std::clamp(_config.exportJpegQualityPercent, 1u, 100u);
     encoderOptions.jpegSubsampling         = std::clamp(_config.exportJpegSubsampling, 0u, 4u);
@@ -714,8 +795,19 @@ void ViewerImgRaw::BeginExport(HWND hwnd)
     };
 
     auto ctx = std::unique_ptr<AsyncExportWorkItem>(new (std::nothrow) AsyncExportWorkItem{});
+    if (! ctx)
+    {
+        Release(); // balance the AddRef() above
+        return;
+    }
 
     ctx->moduleKeepAlive = AcquireModuleReferenceFromAddress(&kViewerImgRawModuleAnchor);
+    if (! ctx->moduleKeepAlive)
+    {
+        Debug::Error(L"ViewerImgRaw: Failed to pin the plugin module for export work");
+        Release(); // balance the AddRef() above
+        return;
+    }
     ctx->work            = [this, hwnd, exportFormat, width = w, height = h, encoderOptions, output = std::move(output), pixels = std::move(pixels)]() mutable
     {
         auto releaseSelf = wil::scope_exit([&] { Release(); });
@@ -742,7 +834,7 @@ void ViewerImgRaw::BeginExport(HWND hwnd)
         if (FAILED(coinitHr) && coinitHr != RPC_E_CHANGED_MODE)
         {
             result->hr            = coinitHr;
-            result->statusMessage = std::format(L"ViewerImgRaw: COM init failed (hr=0x{:08X}).", static_cast<unsigned long>(coinitHr));
+            result->statusMessage = FormatExportError(IDS_VIEWERRAW_EXPORT_COM_INIT_FAILED_FMT, coinitHr);
         }
         else
         {
@@ -757,16 +849,22 @@ void ViewerImgRaw::BeginExport(HWND hwnd)
         static_cast<void>(PostMessagePayload(hwnd, kAsyncExportCompleteMessage, 0, std::move(result)));
     };
 
+    NotifyViewerImgRawAsyncWorkQueued();
     const BOOL queued = TrySubmitThreadpoolCallback(
-        [](PTP_CALLBACK_INSTANCE /*instance*/, void* context) noexcept
+        [](PTP_CALLBACK_INSTANCE instance, void* context) noexcept
     {
         std::unique_ptr<AsyncExportWorkItem> ctx(static_cast<AsyncExportWorkItem*>(context));
         if (! ctx)
         {
+            NotifyViewerImgRawAsyncWorkCompleted();
             return;
         }
 
-        static_cast<void>(ctx->moduleKeepAlive);
+        if (ctx->moduleKeepAlive)
+        {
+            TransferModulePinToCallbackReturn(instance, ctx->moduleKeepAlive);
+        }
+        auto completeAsyncWork = wil::scope_exit([]() noexcept { NotifyViewerImgRawAsyncWorkCompleted(); });
         if (ctx->work)
         {
             ctx->work();
@@ -777,10 +875,13 @@ void ViewerImgRaw::BeginExport(HWND hwnd)
 
     if (queued == 0)
     {
+        NotifyViewerImgRawAsyncWorkCompleted();
         Debug::Error(L"ViewerImgRaw: Failed to queue export work item");
+        Release(); // balance the AddRef(); ctx's destructor frees the work item
+        return;
     }
 
-    ctx.release();
+    ctx.release(); // success only — the threadpool now owns the work item
 }
 
 void ViewerImgRaw::OnAsyncExportComplete(std::unique_ptr<AsyncExportResult> result) noexcept
@@ -796,12 +897,12 @@ void ViewerImgRaw::OnAsyncExportComplete(std::unique_ptr<AsyncExportResult> resu
         HostAlertSeverity severity = HOST_ALERT_INFO;
         if (SUCCEEDED(result->hr))
         {
-            message  = std::format(L"Exported: {}", result->outputPath.c_str());
+            message  = FormatStringResource(g_hInstance, IDS_VIEWERRAW_EXPORT_SUCCESS_FMT, result->outputPath);
             severity = HOST_ALERT_INFO;
         }
         else
         {
-            message  = result->statusMessage.empty() ? L"ViewerImgRaw: Export failed." : result->statusMessage;
+            message  = result->statusMessage.empty() ? LoadStringResource(g_hInstance, IDS_VIEWERRAW_EXPORT_FAILED) : result->statusMessage;
             severity = HOST_ALERT_WARNING;
         }
 

@@ -553,7 +553,8 @@ void FolderView::UpdateItemTextLayouts()
         if (! item.detailsLayout)
         {
             wil::com_ptr<IDWriteTextLayout> layout;
-            const HRESULT hr = CreateInstrumentedItemTextLayout(ItemTextLayoutKind::Details, item.detailsText.c_str(),
+            const HRESULT hr = CreateInstrumentedItemTextLayout(ItemTextLayoutKind::Details,
+                                                                item.detailsText.c_str(),
                                                                 static_cast<UINT32>(item.detailsText.length()),
                                                                 _detailsFormat.get(),
                                                                 constrainedWidth,
@@ -597,7 +598,8 @@ void FolderView::UpdateItemTextLayouts()
         if (! item.metadataLayout && ! item.metadataText.empty())
         {
             wil::com_ptr<IDWriteTextLayout> layout;
-            const HRESULT hr = CreateInstrumentedItemTextLayout(ItemTextLayoutKind::Metadata, item.metadataText.c_str(),
+            const HRESULT hr = CreateInstrumentedItemTextLayout(ItemTextLayoutKind::Metadata,
+                                                                item.metadataText.c_str(),
                                                                 static_cast<UINT32>(item.metadataText.length()),
                                                                 _detailsFormat.get(),
                                                                 constrainedWidth,
@@ -819,7 +821,12 @@ void FolderView::EnsureItemTextLayout(FolderItem& item, float labelWidth)
     {
         wil::com_ptr<IDWriteTextLayout> layout;
         HRESULT hr = CreateInstrumentedItemTextLayout(ItemTextLayoutKind::Label,
-            labelText.data(), static_cast<UINT32>(labelText.length()), _labelFormat.get(), constrainedWidth, constrainedHeight, layout.addressof());
+                                                      labelText.data(),
+                                                      static_cast<UINT32>(labelText.length()),
+                                                      _labelFormat.get(),
+                                                      constrainedWidth,
+                                                      constrainedHeight,
+                                                      layout.addressof());
         if (SUCCEEDED(hr))
         {
             ConfigureLabelLayout(layout.get(), _ellipsisSign.get());
@@ -858,7 +865,8 @@ void FolderView::EnsureItemTextLayout(FolderItem& item, float labelWidth)
         if (! item.detailsLayout && ! item.detailsText.empty())
         {
             wil::com_ptr<IDWriteTextLayout> layout;
-            const HRESULT hr = CreateInstrumentedItemTextLayout(ItemTextLayoutKind::Details, item.detailsText.c_str(),
+            const HRESULT hr = CreateInstrumentedItemTextLayout(ItemTextLayoutKind::Details,
+                                                                item.detailsText.c_str(),
                                                                 static_cast<UINT32>(item.detailsText.length()),
                                                                 _detailsFormat.get(),
                                                                 constrainedWidth,
@@ -894,7 +902,8 @@ void FolderView::EnsureItemTextLayout(FolderItem& item, float labelWidth)
             if (! item.metadataLayout && ! item.metadataText.empty())
             {
                 wil::com_ptr<IDWriteTextLayout> layout;
-                const HRESULT hr = CreateInstrumentedItemTextLayout(ItemTextLayoutKind::Metadata, item.metadataText.c_str(),
+                const HRESULT hr = CreateInstrumentedItemTextLayout(ItemTextLayoutKind::Metadata,
+                                                                    item.metadataText.c_str(),
                                                                     static_cast<UINT32>(item.metadataText.length()),
                                                                     _detailsFormat.get(),
                                                                     constrainedWidth,
@@ -1007,7 +1016,8 @@ void FolderView::ProcessIdleLayoutBatch()
 
         // Create label layout
         wil::com_ptr<IDWriteTextLayout> layout;
-        HRESULT hr = CreateInstrumentedItemTextLayout(ItemTextLayoutKind::Label, item.displayName.data(),
+        HRESULT hr = CreateInstrumentedItemTextLayout(ItemTextLayoutKind::Label,
+                                                      item.displayName.data(),
                                                       static_cast<UINT32>(item.displayName.length()),
                                                       _labelFormat.get(),
                                                       constrainedWidth,
@@ -1043,7 +1053,8 @@ void FolderView::ProcessIdleLayoutBatch()
             if (! item.detailsLayout && ! item.detailsText.empty())
             {
                 wil::com_ptr<IDWriteTextLayout> detailsLayout;
-                hr = CreateInstrumentedItemTextLayout(ItemTextLayoutKind::Details, item.detailsText.c_str(),
+                hr = CreateInstrumentedItemTextLayout(ItemTextLayoutKind::Details,
+                                                      item.detailsText.c_str(),
                                                       static_cast<UINT32>(item.detailsText.length()),
                                                       _detailsFormat.get(),
                                                       constrainedWidth,
@@ -1072,7 +1083,8 @@ void FolderView::ProcessIdleLayoutBatch()
                 if (! item.metadataLayout && ! item.metadataText.empty())
                 {
                     wil::com_ptr<IDWriteTextLayout> metaLayout;
-                    hr = CreateInstrumentedItemTextLayout(ItemTextLayoutKind::Metadata, item.metadataText.c_str(),
+                    hr = CreateInstrumentedItemTextLayout(ItemTextLayoutKind::Metadata,
+                                                          item.metadataText.c_str(),
                                                           static_cast<UINT32>(item.metadataText.length()),
                                                           _detailsFormat.get(),
                                                           constrainedWidth,

@@ -125,6 +125,7 @@
     <ClCompile Include="Factory.cpp" />
     <ClCompile Include="ViewerSpace.cpp" />
     <ClInclude Include="resource.h" />
+    <ClInclude Include="ViewerSpace.ScanPolicy.h" />
     <ClInclude Include="ViewerSpace.h" />
     <ResourceCompile Include="ViewerSpaceResources.rc" />
   </ItemGroup>

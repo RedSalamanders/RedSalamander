@@ -34,6 +34,7 @@ These locations are referenced by the build/runtime:
 
 ### Core
 
+- `Specs/Core/Core_SharedHelpers.md`
 - `Specs/Core/Core_SettingsStore.md`
 - `Specs/Core/Core_Search.md`
 - `Specs/Core/Core_ConnectionManager.md`

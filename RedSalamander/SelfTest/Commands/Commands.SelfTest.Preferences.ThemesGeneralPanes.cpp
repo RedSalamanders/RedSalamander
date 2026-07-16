@@ -73,6 +73,47 @@ namespace
                        DescribeThemesWindowForSelfTest(focus));
 }
 
+[[nodiscard]] std::wstring DescribePreferencesGeneralNavigationSnapshotForSelfTest(const PreferencesDebugSnapshot& snapshot)
+{
+    PreferencesDebugSnapshot currentSnapshot{};
+    const bool haveCurrentSnapshot             = DebugGetPreferencesDialogSnapshot(currentSnapshot);
+    const PreferencesDebugSnapshot& diagnostic = haveCurrentSnapshot ? currentSnapshot : snapshot;
+
+    const HWND prefs        = GetPreferencesDialogHandle();
+    const HWND activePage   = DebugGetPreferencesActivePageHandle();
+    const HWND activeDxHost = DebugGetPreferencesActivePageDxHostHandle();
+    const HWND focus        = GetFocus();
+
+    return std::format(L"haveSnapshot={} category={} title='{}' generalFocus={} viewersRows={} viewersVisibleRows={} "
+                       L"categoryTreeFocused={} treeFirstVisible={} treeSelected={} pageCards={} pageChildren={} renderedDxHosts={} "
+                       L"renderTotal={} generalTypographyContext={} generalTypographyMetrics={} paneWindows={}/{} pageResizeFailures={} "
+                       L"shellResizeFailures={} shellFocus={} prefsWindow=[{}] activePage=[{}] activeDxHost=[{}] focus=[{}]",
+                       haveCurrentSnapshot,
+                       static_cast<int>(diagnostic.currentCategory),
+                       diagnostic.pageTitle,
+                       static_cast<int>(diagnostic.generalFocusTarget),
+                       diagnostic.viewersListRowCount,
+                       diagnostic.viewersListVisibleRowCount,
+                       diagnostic.categoryTreeFocused,
+                       diagnostic.categoryTreeFirstVisibleIndex,
+                       diagnostic.categoryTreeSelectedVisibleIndex,
+                       diagnostic.currentPageCardCount,
+                       diagnostic.visibleCurrentPageChildWindowCount,
+                       diagnostic.currentPageRenderedDxHostCount,
+                       diagnostic.currentPageDxHostRenderCountTotal,
+                       diagnostic.generalUsesDxUiTypographyContext,
+                       diagnostic.generalUsesDxUiTypographyMetrics,
+                       diagnostic.createdPaneWindowCount,
+                       diagnostic.visiblePaneWindowCount,
+                       diagnostic.currentPageDxHostResizeFailureCount,
+                       diagnostic.shellDxHostResizeFailureCount,
+                       static_cast<int>(diagnostic.shellFocusTarget),
+                       DescribeThemesWindowForSelfTest(prefs),
+                       DescribeThemesWindowForSelfTest(activePage),
+                       DescribeThemesWindowForSelfTest(activeDxHost),
+                       DescribeThemesWindowForSelfTest(focus));
+}
+
 [[nodiscard]] bool TestPreferencesDialogThemesSearchRoundTripPreservesRetainedState(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
@@ -140,7 +181,8 @@ namespace
 
     const auto navigateToThemesPage = [&]() noexcept
     {
-        state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Themes search round-trip test.");
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(1000ms)),
+                      L"Failed to focus the Preferences category host for Themes search round-trip test.");
         if (! state.failure.empty())
         {
             return false;
@@ -211,14 +253,14 @@ namespace
         return false;
     }
 
-    state.Require(SetFocus(categoryTreeHost) == categoryTreeHost,
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(1000ms)),
                   L"Failed to refocus the Preferences category host before leaving Themes for General during retained-search round-trip validation.");
     if (! state.failure.empty())
     {
         return false;
     }
 
-    state.Require(SetFocus(categoryTreeHost) == categoryTreeHost,
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(1000ms)),
                   L"Failed to refocus the Preferences category host before leaving Themes for General during retained-search round-trip validation.");
     if (! state.failure.empty())
     {
@@ -316,7 +358,7 @@ namespace
 
     const auto navigateToThemesPage = [&]() noexcept
     {
-        state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Themes retained-selection test.");
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Themes retained-selection test.");
         if (! state.failure.empty())
         {
             return false;
@@ -367,7 +409,7 @@ namespace
         return false;
     }
 
-    state.Require(SetFocus(categoryTreeHost) == categoryTreeHost,
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
                   L"Failed to refocus the Preferences category host before leaving Themes for General during retained-selection validation.");
     if (! state.failure.empty())
     {
@@ -580,7 +622,7 @@ namespace
         return false;
     }
 
-    state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Themes grid UIA selection test.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Themes grid UIA selection test.");
     state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes), L"Failed to select the Preferences Themes category for Themes grid UIA selection test.");
     PumpPendingMessages();
     SelfTest::AppendSuiteTrace(
@@ -721,7 +763,7 @@ namespace
             return false;
         }
 
-        state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Themes tab-traversal validation.");
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Themes tab-traversal validation.");
 
         if (waitForSnapshot(
                 [&](const PreferencesDebugSnapshot& value) noexcept
@@ -741,7 +783,7 @@ namespace
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
                       L"Failed to select the Preferences Themes category during tab-traversal validation.");
         PumpPendingMessages();
-        state.Require(SetFocus(categoryTreeHost) == categoryTreeHost,
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
                       L"Failed to restore focus to the Preferences category host after selecting Themes during tab-traversal validation.");
 
         state.Require(waitForSnapshot(
@@ -989,7 +1031,7 @@ namespace
             return false;
         }
 
-        state.Require(SetFocus(categoryTreeHost) == categoryTreeHost,
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
                       L"Failed to focus the Preferences category host for Themes pointer-selection validation.");
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
                       L"Failed to select the Preferences Themes category for Themes pointer-selection validation.");
@@ -1012,7 +1054,7 @@ namespace
         return false;
     }
 
-    state.Require(DebugSelectPreferencesThemesListRow(0u), L"Failed to select the first Themes DX row before pointer-selection validation.");
+    state.Require(DebugSelectPreferencesThemesListRow(1u), L"Failed to select the second Themes DX row before pointer-selection validation.");
     state.Require(waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept
     { return value.currentCategory == kPrefCategoryThemes && ! value.themesSelectedColorKeyText.empty() && value.currentPageDxHostResizeFailureCount == 0u; },
                                   snapshot),
@@ -1023,7 +1065,7 @@ namespace
     }
 
     RECT rowRect{};
-    state.Require(DebugGetPreferencesThemesListRowClientRect(1u, rowRect),
+    state.Require(DebugGetPreferencesThemesListRowClientRect(0u, rowRect),
                   L"Failed to capture a visible Preferences Themes DX row rect for pointer-selection validation.");
     state.Require(rowRect.right > rowRect.left && rowRect.bottom > rowRect.top,
                   std::format(L"Preferences Themes DX row rect should be non-empty for pointer-selection validation; saw ({}, {})-({}, {}).",
@@ -1036,7 +1078,7 @@ namespace
         return false;
     }
 
-    const HWND activePage = DebugGetPreferencesActivePageHandle();
+    const HWND activePage = DebugGetPreferencesActivePageDxHostHandle();
     state.Require(activePage != nullptr && IsWindow(activePage) != FALSE,
                   L"Failed to resolve the active Preferences Themes DX page host for pointer-selection validation.");
     if (! activePage || IsWindow(activePage) == FALSE)
@@ -1079,15 +1121,26 @@ namespace
                value.visibleCurrentPageChildWindowCount == 1u && value.currentPageDxHostResizeFailureCount == 0u;
     },
                       snapshot),
-                  std::format(L"Clicking the Preferences Themes DX row did not settle on the expected retained selection; selected='{}', focusTarget={}, "
-                              L"rows={}, cols={}, cells={}, renderCount={}, resizeCount={}, pageResizeFailures={}.",
+                  std::format(L"Clicking the Preferences Themes DX row did not settle on the expected retained selection; baseline='{}', selected='{}', "
+                              L"focusTarget={}, rowRect=({}, {})-({}, {}), click=({}, {}), activePage={:#x}, targetWindow={:#x}, rows={}, cols={}, "
+                              L"cells={}, renderCount={}, resizeCount={}, pageScrollY={}, pageResizeFailures={}.",
+                              baselineSelectedColorKey,
                               snapshot.themesSelectedColorKeyText,
                               static_cast<unsigned>(snapshot.themesFocusTarget),
+                              rowRect.left,
+                              rowRect.top,
+                              rowRect.right,
+                              rowRect.bottom,
+                              clickX,
+                              clickY,
+                              reinterpret_cast<uintptr_t>(activePage),
+                              reinterpret_cast<uintptr_t>(targetWindow),
                               snapshot.themesListVisibleRowCount,
                               snapshot.themesListVisibleColumnCount,
                               snapshot.themesListVisibleCellCount,
                               snapshot.themesListRenderCount,
                               snapshot.themesListResizeCount,
+                              snapshot.pageScrollY,
                               snapshot.currentPageDxHostResizeFailureCount));
 
     return state.failure.empty();
@@ -1160,7 +1213,7 @@ namespace
             return false;
         }
 
-        state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Themes header-reorder validation.");
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Themes header-reorder validation.");
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
                       L"Failed to select the Preferences Themes category for Themes header-reorder validation.");
         PumpPendingMessages();
@@ -1208,7 +1261,7 @@ namespace
         return false;
     }
 
-    const HWND activePage = DebugGetPreferencesActivePageHandle();
+    const HWND activePage = DebugGetPreferencesActivePageDxHostHandle();
     state.Require(activePage != nullptr && IsWindow(activePage) != FALSE,
                   L"Failed to resolve the active Preferences Themes DX page host for header-reorder validation.");
     if (! activePage || IsWindow(activePage) == FALSE)
@@ -1335,7 +1388,7 @@ namespace
             return false;
         }
 
-        state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Themes reordered-copy validation.");
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Themes reordered-copy validation.");
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
                       L"Failed to select the Preferences Themes category for Themes reordered-copy validation.");
         PumpPendingMessages();
@@ -1382,7 +1435,7 @@ namespace
         return false;
     }
 
-    const HWND activePage = DebugGetPreferencesActivePageHandle();
+    const HWND activePage = DebugGetPreferencesActivePageDxHostHandle();
     state.Require(activePage != nullptr && IsWindow(activePage) != FALSE,
                   L"Failed to resolve the active Preferences Themes DX page host for reordered-copy validation.");
     if (! activePage || IsWindow(activePage) == FALSE)
@@ -1534,14 +1587,17 @@ namespace
         };
 
         PreferencesDebugSnapshot snapshot{};
-        state.Require(waitForSnapshot(
-                          [](const PreferencesDebugSnapshot& value) noexcept
+        const bool generalReady = waitForSnapshot(
+            [](const PreferencesDebugSnapshot& value) noexcept
         {
             return value.currentCategory == kPrefCategoryGeneral && value.currentPageRenderedDxHostCount <= 1u &&
                    value.visibleCurrentPageChildWindowCount <= 1u && value.generalUsesDxUiTypographyContext && value.generalUsesDxUiTypographyMetrics;
         },
-                          snapshot),
-                      std::format(L"Preferences General page did not settle onto its DX toggle-card surface during {}.", context));
+            snapshot);
+        state.Require(generalReady,
+                      std::format(L"Preferences General page did not settle onto its DX toggle-card surface during {}; {}.",
+                                  context,
+                                  DescribePreferencesGeneralNavigationSnapshotForSelfTest(snapshot)));
         if (! state.failure.empty())
         {
             return false;
@@ -1618,15 +1674,25 @@ namespace
         RedrawWindow(prefs, nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_FRAME | RDW_UPDATENOW);
         PumpPendingMessages();
 
+        PreferencesDebugSnapshot afterViewersClick{};
+        static_cast<void>(DebugGetPreferencesDialogSnapshot(afterViewersClick));
+        SelfTest::AppendSelfTestTrace(
+            std::format(L"Preferences General page Viewers-click snapshot during {}: {}",
+                        context,
+                        DescribePreferencesGeneralNavigationSnapshotForSelfTest(afterViewersClick)));
+
         snapshot = {};
-        state.Require(waitForSnapshot(
-                          [](const PreferencesDebugSnapshot& value) noexcept
+        const bool viewersReady = waitForSnapshot(
+            [](const PreferencesDebugSnapshot& value) noexcept
         {
             return value.currentCategory == kPrefCategoryViewers && value.currentPageDxHostResizeFailureCount == 0u &&
                    value.shellDxHostResizeFailureCount == 0u;
         },
-                          snapshot),
-                      std::format(L"Failed to capture a settled Preferences Viewers snapshot after switching from General during {}.", context));
+            snapshot);
+        state.Require(viewersReady,
+                      std::format(L"Failed to capture a settled Preferences Viewers snapshot after switching from General during {}; {}.",
+                                  context,
+                                  DescribePreferencesGeneralNavigationSnapshotForSelfTest(snapshot)));
         state.Require(snapshot.currentCategory == kPrefCategoryViewers,
                       std::format(L"Preferences click navigation did not move to the Viewers category during {}.", context));
         state.Require(snapshot.currentPageRenderedDxHostCount <= 1u,
@@ -1899,9 +1965,9 @@ namespace
                   L"Preferences General page focused menu-bar toggle did not accept keyboard interaction during shell Cancel discard validation.");
     state.Require(waitForMenuBarToggleChecked(! initialToggleChecked),
                   L"Preferences General page menu-bar toggle did not settle to the edited state during shell Cancel discard validation.");
-    state.Require(InvokeVisibleDescendantByNameWithMessagePump(
-                      getShellHost(), UIA_ButtonControlTypeId, cancelButtonText, L"Preferences General shell Cancel invoke"),
-                  L"Preferences shell visible DX Cancel action did not expose live UIA InvokePattern interaction during General discard validation.");
+    state.Require(
+        InvokeVisibleDescendantByNameWithMessagePump(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText, L"Preferences General shell Cancel invoke"),
+        L"Preferences shell visible DX Cancel action did not expose live UIA InvokePattern interaction during General discard validation.");
     state.Require(
         WaitForWindowClosed(prefs, SelfTest::Scale(3000ms)),
         L"Preferences dialog did not close after live UIA InvokePattern interaction on the visible DX Cancel action during General discard validation.");
@@ -2162,8 +2228,9 @@ namespace
         return false;
     }
 
-    state.Require(InvokeVisibleDescendantByName(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText),
-                  L"Preferences shell visible DX Cancel action did not close the dialog during DxUI customization preview validation.");
+    state.Require(
+        InvokeVisibleDescendantByNameWithMessagePump(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText, L"Preferences General customization Cancel"),
+        L"Preferences shell visible DX Cancel action did not close the dialog during DxUI customization preview validation.");
     state.Require(WaitForWindowClosed(prefs, SelfTest::Scale(3000ms)),
                   L"Preferences dialog did not close after cancelling the DxUI customization preview mutation.");
     prefs = nullptr;
@@ -2655,18 +2722,13 @@ namespace
 
     const auto navigateToPanesPage = [&](HWND prefs, PreferencesDebugSnapshot& outSnapshot) noexcept
     {
-        const HWND categoryTreeHost = GetDlgItem(prefs, IDC_PREFS_CATEGORY_LIST);
-        state.Require(categoryTreeHost != nullptr && IsWindow(categoryTreeHost) != FALSE, L"Preferences category host control missing.");
-        if (! categoryTreeHost || IsWindow(categoryTreeHost) == FALSE)
+        state.Require(prefs != nullptr && IsWindow(prefs) != FALSE, L"Preferences window invalid for Panes page DX test.");
+        if (! prefs || IsWindow(prefs) == FALSE)
         {
             return false;
         }
 
-        state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Panes navigation.");
-        PumpPendingMessages();
-
-        SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
-        SendMessageW(categoryTreeHost, WM_KEYUP, VK_DOWN, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryPanes), L"Failed to select the Preferences Panes category for Panes page DX test.");
         PumpPendingMessages();
 
         state.Require(waitForSnapshot(
@@ -2921,7 +2983,7 @@ namespace
         return pagePatternStats;
     };
 
-    state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for General round-trip test.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for General round-trip test.");
     PumpPendingMessages();
 
     state.Require(waitForSnapshot(
@@ -3913,21 +3975,13 @@ namespace
 
     const auto navigateToPanesPage = [&](PreferencesDebugSnapshot& outSnapshot) noexcept
     {
-        const HWND treeHost = GetDlgItem(prefs, IDC_PREFS_CATEGORY_LIST);
-        state.Require(treeHost != nullptr && IsWindow(treeHost) != FALSE, L"Preferences category host control missing for Panes theme-cycle validation.");
-        if (! treeHost || IsWindow(treeHost) == FALSE)
+        state.Require(prefs != nullptr && IsWindow(prefs) != FALSE, L"Preferences window invalid for Panes theme-cycle validation.");
+        if (! prefs || IsWindow(prefs) == FALSE)
         {
             return false;
         }
 
-        state.Require(SetFocus(treeHost) == treeHost, L"Failed to focus the Preferences category host for Panes theme-cycle validation.");
-        PumpPendingMessages();
-
-        SendMessageW(treeHost, WM_KEYDOWN, VK_HOME, 0);
-        SendMessageW(treeHost, WM_KEYUP, VK_HOME, 0);
-        PumpPendingMessages();
-        SendMessageW(treeHost, WM_KEYDOWN, VK_DOWN, 0);
-        SendMessageW(treeHost, WM_KEYUP, VK_DOWN, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryPanes), L"Failed to select the Preferences Panes category for Panes theme-cycle validation.");
         PumpPendingMessages();
 
         state.Require(waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept
@@ -4147,18 +4201,13 @@ namespace
 
     const auto navigateToPanesPage = [&](HWND targetPrefs, PreferencesDebugSnapshot& outSnapshot) noexcept
     {
-        const HWND treeHost = GetDlgItem(targetPrefs, IDC_PREFS_CATEGORY_LIST);
-        state.Require(treeHost != nullptr && IsWindow(treeHost) != FALSE, L"Preferences category host control missing for Panes live interaction test.");
-        if (! treeHost || IsWindow(treeHost) == FALSE)
+        state.Require(targetPrefs != nullptr && IsWindow(targetPrefs) != FALSE, L"Preferences window invalid for Panes live interaction test.");
+        if (! targetPrefs || IsWindow(targetPrefs) == FALSE)
         {
             return false;
         }
 
-        state.Require(SetFocus(treeHost) == treeHost, L"Failed to focus the Preferences category host for Panes live interaction test.");
-        PumpPendingMessages();
-
-        SendMessageW(treeHost, WM_KEYDOWN, VK_DOWN, 0);
-        SendMessageW(treeHost, WM_KEYUP, VK_DOWN, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryPanes), L"Failed to select the Preferences Panes category for Panes live interaction test.");
         PumpPendingMessages();
 
         state.Require(waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept
@@ -4390,13 +4439,15 @@ namespace
 
     const std::wstring editName         = historyLabel;
     const std::wstring initialEditValue = initialValueState->value;
-    state.Require(SetVisibleDescendantValueByName(getActivePage(), UIA_EditControlTypeId, editName, editedValue),
+    state.Require(SetVisibleDescendantValueByNameWithMessagePump(
+                      getActivePage(), UIA_EditControlTypeId, editName, editedValue, L"Preferences Panes initial history-size SetValue"),
                   L"Preferences Panes page visible DX edit did not accept live UIA ValuePattern mutation.");
     state.Require(waitForEditValue(editName, editedValue),
                   L"Preferences Panes page visible DX edit did not settle to the edited value after live UIA mutation.");
 
-    state.Require(InvokeVisibleDescendantByName(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText),
-                  L"Preferences shell Cancel action did not expose a visible DX button for the Panes live interaction test.");
+    state.Require(
+        InvokeVisibleDescendantByNameWithMessagePump(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText, L"Preferences Panes live interaction Cancel"),
+        L"Preferences shell Cancel action did not expose a visible DX button for the Panes live interaction test.");
     state.Require(WaitForWindowClosed(prefs, SelfTest::Scale(3000ms)),
                   L"Preferences window did not close after invoking the shared shell Cancel action during the Panes live interaction test.");
     prefs = nullptr;
@@ -4426,11 +4477,13 @@ namespace
     state.Require(setFocusedLeftStatusBarToggleChecked(initialToggleChecked),
                   L"Preferences Panes page left Status Bar toggle did not restore its original state after reopened live interaction.");
 
-    state.Require(SetVisibleDescendantValueByName(getActivePage(), UIA_EditControlTypeId, editName, editedValue),
+    state.Require(SetVisibleDescendantValueByNameWithMessagePump(
+                      getActivePage(), UIA_EditControlTypeId, editName, editedValue, L"Preferences Panes reopened history-size SetValue"),
                   L"Preferences Panes page visible DX edit did not accept reopened live UIA ValuePattern mutation.");
     state.Require(waitForEditValue(editName, editedValue),
                   L"Preferences Panes page visible DX edit did not settle to the reopened edited value after live UIA mutation.");
-    state.Require(SetVisibleDescendantValueByName(getActivePage(), UIA_EditControlTypeId, editName, initialEditValue),
+    state.Require(SetVisibleDescendantValueByNameWithMessagePump(
+                      getActivePage(), UIA_EditControlTypeId, editName, initialEditValue, L"Preferences Panes restore history-size SetValue"),
                   L"Preferences Panes page visible DX edit did not accept restoration through reopened live UIA ValuePattern.");
     state.Require(waitForEditValue(editName, initialEditValue),
                   L"Preferences Panes page visible DX edit did not restore its original value after reopened live UIA mutation.");
@@ -4494,19 +4547,13 @@ namespace
 
     const auto navigateToPanesPage = [&](const HWND prefs, PreferencesDebugSnapshot& outSnapshot) noexcept
     {
-        const HWND categoryTreeHost = GetDlgItem(prefs, IDC_PREFS_CATEGORY_LIST);
-        state.Require(categoryTreeHost != nullptr && IsWindow(categoryTreeHost) != FALSE,
-                      L"Preferences category host control missing for Panes tab-traversal validation.");
-        if (! categoryTreeHost || IsWindow(categoryTreeHost) == FALSE)
+        state.Require(prefs != nullptr && IsWindow(prefs) != FALSE, L"Preferences window invalid for Panes tab-traversal validation.");
+        if (! prefs || IsWindow(prefs) == FALSE)
         {
             return false;
         }
 
-        state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Panes tab-traversal validation.");
-        PumpPendingMessages();
-
-        SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
-        SendMessageW(categoryTreeHost, WM_KEYUP, VK_DOWN, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryPanes), L"Failed to select the Preferences Panes category for Panes tab-traversal validation.");
         PumpPendingMessages();
 
         state.Require(waitForSnapshot(
@@ -4608,15 +4655,28 @@ namespace
             SendMessageW(activePage, WM_KEYUP, VK_SHIFT, 0);
         }
 
-        state.Require(waitForSnapshot(
-                          [&](const PreferencesDebugSnapshot& value) noexcept
+        const bool reachedTarget = waitForSnapshot(
+            [&](const PreferencesDebugSnapshot& value) noexcept
         {
             return value.currentCategory == kPrefCategoryPanes && value.panesFocusTarget == expectedTarget && value.createdPaneWindowCount == 0u &&
                    value.visiblePaneWindowCount == 0u && value.visibleCurrentPageChildWindowCount <= 1u && value.currentPageRenderedDxHostCount <= 1u &&
                    value.currentPageDxHostResizeFailureCount == 0u;
         },
-                          snapshot),
-                      std::format(L"Preferences Panes {} focus target not reached during tab traversal.", label));
+            snapshot);
+        state.Require(reachedTarget,
+                      std::format(L"Preferences Panes {} focus target not reached during tab traversal; expected={} actual={} category={} title='{}' "
+                                  L"createdPaneWindows={} visiblePaneWindows={} childWindows={} renderedHosts={} resizeFailures={} renderTotal={}.",
+                                  label,
+                                  static_cast<uint8_t>(expectedTarget),
+                                  static_cast<uint8_t>(snapshot.panesFocusTarget),
+                                  static_cast<int>(snapshot.currentCategory),
+                                  snapshot.pageTitle,
+                                  snapshot.createdPaneWindowCount,
+                                  snapshot.visiblePaneWindowCount,
+                                  snapshot.visibleCurrentPageChildWindowCount,
+                                  snapshot.currentPageRenderedDxHostCount,
+                                  snapshot.currentPageDxHostResizeFailureCount,
+                                  snapshot.currentPageDxHostRenderCountTotal));
     };
 
     if (highContrastActive)
@@ -4733,18 +4793,13 @@ namespace
 
     const auto navigateToPanesPage = [&](HWND targetPrefs, PreferencesDebugSnapshot& outSnapshot) noexcept
     {
-        const HWND treeHost = GetDlgItem(targetPrefs, IDC_PREFS_CATEGORY_LIST);
-        state.Require(treeHost != nullptr && IsWindow(treeHost) != FALSE, L"Preferences category host control missing for Panes history-size validation.");
-        if (! treeHost || IsWindow(treeHost) == FALSE)
+        state.Require(targetPrefs != nullptr && IsWindow(targetPrefs) != FALSE, L"Preferences window invalid for Panes history-size validation.");
+        if (! targetPrefs || IsWindow(targetPrefs) == FALSE)
         {
             return false;
         }
 
-        state.Require(SetFocus(treeHost) == treeHost, L"Failed to focus the Preferences category host for Panes history-size validation.");
-        PumpPendingMessages();
-
-        SendMessageW(treeHost, WM_KEYDOWN, VK_DOWN, 0);
-        SendMessageW(treeHost, WM_KEYUP, VK_DOWN, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryPanes), L"Failed to select the Preferences Panes category for Panes history-size validation.");
         PumpPendingMessages();
 
         state.Require(waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept
@@ -4845,12 +4900,14 @@ namespace
         return false;
     }
 
-    state.Require(SetVisibleDescendantValueByName(getActivePage(), UIA_EditControlTypeId, historyLabel, editedValue),
+    state.Require(SetVisibleDescendantValueByNameWithMessagePump(
+                      getActivePage(), UIA_EditControlTypeId, historyLabel, editedValue, L"Preferences Panes discard history-size SetValue"),
                   L"Preferences Panes visible History size DX edit did not accept live UIA ValuePattern mutation during discard validation.");
     state.Require(waitForEditValue(historyLabel, editedValue),
                   L"Preferences Panes visible History size DX edit did not settle to the edited value during discard validation.");
     state.Require(
-        InvokeVisibleDescendantByName(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText),
+        InvokeVisibleDescendantByNameWithMessagePump(
+            getShellHost(), UIA_ButtonControlTypeId, cancelButtonText, L"Preferences Panes history-size discard Cancel"),
         L"Preferences shell visible DX Cancel action did not expose live UIA InvokePattern interaction during Panes history-size discard validation.");
     state.Require(WaitForWindowClosed(prefs, SelfTest::Scale(3000ms)),
                   L"Preferences dialog did not close after invoking the shared shell Cancel action during Panes history-size discard validation.");
@@ -4876,10 +4933,12 @@ namespace
         return false;
     }
 
-    state.Require(SetVisibleDescendantValueByName(getActivePage(), UIA_EditControlTypeId, historyLabel, editedValue),
+    state.Require(SetVisibleDescendantValueByNameWithMessagePump(
+                      getActivePage(), UIA_EditControlTypeId, historyLabel, editedValue, L"Preferences Panes reopened discard history-size SetValue"),
                   L"Preferences Panes visible History size DX edit did not accept reopened live UIA ValuePattern mutation.");
     state.Require(waitForEditValue(historyLabel, editedValue), L"Preferences Panes visible History size DX edit did not settle to the reopened edited value.");
-    state.Require(SetVisibleDescendantValueByName(getActivePage(), UIA_EditControlTypeId, historyLabel, initialValue),
+    state.Require(SetVisibleDescendantValueByNameWithMessagePump(
+                      getActivePage(), UIA_EditControlTypeId, historyLabel, initialValue, L"Preferences Panes discard restore history-size SetValue"),
                   L"Preferences Panes visible History size DX edit did not accept restoration through reopened live UIA ValuePattern.");
     state.Require(waitForEditValue(historyLabel, initialValue),
                   L"Preferences Panes visible History size DX edit did not restore its original value after reopened live UIA mutation.");
@@ -4902,6 +4961,7 @@ namespace
 [[nodiscard]] bool TestPreferencesDialogPanesComboThenToggleLiveDxInteraction(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
+    SelfTest::AppendSelfTestTrace(L"Preferences Panes combo/toggle: begin");
 
     if (! mainWindow || IsWindow(mainWindow) == FALSE)
     {
@@ -4911,6 +4971,8 @@ namespace
 
     if (const HWND existing = GetPreferencesDialogHandle(); existing && IsWindow(existing) != FALSE)
     {
+        SelfTest::AppendSelfTestTrace(
+            std::format(L"Preferences Panes combo/toggle: closing existing Preferences hwnd=0x{:X}", reinterpret_cast<UINT_PTR>(existing)));
         PostMessageW(existing, WM_CLOSE, 0, 0);
         state.Require(WaitForWindowClosed(existing, SelfTest::Scale(2000ms)),
                       L"Existing Preferences window did not close before Panes combo/toggle validation.");
@@ -4919,6 +4981,7 @@ namespace
     auto waitForPreferencesWindow = [&]() noexcept { return WaitForWindow([] noexcept { return GetPreferencesDialogHandle(); }, SelfTest::Scale(3000ms)); };
 
     HWND prefs = nullptr;
+    SelfTest::AppendSelfTestTrace(L"Preferences Panes combo/toggle: opening Preferences");
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_FILE_PREFERENCES, 0), 0);
     prefs = waitForPreferencesWindow();
     state.Require(prefs != nullptr && IsWindow(prefs) != FALSE, L"Preferences window did not open for Panes combo/toggle validation.");
@@ -4957,24 +5020,23 @@ namespace
 
     const auto navigateToPanesPage = [&](HWND targetPrefs, PreferencesDebugSnapshot& outSnapshot) noexcept
     {
-        const HWND treeHost = GetDlgItem(targetPrefs, IDC_PREFS_CATEGORY_LIST);
-        state.Require(treeHost != nullptr && IsWindow(treeHost) != FALSE, L"Preferences category host control missing for Panes combo/toggle validation.");
-        if (! treeHost || IsWindow(treeHost) == FALSE)
+        SelfTest::AppendSelfTestTrace(L"Preferences Panes combo/toggle: navigating to Panes page");
+        state.Require(targetPrefs != nullptr && IsWindow(targetPrefs) != FALSE, L"Preferences window invalid for Panes combo/toggle validation.");
+        if (! targetPrefs || IsWindow(targetPrefs) == FALSE)
         {
             return false;
         }
 
-        state.Require(SetFocus(treeHost) == treeHost, L"Failed to focus the Preferences category host for Panes combo/toggle validation.");
-        PumpPendingMessages();
-
-        SendMessageW(treeHost, WM_KEYDOWN, VK_DOWN, 0);
-        SendMessageW(treeHost, WM_KEYUP, VK_DOWN, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryPanes), L"Failed to select the Preferences Panes category for Panes combo/toggle validation.");
         PumpPendingMessages();
 
         state.Require(waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept
         { return value.currentCategory == kPrefCategoryPanes && value.currentPageDxHostResizeFailureCount == 0u; },
                                       outSnapshot),
                       L"Preferences Panes page did not settle to the active DX surface before combo/toggle validation.");
+        SelfTest::AppendSelfTestTrace(std::format(L"Preferences Panes combo/toggle: Panes page settled category={} resizeFailures={}",
+                                                  static_cast<int>(outSnapshot.currentCategory),
+                                                  outSnapshot.currentPageDxHostResizeFailureCount));
         return state.failure.empty();
     };
 
@@ -5168,7 +5230,7 @@ namespace
                 return false;
             }
 
-            state.Require(ToggleVisibleDescendantByName(getActivePage(), displayLabelText),
+            state.Require(ToggleVisibleDescendantByNameWithMessagePump(getActivePage(), displayLabelText, L"Preferences Panes visible Display toggle"),
                           std::format(L"Preferences Panes visible Display DX toggle did not accept live UIA TogglePattern during {}.", context));
             state.Require(waitForToggleStateByName(displayLabelText, initialToggleValue),
                           std::format(L"Preferences Panes visible Display DX toggle did not restore its original state during {}.", context));
@@ -5201,8 +5263,9 @@ namespace
         return false;
     }
 
-    state.Require(InvokeVisibleDescendantByName(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText),
-                  L"Preferences shell visible DX Cancel action did not expose live UIA InvokePattern interaction during Panes combo/toggle reopen validation.");
+    state.Require(
+        InvokeVisibleDescendantByNameWithMessagePump(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText, L"Preferences Panes combo/toggle Cancel"),
+        L"Preferences shell visible DX Cancel action did not expose live UIA InvokePattern interaction during Panes combo/toggle reopen validation.");
     state.Require(WaitForWindowClosed(prefs, SelfTest::Scale(3000ms)),
                   L"Preferences dialog did not close after invoking the shared shell Cancel action during Panes combo/toggle reopen validation.");
     prefs = nullptr;

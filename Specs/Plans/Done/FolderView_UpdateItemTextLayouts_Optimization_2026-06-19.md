@@ -9,7 +9,7 @@ FolderView layout optimization itself is **closed as a measured no-op** — ther
 no real layout bottleneck. The genuine, valuable fix was the perf sink
 (`Common/Common/PerfJsonl.cpp`).
 **Created:** 2026-06-19.
-**Parent backlog:** `Specs/Plans/WIP/DxUi_FolderView_Monitor_FuturePerformanceIdeas_2026-05-20.md`.
+**Parent backlog:** `Specs/Plans/WIP/Operation_FolderView_WarpDrive_AnyCircumstancePerformance_2026-06-28.md`.
 **Predecessors (both closed, both measurement pilots):**
 - `Specs/Plans/Done/FolderView_TextLayout_MetricPilot_2026-06-19.md` — DirectWrite
   text-layout *creation* is ~1.3% of layout time (cache = measured no-op).

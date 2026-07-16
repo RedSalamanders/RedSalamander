@@ -583,7 +583,7 @@ void PanesPane::ApplyDxTheme(const PreferencesDialogState& state) noexcept
     }
 
     _useDxUiTwoStateCombos = state.theme.systemHighContrast;
-    _pageHostDx->SetTheme(PrefsUi::MakeDxPalette(state.theme));
+    _pageHostDx->SetTheme(MakeAppThemeDxPalette(state.theme));
 }
 
 void PanesPane::SyncDxControlsFromState(const PreferencesDialogState& state) noexcept

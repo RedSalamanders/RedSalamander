@@ -3,13 +3,18 @@
 #include "SelfTestCommon.h"
 #include "Helpers.h"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <exception>
 #include <filesystem>
 #include <format>
 #include <limits>
+#include <memory>
 #include <mutex>
+#include <optional>
+#include <random>
 #include <span>
 #include <string>
 #include <vector>
@@ -59,7 +64,21 @@ constexpr std::wstring_view kPerfMetricsFileName{L"perf_metrics.jsonl"};
 constexpr std::wstring_view kRepoSpecsDirName{L"Specs"};
 constexpr std::wstring_view kRepoTestRunsDirName{L"TestRuns"};
 constexpr std::wstring_view kRepoGitDirName{L".git"};
+constexpr std::wstring_view kRunsDirName{L"runs"};
+constexpr std::wstring_view kArtifactsDirName{L"artifacts"};
+constexpr std::wstring_view kScratchDirName{L"scratch"};
+constexpr std::wstring_view kSelfTestArtifactDirName{L"selftest"};
+constexpr std::wstring_view kAlternateVolumeTestSandboxDirName{L"RedSalamanderTestSandbox"};
+constexpr std::wstring_view kUnifiedTestRootEnvVar{L"REDSALAMANDER_TEST_ROOT"};
+constexpr std::wstring_view kUnifiedTestRunIdEnvVar{L"REDSALAMANDER_TEST_RUN_ID"};
 constexpr std::wstring_view kSelfTestRootOverrideEnvVar{L"REDSALAMANDER_SELFTEST_ROOT"};
+#if defined(RS_ASAN_DEBUG_BUILD)
+constexpr std::wstring_view kSelfTestBuildFlavor{L"ASan Debug"};
+#elif defined(_DEBUG)
+constexpr std::wstring_view kSelfTestBuildFlavor{L"Debug"};
+#else
+constexpr std::wstring_view kSelfTestBuildFlavor{L"Release"};
+#endif
 constexpr const char* kSuiteCompareName  = "CompareDirectories";
 constexpr const char* kSuiteFileOpsName  = "FileOperations";
 constexpr const char* kSuiteCommandsName = "Commands";
@@ -70,7 +89,17 @@ std::wstring g_runStartedUtcIso;
 std::filesystem::file_time_type g_runArtifactStartTime{};
 bool g_runArtifactStartTimeInitialized = false;
 std::mutex g_traceLogMutex;
+std::mutex g_inFlightSelfTestCaseMutex;
 constexpr auto kArchiveFreshnessSlack = std::chrono::seconds(5);
+
+struct InFlightSelfTestCase
+{
+    SelfTestSuite suite{};
+    std::wstring name;
+    std::chrono::steady_clock::time_point startedAt{};
+};
+
+std::optional<InFlightSelfTestCase> g_inFlightSelfTestCase;
 
 [[nodiscard]] const char* SuiteName(SelfTestSuite suite) noexcept
 {
@@ -90,6 +119,7 @@ const char* CaseStatusName(SelfTestCaseResult::Status status) noexcept
         case SelfTestCaseResult::Status::passed: return "passed";
         case SelfTestCaseResult::Status::failed: return "failed";
         case SelfTestCaseResult::Status::skipped: return "skipped";
+        case SelfTestCaseResult::Status::crashed: return "crashed";
     }
     return "unknown";
 }
@@ -105,28 +135,224 @@ const char* CaseStatusName(SelfTestCaseResult::Status status) noexcept
     return L"unknown";
 }
 
-[[nodiscard]] std::filesystem::path GetSelfTestRootOverrideFromEnvironment() noexcept
+[[nodiscard]] std::wstring GetEnvironmentString(std::wstring_view name) noexcept
 {
-    const DWORD required = GetEnvironmentVariableW(kSelfTestRootOverrideEnvVar.data(), nullptr, 0u);
+    if (name.empty())
+    {
+        return {};
+    }
+
+    const DWORD required = GetEnvironmentVariableW(name.data(), nullptr, 0u);
     if (required == 0u)
     {
         return {};
     }
 
     std::wstring value(required, L'\0');
-    const DWORD written = GetEnvironmentVariableW(kSelfTestRootOverrideEnvVar.data(), value.data(), required);
+    const DWORD written = GetEnvironmentVariableW(name.data(), value.data(), required);
     if (written == 0u || written >= required)
     {
         return {};
     }
 
     value.resize(written);
+    return value;
+}
+
+[[nodiscard]] std::filesystem::path NormalizeSelfTestRootPath(const std::filesystem::path& root) noexcept
+{
+    if (root.empty())
+    {
+        return {};
+    }
+
+    std::error_code ec;
+    if (! root.is_absolute())
+    {
+        const std::filesystem::path absoluteRoot = std::filesystem::absolute(root, ec);
+        if (! ec && ! absoluteRoot.empty())
+        {
+            return absoluteRoot.lexically_normal();
+        }
+    }
+
+    return root.lexically_normal();
+}
+
+[[nodiscard]] std::filesystem::path ExtendSelfTestPathForIo(const std::filesystem::path& path) noexcept
+{
+    if (path.empty())
+    {
+        return {};
+    }
+
+    std::wstring normalized = path.native();
+    std::replace(normalized.begin(), normalized.end(), L'/', L'\\');
+    if (normalized.rfind(L"\\\\?\\", 0u) == 0u || normalized.rfind(L"\\\\.\\", 0u) == 0u)
+    {
+        return std::filesystem::path(normalized);
+    }
+
+    const DWORD required = GetFullPathNameW(normalized.c_str(), 0u, nullptr, nullptr);
+    if (required == 0u)
+    {
+        return path;
+    }
+
+    std::wstring absolute(static_cast<size_t>(required), L'\0');
+    const DWORD written = GetFullPathNameW(normalized.c_str(), required, absolute.data(), nullptr);
+    if (written == 0u || written >= required)
+    {
+        return path;
+    }
+
+    absolute.resize(written);
+    std::replace(absolute.begin(), absolute.end(), L'/', L'\\');
+    if (absolute.rfind(L"\\\\", 0u) == 0u)
+    {
+        return std::filesystem::path(std::wstring(L"\\\\?\\UNC\\") + absolute.substr(2u));
+    }
+
+    return std::filesystem::path(std::wstring(L"\\\\?\\") + absolute);
+}
+
+[[nodiscard]] bool IsSafeSelfTestRunId(std::wstring_view value) noexcept
+{
+    if (value.empty())
+    {
+        return false;
+    }
+
+    return std::ranges::all_of(value, [](const wchar_t ch) noexcept
+    {
+        return (ch >= L'0' && ch <= L'9') || (ch >= L'A' && ch <= L'Z') || (ch >= L'a' && ch <= L'z') || ch == L'-' || ch == L'_';
+    });
+}
+
+[[nodiscard]] std::filesystem::path GetUnifiedSelfTestRootFromEnvironment() noexcept
+{
+    const std::wstring rootText = GetEnvironmentString(kUnifiedTestRootEnvVar);
+    const std::wstring runId    = GetEnvironmentString(kUnifiedTestRunIdEnvVar);
+    if (rootText.empty() || ! IsSafeSelfTestRunId(runId))
+    {
+        return {};
+    }
+
+    const std::filesystem::path root = NormalizeSelfTestRootPath(std::filesystem::path(rootText));
+    if (root.empty())
+    {
+        return {};
+    }
+
+    return root / std::wstring(kRunsDirName) / runId / std::wstring(kArtifactsDirName) / std::wstring(kSelfTestArtifactDirName);
+}
+
+[[nodiscard]] std::filesystem::path GetUnifiedTestRunScratchRootFromEnvironment() noexcept
+{
+    const std::wstring rootText = GetEnvironmentString(kUnifiedTestRootEnvVar);
+    const std::wstring runId    = GetEnvironmentString(kUnifiedTestRunIdEnvVar);
+    if (rootText.empty() || ! IsSafeSelfTestRunId(runId))
+    {
+        return {};
+    }
+
+    const std::filesystem::path root = NormalizeSelfTestRootPath(std::filesystem::path(rootText));
+    if (root.empty())
+    {
+        return {};
+    }
+
+    return root / std::wstring(kRunsDirName) / runId / std::wstring(kScratchDirName);
+}
+
+[[nodiscard]] std::filesystem::path GetUnifiedTestRunScratchRootForVolume(const std::filesystem::path& volumeRoot) noexcept
+{
+    const std::wstring runId = GetEnvironmentString(kUnifiedTestRunIdEnvVar);
+    if (! IsSafeSelfTestRunId(runId))
+    {
+        return {};
+    }
+
+    const std::filesystem::path normalizedVolumeRoot = NormalizeSelfTestRootPath(volumeRoot);
+    if (normalizedVolumeRoot.empty())
+    {
+        return {};
+    }
+
+    return normalizedVolumeRoot / std::wstring(kAlternateVolumeTestSandboxDirName) / std::wstring(kRunsDirName) / runId / std::wstring(kScratchDirName);
+}
+
+[[nodiscard]] std::filesystem::path GetSelfTestRootOverrideFromEnvironment() noexcept
+{
+    const std::wstring value = GetEnvironmentString(kSelfTestRootOverrideEnvVar);
     if (value.empty())
     {
         return {};
     }
 
-    return std::filesystem::path(value);
+    return NormalizeSelfTestRootPath(std::filesystem::path(value));
+}
+
+[[nodiscard]] std::wstring SanitizeTestSandboxSegment(std::wstring_view value)
+{
+    std::wstring segment;
+    segment.reserve(value.size());
+    for (const wchar_t ch : value)
+    {
+        const bool allowed = std::iswalnum(static_cast<wint_t>(ch)) != 0 || ch == L'-' || ch == L'_' || ch == L'.';
+        segment.push_back(allowed ? ch : L'_');
+    }
+
+    if (segment.empty())
+    {
+        segment = L"unnamed";
+    }
+    return segment;
+}
+
+[[nodiscard]] std::filesystem::path GetLegacyTestRunScratchRoot(SelfTestSuite suite)
+{
+    const std::filesystem::path root = SelfTestRoot();
+    if (root.empty())
+    {
+        return {};
+    }
+
+    return root / kLastRunDirName / std::filesystem::path(SuiteArtifactPrefix(suite)) / kScratchDirName;
+}
+
+[[nodiscard]] TestSandbox CreateTestSandboxAtScratchRoot(SelfTestSuite suite,
+                                                         std::wstring_view caseName,
+                                                         const std::filesystem::path& scratchRoot,
+                                                         std::wstring_view traceKind)
+{
+    const std::wstring suiteSegment = std::wstring(SuiteArtifactPrefix(suite));
+    const std::wstring caseSegment  = SanitizeTestSandboxSegment(caseName);
+
+    if (scratchRoot.empty())
+    {
+        AppendSelfTestTrace(std::format(L"{}: suite={} case={} unavailable", traceKind, suiteSegment, caseSegment));
+        return {};
+    }
+
+    std::filesystem::path sandboxRoot = scratchRoot / suiteSegment / caseSegment;
+    sandboxRoot                       = sandboxRoot.lexically_normal();
+
+    std::error_code ec;
+    std::filesystem::create_directories(sandboxRoot, ec);
+    if (ec)
+    {
+        AppendSelfTestTrace(std::format(L"{}: suite={} case={} create failed path='{}' error={}",
+                                        traceKind,
+                                        suiteSegment,
+                                        caseSegment,
+                                        sandboxRoot.wstring(),
+                                        ec.value()));
+        return {};
+    }
+
+    AppendSelfTestTrace(std::format(L"{}: suite={} case={} root='{}'", traceKind, suiteSegment, caseSegment, sandboxRoot.wstring()));
+    return TestSandbox{.root = std::move(sandboxRoot)};
 }
 
 // Trace / logging helpers (UTF-16 LE with BOM, one message per line)
@@ -138,8 +364,9 @@ void TruncateUtf16Log(const std::filesystem::path& path) noexcept
     }
 
     const std::scoped_lock lock(g_traceLogMutex);
+    const std::filesystem::path extendedPath = ExtendSelfTestPathForIo(path);
     wil::unique_handle file(
-        CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
+        CreateFileW(extendedPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
     if (! file)
     {
         return;
@@ -158,7 +385,9 @@ void AppendUtf16LogLine(const std::filesystem::path& path, std::wstring_view mes
     }
 
     const std::scoped_lock lock(g_traceLogMutex);
-    wil::unique_handle file(CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
+    const std::filesystem::path extendedPath = ExtendSelfTestPathForIo(path);
+    wil::unique_handle file(
+        CreateFileW(extendedPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
     if (! file)
     {
         return;
@@ -200,25 +429,12 @@ void AppendUtf16LogLine(const std::filesystem::path& path, std::wstring_view mes
 // File I/O helpers
 bool ConvertUtf8(const std::wstring_view text, std::string& out) noexcept
 {
-    if (text.empty())
-    {
-        out.clear();
-        return true;
-    }
-
-    const int required = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
-    if (required <= 0)
+    const std::optional<std::string> converted = Common::Strings::TryUtf8FromUtf16Strict(text);
+    if (! converted.has_value())
     {
         return false;
     }
-
-    out.resize(static_cast<size_t>(required));
-    const int written = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), out.data(), required, nullptr, nullptr);
-    if (written != required)
-    {
-        return false;
-    }
-
+    out = converted.value();
     return true;
 }
 
@@ -329,11 +545,13 @@ bool WriteJsonBlob(const std::filesystem::path& path, yyjson_mut_doc* doc) noexc
 
 [[nodiscard]] bool IsRepoRootCandidate(const std::filesystem::path& candidate) noexcept
 {
-    return PathExistsNoThrow(candidate / kRepoGitDirName) && PathExistsNoThrow(candidate / L"RedSalamander.sln") &&
-           PathExistsNoThrow(candidate / kRepoSpecsDirName / kRepoTestRunsDirName);
+    // A worktree stores .git as a file, while source snapshots may preserve only the solution or
+    // project. Accept the union so every self-test uses one checkout-layout policy.
+    return PathExistsNoThrow(candidate / kRepoGitDirName) || PathExistsNoThrow(candidate / L"RedSalamander.sln") ||
+           PathExistsNoThrow(candidate / L"RedSalamander" / L"RedSalamander.vcxproj");
 }
 
-[[nodiscard]] std::filesystem::path TryFindRepoRoot() noexcept
+[[nodiscard]] std::filesystem::path TryFindRepoRootImpl() noexcept
 {
     const std::wstring envRoot = GetEnvironmentString(L"REDSALAMANDER_REPO_ROOT");
     if (! envRoot.empty())
@@ -345,33 +563,41 @@ bool WriteJsonBlob(const std::filesystem::path& path, yyjson_mut_doc* doc) noexc
         }
     }
 
-    std::filesystem::path cursor = GetModuleDirectory();
-    if (cursor.empty())
+    const auto findFrom = [](std::filesystem::path cursor) noexcept
     {
-        return {};
+        for (int i = 0; i < kRepoRootParentWalkLimit && ! cursor.empty(); ++i)
+        {
+            if (IsRepoRootCandidate(cursor))
+            {
+                return cursor;
+            }
+
+            const std::filesystem::path parent = cursor.parent_path();
+            if (parent.empty() || parent == cursor)
+            {
+                break;
+            }
+            cursor = parent;
+        }
+        return std::filesystem::path{};
+    };
+
+    std::error_code ec;
+    const std::filesystem::path currentPath = std::filesystem::current_path(ec);
+    if (! ec)
+    {
+        if (const std::filesystem::path root = findFrom(currentPath); ! root.empty())
+        {
+            return root;
+        }
     }
 
-    for (int i = 0; i < kRepoRootParentWalkLimit; ++i)
-    {
-        const std::filesystem::path candidate = cursor;
-        if (IsRepoRootCandidate(candidate))
-        {
-            return candidate;
-        }
-
-        if (! cursor.has_parent_path())
-        {
-            break;
-        }
-        cursor = cursor.parent_path();
-    }
-
-    return {};
+    return findFrom(GetModuleDirectory());
 }
 
 [[nodiscard]] std::filesystem::path TryFindTestRunsRoot() noexcept
 {
-    const std::filesystem::path repoRoot = TryFindRepoRoot();
+    const std::filesystem::path repoRoot = TryFindRepoRootImpl();
     if (repoRoot.empty())
     {
         return {};
@@ -609,20 +835,12 @@ bool WriteJsonBlob(const std::filesystem::path& path, yyjson_mut_doc* doc) noexc
         return {};
     }
 
-    std::wstring restW;
+    const std::optional<std::wstring> convertedRest = Common::Strings::TryUtf16FromUtf8Strict(rest);
+    if (! convertedRest.has_value())
     {
-        const int required = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, rest.data(), static_cast<int>(rest.size()), nullptr, 0);
-        if (required <= 0)
-        {
-            return {};
-        }
-        restW.resize(static_cast<size_t>(required));
-        const int written = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, rest.data(), static_cast<int>(rest.size()), restW.data(), required);
-        if (written != required)
-        {
-            return {};
-        }
+        return {};
     }
+    const std::wstring& restW = convertedRest.value();
 
     std::filesystem::path gitDir(restW);
     if (! gitDir.is_absolute())
@@ -670,27 +888,16 @@ bool WriteJsonBlob(const std::filesystem::path& path, yyjson_mut_doc* doc) noexc
             return false;
         }
 
-        // Convert ref to wide
-        std::wstring refW;
+        const std::optional<std::wstring> refW = Common::Strings::TryUtf16FromUtf8Strict(ref);
+        if (! refW.has_value())
         {
-            const int required = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, ref.data(), static_cast<int>(ref.size()), nullptr, 0);
-            if (required <= 0)
-            {
-                return false;
-            }
-            refW.resize(static_cast<size_t>(required));
-            const int written = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, ref.data(), static_cast<int>(ref.size()), refW.data(), required);
-            if (written != required)
-            {
-                return false;
-            }
+            return false;
         }
-
-        outBranch = std::filesystem::path(refW).filename().wstring();
+        outBranch = std::filesystem::path(refW.value()).filename().wstring();
 
         // Try loose ref first
         std::string commitText;
-        const std::filesystem::path looseRefPath = gitDir / std::filesystem::path(refW);
+        const std::filesystem::path looseRefPath = gitDir / std::filesystem::path(refW.value());
         if (ReadSmallTextFile(looseRefPath, commitText))
         {
             const std::string commit = TrimAscii(commitText);
@@ -938,6 +1145,7 @@ void AddCaseJson(yyjson_mut_doc* doc, yyjson_mut_val* casesArray, const SelfTest
     yyjson_mut_obj_add_strncpy(doc, caseObj, "name", caseName.c_str(), caseName.size());
     yyjson_mut_obj_add_str(doc, caseObj, "status", CaseStatusName(testCase.status));
     yyjson_mut_obj_add_uint(doc, caseObj, "duration_ms", testCase.durationMs);
+    yyjson_mut_obj_add_uint(doc, caseObj, "repeat_index", testCase.repeatIndex);
 
     if (! testCase.reason.empty())
     {
@@ -973,6 +1181,11 @@ void AddSuiteJson(yyjson_mut_doc* doc, yyjson_mut_val* suitesArray, const SelfTe
     yyjson_mut_obj_add_int(doc, suiteObj, "skipped", result.skipped);
     yyjson_mut_obj_add_bool(doc, suiteObj, "fail_fast", g_options.failFast);
     yyjson_mut_obj_add_real(doc, suiteObj, "timeout_scale", g_options.timeoutScale);
+    yyjson_mut_obj_add_uint(doc, suiteObj, "repeat_count", g_options.repeatCount);
+    if (g_options.shuffleSeed.has_value())
+    {
+        yyjson_mut_obj_add_uint(doc, suiteObj, "shuffle_seed", g_options.shuffleSeed.value());
+    }
     if (! g_options.caseFilter.empty())
     {
         std::string caseFilterUtf8;
@@ -1008,9 +1221,241 @@ void AddSuiteJson(yyjson_mut_doc* doc, yyjson_mut_val* suitesArray, const SelfTe
 
 } // namespace
 
+std::filesystem::path TryFindRepoRoot() noexcept
+{
+    return TryFindRepoRootImpl();
+}
+
+std::filesystem::path GetLocalAppDataPath() noexcept
+{
+    return AppDataPaths::GetLocalAppDataPath();
+}
+
+HRESULT EnsureDirectoryExists(const std::filesystem::path& path) noexcept
+{
+    if (path.empty())
+    {
+        return E_INVALIDARG;
+    }
+
+    std::error_code ec;
+    std::filesystem::create_directories(ExtendSelfTestPathForIo(path), ec);
+    if (ec)
+    {
+        return HRESULT_FROM_WIN32(static_cast<DWORD>(ec.value()));
+    }
+
+    return PathExistsNoThrow(ExtendSelfTestPathForIo(path)) ? S_OK : HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND);
+}
+
+HRESULT WriteUtf8File(const std::filesystem::path& path, std::string_view text) noexcept
+{
+    if (path.empty())
+    {
+        return E_INVALIDARG;
+    }
+
+    if (path.has_parent_path())
+    {
+        const HRESULT directoryHr = EnsureDirectoryExists(path.parent_path());
+        if (FAILED(directoryHr))
+        {
+            return directoryHr;
+        }
+    }
+
+    const std::filesystem::path extendedPath = ExtendSelfTestPathForIo(path);
+    wil::unique_handle file(CreateFileW(extendedPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
+    if (! file)
+    {
+        return HRESULT_FROM_WIN32(GetLastError());
+    }
+
+    size_t offset = 0;
+    while (offset < text.size())
+    {
+        const size_t remaining = text.size() - offset;
+        const DWORD chunk      = static_cast<DWORD>(std::min<size_t>(remaining, 16ull * 1024ull * 1024ull));
+        DWORD written          = 0;
+        if (WriteFile(file.get(), text.data() + offset, chunk, &written, nullptr) == 0)
+        {
+            return HRESULT_FROM_WIN32(GetLastError());
+        }
+        if (written != chunk)
+        {
+            return HRESULT_FROM_WIN32(ERROR_WRITE_FAULT);
+        }
+        offset += written;
+    }
+
+    return FlushFileBuffers(file.get()) != 0 ? S_OK : HRESULT_FROM_WIN32(GetLastError());
+}
+
+std::string NarrowAscii(std::wstring_view text)
+{
+    std::string result;
+    result.reserve(text.size());
+    for (const wchar_t ch : text)
+    {
+        result.push_back(static_cast<char>(ch));
+    }
+    return result;
+}
+
+uint64_t StableDeviceHash(std::wstring_view value) noexcept
+{
+    uint64_t hash = 1469598103934665603ull;
+    for (const wchar_t ch : value)
+    {
+        const auto lower = static_cast<uint64_t>(::towlower(static_cast<wint_t>(ch)));
+        hash ^= lower & 0xFFu;
+        hash *= 1099511628211ull;
+        hash ^= (lower >> 8u) & 0xFFu;
+        hash *= 1099511628211ull;
+    }
+    return hash;
+}
+
+std::optional<uint64_t> ExtractJsonUInt(std::string_view json, std::string_view key) noexcept
+{
+    if (key.empty())
+    {
+        return std::nullopt;
+    }
+
+    size_t keyStart = 0;
+    while ((keyStart = json.find(key, keyStart)) != std::string_view::npos)
+    {
+        const size_t keyEnd = keyStart + key.size();
+        if (keyStart > 0 && keyEnd < json.size() && json[keyStart - 1] == '"' && json[keyEnd] == '"')
+        {
+            size_t valueStart = json.find(':', keyEnd + 1);
+            if (valueStart == std::string_view::npos)
+            {
+                return std::nullopt;
+            }
+            ++valueStart;
+            while (valueStart < json.size() &&
+                   (json[valueStart] == ' ' || json[valueStart] == '\t' || json[valueStart] == '\r' || json[valueStart] == '\n'))
+            {
+                ++valueStart;
+            }
+
+            if (valueStart >= json.size() || json[valueStart] < '0' || json[valueStart] > '9')
+            {
+                return std::nullopt;
+            }
+
+            uint64_t value = 0;
+            for (; valueStart < json.size() && json[valueStart] >= '0' && json[valueStart] <= '9'; ++valueStart)
+            {
+                const uint64_t digit = static_cast<uint64_t>(json[valueStart] - '0');
+                if (value > ((std::numeric_limits<uint64_t>::max)() - digit) / 10u)
+                {
+                    return std::nullopt;
+                }
+                value = value * 10u + digit;
+            }
+            return value;
+        }
+        keyStart = keyEnd;
+    }
+
+    return std::nullopt;
+}
+
+HRESULT LoadMtpPluginSelfTestExport(std::string_view exportName, wil::unique_hmodule& module, FARPROC& exportAddress) noexcept
+{
+    module.reset();
+    exportAddress = nullptr;
+    if (exportName.empty() || exportName.size() >= 128u || exportName.find('\0') != std::string_view::npos)
+    {
+        return E_INVALIDARG;
+    }
+
+    FileSystemPluginManager& pluginManager                  = FileSystemPluginManager::GetInstance();
+    const FileSystemPluginManager::PluginEntry* mtpEntry = nullptr;
+    for (const FileSystemPluginManager::PluginEntry& entry : pluginManager.GetPlugins())
+    {
+        if (CompareStringOrdinal(entry.id.data(), static_cast<int>(entry.id.size()), L"builtin/file-system-mtp", -1, TRUE) == CSTR_EQUAL)
+        {
+            mtpEntry = &entry;
+            break;
+        }
+    }
+
+    if (! mtpEntry || mtpEntry->disabled || ! mtpEntry->loadable || mtpEntry->path.empty())
+    {
+        return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
+    }
+    if (mtpEntry->unloadDeferred || pluginManager.IsPluginPathDeferred(mtpEntry->path))
+    {
+        return HRESULT_FROM_WIN32(ERROR_BUSY);
+    }
+
+    module.reset(LoadLibraryExW(mtpEntry->path.c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH));
+    if (! module)
+    {
+        return HRESULT_FROM_WIN32(GetLastError());
+    }
+
+    std::array<char, 128> exportNameBuffer{};
+    std::copy(exportName.begin(), exportName.end(), exportNameBuffer.begin());
+    exportAddress = GetProcAddress(module.get(), exportNameBuffer.data());
+    if (! exportAddress)
+    {
+        module.reset();
+        return HRESULT_FROM_WIN32(ERROR_PROC_NOT_FOUND);
+    }
+
+    return S_OK;
+}
+
 SelfTestOptions& GetSelfTestOptions() noexcept
 {
     return g_options;
+}
+
+std::wstring_view GetSelfTestBuildFlavor() noexcept
+{
+    return kSelfTestBuildFlavor;
+}
+
+std::wstring GetSelfTestMachineHash() noexcept
+{
+    return GetComputerHashName();
+}
+
+std::vector<SelfTestCaseExecution> BuildSelfTestCaseExecutionOrder(const SelfTestOptions& options, std::span<const std::wstring> declaredCases)
+{
+    std::vector<std::wstring> selected;
+    selected.reserve(declaredCases.size());
+    for (const std::wstring& name : declaredCases)
+    {
+        if (CaseFilterMatches(options.caseFilter, name))
+        {
+            selected.push_back(name);
+        }
+    }
+
+    if (options.shuffleSeed.has_value())
+    {
+        std::mt19937_64 rng(options.shuffleSeed.value());
+        std::shuffle(selected.begin(), selected.end(), rng);
+    }
+
+    const uint32_t repeatCount = std::max(1u, options.repeatCount);
+    std::vector<SelfTestCaseExecution> order;
+    order.reserve(selected.size() * static_cast<size_t>(repeatCount));
+    for (uint32_t repeatIndex = 1u; repeatIndex <= repeatCount; ++repeatIndex)
+    {
+        for (const std::wstring& name : selected)
+        {
+            order.push_back(SelfTestCaseExecution{.name = name, .repeatIndex = repeatIndex});
+        }
+    }
+
+    return order;
 }
 
 const std::filesystem::path& SelfTestRoot() noexcept
@@ -1020,17 +1465,13 @@ const std::filesystem::path& SelfTestRoot() noexcept
         const std::filesystem::path overrideRoot = GetSelfTestRootOverrideFromEnvironment();
         if (! overrideRoot.empty())
         {
-            std::error_code ec;
-            if (! overrideRoot.is_absolute())
-            {
-                const std::filesystem::path absoluteRoot = std::filesystem::absolute(overrideRoot, ec);
-                if (! ec && ! absoluteRoot.empty())
-                {
-                    return absoluteRoot.lexically_normal();
-                }
-            }
+            return overrideRoot;
+        }
 
-            return overrideRoot.lexically_normal();
+        const std::filesystem::path unifiedRoot = GetUnifiedSelfTestRootFromEnvironment();
+        if (! unifiedRoot.empty())
+        {
+            return unifiedRoot;
         }
 
         const std::filesystem::path base = AppDataPaths::GetLocalAppDataPath();
@@ -1113,6 +1554,49 @@ wil::com_ptr<IFileSystem> GetFileSystem(std::wstring_view pluginId) noexcept
     return {};
 }
 
+TestSandbox AcquireTestSandbox(SelfTestSuite suite, std::wstring_view caseName) noexcept
+{
+    try
+    {
+        std::filesystem::path scratchRoot = GetUnifiedTestRunScratchRootFromEnvironment();
+        if (scratchRoot.empty())
+        {
+            scratchRoot = GetLegacyTestRunScratchRoot(suite);
+        }
+
+        return CreateTestSandboxAtScratchRoot(suite, caseName, scratchRoot, L"TestSandbox");
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::terminate();
+    }
+    catch (const std::exception&)
+    {
+        // Mandatory: self-test path acquisition is used from noexcept case bodies. Convert path failures into a test-visible empty sandbox.
+        AppendSelfTestTrace(L"TestSandbox: path acquisition failed with std::exception.");
+        return {};
+    }
+}
+
+TestSandbox AcquireTestSandboxOnVolume(SelfTestSuite suite, std::wstring_view caseName, const std::filesystem::path& volumeRoot) noexcept
+{
+    try
+    {
+        const std::filesystem::path scratchRoot = GetUnifiedTestRunScratchRootForVolume(volumeRoot);
+        return CreateTestSandboxAtScratchRoot(suite, caseName, scratchRoot, L"TestSandbox alternate-volume");
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::terminate();
+    }
+    catch (const std::exception&)
+    {
+        // Mandatory: self-test path acquisition is used from noexcept case bodies. Convert path failures into a test-visible empty sandbox.
+        AppendSelfTestTrace(L"TestSandbox alternate-volume: path acquisition failed with std::exception.");
+        return {};
+    }
+}
+
 // Rotate artifacts: previous_run/ is discarded, last_run/ is renamed to previous_run/,
 // and fresh empty directories are created under last_run/ ready for the new run.
 void RotateSelfTestRuns()
@@ -1189,7 +1673,7 @@ void InitSelfTestRun(const SelfTestOptions& options)
     }();
     const std::wstring runId = std::format(L"{0:04}-{1:02}-{2:02}_{3:02}{4:02}{5:02}", st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
 
-    Debug::Perf::ConfigureJsonlOutput(perfPath, L"SelfTest", L"Debug", gitBranch, gitCommit, GetComputerHashName(), runId);
+    Debug::Perf::ConfigureJsonlOutput(perfPath, L"SelfTest", kSelfTestBuildFlavor, gitBranch, gitCommit, GetComputerHashName(), runId);
 }
 
 void AppendSelfTestTrace(std::wstring_view msg) noexcept
@@ -1202,6 +1686,76 @@ void AppendSuiteTrace(SelfTestSuite suite, std::wstring_view msg) noexcept
     AppendUtf16LogLine(GetSuiteArtifactPath(suite, kTraceFileName), msg);
 }
 
+void BeginInFlightSelfTestCase(SelfTestSuite suite, std::wstring_view name) noexcept
+{
+    const std::scoped_lock lock(g_inFlightSelfTestCaseMutex);
+    g_inFlightSelfTestCase = InFlightSelfTestCase{
+        .suite     = suite,
+        .name      = std::wstring(name),
+        .startedAt = std::chrono::steady_clock::now(),
+    };
+}
+
+void EndInFlightSelfTestCase(SelfTestSuite suite, std::wstring_view name) noexcept
+{
+    const std::scoped_lock lock(g_inFlightSelfTestCaseMutex);
+    if (! g_inFlightSelfTestCase.has_value())
+    {
+        return;
+    }
+
+    if (g_inFlightSelfTestCase->suite == suite && g_inFlightSelfTestCase->name == name)
+    {
+        g_inFlightSelfTestCase.reset();
+    }
+}
+
+void TriggerSelfTestCaseCrashInjection(SelfTestSuite suite, std::wstring_view name) noexcept
+{
+    AppendSuiteTrace(suite, std::format(L"Case crash injection: {}", name));
+    AppendSelfTestTrace(std::format(L"Case crash injection: {}", name));
+    RaiseException(EXCEPTION_ACCESS_VIOLATION, EXCEPTION_NONCONTINUABLE, 0, nullptr);
+    std::terminate();
+}
+
+void RecalculateSuiteSummary(SelfTestSuiteResult& suite) noexcept
+{
+    suite.passed = 0;
+    suite.failed = 0;
+    suite.skipped = 0;
+    suite.failureMessage.clear();
+
+    for (const SelfTestCaseResult& item : suite.cases)
+    {
+        switch (item.status)
+        {
+            case SelfTestCaseResult::Status::passed: ++suite.passed; break;
+            case SelfTestCaseResult::Status::failed:
+            case SelfTestCaseResult::Status::crashed:
+            {
+                ++suite.failed;
+                if (suite.failureMessage.empty() && ! item.reason.empty())
+                {
+                    suite.failureMessage = item.reason;
+                }
+                break;
+            }
+            case SelfTestCaseResult::Status::skipped: ++suite.skipped; break;
+        }
+    }
+}
+
+void FlushSuiteJsonAfterCase(const SelfTestSuiteResult& suite) noexcept
+{
+    if (! g_options.writeJsonSummary)
+    {
+        return;
+    }
+
+    const std::filesystem::path jsonPath = GetSuiteArtifactPath(suite.suite, L"results.json");
+    WriteSuiteJson(suite, jsonPath);
+}
+
 void AppendCaseResult(SelfTestSuiteResult& suite, SelfTestCaseResult result) noexcept
 {
     suite.cases.push_back(std::move(result));
@@ -1209,6 +1763,7 @@ void AppendCaseResult(SelfTestSuiteResult& suite, SelfTestCaseResult result) noe
     {
         case SelfTestCaseResult::Status::passed: ++suite.passed; break;
         case SelfTestCaseResult::Status::failed:
+        case SelfTestCaseResult::Status::crashed:
         {
             ++suite.failed;
             if (suite.failureMessage.empty())
@@ -1219,6 +1774,8 @@ void AppendCaseResult(SelfTestSuiteResult& suite, SelfTestCaseResult result) noe
         }
         case SelfTestCaseResult::Status::skipped: ++suite.skipped; break;
     }
+
+    FlushSuiteJsonAfterCase(suite);
 }
 
 void AppendCaseResult(
@@ -1228,8 +1785,69 @@ void AppendCaseResult(
     result.name       = std::wstring(name);
     result.status     = status;
     result.durationMs = durationMs;
+    result.repeatIndex = 1u;
     result.reason     = std::wstring(reason);
     AppendCaseResult(suite, std::move(result));
+}
+
+void MarkInFlightSelfTestCaseCrashed(SelfTestRunResult& runResult, std::wstring_view reason) noexcept
+{
+    std::optional<InFlightSelfTestCase> crashedCase;
+    {
+        const std::scoped_lock lock(g_inFlightSelfTestCaseMutex);
+        crashedCase = g_inFlightSelfTestCase;
+    }
+
+    if (! crashedCase.has_value() || crashedCase->name.empty())
+    {
+        return;
+    }
+
+    const auto now = std::chrono::steady_clock::now();
+    uint64_t durationMs = 0;
+    if (now >= crashedCase->startedAt)
+    {
+        durationMs = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(now - crashedCase->startedAt).count());
+    }
+
+    SelfTestSuiteResult* targetSuite = nullptr;
+    const auto existingSuite = std::find_if(runResult.suites.begin(),
+                                            runResult.suites.end(),
+                                            [&](const SelfTestSuiteResult& item) noexcept { return item.suite == crashedCase->suite; });
+    if (existingSuite != runResult.suites.end())
+    {
+        targetSuite = std::addressof(*existingSuite);
+    }
+    else
+    {
+        SelfTestSuiteResult suite{};
+        suite.suite = crashedCase->suite;
+        runResult.suites.push_back(std::move(suite));
+        targetSuite = std::addressof(runResult.suites.back());
+    }
+
+    const auto existingCase = std::find_if(targetSuite->cases.begin(),
+                                           targetSuite->cases.end(),
+                                           [&](const SelfTestCaseResult& item) noexcept { return item.name == crashedCase->name; });
+    if (existingCase != targetSuite->cases.end())
+    {
+        existingCase->status = SelfTestCaseResult::Status::crashed;
+        existingCase->durationMs = durationMs;
+        existingCase->reason = std::wstring(reason.empty() ? std::wstring_view(L"case crashed") : reason);
+        RecalculateSuiteSummary(*targetSuite);
+        FlushSuiteJsonAfterCase(*targetSuite);
+    }
+    else
+    {
+        SelfTestCaseResult result{};
+        result.name = crashedCase->name;
+        result.status = SelfTestCaseResult::Status::crashed;
+        result.durationMs = durationMs;
+        result.reason = std::wstring(reason.empty() ? std::wstring_view(L"case crashed") : reason);
+        AppendCaseResult(*targetSuite, std::move(result));
+    }
+
+    AppendSuiteTrace(crashedCase->suite, std::format(L"Case crashed: {} reason='{}'", crashedCase->name, reason));
 }
 
 void SetRunStartedUtcIso(std::wstring_view startedUtcIso) noexcept
@@ -1250,13 +1868,25 @@ bool EnsureDirectory(const std::filesystem::path& path) noexcept
     }
 
     std::error_code ec;
-    std::filesystem::create_directories(path, ec);
+    std::filesystem::create_directories(ExtendSelfTestPathForIo(path), ec);
     if (ec)
     {
         return false;
     }
 
     return PathExists(path);
+}
+
+bool RemoveAll(const std::filesystem::path& path) noexcept
+{
+    if (path.empty())
+    {
+        return false;
+    }
+
+    std::error_code ec;
+    static_cast<void>(std::filesystem::remove_all(ExtendSelfTestPathForIo(path), ec));
+    return ! ec;
 }
 
 bool WriteBinaryFile(const std::filesystem::path& path, std::span<const std::byte> bytes) noexcept
@@ -1268,10 +1898,14 @@ bool WriteBinaryFile(const std::filesystem::path& path, std::span<const std::byt
 
     if (path.has_parent_path())
     {
-        EnsureDirectory(path.parent_path());
+        if (! EnsureDirectory(path.parent_path()))
+        {
+            return false;
+        }
     }
 
-    wil::unique_handle file(CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
+    const std::filesystem::path extendedPath = ExtendSelfTestPathForIo(path);
+    wil::unique_handle file(CreateFileW(extendedPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
     if (! file)
     {
         return false;
@@ -1344,9 +1978,7 @@ std::filesystem::path GetTempRoot(SelfTestSuite suite)
         return {};
     }
 
-    std::error_code ec;
-    std::filesystem::create_directories(suiteRoot, ec);
-    return suiteRoot;
+    return EnsureDirectory(suiteRoot) ? suiteRoot : std::filesystem::path{};
 }
 
 bool PathExists(const std::filesystem::path& p)
@@ -1356,8 +1988,7 @@ bool PathExists(const std::filesystem::path& p)
         return false;
     }
 
-    std::error_code ec;
-    return std::filesystem::exists(p, ec) && ! ec;
+    return GetFileAttributesW(ExtendSelfTestPathForIo(p).c_str()) != INVALID_FILE_ATTRIBUTES;
 }
 
 uint64_t ScaleTimeout(uint64_t baseMs)
@@ -1452,6 +2083,11 @@ void WriteSuiteJson(const SelfTestSuiteResult& result, const std::filesystem::pa
     yyjson_mut_obj_add_val(doc, root, "cases", cases);
     yyjson_mut_obj_add_bool(doc, root, "fail_fast", g_options.failFast);
     yyjson_mut_obj_add_real(doc, root, "timeout_scale", g_options.timeoutScale);
+    yyjson_mut_obj_add_uint(doc, root, "repeat_count", g_options.repeatCount);
+    if (g_options.shuffleSeed.has_value())
+    {
+        yyjson_mut_obj_add_uint(doc, root, "shuffle_seed", g_options.shuffleSeed.value());
+    }
 
     static_cast<void>(WriteJsonBlob(path, doc));
 }
@@ -1487,6 +2123,11 @@ void WriteRunJson(const SelfTestRunResult& result, const std::filesystem::path& 
     yyjson_mut_obj_add_uint(doc, root, "duration_ms", result.durationMs);
     yyjson_mut_obj_add_bool(doc, root, "fail_fast", result.failFast);
     yyjson_mut_obj_add_real(doc, root, "timeout_scale", result.timeoutScale);
+    yyjson_mut_obj_add_uint(doc, root, "repeat_count", result.repeatCount);
+    if (result.shuffleSeed.has_value())
+    {
+        yyjson_mut_obj_add_uint(doc, root, "shuffle_seed", result.shuffleSeed.value());
+    }
     if (! result.caseFilter.empty())
     {
         std::string caseFilterUtf8;

@@ -377,6 +377,10 @@ private:
     std::string _capabilitiesJson;
     mutable std::mutex _propertiesMutex;
     std::string _lastPropertiesJson;
+    // Per-provider-instance cache. A new plugin/context instance naturally invalidates the probe;
+    // distinct resolved volume roots retain independent entries.
+    std::mutex _storageCharacteristicsMutex;
+    std::unordered_map<std::wstring, FileSystemStorageCharacteristics> _storageCharacteristicsCache;
 
     FileSystemConcurrencyMode _concurrencyMode                 = kDefaultConcurrencyMode;
     unsigned int _copyMoveMaxConcurrency                       = kDefaultCopyMoveMaxConcurrency;

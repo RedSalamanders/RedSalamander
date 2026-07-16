@@ -32,4 +32,8 @@ BEGIN
     IDS_VIEWERVLC_SNAPSHOT_FAILED_FMT "Snímka zlyhala (kód {0})."
     IDS_VIEWERVLC_LOADING_TITLE "Spúšťa sa VLC..."
     IDS_VIEWERVLC_LOADING_BODY "Načítava sa motor VLC. Prehrávanie sa spustí automaticky."
+    IDS_VIEWERVLC_DETAILS_CONFIGURATION_REJECTED "Konfigurácia možností VLC obsahuje nebezpečnú alebo chybnú hodnotu."
+    IDS_VIEWERVLC_DETAILS_ASYNC_SUBMIT_FAILED "Načítanie VLC sa nepodarilo zaradiť do frontu. Skúste súbor otvoriť znova."
+    IDS_VIEWERVLC_DETAILS_ASYNC_RESULT_DELIVERY_FAILED "Výsledok načítania VLC sa nepodarilo doručiť. Skúste súbor otvoriť znova."
+    IDS_VIEWERVLC_DETAILS_LOAD_DLL_FAILED_FMT "Nepodarilo sa načítať súbor „{0}“ (Win32: {1})."
 END
