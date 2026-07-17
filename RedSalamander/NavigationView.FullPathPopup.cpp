@@ -295,7 +295,9 @@ LRESULT NavigationView::OnFullPathPopupActivate(WORD state, HWND activatingWindo
         {
             return 0;
         }
-        if (_fullPathPopup && activatingWindow && (activatingWindow == _fullPathPopup.get() || IsChild(_fullPathPopup.get(), activatingWindow) != FALSE))
+        const HWND popupHwnd = _fullPathPopup.get();
+        if (popupHwnd && activatingWindow && (activatingWindow == popupHwnd || IsChild(popupHwnd, activatingWindow) != FALSE ||
+                                               GetWindow(activatingWindow, GW_OWNER) == popupHwnd))
         {
             return 0;
         }
@@ -437,13 +439,14 @@ void NavigationView::ShowFullPathPopupSiblingsDropdown(HWND popupHwnd, size_t se
     }
 
     std::vector<std::filesystem::path> siblings;
-    if (! TryGetSiblingFolders(parentPath, siblings) || siblings.empty())
+    bool siblingsTruncated = false;
+    if (! TryGetSiblingFolders(parentPath, normalizedSegmentPath, siblings, siblingsTruncated) || siblings.empty())
     {
         return;
     }
 
     std::vector<RedSalamander::DxUi::MenuFlyoutItem> items;
-    items.reserve(siblings.size());
+    items.reserve(siblings.size() + (siblingsTruncated ? 2u : 0u));
 
     const std::filesystem::path normalizedCurrentPath = NormalizeDirectoryPath(segment.fullPath);
     const std::wstring currentPathText                = normalizedCurrentPath.wstring();
@@ -462,6 +465,14 @@ void NavigationView::ShowFullPathPopupSiblingsDropdown(HWND popupHwnd, size_t se
             selectedIndex = static_cast<int>(i);
         }
         items.push_back(std::move(item));
+    }
+
+    if (siblingsTruncated)
+    {
+        items.push_back(RedSalamander::DxUi::MenuFlyoutItem{.kind = RedSalamander::DxUi::MenuItemKind::Separator});
+        items.push_back(RedSalamander::DxUi::MenuFlyoutItem{.text = LoadStringResource(nullptr, IDS_CMD_NAVIGATE_PATH),
+                                                            .iconGlyph = L"\uE721",
+                                                            .commandId = ID_SIBLING_SEARCH});
     }
 
     _fullPathPopupActiveSeparatorIndex            = static_cast<int>(separatorIndex);
@@ -501,7 +512,12 @@ void NavigationView::ShowFullPathPopupSiblingsDropdown(HWND popupHwnd, size_t se
                       static_cast<uint64_t>(items.size()),
                       static_cast<uint64_t>(selectedIndex >= 0 ? selectedIndex : 0));
 
-    if (selectedId.has_value() && selectedId.value() >= ID_SIBLING_BASE)
+    if (selectedId == ID_SIBLING_SEARCH)
+    {
+        EnterFullPathPopupEditMode();
+        return;
+    }
+    else if (selectedId.has_value() && selectedId.value() >= ID_SIBLING_BASE && selectedId.value() < ID_SIBLING_SEARCH)
     {
         const size_t siblingIndex = static_cast<size_t>(selectedId.value() - ID_SIBLING_BASE);
         if (siblingIndex < siblings.size())

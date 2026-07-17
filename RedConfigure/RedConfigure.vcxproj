@@ -130,6 +130,7 @@
     <ClCompile Include="Localization\RcWriter.cpp" />
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="RedConfigureApp.cpp" />
+    <ClCompile Include="RedConfigurePagePresenters.cpp" />
     <ClCompile Include="RedConfigureRoot.cpp" />
     <ClCompile Include="RedConfigureSession.cpp" />
     <ClCompile Include="RedConfigureWorkflow.cpp" />
@@ -146,6 +147,7 @@
     <ClInclude Include="Localization\RcParser.h" />
     <ClInclude Include="Localization\RcWriter.h" />
     <ClInclude Include="RedConfigureApp.h" />
+    <ClInclude Include="RedConfigurePagePresenters.h" />
     <ClInclude Include="RedConfigureGridModels.h" />
     <ClInclude Include="RedConfigureLocalizationExampleControl.h" />
     <ClInclude Include="RedConfigureRoot.h" />

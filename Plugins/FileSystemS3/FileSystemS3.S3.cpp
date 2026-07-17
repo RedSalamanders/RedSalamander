@@ -1,5 +1,6 @@
 #include "FileSystemS3.Internal.h"
 #include "HandleIo.h"
+#include "PaginationGuard.h"
 
 #include <aws/core/utils/StringUtils.h>
 #include <aws/core/utils/memory/stl/AWSStringStream.h>
@@ -19,6 +20,7 @@
 #include <aws/s3-crt/model/UploadPartRequest.h>
 
 #include <algorithm>
+#include <limits>
 #include <unordered_set>
 
 std::optional<std::string> LookupS3BucketRegion(FileSystemS3& fs, std::wstring_view bucketName) noexcept
@@ -329,8 +331,21 @@ namespace
     std::unordered_set<std::string> seenDirectoryNamesUtf8;
     seenDirectoryNamesUtf8.reserve(256);
 
+    const uint64_t pagingDurationMs = std::clamp<uint64_t>(static_cast<uint64_t>(ctx.requestTimeoutMs) * 10u, 60'000u, 600'000u);
+    Common::Paging::Utf8ContinuationGuard pager(Common::Paging::Limits{
+        .deadlineTickMs = Common::Paging::DeadlineFromNow(GetTickCount64(), pagingDurationMs),
+    });
+    std::string continuationToken;
+    bool firstPage = true;
     while (true)
     {
+        const HRESULT pageBoundaryHr = firstPage ? pager.BeginFirstPage(GetTickCount64()) : pager.BeginContinuation(continuationToken, GetTickCount64());
+        firstPage = false;
+        if (FAILED(pageBoundaryHr))
+        {
+            return pageBoundaryHr;
+        }
+
         const auto outcome = client->ListObjectsV2(req);
         if (! outcome.IsSuccess())
         {
@@ -341,11 +356,13 @@ namespace
         }
 
         const auto& result = outcome.GetResult();
+        size_t pageBytes = 0u;
 
         // Directories (common prefixes)
         for (const auto& cp : result.GetCommonPrefixes())
         {
             const Aws::String& full = cp.GetPrefix();
+            pageBytes += (std::min)(full.size(), (std::numeric_limits<size_t>::max)() - pageBytes);
             std::string_view fullView(full.c_str(), full.size());
 
             if (! loc.keyOrPrefix.empty() && fullView.rfind(loc.keyOrPrefix, 0) == 0)
@@ -378,6 +395,7 @@ namespace
         for (const auto& obj : result.GetContents())
         {
             const Aws::String& key = obj.GetKey();
+            pageBytes += (std::min)(key.size(), (std::numeric_limits<size_t>::max)() - pageBytes);
             std::string_view keyView(key.c_str(), key.size());
 
             // Skip the "folder marker" for the current prefix.
@@ -412,13 +430,24 @@ namespace
             out.push_back(std::move(e));
         }
 
-        if (! result.GetIsTruncated())
+        const bool isTruncated       = result.GetIsTruncated();
+        const Aws::String& nextToken = result.GetNextContinuationToken();
+        const HRESULT pageHr = pager.CompletePage(result.GetCommonPrefixes().size() + result.GetContents().size(),
+                                                  pageBytes,
+                                                  isTruncated,
+                                                  std::string_view(nextToken.c_str(), nextToken.size()),
+                                                  GetTickCount64());
+        if (FAILED(pageHr))
+        {
+            return pageHr;
+        }
+        if (! isTruncated)
         {
             break;
         }
 
-        const Aws::String& token = result.GetNextContinuationToken();
-        req.SetContinuationToken(token);
+        continuationToken.assign(nextToken.c_str(), nextToken.size());
+        req.SetContinuationToken(nextToken);
     }
 
     return S_OK;
@@ -499,7 +528,7 @@ namespace
 class HandleReadStreamBuf final : public std::streambuf
 {
 public:
-    explicit HandleReadStreamBuf(HANDLE file) noexcept : _file(file)
+    HandleReadStreamBuf(HANDLE file, uint64_t declaredBytes) noexcept : _file(file), _declaredBytes(declaredBytes)
     {
         setg(_buffer.data(), _buffer.data(), _buffer.data());
     }
@@ -512,6 +541,12 @@ public:
     [[nodiscard]] HRESULT GetReadError() const noexcept
     {
         return _readErrorHr;
+    }
+
+    [[nodiscard]] uint64_t GetConsumedBytes() const noexcept
+    {
+        const auto unread = gptr() != nullptr && egptr() != nullptr ? static_cast<uint64_t>(egptr() - gptr()) : 0u;
+        return _fetchedBytes - unread;
     }
 
 protected:
@@ -533,8 +568,14 @@ protected:
             return traits_type::eof();
         }
 
+        if (_fetchedBytes >= _declaredBytes)
+        {
+            return traits_type::eof();
+        }
+
         DWORD read = 0;
-        if (ReadFile(_file, _buffer.data(), static_cast<DWORD>(_buffer.size()), &read, nullptr) == 0)
+        const DWORD requested = static_cast<DWORD>((std::min)(static_cast<uint64_t>(_buffer.size()), _declaredBytes - _fetchedBytes));
+        if (ReadFile(_file, _buffer.data(), requested, &read, nullptr) == 0)
         {
             const DWORD lastError = GetLastError();
             _readErrorHr          = HRESULT_FROM_WIN32(lastError != 0 ? lastError : ERROR_READ_FAULT);
@@ -546,6 +587,7 @@ protected:
             return traits_type::eof();
         }
 
+        _fetchedBytes += read;
         setg(_buffer.data(), _buffer.data(), _buffer.data() + read);
         return traits_type::to_int_type(*gptr());
     }
@@ -553,13 +595,15 @@ protected:
 private:
     HANDLE _file         = nullptr;
     HRESULT _readErrorHr = S_OK;
+    uint64_t _declaredBytes = 0u;
+    uint64_t _fetchedBytes  = 0u;
     std::array<char, 64 * 1024> _buffer{};
 };
 
 class HandleReadIStream final : public Aws::IOStream
 {
 public:
-    explicit HandleReadIStream(HANDLE file) noexcept : Aws::IOStream(nullptr), _buf(file)
+    HandleReadIStream(HANDLE file, uint64_t declaredBytes) noexcept : Aws::IOStream(nullptr), _buf(file, declaredBytes)
     {
         rdbuf(&_buf);
     }
@@ -572,6 +616,11 @@ public:
     [[nodiscard]] HRESULT GetReadError() const noexcept
     {
         return _buf.GetReadError();
+    }
+
+    [[nodiscard]] uint64_t GetConsumedBytes() const noexcept
+    {
+        return _buf.GetConsumedBytes();
     }
 
 private:
@@ -1019,12 +1068,12 @@ namespace
     req.SetKey(Aws::String(key.data(), key.size()));
     req.SetContentLength(static_cast<long long>(sizeBytes));
 
-    auto body = Aws::MakeShared<HandleReadIStream>("rs3-put", file);
+    auto body = Aws::MakeShared<HandleReadIStream>("rs3-put", file, sizeBytes);
     req.SetBody(body);
 
     const auto outcome = client->PutObject(req);
 
-    const HRESULT readHr = body->GetReadError();
+    const HRESULT readHr = ValidateS3UploadReadResult(sizeBytes, body->GetConsumedBytes(), body->GetReadError());
     if (FAILED(readHr))
     {
         return readHr;

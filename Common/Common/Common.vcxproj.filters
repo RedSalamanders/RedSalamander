@@ -24,6 +24,9 @@
     <ClInclude Include="..\LocalizationManager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\LocalFileTransaction.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="..\PluginConfiguration.h">
       <Filter>Header Files</Filter>
     </ClInclude>

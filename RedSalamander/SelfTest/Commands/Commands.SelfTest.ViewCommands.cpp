@@ -76,90 +76,6 @@ void PumpLimitedPendingMessagesForPerf(size_t maxMessages) noexcept
     }
 }
 
-class DirectedSelfTestInputWarning
-{
-public:
-    DirectedSelfTestInputWarning() noexcept
-    {
-        const int screenW = GetSystemMetrics(SM_CXSCREEN);
-        const int screenH = GetSystemMetrics(SM_CYSCREEN);
-        if (screenW <= 0 || screenH <= 0)
-        {
-            return;
-        }
-
-        const int width  = std::min(screenW, 900);
-        const int height = std::min(screenH, 220);
-        const int left   = (std::max)(0, (screenW - width) / 2);
-        const int top    = (std::max)(0, (screenH - height) / 3);
-
-        _font.reset(CreateFontW(-56,
-                                0,
-                                0,
-                                0,
-                                FW_BOLD,
-                                FALSE,
-                                FALSE,
-                                FALSE,
-                                DEFAULT_CHARSET,
-                                OUT_DEFAULT_PRECIS,
-                                CLIP_DEFAULT_PRECIS,
-                                CLEARTYPE_QUALITY,
-                                DEFAULT_PITCH | FF_SWISS,
-                                L"Segoe UI"));
-
-        HWND hwnd = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_LAYERED | WS_EX_TRANSPARENT,
-                                    L"STATIC",
-                                    L"don't touch the mouse",
-                                    WS_POPUP | WS_VISIBLE | WS_BORDER | SS_CENTER | SS_CENTERIMAGE,
-                                    left,
-                                    top,
-                                    width,
-                                    height,
-                                    nullptr,
-                                    nullptr,
-                                    GetModuleHandleW(nullptr),
-                                    nullptr);
-        if (! hwnd)
-        {
-            return;
-        }
-
-        _hwnd.reset(hwnd);
-        if (_font)
-        {
-            SendMessageW(_hwnd.get(), WM_SETFONT, reinterpret_cast<WPARAM>(_font.get()), TRUE);
-        }
-        static_cast<void>(SetLayeredWindowAttributes(_hwnd.get(), 0, 230, LWA_ALPHA));
-        SetWindowPos(_hwnd.get(), HWND_TOPMOST, left, top, width, height, SWP_NOACTIVATE | SWP_SHOWWINDOW);
-        UpdateWindow(_hwnd.get());
-        PumpPendingMessages();
-        _shownAt = GetTickCount64();
-    }
-
-    ~DirectedSelfTestInputWarning() noexcept
-    {
-        if (_hwnd)
-        {
-            const ULONGLONG elapsedMs = GetTickCount64() - _shownAt;
-            if (elapsedMs < 250u)
-            {
-                std::this_thread::sleep_for(std::chrono::milliseconds(250u - elapsedMs));
-                PumpPendingMessages();
-            }
-            _hwnd.reset();
-        }
-    }
-
-    DirectedSelfTestInputWarning(const DirectedSelfTestInputWarning&)            = delete;
-    DirectedSelfTestInputWarning& operator=(const DirectedSelfTestInputWarning&) = delete;
-
-private:
-    wil::unique_hwnd _hwnd;
-    wil::unique_hfont _font;
-    ULONGLONG _shownAt = 0;
-};
-
 [[nodiscard]] LONG ClampClientOffsetForSelfTest(LONG desired, LONG extent) noexcept
 {
     if (extent <= 1)
@@ -4343,7 +4259,7 @@ private:
     return state.failure.empty();
 }
 
-[[nodiscard]] bool TestPaneNavigationViewFullPathPopupEditRoute(HWND mainWindow, CaseState& state) noexcept
+[[nodiscard]] bool TestPaneNavigationViewFullPathPopupEditRoute(HWND mainWindow, CaseState& state, bool ownedWindowActivationOnly = false) noexcept
 {
     using namespace std::chrono_literals;
 
@@ -4597,6 +4513,56 @@ private:
     if (! state.failure.empty())
     {
         return false;
+    }
+
+    if (ownedWindowActivationOnly)
+    {
+        wil::unique_hwnd ownedPopupProbe{CreateWindowExW(WS_EX_TOOLWINDOW,
+                                                         L"STATIC",
+                                                         L"",
+                                                         WS_POPUP,
+                                                         0,
+                                                         0,
+                                                         32,
+                                                         32,
+                                                         popupHwnd,
+                                                         nullptr,
+                                                         GetModuleHandleW(nullptr),
+                                                         nullptr)};
+        state.Require(ownedPopupProbe != nullptr && GetWindow(ownedPopupProbe.get(), GW_OWNER) == popupHwnd,
+                      L"Navigation-view full-path popup proof could not create an owned top-level menu surrogate.");
+        if (ownedPopupProbe)
+        {
+            ShowWindow(ownedPopupProbe.get(), SW_SHOWNOACTIVATE);
+            SendMessageW(popupHwnd, WM_ACTIVATE, MAKEWPARAM(WA_INACTIVE, 0), reinterpret_cast<LPARAM>(ownedPopupProbe.get()));
+            state.Require(IsWindow(popupHwnd) != FALSE && IsWindowVisible(popupHwnd) != FALSE,
+                          L"Navigation-view full-path popup should remain open while one of its owned top-level menus is active.");
+        }
+        if (ownedPopupProbe && IsWindow(ownedPopupProbe.get()) != FALSE)
+        {
+            ownedPopupProbe.reset();
+        }
+        else
+        {
+            static_cast<void>(ownedPopupProbe.release());
+        }
+        if (! state.failure.empty())
+        {
+            return false;
+        }
+
+        SendMessageW(popupHwnd, WM_CLOSE, 0, 0);
+        PumpPendingMessages();
+        FocusFolderViewPane(FolderWindow::Pane::Left);
+
+        NavigationViewDebugSnapshot cleanupSnapshot{};
+        state.Require(WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
+                                                    [](const NavigationViewDebugSnapshot& value) noexcept
+        { return ! value.fullPathPopupVisible && ! value.fullPathPopupEditMode; },
+                                                    SelfTest::Scale(3000ms),
+                                                    &cleanupSnapshot),
+                      L"Navigation-view full-path popup owned-window proof did not close its popup during cleanup.");
+        return state.failure.empty();
     }
 
     SendMessageW(popupHwnd, WM_KEYDOWN, VK_F4, 0);
@@ -6956,6 +6922,8 @@ private:
         return false;
     }
 
+    state.Require(g_folderWindow.DebugPostCurrentNavigationEditSuggestResult(FolderWindow::Pane::Left),
+                  L"Failed to queue the deterministic stale edit-suggest result before Escape dismissal.");
     SendMessageW(pathEdit, WM_KEYDOWN, VK_ESCAPE, 0);
     SendMessageW(pathEdit, WM_KEYUP, VK_ESCAPE, 0);
     state.Require(waitForEditWithoutPopup(queryOne, L"popup escape close"),
@@ -6969,6 +6937,8 @@ private:
     state.Require(g_folderWindow.DebugGetNavigationViewSnapshot(FolderWindow::Pane::Left, escapeSnapshot),
                   L"Navigation view snapshot unavailable after closing the live edit-suggest popup with Escape.");
     state.Require(hasPathEditFocus(escapeSnapshot), L"Path edit should retain Win32 focus after closing the edit-suggest popup with Escape.");
+    state.Require(! escapeSnapshot.editSuggestPopupVisible && escapeSnapshot.editSuggestItemCount == 0u,
+                  L"An edit-suggest result queued before Escape must not reopen the dismissed popup.");
     if (! state.failure.empty())
     {
         return false;
@@ -6995,6 +6965,8 @@ private:
         return false;
     }
 
+    state.Require(g_folderWindow.DebugPostCurrentNavigationEditSuggestResult(FolderWindow::Pane::Left),
+                  L"Failed to queue the deterministic stale edit-suggest result before suggestion application.");
     SendMessageW(pathEdit, WM_KEYDOWN, VK_RETURN, 0);
     SendMessageW(pathEdit, WM_KEYUP, VK_RETURN, 0);
     state.Require(waitForEditWithoutPopup(expectedAppliedText, L"applying selected suggestion"),
@@ -7015,6 +6987,8 @@ private:
         return false;
     }
 
+    state.Require(g_folderWindow.DebugPostCurrentNavigationEditSuggestResult(FolderWindow::Pane::Left),
+                  L"Failed to queue the deterministic stale edit-suggest result before edit exit.");
     SendMessageW(pathEdit, WM_KEYDOWN, VK_ESCAPE, 0);
     SendMessageW(pathEdit, WM_KEYUP, VK_ESCAPE, 0);
     state.Require(waitForFolderFocus(L"final edit escape cleanup"),
@@ -24885,6 +24859,9 @@ void RunViewCommandsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfT
     });
     SelfTest::RunCase(options, suite, L"cmd_pane_navigationView_full_path_popup_edit_route", [=](CaseState& state) noexcept {
         return TestPaneNavigationViewFullPathPopupEditRoute(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_pane_navigationView_full_path_popup_owned_window_activation", [=](CaseState& state) noexcept {
+        return TestPaneNavigationViewFullPathPopupEditRoute(mainWindow, state, true);
     });
     SelfTest::RunCase(options, suite, L"cmd_pane_navigationView_full_path_popup_ancestor_click_navigates_to_ancestor", [=](CaseState& state) noexcept {
         return TestPaneNavigationViewFullPathPopupAncestorClickNavigatesToAncestor(mainWindow, state);

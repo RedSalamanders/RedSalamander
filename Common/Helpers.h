@@ -228,6 +228,19 @@ namespace Detail
                                      static_cast<double>(argb & 0xFFu) / 255.0);
 }
 
+[[nodiscard]] inline uint32_t CompositeArgbOverOpaqueBackground(uint32_t foregroundArgb, uint32_t backgroundArgb) noexcept
+{
+    const uint32_t alpha        = (foregroundArgb >> 24u) & 0xFFu;
+    const uint32_t inverseAlpha = 0xFFu - alpha;
+    const auto compositeChannel = [&](uint32_t shift) noexcept
+    {
+        const uint32_t foreground = (foregroundArgb >> shift) & 0xFFu;
+        const uint32_t background = (backgroundArgb >> shift) & 0xFFu;
+        return ((foreground * alpha) + (background * inverseAlpha) + 0x7Fu) / 0xFFu;
+    };
+    return 0xFF000000u | (compositeChannel(16u) << 16u) | (compositeChannel(8u) << 8u) | compositeChannel(0u);
+}
+
 [[nodiscard]] inline double RelativeLuminanceFromColorRef(COLORREF color) noexcept
 {
     return RelativeLuminanceFromSrgb(static_cast<double>(GetRValue(color)) / 255.0,
@@ -2382,16 +2395,19 @@ inline void TransferModulePinToCallbackReturn(PTP_CALLBACK_INSTANCE instance, wi
 //
 //   Receiver (WndProc):
 //     auto payload = TakeMessagePayload<MyPayload>(lParam);
-//     // NOTE: Receiver MUST use TakeMessagePayload<T> (not `std::unique_ptr<T>(reinterpret_cast<T*>(lParam))`)
-//     // so the payload registry can unregister it and avoid double-delete during WM_NCDESTROY draining.
+//     // NOTE: A nonzero LPARAM is an opaque registry token, never a payload pointer. Receiver MUST use
+//     // TakeMessagePayload<T>, check for null, and ignore stale/drained/type-mismatched nonzero tokens.
+//     // LPARAM zero is reserved for an explicitly posted payload-less fallback when that message defines one.
 //     // ... use payload ...
 //     // payload automatically deleted when scope exits
 //
 // Window teardown:
 // - If an `HWND` is destroyed while messages are still queued, Windows may discard those messages without delivering them.
 //   If those messages carry heap payload pointers, the payloads become unreachable (leak).
-// - To prevent that, windows that receive payload messages should call `DrainPostedPayloadsForWindow(hwnd)` in `WM_NCDESTROY`
-//   and call `InitPostedPayloadWindow(hwnd)` during create (`WM_NCCREATE`/`WM_CREATE`) to handle potential HWND reuse.
+// - To prevent that, windows that receive payload messages should call `DrainPostedPayloadsForWindow(hwnd)` in `WM_NCDESTROY`.
+//   It closes the target, invalidates every registered token, and then deletes registered payloads. Any stale queued token is harmless:
+//   TakeMessagePayload<T> returns null and never adopts it as storage.
+// - Call `InitPostedPayloadWindow(hwnd)` during create (`WM_NCCREATE`/`WM_CREATE`) to handle potential HWND reuse.
 
 namespace detail
 {
@@ -2399,6 +2415,7 @@ using MessagePayloadDeleter = void (*)(void*) noexcept;
 
 struct PostedMessagePayloadEntry final
 {
+    void* payload             = nullptr;
     HWND hwnd                 = nullptr;
     UINT msg                  = 0;
     MessagePayloadDeleter del = nullptr;
@@ -2413,9 +2430,10 @@ struct PostedMessagePayloadRegistry final
     PostedMessagePayloadRegistry& operator=(PostedMessagePayloadRegistry&&)      = delete;
 
     std::mutex mutex;
-    std::unordered_map<void*, PostedMessagePayloadEntry> entriesByPtr;
-    std::unordered_map<HWND, std::unordered_set<void*>> ptrsByHwnd;
+    std::unordered_map<LPARAM, PostedMessagePayloadEntry> entriesByToken;
+    std::unordered_map<HWND, std::unordered_set<LPARAM>> tokensByHwnd;
     std::unordered_set<HWND> closedHwnds;
+    LPARAM nextToken = 1;
 };
 
 [[nodiscard]] inline PostedMessagePayloadRegistry& GetPostedMessagePayloadRegistry() noexcept
@@ -2437,66 +2455,73 @@ inline void InitPostedPayloadWindow(HWND hwnd) noexcept
     static_cast<void>(registry.closedHwnds.erase(hwnd));
 }
 
-[[nodiscard]] inline bool RegisterPostedMessagePayload(HWND hwnd, UINT msg, void* payload, MessagePayloadDeleter deleter) noexcept
+template <typename T> inline void DeletePostedMessagePayload(void* payload) noexcept
 {
-    if (! hwnd || ! payload || deleter == nullptr)
+    delete static_cast<T*>(payload);
+}
+
+[[nodiscard]] inline LPARAM AllocatePostedMessagePayloadTokenLocked(PostedMessagePayloadRegistry& registry) noexcept
+{
+    const size_t maxAttempts = registry.entriesByToken.size() + 1u;
+    for (size_t attempt = 0u; attempt < maxAttempts; ++attempt)
+    {
+        const LPARAM token = registry.nextToken;
+        registry.nextToken = token >= std::numeric_limits<LPARAM>::max() ? 1 : token + 1;
+        if (token != 0 && ! registry.entriesByToken.contains(token))
+        {
+            return token;
+        }
+    }
+    return 0;
+}
+
+[[nodiscard]] inline bool ErasePostedMessagePayloadEntryLocked(PostedMessagePayloadRegistry& registry,
+                                                               LPARAM token,
+                                                               HWND expectedHwnd,
+                                                               UINT expectedMessage,
+                                                               bool validateDestination,
+                                                               PostedMessagePayloadEntry& removed) noexcept
+{
+    const auto it = registry.entriesByToken.find(token);
+    if (it == registry.entriesByToken.end())
+    {
+        return false;
+    }
+    if (validateDestination && (it->second.hwnd != expectedHwnd || it->second.msg != expectedMessage))
     {
         return false;
     }
 
-    bool shouldDelete = false;
-    {
-        auto& registry = GetPostedMessagePayloadRegistry();
-        std::lock_guard lock(registry.mutex);
+    removed         = it->second;
+    const HWND hwnd = removed.hwnd;
+    registry.entriesByToken.erase(it);
 
-        if (registry.closedHwnds.contains(hwnd))
+    const auto hwIt = registry.tokensByHwnd.find(hwnd);
+    if (hwIt != registry.tokensByHwnd.end())
+    {
+        hwIt->second.erase(token);
+        if (hwIt->second.empty())
         {
-            shouldDelete = true;
-        }
-        else
-        {
-            static_cast<void>(registry.entriesByPtr.emplace(payload, PostedMessagePayloadEntry{.hwnd = hwnd, .msg = msg, .del = deleter}));
-            static_cast<void>(registry.ptrsByHwnd[hwnd].insert(payload));
+            registry.tokensByHwnd.erase(hwIt);
         }
     }
-
-    if (shouldDelete)
-    {
-        deleter(payload);
-        return false;
-    }
-
     return true;
 }
 
-inline void UnregisterPostedMessagePayload(void* payload) noexcept
+[[nodiscard]] inline bool TakeRegisteredPostedMessagePayload(LPARAM token,
+                                                             HWND expectedHwnd,
+                                                             UINT expectedMessage,
+                                                             bool validateDestination,
+                                                             PostedMessagePayloadEntry& removed) noexcept
 {
-    if (! payload)
+    if (token == 0)
     {
-        return;
+        return false;
     }
 
     auto& registry = GetPostedMessagePayloadRegistry();
     std::lock_guard lock(registry.mutex);
-
-    const auto it = registry.entriesByPtr.find(payload);
-    if (it == registry.entriesByPtr.end())
-    {
-        return;
-    }
-
-    const HWND hwnd = it->second.hwnd;
-    registry.entriesByPtr.erase(it);
-
-    const auto hwIt = registry.ptrsByHwnd.find(hwnd);
-    if (hwIt != registry.ptrsByHwnd.end())
-    {
-        hwIt->second.erase(payload);
-        if (hwIt->second.empty())
-        {
-            registry.ptrsByHwnd.erase(hwIt);
-        }
-    }
+    return ErasePostedMessagePayloadEntryLocked(registry, token, expectedHwnd, expectedMessage, validateDestination, removed);
 }
 } // namespace detail
 
@@ -2514,49 +2539,44 @@ inline void InitPostedPayloadWindow(HWND hwnd) noexcept
         return 0;
     }
 
-    std::vector<std::pair<void*, detail::MessagePayloadDeleter>> toDelete;
+    std::vector<detail::PostedMessagePayloadEntry> toDelete;
     {
         auto& registry = detail::GetPostedMessagePayloadRegistry();
         std::lock_guard lock(registry.mutex);
 
         static_cast<void>(registry.closedHwnds.insert(hwnd));
 
-        const auto hwIt = registry.ptrsByHwnd.find(hwnd);
-        if (hwIt == registry.ptrsByHwnd.end())
+        const auto hwIt = registry.tokensByHwnd.find(hwnd);
+        if (hwIt == registry.tokensByHwnd.end())
         {
             return 0;
         }
 
         toDelete.reserve(hwIt->second.size());
-
-        for (void* payload : hwIt->second)
+        const std::vector<LPARAM> tokens(hwIt->second.begin(), hwIt->second.end());
+        for (const LPARAM token : tokens)
         {
-            const auto it = registry.entriesByPtr.find(payload);
-            if (it == registry.entriesByPtr.end())
+            detail::PostedMessagePayloadEntry removed{};
+            if (detail::ErasePostedMessagePayloadEntryLocked(registry, token, hwnd, 0, false, removed))
             {
-                continue;
+                toDelete.push_back(removed);
             }
-
-            toDelete.emplace_back(payload, it->second.del);
-            registry.entriesByPtr.erase(it);
         }
-
-        registry.ptrsByHwnd.erase(hwIt);
     }
 
-    for (const auto& [payload, deleter] : toDelete)
+    for (const detail::PostedMessagePayloadEntry& entry : toDelete)
     {
-        if (deleter)
+        if (entry.del)
         {
-            deleter(payload);
+            entry.del(entry.payload);
         }
     }
 
     return toDelete.size();
 }
 
-/// Posts a message with a unique_ptr payload. If PostMessageW fails, the payload is automatically deleted.
-/// Returns true on success, false on failure (payload is deleted, call GetLastError() for details).
+/// Posts a message with a unique_ptr payload behind an opaque, process-unique LPARAM token. If PostMessageW
+/// fails, the payload is automatically deleted. Returns true on success, false on failure.
 template <typename T> [[nodiscard]] inline bool PostMessagePayload(HWND hwnd, UINT msg, WPARAM wParam, std::unique_ptr<T> payload) noexcept
 {
     T* raw = payload.release();
@@ -2565,7 +2585,7 @@ template <typename T> [[nodiscard]] inline bool PostMessagePayload(HWND hwnd, UI
         return PostMessageW(hwnd, msg, wParam, 0) != 0;
     }
 
-    const auto deleter = +[](void* ptr) noexcept { delete static_cast<T*>(ptr); };
+    constexpr detail::MessagePayloadDeleter deleter = &detail::DeletePostedMessagePayload<T>;
 
     auto& registry = detail::GetPostedMessagePayloadRegistry();
     std::unique_lock lock(registry.mutex);
@@ -2577,37 +2597,48 @@ template <typename T> [[nodiscard]] inline bool PostMessagePayload(HWND hwnd, UI
         return false;
     }
 
-    static_cast<void>(registry.entriesByPtr.emplace(raw, detail::PostedMessagePayloadEntry{.hwnd = hwnd, .msg = msg, .del = deleter}));
-    static_cast<void>(registry.ptrsByHwnd[hwnd].insert(raw));
-
-    if (! PostMessageW(hwnd, msg, wParam, reinterpret_cast<LPARAM>(raw)))
+    const LPARAM token = detail::AllocatePostedMessagePayloadTokenLocked(registry);
+    if (token == 0)
     {
-        registry.entriesByPtr.erase(raw);
-
-        const auto hwIt = registry.ptrsByHwnd.find(hwnd);
-        if (hwIt != registry.ptrsByHwnd.end())
-        {
-            hwIt->second.erase(raw);
-            if (hwIt->second.empty())
-            {
-                registry.ptrsByHwnd.erase(hwIt);
-            }
-        }
-
         lock.unlock();
         deleter(raw);
+        return false;
+    }
+
+    static_cast<void>(registry.entriesByToken.emplace(
+        token, detail::PostedMessagePayloadEntry{.payload = raw, .hwnd = hwnd, .msg = msg, .del = deleter}));
+    static_cast<void>(registry.tokensByHwnd[hwnd].insert(token));
+
+    if (! PostMessageW(hwnd, msg, wParam, token))
+    {
+        detail::PostedMessagePayloadEntry removed{};
+        static_cast<void>(detail::ErasePostedMessagePayloadEntryLocked(registry, token, hwnd, msg, true, removed));
+
+        lock.unlock();
+        deleter(removed.payload);
         return false;
     }
 
     return true;
 }
 
-/// Takes ownership of a message payload from LPARAM, wrapping it in a unique_ptr.
-/// Use in WndProc message handlers to ensure automatic cleanup.
+/// Takes ownership of a registered message payload identified by the opaque LPARAM token.
+/// Returns null for a zero LPARAM or a stale, drained, unregistered, or differently typed token.
 template <typename T> [[nodiscard]] inline std::unique_ptr<T> TakeMessagePayload(LPARAM lParam) noexcept
 {
-    detail::UnregisterPostedMessagePayload(reinterpret_cast<void*>(lParam));
-    return std::unique_ptr<T>(reinterpret_cast<T*>(lParam));
+    detail::PostedMessagePayloadEntry entry{};
+    if (! detail::TakeRegisteredPostedMessagePayload(lParam, nullptr, 0, false, entry))
+    {
+        return {};
+    }
+
+    constexpr detail::MessagePayloadDeleter expectedDeleter = &detail::DeletePostedMessagePayload<T>;
+    if (entry.del != expectedDeleter)
+    {
+        entry.del(entry.payload);
+        return {};
+    }
+    return std::unique_ptr<T>(static_cast<T*>(entry.payload));
 }
 
 template <typename T> struct ContiguousPostedPayloadDrainResult final

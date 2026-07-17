@@ -63,7 +63,13 @@ This spec defines a **host-managed Connection Manager** that:
 
 Stored in Settings Store (non-secret fields only):
 
-- `id` (string, GUID): stable internal identifier.
+- `id` (string, GUID): stable internal identifier in lowercase canonical `8-4-4-4-12` form.
+  - Persisted IDs must be unique after case folding; the reserved Quick Connect ID is forbidden in persisted profiles.
+  - Strict reload, Connection Manager commit, and Settings Store save reject invalid, non-canonical, reserved, or duplicate IDs.
+  - Startup recovery gives every member of an existing collision group (and every other invalid-ID profile) a fresh unique ID.
+    Because an old WinCred target cannot be associated safely once identities collided, recovery sets `savePassword=false`,
+    leaves old WinCred entries untouched, persists the repaired settings through source CAS, and tells the user to re-enter
+    the affected secret. Recovery never copies or guesses an ambiguous credential.
 - `name` (string): user-visible name, unique (case-insensitive), trimmed, and safe for `/@conn:<name>` (no `/` or `\\`).
 - `pluginId` (string): target filesystem plugin long id (e.g. `builtin/file-system-sftp`).
 - `host` (string): trimmed (no leading/trailing whitespace).
@@ -131,16 +137,18 @@ Stored in Settings Store under `connections`:
 - `items` (array of ConnectionProfile)
 - Global Windows Hello settings (Preferences → Advanced → Windows Hello for Connections):
   - `bypassWindowsHello` (bool, default `false`): when `true`, Windows Hello verification is skipped even if a profile requires it (intended for automation).
-  - `windowsHelloReauthTimeoutMinute` (uint32, default `10`): how long recent interactive authentication is reused for a given connection id (in minutes) for interactive prompts/UX.
+  - `windowsHelloReauthTimeoutMinute` (uint32, default `10`): how long recent interactive authentication is reused for a given connection id and secret kind (in minutes) for interactive prompts/UX.
     - Interactive authentication includes Windows Hello verification and manual secret entry (password/passphrase).
     - `0` means re-ask Windows Hello on every secret access.
-    - For long-running background operations (copy/compare) the host reuses successful interactive authentication for the remainder of the app run to avoid mid-operation Windows Hello prompts.
+    - The same successful interactive action creates an explicit app-run grant for background plugin access to that exact
+      `(connectionId, secretKind)`, so long-running copy/compare work does not prompt mid-operation.
+    - Background grants never satisfy an interactive reveal after its timed grant expires.
 
 ### Secret Storage (not persisted in JSON)
 
 Secrets are stored in Windows Credential Manager as **generic credentials**.
 
-- Target name format: `RedSalamander/Connections/<connectionId>/<secretKind>` (internal stable id = `ConnectionProfile.id`, not the user name).
+- Target name format: `RedSalamander/Connections/<connectionId>/<secretKind>` (the canonical internal stable id = `ConnectionProfile.id`, not the user name). Target construction rejects non-canonical IDs.
 - Username is stored in the credential record as a convenience; the host remains the source of truth for `ConnectionProfile.userName`.
 - Secret blob is UTF-16 NUL-terminated text.
 
@@ -215,8 +223,11 @@ The Connection Manager is exposed to plugins via a host service queried from `IH
     - prompt the user to enter a secret via `PromptForConnectionSecret(...)` and cache it **in memory only** for the current app run,
   - OAuth 2.0 PKCE refresh tokens follow the same persistence rule, but they are written through `SetConnectionSecret(...)` after token acquisition or refresh,
   - if `requireWindowsHello == true` (and `bypassWindowsHello == false`), the host may perform Windows Hello verification prior to returning a secret from WinCred (host policy),
-    - The host MUST reuse successful interactive authentication for the remainder of the app run for background secret access (so long-running compare/copy does not re-prompt Windows Hello mid-operation).
-  - session-cached secrets are cleared on exit (and may expire after a host-defined TTL).
+    - The host MUST reuse the explicit app-run background grant created by successful interactive authentication for the
+      same `(connectionId, secretKind)`; this grant does not bypass the timed policy for an interactive reveal.
+  - authorization state is keyed by canonical connection ID, secret kind, and access purpose. It is cleared for the affected
+    secret on replacement/deletion and cleared globally on workstation lock/disconnect/logoff, session end, and process shutdown.
+  - session-cached secrets are cleared on workstation lock/disconnect/logoff, session end, and process exit (and may expire after a host-defined TTL).
 
 ### Secret retrieval (prompting + session cache)
 

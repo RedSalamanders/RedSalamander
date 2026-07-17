@@ -590,7 +590,9 @@ struct FolderWindow::FileOperationState
                            wil::com_ptr<IFileSystem> destinationFileSystem                    = nullptr,
                            uint64_t* taskIdOut                                                = nullptr,
                            std::vector<FolderWindow::ResolvedFileOperationItem> resolvedItems = {},
-                           std::wstring confirmationMessage                                   = {});
+                           std::wstring confirmationMessage                                   = {},
+                           std::wstring sourcePluginIdOverride                                = {},
+                           std::wstring sourcePluginShortIdOverride                           = {});
 
     void ApplyTheme(const AppTheme& theme);
     void Shutdown() noexcept;

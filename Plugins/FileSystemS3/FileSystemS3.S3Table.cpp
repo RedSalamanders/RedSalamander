@@ -1,10 +1,14 @@
 #include "FileSystemS3.Internal.h"
+#include "PaginationGuard.h"
 
 #include <aws/core/utils/json/JsonSerializer.h>
 #include <aws/s3tables/model/GetTableRequest.h>
 #include <aws/s3tables/model/ListNamespacesRequest.h>
 #include <aws/s3tables/model/ListTableBucketsRequest.h>
 #include <aws/s3tables/model/ListTablesRequest.h>
+
+#include <algorithm>
+#include <limits>
 
 HRESULT ListS3TableBuckets(FileSystemS3& fs, const FileSystemS3Internal::ResolvedAwsContext& ctx, std::vector<FilesInformationS3::Entry>& out) noexcept
 {
@@ -111,8 +115,20 @@ namespace
 
     // S3 Tables paginates via a continuation token (no IsTruncated boolean).
     Aws::String token;
+    const uint64_t pagingDurationMs = std::clamp<uint64_t>(static_cast<uint64_t>(ctx.requestTimeoutMs) * 10u, 60'000u, 600'000u);
+    Common::Paging::Utf8ContinuationGuard pager(Common::Paging::Limits{
+        .deadlineTickMs = Common::Paging::DeadlineFromNow(GetTickCount64(), pagingDurationMs),
+    });
+    bool firstPage = true;
     while (true)
     {
+        const std::string_view tokenView(token.c_str(), token.size());
+        const HRESULT pageBoundaryHr = firstPage ? pager.BeginFirstPage(GetTickCount64()) : pager.BeginContinuation(tokenView, GetTickCount64());
+        firstPage = false;
+        if (FAILED(pageBoundaryHr))
+        {
+            return pageBoundaryHr;
+        }
         if (! token.empty())
         {
             req.SetContinuationToken(token);
@@ -128,11 +144,13 @@ namespace
         }
 
         const auto& result = outcome.GetResult();
+        size_t pageBytes = 0u;
         for (const auto& ns : result.GetNamespaces())
         {
             std::string joined;
             for (const auto& part : ns.GetNamespace())
             {
+                pageBytes += (std::min)(part.size(), (std::numeric_limits<size_t>::max)() - pageBytes);
                 if (! joined.empty())
                 {
                     joined.push_back('.');
@@ -150,6 +168,15 @@ namespace
         }
 
         token = result.GetContinuationToken();
+        const HRESULT pageHr = pager.CompletePage(result.GetNamespaces().size(),
+                                                  pageBytes,
+                                                  ! token.empty(),
+                                                  std::string_view(token.c_str(), token.size()),
+                                                  GetTickCount64());
+        if (FAILED(pageHr))
+        {
+            return pageHr;
+        }
         if (token.empty())
         {
             break;
@@ -191,8 +218,20 @@ namespace
 
     // S3 Tables paginates via a continuation token (no IsTruncated boolean).
     Aws::String token;
+    const uint64_t pagingDurationMs = std::clamp<uint64_t>(static_cast<uint64_t>(ctx.requestTimeoutMs) * 10u, 60'000u, 600'000u);
+    Common::Paging::Utf8ContinuationGuard pager(Common::Paging::Limits{
+        .deadlineTickMs = Common::Paging::DeadlineFromNow(GetTickCount64(), pagingDurationMs),
+    });
+    bool firstPage = true;
     while (true)
     {
+        const std::string_view tokenView(token.c_str(), token.size());
+        const HRESULT pageBoundaryHr = firstPage ? pager.BeginFirstPage(GetTickCount64()) : pager.BeginContinuation(tokenView, GetTickCount64());
+        firstPage = false;
+        if (FAILED(pageBoundaryHr))
+        {
+            return pageBoundaryHr;
+        }
         if (! token.empty())
         {
             req.SetContinuationToken(token);
@@ -208,8 +247,10 @@ namespace
         }
 
         const auto& result = outcome.GetResult();
+        size_t pageBytes = 0u;
         for (const auto& table : result.GetTables())
         {
+            pageBytes += (std::min)(table.GetName().size(), (std::numeric_limits<size_t>::max)() - pageBytes);
             const std::wstring name = Utf16FromUtf8(table.GetName());
             if (name.empty())
             {
@@ -226,6 +267,15 @@ namespace
         }
 
         token = result.GetContinuationToken();
+        const HRESULT pageHr = pager.CompletePage(result.GetTables().size(),
+                                                  pageBytes,
+                                                  ! token.empty(),
+                                                  std::string_view(token.c_str(), token.size()),
+                                                  GetTickCount64());
+        if (FAILED(pageHr))
+        {
+            return pageHr;
+        }
         if (token.empty())
         {
             break;

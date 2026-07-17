@@ -58,8 +58,6 @@
 #include "WindowSizing.h"
 #include "resource.h"
 
-extern FolderWindow g_folderWindow;
-
 namespace
 {
 using RedSalamander::DxUi::Button;
@@ -1667,7 +1665,8 @@ public:
     using IDxGridDelegate::OnGridRowActivated;
     using IDxGridDelegate::OnGridSelectionChanged;
 
-    FindFilesWindow(HWND owner, Common::Settings::Settings& settings, AppTheme theme, FindFilesPaneContext context) noexcept;
+    FindFilesWindow(
+        HWND owner, FolderWindow& applicationFolderWindow, Common::Settings::Settings& settings, AppTheme theme, FindFilesPaneContext context) noexcept;
 
     ~FindFilesWindow() noexcept override
     {
@@ -1859,6 +1858,7 @@ private:
     [[nodiscard]] wil::com_ptr<ID2D1Bitmap1> GetGridIconBitmap(const Grid& sender, int iconIndex, float targetDipSize, ID2D1DeviceContext* d2dContext) override;
 
     HWND _ownerWindow                     = nullptr;
+    FolderWindow* _applicationFolderWindow = nullptr;
     HWND _restoreFocusWindow              = nullptr;
     Common::Settings::Settings* _settings = nullptr;
     AppTheme _theme{};
@@ -2500,8 +2500,10 @@ void SearchSessionController::MarkIdle() noexcept
     _idleCv.notify_all();
 }
 
-FindFilesWindow::FindFilesWindow(HWND owner, Common::Settings::Settings& settings, AppTheme theme, FindFilesPaneContext context) noexcept
-    : _settings(&settings),
+FindFilesWindow::FindFilesWindow(
+    HWND owner, FolderWindow& applicationFolderWindow, Common::Settings::Settings& settings, AppTheme theme, FindFilesPaneContext context) noexcept
+    : _applicationFolderWindow(&applicationFolderWindow),
+      _settings(&settings),
       _theme(std::move(theme)),
       _context(std::move(context))
 {
@@ -3257,7 +3259,7 @@ bool FindFilesWindow::LaunchSelectedResultFileAction(unsigned int commandId) noe
         displayedFilePaths.push_back(fullPath);
     }
 
-    const bool launched = g_folderWindow.TryLaunchResolvedFileAction(
+    const bool launched = _applicationFolderWindow->TryLaunchResolvedFileAction(
         result.pluginId, result.instanceContext, fullPath, std::move(selectedPaths), std::move(displayedFilePaths), commandId, _hWnd.get());
     if (! launched)
     {
@@ -3358,12 +3360,12 @@ bool FindFilesWindow::CopyOrMoveSelectedResultsToOtherPane(FileSystemOperation o
     if (_explicitDestinationFolder.has_value() && ! _explicitDestinationFolder->empty())
     {
         destinationFolder = _explicitDestinationFolder.value();
-        hr                = g_folderWindow.StartFileOperationForResolvedPathsToDestination(
+        hr                = _applicationFolderWindow->StartFileOperationForResolvedPathsToDestination(
             context->pluginId, context->instanceContext, operation, std::move(context->paths), destinationFolder.value(), flags, &taskId);
     }
     else
     {
-        hr = g_folderWindow.StartFileOperationForResolvedPathsToOtherPane(
+        hr = _applicationFolderWindow->StartFileOperationForResolvedPathsToOtherPane(
             context->pluginId, context->instanceContext, operation, std::move(context->paths), flags, &destinationFolder, &taskId);
     }
     if (FAILED(hr))
@@ -3404,7 +3406,7 @@ bool FindFilesWindow::DeleteSelectedResults(bool permanent) noexcept
     const FileSystemFlags flags = permanent ? static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE)
                                             : static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_USE_RECYCLE_BIN);
     uint64_t taskId             = 0;
-    const HRESULT hr            = g_folderWindow.StartFileOperationForResolvedPaths(
+    const HRESULT hr            = _applicationFolderWindow->StartFileOperationForResolvedPaths(
         context->pluginId, context->instanceContext, FILESYSTEM_DELETE, std::move(context->paths), flags, permanent, &taskId);
     if (FAILED(hr))
     {
@@ -3432,7 +3434,7 @@ void FindFilesWindow::EnsureFileOperationCompletedSubscription() noexcept
     {
         return;
     }
-    _fileOperationCompletedCallbackToken = g_folderWindow.AddFileOperationCompletedCallback([this](const FolderWindow::FileOperationCompletedEvent& e) noexcept
+    _fileOperationCompletedCallbackToken = _applicationFolderWindow->AddFileOperationCompletedCallback([this](const FolderWindow::FileOperationCompletedEvent& e) noexcept
     { OnFolderWindowFileOperationCompleted(e); },
                                                                                             _fileOperationCompletedCallbackLifetime);
 }
@@ -4295,10 +4297,10 @@ void FindFilesWindow::PersistUiState(bool updateHistory) noexcept
 
 HWND FindFilesWindow::ResolveRestoreFolderViewWindow() const noexcept
 {
-    HWND focusedFolderView = g_folderWindow.GetFocusedFolderViewHwnd();
+    HWND focusedFolderView = _applicationFolderWindow->GetFocusedFolderViewHwnd();
     if (! focusedFolderView)
     {
-        focusedFolderView = g_folderWindow.GetFolderViewHwnd(g_folderWindow.GetFocusedPane());
+        focusedFolderView = _applicationFolderWindow->GetFolderViewHwnd(_applicationFolderWindow->GetFocusedPane());
     }
 
     if (! focusedFolderView || IsWindow(focusedFolderView) == FALSE)
@@ -4452,7 +4454,7 @@ LRESULT FindFilesWindow::OnNcDestroy() noexcept
     _fileOperationCompletedCallbackLifetime.reset();
     if (_fileOperationCompletedCallbackToken != 0)
     {
-        g_folderWindow.RemoveFileOperationCompletedCallback(std::exchange(_fileOperationCompletedCallbackToken, 0ull));
+        _applicationFolderWindow->RemoveFileOperationCompletedCallback(std::exchange(_fileOperationCompletedCallbackToken, 0ull));
     }
     if (_hWnd)
     {
@@ -4525,7 +4527,7 @@ LRESULT FindFilesWindow::OnNcDestroy() noexcept
     }
     if (restoreFocus)
     {
-        g_folderWindow.RequestRestoreFolderViewFocus(restoreFocus);
+        _applicationFolderWindow->RequestRestoreFolderViewFocus(restoreFocus);
     }
     if (_dispatchDepth == 0u)
     {
@@ -4766,7 +4768,7 @@ void FindFilesWindow::OpenSelectedResult(bool parentOnly) noexcept
     }
 
     const std::filesystem::path historyPath = NavigationLocation::FormatHistoryPath(record.pluginShortId, record.instanceContext, plan.targetFolder);
-    static_cast<void>(g_folderWindow.ExecuteInActivePane(historyPath, plan.focusName, plan.commandId, true));
+    static_cast<void>(_applicationFolderWindow->ExecuteInActivePane(historyPath, plan.focusName, plan.commandId, true));
 }
 
 void FindFilesWindow::SetStatusText(std::wstring text) noexcept
@@ -4887,15 +4889,15 @@ std::optional<std::filesystem::path> FindFilesWindow::ResolveDestinationFolderFo
 
     if (! pluginId.empty() && ! sourcePaths.empty())
     {
-        if (auto destination = g_folderWindow.GetOtherPaneDestinationForResolvedPaths(pluginId, instanceContext, sourcePaths))
+        if (auto destination = _applicationFolderWindow->GetOtherPaneDestinationForResolvedPaths(pluginId, instanceContext, sourcePaths))
         {
             return destination;
         }
     }
 
-    const FolderWindow::Pane focusedPane     = g_folderWindow.GetFocusedPane();
+    const FolderWindow::Pane focusedPane     = _applicationFolderWindow->GetFocusedPane();
     const FolderWindow::Pane destinationPane = focusedPane == FolderWindow::Pane::Left ? FolderWindow::Pane::Right : FolderWindow::Pane::Left;
-    return g_folderWindow.GetCurrentPath(destinationPane);
+    return _applicationFolderWindow->GetCurrentPath(destinationPane);
 }
 
 std::wstring FindFilesWindow::BuildDestinationStatusText() const
@@ -4958,7 +4960,7 @@ void FindFilesWindow::RefreshDestinationNavigationPath() noexcept
 void FindFilesWindow::RefreshDestinationNavigationHistory(const std::optional<std::filesystem::path>& destination) noexcept
 {
     std::vector<std::filesystem::path> history;
-    const size_t maxItems = static_cast<size_t>((std::clamp)(g_folderWindow.GetFolderHistoryMax(), 1u, 50u));
+    const size_t maxItems = static_cast<size_t>((std::clamp)(_applicationFolderWindow->GetFolderHistoryMax(), 1u, 50u));
     history.reserve(maxItems);
 
     const auto appendUnique = [&](const std::filesystem::path& path) noexcept
@@ -4981,7 +4983,7 @@ void FindFilesWindow::RefreshDestinationNavigationHistory(const std::optional<st
         appendUnique(destination.value());
     }
 
-    for (const auto& entry : g_folderWindow.GetFolderHistory())
+    for (const auto& entry : _applicationFolderWindow->GetFolderHistory())
     {
         appendUnique(entry);
         if (history.size() >= maxItems)
@@ -7520,9 +7522,13 @@ LRESULT CALLBACK FindFilesWindow::WndProc(HWND hwnd, UINT message, WPARAM wParam
 
 } // namespace
 
-bool ShowFindFilesWindow(HWND owner, Common::Settings::Settings& settings, const AppTheme& theme, FindFilesPaneContext context) noexcept
+bool ShowFindFilesWindow(HWND owner,
+                         FolderWindow& applicationFolderWindow,
+                         Common::Settings::Settings& settings,
+                         const AppTheme& theme,
+                         FindFilesPaneContext context) noexcept
 {
-    auto* window = new (std::nothrow) FindFilesWindow(owner, settings, theme, std::move(context));
+    auto* window = new (std::nothrow) FindFilesWindow(owner, applicationFolderWindow, settings, theme, std::move(context));
     if (! window)
     {
         return false;

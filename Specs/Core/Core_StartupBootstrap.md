@@ -152,8 +152,10 @@ from normal interactive `WM_CLOSE` teardown.
 - `WM_QUERYENDSESSION` returns `TRUE` promptly. It does not prompt, cancel File Operations, close windows,
   unload plugins, or write settings.
 - A confirmed `WM_ENDSESSION` (`wParam != FALSE`) captures current main-window placement, pane paths and
-  view/history state, active pane, and menu/function-bar visibility, then synchronously writes the prepared
-  RedSalamander settings document.
+  view/history state, active pane, and menu/function-bar visibility, then submits the prepared
+  RedSalamander settings document as a bounded final request to the serialized save coordinator.
+- The final request fences later submissions and is ordered after any already-active write, so an older
+  debounced snapshot cannot replace the session-end snapshot.
 - A canceled `WM_ENDSESSION` (`wParam == FALSE`) is a no-op.
 - Session-end persistence is idempotent. One atomic save owner arbitrates the confirmed-session path and the
   later normal `WM_DESTROY` path, so repeated notifications and normal destruction cannot write the runtime

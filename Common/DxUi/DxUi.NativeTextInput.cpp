@@ -613,6 +613,18 @@ void WindowHost::SecureClearNativeTextInputStateCache() noexcept
 
 void WindowHost::DeactivateNativeTextInputSession(bool restoreHostFocus) noexcept
 {
+    if (_nativeTextInputImeComposing && _nativeTextInputImeBaseState.has_value() && _nativeTextInputControl &&
+        ! _nativeTextInputControlLifetime.expired() && NativeTextInputControlBelongsToTree(_root.get(), _nativeTextInputControl))
+    {
+        Control* const editTarget                  = _nativeTextInputControl;
+        const std::weak_ptr<int> editTargetLifetime = _nativeTextInputControlLifetime;
+        static_cast<void>(editTarget->ImportTextInputState(*this, _nativeTextInputImeBaseState.value(), false));
+        if (! editTargetLifetime.expired() && editTarget == _nativeTextInputControl && NativeTextInputControlBelongsToTree(_root.get(), editTarget))
+        {
+            SyncNativeTextInputSession(editTarget);
+        }
+    }
+
     DeactivateNativeTextInputTsf();
 
     if (! _nativeTextInputControl)

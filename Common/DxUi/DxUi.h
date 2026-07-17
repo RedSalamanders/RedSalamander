@@ -401,6 +401,7 @@ struct ContextMenuPopupDebugState
     uint64_t rootPointerSwitchCount         = 0;
     uint64_t rootSwitchImmediateRenderCount = 0;
     uint64_t renderCount                    = 0;
+    size_t lastPaintedItemCount             = 0;
 };
 
 struct ContextMenuPopupItemLayoutDebugState
@@ -2229,6 +2230,12 @@ private:
     };
 
     [[nodiscard]] std::wstring GetDisplayText() const;
+    [[nodiscard]] bool UsesMaskedDisplayText() const noexcept;
+    [[nodiscard]] const std::vector<size_t>& GetMaskedSourceTextElementBoundaries() const noexcept;
+    [[nodiscard]] size_t ControlTextIndexToDisplayTextIndex(size_t controlTextIndex) const noexcept;
+    [[nodiscard]] size_t DisplayTextIndexToControlTextIndex(size_t displayTextIndex) const noexcept;
+    [[nodiscard]] std::optional<std::pair<size_t, size_t>> ControlTextRangeToDisplayTextRange(size_t controlTextStartIndex,
+                                                                                             size_t controlTextEndIndex) const noexcept;
     [[nodiscard]] D2D1_RECT_F GetTextRect() const noexcept;
     [[nodiscard]] bool IsClearButtonVisible() const noexcept;
     [[nodiscard]] D2D1_RECT_F GetClearButtonRect() const noexcept;
@@ -2263,7 +2270,7 @@ private:
     void RemaskPasswordReveal() noexcept;
     void SelectAllText() noexcept;
     void SelectWordAt(size_t hitIndex) noexcept;
-    void NotifyChanged();
+    [[nodiscard]] bool NotifyChanged();
 
     std::wstring _text;
     std::wstring _placeholder;
@@ -2278,6 +2285,7 @@ private:
     bool _caretVisible                 = true;
     mutable float _horizontalScrollDip = 0.0f;
     mutable SingleLineTextLayoutCache _singleLineLayoutCache;
+    mutable std::vector<size_t> _maskedSourceTextElementBoundaries;
     mutable wil::com_ptr<IDWriteTextLayout> _cachedMultilineLayout;
     mutable std::wstring _cachedLayoutText;
     mutable D2D1_SIZE_F _cachedLayoutSize           = D2D1::SizeF(0.0f, 0.0f);
@@ -2933,8 +2941,8 @@ private:
     void SyncScrollbarAnimation(WindowHost& host) noexcept;
     [[nodiscard]] std::optional<size_t> FindSelectedVisibleIndex() const noexcept;
     void EnsureVisibleIndex(size_t visibleIndex) noexcept;
-    void SelectVisibleIndex(size_t visibleIndex, bool notifyDelegate);
-    void ToggleExpanded(size_t visibleIndex);
+    [[nodiscard]] bool SelectVisibleIndex(size_t visibleIndex, bool notifyDelegate);
+    [[nodiscard]] bool ToggleExpanded(size_t visibleIndex);
     void RefreshAccessibilitySnapshot() const noexcept;
     [[nodiscard]] float ComputeExpanderProgress(uint64_t itemId, bool expanded, uint64_t nowTickMs) const noexcept;
     void StartExpanderAnimation(uint64_t itemId, bool fromExpanded, bool toExpanded) noexcept;

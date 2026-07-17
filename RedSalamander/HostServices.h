@@ -1,8 +1,18 @@
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 
 #include "PlugInterfaces/Host.h"
+#include "SettingsStore.h"
+
+class FolderWindow;
+
+// Binds the process-lifetime plugin host to the composition root before any
+// plugin can call it. Dependencies remain non-owning and outlive the host.
+void ConfigureHostServices(FolderWindow& folderWindow,
+                           std::atomic<HWND>& folderWindowHwnd,
+                           Common::Settings::Settings& settings) noexcept;
 
 // Returns a process-lifetime host services object that plugins can use via QueryInterface.
 // The returned pointer is always non-null.
@@ -12,6 +22,7 @@ IHost* GetHostServices() noexcept;
 HRESULT HostShowAlert(const HostAlertRequest& request, void* cookie = nullptr) noexcept;
 HRESULT HostClearAlert(HostAlertScope scope, void* cookie = nullptr) noexcept;
 HRESULT HostShowPrompt(const HostPromptRequest& request, void* cookie, HostPromptResult* result) noexcept;
+void HostClearConnectionSessionState() noexcept;
 
 // Debug/testing hook: bypass prompts and accept the default result.
 // Intended for automated self-tests that must not block on modal dialogs.

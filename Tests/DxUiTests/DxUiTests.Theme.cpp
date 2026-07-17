@@ -2,6 +2,7 @@
 #include "DxUiThemePalette.h"
 #include "FileMetadataFormatting.h"
 #include "HandleIo.h"
+#include "PaginationGuard.h"
 #include "PathUtils.h"
 #include "SettingsStore.h"
 #include "ThroughputParsing.h"
@@ -532,6 +533,62 @@ void TestPercentEncodingAndHandleIoPoliciesCoverForwardProgressAndAtomicSiblings
     const Common::Paths::UniqueSiblingFileOptions invalidOptions{.prefix = L"bad\\prefix", .suffix = L".tmp"};
     Require(Common::Paths::CreateUniqueSiblingFile(sibling, invalidOptions, stalePath, staleFile) == E_INVALIDARG && stalePath.empty() && ! staleFile,
             "failed atomic sibling validation clears unpublished path and handle outputs");
+}
+
+void TestCloudPaginationGuardBoundsProgressAndCancellation()
+{
+    using Common::Paging::Limits;
+    using Common::Paging::Utf8ContinuationGuard;
+
+    bool cancel = false;
+    const auto cancellationProbe = [](void* cookie) noexcept -> HRESULT {
+        return *static_cast<const bool*>(cookie) ? HRESULT_FROM_WIN32(ERROR_CANCELLED) : S_OK;
+    };
+
+    Limits limits{
+        .maxPages = 2u,
+        .maxItems = 3u,
+        .maxBytes = 12u,
+        .maxTokenChars = 8u,
+        .deadlineTickMs = 110u,
+        .cancellationProbe = cancellationProbe,
+        .cancellationCookie = &cancel,
+    };
+    Utf8ContinuationGuard guard(limits);
+    Require(guard.BeginFirstPage(100u) == S_OK, "pagination guard admits the bounded first page");
+    Require(guard.CompletePage(2u, 5u, true, "next", 101u) == S_OK,
+            "pagination guard records page items/bytes and a non-empty continuation");
+    Require(guard.BeginContinuation("next", 102u) == S_OK, "pagination guard admits a new continuation once");
+    Require(guard.CompletePage(1u, 7u, false, {}, 103u) == S_OK && guard.PageCount() == 2u && guard.ItemCount() == 3u && guard.ByteCount() == 12u,
+            "pagination guard preserves exact bounded totals");
+
+    Utf8ContinuationGuard repeated(limits);
+    Require(repeated.BeginFirstPage(100u) == S_OK && repeated.CompletePage(0u, 0u, true, "same", 101u) == S_OK &&
+                repeated.BeginContinuation("same", 102u) == S_OK && repeated.CompletePage(0u, 0u, true, "same", 103u) == S_OK &&
+                repeated.BeginContinuation("same", 104u) == HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
+            "pagination guard rejects a repeated continuation before another request");
+
+    Utf8ContinuationGuard empty(limits);
+    Require(empty.BeginFirstPage(100u) == S_OK &&
+                empty.CompletePage(0u, 0u, true, {}, 101u) == HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
+            "pagination guard rejects an empty token when the provider says another page exists");
+
+    Limits tiny = limits;
+    tiny.maxPages = 1u;
+    tiny.deadlineTickMs = 0u;
+    Utf8ContinuationGuard pageCap(tiny);
+    Require(pageCap.BeginFirstPage(100u) == S_OK && pageCap.CompletePage(0u, 0u, true, "next", 101u) == S_OK &&
+                pageCap.BeginContinuation("next", 102u) == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE),
+            "pagination guard enforces the page ceiling");
+
+    Utf8ContinuationGuard deadline(limits);
+    Require(deadline.BeginFirstPage(110u) == HRESULT_FROM_WIN32(ERROR_TIMEOUT), "pagination guard enforces the operation deadline");
+
+    cancel = true;
+    Limits cancelledLimits = limits;
+    cancelledLimits.deadlineTickMs = 0u;
+    Utf8ContinuationGuard cancelled(cancelledLimits);
+    Require(cancelled.BeginFirstPage(100u) == HRESULT_FROM_WIN32(ERROR_CANCELLED), "pagination guard propagates cancellation at request boundaries");
 }
 
 void TestYyjsonMemberPoliciesDistinguishPresenceTypeRangeAndCoercion()
@@ -3124,6 +3181,7 @@ void RunThemeTests()
     TestBinaryThroughputGrammarPreservesBoundaryPoliciesAndRoundTrips();
     TestCompactFileMetadataFormattingPreservesTimeAndAttributePolicies();
     TestPercentEncodingAndHandleIoPoliciesCoverForwardProgressAndAtomicSiblings();
+    TestCloudPaginationGuardBoundsProgressAndCancellation();
     TestYyjsonMemberPoliciesDistinguishPresenceTypeRangeAndCoercion();
     TestViewerThemePaletteDerivesDarkControlChrome();
     TestViewerThemePaletteDerivesLightControlChrome();

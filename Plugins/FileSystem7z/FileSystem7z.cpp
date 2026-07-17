@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
@@ -227,6 +228,13 @@ FileSystem7z::FileSystem7z()
     _driveFileSystem = L"7z";
 }
 
+FileSystem7z::~FileSystem7z()
+{
+    SecureWipe::SecureClear(_defaultPassword);
+    SecureWipe::SecureClear(_password);
+    SecureWipe::SecureClear(_indexedPassword);
+}
+
 HRESULT STDMETHODCALLTYPE FileSystem7z::QueryInterface(REFIID riid, void** ppvObject) noexcept
 {
     if (ppvObject == nullptr)
@@ -237,6 +245,13 @@ HRESULT STDMETHODCALLTYPE FileSystem7z::QueryInterface(REFIID riid, void** ppvOb
     if (riid == __uuidof(IUnknown) || riid == __uuidof(IFileSystem))
     {
         *ppvObject = static_cast<IFileSystem*>(this);
+        AddRef();
+        return S_OK;
+    }
+
+    if (riid == __uuidof(IFileSystemCancellableDirectoryEnumeration))
+    {
+        *ppvObject = static_cast<IFileSystemCancellableDirectoryEnumeration*>(this);
         AddRef();
         return S_OK;
     }
@@ -336,50 +351,53 @@ const char* FileSystem7z::StaticConfigurationSchema() noexcept
 
 HRESULT STDMETHODCALLTYPE FileSystem7z::SetConfiguration(const char* configurationJsonUtf8) noexcept
 {
+    std::string nextConfiguration = "{}";
+    std::wstring nextDefaultPassword;
+#ifdef _DEBUG
+    unsigned long nextDebugIndexBuildDelayMs = 0u;
+#endif
+
+    if (configurationJsonUtf8 != nullptr && configurationJsonUtf8[0] != '\0')
+    {
+        nextConfiguration = configurationJsonUtf8;
+        Common::Json::ObjectDocument parsed = Common::Json::ParseObjectDocument(nextConfiguration, YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM);
+        if (! parsed)
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+
+        constexpr std::array<const char*, 1> secretMembers{{"defaultPassword"}};
+        const std::optional<std::string> sanitized = Common::Json::WriteObjectWithoutMembers(parsed, secretMembers);
+        if (! sanitized.has_value())
+        {
+            SecureWipe::SecureClear(nextDefaultPassword);
+            return E_OUTOFMEMORY;
+        }
+        nextConfiguration = sanitized.value();
+
+        const auto password = TryGetJsonString(parsed.root, "defaultPassword");
+        if (password.has_value())
+        {
+            nextDefaultPassword = password.value();
+        }
+
+#ifdef _DEBUG
+        yyjson_val* debugDelay = yyjson_obj_get(parsed.root, "debugIndexBuildDelayMs");
+        if (debugDelay && yyjson_is_uint(debugDelay))
+        {
+            nextDebugIndexBuildDelayMs = static_cast<unsigned long>(std::min<uint64_t>(yyjson_get_uint(debugDelay), 10'000ull));
+        }
+#endif
+    }
+
     std::lock_guard lock(_stateMutex);
-
-    _defaultPassword.clear();
+    SecureWipe::SecureClear(_defaultPassword);
+    _defaultPassword   = std::move(nextDefaultPassword);
+    _configurationJson = std::move(nextConfiguration);
+    SecureWipe::SecureClear(nextDefaultPassword);
 #ifdef _DEBUG
-    _debugIndexBuildDelayMs = 0;
+    _debugIndexBuildDelayMs = nextDebugIndexBuildDelayMs;
 #endif
-
-    if (configurationJsonUtf8 == nullptr || configurationJsonUtf8[0] == '\0')
-    {
-        _configurationJson = "{}";
-        return S_OK;
-    }
-
-    _configurationJson = configurationJsonUtf8;
-
-    yyjson_read_err err{};
-    yyjson_doc* doc = yyjson_read_opts(_configurationJson.data(), _configurationJson.size(), YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM, nullptr, &err);
-    if (! doc)
-    {
-        return S_OK;
-    }
-
-    Common::Json::UniqueDocument docOwner{doc};
-
-    yyjson_val* root = yyjson_doc_get_root(doc);
-    if (! root || ! yyjson_is_obj(root))
-    {
-        return S_OK;
-    }
-
-    const auto password = TryGetJsonString(root, "defaultPassword");
-    if (password.has_value())
-    {
-        _defaultPassword = password.value();
-    }
-
-#ifdef _DEBUG
-    yyjson_val* debugDelay = yyjson_obj_get(root, "debugIndexBuildDelayMs");
-    if (debugDelay && yyjson_is_uint(debugDelay))
-    {
-        _debugIndexBuildDelayMs = static_cast<unsigned long>(std::min<uint64_t>(yyjson_get_uint(debugDelay), 10'000ull));
-    }
-#endif
-
     return S_OK;
 }
 
@@ -627,7 +645,8 @@ HRESULT STDMETHODCALLTYPE FileSystem7z::Initialize(const wchar_t* rootPath, cons
     std::lock_guard lock(_stateMutex);
 
     _archivePath = std::move(normalizedArchivePath);
-    _password.clear();
+    SecureWipe::SecureClear(_password);
+    _indexGeneration.fetch_add(1u, std::memory_order_acq_rel);
 
     if (optionsJsonUtf8 && optionsJsonUtf8[0] != '\0')
     {
@@ -673,15 +692,42 @@ void FileSystem7z::ClearIndexLocked() noexcept
     _indexReady  = false;
     _indexStatus = S_OK;
     _indexedArchivePath.clear();
-    _indexedPassword.clear();
+    SecureWipe::SecureClear(_indexedPassword);
     _entries.clear();
     _children.clear();
 }
 
-HRESULT FileSystem7z::EnsureIndex() noexcept
+namespace
+{
+[[nodiscard]] HRESULT ReportArchiveIndexProgress(IFileSystemDirectoryEnumerationCallback* callback,
+                                                 void* cookie,
+                                                 uint64_t scannedEntries,
+                                                 uint64_t totalEntries) noexcept
+{
+    if (! callback)
+    {
+        return S_OK;
+    }
+
+    if (FAILED(callback->DirectoryEnumerationProgress(scannedEntries, totalEntries, cookie)))
+    {
+        return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+    }
+
+    BOOL cancel = FALSE;
+    if (FAILED(callback->DirectoryEnumerationShouldCancel(&cancel, cookie)) || cancel != FALSE)
+    {
+        return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+    }
+    return S_OK;
+}
+} // namespace
+
+HRESULT FileSystem7z::EnsureIndex(IFileSystemDirectoryEnumerationCallback* callback, void* cookie) noexcept
 {
     std::wstring archivePath;
     std::wstring password;
+    uint64_t buildGeneration = 0u;
 #ifdef _DEBUG
     unsigned long buildDelayMs = 0;
 #endif
@@ -706,15 +752,25 @@ HRESULT FileSystem7z::EnsureIndex() noexcept
 
                 if (_indexBuildInProgress)
                 {
-                    _indexBuildCv.wait(lock, [&] { return ! _indexBuildInProgress; });
+                    const uint64_t scannedEntries = _indexScannedEntries.load(std::memory_order_acquire);
+                    lock.unlock();
+                    const HRESULT progressHr = ReportArchiveIndexProgress(callback, cookie, scannedEntries, 0u);
+                    lock.lock();
+                    if (FAILED(progressHr))
+                    {
+                        return progressHr;
+                    }
+                    static_cast<void>(_indexBuildCv.wait_for(lock, std::chrono::milliseconds(25), [&] { return ! _indexBuildInProgress; }));
                     continue;
                 }
 
                 archivePath = _archivePath;
                 password    = _password;
+                buildGeneration = _indexGeneration.load(std::memory_order_acquire);
 
                 ClearIndexLocked();
                 _indexBuildInProgress = true;
+                _indexScannedEntries.store(0u, std::memory_order_release);
 #ifdef _DEBUG
                 buildDelayMs = _debugIndexBuildDelayMs;
                 _debugIndexBuildCount.fetch_add(1u, std::memory_order_acq_rel);
@@ -724,16 +780,34 @@ HRESULT FileSystem7z::EnsureIndex() noexcept
         }
 
 #ifdef _DEBUG
-        if (buildDelayMs > 0u)
+        HRESULT buildHr = S_OK;
+        for (unsigned long elapsedMs = 0u; elapsedMs < buildDelayMs;)
         {
-            Sleep(buildDelayMs);
+            if (_indexGeneration.load(std::memory_order_acquire) != buildGeneration)
+            {
+                buildHr = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+                break;
+            }
+            buildHr = ReportArchiveIndexProgress(callback, cookie, 0u, 0u);
+            if (FAILED(buildHr))
+            {
+                break;
+            }
+            const unsigned long sliceMs = (std::min)(10ul, buildDelayMs - elapsedMs);
+            Sleep(sliceMs);
+            elapsedMs += sliceMs;
         }
+#else
+        HRESULT buildHr = S_OK;
 #endif
 
         std::unordered_map<std::wstring, ArchiveEntry> entries;
         std::unordered_map<std::wstring, std::vector<std::wstring>> children;
 
-        const HRESULT buildHr = BuildIndex(archivePath, password, entries, children);
+        if (SUCCEEDED(buildHr))
+        {
+            buildHr = BuildIndex(archivePath, password, buildGeneration, callback, cookie, entries, children);
+        }
 
         bool restart     = false;
         HRESULT resultHr = buildHr;
@@ -744,9 +818,15 @@ HRESULT FileSystem7z::EnsureIndex() noexcept
             {
                 resultHr = HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
             }
-            else if (! EqualsNoCase(_archivePath, archivePath) || _password != password)
+            else if (_indexGeneration.load(std::memory_order_acquire) != buildGeneration || ! EqualsNoCase(_archivePath, archivePath) || _password != password)
             {
                 restart = true;
+            }
+            else if (buildHr == HRESULT_FROM_WIN32(ERROR_CANCELLED))
+            {
+                _indexStatus = S_OK;
+                _indexReady  = false;
+                resultHr     = buildHr;
             }
             else
             {
@@ -757,6 +837,7 @@ HRESULT FileSystem7z::EnsureIndex() noexcept
                     _entries            = std::move(entries);
                     _children           = std::move(children);
                     _indexedArchivePath = _archivePath;
+                    SecureWipe::SecureClear(_indexedPassword);
                     _indexedPassword    = _password;
                 }
 
@@ -769,14 +850,29 @@ HRESULT FileSystem7z::EnsureIndex() noexcept
         _indexBuildCv.notify_all();
         if (restart)
         {
+            SecureWipe::SecureClear(password);
+            const HRESULT progressHr = ReportArchiveIndexProgress(callback, cookie, _indexScannedEntries.load(std::memory_order_acquire), 0u);
+            if (FAILED(progressHr))
+            {
+                return progressHr;
+            }
             continue;
         }
 
+        SecureWipe::SecureClear(password);
         return resultHr;
     }
 }
 
 HRESULT STDMETHODCALLTYPE FileSystem7z::ReadDirectoryInfo(const wchar_t* path, IFilesInformation** ppFilesInformation) noexcept
+{
+    return ReadDirectoryInfoCancellable(path, nullptr, nullptr, ppFilesInformation);
+}
+
+HRESULT STDMETHODCALLTYPE FileSystem7z::ReadDirectoryInfoCancellable(const wchar_t* path,
+                                                                     IFileSystemDirectoryEnumerationCallback* callback,
+                                                                     void* cookie,
+                                                                     IFilesInformation** ppFilesInformation) noexcept
 {
     if (ppFilesInformation == nullptr)
     {
@@ -790,7 +886,7 @@ HRESULT STDMETHODCALLTYPE FileSystem7z::ReadDirectoryInfo(const wchar_t* path, I
         return E_INVALIDARG;
     }
 
-    const HRESULT idxHr = EnsureIndex();
+    const HRESULT idxHr = EnsureIndex(callback, cookie);
     if (FAILED(idxHr))
     {
         return idxHr;
@@ -2168,7 +2264,18 @@ private:
 class SevenZipOpenCallback final : public IArchiveOpenCallback, public IArchiveOpenVolumeCallback, public ICryptoGetTextPassword, public ICryptoGetTextPassword2
 {
 public:
-    SevenZipOpenCallback(std::wstring archivePath, std::wstring password) : _archivePath(std::move(archivePath)), _password(std::move(password))
+    SevenZipOpenCallback(std::wstring archivePath,
+                         std::wstring password,
+                         IFileSystemDirectoryEnumerationCallback* enumerationCallback,
+                         void* enumerationCookie,
+                         const std::atomic<uint64_t>* generation,
+                         uint64_t expectedGeneration)
+        : _archivePath(std::move(archivePath)),
+          _password(std::move(password)),
+          _enumerationCallback(enumerationCallback),
+          _enumerationCookie(enumerationCookie),
+          _generation(generation),
+          _expectedGeneration(expectedGeneration)
     {
     }
 
@@ -2289,9 +2396,13 @@ public:
         return S_OK;
     }
 
-    HRESULT STDMETHODCALLTYPE SetCompleted(const UInt64* /*files*/, const UInt64* /*bytes*/) noexcept override
+    HRESULT STDMETHODCALLTYPE SetCompleted(const UInt64* files, const UInt64* /*bytes*/) noexcept override
     {
-        return S_OK;
+        if (_generation && _generation->load(std::memory_order_acquire) != _expectedGeneration)
+        {
+            return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        }
+        return ReportArchiveIndexProgress(_enumerationCallback, _enumerationCookie, files ? *files : 0u, 0u);
     }
 
     HRESULT STDMETHODCALLTYPE CryptoGetTextPassword(BSTR* password) noexcept override
@@ -2347,11 +2458,18 @@ public:
     }
 
 private:
-    ~SevenZipOpenCallback() = default;
+    ~SevenZipOpenCallback()
+    {
+        SecureWipe::SecureClear(_password);
+    }
 
     std::atomic_ulong _refCount{1};
     std::wstring _archivePath;
     std::wstring _password;
+    IFileSystemDirectoryEnumerationCallback* _enumerationCallback = nullptr;
+    void* _enumerationCookie                                       = nullptr;
+    const std::atomic<uint64_t>* _generation                       = nullptr;
+    uint64_t _expectedGeneration                                   = 0u;
 };
 
 std::wstring PropVariantToWideString(const PROPVARIANT& value) noexcept
@@ -2518,6 +2636,10 @@ HRESULT CreateAndOpenArchive(const SevenZipExports& api,
                              const GUID& classId,
                              std::wstring_view archivePath,
                              std::wstring_view password,
+                             IFileSystemDirectoryEnumerationCallback* enumerationCallback,
+                             void* enumerationCookie,
+                             const std::atomic<uint64_t>* generation,
+                             uint64_t expectedGeneration,
                              wil::com_ptr<IInArchive>& outArchive,
                              wil::com_ptr<IInStream>& outStream,
                              wil::com_ptr<IArchiveOpenCallback>& outOpenCallback) noexcept
@@ -2545,7 +2667,8 @@ HRESULT CreateAndOpenArchive(const SevenZipExports& api,
         return hr;
     }
 
-    auto* callbackImpl = new (std::nothrow) SevenZipOpenCallback(std::wstring(archivePath), std::wstring(password));
+    auto* callbackImpl = new (std::nothrow) SevenZipOpenCallback(
+        std::wstring(archivePath), std::wstring(password), enumerationCallback, enumerationCookie, generation, expectedGeneration);
     if (! callbackImpl)
     {
         return E_OUTOFMEMORY;
@@ -2571,7 +2694,11 @@ HRESULT OpenArchiveAuto(const SevenZipExports& api,
                         std::wstring_view password,
                         wil::com_ptr<IInArchive>& outArchive,
                         wil::com_ptr<IInStream>& outStream,
-                        wil::com_ptr<IArchiveOpenCallback>& outOpenCallback) noexcept
+                        wil::com_ptr<IArchiveOpenCallback>& outOpenCallback,
+                        IFileSystemDirectoryEnumerationCallback* enumerationCallback = nullptr,
+                        void* enumerationCookie                                       = nullptr,
+                        const std::atomic<uint64_t>* generation                       = nullptr,
+                        uint64_t expectedGeneration                                   = 0u) noexcept
 {
     outArchive.reset();
     outStream.reset();
@@ -2583,7 +2710,17 @@ HRESULT OpenArchiveAuto(const SevenZipExports& api,
         const auto clsid = TryGetFormatClassIdForExtension(api, extNoDotLower);
         if (clsid.has_value())
         {
-            const HRESULT hr = CreateAndOpenArchive(api, clsid.value(), archivePath, password, outArchive, outStream, outOpenCallback);
+            const HRESULT hr = CreateAndOpenArchive(api,
+                                                    clsid.value(),
+                                                    archivePath,
+                                                    password,
+                                                    enumerationCallback,
+                                                    enumerationCookie,
+                                                    generation,
+                                                    expectedGeneration,
+                                                    outArchive,
+                                                    outStream,
+                                                    outOpenCallback);
             if (SUCCEEDED(hr))
             {
                 return S_OK;
@@ -2624,7 +2761,17 @@ HRESULT OpenArchiveAuto(const SevenZipExports& api,
             continue;
         }
 
-        lastError = CreateAndOpenArchive(api, classId.value(), archivePath, password, outArchive, outStream, outOpenCallback);
+        lastError = CreateAndOpenArchive(api,
+                                         classId.value(),
+                                         archivePath,
+                                         password,
+                                         enumerationCallback,
+                                         enumerationCookie,
+                                         generation,
+                                         expectedGeneration,
+                                         outArchive,
+                                         outStream,
+                                         outOpenCallback);
         if (SUCCEEDED(lastError))
         {
             return S_OK;
@@ -2687,6 +2834,7 @@ public:
         {
             static_cast<void>(_archive->Close());
         }
+        SecureWipe::SecureClear(_password);
     }
 
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppvObject) noexcept override
@@ -4492,6 +4640,104 @@ struct DebugStoredZipEntry final
     check(seekReadHr == terminalHr && bytesRead == 0u, L"seek should not clear the terminal read failure");
     return failed == 0u ? S_OK : E_FAIL;
 }
+
+[[nodiscard]] HRESULT RunDebugArchiveIndexCancellationSelfTest(unsigned int& passed, unsigned int& failed) noexcept
+{
+    const auto check = [&](bool condition, const wchar_t* message) noexcept
+    {
+        if (condition)
+        {
+            ++passed;
+        }
+        else
+        {
+            ++failed;
+            Debug::Error(L"FileSystem7z cancellable-index selftest failed: {}", message);
+        }
+    };
+
+    wchar_t tempDirectory[MAX_PATH]{};
+    wchar_t tempPath[MAX_PATH]{};
+    if (GetTempPathW(static_cast<DWORD>(std::size(tempDirectory)), tempDirectory) == 0 || GetTempFileNameW(tempDirectory, L"RS7", 0u, tempPath) == 0)
+    {
+        return HRESULT_FROM_WIN32(GetLastError());
+    }
+
+    std::wstring archivePath(tempPath);
+    static_cast<void>(DeleteFileW(tempPath));
+    archivePath.append(L".zip");
+    const auto deleteTemp = wil::scope_exit([&] { static_cast<void>(DeleteFileW(archivePath.c_str())); });
+
+    constexpr std::array entries{DebugStoredZipEntry{"one.txt", "one"}, DebugStoredZipEntry{"two.txt", "two"}};
+    const std::vector<uint8_t> archive = BuildDebugStoredZip(entries);
+    wil::unique_hfile file(CreateFileW(archivePath.c_str(), GENERIC_WRITE, 0u, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_TEMPORARY, nullptr));
+    if (! file)
+    {
+        return HRESULT_FROM_WIN32(GetLastError());
+    }
+    DWORD written = 0u;
+    if (WriteFile(file.get(), archive.data(), static_cast<DWORD>(archive.size()), &written, nullptr) == 0 || written != archive.size())
+    {
+        return HRESULT_FROM_WIN32(GetLastError());
+    }
+    file.reset();
+
+    wil::com_ptr<IFileSystem> fileSystem;
+    fileSystem.attach(static_cast<IFileSystem*>(new (std::nothrow) FileSystem7z()));
+    if (! fileSystem)
+    {
+        return E_OUTOFMEMORY;
+    }
+
+    wil::com_ptr<IInformations> information;
+    wil::com_ptr<IFileSystemInitialize> initialize;
+    wil::com_ptr<IFileSystemCancellableDirectoryEnumeration> cancellable;
+    if (! fileSystem.try_query_to(information.put()) || ! information || ! fileSystem.try_query_to(initialize.put()) || ! initialize ||
+        ! fileSystem.try_query_to(cancellable.put()) || ! cancellable)
+    {
+        return E_NOINTERFACE;
+    }
+
+    check(information->SetConfiguration(R"json({"debugIndexBuildDelayMs":1000})json") == S_OK,
+          L"debug delay configuration should be accepted");
+    check(initialize->Initialize(archivePath.c_str(), nullptr) == S_OK, L"cancellation fixture should initialize");
+
+    class CancelAtFirstCheckpoint final : public IFileSystemDirectoryEnumerationCallback
+    {
+    public:
+        HRESULT STDMETHODCALLTYPE DirectoryEnumerationProgress(uint64_t, uint64_t, void*) noexcept override
+        {
+            ++progressCalls;
+            return S_OK;
+        }
+
+        HRESULT STDMETHODCALLTYPE DirectoryEnumerationShouldCancel(BOOL* cancel, void*) noexcept override
+        {
+            if (! cancel)
+            {
+                return E_POINTER;
+            }
+            *cancel = progressCalls > 0u ? TRUE : FALSE;
+            return S_OK;
+        }
+
+        unsigned int progressCalls = 0u;
+    } callback;
+
+    const uint64_t startTick = GetTickCount64();
+    wil::com_ptr<IFilesInformation> cancelledResult;
+    const HRESULT cancelledHr = cancellable->ReadDirectoryInfoCancellable(L"/", &callback, nullptr, cancelledResult.put());
+    const uint64_t elapsedMs   = GetTickCount64() - startTick;
+    check(cancelledHr == HRESULT_FROM_WIN32(ERROR_CANCELLED) && ! cancelledResult,
+          L"cancellable enumeration should return cancellation without publishing a partial index");
+    check(callback.progressCalls > 0u && elapsedMs < 500u, L"cancellation should interrupt the simulated blocked index promptly");
+
+    check(information->SetConfiguration("{}") == S_OK, L"debug delay should reset after cancellation");
+    wil::com_ptr<IFilesInformation> retryResult;
+    const HRESULT retryHr = fileSystem->ReadDirectoryInfo(L"/", retryResult.put());
+    check(retryHr == S_OK && retryResult, L"a cancelled index build must remain retryable and complete on the next request");
+    return failed == 0u ? S_OK : E_FAIL;
+}
 #endif
 } // namespace
 
@@ -4506,19 +4752,39 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamander7zDebugSelfTests
     *passed = 0u;
     *failed = 0u;
     const HRESULT collisionHr = RunDebugArchiveIndexCollisionSelfTest(*passed, *failed);
-    const HRESULT corruptHr = RunDebugCorruptArchiveReaderSelfTest(*passed, *failed);
-    const HRESULT hr = FAILED(collisionHr) ? collisionHr : corruptHr;
+    const HRESULT corruptHr    = RunDebugCorruptArchiveReaderSelfTest(*passed, *failed);
+    const HRESULT cancellationHr = RunDebugArchiveIndexCancellationSelfTest(*passed, *failed);
+    const HRESULT hr = FAILED(collisionHr) ? collisionHr : (FAILED(corruptHr) ? corruptHr : cancellationHr);
     return *failed == 0u ? S_OK : (FAILED(hr) ? hr : E_FAIL);
 }
 #endif
 
 HRESULT FileSystem7z::BuildIndex(const std::wstring& archivePath,
                                  const std::wstring& password,
+                                 uint64_t expectedGeneration,
+                                 IFileSystemDirectoryEnumerationCallback* callback,
+                                 void* cookie,
                                  std::unordered_map<std::wstring, ArchiveEntry>& outEntries,
                                  std::unordered_map<std::wstring, std::vector<std::wstring>>& outChildren) noexcept
 {
     outEntries.clear();
     outChildren.clear();
+
+    const auto checkProgress = [&](uint64_t scannedEntries, uint64_t totalEntries) noexcept -> HRESULT
+    {
+        _indexScannedEntries.store(scannedEntries, std::memory_order_release);
+        if (_indexGeneration.load(std::memory_order_acquire) != expectedGeneration)
+        {
+            return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        }
+        return ReportArchiveIndexProgress(callback, cookie, scannedEntries, totalEntries);
+    };
+
+    HRESULT progressHr = checkProgress(0u, 0u);
+    if (FAILED(progressHr))
+    {
+        return progressHr;
+    }
 
     const DWORD attrs = GetFileAttributesW(archivePath.c_str());
     if (attrs == INVALID_FILE_ATTRIBUTES)
@@ -4545,7 +4811,7 @@ HRESULT FileSystem7z::BuildIndex(const std::wstring& archivePath,
     wil::com_ptr<IInStream> stream;
     wil::com_ptr<IArchiveOpenCallback> openCallback;
 
-    const HRESULT openHr = OpenArchiveAuto(api, archivePath, password, archive, stream, openCallback);
+    const HRESULT openHr = OpenArchiveAuto(api, archivePath, password, archive, stream, openCallback, callback, cookie, &_indexGeneration, expectedGeneration);
     if (FAILED(openHr))
     {
         return openHr;
@@ -4563,8 +4829,11 @@ HRESULT FileSystem7z::BuildIndex(const std::wstring& archivePath,
     constexpr UInt32 kMaxIndexItems = 1'000'000u;
     if (numItems > kMaxIndexItems)
     {
-        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
     }
+
+    constexpr size_t kMaxIndexTextBytes = 128u * 1024u * 1024u;
+    size_t rawTextBytes                 = 0u;
 
     struct Raw
     {
@@ -4580,6 +4849,15 @@ HRESULT FileSystem7z::BuildIndex(const std::wstring& archivePath,
 
     for (UInt32 i = 0; i < numItems; ++i)
     {
+        if ((i % 64u) == 0u)
+        {
+            progressHr = checkProgress(i, numItems);
+            if (FAILED(progressHr))
+            {
+                return progressHr;
+            }
+        }
+
         std::wstring pathText = ArchiveStringProperty(archive.get(), i, kpidPath);
         if (pathText.empty())
         {
@@ -4597,6 +4875,12 @@ HRESULT FileSystem7z::BuildIndex(const std::wstring& archivePath,
         {
             continue;
         }
+        const size_t keyBytes = raw.key.size() * sizeof(wchar_t);
+        if (keyBytes > kMaxIndexTextBytes - (std::min)(rawTextBytes, kMaxIndexTextBytes))
+        {
+            return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+        }
+        rawTextBytes += keyBytes;
         raw.itemIndex = static_cast<uint32_t>(i);
 
         bool isDir        = false;
@@ -4620,7 +4904,31 @@ HRESULT FileSystem7z::BuildIndex(const std::wstring& archivePath,
         raws.emplace_back(std::move(raw));
     }
 
+    progressHr = checkProgress(numItems, static_cast<uint64_t>(numItems) + raws.size());
+    if (FAILED(progressHr))
+    {
+        return progressHr;
+    }
+
     outEntries.emplace(std::wstring(), ArchiveEntry{true, 0, 0, std::nullopt});
+
+    size_t indexedTextBytes = 0u;
+    const auto reserveIndexedText = [&](std::wstring_view first, std::wstring_view second = {}) noexcept -> bool
+    {
+        const size_t firstBytes  = first.size() * sizeof(wchar_t);
+        const size_t secondBytes = second.size() * sizeof(wchar_t);
+        if (firstBytes > kMaxIndexTextBytes - (std::min)(indexedTextBytes, kMaxIndexTextBytes))
+        {
+            return false;
+        }
+        indexedTextBytes += firstBytes;
+        if (secondBytes > kMaxIndexTextBytes - (std::min)(indexedTextBytes, kMaxIndexTextBytes))
+        {
+            return false;
+        }
+        indexedTextBytes += secondBytes;
+        return true;
+    };
 
     const auto ensureDir = [&](const std::wstring& key) noexcept -> HRESULT
     {
@@ -4640,15 +4948,29 @@ HRESULT FileSystem7z::BuildIndex(const std::wstring& archivePath,
             return S_OK;
         }
 
-        outEntries.emplace(key, ArchiveEntry{true, 0, 0, std::nullopt});
-
         const std::wstring parent = ParentKey(key);
+        if (outEntries.size() >= kMaxIndexItems || ! reserveIndexedText(key, parent))
+        {
+            return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+        }
+        outEntries.emplace(key, ArchiveEntry{true, 0, 0, std::nullopt});
         outChildren[parent].push_back(key);
         return S_OK;
     };
 
+    size_t rawIndex = 0u;
     for (const auto& raw : raws)
     {
+        if ((rawIndex % 64u) == 0u)
+        {
+            progressHr = checkProgress(static_cast<uint64_t>(numItems) + rawIndex, static_cast<uint64_t>(numItems) + raws.size());
+            if (FAILED(progressHr))
+            {
+                return progressHr;
+            }
+        }
+        ++rawIndex;
+
         if (raw.key.empty())
         {
             continue;
@@ -4728,15 +5050,29 @@ HRESULT FileSystem7z::BuildIndex(const std::wstring& archivePath,
             continue;
         }
 
+        if (outEntries.size() >= kMaxIndexItems || ! reserveIndexedText(raw.key, parent))
+        {
+            return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+        }
         outEntries.emplace(raw.key, entry);
         outChildren[parent].push_back(raw.key);
     }
 
+    size_t sortedDirectoryCount = 0u;
     for (auto& [_, list] : outChildren)
     {
+        if ((sortedDirectoryCount % 64u) == 0u)
+        {
+            progressHr = checkProgress(static_cast<uint64_t>(numItems) + raws.size(), static_cast<uint64_t>(numItems) + raws.size());
+            if (FAILED(progressHr))
+            {
+                return progressHr;
+            }
+        }
+        ++sortedDirectoryCount;
         std::sort(list.begin(), list.end());
         list.erase(std::unique(list.begin(), list.end()), list.end());
     }
 
-    return S_OK;
+    return checkProgress(static_cast<uint64_t>(numItems) + raws.size(), static_cast<uint64_t>(numItems) + raws.size());
 }

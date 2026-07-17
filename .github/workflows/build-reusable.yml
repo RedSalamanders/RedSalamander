@@ -18,6 +18,9 @@ name: Build (reusable)
       upload_build_output:
         type: boolean
         default: false
+      run_asan_plugin_contracts:
+        type: boolean
+        default: false
 
 jobs:
   build:
@@ -28,7 +31,7 @@ jobs:
       VCPKG_DEFAULT_TRIPLET: ${{ inputs.platform == 'ARM64' && 'arm64-windows' || 'x64-windows' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       # ── Setup toolchain ──────────────────────────────────────────────
 
@@ -148,12 +151,12 @@ jobs:
       # ── Restore dependencies ─────────────────────────────────────────
 
       - name: Cache vcpkg
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: |
             .build/vcpkg_installed
             vcpkg/downloads
-          key: ${{ runner.os }}-vcpkg-${{ env.VCPKG_DEFAULT_TRIPLET }}-${{ hashFiles('vcpkg.json') }}
+          key: ${{ runner.os }}-vcpkg-${{ env.VCPKG_DEFAULT_TRIPLET }}-${{ hashFiles('vcpkg.json', 'vcpkg-tool.json') }}
 
       - name: Bootstrap vcpkg
         shell: pwsh
@@ -178,6 +181,21 @@ jobs:
           $baseline = $baseline.ToLowerInvariant()
           Write-Host "vcpkg builtin-baseline: $baseline"
 
+          $toolPinPath = Join-Path $env:GITHUB_WORKSPACE "vcpkg-tool.json"
+          if (-not (Test-Path $toolPinPath)) {
+            throw "vcpkg-tool.json not found at: $toolPinPath"
+          }
+          $toolPin = Get-Content -Path $toolPinPath -Raw | ConvertFrom-Json
+          $toolRepository = ([string]$toolPin.repository).Trim()
+          $toolCommit = ([string]$toolPin.commit).Trim().ToLowerInvariant()
+          if ([string]::IsNullOrWhiteSpace($toolRepository)) {
+            throw "vcpkg-tool.json repository is missing/empty."
+          }
+          if ($toolCommit -notmatch '^[0-9a-f]{40}$') {
+            throw "vcpkg-tool.json commit is not a 40-character commit SHA: '$toolCommit'"
+          }
+          Write-Host "vcpkg tool commit: $toolCommit"
+
           # Cache may restore vcpkg\downloads without the vcpkg repo itself.
           $bootstrap = Join-Path $env:GITHUB_WORKSPACE "vcpkg\\bootstrap-vcpkg.bat"
           $gitDir = Join-Path $env:GITHUB_WORKSPACE "vcpkg\\.git"
@@ -192,7 +210,7 @@ jobs:
             }
 
             if (Test-Path .\\vcpkg) { Remove-Item .\\vcpkg -Recurse -Force }
-            git clone https://github.com/microsoft/vcpkg .\\vcpkg
+            git clone $toolRepository .\\vcpkg
             if ($LASTEXITCODE -ne 0) { throw "git clone vcpkg failed with exit code $LASTEXITCODE" }
 
             if ($downloadsStash) {
@@ -214,28 +232,18 @@ jobs:
             }
           }
 
-          # Ensure the pinned baseline commit exists locally; shallow clones won't include it.
-          git cat-file -e "$baseline^{commit}" 2>$null
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "Fetching vcpkg baseline commit..."
-
-            git fetch --depth 1 origin $baseline
+          # The executable revision and ports baseline are separate pins; both commits must exist.
+          foreach ($requiredCommit in @($toolCommit, $baseline) | Select-Object -Unique) {
+            git cat-file -e "$requiredCommit^{commit}" 2>$null
             if ($LASTEXITCODE -ne 0) {
-              $isShallow = (git rev-parse --is-shallow-repository).Trim()
-              if ($isShallow -eq "true") {
-                git fetch --prune --unshallow origin
-              } else {
-                git fetch --prune origin
-              }
-
+              git fetch --depth 1 origin $requiredCommit
               if ($LASTEXITCODE -ne 0) {
-                throw "git fetch failed while trying to obtain vcpkg baseline commit '$baseline' (exit code $LASTEXITCODE)."
+                throw "git fetch failed while obtaining pinned vcpkg commit '$requiredCommit'."
               }
-            }
-
-            git cat-file -e "$baseline^{commit}" 2>$null
-            if ($LASTEXITCODE -ne 0) {
-              throw "vcpkg baseline commit not found after fetch: $baseline"
+              git cat-file -e "$requiredCommit^{commit}" 2>$null
+              if ($LASTEXITCODE -ne 0) {
+                throw "Pinned vcpkg commit not found after fetch: $requiredCommit"
+              }
             }
           }
 
@@ -243,6 +251,13 @@ jobs:
           git show "${baseline}:versions/baseline.json" 1>$null 2>$null
           if ($LASTEXITCODE -ne 0) {
             throw "vcpkg.json builtin-baseline '$baseline' is invalid: versions/baseline.json missing at that commit. Update vcpkg.json builtin-baseline."
+          }
+
+          git checkout --detach $toolCommit
+          if ($LASTEXITCODE -ne 0) { throw "Unable to check out pinned vcpkg tool commit '$toolCommit'." }
+          $actualToolCommit = (git rev-parse HEAD).Trim().ToLowerInvariant()
+          if ($actualToolCommit -ne $toolCommit) {
+            throw "vcpkg tool identity mismatch: expected '$toolCommit', found '$actualToolCommit'."
           }
 
           Pop-Location
@@ -254,12 +269,6 @@ jobs:
         shell: pwsh
         run: |
           .\vcpkg\vcpkg.exe install --triplet $env:VCPKG_DEFAULT_TRIPLET --x-manifest-root $env:GITHUB_WORKSPACE --x-install-root "$env:GITHUB_WORKSPACE\.build\vcpkg_installed"
-
-      - name: Enable vcpkg MSBuild integration
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-          .\vcpkg\vcpkg.exe integrate install
 
       - name: Normalize vcpkg install root
         shell: pwsh
@@ -345,9 +354,35 @@ jobs:
 
           & $buildScript @buildArgs
 
+      - name: Run ASan plugin contracts
+        if: ${{ inputs.run_asan_plugin_contracts }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          if ("${{ inputs.configuration }}" -ne "ASan Debug" -or "${{ inputs.platform }}" -ne "x64") {
+            throw "run_asan_plugin_contracts requires the x64 ASan Debug configuration."
+          }
+          $testExe = ".\.build\x64\ASan Debug\PluginContractTests.exe"
+          $oldNativeErrorPreference = $PSNativeCommandUseErrorActionPreference
+          try {
+            $PSNativeCommandUseErrorActionPreference = $false
+            $probeOutput = @(& $testExe --asan-seed-heap-overflow 2>&1)
+            $probeExitCode = $LASTEXITCODE
+          } finally {
+            $PSNativeCommandUseErrorActionPreference = $oldNativeErrorPreference
+          }
+          $probeOutput | Out-Host
+          if ($probeExitCode -eq 0) { throw "The seeded heap overflow was not rejected by AddressSanitizer." }
+          if (($probeOutput -join "`n") -notmatch "AddressSanitizer") {
+            throw "The seeded heap overflow failed without an AddressSanitizer diagnostic."
+          }
+
+          & $testExe
+          if ($LASTEXITCODE -ne 0) { throw "ASan PluginContractTests failed with exit code $LASTEXITCODE." }
+
       - name: Upload build output
         if: ${{ inputs.upload_build_output }}
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: build-output-${{ inputs.platform }}
           path: .build/${{ inputs.platform }}/${{ inputs.configuration }}/

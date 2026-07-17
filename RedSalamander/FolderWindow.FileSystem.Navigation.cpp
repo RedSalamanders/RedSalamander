@@ -1,3 +1,59 @@
+#include "ChangeCase.h"
+#include "FolderWindow.FileSystem.Private.h"
+#include "ConnectionManagerWindow.h"
+#include "DxUi/DxUi.h"
+#include "DxUiThemePalette.h"
+#include "FileActionLauncher.h"
+#include "FileActionResolver.h"
+#include "FolderWindowInternal.h"
+#include "Helpers.h"
+#include "HostServices.h"
+#include "MaskSyntax.h"
+#include "NavigationLocation.h"
+#include "SettingsStore.h"
+#include "ViewerPluginManager.h"
+#include "Win32CallbackHelpers.h"
+#include "WindowMessages.h"
+#include "WindowSizing.h"
+#ifdef ENABLE_TESTS
+#include "SelfTestCommon.h"
+#endif
+#include "UiMetrics.h"
+
+#include <algorithm>
+#include <array>
+#include <atomic>
+#include <chrono>
+#include <cstddef>
+#include <cstdlib>
+#include <cstring>
+#include <cwctype>
+#include <fstream>
+#include <limits>
+#include <map>
+#include <span>
+#include <string>
+#include <system_error>
+#include <unordered_set>
+#include <utility>
+#include <vector>
+
+#include <commdlg.h>
+#include <lm.h>
+#include <oleauto.h>
+#include <shellapi.h>
+#include <shlwapi.h>
+#include <shobjidl.h>
+#include <winnetwk.h>
+
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
+#include <wil/resource.h>
+#pragma warning(pop)
+
+using namespace FolderWindowFileSystemInternal;
+using OrdinalString::StartsWithNoCase;
+
 namespace
 {
 [[nodiscard]] std::wstring QuoteCommandLineArgument(std::wstring_view text)
@@ -793,376 +849,6 @@ bool FolderWindow::ApplyPaneFilterState(Pane pane, const FolderView::NameFilterS
 
     return true;
 }
-
-#ifdef ENABLE_TESTS
-HWND FindDebugPromptWindowForCurrentProcess(const wchar_t* className) noexcept
-{
-    if (! className || *className == L'\0')
-    {
-        return nullptr;
-    }
-
-    struct SearchState
-    {
-        DWORD processId          = 0;
-        const wchar_t* className = nullptr;
-        HWND hwnd                = nullptr;
-    } state{GetCurrentProcessId(), className, nullptr};
-
-    EnumWindows(
-        [](HWND hwnd, LPARAM lParam) noexcept -> BOOL
-    {
-        auto* state = reinterpret_cast<SearchState*>(lParam);
-        if (! state || ! hwnd || IsWindow(hwnd) == FALSE || IsWindowVisible(hwnd) == FALSE)
-        {
-            return TRUE;
-        }
-
-        DWORD processId = 0;
-        GetWindowThreadProcessId(hwnd, &processId);
-        if (processId != state->processId)
-        {
-            return TRUE;
-        }
-
-        wchar_t windowClass[128]{};
-        if (GetClassNameW(hwnd, windowClass, static_cast<int>(std::size(windowClass))) == 0)
-        {
-            return TRUE;
-        }
-
-        if (wcscmp(windowClass, state->className) != 0)
-        {
-            return TRUE;
-        }
-
-        state->hwnd = hwnd;
-        return FALSE;
-    },
-        reinterpret_cast<LPARAM>(&state));
-
-    return state.hwnd;
-}
-
-HWND GetFolderViewPaneFilterPromptHandle() noexcept
-{
-    const HWND hwnd = FindDebugPromptWindowForCurrentProcess(kFolderViewPaneFilterPromptClassName);
-    return hwnd && IsWindow(hwnd) != FALSE ? hwnd : nullptr;
-}
-
-bool DebugGetFolderViewPaneFilterPromptSnapshot(FolderViewPaneFilterPromptDebugSnapshot& out) noexcept
-{
-    const HWND hwnd = GetFolderViewPaneFilterPromptHandle();
-    if (! hwnd)
-    {
-        return false;
-    }
-
-    const bool ok =
-        SendMessageW(hwnd, WndMsg::kFolderViewPaneFilterPromptDebug, static_cast<WPARAM>(FolderViewPaneFilterPromptDebugCommand::GetSnapshot), 0) != FALSE;
-    if (ok)
-    {
-        const std::scoped_lock lock(g_folderViewPaneFilterPromptDebugMutex);
-        if (! g_folderViewPaneFilterPromptDebugSnapshot.has_value())
-        {
-            return false;
-        }
-        out = g_folderViewPaneFilterPromptDebugSnapshot.value();
-    }
-    return ok;
-}
-
-bool DebugSetFolderViewPaneFilterPromptEnabled(bool enabled) noexcept
-{
-    const HWND hwnd = GetFolderViewPaneFilterPromptHandle();
-    return hwnd && SendMessageW(hwnd,
-                                WndMsg::kFolderViewPaneFilterPromptDebug,
-                                static_cast<WPARAM>(FolderViewPaneFilterPromptDebugCommand::SetEnabled),
-                                enabled ? 1 : 0) != FALSE;
-}
-
-bool DebugSetFolderViewPaneFilterPromptText(std::wstring_view text) noexcept
-{
-    const HWND hwnd = GetFolderViewPaneFilterPromptHandle();
-    if (! hwnd)
-    {
-        return false;
-    }
-
-    {
-        const std::scoped_lock lock(g_folderViewPaneFilterPromptDebugMutex);
-        g_folderViewPaneFilterPromptDebugText.assign(text);
-    }
-    return SendMessageW(hwnd, WndMsg::kFolderViewPaneFilterPromptDebug, static_cast<WPARAM>(FolderViewPaneFilterPromptDebugCommand::SetText), 0) != FALSE;
-}
-
-bool DebugSetFolderViewPaneFilterPromptTextAndNotify(std::wstring_view text) noexcept
-{
-    const HWND hwnd = GetFolderViewPaneFilterPromptHandle();
-    if (! hwnd)
-    {
-        return false;
-    }
-
-    {
-        const std::scoped_lock lock(g_folderViewPaneFilterPromptDebugMutex);
-        g_folderViewPaneFilterPromptDebugText.assign(text);
-    }
-    return SendMessageW(hwnd, WndMsg::kFolderViewPaneFilterPromptDebug, static_cast<WPARAM>(FolderViewPaneFilterPromptDebugCommand::SetTextAndNotify), 0) !=
-           FALSE;
-}
-
-bool DebugSetFolderViewPaneFilterPromptHelpExpanded(bool expanded) noexcept
-{
-    const HWND hwnd = GetFolderViewPaneFilterPromptHandle();
-    return hwnd && SendMessageW(hwnd,
-                                WndMsg::kFolderViewPaneFilterPromptDebug,
-                                static_cast<WPARAM>(FolderViewPaneFilterPromptDebugCommand::SetHelpExpanded),
-                                expanded ? 1 : 0) != FALSE;
-}
-
-bool DebugConfirmFolderViewPaneFilterPrompt() noexcept
-{
-    const HWND hwnd = GetFolderViewPaneFilterPromptHandle();
-    return PostDxUiPromptCloseDebugCommand(hwnd, WndMsg::kFolderViewPaneFilterPromptDebug, static_cast<WPARAM>(FolderViewPaneFilterPromptDebugCommand::Confirm));
-}
-
-bool DebugCancelFolderViewPaneFilterPrompt() noexcept
-{
-    const HWND hwnd = GetFolderViewPaneFilterPromptHandle();
-    return PostDxUiPromptCloseDebugCommand(hwnd, WndMsg::kFolderViewPaneFilterPromptDebug, static_cast<WPARAM>(FolderViewPaneFilterPromptDebugCommand::Cancel));
-}
-
-HWND GetFolderViewSelectionMaskPromptHandle() noexcept
-{
-    const HWND hwnd = FindDebugPromptWindowForCurrentProcess(kFolderViewSelectionMaskPromptClassName);
-    return hwnd && IsWindow(hwnd) != FALSE ? hwnd : nullptr;
-}
-
-HWND GetFolderViewCreateDirectoryPromptHandle() noexcept
-{
-    const HWND hwnd = FindDebugPromptWindowForCurrentProcess(kFolderViewCreateDirectoryPromptClassName);
-    return hwnd && IsWindow(hwnd) != FALSE ? hwnd : nullptr;
-}
-
-HWND GetFolderViewEditNewPromptHandle() noexcept
-{
-    const HWND hwnd = FindDebugPromptWindowForCurrentProcess(kFolderViewEditNewPromptClassName);
-    return hwnd && IsWindow(hwnd) != FALSE ? hwnd : nullptr;
-}
-
-bool DebugGetFolderViewSelectionMaskPromptSnapshot(FolderViewSelectionMaskPromptDebugSnapshot& out) noexcept
-{
-    const HWND hwnd = GetFolderViewSelectionMaskPromptHandle();
-    if (! hwnd)
-    {
-        return false;
-    }
-
-    auto snapshot = std::make_unique<FolderViewSelectionMaskPromptDebugSnapshot>();
-    const bool ok = SendMessageW(hwnd,
-                                 WndMsg::kFolderViewSelectionMaskPromptDebug,
-                                 static_cast<WPARAM>(FolderViewSelectionMaskPromptDebugCommand::GetSnapshot),
-                                 reinterpret_cast<LPARAM>(snapshot.get())) != FALSE;
-    if (ok)
-    {
-        out = std::move(*snapshot);
-    }
-    return ok;
-}
-
-bool DebugSetFolderViewSelectionMaskPromptText(std::wstring_view text) noexcept
-{
-    const HWND hwnd = GetFolderViewSelectionMaskPromptHandle();
-    if (! hwnd)
-    {
-        return false;
-    }
-
-    auto payload = std::make_unique<std::wstring>(text);
-    return SendMessageW(hwnd,
-                        WndMsg::kFolderViewSelectionMaskPromptDebug,
-                        static_cast<WPARAM>(FolderViewSelectionMaskPromptDebugCommand::SetText),
-                        reinterpret_cast<LPARAM>(payload.get())) != FALSE;
-}
-
-bool DebugConfirmFolderViewSelectionMaskPrompt() noexcept
-{
-    const HWND hwnd = GetFolderViewSelectionMaskPromptHandle();
-    return PostDxUiPromptCloseDebugCommand(
-        hwnd, WndMsg::kFolderViewSelectionMaskPromptDebug, static_cast<WPARAM>(FolderViewSelectionMaskPromptDebugCommand::Confirm));
-}
-
-bool DebugCancelFolderViewSelectionMaskPrompt() noexcept
-{
-    const HWND hwnd = GetFolderViewSelectionMaskPromptHandle();
-    return PostDxUiPromptCloseDebugCommand(
-        hwnd, WndMsg::kFolderViewSelectionMaskPromptDebug, static_cast<WPARAM>(FolderViewSelectionMaskPromptDebugCommand::Cancel));
-}
-
-bool DebugGetFolderViewCreateDirectoryPromptSnapshot(FolderViewCreateDirectoryPromptDebugSnapshot& out) noexcept
-{
-    const HWND hwnd = GetFolderViewCreateDirectoryPromptHandle();
-    if (! hwnd)
-    {
-        return false;
-    }
-
-    auto snapshot = std::make_unique<FolderViewCreateDirectoryPromptDebugSnapshot>();
-    const bool ok = SendMessageW(hwnd,
-                                 GetFolderViewCreateDirectoryPromptDebugMessage(),
-                                 static_cast<WPARAM>(FolderViewCreateDirectoryPromptDebugCommand::GetSnapshot),
-                                 reinterpret_cast<LPARAM>(snapshot.get())) != FALSE;
-    if (ok)
-    {
-        out = std::move(*snapshot);
-    }
-    return ok;
-}
-
-bool DebugSetFolderViewCreateDirectoryPromptText(std::wstring_view text) noexcept
-{
-    const HWND hwnd = GetFolderViewCreateDirectoryPromptHandle();
-    if (! hwnd)
-    {
-        return false;
-    }
-
-    auto payload = std::make_unique<std::wstring>(text);
-    return SendMessageW(hwnd,
-                        GetFolderViewCreateDirectoryPromptDebugMessage(),
-                        static_cast<WPARAM>(FolderViewCreateDirectoryPromptDebugCommand::SetText),
-                        reinterpret_cast<LPARAM>(payload.get())) != FALSE;
-}
-
-bool DebugConfirmFolderViewCreateDirectoryPrompt() noexcept
-{
-    const HWND hwnd = GetFolderViewCreateDirectoryPromptHandle();
-    return PostDxUiPromptCloseDebugCommand(
-        hwnd, GetFolderViewCreateDirectoryPromptDebugMessage(), static_cast<WPARAM>(FolderViewCreateDirectoryPromptDebugCommand::Confirm));
-}
-
-bool DebugCancelFolderViewCreateDirectoryPrompt() noexcept
-{
-    const HWND hwnd = GetFolderViewCreateDirectoryPromptHandle();
-    return PostDxUiPromptCloseDebugCommand(
-        hwnd, GetFolderViewCreateDirectoryPromptDebugMessage(), static_cast<WPARAM>(FolderViewCreateDirectoryPromptDebugCommand::Cancel));
-}
-
-bool DebugGetFolderViewEditNewPromptSnapshot(FolderViewEditNewPromptDebugSnapshot& out) noexcept
-{
-    const HWND hwnd = GetFolderViewEditNewPromptHandle();
-    if (! hwnd)
-    {
-        return false;
-    }
-
-    auto snapshot = std::make_unique<FolderViewEditNewPromptDebugSnapshot>();
-    const bool ok = SendMessageW(hwnd,
-                                 GetFolderViewEditNewPromptDebugMessage(),
-                                 static_cast<WPARAM>(FolderViewEditNewPromptDebugCommand::GetSnapshot),
-                                 reinterpret_cast<LPARAM>(snapshot.get())) != FALSE;
-    if (ok)
-    {
-        out = std::move(*snapshot);
-    }
-    return ok;
-}
-
-bool DebugSetFolderViewEditNewPromptText(std::wstring_view text) noexcept
-{
-    const HWND hwnd = GetFolderViewEditNewPromptHandle();
-    if (! hwnd)
-    {
-        return false;
-    }
-
-    auto payload = std::make_unique<std::wstring>(text);
-    return SendMessageW(hwnd,
-                        GetFolderViewEditNewPromptDebugMessage(),
-                        static_cast<WPARAM>(FolderViewEditNewPromptDebugCommand::SetText),
-                        reinterpret_cast<LPARAM>(payload.get())) != FALSE;
-}
-
-bool DebugSelectFolderViewEditNewPromptEditor(std::wstring_view actionId) noexcept
-{
-    const HWND hwnd = GetFolderViewEditNewPromptHandle();
-    if (! hwnd)
-    {
-        return false;
-    }
-
-    auto payload = std::make_unique<std::wstring>(actionId);
-    return SendMessageW(hwnd,
-                        GetFolderViewEditNewPromptDebugMessage(),
-                        static_cast<WPARAM>(FolderViewEditNewPromptDebugCommand::SelectEditor),
-                        reinterpret_cast<LPARAM>(payload.get())) != FALSE;
-}
-
-bool DebugConfirmFolderViewEditNewPrompt() noexcept
-{
-    const HWND hwnd = GetFolderViewEditNewPromptHandle();
-    return PostDxUiPromptCloseDebugCommand(hwnd, GetFolderViewEditNewPromptDebugMessage(), static_cast<WPARAM>(FolderViewEditNewPromptDebugCommand::Confirm));
-}
-
-bool DebugCancelFolderViewEditNewPrompt() noexcept
-{
-    const HWND hwnd = GetFolderViewEditNewPromptHandle();
-    return PostDxUiPromptCloseDebugCommand(hwnd, GetFolderViewEditNewPromptDebugMessage(), static_cast<WPARAM>(FolderViewEditNewPromptDebugCommand::Cancel));
-}
-
-HWND GetFolderViewChangeCasePromptHandle() noexcept
-{
-    const HWND hwnd = FindDebugPromptWindowForCurrentProcess(kFolderViewChangeCasePromptClassName);
-    return hwnd && IsWindow(hwnd) != FALSE ? hwnd : nullptr;
-}
-
-bool DebugGetFolderViewChangeCasePromptSnapshot(FolderViewChangeCasePromptDebugSnapshot& out) noexcept
-{
-    const HWND hwnd = GetFolderViewChangeCasePromptHandle();
-    if (! hwnd)
-    {
-        return false;
-    }
-
-    auto snapshot = std::make_unique<FolderViewChangeCasePromptDebugSnapshot>();
-    const bool ok = SendMessageW(hwnd,
-                                 WndMsg::kFolderViewChangeCasePromptDebug,
-                                 static_cast<WPARAM>(FolderViewChangeCasePromptDebugCommand::GetSnapshot),
-                                 reinterpret_cast<LPARAM>(snapshot.get())) != FALSE;
-    if (ok)
-    {
-        out = std::move(*snapshot);
-    }
-    return ok;
-}
-
-bool DebugSetFolderViewChangeCasePromptSelections(size_t styleIndex, size_t targetIndex, bool includeSubdirs) noexcept
-{
-    const HWND hwnd = GetFolderViewChangeCasePromptHandle();
-    if (! hwnd)
-    {
-        return false;
-    }
-
-    return SendMessageW(hwnd,
-                        WndMsg::kFolderViewChangeCasePromptDebug,
-                        static_cast<WPARAM>(FolderViewChangeCasePromptDebugCommand::SetSelections),
-                        PackFolderViewChangeCasePromptSelections(styleIndex, targetIndex, includeSubdirs)) != FALSE;
-}
-
-bool DebugConfirmFolderViewChangeCasePrompt() noexcept
-{
-    const HWND hwnd = GetFolderViewChangeCasePromptHandle();
-    return PostDxUiPromptCloseDebugCommand(hwnd, WndMsg::kFolderViewChangeCasePromptDebug, static_cast<WPARAM>(FolderViewChangeCasePromptDebugCommand::Confirm));
-}
-
-bool DebugCancelFolderViewChangeCasePrompt() noexcept
-{
-    const HWND hwnd = GetFolderViewChangeCasePromptHandle();
-    return PostDxUiPromptCloseDebugCommand(hwnd, WndMsg::kFolderViewChangeCasePromptDebug, static_cast<WPARAM>(FolderViewChangeCasePromptDebugCommand::Cancel));
-}
-#endif
 
 void FolderWindow::CommandGoRootDirectory(Pane pane)
 {

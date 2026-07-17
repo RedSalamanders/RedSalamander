@@ -7602,6 +7602,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     bool desktopFocusContended = false;
     POINT originalCursor{};
     const bool originalCursorAvailable = GetCursorPos(&originalCursor) != FALSE;
+    DirectedSelfTestInputWarning inputWarning;
     const auto restoreCursor = wil::scope_exit([&]() noexcept
     {
         if (originalCursorAvailable)

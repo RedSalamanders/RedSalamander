@@ -14,10 +14,15 @@ namespace Common::Settings
 struct Settings;
 }
 
+class FolderWindow;
+
 [[nodiscard]] HWND GetAboutDialogHandle() noexcept;
 [[nodiscard]] HWND GetFatalErrorDialogHandle() noexcept;
 
 #ifdef ENABLE_TESTS
+[[nodiscard]] FolderWindow& GetApplicationFolderWindowForSelfTest() noexcept;
+[[nodiscard]] Common::Settings::Settings& GetApplicationSettingsForSelfTest() noexcept;
+
 struct RereadAssociationsDebugSnapshot
 {
     bool attempted                            = false;

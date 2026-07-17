@@ -128,7 +128,7 @@ Detailed patterns in `.github/skills/`:
 - **Build**: Visual Studio 2026 / toolset v145, MSBuild, vcpkg
 - **Graphics**: Direct2D, DirectWrite, Direct3D 11, DXGI
 - **Platform**: Windows 11 build 22000.2600, x64 and ARM64
-- **Key Dependencies**: WIL, fmt, yyjson, libraw, libjpeg-turbo, 7zip, pe-parse
+- **Key Dependencies**: WIL, yyjson, libraw, libjpeg-turbo, 7zip, pe-parse
 
 ## Specifications
 

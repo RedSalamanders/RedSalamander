@@ -1,105 +1,80 @@
 #include "FileSystemS3.Internal.h"
+#include "YyjsonHelpers.h"
 
 namespace FsS3 = FileSystemS3Internal;
 
 HRESULT STDMETHODCALLTYPE FileSystemS3::SetConfiguration(const char* configurationJsonUtf8) noexcept
 {
-    std::lock_guard lock(_stateMutex);
+    Settings nextSettings{};
+    std::string nextConfiguration = "{}";
 
-    _settings = {};
+    if (configurationJsonUtf8 != nullptr && configurationJsonUtf8[0] != '\0')
+    {
+        nextConfiguration = configurationJsonUtf8;
+        Common::Json::ObjectDocument parsed = Common::Json::ParseObjectDocument(nextConfiguration, YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM);
+        if (! parsed)
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+
+        yyjson_val* root = parsed.root;
+        if (const auto value = FsS3::TryGetJsonString(root, "defaultRegion"); value.has_value())
+        {
+            nextSettings.defaultRegion = value.value();
+            if (nextSettings.defaultRegion.empty())
+            {
+                nextSettings.defaultRegion = L"us-east-1";
+            }
+        }
+
+        if (const auto value = FsS3::TryGetJsonString(root, "defaultEndpointOverride"); value.has_value())
+        {
+            nextSettings.defaultEndpointOverride = value.value();
+        }
+
+        if (const auto value = FsS3::TryGetJsonBool(root, "useHttps"); value.has_value())
+        {
+            nextSettings.useHttps = value.value();
+        }
+
+        if (const auto value = FsS3::TryGetJsonBool(root, "verifyTls"); value.has_value())
+        {
+            nextSettings.verifyTls = value.value();
+        }
+
+        if (const auto value = FsS3::TryGetJsonBool(root, "useVirtualAddressing"); value.has_value())
+        {
+            nextSettings.useVirtualAddressing = value.value();
+        }
+
+        if (const auto value = FsS3::TryGetJsonUInt(root, "maxKeys"); value.has_value() && value.value() >= 1u)
+        {
+            nextSettings.maxKeys = static_cast<unsigned long>((std::min)(value.value(), 1000ull));
+        }
+
+        if (const auto value = FsS3::TryGetJsonUInt(root, "maxTableResults"); value.has_value() && value.value() >= 1u)
+        {
+            nextSettings.maxTableResults = static_cast<unsigned long>((std::min)(value.value(), 1000ull));
+        }
+
+        if (const auto value = FsS3::TryGetJsonUInt(root, "connectTimeoutMs"); value.has_value() && value.value() >= 1u)
+        {
+            nextSettings.connectTimeoutMs = static_cast<uint32_t>((std::min)(value.value(), 600'000ull));
+        }
+
+        if (const auto value = FsS3::TryGetJsonUInt(root, "requestTimeoutMs"); value.has_value() && value.value() >= 1u)
+        {
+            nextSettings.requestTimeoutMs = static_cast<uint32_t>((std::min)(value.value(), 600'000ull));
+        }
+    }
+
+    std::lock_guard lock(_stateMutex);
+    _settings          = std::move(nextSettings);
+    _configurationJson = std::move(nextConfiguration);
     _s3BucketRegionByName.clear();
     _s3ClientsByCtxKey.clear();
     _writableDirectoryValidationTicks.clear();
     _s3TableBucketArnByName.clear();
-
-    if (configurationJsonUtf8 == nullptr || configurationJsonUtf8[0] == '\0')
-    {
-        _configurationJson = "{}";
-        return S_OK;
-    }
-
-    _configurationJson = configurationJsonUtf8;
-
-    yyjson_read_err err{};
-    yyjson_doc* doc = yyjson_read_opts(_configurationJson.data(), _configurationJson.size(), YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM, nullptr, &err);
-    if (! doc)
-    {
-        return S_OK;
-    }
-
-    auto freeDoc = wil::scope_exit([&] { yyjson_doc_free(doc); });
-
-    yyjson_val* root = yyjson_doc_get_root(doc);
-    if (! root || ! yyjson_is_obj(root))
-    {
-        return S_OK;
-    }
-
-    if (const auto v = FsS3::TryGetJsonString(root, "defaultRegion"); v.has_value())
-    {
-        _settings.defaultRegion = v.value();
-        if (_settings.defaultRegion.empty())
-        {
-            _settings.defaultRegion = L"us-east-1";
-        }
-    }
-
-    if (const auto v = FsS3::TryGetJsonString(root, "defaultEndpointOverride"); v.has_value())
-    {
-        _settings.defaultEndpointOverride = v.value();
-    }
-
-    if (const auto v = FsS3::TryGetJsonBool(root, "useHttps"); v.has_value())
-    {
-        _settings.useHttps = v.value();
-    }
-
-    if (const auto v = FsS3::TryGetJsonBool(root, "verifyTls"); v.has_value())
-    {
-        _settings.verifyTls = v.value();
-    }
-
-    if (const auto v = FsS3::TryGetJsonBool(root, "useVirtualAddressing"); v.has_value())
-    {
-        _settings.useVirtualAddressing = v.value();
-    }
-
-    if (const auto v = FsS3::TryGetJsonUInt(root, "maxKeys"); v.has_value())
-    {
-        const uint64_t raw = v.value();
-        if (raw >= 1u)
-        {
-            _settings.maxKeys = static_cast<unsigned long>(std::min<uint64_t>(raw, 1000u));
-        }
-    }
-
-    if (const auto v = FsS3::TryGetJsonUInt(root, "maxTableResults"); v.has_value())
-    {
-        const uint64_t raw = v.value();
-        if (raw >= 1u)
-        {
-            _settings.maxTableResults = static_cast<unsigned long>(std::min<uint64_t>(raw, 1000u));
-        }
-    }
-
-    if (const auto v = FsS3::TryGetJsonUInt(root, "connectTimeoutMs"); v.has_value())
-    {
-        const uint64_t raw = v.value();
-        if (raw >= 1u)
-        {
-            _settings.connectTimeoutMs = static_cast<uint32_t>(std::min<uint64_t>(raw, 600'000ull));
-        }
-    }
-
-    if (const auto v = FsS3::TryGetJsonUInt(root, "requestTimeoutMs"); v.has_value())
-    {
-        const uint64_t raw = v.value();
-        if (raw >= 1u)
-        {
-            _settings.requestTimeoutMs = static_cast<uint32_t>(std::min<uint64_t>(raw, 600'000ull));
-        }
-    }
-
     return S_OK;
 }
 

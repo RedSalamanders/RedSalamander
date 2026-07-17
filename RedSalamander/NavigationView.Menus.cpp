@@ -2364,9 +2364,13 @@ void NavigationView::ShowDiskInfoDropdown(bool ignoreInitialLeftButtonUp, bool f
     RestoreFolderViewFocusAfterDropdown();
 }
 
-bool NavigationView::TryGetSiblingFolders(const std::filesystem::path& parentPath, std::vector<std::filesystem::path>& siblings)
+bool NavigationView::TryGetSiblingFolders(const std::filesystem::path& parentPath,
+                                          const std::filesystem::path& preferredPath,
+                                          std::vector<std::filesystem::path>& siblings,
+                                          bool& truncated)
 {
     siblings.clear();
+    truncated = false;
 
     if (! _fileSystemPlugin)
     {
@@ -2389,6 +2393,25 @@ bool NavigationView::TryGetSiblingFolders(const std::filesystem::path& parentPat
         return true;
     }
 
+    constexpr size_t kMaxSiblingItems = static_cast<size_t>(ID_SIBLING_SEARCH - ID_SIBLING_BASE);
+    const auto lessByName = [](const std::filesystem::path& left, const std::filesystem::path& right)
+    { return _wcsicmp(left.filename().c_str(), right.filename().c_str()) < 0; };
+    const auto isPreferred = [&](const std::filesystem::path& candidate)
+    { return wil::compare_string_ordinal(candidate.native(), preferredPath.native(), true) == wistd::weak_ordering::equivalent; };
+    size_t largestReplaceableIndex = SIZE_MAX;
+    const auto findLargestReplaceable = [&]()
+    {
+        largestReplaceableIndex = SIZE_MAX;
+        for (size_t i = 0; i < siblings.size(); ++i)
+        {
+            if (! isPreferred(siblings[i]) &&
+                (largestReplaceableIndex == SIZE_MAX || lessByName(siblings[largestReplaceableIndex], siblings[i])))
+            {
+                largestReplaceableIndex = i;
+            }
+        }
+    };
+
     while (entry != nullptr)
     {
         if ((entry->FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
@@ -2397,7 +2420,22 @@ bool NavigationView::TryGetSiblingFolders(const std::filesystem::path& parentPat
             const std::wstring_view name(entry->FileName, nameChars);
             if (name != L"." && name != L"..")
             {
-                siblings.push_back(parentPath / std::wstring(name));
+                std::filesystem::path candidate = parentPath / std::wstring(name);
+                if (siblings.size() < kMaxSiblingItems)
+                {
+                    siblings.push_back(std::move(candidate));
+                    findLargestReplaceable();
+                }
+                else
+                {
+                    truncated = true;
+                    if (largestReplaceableIndex != SIZE_MAX &&
+                        (isPreferred(candidate) || lessByName(candidate, siblings[largestReplaceableIndex])))
+                    {
+                        siblings[largestReplaceableIndex] = std::move(candidate);
+                        findLargestReplaceable();
+                    }
+                }
             }
         }
 
@@ -2409,9 +2447,7 @@ bool NavigationView::TryGetSiblingFolders(const std::filesystem::path& parentPat
         entry = reinterpret_cast<FileInfo*>(reinterpret_cast<std::byte*>(entry) + entry->NextEntryOffset);
     }
 
-    std::sort(siblings.begin(), siblings.end(), [](const std::filesystem::path& a, const std::filesystem::path& b) {
-        return _wcsicmp(a.filename().c_str(), b.filename().c_str()) < 0;
-    });
+    std::sort(siblings.begin(), siblings.end(), lessByName);
 
     return true;
 }
@@ -2479,7 +2515,8 @@ void NavigationView::ShowSiblingsDropdown(size_t separatorIndex)
     }
 
     std::vector<std::filesystem::path> siblings;
-    if (! TryGetSiblingFolders(parentPath, siblings) || siblings.empty())
+    bool siblingsTruncated = false;
+    if (! TryGetSiblingFolders(parentPath, normalizedSegmentPath, siblings, siblingsTruncated) || siblings.empty())
     {
         TraceNavigationViewMenuDiagnostics(L"navigation.siblings-dropdown.skip",
                                            L"hwnd={:#x} reason=no-siblings index={} parent='{}'",
@@ -2511,7 +2548,7 @@ void NavigationView::ShowSiblingsDropdown(size_t separatorIndex)
     const std::filesystem::path normalizedCurrentPath = NormalizeDirectoryPath(segment.fullPath);
     const std::wstring currentPathText                = normalizedCurrentPath.wstring();
     std::vector<RedSalamander::DxUi::MenuFlyoutItem> items;
-    items.reserve(_navDropdownPaths.size());
+    items.reserve(_navDropdownPaths.size() + (siblingsTruncated ? 2u : 0u));
 
     int selectedIndex = 0;
     for (size_t i = 0; i < _navDropdownPaths.size(); ++i)
@@ -2529,6 +2566,14 @@ void NavigationView::ShowSiblingsDropdown(size_t separatorIndex)
         }
 
         items.push_back(std::move(item));
+    }
+
+    if (siblingsTruncated)
+    {
+        items.push_back(RedSalamander::DxUi::MenuFlyoutItem{.kind = RedSalamander::DxUi::MenuItemKind::Separator});
+        items.push_back(RedSalamander::DxUi::MenuFlyoutItem{.text = LoadStringResource(nullptr, IDS_CMD_NAVIGATE_PATH),
+                                                            .iconGlyph = L"\uE721",
+                                                            .commandId = ID_SIBLING_SEARCH});
     }
 
     if (items.empty())
@@ -2612,7 +2657,12 @@ void NavigationView::ShowSiblingsDropdown(size_t separatorIndex)
                       static_cast<uint64_t>(items.size()),
                       static_cast<uint64_t>(_navDropdownSelectedIndex >= 0 ? _navDropdownSelectedIndex : 0));
 
-    if (selectedId.has_value() && selectedId.value() >= ID_SIBLING_BASE)
+    if (selectedId == ID_SIBLING_SEARCH)
+    {
+        EnterEditMode();
+        return;
+    }
+    else if (selectedId.has_value() && selectedId.value() >= ID_SIBLING_BASE && selectedId.value() < ID_SIBLING_SEARCH)
     {
         const size_t siblingIndex = static_cast<size_t>(selectedId.value() - ID_SIBLING_BASE);
         if (siblingIndex < _navDropdownPaths.size())

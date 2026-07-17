@@ -61,12 +61,13 @@
 #include "PlugInterfaces/Host.h"
 #include "PlugInterfaces/Informations.h"
 #include "PlugInterfaces/NavigationMenu.h"
+#include "RedSalamander.h"
 #include "SelfTestCommon.h"
 #include "SessionState.h"
 #include "SettingsStore.h"
 #include "WindowsHello.h"
 
-extern Common::Settings::Settings g_settings;
+static Common::Settings::Settings& g_settings = GetApplicationSettingsForSelfTest();
 
 namespace
 {
@@ -1329,21 +1330,8 @@ struct NavigationMenuCallbackProbe final : INavigationMenuCallback
 
 [[nodiscard]] std::wstring MakeGuidText() noexcept
 {
-    GUID guid{};
-    if (FAILED(::CoCreateGuid(&guid)))
-    {
-        return {};
-    }
-
-    wchar_t buffer[64]{};
-    if (::StringFromGUID2(guid, buffer, static_cast<int>(std::size(buffer))) <= 0)
-    {
-        return {};
-    }
-
-    std::wstring text(buffer);
-    text.erase(std::remove_if(text.begin(), text.end(), [](wchar_t ch) noexcept { return ch == L'{' || ch == L'}'; }), text.end());
-    return text;
+    std::wstring id;
+    return SUCCEEDED(Common::Settings::CreateConnectionProfileId(id)) ? id : std::wstring{};
 }
 
 [[nodiscard]] std::wstring MakeExtendedPathForCompareSelfTest(const std::filesystem::path& inputPath)

@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstddef>
+#include <limits>
 #include <string>
 #include <string_view>
 
@@ -179,6 +180,47 @@ enum class WindowsPathClass
         case WindowsPathClass::Device: return std::wstring(path);
     }
     return std::wstring(path);
+}
+
+// Compares already-normalized Windows paths using ordinal case-insensitive semantics.
+// Callers remain responsible for choosing lexical versus physical normalization; this
+// helper intentionally does not resolve reparse points or touch the filesystem.
+[[nodiscard]] inline bool NormalizedWindowsPathEqualsNoCase(std::wstring_view left, std::wstring_view right) noexcept
+{
+    if (left.size() != right.size() || left.size() > static_cast<size_t>((std::numeric_limits<int>::max)()))
+    {
+        return false;
+    }
+    if (left.empty())
+    {
+        return true;
+    }
+    return CompareStringOrdinal(
+               left.data(), static_cast<int>(left.size()), right.data(), static_cast<int>(right.size()), TRUE) == CSTR_EQUAL;
+}
+
+// Component-boundary containment for already-normalized local Windows path text.
+// Root and candidate must use the same separator convention (std::filesystem::path::native
+// after lexically_normal is the canonical caller). Equality counts as containment.
+[[nodiscard]] inline bool IsSameOrDescendantNormalizedWindowsPath(std::wstring_view root, std::wstring_view candidate) noexcept
+{
+    if (root.empty() || candidate.size() < root.size() || root.size() > static_cast<size_t>((std::numeric_limits<int>::max)()))
+    {
+        return false;
+    }
+    if (CompareStringOrdinal(root.data(),
+                             static_cast<int>(root.size()),
+                             candidate.data(),
+                             static_cast<int>(root.size()),
+                             TRUE) != CSTR_EQUAL)
+    {
+        return false;
+    }
+    if (candidate.size() == root.size())
+    {
+        return true;
+    }
+    return IsSeparator(root.back()) || IsSeparator(candidate[root.size()]);
 }
 
 struct UniqueSiblingFileOptions final

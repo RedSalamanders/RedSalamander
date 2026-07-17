@@ -6,6 +6,19 @@
 
 It edits a working model in memory, previews the result, validates it, and writes explicit output files only when the user exports.
 
+## Composition and presentation boundaries
+
+`RedConfigureSession` owns mutable authoring state and Undo/Redo. `RedConfigureWorkflow` owns pure validation,
+recipe, stable-identity, and candidate-building rules. The compiled `RedConfigurePagePresenters` unit owns the
+page-specific interaction state for Start, Localization, Themes, and Review/Export: count projection, two-step
+approval state, typed theme-origin routing, and validation resource routing. `RedConfigureRoot` composes controls,
+layout, shared command routing, and control lifetime; it does not retain a second copy of batch-approval policy or
+infer user theme origin from output-path spelling.
+
+Theme catalog entries carry a typed `BuiltIn`, `File`, or `User` origin. Duplicate creation marks the new entry as
+`User`; file loading derives built-in origin from the durable built-in ID namespace and otherwise records `File`.
+Presentation consumes this origin and never guesses it from a directory name.
+
 ## Outputs
 
 - Localization output is one or more target-language satellite `.rc` files.
@@ -153,6 +166,8 @@ Expression evaluation rules:
 - palette rename rewrites references atomically; palette delete is blocked while dependents remain and reports the affected sources
 - batch darken/blend operations preserve each prior source in a generated palette entry and author a `darken(...)` or `blend(...)` recipe instead of flattening the result to hex
 - direct color edits replace any expression for the same key
+- exported expressions use the canonical camelCase function spellings from the settings schema
+- `ensureContrast` previews the foreground composited over an opaque background, preserves attainable foreground alpha, and reports an invalid source when the background is translucent or the requested rendered ratio cannot be met
 
 Theme preview tokens must include enough defaults for app/window, navigation, menu, folder-view, file-operation progress, monitor, and viewer-diff examples to update even when the active theme omits a key. Every editable and hit-testable preview region maps to an actual semantic key from `Specs/Core/Core_SettingsStore.md`; RedConfigure must not invent preview-only aliases that would export as inert theme overrides. Dialog/button examples reuse the applicable window/menu tokens. The editor color-key grid is the union of those preview defaults, palette entries, and the active theme's authored `colors` keys. The UI can filter this key list by case-insensitive substring, but batch group transforms operate against the complete key list for the selected group and produce authored palette recipes. Preview-hit regions map back to color keys shown in the editor. When preview regions overlap, hit resolution prefers the smallest region first and can cycle through containing regions on repeated clicks.
 

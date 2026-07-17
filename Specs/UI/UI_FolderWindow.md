@@ -303,7 +303,7 @@ FolderWindow also integrates with the top-level **Plugins** menu:
 
 The pane-scoped file-system prompts for change-attributes, change-case, and selection-mask actions use owned DxUi prompt windows, not legacy Win32 dialog-template routes.
 
-- `Change Attributes...` MUST route through the owned prompt-window path in `RedSalamander/FolderWindow.FileSystem.Commands.Part.cpp`. The prompt MUST expose tri-state attribute toggles, date/time rows, alternate-stream removal, and an Include subdirectories option that is enabled only when a folder is in scope. Recursive Change Attributes runs asynchronously as a File Operations informational task with enumeration/apply status.
+- `Change Attributes...` MUST route through the owned prompt-window path in `RedSalamander/FolderWindow.FileSystem.Commands.cpp`. The prompt MUST expose tri-state attribute toggles, date/time rows, alternate-stream removal, and an Include subdirectories option that is enabled only when a folder is in scope. Recursive Change Attributes runs asynchronously as a File Operations informational task with enumeration/apply status.
 - `Change Case...` MUST route through the owned prompt-window path in `RedSalamander/FolderWindow.FileSystem.cpp`.
 - The selection-mask commands (`Select by Mask...` / `Unselect by Mask...`) MUST route through the owned prompt-window path in `RedSalamander/FolderWindow.FileSystem.cpp`. The prompt's DxUi `TextField` MUST expose the localized adjacent mask label as its non-empty UI Automation Name across repeated open/close and live edit cycles.
 - These prompts MUST expose the shared DxUi host contract and MUST NOT reintroduce legacy `DialogBoxParamW`, owner-draw button/toggle, or extra visible combo/input-frame fallback surfaces for the active product path.

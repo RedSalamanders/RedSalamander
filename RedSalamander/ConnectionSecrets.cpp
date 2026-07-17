@@ -46,12 +46,13 @@ std::atomic<CredentialPersistenceFault> g_credentialPersistenceFault{CredentialP
 
 std::wstring BuildCredentialTargetName(std::wstring_view connectionId, SecretKind kind)
 {
-    if (connectionId.empty())
+    std::wstring canonicalId;
+    if (FAILED(Common::Settings::NormalizeConnectionProfileId(connectionId, canonicalId)) || canonicalId != connectionId)
     {
         return {};
     }
 
-    return std::format(L"{}{}/{}", kTargetPrefix, connectionId, SecretKindSuffix(kind));
+    return std::format(L"{}{}/{}", kTargetPrefix, canonicalId, SecretKindSuffix(kind));
 }
 
 HRESULT SaveGenericCredential(std::wstring_view targetName, std::wstring_view userName, std::wstring_view secret) noexcept
@@ -213,7 +214,37 @@ bool g_quickConnectHasPassphrase   = false;
 bool g_quickConnectHasRefreshToken = false;
 
 std::mutex g_secretAccessAuthorizationMutex;
-std::unordered_map<std::wstring, uint64_t> g_lastSecretAccessAuthorizationTickByConnectionId;
+
+struct SecretAccessAuthorizationKey
+{
+    std::wstring connectionId;
+    SecretKind kind                 = SecretKind::Password;
+    SecretAccessPurpose purpose     = SecretAccessPurpose::Interactive;
+
+    bool operator==(const SecretAccessAuthorizationKey&) const noexcept = default;
+};
+
+struct SecretAccessAuthorizationKeyHash
+{
+    [[nodiscard]] size_t operator()(const SecretAccessAuthorizationKey& key) const noexcept
+    {
+        size_t hash = std::hash<std::wstring>{}(key.connectionId);
+        hash        = hash * 131u + static_cast<size_t>(key.kind);
+        return hash * 131u + static_cast<size_t>(key.purpose);
+    }
+};
+
+std::unordered_map<SecretAccessAuthorizationKey, uint64_t, SecretAccessAuthorizationKeyHash> g_secretAccessAuthorizationTicks;
+
+[[nodiscard]] bool TryGetCanonicalConnectionId(std::wstring_view connectionId, std::wstring& canonicalId) noexcept
+{
+    return SUCCEEDED(Common::Settings::NormalizeConnectionProfileId(connectionId, canonicalId)) && canonicalId == connectionId;
+}
+
+[[nodiscard]] bool IsAuthorizationFresh(uint64_t now, uint64_t authorizedAt, uint64_t timeoutMs) noexcept
+{
+    return timeoutMs != 0u && now - authorizedAt < timeoutMs;
+}
 
 void TryAssign(std::wstring& target, std::wstring_view value) noexcept
 {
@@ -263,7 +294,7 @@ void SetCredentialPersistenceFaultForTesting(CredentialPersistenceFault fault) n
 
 bool IsQuickConnectConnectionId(std::wstring_view connectionId) noexcept
 {
-    return connectionId == kQuickConnectConnectionId;
+    return connectionId == Common::Settings::kQuickConnectConnectionId;
 }
 
 bool IsQuickConnectConnectionName(std::wstring_view connectionName) noexcept
@@ -280,7 +311,7 @@ void EnsureQuickConnectProfile(std::wstring_view preferredPluginId) noexcept
     }
 
     Common::Settings::ConnectionProfile profile;
-    TryAssign(profile.id, kQuickConnectConnectionId);
+    TryAssign(profile.id, Common::Settings::kQuickConnectConnectionId);
     TryAssign(profile.name, kQuickConnectConnectionName);
     TryAssign(profile.pluginId, preferredPluginId.empty() ? L"builtin/file-system-ftp" : preferredPluginId);
     profile.host         = L"";
@@ -316,7 +347,7 @@ void SetQuickConnectProfile(const Common::Settings::ConnectionProfile& profile) 
     std::scoped_lock lock(g_quickConnectMutex);
 
     Common::Settings::ConnectionProfile copy = profile;
-    TryAssign(copy.id, kQuickConnectConnectionId);
+    TryAssign(copy.id, Common::Settings::kQuickConnectConnectionId);
     TryAssign(copy.name, kQuickConnectConnectionName);
     g_quickConnectProfile.emplace(std::move(copy));
 }
@@ -417,74 +448,94 @@ void ClearQuickConnectSecret(SecretKind kind) noexcept
     SetQuickConnectSecret(kind, {});
 }
 
-void NoteSecretAccessAuthorized(std::wstring_view connectionId) noexcept
+void NoteSecretAccessAuthorized(std::wstring_view connectionId, SecretKind kind) noexcept
 {
-    if (connectionId.empty())
+    std::wstring canonicalId;
+    if (! TryGetCanonicalConnectionId(connectionId, canonicalId))
+    {
+        return;
+    }
+
+    const uint64_t now = GetTickCount64();
+    std::scoped_lock lock(g_secretAccessAuthorizationMutex);
+    g_secretAccessAuthorizationTicks.insert_or_assign(
+        SecretAccessAuthorizationKey{canonicalId, kind, SecretAccessPurpose::Interactive}, now);
+    g_secretAccessAuthorizationTicks.insert_or_assign(
+        SecretAccessAuthorizationKey{std::move(canonicalId), kind, SecretAccessPurpose::Background}, now);
+}
+
+bool IsSecretAccessAuthorized(std::wstring_view connectionId,
+                              SecretKind kind,
+                              SecretAccessPurpose purpose,
+                              uint64_t reauthTimeoutMs) noexcept
+{
+    std::wstring canonicalId;
+    if (! TryGetCanonicalConnectionId(connectionId, canonicalId))
+    {
+        return false;
+    }
+
+    std::scoped_lock lock(g_secretAccessAuthorizationMutex);
+    const auto it = g_secretAccessAuthorizationTicks.find(SecretAccessAuthorizationKey{std::move(canonicalId), kind, purpose});
+    if (it == g_secretAccessAuthorizationTicks.end())
+    {
+        return false;
+    }
+
+    return purpose == SecretAccessPurpose::Background || IsAuthorizationFresh(GetTickCount64(), it->second, reauthTimeoutMs);
+}
+
+void ClearSecretAccessAuthorization(std::wstring_view connectionId, SecretKind kind) noexcept
+{
+    std::wstring canonicalId;
+    if (! TryGetCanonicalConnectionId(connectionId, canonicalId))
     {
         return;
     }
 
     std::scoped_lock lock(g_secretAccessAuthorizationMutex);
-    g_lastSecretAccessAuthorizationTickByConnectionId[std::wstring(connectionId)] = GetTickCount64();
-}
-
-bool HasSecretAccessAuthorization(std::wstring_view connectionId) noexcept
-{
-    if (connectionId.empty())
-    {
-        return false;
-    }
-
-    std::scoped_lock lock(g_secretAccessAuthorizationMutex);
-    return g_lastSecretAccessAuthorizationTickByConnectionId.find(std::wstring(connectionId)) != g_lastSecretAccessAuthorizationTickByConnectionId.end();
-}
-
-bool IsSecretAccessAuthorized(std::wstring_view connectionId, uint64_t reauthTimeoutMs) noexcept
-{
-    if (reauthTimeoutMs == 0 || connectionId.empty())
-    {
-        return false;
-    }
-
-    std::scoped_lock lock(g_secretAccessAuthorizationMutex);
-    const auto it = g_lastSecretAccessAuthorizationTickByConnectionId.find(std::wstring(connectionId));
-    if (it == g_lastSecretAccessAuthorizationTickByConnectionId.end())
-    {
-        return false;
-    }
-
-    const uint64_t now     = GetTickCount64();
-    const uint64_t elapsed = now - it->second;
-    return elapsed < reauthTimeoutMs;
+    g_secretAccessAuthorizationTicks.erase(SecretAccessAuthorizationKey{canonicalId, kind, SecretAccessPurpose::Interactive});
+    g_secretAccessAuthorizationTicks.erase(SecretAccessAuthorizationKey{std::move(canonicalId), kind, SecretAccessPurpose::Background});
 }
 
 void ClearSecretAccessAuthorization(std::wstring_view connectionId) noexcept
 {
-    if (connectionId.empty())
+    std::wstring canonicalId;
+    if (! TryGetCanonicalConnectionId(connectionId, canonicalId))
     {
         return;
     }
 
     std::scoped_lock lock(g_secretAccessAuthorizationMutex);
-    g_lastSecretAccessAuthorizationTickByConnectionId.erase(std::wstring(connectionId));
+    std::erase_if(g_secretAccessAuthorizationTicks,
+                  [&](const auto& entry) noexcept { return entry.first.connectionId == canonicalId; });
 }
 
 void ClearAllSecretAccessAuthorizations() noexcept
 {
     std::scoped_lock lock(g_secretAccessAuthorizationMutex);
-    g_lastSecretAccessAuthorizationTickByConnectionId.clear();
+    g_secretAccessAuthorizationTicks.clear();
 }
 
 #ifdef ENABLE_TESTS
-void SetSecretAccessAuthorizationTickForTesting(std::wstring_view connectionId, uint64_t tick) noexcept
+void SetSecretAccessAuthorizationTickForTesting(std::wstring_view connectionId,
+                                                SecretKind kind,
+                                                SecretAccessPurpose purpose,
+                                                uint64_t tick) noexcept
 {
-    if (connectionId.empty())
+    std::wstring canonicalId;
+    if (! TryGetCanonicalConnectionId(connectionId, canonicalId))
     {
         return;
     }
 
     std::scoped_lock lock(g_secretAccessAuthorizationMutex);
-    g_lastSecretAccessAuthorizationTickByConnectionId[std::wstring(connectionId)] = tick;
+    g_secretAccessAuthorizationTicks.insert_or_assign(SecretAccessAuthorizationKey{std::move(canonicalId), kind, purpose}, tick);
+}
+
+bool IsSecretAccessAuthorizationFreshForTesting(uint64_t now, uint64_t authorizedAt, uint64_t timeoutMs) noexcept
+{
+    return IsAuthorizationFresh(now, authorizedAt, timeoutMs);
 }
 #endif
 } // namespace RedSalamander::Connections

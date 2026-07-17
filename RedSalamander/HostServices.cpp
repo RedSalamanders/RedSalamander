@@ -36,9 +36,38 @@
 #include "resource.h"
 
 // Globals owned by RedSalamander.cpp.
-extern FolderWindow g_folderWindow;
-extern std::atomic<HWND> g_hFolderWindow;
-extern Common::Settings::Settings g_settings;
+namespace
+{
+std::atomic<FolderWindow*> g_hostFolderWindow{nullptr};
+std::atomic<std::atomic<HWND>*> g_hostFolderWindowHwnd{nullptr};
+std::atomic<Common::Settings::Settings*> g_hostSettings{nullptr};
+
+template<typename T>
+[[nodiscard]] T& RequireHostDependency(const std::atomic<T*>& dependency) noexcept
+{
+    T* value = dependency.load(std::memory_order_acquire);
+    if (! value)
+    {
+        std::terminate();
+    }
+    return *value;
+}
+
+[[nodiscard]] FolderWindow& HostFolderWindow() noexcept
+{
+    return RequireHostDependency(g_hostFolderWindow);
+}
+
+[[nodiscard]] std::atomic<HWND>& HostFolderWindowHwnd() noexcept
+{
+    return RequireHostDependency(g_hostFolderWindowHwnd);
+}
+
+[[nodiscard]] Common::Settings::Settings& HostSettings() noexcept
+{
+    return RequireHostDependency(g_hostSettings);
+}
+} // namespace
 
 namespace
 {
@@ -246,7 +275,7 @@ FolderView::OverlaySeverity ToFolderOverlaySeverity(HostAlertSeverity severity) 
 
 [[nodiscard]] HWND GetInitializedHostWindow() noexcept
 {
-    const HWND hostWindow = g_hFolderWindow.load(std::memory_order_acquire);
+    const HWND hostWindow = HostFolderWindowHwnd().load(std::memory_order_acquire);
     if (! hostWindow || ! IsWindow(hostWindow))
     {
         return nullptr;
@@ -300,7 +329,7 @@ FolderView::OverlaySeverity ToFolderOverlaySeverity(HostAlertSeverity severity) 
 
 [[nodiscard]] FolderWindow::Pane ResolvePaneScopeTarget(void* cookie) noexcept
 {
-    return ResolveHostPaneCookie(cookie).value_or(g_folderWindow.GetFocusedPane());
+    return ResolveHostPaneCookie(cookie).value_or(HostFolderWindow().GetFocusedPane());
 }
 
 HWND ResolvePromptTargetWindow(const HostPromptRequest& request, void* cookie) noexcept
@@ -317,7 +346,7 @@ HWND ResolvePromptTargetWindow(const HostPromptRequest& request, void* cookie) n
         if (hostWindow && IsCurrentThreadWindowThread(hostWindow))
         {
             const FolderWindow::Pane pane = ResolvePaneScopeTarget(cookie);
-            const HWND folderView         = g_folderWindow.GetFolderViewHwnd(pane);
+            const HWND folderView         = HostFolderWindow().GetFolderViewHwnd(pane);
             if (folderView && IsWindow(folderView))
             {
                 return folderView;
@@ -345,7 +374,7 @@ RedSalamander::Ui::AlertTheme BuildHostAlertTheme() noexcept
     AppTheme theme = ResolveAppTheme(ThemeMode::System, L"HostServices");
     if (const HWND hostWindow = GetInitializedHostWindow(); hostWindow && IsCurrentThreadWindowThread(hostWindow))
     {
-        theme = g_folderWindow.GetTheme();
+        theme = HostFolderWindow().GetTheme();
     }
 
     const FolderViewTheme& fv = theme.folderView;
@@ -377,6 +406,11 @@ public:
     }
 
     ~HostServices() noexcept
+    {
+        clearAllSessionSecrets();
+    }
+
+    void ClearConnectionSessionState() noexcept
     {
         clearAllSessionSecrets();
     }
@@ -932,7 +966,7 @@ public:
         }
 
         const bool activateWindow = (request->flags & HOST_PANE_EXECUTE_FLAG_ACTIVATE_WINDOW) != 0;
-        return g_folderWindow.ExecuteInActivePane(std::filesystem::path(request->folderPath), focusName, request->folderViewCommandId, activateWindow);
+        return HostFolderWindow().ExecuteInActivePane(std::filesystem::path(request->folderPath), focusName, request->folderViewCommandId, activateWindow);
     }
 
     HRESULT STDMETHODCALLTYPE OpenViewer(const HostViewerOpenRequest* request) noexcept override
@@ -1027,7 +1061,7 @@ public:
         context.otherFileCount        = request->otherFileCount;
         context.focusedOtherFileIndex = request->focusedOtherFileIndex;
         context.flags                 = static_cast<ViewerOpenFlags>(request->viewerFlags);
-        return g_folderWindow.OpenViewerWithPlugin(request->pluginId, context);
+        return HostFolderWindow().OpenViewerWithPlugin(request->pluginId, context);
     }
 
     bool TryHandleMessage(UINT message, WPARAM /*wParam*/, LPARAM lParam, LRESULT& result) noexcept
@@ -1207,7 +1241,7 @@ public:
             }
 
             const bool activateWindow = (data->flags & HOST_PANE_EXECUTE_FLAG_ACTIVATE_WINDOW) != 0;
-            const HRESULT hr          = g_folderWindow.ExecuteInActivePane(
+            const HRESULT hr          = HostFolderWindow().ExecuteInActivePane(
                 std::filesystem::path(data->folderPath), std::wstring_view(data->focusItemDisplayName), data->folderViewCommandId, activateWindow);
 
             result = static_cast<LRESULT>(hr);
@@ -1235,7 +1269,7 @@ public:
             context.focusedOtherFileIndex = data->focusedOtherFileIndex;
             context.flags                 = static_cast<ViewerOpenFlags>(data->viewerFlags);
 
-            const HRESULT hr = g_folderWindow.OpenViewerWithPlugin(data->pluginId, context);
+            const HRESULT hr = HostFolderWindow().OpenViewerWithPlugin(data->pluginId, context);
             result           = static_cast<LRESULT>(hr);
             return true;
         }
@@ -1275,12 +1309,12 @@ private:
 
     [[nodiscard]] static const Common::Settings::ConnectionProfile* FindConnectionProfile(std::wstring_view connectionName) noexcept
     {
-        if (connectionName.empty() || ! g_settings.connections)
+        if (connectionName.empty() || ! HostSettings().connections)
         {
             return nullptr;
         }
 
-        const auto& items = g_settings.connections->items;
+        const auto& items = HostSettings().connections->items;
 
         const auto byName = std::find_if(items.begin(), items.end(), [&](const Common::Settings::ConnectionProfile& c) noexcept {
             return ! c.name.empty() && EqualsIgnoreCase(c.name, connectionName);
@@ -1295,12 +1329,12 @@ private:
 
     [[nodiscard]] static Common::Settings::ConnectionProfile* FindConnectionProfileMutable(std::wstring_view connectionName) noexcept
     {
-        if (connectionName.empty() || ! g_settings.connections)
+        if (connectionName.empty() || ! HostSettings().connections)
         {
             return nullptr;
         }
 
-        auto& items = g_settings.connections->items;
+        auto& items = HostSettings().connections->items;
 
         const auto byName = std::find_if(items.begin(), items.end(), [&](Common::Settings::ConnectionProfile& c) noexcept {
             return ! c.name.empty() && EqualsIgnoreCase(c.name, connectionName);
@@ -1375,6 +1409,7 @@ private:
             SecureClear(entry.secret);
         }
         _sessionRefreshTokenByConnectionId.clear();
+        RedSalamander::Connections::ClearAllSecretAccessAuthorizations();
     }
 
     HRESULT ShowConnectionManagerOnUiThread(const HostConnectionManagerRequest& request, HostConnectionManagerResult* result) noexcept
@@ -1398,7 +1433,8 @@ private:
 
         std::wstring selectedName;
         const std::wstring_view filter = (request.filterPluginId && request.filterPluginId[0] != L'\0') ? request.filterPluginId : L"";
-        const HRESULT hr               = ShowConnectionManagerDialog(owner, L"RedSalamander", g_settings, g_folderWindow.GetTheme(), filter, selectedName);
+        const HRESULT hr =
+            ShowConnectionManagerDialog(owner, HostFolderWindow(), L"RedSalamander", HostSettings(), HostFolderWindow().GetTheme(), filter, selectedName);
         if (hr == S_FALSE)
         {
             return S_FALSE;
@@ -1446,7 +1482,7 @@ private:
 
         if (IsAutomationModeFromCommandLine() && ConnectionProfileUtils::ConnectionProfileUsesInsecureTls(*profile))
         {
-            const bool allowInAutomation = g_settings.connections ? g_settings.connections->allowInsecureTlsInAutomation : false;
+            const bool allowInAutomation = HostSettings().connections ? HostSettings().connections->allowInsecureTlsInAutomation : false;
             const bool acked             = ConnectionProfileUtils::ExtraGetBool(profile->extra, "insecureTlsAck").value_or(false);
             if (! allowInAutomation || ! acked)
             {
@@ -1661,10 +1697,10 @@ private:
         const Common::Settings::ConnectionsSettings defaults{};
         bool bypassWindowsHello                  = false;
         uint32_t windowsHelloReauthTimeoutMinute = defaults.windowsHelloReauthTimeoutMinute;
-        if (g_settings.connections)
+        if (HostSettings().connections)
         {
-            bypassWindowsHello              = g_settings.connections->bypassWindowsHello;
-            windowsHelloReauthTimeoutMinute = g_settings.connections->windowsHelloReauthTimeoutMinute;
+            bypassWindowsHello              = HostSettings().connections->bypassWindowsHello;
+            windowsHelloReauthTimeoutMinute = HostSettings().connections->windowsHelloReauthTimeoutMinute;
         }
 
         const RedSalamander::Connections::SecretKind secretKind = ToLocalSecretKind(kind);
@@ -1712,21 +1748,10 @@ private:
                     bypassWindowsHello ? 1 : 0,
                     windowsHelloReauthTimeoutMinute);
 
-        const uint64_t windowsHelloReauthTimeoutMs = static_cast<uint64_t>(windowsHelloReauthTimeoutMinute) * 60'000ull;
-
         if (profile->requireWindowsHello && ! bypassWindowsHello)
         {
-            bool shouldPrompt = true;
-            if (windowsHelloReauthTimeoutMs != 0 && RedSalamander::Connections::IsSecretAccessAuthorized(profile->id, windowsHelloReauthTimeoutMs))
-            {
-                shouldPrompt = false;
-            }
-            else if (windowsHelloReauthTimeoutMs != 0 && RedSalamander::Connections::HasSecretAccessAuthorization(profile->id))
-            {
-                // Once the user has performed interactive authentication for a connection during this app run,
-                // do not re-prompt Windows Hello for background reconnects/long-running operations.
-                shouldPrompt = false;
-            }
+            const bool shouldPrompt = ! RedSalamander::Connections::IsSecretAccessAuthorized(
+                profile->id, secretKind, RedSalamander::Connections::SecretAccessPurpose::Background, 0u);
 
             if (shouldPrompt)
             {
@@ -1752,9 +1777,9 @@ private:
                     return helloHr;
                 }
 
-                if (windowsHelloReauthTimeoutMs != 0 && ! profile->id.empty())
+                if (! profile->id.empty())
                 {
-                    RedSalamander::Connections::NoteSecretAccessAuthorized(profile->id);
+                    RedSalamander::Connections::NoteSecretAccessAuthorized(profile->id, secretKind);
                 }
             }
         }
@@ -1867,7 +1892,7 @@ private:
 
         const FolderView::OverlaySeverity folderSeverity = ToFolderOverlaySeverity(request.severity);
         const FolderWindow::Pane pane                    = ResolvePaneScopeTarget(cookie);
-        g_folderWindow.ShowPaneAlertOverlay(
+        HostFolderWindow().ShowPaneAlertOverlay(
             pane, FolderView::ErrorOverlayKind::Operation, folderSeverity, std::move(model.title), std::move(model.message), S_OK, closable, blocksInput);
         return S_OK;
     }
@@ -1907,7 +1932,7 @@ private:
         }
 
         const FolderWindow::Pane pane = ResolvePaneScopeTarget(cookie);
-        g_folderWindow.DismissPaneAlertOverlay(pane);
+        HostFolderWindow().DismissPaneAlertOverlay(pane);
         return S_OK;
     }
 
@@ -2118,7 +2143,7 @@ HostServices::PromptForConnectionSecretOnUiThread(const wchar_t* connectionName,
         owner = hostWindow;
     }
 
-    const AppTheme& theme = g_folderWindow.GetTheme();
+    const AppTheme& theme = HostFolderWindow().GetTheme();
 
     if (kind == HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN)
     {
@@ -2173,7 +2198,7 @@ HostServices::PromptForConnectionSecretOnUiThread(const wchar_t* connectionName,
         }
         else
         {
-            const HRESULT saveHr = SettingsHotReload::SaveSettingsAndSchema(L"RedSalamander", g_settings);
+            const HRESULT saveHr = SettingsHotReload::SaveSettingsAndSchema(L"RedSalamander", HostSettings());
             if (FAILED(saveHr))
             {
                 const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(L"RedSalamander");
@@ -2193,7 +2218,7 @@ HostServices::PromptForConnectionSecretOnUiThread(const wchar_t* connectionName,
         }
         entry.present = true;
         entry.secret.assign(secret);
-        RedSalamander::Connections::NoteSecretAccessAuthorized(profile->id);
+        RedSalamander::Connections::NoteSecretAccessAuthorized(profile->id, ToLocalSecretKind(kind));
     }
 
     const size_t bytes = (secret.size() + 1u) * sizeof(wchar_t);
@@ -2267,13 +2292,13 @@ HRESULT HostServices::SetConnectionSecretOnUiThread(const wchar_t* connectionNam
         entry.present = false;
         if (secretView.empty())
         {
-            RedSalamander::Connections::ClearSecretAccessAuthorization(profile->id);
+            RedSalamander::Connections::ClearSecretAccessAuthorization(profile->id, secretKind);
         }
         else
         {
             entry.present = true;
             entry.secret.assign(secretView);
-            RedSalamander::Connections::NoteSecretAccessAuthorized(profile->id);
+            RedSalamander::Connections::NoteSecretAccessAuthorized(profile->id, secretKind);
         }
         return S_OK;
     }
@@ -2286,13 +2311,13 @@ HRESULT HostServices::SetConnectionSecretOnUiThread(const wchar_t* connectionNam
     entry.present = false;
     if (secretView.empty())
     {
-        RedSalamander::Connections::ClearSecretAccessAuthorization(profile->id);
+        RedSalamander::Connections::ClearSecretAccessAuthorization(profile->id, secretKind);
     }
     else
     {
         entry.present = true;
         entry.secret.assign(secretView);
-        RedSalamander::Connections::NoteSecretAccessAuthorized(profile->id);
+        RedSalamander::Connections::NoteSecretAccessAuthorized(profile->id, secretKind);
     }
 
     if (persist != FALSE)
@@ -2404,7 +2429,7 @@ HRESULT HostServices::ClearCachedConnectionSecretOnUiThread(const wchar_t* conne
         map.erase(it);
     }
 
-    RedSalamander::Connections::ClearSecretAccessAuthorization(profile->id);
+    RedSalamander::Connections::ClearSecretAccessAuthorization(profile->id, ToLocalSecretKind(kind));
 
     if (RedSalamander::Connections::IsQuickConnectConnectionId(profile->id))
     {
@@ -2446,7 +2471,7 @@ HRESULT HostServices::UpgradeFtpAnonymousToPasswordOnUiThread(const wchar_t* con
         owner = hostWindow;
     }
 
-    const AppTheme& theme = g_folderWindow.GetTheme();
+    const AppTheme& theme = HostFolderWindow().GetTheme();
 
     const std::wstring caption = LoadStringResource(nullptr, IDS_CONNECTIONS_PROMPT_FTP_CREDENTIALS_CAPTION);
     std::wstring message =
@@ -2471,7 +2496,7 @@ HRESULT HostServices::UpgradeFtpAnonymousToPasswordOnUiThread(const wchar_t* con
     profile->authMode = Common::Settings::ConnectionAuthMode::Password;
     profile->userName = userName;
 
-    const HRESULT saveHr = SettingsHotReload::SaveSettingsAndSchema(L"RedSalamander", g_settings);
+    const HRESULT saveHr = SettingsHotReload::SaveSettingsAndSchema(L"RedSalamander", HostSettings());
     if (FAILED(saveHr))
     {
         const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(L"RedSalamander");
@@ -2489,7 +2514,7 @@ HRESULT HostServices::UpgradeFtpAnonymousToPasswordOnUiThread(const wchar_t* con
         }
         entry.present = true;
         entry.secret.assign(password);
-        RedSalamander::Connections::NoteSecretAccessAuthorized(profile->id);
+        RedSalamander::Connections::NoteSecretAccessAuthorized(profile->id, RedSalamander::Connections::SecretKind::Password);
     }
 
     SecureClear(password);
@@ -2502,9 +2527,23 @@ HostServices& GetHostServicesImpl() noexcept
     return instance;
 }
 
+void ConfigureHostServices(FolderWindow& folderWindow,
+                           std::atomic<HWND>& folderWindowHwnd,
+                           Common::Settings::Settings& settings) noexcept
+{
+    g_hostFolderWindow.store(&folderWindow, std::memory_order_release);
+    g_hostFolderWindowHwnd.store(&folderWindowHwnd, std::memory_order_release);
+    g_hostSettings.store(&settings, std::memory_order_release);
+}
+
 IHost* GetHostServices() noexcept
 {
     return &GetHostServicesImpl();
+}
+
+void HostClearConnectionSessionState() noexcept
+{
+    GetHostServicesImpl().ClearConnectionSessionState();
 }
 
 HRESULT HostShowAlert(const HostAlertRequest& request, void* cookie) noexcept

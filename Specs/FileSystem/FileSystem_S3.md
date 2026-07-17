@@ -128,9 +128,22 @@ Host-level extra keys:
 ## Operations and Behavior Notes
 
 - **Read** is supported. File reads download the remote object to a local delete-on-close temporary file before streaming it to the host.
-- **Write** is supported (uploads/overwrites objects).
-- **Delete** is supported for objects and for recursive prefixes when the host passes `FILESYSTEM_FLAG_RECURSIVE`. Recursive prefix delete enumerates matching keys and deletes them in bounded S3 batches (up to 1000 keys per service request). Non-recursive delete of a prefix is denied unless the path resolves to a concrete object key.
-- **Copy/Move/Rename** are supported within S3 using provider-side object operations. The implementation uses single-object copy for small objects, multipart copy for large objects, conflict prompts, `.rs-bak` backup objects, and rollback/cleanup paths before deleting move sources.
+- **Write** is supported (uploads/overwrites objects). A handle-backed upload is successful only when the SDK consumes exactly the declared `ContentLength`; a short source is `ERROR_PARTIAL_COPY`, even if the SDK reports success.
+- **Delete** is supported for objects and for recursive prefixes when the host passes `FILESYSTEM_FLAG_RECURSIVE`. Recursive prefix delete enumerates matching keys and deletes them in bounded S3 batches (up to 1000 keys per service request), then re-lists until the prefix is empty. It observes cancellation and a request-timeout-derived deadline, and returns an incomplete/retry status instead of claiming success if concurrent additions prevent convergence. Non-recursive delete of a prefix is denied unless the path resolves to a concrete object key.
+- **Copy/Move/Rename** are supported within S3 using provider-side object operations. The implementation uses single-object copy for small objects, multipart copy for large objects, conflict prompts, `.rs-bak` backup objects, and rollback/cleanup paths before deleting move sources. Once the requested destination mutation commits, backup-cleanup failure is recorded and logged as cleanup debt; it does not turn the committed primary operation into an ordinary failure.
 - **Cross-filesystem copy/move** uses the host bridge via `read`/`write`.
 - **S3 Table** is read-only: it supports enumeration/properties/read and advertises no write/import capability.
+- Directory-size progress/cancellation failures are authoritative, including the final completion callback; the plugin must not overwrite that callback status with `S_OK`.
+- A failed multipart abort transfers the upload session and its owning filesystem instance to a bounded background reconciliation queue. Each pass attempts at most 16 sessions once, failed sessions cool down for at least one second, and pending/active cleanup keeps runtime unload closed. The queue logs the path, attempt count, and status so an orphan risk is observable rather than silently discarded by the writer destructor.
+- `ListObjectsV2`, recursive-transfer planning, directory-size enumeration, and S3 Table namespace/table paging
+  use the shared page/item/retained-token-byte/deadline guard. Truncated S3 responses must provide a non-empty
+  next token, and repeated tokens fail before another provider request instead of looping.
 - `concurrency.deleteMax` is `8` so the host can parallelize deletes when many objects are selected.
+
+## AWS runtime and module lifetime
+
+AWS initialization is a fallible state transition. `FileSystemS3` and ranged-reader creation acquire a runtime reference only after `Aws::InitAPI` succeeds; a named initialization exception leaves a failed, non-unloadable state and the factory returns the failure instead of exposing an unusable object.
+
+Runtime refresh uses the optional plugin quiet-point exports. `RedSalamanderPluginShutdown()` closes new runtime acquisition and schedules pending multipart cleanup. `RedSalamanderPluginCanUnloadNow()` remains false while a filesystem/I/O owner, cleanup item, cleanup callback, initialization/shutdown transition, or AWS runtime reference remains. It becomes true only after the final owner releases and `Aws::ShutdownAPI` returns. Cleanup callbacks carry a module pin through the Windows threadpool return boundary.
+
+Process shutdown still honors `RedSalamanderPluginRetainModuleUntilProcessExit()`: the normal quiet point and AWS shutdown run, while the module/dependency chain remains mapped for OS teardown as an additional defense against late third-party CRT activity.

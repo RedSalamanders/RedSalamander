@@ -90,65 +90,21 @@
     <ClCompile>
       <PreprocessorDefinitions>_DEBUG;_WINDOWS;FILESYSTEMGOOGLEDRIVE_EXPORTS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
-    <PostBuildEvent>
-      <Command>if exist "$(OutDir)brotlienc.dll" del /Q "$(OutDir)brotlienc.dll"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\libcurl-d.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\libssl-3-x64.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\libcrypto-3-x64.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\zd.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\brotlicommon.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\brotlidec.dll" "$(OutDir)"
- if exist "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\nghttp2.dll" xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\nghttp2.dll" "$(OutDir)"
- if exist "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\nghttp2d.dll" xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\nghttp2d.dll" "$(OutDir)"</Command>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
     <ClCompile>
       <PreprocessorDefinitions>_DEBUG;_WINDOWS;FILESYSTEMGOOGLEDRIVE_EXPORTS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
-    <PostBuildEvent>
-      <Command>if exist "$(OutDir)brotlienc.dll" del /Q "$(OutDir)brotlienc.dll"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\libcurl-d.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\libssl-3-x64.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\libcrypto-3-x64.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\zd.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\brotlicommon.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\brotlidec.dll" "$(OutDir)"
- if exist "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\nghttp2.dll" xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\nghttp2.dll" "$(OutDir)"
- if exist "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\nghttp2d.dll" xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\nghttp2d.dll" "$(OutDir)"</Command>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ASan Debug|x64'">
     <ClCompile>
       <PreprocessorDefinitions>_DEBUG;_WINDOWS;FILESYSTEMGOOGLEDRIVE_EXPORTS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
-    <PostBuildEvent>
-      <Command>if exist "$(OutDir)brotlienc.dll" del /Q "$(OutDir)brotlienc.dll"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\libcurl-d.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\libssl-3-x64.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\libcrypto-3-x64.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\zd.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\brotlicommon.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\brotlidec.dll" "$(OutDir)"
- if exist "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\nghttp2.dll" xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\nghttp2.dll" "$(OutDir)"
- if exist "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\nghttp2d.dll" xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\nghttp2d.dll" "$(OutDir)"</Command>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ASan Debug|ARM64'">
     <ClCompile>
       <PreprocessorDefinitions>_DEBUG;_WINDOWS;FILESYSTEMGOOGLEDRIVE_EXPORTS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
-    <PostBuildEvent>
-      <Command>if exist "$(OutDir)brotlienc.dll" del /Q "$(OutDir)brotlienc.dll"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\libcurl-d.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\libssl-3-x64.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\libcrypto-3-x64.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\zd.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\brotlicommon.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\brotlidec.dll" "$(OutDir)"
- if exist "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\nghttp2.dll" xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\nghttp2.dll" "$(OutDir)"
- if exist "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\nghttp2d.dll" xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\nghttp2d.dll" "$(OutDir)"</Command>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -156,16 +112,6 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>NDEBUG;_WINDOWS;FILESYSTEMGOOGLEDRIVE_EXPORTS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
-    <PostBuildEvent>
-      <Command>if exist "$(OutDir)brotlienc.dll" del /Q "$(OutDir)brotlienc.dll"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\libcurl.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\libssl-3-x64.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\libcrypto-3-x64.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\z.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\brotlicommon.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\brotlidec.dll" "$(OutDir)"
- if exist "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\nghttp2.dll" xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\nghttp2.dll" "$(OutDir)"</Command>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
     <ClCompile>
@@ -173,16 +119,6 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>NDEBUG;_WINDOWS;FILESYSTEMGOOGLEDRIVE_EXPORTS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
-    <PostBuildEvent>
-      <Command>if exist "$(OutDir)brotlienc.dll" del /Q "$(OutDir)brotlienc.dll"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\libcurl.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\libssl-3-x64.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\libcrypto-3-x64.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\z.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\brotlicommon.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\brotlidec.dll" "$(OutDir)"
- if exist "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\nghttp2.dll" xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\nghttp2.dll" "$(OutDir)"</Command>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp" />

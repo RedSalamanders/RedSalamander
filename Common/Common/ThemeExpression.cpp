@@ -5,10 +5,10 @@
 #include "Helpers.h"
 
 #include <algorithm>
-#include <cerrno>
+#include <array>
+#include <charconv>
 #include <chrono>
 #include <cmath>
-#include <cstdlib>
 #include <cwctype>
 #include <format>
 #include <limits>
@@ -71,15 +71,69 @@ using Common::Settings::ThemeSystemColorRole;
 
 [[nodiscard]] bool ParseDouble(std::wstring_view text, double& out) noexcept
 {
-    const std::wstring owned(Trim(text));
-    if (owned.empty())
+    text = Trim(text);
+    constexpr size_t kMaxNumberCharacters = 64u;
+    if (text.empty() || text.size() > kMaxNumberCharacters)
     {
         return false;
     }
-    wchar_t* end = nullptr;
-    errno        = 0;
-    const double value = std::wcstod(owned.c_str(), &end);
-    if (errno == ERANGE || end != owned.c_str() + owned.size() || ! std::isfinite(value))
+
+    std::array<char, kMaxNumberCharacters> ascii{};
+    bool mantissaDigit = false;
+    bool exponent      = false;
+    bool exponentDigit = false;
+    bool decimalPoint  = false;
+    for (size_t index = 0u; index < text.size(); ++index)
+    {
+        const wchar_t ch = text[index];
+        if (ch >= L'0' && ch <= L'9')
+        {
+            ascii[index] = static_cast<char>(ch);
+            if (exponent)
+            {
+                exponentDigit = true;
+            }
+            else
+            {
+                mantissaDigit = true;
+            }
+            continue;
+        }
+        if ((ch == L'+' || ch == L'-') && (index == 0u || (exponent && (text[index - 1u] == L'e' || text[index - 1u] == L'E'))))
+        {
+            ascii[index] = static_cast<char>(ch);
+            continue;
+        }
+        if (ch == L'.' && ! decimalPoint && ! exponent)
+        {
+            ascii[index] = '.';
+            decimalPoint = true;
+            continue;
+        }
+        if ((ch == L'e' || ch == L'E') && mantissaDigit && ! exponent)
+        {
+            ascii[index] = static_cast<char>(ch);
+            exponent     = true;
+            continue;
+        }
+        return false;
+    }
+
+    if (! mantissaDigit || (exponent && ! exponentDigit))
+    {
+        return false;
+    }
+
+    const char* first = ascii.data();
+    const char* last  = first + text.size();
+    if (*first == '+')
+    {
+        ++first;
+    }
+
+    double value = 0.0;
+    const auto [end, error] = std::from_chars(first, last, value, std::chars_format::general);
+    if (error != std::errc{} || end != last || ! std::isfinite(value))
     {
         return false;
     }
@@ -317,9 +371,23 @@ struct LinearRgb
     return Common::Colors::ContrastRatioFromRelativeLuminance(a, b);
 }
 
+[[nodiscard]] std::optional<double> RenderedContrastRatio(uint32_t foreground, uint32_t background) noexcept
+{
+    if (Channel(background, 24u) != 0xFFu)
+    {
+        return std::nullopt;
+    }
+    return ContrastRatio(Common::Colors::CompositeArgbOverOpaqueBackground(foreground, background), background);
+}
+
 [[nodiscard]] std::optional<uint32_t> EnsureContrast(uint32_t foreground, uint32_t background, double ratio) noexcept
 {
-    if (ContrastRatio(foreground, background) >= ratio)
+    const std::optional<double> initialRatio = RenderedContrastRatio(foreground, background);
+    if (! initialRatio.has_value())
+    {
+        return std::nullopt;
+    }
+    if (initialRatio.value() >= ratio)
     {
         return foreground;
     }
@@ -331,7 +399,8 @@ struct LinearRgb
         Oklch candidate = source;
         candidate.lightness = static_cast<double>(tone) / 100.0;
         const uint32_t argb = FromOklch(candidate);
-        if (ContrastRatio(argb, background) < ratio)
+        const std::optional<double> candidateRatio = RenderedContrastRatio(argb, background);
+        if (! candidateRatio.has_value() || candidateRatio.value() < ratio)
         {
             continue;
         }
@@ -753,20 +822,20 @@ std::wstring FormatThemeColorSource(const ThemeColorSource& source)
     case ThemeColorSourceKind::Contrast:
         return source.references.size() == 1u ? std::format(L"contrast({})", ref(0u))
                                              : std::format(L"contrast({},{},{})", ref(0u), ref(1u), ref(2u));
-    case ThemeColorSourceKind::PerceptualTone: return std::format(L"perceptualtone({},{})", ref(0u), NumberText(source.parameters[0]));
-    case ThemeColorSourceKind::EnsureContrast: return std::format(L"ensurecontrast({},{},{})", ref(0u), ref(1u), NumberText(source.parameters[0]));
+    case ThemeColorSourceKind::PerceptualTone: return std::format(L"perceptualTone({},{})", ref(0u), NumberText(source.parameters[0]));
+    case ThemeColorSourceKind::EnsureContrast: return std::format(L"ensureContrast({},{},{})", ref(0u), ref(1u), NumberText(source.parameters[0]));
     case ThemeColorSourceKind::Harmonize: return std::format(L"harmonize({},{},{})", ref(0u), ref(1u), NumberText(source.parameters[0]));
     case ThemeColorSourceKind::SystemColor:
         return source.preserveSystemAccentSpelling && source.systemRole == ThemeSystemColorRole::Accent
                    ? L"systemAccent()"
-                   : std::format(L"systemcolor({})", SystemRoleText(source.systemRole));
+                   : std::format(L"systemColor({})", SystemRoleText(source.systemRole));
     case ThemeColorSourceKind::Tone: return std::format(L"tone({},{})", ref(0u), ref(1u));
     case ThemeColorSourceKind::SeededRainbow:
-        return std::format(L"seededrainbow(runtime.seed,{},{},{},{})",
+        return std::format(L"seededRainbow(runtime.seed,{},{},{},{})",
                            NumberText(source.parameters[0]), NumberText(source.parameters[1]), NumberText(source.parameters[2]), NumberText(source.parameters[3]));
     case ThemeColorSourceKind::SeededChoice:
     {
-        std::wstring result = L"seededchoice(runtime.seed";
+        std::wstring result = L"seededChoice(runtime.seed";
         for (const std::wstring& reference : source.references) result += std::format(L",{}", reference);
         result += L")";
         return result;

@@ -1476,8 +1476,8 @@
         "id": {
           "type": "string",
           "title": "Id",
-          "description": "Stable internal GUID (used for WinCred storage; not used for /@conn: navigation).",
-          "pattern": "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$"
+          "description": "Stable, unique, lowercase canonical GUID (used for WinCred storage; not used for /@conn: navigation).",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
         },
         "name": { "type": "string", "title": "Name", "minLength": 1 },
         "pluginId": { "$ref": "#/$defs/pluginId", "title": "Plugin" },

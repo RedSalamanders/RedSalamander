@@ -57,6 +57,28 @@ Supported delegated scopes:
 
 Refresh tokens are stored through the host secret API as `refreshToken` when the connection enables `savePassword`. Access tokens are cached in memory only.
 
+### Credential and URL trust boundaries
+
+- A request carrying the Microsoft Graph bearer token must use HTTPS, the default HTTPS port, the exact configured
+  Graph origin (`graph.microsoft.com` for the current global-cloud implementation), and the `/v1.0` API path.
+  Userinfo, fragments, plaintext schemes, malformed/non-default ports, foreign origins, and paths outside that API
+  root are rejected before the request seam or network connection is reached.
+- `@odata.nextLink` is treated as an opaque full URL for paging, but it must pass the same Graph-origin validation
+  before authorization is attached. A listing tracks already-followed continuation URLs and fails closed before a
+  repeated continuation can issue another request.
+- Graph-authorized requests disable automatic redirects. Supporting a sovereign Microsoft Graph cloud requires an
+  explicit configured-origin policy and matching deterministic tests; it must not be enabled through a broad suffix
+  match.
+- An upload-session `uploadUrl` is a distinct preauthenticated credential. The current global-cloud policy accepts
+  only HTTPS/default-port URLs on `*.up.1drv.com` or `*.sharepoint.com`, rejects userinfo and fragments, disables
+  automatic redirects, and never attaches the Graph bearer token. The opaque URL must be sent unchanged after
+  validation.
+- Diagnostics never serialize request-header blocks or raw request URLs. They emit the method, a redacted target
+  class (`graph-api`, `oauth-authority`, `preauthenticated-upload`, or external), status/request ID when available,
+  byte counts, and HRESULT. Query values from Graph continuations and upload-session URLs are never logged.
+- Transient access/refresh tokens, authorization-header storage, parsed opaque URLs, upload-session response bodies,
+  and retained continuation strings are securely cleared where their current in-memory representation permits.
+
 ## Plugin configuration
 
 Each logical plugin exposes the same configuration schema through `IInformations::GetConfigurationSchema()`.
@@ -122,13 +144,24 @@ Implemented operations:
 Behavior notes:
 
 - Directory listings use Graph `children` paging with `$top=pageSize` and `@odata.nextLink`.
+  Paging is bounded by the shared page/item/retained-byte/deadline policy and rejects an empty continuation when
+  the provider says more data exists or any continuation URL already followed in the same operation.
 - Metadata requests use Graph item lookup with a small `$select` set.
 - `GetItemProperties` returns structured properties for both files and folders using all Microsoft Graph item metadata the plugin has available, including general identity/path/type data, drive/remote identifiers, timestamps, facets, hashes, and size for files. Missing Graph fields are omitted rather than reported as placeholder values.
 - File reads resolve `@microsoft.graph.downloadUrl` and then use ranged HTTP reads against that download URL.
 - Writes stage data into a local temporary file first.
   - Up to 250 MiB: simple upload (`/content`)
   - Above 250 MiB: upload session with chunked PUTs
+- Every upload-session `202 Accepted` response must contain valid `nextExpectedRanges`. The writer resumes from
+  the lowest server-acknowledged missing offset, rejects non-progress/out-of-range/contradictory ranges, and
+  accepts completion only through a final `200`/`201` after all declared bytes are acknowledged.
 - Same-drive move and rename use Graph `PATCH`.
+- Moving a folder onto an existing folder moves children individually but retains the drained source folder and
+  reports partial cleanup. Graph item deletion is recursive and the plugin has no atomic "delete only if still
+  empty" primitive, so deleting the folder after a re-list would still risk erasing a concurrently-added child.
+- Overwrite move results distinguish the committed primary mutation from backup cleanup and rollback. Once the
+  requested move has committed, failure to delete the recoverable overwrite backup is logged as cleanup debt and
+  does not turn the move into an ordinary failure that callers might destructively retry.
 - Cross-drive move returns `ERROR_NOT_SUPPORTED`.
 - Server-side copy is not implemented in this version. `CopyItem` and `CopyItems` return `ERROR_NOT_SUPPORTED`, allowing the host bridge to fall back to read/write copy paths where applicable.
 
@@ -144,6 +177,8 @@ The plugin caches resolved drive metadata per connection name for the current ap
 ## Limitations
 
 - Delegated user auth only. App-only / client-credentials auth is out of scope.
+- Microsoft sovereign-cloud Graph and upload origins are not currently configured; the credential boundary supports
+  only the documented global-cloud origins above.
 - The built-in default `clientId` is intended for RedSalamander's shipped Microsoft app registration. Installations that need a different Microsoft Entra app must override it in plugin configuration.
 - SharePoint browsing is rooted to the configured site (or tenant root if only the tenant host is provided). There is no tenant-wide search UI.
 - `SetFileBasicInformation` is not implemented.
@@ -160,3 +195,15 @@ Optional selftest coverage is wired through Connection Manager profiles:
   - remote directory-size callback contract
 
 Profile names and environment-variable overrides are documented in `Specs/Testing/Testing_SelfTestRemoteCredentials.md`.
+
+Credential-boundary coverage is deterministic and does not require live credentials:
+
+- Debug `PluginContractTests` runs the Microsoft Drive exported selftests for strict URL validation, approved
+  same-origin pagination, foreign/plaintext continuation rejection before a second request, repeated-link rejection
+  before a third request, server-acknowledged upload offsets, concurrent-child-safe merge cleanup, committed-move
+  cleanup debt, and injected Graph/upload transport failures whose captured diagnostics contain no bearer or
+  opaque-query sentinels.
+- `Tools/Tests/TestHarnessSourceContracts.Tests.ps1` preserves the validated URL types, redirect suppression,
+  separated/secure-cleared authorization header, continuation guard, and raw-URL/header logging bans.
+- Closeout evidence is archived under
+  `Specs/TestRuns/4cb089111a23/FileSystemMicrosoftDrive/2026-07-16_2046_observatory_track3_credential_boundary/`.

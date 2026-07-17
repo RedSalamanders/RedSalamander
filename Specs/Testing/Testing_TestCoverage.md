@@ -2,36 +2,19 @@
 
 ## Overview
 
-This document provides a comprehensive inventory of every declared test case across all
-RedSalamander test suites. It serves as the authoritative reference for test coverage.
+This document describes coverage domains and durable test contracts. It does not
+own mutable current totals.
 
-Current runner-native inventory as of 2026-07-15:
-
-- Commands: 809 listed cases.
-- CompareDirectories: 257 listed cases.
-- FileOperations: 128 listed phases: 126 active ordered phases, plus setup and
-  cleanup.
-- PerformanceTests2: 14 CppUnitTest `TEST_METHOD`s.
-- FileSystemCurlTests: 8 standalone helper cases.
-- RedConfigureTests: 39 standalone model/parser/session/UI-smoke/performance cases.
-- MonitorTest: 3 ETW burst scenarios plus 3 fast guards
-  (`--diagnostics-gate-selftest`, `--scrollbar-model-selftest`, and
-  `--document-model-selftest`).
-- Tooling scripts: 294 Pester-style `It` cases under `Tools/Tests`, plus 5 fast
-  synthetic vcpkg merge cases.
-
-`RedSalamander.exe --selftest-list-cases` emits the authoritative in-product
-self-test case inventory as JSON. `Tools\Get-TestInventory.ps1 -Format Json`
-emits a source-derived fallback manifest for static/doc linting; it intentionally
-keeps the older static `RunCase` call-site counts visible because those are not
-equivalent to runner-listed cases.
-
-Current source-derived fallback counts:
-
-- Commands: 707 static `SelfTest::RunCase` call-site registrations (706 family
-  registrations plus one orchestrator isolation-failure registration).
-- CompareDirectories: 249 static `SelfTest::RunCase` call-site registrations.
-- FileOperations: 126 active ordered phases in `kFileOpsPhaseOrder`.
+Use `RedSalamander.exe --selftest-list-cases` for the authoritative in-product
+case inventory. Use `Tools\Get-TestInventory.ps1 -Format Json` for the
+source-derived manifest of static registrations, native test projects, CI/Full
+run-plan entries, and execution kinds. The manifest derives project-backed
+surfaces from `Tests\*.vcxproj` plus `Tools\TestRunPlan.ps1` and fails when the
+sets or kinds diverge. It also parses every `TestHarnessSourceContracts` `It`
+block and classifies it as `LexicalSafetyBan`, `StructuralGraphInvariant`,
+`BehavioralShadow`, or `MixedSourceShape`; the latter two form the live runtime-
+replacement queue. Current totals must not be copied into this specification;
+archived run counts below remain dated evidence rather than inventory authority.
 
 The Compare delete-burst maintenance parity case launches its isolated foreground
 service without consuming the queued-state observation in a generic readiness
@@ -42,6 +25,69 @@ misclassifying an in-progress automatic compaction window as a missing-pipe
 failure under broad suite load.
 
 Recent focused coverage updates:
+
+- 2026-07-17 Observatory Track 17 inventory checkpoint: `Tools\TestInventory.ps1` now parses and uniquely
+  classifies every live `TestHarnessSourceContracts` case, exports per-case line/assertion metadata and category
+  totals through `Get-TestInventory.ps1 -Format Json`, and exposes behavioral/mixed cases as the replacement queue.
+  The classifier found 15 structural graph invariants and 133 behavioral/mixed source-shape checks in the current
+  148-case file; these are an observed checkpoint, not frozen specification totals. `TestInventory.Tests.ps1`
+  passes **7/7**, including classification coverage, uniqueness, category accounting, JSON parity, native project
+  parity, run-plan coverage, and FileOperations phase-order integrity.
+
+- 2026-07-17 Observatory Track 14 lifecycle/UI closeout: the settings Commands case now proves
+  `BeginProcessShutdown()` admits one final snapshot, rejects a crossing normal submitter, and makes duplicate
+  finalization idempotent; the NavigationView Commands case posts deliberately stale suggestion results before
+  Escape, apply, and exit; and the DxUi Menu suite exercises cached geometry and viewport-only paint with 4,096
+  rows. Debug `RedSalamander` and `DxUiTests` builds completed with zero warnings/errors, both exact Commands cases
+  exited 0, and the focused Menu suite passed. Archived UI/perf evidence is under
+  `Specs/TestRuns/4cb089111a23/UI/2026-07-17_132300_observatory_track14_lifecycle_navigation_menu/`.
+
+- 2026-07-17 Observatory Track 9 non-provider reentrancy checkpoint: `MenuBar` callback root replacement,
+  `NativeMenuBarHost` destruction from inside a nested DxUi popup loop, Tree selection-delegate root replacement and
+  stable-ID expander re-resolution, and NavigationView full-path owned-window activation now have focused regressions.
+  Debug `DxUiTests` built with 0 warnings / 0 errors; Control, Tree, and Menu suites exited 0; the serialized Debug
+  `RedSalamander` project build exited 0; and
+  `cmd_pane_navigationView_full_path_popup_owned_window_activation` exited 0. Source contracts passed **142 / 0 / 0**.
+  The pre-existing `cmd_pane_navigationView_full_path_popup_edit_route` Escape focus-return failure reproduced with
+  the owned-window block skipped and is preserved separately under
+  `Specs/TestRuns/SINON/Continuation/2026-07-17_0938_observatory_track9_full_path_focus_failure/`; it is not counted
+  as proof for or against the isolated owned-window change.
+
+- 2026-07-17 Observatory Track 9 text-input checkpoint: focused replacement now synchronizes native/TSF and
+  accessibility state before terminal notification, all text-change callers stop if the callback destroys the
+  control, window/app deactivation restores active IME preview base state, and masked caret/range/selection/hit-test
+  geometry maps source UTF-16 boundaries through a cached user-visible text-element map. Debug `TextField`,
+  `NativeTextInput`, and `Accessibility` suites exited 0; source contracts remained **142 / 0 / 0**. The archived
+  TextField perf capture at
+  `Specs/TestRuns/SINON/Continuation/2026-07-17_observatory_track9_text_input/text_field_perf.jsonl` contains six
+  `dxui.textinput.masked_index_map_rebuild_us` samples (96 us minimum, 231 us median, 1,140 us maximum); the seven-
+  UTF-16-unit/three-text-element ZWJ fixture rebuilt in 155 us and reused the retained map for later geometry.
+
+- 2026-07-17 Observatory Track 9 UIA closeout: retained Tree-item providers now keep the full 64-bit stable item
+  ID across reorder, preserve their runtime ID, re-resolve sibling/action targets, and return
+  `UIA_E_ELEMENTNOTAVAILABLE` after removal. Text ranges normalize Character, Word, logical Line, wrapped visual
+  Line, and Document units; Character expansion keeps a ZWJ emoji intact, and wrapped Line expansion is covered
+  through the cross-thread host dispatch path. The serialized Debug `DxUiTests` project build completed with 0
+  warnings / 0 errors, the focused `Accessibility` suite exited 0, and source contracts passed **142 / 0 / 0**.
+
+- 2026-07-16 Observatory IMAP identity/delete-safety checkpoint: FileSystemCurl now lists messages as
+  `<subject> [uidValidity-uid].eml`, revalidates UIDVALIDITY before fetch/delete, requires exact UIDPLUS capability
+  before marking a message deleted, never issues mailbox-wide EXPUNGE, and compensates a rejected UID EXPUNGE by
+  removing the target's `\Deleted` flag while preserving the original error and cleanup status. The deterministic
+  fake mailbox covers absent UIDPLUS, unrelated pre-deleted mail, UID EXPUNGE success/rejection, rollback success/
+  failure, and stale UIDVALIDITY. Debug test/plugin builds and the test-enabled Release test build had 0 warnings /
+  0 errors; FileSystemCurlTests passed in Debug and Release; source contracts passed **131 / 0 / 0**. Release CPU
+  and constant command-count evidence is archived at
+  `Specs/TestRuns/4cb089111a23/FileSystemCurl/2026-07-16_2028_observatory_track2_imap_safety/`; live network latency is
+  explicitly unclaimed pending a deterministic network-capable IMAP fixture.
+
+- 2026-07-16 Observatory release fail-closed checkpoint: `Tools/ReleaseArtifactPolicy.ps1` and
+  `Tools/Tests/ReleaseWorkflowPolicy.Tests.ps1` now prove the exact x64-only and x64+ARM64 portable/MSIX matrices,
+  reject missing requested legs, wrong PE architecture, wrong MSIX identity/version/architecture, unexpected files,
+  and checksum tampering, and source-check the release workflow's dependency semantics, deterministic upload paths,
+  immutable third-party action pins, removed mismatched Squad workflows, Dependabot entry, and CODEOWNERS guard.
+  The focused suite passed **13 / 0 / 0**; the complete `Tools/Tests` Pester surface passed **309 / 0 / 0** in
+  3m00s. Workflow-only remediation required no native rebuild or repeated CI/Full run.
 
 - 2026-07-15 Lighthouse shared-test-support checkpoint: first-party standalone
   harnesses now share `Tests/TestSupport/TestSupport.h` for exact environment
@@ -64,6 +110,14 @@ Recent focused coverage updates:
   clipboard, accelerator, combined-validation, theme metadata/contrast/recipe,
   undo/redo, grouped JSON5, unbalanced-placeholder, four-page UI smoke, and
   deterministic 6-owner/1,500-row/4-culture/10-theme performance coverage.
+
+- 2026-07-17 Observatory Track 19 RedConfigure checkpoint: all ten theme recipes and all seven localization
+  batch kinds now have typed preview characterization; exact-reference, direct-source-only conversion,
+  malformed/missing-target, stale-source, atomic rejection, session Undo, typed validation, duplicate-theme
+  boundary/result, and comma-decimal locale contracts pass. A zero-warning Debug build and five candidate
+  performance samples are archived at
+  `Specs/TestRuns/4cb089111a23/RedConfigure/2026-07-17_1548_observatory_track19/`; the 512-token validated mass
+  preview median is 57,111 us against its 100 ms explicit-action budget.
 
 - 2026-07-10 test-suite stabilization final Full closeout: after the
   SearchService foreground-readiness diagnostics and FileOperations queued-cancel
@@ -2047,7 +2101,25 @@ Recent focused coverage updates:
   `cmd/pane/clipboardPaste` dispatch using `CF_HDROP` plus
   `Preferred DropEffect = DROPEFFECT_MOVE`, proving Ctrl+X then Ctrl+V moves
   source files instead of copying them and asks for exactly one shared move
-  confirmation.
+  confirmation. It also waits for verified completion to invalidate the
+  unchanged move clipboard and proves a second paste cannot retry the move.
+- `folderView_drop_integrity_guards` covers hovered-subfolder versus pane-background
+  destination resolution, no-modifier same-volume MOVE selection, external queued
+  MOVE reporting COPY while the host request remains MOVE, same-parent/descendant
+  rejection, and rejection while the destination folder is not enumerated.
+- `folderView_drop_rejects_malformed_payloads` injects hostile private-drop and
+  `CF_HDROP` HGLOBAL layouts and proves they fail before queuing a file operation.
+- `folderView_pointer_targets_and_stale_hover_are_safe` covers plain-click selection
+  collapse, empty-background drag disarm, and paint with an out-of-range stale hover.
+- `TestHarnessSourceContracts.Tests.ps1` pins the remaining IronLedger seams that are
+  impractical to allocate or interleave in a deterministic runtime fixture: bounded
+  clipboard writer/reader arithmetic, untrusted provider count clamping, named focus
+  preservation, nested-menu target revalidation, inline deferred dispatch, local-source
+  provider routing, completion callback ownership, and the settled cross-pane gate.
+- 2026-07-16 IronLedger/Observatory Track 4 closeout evidence is archived at
+  `Specs/TestRuns/4cb089111a23/FolderView/2026-07-16_2127_observatory_track4_ironledger/`.
+  The focused Debug build completed with 0 warnings/0 errors; the five selected Commands
+  regressions exited 0; source contracts passed 134/134.
 - 2026-06-28 FolderView refresh preservation metrics: Debug `RedSalamander`
   build passed with `.build/logs/msbuild-20260628_184739_282.log` (`0 warning(s),
   0 error(s)`). `folderView_perf_directory_change_storm` passed in
@@ -2651,10 +2723,11 @@ window using UIAutomation and direct Win32 message simulation.
 | `cmd_app_shortcuts_reordered_resized_columns_survive_sort_cycles_and_search_roundtrip` | Reordered+resized layout through sort and search |
 | `cmd_app_shortcuts_reordered_resized_copy_follows_visible_columns_after_sort_cycles_and_search_roundtrip` | Reordered+resized copy after sort and search |
 
-### 1.4 Connection Manager (30 cases)
+### 1.4 Connection Manager (31 cases)
 
 | Case Name | Coverage Area |
 |-----------|---------------|
+| `connection_secret_authorization_scopes` | Canonical profile/secret-kind/purpose authorization, zero/nonzero interactive timeout, unsigned tick-wrap expiry, app-run background continuation, targeted revocation, and global session clearing |
 | `cmd_connection_manager_window_access_keys_focus_expected_controls` | Access key focus |
 | `cmd_connection_manager_window_clean_external_reload_refreshes_list` | Clean settings hot-reload refresh |
 | `cmd_connection_manager_window_close_persists_new_profile` | Close command persistence for newly created profiles |
@@ -2719,6 +2792,7 @@ Connection Manager closeout requires:
 | `cmd_pane_archive_pack_unpack_zip_roundtrip_and_validation` | Pack/Unpack ZIP round trip, sorted entries, empty-directory preservation, overwrite validation, invalid destination handling, unsupported-provider feedback, and archive perf artifact output |
 | `cmd_pane_listOpenedFiles_shows_sources_prunes_closed_editors_and_focuses_items` | List Opened Files dialog empty state, viewer/editor/preview source rows, closed external-editor pruning, focus navigation, deferred close after Focus Item, and perf artifact output |
 | `cmd_pane_navigationView_full_path_popup_edit_route` | Navigation full path editing |
+| `cmd_pane_navigationView_full_path_popup_owned_window_activation` | Full-path popup stays open while a directly owned top-level menu window is active |
 | `cmd_pane_navigationView_history_dropdown_keyboard_navigation` | History dropdown navigation |
 | `cmd_pane_navigationView_path_doubleClick_enters_edit_mode` | Path double-click edit |
 | `cmd_pane_navigationView_region_tab_traversal` | Navigation region tab order |
@@ -3388,9 +3462,9 @@ the sink requests a synchronous read lock from the text-change callback.
 |---------|-------|---------------|
 | **DxUiTests** | ~50+ | DxUi color parsing, theme rendering, control creation, HSL/RGB conversion, submenu cascade hover timing, single-line text selection clipping, compact TextField density default vertical-padding coverage with explicit-padding override semantics, native RTL/mixed-BiDi selection clipping outside visible clear/reveal trailing buttons, selected TextField emoji color-font rendering, native TextField selected/unselected/multiline/mixed-BiDi and editable ComboBox emoji color-font rendering without a hidden bridge child plus color-glyph pixel-count perf rows, native masked emoji color-font suppression and unmask restore, TextField/native extended emoji text-element deletion and Shift+Arrow selection for ZWJ sequences, variation selectors, skin-tone modifiers, and regional-indicator flags, native emoji copy/cut/paste selection replacement, clipboard round-trip, and undo/redo coverage for grinning face, woman technologist, rainbow flag, skin-tone modifier, and regional-indicator flag text elements, native pointer hit-test snapping over extended emoji text elements for TextField and editable ComboBox, native masked exact-policy one-dot-per-text-element state for extended emoji, native concealed-policy privacy display ranges with same-bucket edit stability plus full-reset/refocus epoch regeneration, hidden concealed pointer end-snap plus keyboard edit/paste/undo/redo coverage, secret render/display-dot/reveal-toggle perf rows, native masked reveal-button pointer and keyboard press-and-hold peek without clearing the secret, keyboard release/blur remask, Tab traversal through the reveal affordance, reveal-button UIA Button/Invoke provider coverage with masked value/text non-disclosure after Invoke, explicit `PasswordRevealMode::Hidden` no-affordance coverage, and explicit `PasswordRevealMode::Visible` persistent plaintext/copy coverage across blur/read-only/disabled transitions, native host text-input keyboard routing, native text-input backend focus/session/caret scaffolding, backend-neutral `SupportsTextInput()` consumer coverage for `TextField` and editable `ComboBox`, native editable-combo session/typing coverage without a hidden bridge child, native editable ComboBox Ctrl+A/C/X/V/Z/Y, Shift+Insert, Shift+Delete, normalized paste, Alt+Down popup-open, Escape popup-close, retained selection, and native-session plus backend-neutral `TextInputState` sync coverage, native inherited flow-direction session state and focused inherited-flow refresh, shared single-line DirectWrite reading-direction-aware visible layout/caret/hit-test/selection-paint plumbing for `TextField` and editable `ComboBox` plus TSF point/extents and UIA RangeFromPoint fallback with `dxui.textinput.bidi_hit_test_us` / `dxui.textinput.bidi_caret_rect_us` perf rows, native key-to-state and key-to-paint perf rows from a deterministic typed-and-rendered native TextField scenario, native edit-transaction and undo-depth perf rows for direct edits, undo, and redo, native no-op delete transaction suppression plus once-per-mutation text-change notifications, native pointer caret-placement state sync, native host-HWND single-line double-click, synthesized repeated-click word selection, third-click select-all, drag-selection replacement over punctuation-delimited text, mixed-BiDi drag selection across Latin/Hebrew script boundaries in both LTR and RTL visual directions with logical UTF-16 clipboard order, native mixed-BiDi pointer hit-test matrix coverage for pixel-rounded leading/middle/trailing DirectWrite visual spans in both LTR and RTL flow directions, native BiDi scenario matrix coverage for pure LTR, pure RTL, Arabic plus Latin digits, surrogate pairs inside RTL text, and path-like RTL host text, native BiDi keyboard logical-boundary coverage for Home/End, Ctrl+End, Shift+Home/End, logical Left/Right, Backspace, and Delete in an RTL host, and native mixed-BiDi edit transaction coverage for logical-order copy/cut/paste, undo/redo selection restoration, Ctrl+Backspace, and Ctrl+Delete around mixed-script word/separator boundaries, native surrogate-pair and extended emoji backspace/delete state sync, native Ctrl+Backspace/Ctrl+Delete word-deletion state sync, native root-reset teardown, native focused-field bounds-change caret refresh, native Tab/default/cancel/context-menu/WM_SYSCHAR routing including attached logical/wrapped multiline `VK_APPS` and `Shift+F10` context-menu keys through the host HWND without a hidden bridge child, native IME start/end composition-state lifecycle, no-payload IME suppression without active composition, read-only IME composition suppression, composition-over-selection range tracking, composition-owned Return/Escape/Tab routing, NavigationView edit-suggest active-composition Down-arrow ownership, host-owned IMM32 composition/candidate window placement at the native caret, moved-field, multiline/wrapped caret-line and focused-control move anchoring, editable ComboBox move, programmatic `TextField` and editable `ComboBox` caret movement, focused `TextField` padding-change and editable `ComboBox` density-change reanchoring, multiline-scroll, and DPI IME reanchoring, native IME result commit, active composition preview with retained composition/conversion-target underline paint geometry for `TextField` and editable `ComboBox`, preview-then-result commit against the original multiline/wrapped IME base anchor, cancel restore, masked UIA `IsPassword`, ValuePattern, and TextPattern non-disclosure, explicit UIA HelpText exposure from retained controls, UIA TextPattern/TextEditPattern document/selection ranges, TextRange clone/endpoint comparison, RangeFromPoint leading-edge caret mapping plus multiline native hit-test mapping, text-element-aware character-unit endpoint/range movement over ZWJ emoji clusters, word-unit endpoint/collapsed/noncollapsed range movement, logical line endpoint/selected-range movement for newline-delimited multiline `TextField` content, multiline TextField non-exposure of ValuePattern, host-thread-dispatched TextField/editable ComboBox range `Select()`, and non-empty selected-range bounding rectangles plus simple LTR same-visual-line, newline-delimited multiline caret-geometry, wrapped multiline visual-line, and single-line plus multiline mixed-BiDi DirectWrite selected-range rectangles for `TextField`, UIA TextPattern/TextEditPattern document ranges plus RangeFromPoint and retained selection for editable `ComboBox`, `dxui.uia.text_range_us` perf rows, native IME TextEdit active-composition/conversion-target ranges, direct native TSF `ITextStoreACP` / `ITextStoreACP2` lock/text/end-ACP/selection/basic geometry/point-to-ACP/mutation/mixed-BiDi text-viewport point/extents/same-line and wrapped multiline text extent/multiline and wrapped point-to-ACP mapping/SetText replacement/query-only insert metadata/layout-unavailable/store-originated and retained-external sink notification plus UnadviseSink identity, read-write edit-transaction, and reentrant-lock rejection coverage and logical UTF-16 emoji range selection/replacement for focused `TextField`, direct native TSF retained selection and insert-at-selection mutation coverage for focused editable `ComboBox`, native single-line and multiline clipboard/undo routing, native host edit-message routing including no-selection `WM_CLEAR`, native masked-hidden clipboard suppression, native masked-revealed copy/cut mutation plus remask on blur/read-only/disable, before Escape cancel, on window deactivation, and on reveal-button capture loss, native read-only mutation suppression, NavigationView native DxUi host-backed address/full-path edit routing without a bridge subclass, NavigationView invalid-path retained HelpText validation feedback, FolderView incremental-search helper behavior, inactive-pane visual-state helpers, and empty-folder placeholder layout metrics |
 | **DxUiTests / NativeTextInput** | 118 | Includes native `TextField` and editable `ComboBox` active IME composition/conversion-target inline underline paint geometry derived from retained range rectangles, programmatic retained caret movement reanchoring active IMM32 composition/candidate forms, focused `TextField` padding-change and editable `ComboBox` density-change reanchoring of active IMM32 composition/candidate forms, focused read-only and masked state cache refresh while a native session is active, editable `ComboBox` active IME composition/candidate reanchoring after focused bounds changes without creating a hidden bridge child, native multiline/wrapped multiline IME composition/candidate anchoring across logical/visual caret lines and focused-control bounds changes on the host HWND, native host-HWND focus-loss native-session teardown/regain while retaining logical text focus, native multiline/wrapped Return default-button suppression plus Tab/Shift+Tab traversal and Escape cancel routing, native multiline/wrapped host-HWND character and Return replacement state sync, editable `ComboBox` exact-match selection plus delete/word-delete command sync coverage on the native host HWND, native single-line tab-character suppression plus partial-selection paste state sync, native Win32 edit-message protocol coverage for `WM_GETTEXT`, `WM_SETTEXT`, `EM_GETSEL`, `EM_SETSEL`, and `EM_REPLACESEL`, native multiline/wrapped multiline IME composition-owned Return/Escape/Tab routing, modified navigation-key routing during active IME composition, host/app deactivation teardown of active IME composition, native IME preview/result commit followed by `WM_IME_ENDCOMPOSITION`, and native IME result-only versus continuing-composition host-key routing coverage. |
-| **FileSystemCurlTests** | 8 | IMAP leaf naming/UID parsing, RFC2047 subject decoding, mailbox `STATUS` parsing, single-message Properties command-count model, listing summary repair batching, and bounded per-listing repair fetch budget coverage. |
-| **PluginContractTests** | 400+ assertions | Plugin factory/enumeration/schema/capability contracts, configuration-gated plugin debug selftests, and direct `PackedFileInfoBuffer` empty/multi-entry metadata, x64/ARM64 alignment, null-output, out-of-range, malformed-name-size, and malformed-offset contracts. |
-| **RedConfigureTests** | 39 | RedConfigure page definitions and four-page UI smoke, workspace discovery, repo-sized scan/parse/validate performance, theme JSON5 parsing/grouped export/validation, SettingsStore parser parity, RC string/menu/dialog parsing plus SDK compiler acceptance, placeholder/unbalanced-brace validation, translation views, language-column/batch/clipboard/accelerator workflows, combined validation and undo/redo, theme metadata/contrast/recipes/preview behavior, atomic reparsed export, and BOM-less UTF-16 RC loading. |
+| **FileSystemCurlTests** | live inventory | IMAP UIDVALIDITY-qualified leaf identity, RFC2047 subject decoding, mailbox `STATUS`/CAPABILITY parsing, stale-identity rejection, fake-mailbox safe single-message delete/rollback, constant security and Properties command-count models, listing summary repair batching, and bounded per-listing repair fetch budget coverage. |
+| **PluginContractTests** | 400+ assertions | Plugin factory/enumeration/schema/capability contracts; transactional configuration rollback and unknown-member round-trip across local, 7z, Curl, Google, Microsoft, and S3 providers; legacy 7z/Curl secret import-without-repersistence; local contradictory writer-flag attribute preservation; Dummy late-collision copy/move no-partial-state and descendant read-only delete policy; configuration-gated plugin debug selftests (including cancellable/retryable 7z index construction; Microsoft Drive credential-bound Graph/upload URL validation, server-acknowledged upload offsets, concurrent-child-safe merge cleanup, committed-move cleanup debt, redacted diagnostics, and continuation rejection; Google Drive response/deadline caps, eight-caller single-flight refresh, bounded retry, repeated-token rejection, and reversible case-sensitive identity; S3 bounded paging, exact upload-byte proof, final directory-size callback propagation, recursive-delete convergence, committed-cleanup debt, retryable multipart abort, and AWS initialization state); eight alternating Curl/Google physical-unload cycles proving the survivor still creates a curl handle; a host-facing S3 runtime-refresh unload quiet-point test; and direct `PackedFileInfoBuffer` empty/multi-entry metadata, x64/ARM64 alignment, null-output, out-of-range, malformed-name-size, and malformed-offset contracts. |
+| **RedConfigureTests** | 39 | RedConfigure page definitions and four-page UI smoke, workspace discovery, repo-sized scan/parse/validate performance, theme JSON5 parsing/grouped export/validation, SettingsStore parser parity, RC string/menu/dialog parsing plus SDK compiler acceptance, placeholder/unbalanced-brace validation, translation views, all seven localization batch kinds with stable-identity stale rejection, combined typed validation and undo/redo, all ten theme recipes with exact-reference/direct-source-only/invalid/stale/atomic contracts, 512-token mass-preview budget, duplicate-theme boundary/result behavior, invariant numeric grammar under a comma-decimal locale, atomic reparsed export, and BOM-less UTF-16 RC loading. |
 | **DxUiTests / Accessibility** | 32 | Includes editable `ComboBox` single-line mixed-BiDi DirectWrite selected-range rectangle coverage through UIA `TextPattern::GetSelection()` / `TextRange::GetBoundingRectangles()`, preserving logical UTF-16 selected text while comparing screen rectangles against retained `ComboBox::TryGetTextInputRangeRects(...)` geometry, horizontally scrolled `DxUi::Grid` row UIA coverage proving row names and row-owned `GridCell` fragments include off-view model columns, `DxUi::ScrollPanel` UIA point-hit coverage proving scrolled-out content-space children are clipped while visible children resolve at viewport-translated points, cross-thread UIA action dispatch timeout coverage proving late host-thread handlers write only into heap-owned dispatch storage after the sender has timed out, and Label-only root parity coverage proving the snapshot path does not collapse labels into direct semantic roots. |
 | **DxUiTests / ReadOnly** | 24 | Focused read-only multiline/wrapped text-field coverage, including attached native/default-host cases with no bridge opt-in host wrapper that prove host `WM_COPY` copies logical and wrapped multiline text, no-selection host `WM_COPY` is a clipboard no-op, no-selection host `WM_CUT`/`WM_CLEAR` leave clipboard/text/caret unchanged, copy shortcuts preserve full selection, no-selection copy/cut shortcuts leave clipboard/text/caret unchanged, undo/redo no-ops preserve full selection, Ctrl+Backspace/Ctrl+Delete no-ops keep native caret state stable, Ctrl+Arrow word navigation syncs native caret state, and `WM_CUT`, `WM_PASTE`, `WM_CLEAR`, and `WM_CHAR` are suppressed without creating a hidden bridge child. |
 | **LocalizationTests** | ~5 | Resource owner registration, satellite string/menu/dialog lookup, localized dialog templates with executable-owned custom child classes, fallback to embedded resources, and persisted `ui.language` roundtrips |
@@ -3406,6 +3480,7 @@ the sink requests a synchronous read lock from the text-change callback.
 |-----------|---------------|
 | `Tools\Tests\BuildOutputProcess.Tests.ps1` | Build preflight self-test protection, exclusive lock-file identity and managed-thread nesting, contained direct-child delegation, parallel-runspace and stale-descendant exclusion, owner diagnostics, abandonment contamination (including stale v1 owner migration), residual compiler diagnostics, exact-path matching, and ordinary interactive-instance close behavior |
 | `Tools\Tests\BuildProjectSelection.Tests.ps1` | Project selection and direct vcxproj builds |
+| `Tools\Tests\BuildReproducibility.Tests.ps1` | Declarative runtime dependency staging, missing-file failure, clean portable extraction, pinned vcpkg identity, Release test definitions, bounded build parallelism, ARM64 PR compilation, and seeded ASan workflow contracts |
 | `Tools\Tests\MSBuildInvocation.Tests.ps1` | MSBuild invocation planning and diagnostic parsing |
 | `Tools\Tests\ModalWindowShellSourceContracts.Tests.ps1` | About/Fatal Error shared modal-shell adoption, owner restoration, canonical DxUi modal-loop reuse, preserved `GetLastError`/`WM_QUIT` behavior, owned-HWND reset, and session-end exclusion |
 | `Tools\Tests\HwndRenderTargetResourcesSourceContracts.Tests.ps1` | FunctionBar/StatusBar adoption of the narrow shared D2D factory/HWND-target/solid-brush lifecycle, target-dependent reset/factory-retention boundaries, local typography ownership, teardown release, and stable paint metrics |
@@ -3417,8 +3492,8 @@ the sink requests a synchronous read lock from the text-change callback.
 | `Tools\Tests\ResourceLocalizationContracts.Tests.ps1` | Resource placeholder positional-order and satellite placeholder-equivalence contract |
 | `Tools\Tests\RunAllTestsPlan.Tests.ps1` | CI/Full runner test-plan enumeration, unified test-sandbox root selection, Pester 3/newer invocation compatibility, dead-PID stale run cleanup, disk-audit evidence, and legacy cleanup target planning including locked-target failure reporting, optional native perf-budget gate forwarding, repeat/shuffle and injected classifier-proof argument forwarding, focused-filter shuffle-triage planning, invariant timeout formatting, blocking failure classification with shuffle-triage evidence, reviewed quarantine validation and repair-lane planning, GitHub step summary formatting, aggregate artifact, per-case history/dashboard output, and result-coverage validation |
 | `Tools\Tests\SanitizedEnvironment.Tests.ps1` | Child process environment normalization |
-| `Tools\Tests\TestHarnessSourceContracts.Tests.ps1` | Source guards for test harness CLI/error handling, case-listing, repeat/shuffle controls, injected classifier-proof hooks, native unified TestSandbox root/run-id consumption, native TestSandbox scratch acquisition, FileOperations alternate-volume TestSandbox scratch routing/pruning, RedConfigureTests, ViewerSqliteTests, CrashHandlingTests unified TestSandbox scratch routing, Commands plugin-config native TestSandbox scratch routing, ShellCommands shortcut-save native TestSandbox routing, PerformanceTests2 unified TestSandbox scratch routing, Commands BatchRename window fixture native TestSandbox routing, ViewerPETests unified TestSandbox fixture routing, Compare foreground service sandboxed stdout capture and kill-on-close JobObject isolation, broad raw temp/profile/legacy-root source guard, local index snapshot reload advisory timing, raw self-test wait scaling through `SelfTest::ScaleTimeout`, legacy TestSandbox cleanup script safety, failed-status warning behavior, and runner invocation, CompareDirectories and FileOperations explicit-order seeded shuffle, FileOperations native repeat aggregation, result-emission, duplicate-name contracts, CompareDirectories listed-case coverage, self-test fatal-modal bypass, partial crash-result preservation, file-operations prefix filters, FileOperations pause-point centralization, FileOperations bridge IO decorator source-size fault seam, FileOperations bridge create-directory race env-helper reuse, FileOperations issues-pane focus-restore helper reuse, FolderView owned threadpool submit helper reuse, FolderView thumbnail stat helper reuse, FolderView pending-to-paint metric shape reuse, IconCache path failure-store duplicate-race contracts, MTP RAII owner/directory-info handoff contracts, LocalSearch snapshot temp-path exception logging contracts, SearchAndIndex callback exception logging contracts, DxUi native text-input bounded formatting contracts, DxUi focus-sensitive Win32 assertion desktop-probe contracts, FileSystemMtp pragma-warning rationale contracts, shared ordinal string helper usage, shared truthy env-flag helper usage for FolderView WARP/perf flags, shared ViewerSpace opt-in env-flag parser usage, shared DxUi modal loop/quit propagation for archive prompts, FolderView perf-budget strict-mode contracts, FolderView overlay perf advisory sample-sufficiency contract, and Riptide/Floodgate source contracts |
-| `Tools\Tests\TestInventory.Tests.ps1` | Source-derived test inventory manifest, FileOperations phase-order drift guard, and doc-count lint |
+| `Tools\Tests\TestHarnessSourceContracts.Tests.ps1` | Source guards for test harness CLI/error handling, case-listing, repeat/shuffle controls, injected classifier-proof hooks, native unified TestSandbox root/run-id consumption, native TestSandbox scratch acquisition, FileOperations alternate-volume TestSandbox scratch routing/pruning, RedConfigureTests, ViewerSqliteTests, CrashHandlingTests unified TestSandbox scratch routing, Commands plugin-config native TestSandbox routing, ShellCommands shortcut-save native TestSandbox routing, PerformanceTests2 unified TestSandbox scratch routing, Commands BatchRename window fixture native TestSandbox routing, ViewerPETests unified TestSandbox fixture routing, Compare foreground service sandboxed stdout capture and kill-on-close JobObject isolation, broad raw temp/profile/legacy-root source guard, local index snapshot reload advisory timing, raw self-test wait scaling through `SelfTest::ScaleTimeout`, legacy TestSandbox cleanup script safety, failed-status warning behavior, and runner invocation, CompareDirectories and FileOperations explicit-order seeded shuffle, FileOperations native repeat aggregation, result-emission, duplicate-name contracts, CompareDirectories listed-case coverage, self-test fatal-modal bypass, partial crash-result preservation, file-operations prefix filters, FileOperations pause-point centralization, FileOperations bridge IO decorator source-size fault seam, FileOperations bridge create-directory race env-helper reuse, FileOperations issues-pane focus-restore helper reuse, FolderView owned threadpool submit helper reuse, FolderView thumbnail stat helper reuse, FolderView pending-to-paint metric shape reuse, IconCache path failure-store duplicate-race contracts, Microsoft Drive validated Graph/preauthenticated-upload URL types, redirect suppression, redacted diagnostics, authorization-header separation, server upload acknowledgement, safe merge/commit state, shared Microsoft/Google/S3 continuation bounds, Google response/deadline/retry/single-flight/identity guards, transactional plugin configuration/secret scrubbing, shared Curl/Google runtime ownership, cancellable bounded 7z indexing, MTP RAII owner/directory-info handoff contracts, LocalSearch snapshot temp-path exception logging contracts, SearchAndIndex callback exception logging contracts, DxUi native text-input bounded formatting contracts, DxUi focus-sensitive Win32 assertion desktop-probe contracts, FileSystemMtp pragma-warning rationale contracts, shared ordinal string helper usage, shared truthy env-flag helper usage for FolderView WARP/perf flags, shared ViewerSpace opt-in env-flag parser usage, shared DxUi modal loop/quit propagation for archive prompts, FolderView perf-budget strict-mode contracts, FolderView overlay perf advisory sample-sufficiency contract, and Riptide/Floodgate/Observatory source contracts |
+| `Tools\Tests\TestInventory.Tests.ps1` | Source-derived test inventory manifest; native project/run-plan parity; source-contract classification and replacement queue; FileOperations phase-order drift guard; and doc-count lint |
 | `Tools\Tests\ThemeDistributionContracts.Tests.ps1` | Theme/license distribution, canonical app-theme resolution, semantic-key authoring, named palette profiles, and rejection of exact palette pass-through adapters |
 | `Tools\Tests\ViewerChromeSourceContracts.Tests.ps1` | Source/spec guards for shared viewer combo keyboard routing, Unicode clipboard use, first-party title-bar policy, Escape focus-cancel-close docs, and the single detached-console launcher contract |
 | `Tools\Tests\VcpkgInstallSafety.Tests.ps1` | vcpkg triplet leaf-name validation and staging/install child path containment |

@@ -15,6 +15,7 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <charconv>
 #include <cstring>
 #include <format>
 #include <functional>
@@ -34,6 +35,7 @@
 #include "FileSystemMicrosoftDriveResources.h"
 #include "HandleIo.h"
 #include "Helpers.h"
+#include "PaginationGuard.h"
 #include "UriEncoding.h"
 #include "YyjsonHelpers.h"
 #include "resource.h"
@@ -978,11 +980,6 @@ using SecureWipe::SecureClear;
     return Common::HandleIo::GetFileSizeBounded(file, (std::numeric_limits<uint64_t>::max)(), sizeBytesOut);
 }
 
-[[nodiscard]] HRESULT WriteBufferToFile(HANDLE file, const void* buffer, size_t bytesToWrite) noexcept
-{
-    return Common::HandleIo::WriteAll(file, buffer, bytesToWrite);
-}
-
 [[nodiscard]] std::wstring PercentEncodeUtf8(std::wstring_view text) noexcept
 {
     std::wstring encoded;
@@ -1292,6 +1289,10 @@ std::mutex g_debugMicrosoftDriveHttpHookMutex;
 DebugHttpRequestHook g_debugMicrosoftDriveHttpHook = nullptr;
 void* g_debugMicrosoftDriveHttpHookCookie          = nullptr;
 
+using DebugHttpDiagnosticHook = void (*)(void* cookie, std::wstring_view diagnostic) noexcept;
+DebugHttpDiagnosticHook g_debugMicrosoftDriveHttpDiagnosticHook = nullptr;
+void* g_debugMicrosoftDriveHttpDiagnosticHookCookie              = nullptr;
+
 class DebugHttpRequestHookScope final
 {
 public:
@@ -1319,6 +1320,35 @@ public:
 private:
     DebugHttpRequestHook _previousHook = nullptr;
     void* _previousCookie              = nullptr;
+};
+
+class DebugHttpDiagnosticHookScope final
+{
+public:
+    DebugHttpDiagnosticHookScope(DebugHttpDiagnosticHook hook, void* cookie) noexcept
+    {
+        std::lock_guard lock(g_debugMicrosoftDriveHttpHookMutex);
+        _previousHook                                 = g_debugMicrosoftDriveHttpDiagnosticHook;
+        _previousCookie                               = g_debugMicrosoftDriveHttpDiagnosticHookCookie;
+        g_debugMicrosoftDriveHttpDiagnosticHook       = hook;
+        g_debugMicrosoftDriveHttpDiagnosticHookCookie = cookie;
+    }
+
+    ~DebugHttpDiagnosticHookScope()
+    {
+        std::lock_guard lock(g_debugMicrosoftDriveHttpHookMutex);
+        g_debugMicrosoftDriveHttpDiagnosticHook       = _previousHook;
+        g_debugMicrosoftDriveHttpDiagnosticHookCookie = _previousCookie;
+    }
+
+    DebugHttpDiagnosticHookScope(const DebugHttpDiagnosticHookScope&)            = delete;
+    DebugHttpDiagnosticHookScope& operator=(const DebugHttpDiagnosticHookScope&) = delete;
+    DebugHttpDiagnosticHookScope(DebugHttpDiagnosticHookScope&&)                 = delete;
+    DebugHttpDiagnosticHookScope& operator=(DebugHttpDiagnosticHookScope&&)      = delete;
+
+private:
+    DebugHttpDiagnosticHook _previousHook = nullptr;
+    void* _previousCookie                 = nullptr;
 };
 
 class DebugFlagScope final
@@ -1372,6 +1402,8 @@ private:
 }
 #endif
 
+[[nodiscard]] std::wstring DescribeHttpRequestTarget(std::wstring_view url) noexcept;
+
 void SleepBeforeGraphRetry(uint64_t delayMs) noexcept
 {
 #if defined(_DEBUG)
@@ -1386,7 +1418,11 @@ void SleepBeforeGraphRetry(uint64_t delayMs) noexcept
 void LogAndSleepBeforeGraphRetry(std::wstring_view method, std::wstring_view url, DWORD statusCode, std::wstring_view retryAfter, int attempt) noexcept
 {
     const uint64_t delayMs = ComputeGraphRetryDelayMs(retryAfter, attempt);
-    Debug::Info(L"Microsoft Drive: retrying request after throttle. method='{}' url='{}' status={} delayMs={}", method, url, statusCode, delayMs);
+    Debug::Info(L"Microsoft Drive: retrying request after throttle. method='{}' target='{}' status={} delayMs={}",
+                method,
+                DescribeHttpRequestTarget(url),
+                statusCode,
+                delayMs);
     SleepBeforeGraphRetry(delayMs);
 }
 
@@ -1699,16 +1735,74 @@ void LogAndSleepBeforeGraphRetry(std::wstring_view method, std::wstring_view url
     return value;
 }
 
-[[nodiscard]] HRESULT CrackUrl(std::wstring_view url, URL_COMPONENTS& components, std::wstring& hostOut, std::wstring& pathAndQueryOut) noexcept
+struct ParsedHttpUrl final
 {
-    hostOut.clear();
-    pathAndQueryOut.clear();
+    ParsedHttpUrl() = default;
+    ~ParsedHttpUrl()
+    {
+        SecureClear(pathAndQuery);
+    }
+
+    ParsedHttpUrl(const ParsedHttpUrl&)            = delete;
+    ParsedHttpUrl& operator=(const ParsedHttpUrl&) = delete;
+
+    INTERNET_SCHEME scheme = static_cast<INTERNET_SCHEME>(0);
+    INTERNET_PORT port     = 0;
+    std::wstring host;
+    std::wstring pathAndQuery;
+    bool hasUserInfo = false;
+    bool hasFragment = false;
+};
+
+struct ValidatedGraphApiUrl final
+{
+    ValidatedGraphApiUrl() = default;
+    ~ValidatedGraphApiUrl()
+    {
+        SecureClear(value);
+    }
+
+    ValidatedGraphApiUrl(const ValidatedGraphApiUrl&)            = delete;
+    ValidatedGraphApiUrl& operator=(const ValidatedGraphApiUrl&) = delete;
+
+    std::wstring value;
+};
+
+struct ValidatedPreauthenticatedUploadUrl final
+{
+    ValidatedPreauthenticatedUploadUrl() = default;
+    ~ValidatedPreauthenticatedUploadUrl()
+    {
+        SecureClear(value);
+    }
+
+    ValidatedPreauthenticatedUploadUrl(const ValidatedPreauthenticatedUploadUrl&)            = delete;
+    ValidatedPreauthenticatedUploadUrl& operator=(const ValidatedPreauthenticatedUploadUrl&) = delete;
+
+    std::wstring value;
+
+    [[nodiscard]] bool empty() const noexcept
+    {
+        return value.empty();
+    }
+};
+
+[[nodiscard]] HRESULT CrackUrl(std::wstring_view url, ParsedHttpUrl& parsedOut) noexcept
+{
+    parsedOut.scheme = static_cast<INTERNET_SCHEME>(0);
+    parsedOut.port   = 0;
+    parsedOut.host.clear();
+    SecureClear(parsedOut.pathAndQuery);
+    parsedOut.hasUserInfo = false;
+    parsedOut.hasFragment = false;
 
     std::wstring urlCopy(url);
-    components                   = {};
+    URL_COMPONENTS components{};
     components.dwStructSize      = sizeof(components);
     components.dwSchemeLength    = static_cast<DWORD>(-1);
     components.dwHostNameLength  = static_cast<DWORD>(-1);
+    components.dwUserNameLength  = static_cast<DWORD>(-1);
+    components.dwPasswordLength  = static_cast<DWORD>(-1);
     components.dwUrlPathLength   = static_cast<DWORD>(-1);
     components.dwExtraInfoLength = static_cast<DWORD>(-1);
 
@@ -1718,19 +1812,163 @@ void LogAndSleepBeforeGraphRetry(std::wstring_view method, std::wstring_view url
         return HRESULT_FROM_WIN32(GetLastError());
     }
 
-    hostOut.assign(components.lpszHostName, components.dwHostNameLength);
-    pathAndQueryOut.assign(components.lpszUrlPath, components.dwUrlPathLength);
+    parsedOut.scheme = components.nScheme;
+    parsedOut.port   = components.nPort;
+    parsedOut.host.assign(components.lpszHostName, components.dwHostNameLength);
+    parsedOut.pathAndQuery.assign(components.lpszUrlPath, components.dwUrlPathLength);
     if (components.dwExtraInfoLength > 0)
     {
-        pathAndQueryOut.append(components.lpszExtraInfo, components.dwExtraInfoLength);
+        parsedOut.pathAndQuery.append(components.lpszExtraInfo, components.dwExtraInfoLength);
     }
 
-    if (pathAndQueryOut.empty())
+    if (parsedOut.pathAndQuery.empty())
     {
-        pathAndQueryOut = L"/";
+        parsedOut.pathAndQuery = L"/";
     }
+
+    parsedOut.hasUserInfo = components.dwUserNameLength != 0u || components.dwPasswordLength != 0u;
+    parsedOut.hasFragment = url.find(L'#') != std::wstring_view::npos;
 
     return S_OK;
+}
+
+[[nodiscard]] bool IsHostOrSubdomainOf(std::wstring_view host, std::wstring_view approvedRoot) noexcept
+{
+    if (OrdinalString::EqualsNoCase(host, approvedRoot))
+    {
+        return true;
+    }
+    if (host.size() <= approvedRoot.size() || host[host.size() - approvedRoot.size() - 1u] != L'.')
+    {
+        return false;
+    }
+    return OrdinalString::EqualsNoCase(host.substr(host.size() - approvedRoot.size()), approvedRoot);
+}
+
+[[nodiscard]] bool IsApprovedPreauthenticatedUploadHost(std::wstring_view host) noexcept
+{
+    // Microsoft Graph documents OneDrive upload-session URLs under *.up.1drv.com. Business and
+    // SharePoint sessions use the tenant's *.sharepoint.com service origin.
+    return IsHostOrSubdomainOf(host, L"up.1drv.com") || IsHostOrSubdomainOf(host, L"sharepoint.com");
+}
+
+[[nodiscard]] bool IsGraphV1Path(std::wstring_view pathAndQuery) noexcept
+{
+    const size_t queryOffset = pathAndQuery.find(L'?');
+    const std::wstring_view path = queryOffset == std::wstring_view::npos ? pathAndQuery : pathAndQuery.substr(0u, queryOffset);
+    return path == L"/v1.0" || (path.size() > 6u && path.starts_with(L"/v1.0/"));
+}
+
+[[nodiscard]] HRESULT ValidateGraphApiUrl(std::wstring_view url, ValidatedGraphApiUrl& validatedOut) noexcept
+{
+    SecureClear(validatedOut.value);
+    ParsedHttpUrl parsed{};
+    const HRESULT hr = CrackUrl(url, parsed);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+    if (parsed.scheme != INTERNET_SCHEME_HTTPS || parsed.port != INTERNET_DEFAULT_HTTPS_PORT || parsed.hasUserInfo || parsed.hasFragment ||
+        ! OrdinalString::EqualsNoCase(parsed.host, L"graph.microsoft.com") || ! IsGraphV1Path(parsed.pathAndQuery))
+    {
+        return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+    }
+    validatedOut.value.assign(url);
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT ValidatePreauthenticatedUploadUrl(
+    std::wstring_view url, ValidatedPreauthenticatedUploadUrl& validatedOut) noexcept
+{
+    SecureClear(validatedOut.value);
+    ParsedHttpUrl parsed{};
+    const HRESULT hr = CrackUrl(url, parsed);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+    if (parsed.scheme != INTERNET_SCHEME_HTTPS || parsed.port != INTERNET_DEFAULT_HTTPS_PORT || parsed.hasUserInfo || parsed.hasFragment ||
+        ! IsApprovedPreauthenticatedUploadHost(parsed.host))
+    {
+        return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+    }
+    validatedOut.value.assign(url);
+    return S_OK;
+}
+
+[[nodiscard]] std::wstring DescribeHttpRequestTarget(std::wstring_view url) noexcept
+{
+    ParsedHttpUrl parsed{};
+    if (FAILED(CrackUrl(url, parsed)))
+    {
+        return L"invalid";
+    }
+
+    const bool https = parsed.scheme == INTERNET_SCHEME_HTTPS;
+    if (https && OrdinalString::EqualsNoCase(parsed.host, L"graph.microsoft.com") && IsGraphV1Path(parsed.pathAndQuery))
+    {
+        return L"https/graph-api";
+    }
+    if (https && OrdinalString::EqualsNoCase(parsed.host, kAuthHost))
+    {
+        return L"https/oauth-authority";
+    }
+    if (https && IsApprovedPreauthenticatedUploadHost(parsed.host))
+    {
+        return L"https/preauthenticated-upload";
+    }
+    return https ? L"https/external" : L"plaintext-or-unknown/external";
+}
+
+void EmitSanitizedHttpDiagnostic(std::wstring diagnostic) noexcept
+{
+#if defined(_DEBUG)
+    DebugHttpDiagnosticHook hook = nullptr;
+    void* cookie                 = nullptr;
+    {
+        std::lock_guard lock(g_debugMicrosoftDriveHttpHookMutex);
+        hook   = g_debugMicrosoftDriveHttpDiagnosticHook;
+        cookie = g_debugMicrosoftDriveHttpDiagnosticHookCookie;
+    }
+    if (hook)
+    {
+        hook(cookie, diagnostic);
+    }
+#endif
+    Debug::Warning(L"{}", diagnostic);
+}
+
+void LogHttpTransportFailure(std::wstring_view stage,
+                             std::wstring_view method,
+                             std::wstring_view url,
+                             HRESULT hr,
+                             size_t byteCount,
+                             size_t headerCount,
+                             bool bearerPresent) noexcept
+{
+    EmitSanitizedHttpDiagnostic(std::format(L"Microsoft Drive: HTTP request failed. stage='{}' method='{}' target='{}' hr=0x{:08X} bytes={} "
+                                                 L"headerCount={} bearerPresent={}.",
+                                             stage,
+                                             method,
+                                             DescribeHttpRequestTarget(url),
+                                             static_cast<unsigned long>(hr),
+                                             byteCount,
+                                             headerCount,
+                                             bearerPresent));
+}
+
+void LogHttpResponseFailure(std::wstring_view method,
+                            std::wstring_view url,
+                            DWORD status,
+                            std::wstring_view requestId,
+                            size_t responseBytes) noexcept
+{
+    Debug::Warning(L"Microsoft Drive: HTTP response failed. method='{}' target='{}' status={} requestId='{}' bytes={}.",
+                   method,
+                   DescribeHttpRequestTarget(url),
+                   status,
+                   requestId.empty() ? std::wstring_view(L"<none>") : requestId,
+                   responseBytes);
 }
 
 [[nodiscard]] HRESULT SendHttpRequest(const FileSystemMicrosoftDrive::Settings& settings,
@@ -1742,9 +1980,11 @@ void LogAndSleepBeforeGraphRetry(std::wstring_view method, std::wstring_view url
                                       size_t bodySizeBytes,
                                       HANDLE bodyFile,
                                       bool allowRetry,
+                                      bool disableRedirects,
                                       HttpResponse& responseOut) noexcept
 {
     responseOut = {};
+    const bool bearerPresent = bearerToken && bearerToken[0] != '\0';
 
     const HINTERNET session = GetSharedWinHttpSession();
     if (! session)
@@ -1761,6 +2001,7 @@ void LogAndSleepBeforeGraphRetry(std::wstring_view method, std::wstring_view url
             {
                 if (FAILED(debugHr))
                 {
+                    LogHttpTransportFailure(L"debug-transport", method, url, debugHr, bodySizeBytes, headers.size(), bearerPresent);
                     return debugHr;
                 }
                 if (ShouldRetryGraphHttpResponse(allowRetry, responseOut.statusCode, attempt))
@@ -1773,32 +2014,42 @@ void LogAndSleepBeforeGraphRetry(std::wstring_view method, std::wstring_view url
         }
 #endif
 
-        URL_COMPONENTS components{};
-        std::wstring host;
-        std::wstring pathAndQuery;
-        HRESULT hr = CrackUrl(url, components, host, pathAndQuery);
+        ParsedHttpUrl parsed{};
+        HRESULT hr = CrackUrl(url, parsed);
         if (FAILED(hr))
         {
-            Debug::Warning(L"Microsoft Drive: CrackUrl failed. method='{}' url='{}' hr=0x{:08X}", method, url, static_cast<unsigned long>(hr));
+            LogHttpTransportFailure(L"CrackUrl", method, url, hr, bodySizeBytes, headers.size(), bearerPresent);
             return hr;
         }
 
-        wil::unique_winhttp_hinternet connection(WinHttpConnect(session, host.c_str(), components.nPort, 0));
+        wil::unique_winhttp_hinternet connection(WinHttpConnect(session, parsed.host.c_str(), parsed.port, 0));
         if (! connection)
         {
             const DWORD lastError = GetLastError();
-            Debug::Warning(L"Microsoft Drive: WinHttpConnect failed. method='{}' url='{}' lastError={}", method, url, lastError);
+            LogHttpTransportFailure(L"WinHttpConnect", method, url, HRESULT_FROM_WIN32(lastError), bodySizeBytes, headers.size(), bearerPresent);
             return HRESULT_FROM_WIN32(lastError);
         }
 
-        const DWORD requestFlags = (components.nScheme == INTERNET_SCHEME_HTTPS) ? WINHTTP_FLAG_SECURE : 0;
+        const DWORD requestFlags = (parsed.scheme == INTERNET_SCHEME_HTTPS) ? WINHTTP_FLAG_SECURE : 0;
         wil::unique_winhttp_hinternet request(WinHttpOpenRequest(
-            connection.get(), std::wstring(method).c_str(), pathAndQuery.c_str(), nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, requestFlags));
+            connection.get(), std::wstring(method).c_str(), parsed.pathAndQuery.c_str(), nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, requestFlags));
         if (! request)
         {
             const DWORD lastError = GetLastError();
-            Debug::Warning(L"Microsoft Drive: WinHttpOpenRequest failed. method='{}' url='{}' lastError={}", method, url, lastError);
+            LogHttpTransportFailure(L"WinHttpOpenRequest", method, url, HRESULT_FROM_WIN32(lastError), bodySizeBytes, headers.size(), bearerPresent);
             return HRESULT_FROM_WIN32(lastError);
+        }
+
+        if (disableRedirects)
+        {
+            DWORD disabledFeatures = WINHTTP_DISABLE_REDIRECTS;
+            if (WinHttpSetOption(request.get(), WINHTTP_OPTION_DISABLE_FEATURE, &disabledFeatures, sizeof(disabledFeatures)) == 0)
+            {
+                const DWORD lastError = GetLastError();
+                LogHttpTransportFailure(
+                    L"WinHttpSetOption(disable-redirects)", method, url, HRESULT_FROM_WIN32(lastError), bodySizeBytes, headers.size(), bearerPresent);
+                return HRESULT_FROM_WIN32(lastError);
+            }
         }
 
         const int timeoutMs = static_cast<int>(std::min<uint32_t>(settings.requestTimeoutMs, static_cast<uint32_t>((std::numeric_limits<int>::max)())));
@@ -1820,13 +2071,21 @@ void LogAndSleepBeforeGraphRetry(std::wstring_view method, std::wstring_view url
         }
 
         std::wstring authorizationHeader;
-        if (bearerToken && bearerToken[0] != '\0')
+        auto clearAuthorizationHeader = wil::scope_exit([&] { SecureClear(authorizationHeader); });
+        if (bearerPresent)
         {
-            authorizationHeader = L"Bearer ";
+            authorizationHeader = L"Authorization: Bearer ";
             authorizationHeader.append(Utf16FromUtf8(bearerToken));
-            headerBlock.append(L"Authorization: ");
-            headerBlock.append(authorizationHeader);
-            headerBlock.append(L"\r\n");
+            if (WinHttpAddRequestHeaders(request.get(),
+                                         authorizationHeader.c_str(),
+                                         static_cast<DWORD>(authorizationHeader.size()),
+                                         WINHTTP_ADDREQ_FLAG_ADD | WINHTTP_ADDREQ_FLAG_REPLACE) == 0)
+            {
+                const DWORD lastError = GetLastError();
+                LogHttpTransportFailure(
+                    L"WinHttpAddRequestHeaders", method, url, HRESULT_FROM_WIN32(lastError), bodySizeBytes, headers.size(), bearerPresent);
+                return HRESULT_FROM_WIN32(lastError);
+            }
         }
 
         const DWORD totalBytes = static_cast<DWORD>(bodySizeBytes);
@@ -1847,12 +2106,7 @@ void LogAndSleepBeforeGraphRetry(std::wstring_view method, std::wstring_view url
                                0) == 0)
         {
             const DWORD lastError = GetLastError();
-            Debug::Warning(L"Microsoft Drive: WinHttpSendRequest failed. method='{}' url='{}' lastError={} bodyBytes={} headers='{}'",
-                           method,
-                           url,
-                           lastError,
-                           bodySizeBytes,
-                           headerBlock.empty() ? std::wstring_view(L"<none>") : std::wstring_view(headerBlock));
+            LogHttpTransportFailure(L"WinHttpSendRequest", method, url, HRESULT_FROM_WIN32(lastError), bodySizeBytes, headers.size(), bearerPresent);
             return HRESULT_FROM_WIN32(lastError);
         }
 
@@ -1873,7 +2127,7 @@ void LogAndSleepBeforeGraphRetry(std::wstring_view method, std::wstring_view url
                 if (ReadFile(bodyFile, chunk.data(), chunkSize, &read, nullptr) == 0)
                 {
                     const DWORD lastError = GetLastError();
-                    Debug::Warning(L"Microsoft Drive: ReadFile failed while sending request body. method='{}' url='{}' lastError={}", method, url, lastError);
+                    LogHttpTransportFailure(L"ReadFile(request-body)", method, url, HRESULT_FROM_WIN32(lastError), read, headers.size(), bearerPresent);
                     return HRESULT_FROM_WIN32(lastError);
                 }
 
@@ -1886,7 +2140,7 @@ void LogAndSleepBeforeGraphRetry(std::wstring_view method, std::wstring_view url
                 if (WinHttpWriteData(request.get(), chunk.data(), read, &written) == 0)
                 {
                     const DWORD lastError = GetLastError();
-                    Debug::Warning(L"Microsoft Drive: WinHttpWriteData failed. method='{}' url='{}' lastError={} chunkBytes={}", method, url, lastError, read);
+                    LogHttpTransportFailure(L"WinHttpWriteData", method, url, HRESULT_FROM_WIN32(lastError), read, headers.size(), bearerPresent);
                     return HRESULT_FROM_WIN32(lastError);
                 }
 
@@ -1902,7 +2156,7 @@ void LogAndSleepBeforeGraphRetry(std::wstring_view method, std::wstring_view url
         if (WinHttpReceiveResponse(request.get(), nullptr) == 0)
         {
             const DWORD lastError = GetLastError();
-            Debug::Warning(L"Microsoft Drive: WinHttpReceiveResponse failed. method='{}' url='{}' lastError={}", method, url, lastError);
+            LogHttpTransportFailure(L"WinHttpReceiveResponse", method, url, HRESULT_FROM_WIN32(lastError), bodySizeBytes, headers.size(), bearerPresent);
             return HRESULT_FROM_WIN32(lastError);
         }
 
@@ -1916,7 +2170,7 @@ void LogAndSleepBeforeGraphRetry(std::wstring_view method, std::wstring_view url
                                 WINHTTP_NO_HEADER_INDEX) == 0)
         {
             const DWORD lastError = GetLastError();
-            Debug::Warning(L"Microsoft Drive: WinHttpQueryHeaders(status) failed. method='{}' url='{}' lastError={}", method, url, lastError);
+            LogHttpTransportFailure(L"WinHttpQueryHeaders(status)", method, url, HRESULT_FROM_WIN32(lastError), 0u, headers.size(), bearerPresent);
             return HRESULT_FROM_WIN32(lastError);
         }
 
@@ -1933,7 +2187,7 @@ void LogAndSleepBeforeGraphRetry(std::wstring_view method, std::wstring_view url
             if (WinHttpQueryDataAvailable(request.get(), &available) == 0)
             {
                 const DWORD lastError = GetLastError();
-                Debug::Warning(L"Microsoft Drive: WinHttpQueryDataAvailable failed. method='{}' url='{}' lastError={}", method, url, lastError);
+                LogHttpTransportFailure(L"WinHttpQueryDataAvailable", method, url, HRESULT_FROM_WIN32(lastError), responseOut.body.size(), headers.size(), bearerPresent);
                 return HRESULT_FROM_WIN32(lastError);
             }
 
@@ -1948,7 +2202,7 @@ void LogAndSleepBeforeGraphRetry(std::wstring_view method, std::wstring_view url
             if (WinHttpReadData(request.get(), responseOut.body.data() + start, available, &read) == 0)
             {
                 const DWORD lastError = GetLastError();
-                Debug::Warning(L"Microsoft Drive: WinHttpReadData failed. method='{}' url='{}' lastError={}", method, url, lastError);
+                LogHttpTransportFailure(L"WinHttpReadData", method, url, HRESULT_FROM_WIN32(lastError), available, headers.size(), bearerPresent);
                 return HRESULT_FROM_WIN32(lastError);
             }
             responseOut.body.resize(start + read);
@@ -1966,113 +2220,43 @@ void LogAndSleepBeforeGraphRetry(std::wstring_view method, std::wstring_view url
     return E_FAIL;
 }
 
-[[nodiscard]] HRESULT DownloadHttpToFile(
-    const FileSystemMicrosoftDrive::Settings& settings, std::wstring_view url, const char* bearerToken, HANDLE file, HttpResponse& responseOut) noexcept
+[[nodiscard]] HRESULT SendAuthenticatedGraphHttpRequest(const FileSystemMicrosoftDrive::Settings& settings,
+                                                        std::wstring_view method,
+                                                        std::wstring_view rawUrl,
+                                                        const char* bearerToken,
+                                                        std::span<const HttpHeader> headers,
+                                                        const std::byte* bodyBytes,
+                                                        size_t bodySizeBytes,
+                                                        HANDLE bodyFile,
+                                                        bool allowRetry,
+                                                        HttpResponse& responseOut) noexcept
 {
-    responseOut = {};
-
-    const HINTERNET session = GetSharedWinHttpSession();
-    if (! session)
-    {
-        return HRESULT_FROM_WIN32(ERROR_WINHTTP_INTERNAL_ERROR);
-    }
-
-    URL_COMPONENTS components{};
-    std::wstring host;
-    std::wstring pathAndQuery;
-    HRESULT hr = CrackUrl(url, components, host, pathAndQuery);
+    ValidatedGraphApiUrl graphUrl{};
+    const HRESULT hr = ValidateGraphApiUrl(rawUrl, graphUrl);
     if (FAILED(hr))
     {
+        LogHttpTransportFailure(L"ValidateGraphApiUrl", method, rawUrl, hr, bodySizeBytes, headers.size(), bearerToken && bearerToken[0] != '\0');
         return hr;
     }
+    return SendHttpRequest(
+        settings, method, graphUrl.value, bearerToken, headers, bodyBytes, bodySizeBytes, bodyFile, allowRetry, true, responseOut);
+}
 
-    wil::unique_winhttp_hinternet connection(WinHttpConnect(session, host.c_str(), components.nPort, 0));
-    if (! connection)
+[[nodiscard]] HRESULT SendPreauthenticatedUploadRequest(const FileSystemMicrosoftDrive::Settings& settings,
+                                                        std::wstring_view method,
+                                                        const ValidatedPreauthenticatedUploadUrl& uploadUrl,
+                                                        std::span<const HttpHeader> headers,
+                                                        const std::byte* bodyBytes,
+                                                        size_t bodySizeBytes,
+                                                        bool allowRetry,
+                                                        HttpResponse& responseOut) noexcept
+{
+    if (uploadUrl.empty())
     {
-        return HRESULT_FROM_WIN32(GetLastError());
+        return E_INVALIDARG;
     }
-
-    const DWORD requestFlags = (components.nScheme == INTERNET_SCHEME_HTTPS) ? WINHTTP_FLAG_SECURE : 0;
-    wil::unique_winhttp_hinternet request(
-        WinHttpOpenRequest(connection.get(), L"GET", pathAndQuery.c_str(), nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, requestFlags));
-    if (! request)
-    {
-        return HRESULT_FROM_WIN32(GetLastError());
-    }
-
-    const int timeoutMs = static_cast<int>(std::min<uint32_t>(settings.requestTimeoutMs, static_cast<uint32_t>((std::numeric_limits<int>::max)())));
-    const int connectMs = static_cast<int>(std::min<uint32_t>(settings.connectTimeoutMs, static_cast<uint32_t>((std::numeric_limits<int>::max)())));
-    static_cast<void>(WinHttpSetTimeouts(request.get(), connectMs, connectMs, timeoutMs, timeoutMs));
-
-    std::wstring headers;
-    if (bearerToken && bearerToken[0] != '\0')
-    {
-        headers = L"Authorization: Bearer ";
-        headers.append(Utf16FromUtf8(bearerToken));
-        headers.append(L"\r\n");
-    }
-
-    if (WinHttpSendRequest(request.get(),
-                           headers.empty() ? WINHTTP_NO_ADDITIONAL_HEADERS : headers.c_str(),
-                           headers.empty() ? 0u : static_cast<DWORD>(headers.size()),
-                           WINHTTP_NO_REQUEST_DATA,
-                           0,
-                           0,
-                           0) == 0)
-    {
-        return HRESULT_FROM_WIN32(GetLastError());
-    }
-
-    if (WinHttpReceiveResponse(request.get(), nullptr) == 0)
-    {
-        return HRESULT_FROM_WIN32(GetLastError());
-    }
-
-    DWORD statusCode = 0;
-    DWORD statusSize = sizeof(statusCode);
-    if (WinHttpQueryHeaders(request.get(),
-                            WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
-                            WINHTTP_HEADER_NAME_BY_INDEX,
-                            &statusCode,
-                            &statusSize,
-                            WINHTTP_NO_HEADER_INDEX) == 0)
-    {
-        return HRESULT_FROM_WIN32(GetLastError());
-    }
-
-    responseOut.statusCode = statusCode;
-    responseOut.requestId  = QueryStringHeader(request.get(), WINHTTP_QUERY_CUSTOM, L"request-id");
-    responseOut.body.clear();
-
-    std::array<std::byte, 64 * 1024> buffer{};
-    while (true)
-    {
-        DWORD read = 0;
-        if (WinHttpReadData(request.get(), buffer.data(), static_cast<DWORD>(buffer.size()), &read) == 0)
-        {
-            return HRESULT_FROM_WIN32(GetLastError());
-        }
-
-        if (read == 0)
-        {
-            break;
-        }
-
-        if (statusCode >= 200u && statusCode < 300u)
-        {
-            const HRESULT writeHr = WriteBufferToFile(file, buffer.data(), read);
-            if (FAILED(writeHr))
-            {
-                return writeHr;
-            }
-        }
-        else
-        {
-            responseOut.body.append(reinterpret_cast<const char*>(buffer.data()), read);
-        }
-    }
-
-    return S_OK;
+    return SendHttpRequest(
+        settings, method, uploadUrl.value, nullptr, headers, bodyBytes, bodySizeBytes, nullptr, allowRetry, true, responseOut);
 }
 
 [[nodiscard]] HRESULT HresultFromGraphError(DWORD statusCode, std::string_view bodyUtf8) noexcept
@@ -2226,8 +2410,17 @@ void LogAndSleepBeforeGraphRetry(std::wstring_view method, std::wstring_view url
     };
 
     HttpResponse response{};
-    const HRESULT hr = SendHttpRequest(
-        settings, L"POST", url, nullptr, headers, reinterpret_cast<const std::byte*>(formUtf8.data()), formUtf8.size(), nullptr, true, response);
+    const HRESULT hr = SendHttpRequest(settings,
+                                       L"POST",
+                                       url,
+                                       nullptr,
+                                       headers,
+                                       reinterpret_cast<const std::byte*>(formUtf8.data()),
+                                       formUtf8.size(),
+                                       nullptr,
+                                       true,
+                                       false,
+                                       response);
     if (FAILED(hr))
     {
         return hr;
@@ -3158,9 +3351,9 @@ void AddJsonScalarFields(yyjson_mut_doc* doc, yyjson_mut_val* fields, yyjson_val
     return S_OK;
 }
 
-[[nodiscard]] HRESULT ParseUploadUrl(std::string_view bodyUtf8, std::wstring& uploadUrlOut) noexcept
+[[nodiscard]] HRESULT ParseUploadUrl(std::string_view bodyUtf8, ValidatedPreauthenticatedUploadUrl& uploadUrlOut) noexcept
 {
-    uploadUrlOut.clear();
+    SecureClear(uploadUrlOut.value);
 
     yyjson_doc* doc = yyjson_read(bodyUtf8.data(), bodyUtf8.size(), YYJSON_READ_ALLOW_BOM);
     if (! doc)
@@ -3175,8 +3368,77 @@ void AddJsonScalarFields(yyjson_mut_doc* doc, yyjson_mut_val* fields, yyjson_val
         return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
 
-    uploadUrlOut = TryGetJsonString(root, "uploadUrl").value_or(L"");
-    return uploadUrlOut.empty() ? HRESULT_FROM_WIN32(ERROR_INVALID_DATA) : S_OK;
+    std::wstring rawUploadUrl = TryGetJsonString(root, "uploadUrl").value_or(L"");
+    auto clearRawUploadUrl    = wil::scope_exit([&] { SecureClear(rawUploadUrl); });
+    if (rawUploadUrl.empty())
+    {
+        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+    }
+    return ValidatePreauthenticatedUploadUrl(rawUploadUrl, uploadUrlOut);
+}
+
+[[nodiscard]] HRESULT ParseNextExpectedUploadOffset(std::string_view bodyUtf8, uint64_t totalBytes, uint64_t& offsetOut) noexcept
+{
+    offsetOut = 0u;
+    yyjson_doc* doc = yyjson_read(bodyUtf8.data(), bodyUtf8.size(), YYJSON_READ_ALLOW_BOM);
+    if (! doc)
+    {
+        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+    }
+    Common::Json::UniqueDocument docOwner{doc};
+
+    yyjson_val* root = yyjson_doc_get_root(doc);
+    yyjson_val* ranges = root && yyjson_is_obj(root) ? yyjson_obj_get(root, "nextExpectedRanges") : nullptr;
+    if (! ranges || ! yyjson_is_arr(ranges) || yyjson_arr_size(ranges) == 0u)
+    {
+        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+    }
+
+    bool foundOffset  = false;
+    uint64_t minimum  = (std::numeric_limits<uint64_t>::max)();
+    size_t index      = 0u;
+    size_t max        = 0u;
+    yyjson_val* value = nullptr;
+    yyjson_arr_foreach(ranges, index, max, value)
+    {
+        if (! value || ! yyjson_is_str(value))
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+        const std::string_view range(yyjson_get_str(value), yyjson_get_len(value));
+        const size_t dash = range.find('-');
+        if (dash == std::string_view::npos || dash == 0u || range.find('-', dash + 1u) != std::string_view::npos)
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+
+        uint64_t start = 0u;
+        const auto startResult = std::from_chars(range.data(), range.data() + dash, start);
+        if (startResult.ec != std::errc{} || startResult.ptr != range.data() + dash || start >= totalBytes)
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+
+        if (dash + 1u < range.size())
+        {
+            uint64_t end = 0u;
+            const auto endResult = std::from_chars(range.data() + dash + 1u, range.data() + range.size(), end);
+            if (endResult.ec != std::errc{} || endResult.ptr != range.data() + range.size() || end < start || end >= totalBytes)
+            {
+                return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+            }
+        }
+
+        minimum   = (std::min)(minimum, start);
+        foundOffset = true;
+    }
+
+    if (! foundOffset)
+    {
+        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+    }
+    offsetOut = minimum;
+    return S_OK;
 }
 
 [[nodiscard]] HRESULT BuildDriveContext(FileSystemMicrosoftDrive& fs, std::wstring_view rawPath, DriveContext& contextOut) noexcept
@@ -3245,16 +3507,16 @@ void AddJsonScalarFields(yyjson_mut_doc* doc, yyjson_mut_val* fields, yyjson_val
     if (fs.Mode() == FileSystemMicrosoftDriveMode::OneDrivePersonal || fs.Mode() == FileSystemMicrosoftDriveMode::OneDriveBusiness)
     {
         HttpResponse response{};
-        hr = SendHttpRequest(fs.SnapshotSettings(),
-                             L"GET",
-                             std::format(L"{}/me/drive?$select=id,name,webUrl", kGraphBaseUrl),
-                             accessToken.c_str(),
-                             headers,
-                             nullptr,
-                             0,
-                             nullptr,
-                             true,
-                             response);
+        hr = SendAuthenticatedGraphHttpRequest(fs.SnapshotSettings(),
+                                               L"GET",
+                                               std::format(L"{}/me/drive?$select=id,name,webUrl", kGraphBaseUrl),
+                                               accessToken.c_str(),
+                                               headers,
+                                               nullptr,
+                                               0,
+                                               nullptr,
+                                               true,
+                                               response);
         if (FAILED(hr))
         {
             return hr;
@@ -3292,7 +3554,8 @@ void AddJsonScalarFields(yyjson_mut_doc* doc, yyjson_mut_val* fields, yyjson_val
         }
 
         HttpResponse siteResponse{};
-        hr = SendHttpRequest(fs.SnapshotSettings(), L"GET", siteUrl, accessToken.c_str(), headers, nullptr, 0, nullptr, true, siteResponse);
+        hr = SendAuthenticatedGraphHttpRequest(
+            fs.SnapshotSettings(), L"GET", siteUrl, accessToken.c_str(), headers, nullptr, 0, nullptr, true, siteResponse);
         if (FAILED(hr))
         {
             return hr;
@@ -3314,7 +3577,8 @@ void AddJsonScalarFields(yyjson_mut_doc* doc, yyjson_mut_val* fields, yyjson_val
                                           : std::format(L"{}/sites/{}/drive?$select=id,name,webUrl", kGraphBaseUrl, PercentEncodeUtf8(contextOut.siteId));
 
         HttpResponse driveResponse{};
-        hr = SendHttpRequest(fs.SnapshotSettings(), L"GET", driveUrl, accessToken.c_str(), headers, nullptr, 0, nullptr, true, driveResponse);
+        hr = SendAuthenticatedGraphHttpRequest(
+            fs.SnapshotSettings(), L"GET", driveUrl, accessToken.c_str(), headers, nullptr, 0, nullptr, true, driveResponse);
         if (FAILED(hr))
         {
             return hr;
@@ -3371,16 +3635,16 @@ void AddJsonScalarFields(yyjson_mut_doc* doc, yyjson_mut_val* fields, yyjson_val
             headers.push_back(header);
         }
 
-        hr = SendHttpRequest(fs.SnapshotSettings(),
-                             method,
-                             url,
-                             accessToken.c_str(),
-                             headers,
-                             bodyUtf8.empty() ? nullptr : reinterpret_cast<const std::byte*>(bodyUtf8.data()),
-                             bodyUtf8.size(),
-                             nullptr,
-                             allowRetry,
-                             responseOut);
+        hr = SendAuthenticatedGraphHttpRequest(fs.SnapshotSettings(),
+                                               method,
+                                               url,
+                                               accessToken.c_str(),
+                                               headers,
+                                               bodyUtf8.empty() ? nullptr : reinterpret_cast<const std::byte*>(bodyUtf8.data()),
+                                               bodyUtf8.size(),
+                                               nullptr,
+                                               allowRetry,
+                                               responseOut);
         if (FAILED(hr))
         {
             return hr;
@@ -3410,12 +3674,7 @@ void AddJsonScalarFields(yyjson_mut_doc* doc, yyjson_mut_val* fields, yyjson_val
 
     if (response.statusCode < 200u || response.statusCode >= 300u)
     {
-        Debug::Warning(L"Microsoft Drive: item metadata request failed. connection='{}' drivePath='{}' status={} requestId='{}' url='{}'",
-                       context.connectionName,
-                       std::wstring(drivePath),
-                       response.statusCode,
-                       response.requestId.empty() ? std::wstring_view(L"<none>") : std::wstring_view(response.requestId),
-                       url);
+        LogHttpResponseFailure(L"GET", url, response.statusCode, response.requestId, response.body.size());
         return HresultFromGraphError(response.statusCode, response.body);
     }
 
@@ -3426,7 +3685,8 @@ void AddJsonScalarFields(yyjson_mut_doc* doc, yyjson_mut_val* fields, yyjson_val
                                     const DriveContext& context,
                                     std::wstring_view drivePath,
                                     std::vector<FilesInformationMicrosoftDrive::Entry>& entriesOut,
-                                    bool* incompleteDueToInvalidChildNameOut = nullptr) noexcept
+                                    bool* incompleteDueToInvalidChildNameOut = nullptr,
+                                    const std::function<HRESULT()>& checkCancel = {}) noexcept
 {
     entriesOut.clear();
     if (incompleteDueToInvalidChildNameOut)
@@ -3436,8 +3696,33 @@ void AddJsonScalarFields(yyjson_mut_doc* doc, yyjson_mut_val* fields, yyjson_val
 
     const FileSystemMicrosoftDrive::Settings settings = fs.SnapshotSettings();
     std::wstring nextUrl                              = BuildGraphChildrenUrl(context, drivePath, settings.pageSize);
+    auto clearNextUrl                                 = wil::scope_exit([&] { SecureClear(nextUrl); });
+    const uint64_t nowTickMs = GetTickCount64();
+    const uint64_t pagingDurationMs = std::clamp<uint64_t>(static_cast<uint64_t>(settings.requestTimeoutMs) * 10ull, 60'000ull, 600'000ull);
+    Common::Paging::Limits pagingLimits{
+        .deadlineTickMs = Common::Paging::DeadlineFromNow(nowTickMs, pagingDurationMs),
+    };
+    if (checkCancel)
+    {
+        pagingLimits.cancellationProbe = [](void* cookie) noexcept -> HRESULT {
+            return (*static_cast<const std::function<HRESULT()>*>(cookie))();
+        };
+        pagingLimits.cancellationCookie = const_cast<std::function<HRESULT()>*>(&checkCancel);
+    }
+    Common::Paging::WideContinuationGuard pager(pagingLimits);
+    bool firstPage = true;
     while (! nextUrl.empty())
     {
+        const HRESULT pageBoundaryHr = firstPage ? pager.BeginFirstPage(nextUrl, GetTickCount64()) : pager.BeginContinuation(nextUrl, GetTickCount64());
+        firstPage = false;
+        if (FAILED(pageBoundaryHr))
+        {
+            Debug::Warning(L"Microsoft Drive: rejected bounded Graph pagination. method='GET' target='{}' hr=0x{:08X}.",
+                           DescribeHttpRequestTarget(nextUrl),
+                           static_cast<unsigned long>(pageBoundaryHr));
+            return pageBoundaryHr;
+        }
+
         HttpResponse response{};
         const HRESULT hr = SendGraphJsonRequest(fs, context, L"GET", nextUrl, {}, {}, true, response);
         if (FAILED(hr))
@@ -3447,17 +3732,13 @@ void AddJsonScalarFields(yyjson_mut_doc* doc, yyjson_mut_val* fields, yyjson_val
 
         if (response.statusCode < 200u || response.statusCode >= 300u)
         {
-            Debug::Warning(L"Microsoft Drive: directory listing request failed. connection='{}' drivePath='{}' status={} requestId='{}' url='{}'",
-                           context.connectionName,
-                           std::wstring(drivePath),
-                           response.statusCode,
-                           response.requestId.empty() ? std::wstring_view(L"<none>") : std::wstring_view(response.requestId),
-                           nextUrl);
+            LogHttpResponseFailure(L"GET", nextUrl, response.statusCode, response.requestId, response.body.size());
             return HresultFromGraphError(response.statusCode, response.body);
         }
 
         std::vector<FilesInformationMicrosoftDrive::Entry> pageEntries;
         std::wstring nextLink;
+        auto clearNextLink = wil::scope_exit([&] { SecureClear(nextLink); });
         bool pageIncompleteDueToInvalidChildName = false;
         const HRESULT parseHr                    = ParseChildren(response.body, pageEntries, nextLink, &pageIncompleteDueToInvalidChildName);
         if (FAILED(parseHr))
@@ -3469,7 +3750,15 @@ void AddJsonScalarFields(yyjson_mut_doc* doc, yyjson_mut_val* fields, yyjson_val
             *incompleteDueToInvalidChildNameOut = true;
         }
 
+        const HRESULT pageHr = pager.CompletePage(pageEntries.size(), response.body.size(), ! nextLink.empty(), nextLink, GetTickCount64());
+        if (FAILED(pageHr))
+        {
+            Debug::Warning(L"Microsoft Drive: rejected invalid or oversized Graph page sequence. hr=0x{:08X}.", static_cast<unsigned long>(pageHr));
+            return pageHr;
+        }
+
         entriesOut.insert(entriesOut.end(), std::make_move_iterator(pageEntries.begin()), std::make_move_iterator(pageEntries.end()));
+        SecureClear(nextUrl);
         nextUrl = std::move(nextLink);
     }
 
@@ -3670,6 +3959,13 @@ void AddJsonScalarFields(yyjson_mut_doc* doc, yyjson_mut_val* fields, yyjson_val
 using MoveIssueReporter = std::function<HRESULT(const wchar_t*, const wchar_t*, HRESULT, FileSystemIssueAction&)>;
 using CancelProbe       = std::function<HRESULT()>;
 
+struct MoveCommitResult
+{
+    bool primaryMutationCommitted = false;
+    HRESULT cleanupStatus         = S_OK;
+    HRESULT rollbackStatus        = S_OK;
+};
+
 inline constexpr unsigned int kMicrosoftDriveMergeMaxDepth = 64u;
 
 [[nodiscard]] HRESULT MoveOrRenameItem(FileSystemMicrosoftDrive& fs,
@@ -3680,7 +3976,8 @@ inline constexpr unsigned int kMicrosoftDriveMergeMaxDepth = 64u;
                                        FileSystemFlags flags,
                                        const MoveIssueReporter& reportIssue = {},
                                        bool allowDirectoryMerge             = true,
-                                       const CancelProbe& checkCancel       = {}) noexcept;
+                                       const CancelProbe& checkCancel       = {},
+                                       MoveCommitResult* commitResultOut    = nullptr) noexcept;
 
 [[nodiscard]] bool IsMergeChildPartialFailure(HRESULT hr) noexcept
 {
@@ -3689,8 +3986,9 @@ inline constexpr unsigned int kMicrosoftDriveMergeMaxDepth = 64u;
 
 // Moves every child of sourceFolderPath into the existing destinationFolderPath (server-side
 // moves), recursing where both sides have a folder of the same name. Collisions are resolved
-// per child via reportIssue; skipped children keep the source folder alive and the move ends
-// as a partial ("source preserved").
+// per child via reportIssue. The source folder is always retained after a successful merge
+// because Graph has no atomic "delete only if still empty" operation; this prevents deleting
+// a child added concurrently after the merge listing.
 [[nodiscard]] HRESULT MergeMoveFolderIntoExisting(FileSystemMicrosoftDrive& fs,
                                                   const DriveContext& sourceContext,
                                                   const DriveContext& destinationContext,
@@ -3721,7 +4019,7 @@ inline constexpr unsigned int kMicrosoftDriveMergeMaxDepth = 64u;
 
     std::vector<FilesInformationMicrosoftDrive::Entry> children;
     bool sourceEnumerationIncomplete = false;
-    HRESULT hr                       = ListDirectory(fs, sourceContext, sourceFolderPath, children, &sourceEnumerationIncomplete);
+    HRESULT hr                       = ListDirectory(fs, sourceContext, sourceFolderPath, children, &sourceEnumerationIncomplete, checkCancel);
     if (FAILED(hr))
     {
         return hr;
@@ -3896,49 +4194,11 @@ inline constexpr unsigned int kMicrosoftDriveMergeMaxDepth = 64u;
         }
     }
 
-    // Re-confirm the source folder actually drained before issuing the RECURSIVE id-delete below.
-    // `allChildrenMoved` is derived from the single up-front enumeration snapshot, but Graph child
-    // enumeration is eventually consistent and the folder can be mutated concurrently by another
-    // client. A fresh, COMPLETE, EMPTY re-list greatly narrows the chance that DeleteItemById sweeps away
-    // a child that was omitted from the original snapshot or added after it. If anything remains (or the
-    // re-list itself is incomplete), leave the source in place and report the merge as partial rather
-    // than risk destroying the only copy of an unmoved file.
-    //
-    // KNOWN RESIDUAL WINDOW (accepted, not yet closed): a child created by another client AFTER this re-list
-    // returns empty but BEFORE the recursive DeleteItemById runs would still be swept. The re-list shrinks
-    // the exposure from the whole move duration to this short interval. Fully closing it would require an
-    // if-empty / etag-conditioned or non-recursive delete that fails on a non-empty folder, which the Graph
-    // delete endpoint does not currently offer. The re-list guard's protective behavior (a child surfacing
-    // on re-list blocks the source delete) is locked in by RunDebugReListGuardBlocksConcurrentChildSelfTest.
-    std::vector<FilesInformationMicrosoftDrive::Entry> remainingChildren;
-    bool reListIncomplete = false;
-    hr                    = ListDirectory(fs, sourceContext, sourceFolderPath, remainingChildren, &reListIncomplete);
-    if (FAILED(hr))
-    {
-        return hr;
-    }
-    if (reListIncomplete || ! remainingChildren.empty())
-    {
-        anySkipped = true;
-        return S_OK; // do NOT delete a source folder we cannot prove is empty
-    }
-
-    ItemMetadata sourceFolder{};
-    hr = GetItemMetadata(fs, sourceContext, sourceFolderPath, false, sourceFolder);
-    if (SUCCEEDED(hr))
-    {
-        hr = DeleteItemById(fs, sourceContext, sourceFolder.id);
-        if (FAILED(hr))
-        {
-            return hr;
-        }
-    }
-    else if (! IsNotFoundStatus(hr))
-    {
-        return hr;
-    }
-
-    subtreeFullyMovedOut = true;
+    // Graph item DELETE is recursive and this provider has no atomic "delete only if still empty"
+    // primitive. Even an immediately preceding empty re-list leaves a race in which another client can
+    // add a child before DELETE. Keep the drained source folder and report partial cleanup; this is less
+    // convenient than a perfect folder MOVE, but it cannot erase a concurrently-added child's only copy.
+    anySkipped = true;
     return S_OK;
 }
 
@@ -3950,8 +4210,13 @@ inline constexpr unsigned int kMicrosoftDriveMergeMaxDepth = 64u;
                                        FileSystemFlags flags,
                                        const MoveIssueReporter& reportIssue,
                                        bool allowDirectoryMerge,
-                                       const CancelProbe& checkCancel) noexcept
+                                       const CancelProbe& checkCancel,
+                                       MoveCommitResult* commitResultOut) noexcept
 {
+    if (commitResultOut)
+    {
+        *commitResultOut = {};
+    }
     if (! OrdinalString::EqualsNoCase(sourceContext.connectionName, destinationContext.connectionName) ||
         ! OrdinalString::EqualsNoCase(sourceContext.driveId, destinationContext.driveId))
     {
@@ -4048,6 +4313,10 @@ inline constexpr unsigned int kMicrosoftDriveMergeMaxDepth = 64u;
         if (! backupItemId.empty())
         {
             const HRESULT restoreHr = MoveItemById(fs, destinationContext, backupItemId, destinationName, {}, false);
+            if (commitResultOut)
+            {
+                commitResultOut->rollbackStatus = restoreHr;
+            }
             return FAILED(restoreHr) ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : hr;
         }
         return hr;
@@ -4062,6 +4331,10 @@ inline constexpr unsigned int kMicrosoftDriveMergeMaxDepth = 64u;
             if (! backupItemId.empty())
             {
                 const HRESULT restoreHr = MoveItemById(fs, destinationContext, backupItemId, destinationName, {}, false);
+                if (commitResultOut)
+                {
+                    commitResultOut->rollbackStatus = restoreHr;
+                }
                 return FAILED(restoreHr) ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : hr;
             }
             return hr;
@@ -4073,9 +4346,18 @@ inline constexpr unsigned int kMicrosoftDriveMergeMaxDepth = 64u;
         if (! backupItemId.empty())
         {
             const HRESULT restoreHr = MoveItemById(fs, destinationContext, backupItemId, destinationName, {}, false);
+            if (commitResultOut)
+            {
+                commitResultOut->rollbackStatus = restoreHr;
+            }
             return FAILED(restoreHr) ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : hr;
         }
         return hr;
+    }
+
+    if (commitResultOut)
+    {
+        commitResultOut->primaryMutationCommitted = true;
     }
 
     if (! backupItemId.empty())
@@ -4083,7 +4365,13 @@ inline constexpr unsigned int kMicrosoftDriveMergeMaxDepth = 64u;
         const HRESULT cleanupHr = DeleteItemById(fs, destinationContext, backupItemId);
         if (FAILED(cleanupHr))
         {
-            return cleanupHr;
+            if (commitResultOut)
+            {
+                commitResultOut->cleanupStatus = cleanupHr;
+            }
+            Debug::Warning(L"Microsoft Drive: move committed but overwrite-backup cleanup remains pending. hr=0x{:08X}.",
+                           static_cast<unsigned long>(cleanupHr));
+            return S_OK;
         }
     }
 
@@ -4370,7 +4658,7 @@ private:
             const std::span<const HttpHeader> requestHeaders(headers.data(), _eTag.empty() ? 2u : headers.size());
 
             HttpResponse response{};
-            hr = SendHttpRequest(_settings, L"GET", _downloadUrl, nullptr, requestHeaders, nullptr, 0, nullptr, true, response);
+            hr = SendHttpRequest(_settings, L"GET", _downloadUrl, nullptr, requestHeaders, nullptr, 0, nullptr, true, false, response);
             if (FAILED(hr))
             {
                 Debug::Warning(L"Microsoft Drive: ranged download request failed. connection='{}' drivePath='{}' offset={} bytes={} hr=0x{:08X}",
@@ -4574,7 +4862,7 @@ private:
         }
 
         HttpResponse response{};
-        const HRESULT hr = SendHttpRequest(_streamSettings, L"DELETE", _uploadUrl, nullptr, {}, nullptr, 0u, nullptr, false, response);
+        const HRESULT hr = SendPreauthenticatedUploadRequest(_streamSettings, L"DELETE", _uploadUrl, {}, nullptr, 0u, false, response);
         if (FAILED(hr) || (response.statusCode < 200u || response.statusCode >= 300u) && response.statusCode != 404u)
         {
             Debug::Warning(L"Microsoft Drive: upload-session cleanup failed. destination='{}' hr=0x{:08X} status={}.",
@@ -4599,7 +4887,7 @@ private:
     uint64_t _expectedSize = 0;
     uint64_t _uploadedBytes = 0;
     FileSystemMicrosoftDrive::Settings _streamSettings;
-    std::wstring _uploadUrl;
+    ValidatedPreauthenticatedUploadUrl _uploadUrl;
     std::vector<std::byte> _uploadBuffer;
     size_t _uploadChunkBytes = 0;
     DWORD _lastUploadStatus = 0;
@@ -4765,70 +5053,52 @@ const char* FileSystemMicrosoftDrive::StaticConfigurationSchema(FileSystemMicros
 
 HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::SetConfiguration(const char* configurationJsonUtf8) noexcept
 {
-    std::lock_guard lock(_stateMutex);
+    Settings nextSettings{};
+    std::string nextConfiguration = "{}";
+    if (configurationJsonUtf8 != nullptr && configurationJsonUtf8[0] != '\0')
+    {
+        nextConfiguration = configurationJsonUtf8;
+        Common::Json::ObjectDocument parsed = Common::Json::ParseObjectDocument(nextConfiguration, YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM);
+        if (! parsed)
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
 
+        yyjson_val* root = parsed.root;
+        if (const auto value = TryGetJsonString(root, "clientId"); value.has_value())
+        {
+            nextSettings.clientId = value.value();
+        }
+        if (const auto value = TryGetJsonUInt(root, "connectTimeoutMs"); value.has_value() && value.value() >= 1u)
+        {
+            nextSettings.connectTimeoutMs = static_cast<uint32_t>((std::min)(value.value(), 600'000ull));
+        }
+        if (const auto value = TryGetJsonUInt(root, "requestTimeoutMs"); value.has_value() && value.value() >= 1u)
+        {
+            nextSettings.requestTimeoutMs = static_cast<uint32_t>((std::min)(value.value(), 600'000ull));
+        }
+        if (const auto value = TryGetJsonUInt(root, "pageSize"); value.has_value() && value.value() >= 1u)
+        {
+            nextSettings.pageSize = static_cast<uint32_t>((std::min)(value.value(), 999ull));
+        }
+        if (const auto value = TryGetJsonUInt(root, "uploadChunkMiB"); value.has_value() && value.value() >= 1u)
+        {
+            nextSettings.uploadChunkMiB = static_cast<uint32_t>((std::min)(value.value(), 32ull));
+        }
+    }
+
+    std::lock_guard lock(_stateMutex);
     for (auto& [key, token] : _tokenCacheByConnectionName)
     {
         SecureClear(token.accessToken);
     }
     _tokenCacheByConnectionName.clear();
     _driveCacheByConnectionName.clear();
-    _settings = {};
+    _settings = std::move(nextSettings);
 
-    // Write new configuration to the inactive buffer
-    const size_t nextIndex = 1 - _configurationJsonIndex;
-    if (! configurationJsonUtf8 || configurationJsonUtf8[0] == '\0')
-    {
-        _configurationJsonStorage[nextIndex] = "{}";
-        _configurationJsonIndex              = nextIndex;
-        return S_OK;
-    }
-
-    _configurationJsonStorage[nextIndex] = configurationJsonUtf8;
-
-    yyjson_read_err err{};
-    yyjson_doc* doc = yyjson_read_opts(
-        _configurationJsonStorage[nextIndex].data(), _configurationJsonStorage[nextIndex].size(), YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM, nullptr, &err);
-    if (! doc)
-    {
-        _configurationJsonIndex = nextIndex;
-        return S_OK;
-    }
-    Common::Json::UniqueDocument docOwner{doc};
-
-    yyjson_val* root = yyjson_doc_get_root(doc);
-    if (! root || ! yyjson_is_obj(root))
-    {
-        _configurationJsonIndex = nextIndex;
-        return S_OK;
-    }
-
-    if (const auto value = TryGetJsonString(root, "clientId"); value.has_value())
-    {
-        _settings.clientId = value.value();
-    }
-
-    if (const auto value = TryGetJsonUInt(root, "connectTimeoutMs"); value.has_value() && value.value() >= 1u)
-    {
-        _settings.connectTimeoutMs = static_cast<uint32_t>(std::min<uint64_t>(value.value(), 600'000ull));
-    }
-
-    if (const auto value = TryGetJsonUInt(root, "requestTimeoutMs"); value.has_value() && value.value() >= 1u)
-    {
-        _settings.requestTimeoutMs = static_cast<uint32_t>(std::min<uint64_t>(value.value(), 600'000ull));
-    }
-
-    if (const auto value = TryGetJsonUInt(root, "pageSize"); value.has_value() && value.value() >= 1u)
-    {
-        _settings.pageSize = static_cast<uint32_t>(std::min<uint64_t>(value.value(), 999ull));
-    }
-
-    if (const auto value = TryGetJsonUInt(root, "uploadChunkMiB"); value.has_value() && value.value() >= 1u)
-    {
-        _settings.uploadChunkMiB = static_cast<uint32_t>(std::min<uint64_t>(value.value(), 32ull));
-    }
-
-    _configurationJsonIndex = nextIndex;
+    const size_t nextIndex               = 1u - _configurationJsonIndex;
+    _configurationJsonStorage[nextIndex] = std::move(nextConfiguration);
+    _configurationJsonIndex              = nextIndex;
     return S_OK;
 }
 
@@ -6098,6 +6368,7 @@ HRESULT MicrosoftDriveFileWriter::InitializeStreamingUpload() noexcept
     }
 
     HttpResponse sessionResponse{};
+    auto clearSessionResponseBody = wil::scope_exit([&] { SecureClear(sessionResponse.body); });
     hr = SendGraphJsonRequest(*_fileSystem, context, L"POST", BuildGraphCreateUploadSessionUrl(context, normalizedPath), bodyUtf8, {}, false, sessionResponse);
     if (FAILED(hr))
     {
@@ -6130,49 +6401,63 @@ HRESULT MicrosoftDriveFileWriter::InitializeStreamingUpload() noexcept
 
 HRESULT MicrosoftDriveFileWriter::FlushStreamingChunk() noexcept
 {
-    if (_uploadBuffer.empty())
+    unsigned int partialAcknowledgements = 0u;
+    while (! _uploadBuffer.empty())
     {
-        return S_OK;
-    }
-    if (! _streamInitialized || _uploadedBytes > _expectedSize || _uploadBuffer.size() > (_expectedSize - _uploadedBytes))
-    {
-        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
-    }
+        if (! _streamInitialized || _uploadedBytes > _expectedSize || _uploadBuffer.size() > (_expectedSize - _uploadedBytes))
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
 
-    const uint64_t chunkSize = static_cast<uint64_t>(_uploadBuffer.size());
-    const uint64_t endOffset = _uploadedBytes + chunkSize - 1u;
-    const std::array<HttpHeader, 3> headers = {
-        HttpHeader{L"Accept", L"application/json"},
-        HttpHeader{L"Content-Length", std::format(L"{}", chunkSize)},
-        HttpHeader{L"Content-Range", std::format(L"bytes {}-{}/{}", _uploadedBytes, endOffset, _expectedSize)},
-    };
+        const uint64_t chunkSize = static_cast<uint64_t>(_uploadBuffer.size());
+        const uint64_t endOffset = _uploadedBytes + chunkSize - 1u;
+        const std::array<HttpHeader, 3> headers = {
+            HttpHeader{L"Accept", L"application/json"},
+            HttpHeader{L"Content-Length", std::format(L"{}", chunkSize)},
+            HttpHeader{L"Content-Range", std::format(L"bytes {}-{}/{}", _uploadedBytes, endOffset, _expectedSize)},
+        };
 
-    HttpResponse uploadResponse{};
-    HRESULT hr = SendHttpRequest(_streamSettings,
-                                 L"PUT",
-                                 _uploadUrl,
-                                 nullptr,
-                                 headers,
-                                 _uploadBuffer.data(),
-                                 _uploadBuffer.size(),
-                                 nullptr,
-                                 true,
-                                 uploadResponse);
-    if (FAILED(hr))
-    {
-        return hr;
+        HttpResponse uploadResponse{};
+        HRESULT hr = SendPreauthenticatedUploadRequest(
+            _streamSettings, L"PUT", _uploadUrl, headers, _uploadBuffer.data(), _uploadBuffer.size(), true, uploadResponse);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        const bool isFinal = endOffset + 1u == _expectedSize;
+        if (uploadResponse.statusCode == 200u || uploadResponse.statusCode == 201u)
+        {
+            if (! isFinal)
+            {
+                return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+            }
+            _lastUploadStatus = uploadResponse.statusCode;
+            _uploadedBytes += chunkSize;
+            _uploadBuffer.clear();
+            break;
+        }
+        if (uploadResponse.statusCode != 202u)
+        {
+            return HresultFromGraphError(uploadResponse.statusCode, uploadResponse.body);
+        }
+
+        uint64_t nextOffset = 0u;
+        hr = ParseNextExpectedUploadOffset(uploadResponse.body, _expectedSize, nextOffset);
+        if (FAILED(hr) || nextOffset <= _uploadedBytes || nextOffset > endOffset + 1u)
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+        if (nextOffset < endOffset + 1u && ++partialAcknowledgements > 16u)
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+
+        const size_t acceptedBytes = static_cast<size_t>(nextOffset - _uploadedBytes);
+        _uploadedBytes             = nextOffset;
+        _lastUploadStatus          = uploadResponse.statusCode;
+        _uploadBuffer.erase(_uploadBuffer.begin(), _uploadBuffer.begin() + static_cast<std::ptrdiff_t>(acceptedBytes));
     }
-
-    const bool isFinal = endOffset + 1u == _expectedSize;
-    if ((! isFinal && uploadResponse.statusCode != 202u) ||
-        (isFinal && uploadResponse.statusCode != 200u && uploadResponse.statusCode != 201u))
-    {
-        return HresultFromGraphError(uploadResponse.statusCode, uploadResponse.body);
-    }
-
-    _lastUploadStatus = uploadResponse.statusCode;
-    _uploadedBytes += chunkSize;
-    _uploadBuffer.clear();
     return S_OK;
 }
 
@@ -6233,16 +6518,16 @@ HRESULT MicrosoftDriveFileWriter::UploadSimple(const DriveContext& context, std:
     }
 
     HttpResponse response{};
-    hr = SendHttpRequest(_fileSystem->SnapshotSettings(),
-                         L"PUT",
-                         BuildGraphUploadContentUrl(context, drivePath),
-                         accessToken.c_str(),
-                         headers,
-                         nullptr,
-                         static_cast<size_t>(fileSize),
-                         _tempFile.get(),
-                         true,
-                         response);
+    hr = SendAuthenticatedGraphHttpRequest(_fileSystem->SnapshotSettings(),
+                                           L"PUT",
+                                           BuildGraphUploadContentUrl(context, drivePath),
+                                           accessToken.c_str(),
+                                           headers,
+                                           nullptr,
+                                           static_cast<size_t>(fileSize),
+                                           _tempFile.get(),
+                                           true,
+                                           response);
     if (FAILED(hr))
     {
         return hr;
@@ -6261,6 +6546,7 @@ HRESULT MicrosoftDriveFileWriter::UploadWithSession(const DriveContext& context,
     }
 
     HttpResponse sessionResponse{};
+    auto clearSessionResponseBody = wil::scope_exit([&] { SecureClear(sessionResponse.body); });
     hr = SendGraphJsonRequest(*_fileSystem, context, L"POST", BuildGraphCreateUploadSessionUrl(context, drivePath), bodyUtf8, {}, false, sessionResponse);
     if (FAILED(hr))
     {
@@ -6271,7 +6557,7 @@ HRESULT MicrosoftDriveFileWriter::UploadWithSession(const DriveContext& context,
         return HresultFromGraphError(sessionResponse.statusCode, sessionResponse.body);
     }
 
-    std::wstring uploadUrl;
+    ValidatedPreauthenticatedUploadUrl uploadUrl{};
     hr = ParseUploadUrl(sessionResponse.body, uploadUrl);
     if (FAILED(hr))
     {
@@ -6291,9 +6577,9 @@ HRESULT MicrosoftDriveFileWriter::UploadWithSession(const DriveContext& context,
         return hr;
     }
 
-    DWORD lastStatus = 0;
     std::vector<std::byte> buffer(static_cast<size_t>(chunkBytes));
     uint64_t offset = 0;
+    unsigned int partialAcknowledgements = 0u;
     while (offset < fileSize)
     {
         const uint64_t remaining = fileSize - offset;
@@ -6317,22 +6603,52 @@ HRESULT MicrosoftDriveFileWriter::UploadWithSession(const DriveContext& context,
         };
 
         HttpResponse uploadResponse{};
-        hr = SendHttpRequest(settings, L"PUT", uploadUrl, nullptr, headers, buffer.data(), read, nullptr, true, uploadResponse);
+        hr = SendPreauthenticatedUploadRequest(settings, L"PUT", uploadUrl, headers, buffer.data(), read, true, uploadResponse);
         if (FAILED(hr))
         {
             return hr;
         }
 
-        lastStatus = uploadResponse.statusCode;
-        if (lastStatus != 200u && lastStatus != 201u && lastStatus != 202u)
+        if (uploadResponse.statusCode == 200u || uploadResponse.statusCode == 201u)
         {
-            return HresultFromGraphError(lastStatus, uploadResponse.body);
+            return endOffset + 1u == fileSize ? S_OK : HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+        if (uploadResponse.statusCode != 202u)
+        {
+            return HresultFromGraphError(uploadResponse.statusCode, uploadResponse.body);
         }
 
-        offset += static_cast<uint64_t>(read);
+        uint64_t nextOffset = 0u;
+        hr = ParseNextExpectedUploadOffset(uploadResponse.body, fileSize, nextOffset);
+        if (FAILED(hr) || nextOffset <= offset || nextOffset > endOffset + 1u)
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+        if (nextOffset < endOffset + 1u)
+        {
+            if (++partialAcknowledgements > 16u)
+            {
+                return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+            }
+        }
+        else
+        {
+            partialAcknowledgements = 0u;
+        }
+
+        offset = nextOffset;
+        if (offset != endOffset + 1u)
+        {
+            LARGE_INTEGER position{};
+            position.QuadPart = static_cast<LONGLONG>(offset);
+            if (SetFilePointerEx(_tempFile.get(), position, nullptr, FILE_BEGIN) == FALSE)
+            {
+                return HRESULT_FROM_WIN32(GetLastError());
+            }
+        }
     }
 
-    return (lastStatus == 200u || lastStatus == 201u) ? S_OK : HRESULT_FROM_WIN32(ERROR_GEN_FAILURE);
+    return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
 }
 
 HRESULT MicrosoftDriveFileWriter::Commit() noexcept
@@ -6853,6 +7169,11 @@ public:
         return item ? item->id : std::wstring{};
     }
 
+    [[nodiscard]] bool HasItemId(std::wstring_view id) const noexcept
+    {
+        return FindById(id) != nullptr;
+    }
+
     [[nodiscard]] bool HasExactLeafName(std::wstring_view path, std::wstring_view expectedName) noexcept
     {
         const DebugDriveItem* item = FindByPath(path);
@@ -7311,12 +7632,13 @@ void RunDebugPatchRetryMergeSelfTest(unsigned int& passed, unsigned int& failed)
     DebugFlagScope noRetrySleep(g_debugMicrosoftDriveSuppressRetrySleepForSelfTest, true);
 
     const HRESULT hr = MoveOrRenameItem(*fs, context, context, L"/src/Foo", L"/dst/Foo", FILESYSTEM_FLAG_RECURSIVE);
-    DebugCheck(hr == S_OK, L"throttled child PATCH merge should complete", passed, failed);
+    DebugCheck(hr == HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY), L"throttled child PATCH merge should retain the source folder as cleanup debt", passed, failed);
     DebugCheck(graph.CountRequests(L"PATCH") == 2u, L"throttled child PATCH should be attempted twice", passed, failed);
     DebugCheck(graph.AllRequestsAllowedRetry(L"PATCH"), L"PATCH Graph mutations should enable retry handling", passed, failed);
     DebugCheck(graph.Exists(L"/dst/Foo/child.txt", false), L"retried child move should land in destination", passed, failed);
     DebugCheck(! graph.Exists(L"/src/Foo/child.txt", false), L"retried child move should leave no source child behind", passed, failed);
-    DebugCheck(! graph.Exists(L"/src/Foo", true), L"fully moved source folder should be deleted", passed, failed);
+    DebugCheck(graph.Exists(L"/src/Foo", true), L"merged source folder should remain because Graph cannot delete it atomically only-if-empty", passed, failed);
+    DebugCheck(graph.CountRequests(L"DELETE") == 0u, L"directory merge should never issue recursive source-folder DELETE", passed, failed);
 }
 
 void RunDebugCaseOnlyRenameSelfTest(unsigned int& passed, unsigned int& failed)
@@ -7497,16 +7819,15 @@ void RunDebugEmptyNameChildBlocksSourceDeleteSelfTest(unsigned int& passed, unsi
     DebugCheck(graph.Exists(L"/dst/Foo/ok.txt", false), L"empty-name child merge should land valid siblings in destination", passed, failed);
 }
 
-struct ReListConcurrentAddContext final
+struct MergeConcurrentAddContext final
 {
-    DebugGraphDrive* graph       = nullptr;
-    unsigned int sourceChildGets = 0;
-    bool injected                = false;
+    DebugGraphDrive* graph = nullptr;
+    bool injected          = false;
 };
 
-// Wraps the standard graph hook and, on the SECOND children enumeration of the source folder (the drain
-// guard's re-list), injects a child as if another client added it concurrently after the up-front snapshot.
-[[nodiscard]] HRESULT ReListConcurrentAddHook(
+// Inject a new source child after the originally-enumerated child commits at the destination. The merge
+// must leave the source folder in place because Graph DELETE cannot atomically require it to remain empty.
+[[nodiscard]] HRESULT MergeConcurrentAddHook(
     void* cookie,
     std::wstring_view method,
     std::wstring_view url,
@@ -7515,29 +7836,22 @@ struct ReListConcurrentAddContext final
     bool allowRetry,
     HttpResponse& responseOut) noexcept
 {
-    auto* ctx = static_cast<ReListConcurrentAddContext*>(cookie);
+    auto* ctx = static_cast<MergeConcurrentAddContext*>(cookie);
     if (! ctx || ! ctx->graph)
     {
         return E_POINTER;
     }
 
-    if (OrdinalString::EqualsNoCase(method, L"GET") && url.find(L"/root:/src/Foo:/children") != std::wstring_view::npos)
+    const HRESULT hr = DebugGraphHook(ctx->graph, method, url, headers, bodyUtf8, allowRetry, responseOut);
+    if (SUCCEEDED(hr) && OrdinalString::EqualsNoCase(method, L"PATCH") && ! ctx->injected)
     {
-        ++ctx->sourceChildGets;
-        if (ctx->sourceChildGets == 2u && ! ctx->injected)
-        {
-            ctx->graph->AddFile(L"/src/Foo/late.txt");
-            ctx->injected = true;
-        }
+        ctx->graph->AddFile(L"/src/Foo/late.txt");
+        ctx->injected = true;
     }
-
-    return DebugGraphHook(ctx->graph, method, url, headers, bodyUtf8, allowRetry, responseOut);
+    return hr;
 }
 
-// Regression guard for the merge-move drain check: when the source folder looks drained on the up-front
-// snapshot but a child surfaces on the re-list (eventual consistency / concurrent add), the source folder
-// must NOT be recursively deleted, the late child must survive, and the merge must report a partial copy.
-void RunDebugReListGuardBlocksConcurrentChildSelfTest(unsigned int& passed, unsigned int& failed)
+void RunDebugMergeNeverRecursivelyDeletesSourceFolderSelfTest(unsigned int& passed, unsigned int& failed)
 {
     wil::com_ptr<FileSystemMicrosoftDrive> fs = MakeDebugFileSystem();
     if (! DebugCheck(static_cast<bool>(fs), L"debug selftest should allocate Microsoft Drive instance for re-list drain guard", passed, failed))
@@ -7550,22 +7864,22 @@ void RunDebugReListGuardBlocksConcurrentChildSelfTest(unsigned int& passed, unsi
     graph.AddFile(L"/src/Foo/ok.txt");
     graph.AddFolder(L"/dst/Foo");
 
-    ReListConcurrentAddContext injection{};
+    MergeConcurrentAddContext injection{};
     injection.graph = &graph;
 
-    DebugHttpRequestHookScope hook(ReListConcurrentAddHook, &injection);
+    DebugHttpRequestHookScope hook(MergeConcurrentAddHook, &injection);
     DebugFlagScope tokenBypass(g_debugMicrosoftDriveBypassAccessTokenForSelfTest, true);
     DebugFlagScope noRetrySleep(g_debugMicrosoftDriveSuppressRetrySleepForSelfTest, true);
 
     const HRESULT hr = MoveOrRenameItem(*fs, context, context, L"/src/Foo", L"/dst/Foo", FILESYSTEM_FLAG_RECURSIVE);
 
-    DebugCheck(injection.injected, L"re-list drain guard test should observe the second source enumeration (the re-list)", passed, failed);
-    DebugCheck(
-        hr == HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY), L"re-list drain guard should report a partial copy when a child surfaces on re-list", passed, failed);
-    DebugCheck(graph.Exists(L"/src/Foo", true), L"re-list drain guard should NOT delete a source folder that is non-empty on re-list", passed, failed);
-    DebugCheck(graph.Exists(L"/src/Foo/late.txt", false), L"re-list drain guard should preserve the concurrently-added child", passed, failed);
-    DebugCheck(graph.Exists(L"/dst/Foo/ok.txt", false), L"re-list drain guard should still move the originally enumerated child", passed, failed);
-    DebugCheck(! graph.Exists(L"/src/Foo/ok.txt", false), L"re-list drain guard should remove the moved child from the source", passed, failed);
+    DebugCheck(injection.injected, L"merge race test should inject a child after the original child move", passed, failed);
+    DebugCheck(hr == HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY), L"safe merge should report retained source-folder cleanup", passed, failed);
+    DebugCheck(graph.Exists(L"/src/Foo", true), L"safe merge should retain the source folder", passed, failed);
+    DebugCheck(graph.Exists(L"/src/Foo/late.txt", false), L"safe merge should preserve the concurrently-added child", passed, failed);
+    DebugCheck(graph.Exists(L"/dst/Foo/ok.txt", false), L"safe merge should still move the originally enumerated child", passed, failed);
+    DebugCheck(! graph.Exists(L"/src/Foo/ok.txt", false), L"safe merge should remove the moved child from the source", passed, failed);
+    DebugCheck(graph.CountRequests(L"DELETE") == 0u, L"safe merge should issue no recursive source-folder DELETE", passed, failed);
 }
 
 void RunDebugMoveRejectsInvalidOptionsSizeSelfTest(unsigned int& passed, unsigned int& failed)
@@ -7642,12 +7956,305 @@ void RunDebugOverwriteCancelRestoresDestinationSelfTest(unsigned int& passed, un
     DebugCheck(graph.Exists(L"/dst.txt", false), L"cancelled overwrite move should restore the original destination", passed, failed);
 }
 
+struct CleanupFailureDebugContext final
+{
+    DebugGraphDrive* graph = nullptr;
+    unsigned int cleanupAttempts = 0u;
+};
+
+[[nodiscard]] HRESULT CleanupFailureDebugHook(void* cookie,
+                                              std::wstring_view method,
+                                              std::wstring_view url,
+                                              std::span<const HttpHeader> headers,
+                                              std::string_view bodyUtf8,
+                                              bool allowRetry,
+                                              HttpResponse& responseOut) noexcept
+{
+    auto* context = static_cast<CleanupFailureDebugContext*>(cookie);
+    if (! context || ! context->graph)
+    {
+        return E_POINTER;
+    }
+    if (OrdinalString::EqualsNoCase(method, L"DELETE"))
+    {
+        ++context->cleanupAttempts;
+        responseOut.statusCode = 500u;
+        responseOut.body       = R"json({"error":{"code":"serverError"}})json";
+        return S_OK;
+    }
+    return DebugGraphHook(context->graph, method, url, headers, bodyUtf8, allowRetry, responseOut);
+}
+
+void RunDebugCommittedMoveCleanupFailureIsWarningSelfTest(unsigned int& passed, unsigned int& failed)
+{
+    wil::com_ptr<FileSystemMicrosoftDrive> fs = MakeDebugFileSystem();
+    if (! DebugCheck(static_cast<bool>(fs), L"cleanup-warning test should allocate Microsoft Drive instance", passed, failed))
+    {
+        return;
+    }
+
+    const DriveContext context = MakeDebugDriveContext();
+    DebugGraphDrive graph;
+    graph.AddFile(L"/src.txt");
+    graph.AddFile(L"/dst.txt");
+    const std::wstring sourceId = graph.ItemId(L"/src.txt");
+    const std::wstring oldDestinationId = graph.ItemId(L"/dst.txt");
+
+    CleanupFailureDebugContext failure{.graph = &graph};
+    DebugHttpRequestHookScope hook(CleanupFailureDebugHook, &failure);
+    DebugFlagScope tokenBypass(g_debugMicrosoftDriveBypassAccessTokenForSelfTest, true);
+    DebugFlagScope noRetrySleep(g_debugMicrosoftDriveSuppressRetrySleepForSelfTest, true);
+
+    MoveCommitResult commit{};
+    const HRESULT hr = MoveOrRenameItem(*fs,
+                                        context,
+                                        context,
+                                        L"/src.txt",
+                                        L"/dst.txt",
+                                        FILESYSTEM_FLAG_ALLOW_OVERWRITE,
+                                        MoveIssueReporter{},
+                                        true,
+                                        CancelProbe{},
+                                        &commit);
+    DebugCheck(hr == S_OK, L"committed move should remain successful when only backup cleanup fails", passed, failed);
+    DebugCheck(commit.primaryMutationCommitted && FAILED(commit.cleanupStatus) && commit.rollbackStatus == S_OK,
+               L"committed move should return structured cleanup debt without rollback failure",
+               passed,
+               failed);
+    DebugCheck(! graph.Exists(L"/src.txt", false) && graph.ItemId(L"/dst.txt") == sourceId,
+               L"cleanup-warning move should leave the requested source-to-destination mutation committed",
+               passed,
+               failed);
+    DebugCheck(graph.HasItemId(oldDestinationId), L"failed cleanup should retain the recoverable overwrite backup", passed, failed);
+    DebugCheck(failure.cleanupAttempts > 0u, L"cleanup-warning test should exercise backup deletion failure", passed, failed);
+}
+
 [[nodiscard]] std::wstring_view FindDebugHeader(std::span<const HttpHeader> headers, std::wstring_view name) noexcept
 {
     const auto found = std::find_if(headers.begin(), headers.end(), [&](const HttpHeader& header) noexcept {
         return OrdinalString::EqualsNoCase(header.name, name);
     });
     return found == headers.end() ? std::wstring_view{} : std::wstring_view(found->value);
+}
+
+void RunDebugCredentialUrlValidationSelfTest(unsigned int& passed, unsigned int& failed)
+{
+    ValidatedGraphApiUrl graphUrl{};
+    DebugCheck(SUCCEEDED(ValidateGraphApiUrl(L"https://graph.microsoft.com/v1.0/me/drive?$skiptoken=opaque", graphUrl)),
+               L"Graph URL validation should accept the configured HTTPS v1.0 origin",
+               passed,
+               failed);
+    DebugCheck(FAILED(ValidateGraphApiUrl(L"http://graph.microsoft.com/v1.0/me/drive", graphUrl)),
+               L"Graph URL validation should reject plaintext HTTP",
+               passed,
+               failed);
+    DebugCheck(FAILED(ValidateGraphApiUrl(L"https://graph.microsoft.com.evil.example/v1.0/me/drive", graphUrl)),
+               L"Graph URL validation should reject foreign origins",
+               passed,
+               failed);
+    DebugCheck(FAILED(ValidateGraphApiUrl(L"https://user@graph.microsoft.com/v1.0/me/drive", graphUrl)),
+               L"Graph URL validation should reject userinfo",
+               passed,
+               failed);
+    DebugCheck(FAILED(ValidateGraphApiUrl(L"https://graph.microsoft.com/v1.0/me/drive#fragment", graphUrl)),
+               L"Graph URL validation should reject fragments",
+               passed,
+               failed);
+    DebugCheck(FAILED(ValidateGraphApiUrl(L"https://graph.microsoft.com:444/v1.0/me/drive", graphUrl)),
+               L"Graph URL validation should reject non-default ports",
+               passed,
+               failed);
+    DebugCheck(FAILED(ValidateGraphApiUrl(L"https://graph.microsoft.com:invalid/v1.0/me/drive", graphUrl)),
+               L"Graph URL validation should reject malformed ports",
+               passed,
+               failed);
+
+    ValidatedPreauthenticatedUploadUrl uploadUrl{};
+    DebugCheck(SUCCEEDED(ValidatePreauthenticatedUploadUrl(L"https://sn3302.up.1drv.com/up/session?opaque=1", uploadUrl)),
+               L"upload URL validation should accept the documented OneDrive preauthenticated origin",
+               passed,
+               failed);
+    DebugCheck(SUCCEEDED(ValidatePreauthenticatedUploadUrl(L"https://tenant.sharepoint.com/_api/upload?opaque=1", uploadUrl)),
+               L"upload URL validation should accept a tenant SharePoint preauthenticated origin",
+               passed,
+               failed);
+    DebugCheck(FAILED(ValidatePreauthenticatedUploadUrl(L"http://sn3302.up.1drv.com/up/session", uploadUrl)),
+               L"upload URL validation should reject plaintext HTTP",
+               passed,
+               failed);
+    DebugCheck(FAILED(ValidatePreauthenticatedUploadUrl(L"https://up.1drv.com.evil.example/up/session", uploadUrl)),
+               L"upload URL validation should reject suffix-confusion origins",
+               passed,
+               failed);
+    DebugCheck(FAILED(ValidatePreauthenticatedUploadUrl(L"https://user@sn3302.up.1drv.com/up/session", uploadUrl)),
+               L"upload URL validation should reject userinfo",
+               passed,
+               failed);
+    DebugCheck(FAILED(ValidatePreauthenticatedUploadUrl(L"https://sn3302.up.1drv.com/up/session#fragment", uploadUrl)),
+               L"upload URL validation should reject fragments",
+               passed,
+               failed);
+}
+
+enum class ContinuationDebugScenario
+{
+    ApprovedSameOrigin,
+    ForeignOrigin,
+    PlaintextOrigin,
+    Repeated,
+};
+
+struct ContinuationDebugContext final
+{
+    ContinuationDebugScenario scenario = ContinuationDebugScenario::ApprovedSameOrigin;
+    unsigned int requestCount          = 0u;
+};
+
+[[nodiscard]] HRESULT ContinuationDebugHook(void* cookie,
+                                            std::wstring_view method,
+                                            [[maybe_unused]] std::wstring_view url,
+                                            [[maybe_unused]] std::span<const HttpHeader> headers,
+                                            [[maybe_unused]] std::string_view bodyUtf8,
+                                            [[maybe_unused]] bool allowRetry,
+                                            HttpResponse& responseOut) noexcept
+{
+    auto* context = static_cast<ContinuationDebugContext*>(cookie);
+    if (context == nullptr || ! OrdinalString::EqualsNoCase(method, L"GET"))
+    {
+        return E_UNEXPECTED;
+    }
+
+    ++context->requestCount;
+    responseOut.statusCode = 200u;
+    if (context->requestCount == 1u)
+    {
+        std::string_view nextLink;
+        switch (context->scenario)
+        {
+            case ContinuationDebugScenario::ApprovedSameOrigin:
+            case ContinuationDebugScenario::Repeated:
+                nextLink = "https://graph.microsoft.com/v1.0/drives/debug/root/children?$skiptoken=page-two";
+                break;
+            case ContinuationDebugScenario::ForeignOrigin:
+                nextLink = "https://foreign.example/v1.0/drives/debug/root/children?$skiptoken=stolen";
+                break;
+            case ContinuationDebugScenario::PlaintextOrigin:
+                nextLink = "http://graph.microsoft.com/v1.0/drives/debug/root/children?$skiptoken=stolen";
+                break;
+        }
+        responseOut.body = std::format(R"json({{"value":[],"@odata.nextLink":"{}"}})json", nextLink);
+        return S_OK;
+    }
+
+    responseOut.body = context->scenario == ContinuationDebugScenario::Repeated
+                           ? R"json({"value":[],"@odata.nextLink":"https://graph.microsoft.com/v1.0/drives/debug/root/children?$skiptoken=page-two"})json"
+                           : R"json({"value":[]})json";
+    return S_OK;
+}
+
+void RunDebugContinuationBoundarySelfTest(unsigned int& passed, unsigned int& failed)
+{
+    wil::com_ptr<FileSystemMicrosoftDrive> fs = MakeDebugFileSystem();
+    if (! DebugCheck(static_cast<bool>(fs), L"continuation boundary test should allocate Microsoft Drive instance", passed, failed))
+    {
+        return;
+    }
+    const DriveContext driveContext = MakeDebugDriveContext();
+    DebugFlagScope tokenBypass(g_debugMicrosoftDriveBypassAccessTokenForSelfTest, true);
+
+    const auto runScenario = [&](ContinuationDebugScenario scenario, HRESULT expectedHr, unsigned int expectedRequests, std::wstring_view message) {
+        ContinuationDebugContext context{.scenario = scenario};
+        DebugHttpRequestHookScope hook(ContinuationDebugHook, &context);
+        std::vector<FilesInformationMicrosoftDrive::Entry> entries;
+        const HRESULT hr = ListDirectory(*fs, driveContext, L"/", entries);
+        DebugCheck(hr == expectedHr && context.requestCount == expectedRequests, message.data(), passed, failed);
+    };
+
+    runScenario(ContinuationDebugScenario::ApprovedSameOrigin, S_OK, 2u, L"approved same-origin Graph pagination should issue the second request");
+    runScenario(ContinuationDebugScenario::ForeignOrigin,
+                HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED),
+                1u,
+                L"foreign Graph continuation should fail before a second request");
+    runScenario(ContinuationDebugScenario::PlaintextOrigin,
+                HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED),
+                1u,
+                L"plaintext Graph continuation should fail before a second request");
+    runScenario(ContinuationDebugScenario::Repeated,
+                HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
+                2u,
+                L"repeated Graph continuation should fail before a third request");
+}
+
+struct CredentialDiagnosticDebugContext final
+{
+    unsigned int requestCount = 0u;
+    std::wstring captured;
+};
+
+[[nodiscard]] HRESULT CredentialDiagnosticFailureHook(void* cookie,
+                                                      [[maybe_unused]] std::wstring_view method,
+                                                      [[maybe_unused]] std::wstring_view url,
+                                                      [[maybe_unused]] std::span<const HttpHeader> headers,
+                                                      [[maybe_unused]] std::string_view bodyUtf8,
+                                                      [[maybe_unused]] bool allowRetry,
+                                                      [[maybe_unused]] HttpResponse& responseOut) noexcept
+{
+    auto* context = static_cast<CredentialDiagnosticDebugContext*>(cookie);
+    if (context == nullptr)
+    {
+        return E_POINTER;
+    }
+    ++context->requestCount;
+    return HRESULT_FROM_WIN32(ERROR_WINHTTP_CANNOT_CONNECT);
+}
+
+void CredentialDiagnosticCapture(void* cookie, std::wstring_view diagnostic) noexcept
+{
+    auto* context = static_cast<CredentialDiagnosticDebugContext*>(cookie);
+    if (context)
+    {
+        context->captured.append(diagnostic);
+        context->captured.push_back(L'\n');
+    }
+}
+
+void RunDebugCredentialDiagnosticRedactionSelfTest(unsigned int& passed, unsigned int& failed)
+{
+    constexpr char kBearerSentinel[]             = "OBSERVATORY_BEARER_SENTINEL";
+    constexpr std::wstring_view kGraphSentinel   = L"OBSERVATORY_GRAPH_QUERY_SENTINEL";
+    constexpr std::wstring_view kUploadSentinel  = L"OBSERVATORY_UPLOAD_QUERY_SENTINEL";
+    CredentialDiagnosticDebugContext context{};
+    DebugHttpRequestHookScope requestHook(CredentialDiagnosticFailureHook, &context);
+    DebugHttpDiagnosticHookScope diagnosticHook(CredentialDiagnosticCapture, &context);
+
+    FileSystemMicrosoftDrive::Settings settings{};
+    HttpResponse response{};
+    const std::wstring graphUrl = std::format(L"https://graph.microsoft.com/v1.0/me/drive?$skiptoken={}", kGraphSentinel);
+    HRESULT hr = SendAuthenticatedGraphHttpRequest(settings, L"GET", graphUrl, kBearerSentinel, {}, nullptr, 0u, nullptr, false, response);
+    DebugCheck(FAILED(hr), L"injected authorized Graph transport failure should propagate", passed, failed);
+
+    ValidatedPreauthenticatedUploadUrl uploadUrl{};
+    const std::wstring rawUploadUrl = std::format(L"https://sn3302.up.1drv.com/up/session?auth={}", kUploadSentinel);
+    hr = ValidatePreauthenticatedUploadUrl(rawUploadUrl, uploadUrl);
+    if (SUCCEEDED(hr))
+    {
+        hr = SendPreauthenticatedUploadRequest(settings, L"PUT", uploadUrl, {}, nullptr, 0u, false, response);
+    }
+    DebugCheck(FAILED(hr), L"injected preauthenticated upload transport failure should propagate", passed, failed);
+    DebugCheck(context.requestCount == 2u, L"diagnostic redaction test should inject both transport failures", passed, failed);
+    DebugCheck(context.captured.find(Utf16FromUtf8(kBearerSentinel)) == std::wstring::npos,
+               L"captured diagnostics must not contain the bearer sentinel",
+               passed,
+               failed);
+    DebugCheck(context.captured.find(kGraphSentinel) == std::wstring::npos && context.captured.find(kUploadSentinel) == std::wstring::npos,
+               L"captured diagnostics must not contain Graph or upload-session query sentinels",
+               passed,
+               failed);
+    DebugCheck(context.captured.find(L"https/graph-api") != std::wstring::npos &&
+                   context.captured.find(L"https/preauthenticated-upload") != std::wstring::npos,
+               L"captured diagnostics should retain only the redacted request target classes",
+               passed,
+               failed);
 }
 
 struct RangedVersionSwapDebugContext final
@@ -7739,6 +8346,7 @@ struct StreamingUploadDebugContext final
     unsigned int uploadPuts = 0u;
     unsigned int cancelDeletes = 0u;
     bool validRanges = true;
+    bool invalidNextExpectedRange = false;
 };
 
 [[nodiscard]] HRESULT StreamingUploadDebugHook(void* cookie,
@@ -7758,16 +8366,16 @@ struct StreamingUploadDebugContext final
     if (OrdinalString::EqualsNoCase(method, L"POST") && url.find(L"createUploadSession") != std::wstring_view::npos)
     {
         responseOut.statusCode = 200u;
-        responseOut.body       = R"json({"uploadUrl":"https://upload.test/session"})json";
+        responseOut.body       = R"json({"uploadUrl":"https://sn3302.up.1drv.com/up/session?opaque=streaming-selftest"})json";
         return S_OK;
     }
-    if (OrdinalString::EqualsNoCase(method, L"DELETE") && url == L"https://upload.test/session")
+    if (OrdinalString::EqualsNoCase(method, L"DELETE") && url == L"https://sn3302.up.1drv.com/up/session?opaque=streaming-selftest")
     {
         ++context->cancelDeletes;
         responseOut.statusCode = 204u;
         return S_OK;
     }
-    if (! OrdinalString::EqualsNoCase(method, L"PUT") || url != L"https://upload.test/session")
+    if (! OrdinalString::EqualsNoCase(method, L"PUT") || url != L"https://sn3302.up.1drv.com/up/session?opaque=streaming-selftest")
     {
         return E_UNEXPECTED;
     }
@@ -7779,7 +8387,15 @@ struct StreamingUploadDebugContext final
     context->receivedBytes += bodyUtf8.size();
     ++context->uploadPuts;
     responseOut.statusCode = context->receivedBytes == context->expectedBytes ? 201u : 202u;
-    responseOut.body       = context->receivedBytes == context->expectedBytes ? R"json({"id":"uploaded"})json" : R"json({})json";
+    if (responseOut.statusCode == 201u)
+    {
+        responseOut.body = R"json({"id":"uploaded"})json";
+    }
+    else
+    {
+        const uint64_t nextOffset = context->invalidNextExpectedRange ? context->expectedBytes - 1u : context->receivedBytes;
+        responseOut.body = std::format(R"json({{"nextExpectedRanges":["{}-"]}})json", nextOffset);
+    }
     return S_OK;
 }
 
@@ -7837,6 +8453,37 @@ void RunDebugWriterStreamsBeforeCommitSelfTest(unsigned int& passed, unsigned in
     writer.reset();
     DebugCheck(context.cancelDeletes == 0u, L"committed streaming upload should not cancel its completed session", passed, failed);
 
+    context.expectedBytes = chunkBytes + 100u;
+    context.receivedBytes = 0u;
+    context.uploadPuts = 0u;
+    context.invalidNextExpectedRange = true;
+    wil::com_ptr<IFileWriter> invalidRangeWriter;
+    hr = fs->CreateFileWriter(L"/@conn:microsoft-drive-selftest/invalid-range.bin", FILESYSTEM_FLAG_ALLOW_OVERWRITE, invalidRangeWriter.addressof());
+    wil::com_ptr<IFileWriterExpectedSize> invalidRangeExpectedSize;
+    if (SUCCEEDED(hr) && invalidRangeWriter)
+    {
+        hr = invalidRangeWriter->QueryInterface(IID_PPV_ARGS(invalidRangeExpectedSize.addressof()));
+    }
+    if (SUCCEEDED(hr) && invalidRangeExpectedSize)
+    {
+        hr = invalidRangeExpectedSize->SetExpectedSize(context.expectedBytes);
+    }
+    written = 0u;
+    if (SUCCEEDED(hr) && invalidRangeWriter)
+    {
+        hr = invalidRangeWriter->Write(chunk.data(), static_cast<unsigned long>(chunk.size()), &written);
+    }
+    DebugCheck(hr == HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
+               L"streaming upload should reject nextExpectedRanges beyond the submitted chunk",
+               passed,
+               failed);
+    invalidRangeExpectedSize.reset();
+    invalidRangeWriter.reset();
+    context.invalidNextExpectedRange = false;
+    context.receivedBytes = 0u;
+    context.uploadPuts = 0u;
+    context.cancelDeletes = 0u;
+
     wil::com_ptr<IFileWriter> abandonedWriter;
     written = 0u;
     hr = fs->CreateFileWriter(
@@ -7882,10 +8529,14 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderMicrosoftDriveDe
     RunDebugDescendantMoveGuardSelfTest(*passed, *failed);
     RunDebugParseChildrenSkipsEmptyNameSelfTest(*passed, *failed);
     RunDebugEmptyNameChildBlocksSourceDeleteSelfTest(*passed, *failed);
-    RunDebugReListGuardBlocksConcurrentChildSelfTest(*passed, *failed);
+    RunDebugMergeNeverRecursivelyDeletesSourceFolderSelfTest(*passed, *failed);
     RunDebugMoveRejectsInvalidOptionsSizeSelfTest(*passed, *failed);
     RunDebugMergeRecursionDepthCapSelfTest(*passed, *failed);
     RunDebugOverwriteCancelRestoresDestinationSelfTest(*passed, *failed);
+    RunDebugCommittedMoveCleanupFailureIsWarningSelfTest(*passed, *failed);
+    RunDebugCredentialUrlValidationSelfTest(*passed, *failed);
+    RunDebugContinuationBoundarySelfTest(*passed, *failed);
+    RunDebugCredentialDiagnosticRedactionSelfTest(*passed, *failed);
     RunDebugRangedReaderPinsVersionSelfTest(*passed, *failed);
     RunDebugWriterStreamsBeforeCommitSelfTest(*passed, *failed);
 

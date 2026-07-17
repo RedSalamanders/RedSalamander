@@ -7927,6 +7927,7 @@ void AutomateChangeCasePrompt(
         bool capturedInitial   = false;
         bool setDestination    = false;
         bool setMask           = false;
+        bool setConflictPolicy = false;
         bool setDeleteAfter    = false;
         bool capturedEdited    = false;
         bool actionTriggered   = false;
@@ -7950,6 +7951,7 @@ void AutomateChangeCasePrompt(
         probe.uiaPatternStats   = CollectVisibleUiaDescendantPatternStats(prompt);
         probe.setDestination    = DebugSetArchiveUnpackPromptDestinationPath(extractRoot.wstring());
         probe.setMask           = DebugSetArchiveUnpackPromptMask(L"alpha.txt");
+        probe.setConflictPolicy = DebugSetArchiveUnpackPromptReplaceExisting(true);
         probe.setDeleteAfter    = DebugSetArchiveUnpackPromptDeleteAfter(true);
         probe.capturedEdited    = DebugGetArchiveUnpackPromptSnapshot(probe.editedSnapshot);
         probe.actionTriggered   = DebugConfirmArchiveUnpackPrompt();
@@ -7972,6 +7974,8 @@ void AutomateChangeCasePrompt(
     state.Require(probe.initialSnapshot.unpackerExtension == L"zip",
                   std::format(L"Unpack prompt initial extension should be zip; saw '{}'.", probe.initialSnapshot.unpackerExtension));
     state.Require(probe.initialSnapshot.unpackerCount == 1u, L"Unpack prompt should expose the currently supported ZIP unpacker.");
+    state.Require(probe.initialSnapshot.conflictPolicyIndex == 0u && ! probe.initialSnapshot.replaceExistingFiles,
+                  L"Unpack prompt should default to skipping existing files.");
     state.Require(! probe.initialSnapshot.deleteAfterUnpacking, L"Unpack prompt should leave delete-after-unpacking off by default.");
     state.Require(probe.initialSnapshot.maskText == L"*.*", L"Unpack prompt should default the file mask to *.*.");
     state.Require(! probe.initialSnapshot.maskHelpVisible, L"Unpack prompt should keep mask hints collapsed initially.");
@@ -7979,19 +7983,23 @@ void AutomateChangeCasePrompt(
     state.Require(probe.uiaPatternStats.has_value(), L"Failed to collect UI Automation stats for Unpack prompt.");
     if (probe.uiaPatternStats.has_value())
     {
-        state.Require(probe.uiaPatternStats->comboBoxControlCount >= 2u, L"Unpack prompt should expose destination and unpacker combo boxes.");
+        state.Require(probe.uiaPatternStats->comboBoxControlCount >= 3u,
+                      L"Unpack prompt should expose destination, unpacker, and existing-file policy combo boxes.");
         state.Require(probe.uiaPatternStats->editControlCount > 0u, L"Unpack prompt should expose an unpack-file mask edit field.");
         state.Require(probe.uiaPatternStats->togglePatternCount > 0u, L"Unpack prompt should expose the delete-after-unpacking checkbox.");
         state.Require(probe.uiaPatternStats->buttonControlCount >= 3u, L"Unpack prompt should expose OK, Cancel, and Help actions.");
     }
     state.Require(probe.setDestination, L"Failed to edit the Unpack prompt destination path.");
     state.Require(probe.setMask, L"Failed to edit the Unpack prompt mask.");
+    state.Require(probe.setConflictPolicy, L"Failed to select replace-existing in the Unpack prompt.");
     state.Require(probe.setDeleteAfter, L"Failed to toggle delete-after-unpacking in Unpack prompt.");
     state.Require(probe.capturedEdited, L"Failed to capture edited Unpack prompt snapshot.");
     if (probe.capturedEdited)
     {
         state.Require(probe.editedSnapshot.destinationPathText == extractRoot.wstring(), L"Unpack prompt should store the edited destination path.");
         state.Require(probe.editedSnapshot.maskText == L"alpha.txt", L"Unpack prompt should store the edited file mask.");
+        state.Require(probe.editedSnapshot.conflictPolicyIndex == 1u && probe.editedSnapshot.replaceExistingFiles,
+                      L"Unpack prompt should store the replace-existing policy.");
         state.Require(probe.editedSnapshot.deleteAfterUnpacking, L"Unpack prompt should store the delete-after-unpacking checkbox state.");
     }
     state.Require(probe.actionTriggered, L"Failed to confirm the Unpack prompt through its DX action path.");

@@ -1,3 +1,10 @@
+#include "FolderWindow.FileOperations.State.Private.h"
+
+#include <algorithm>
+#include <limits>
+
+using namespace FolderWindowFileOperationsStateInternal;
+
 #ifdef ENABLE_TESTS
 HWND FolderWindow::FileOperationState::GetPopupHwndForSelfTest() noexcept
 {

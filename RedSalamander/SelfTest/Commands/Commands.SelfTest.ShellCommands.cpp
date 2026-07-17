@@ -8,6 +8,113 @@ struct ShellActionProbeState final
     HRESULT result = S_OK;
 };
 
+class ShellCommandHGlobalDataObject final : public IDataObject
+{
+public:
+    ShellCommandHGlobalDataObject(CLIPFORMAT format, wil::unique_hglobal data) noexcept : _format(format), _data(std::move(data))
+    {
+    }
+
+    ShellCommandHGlobalDataObject(const ShellCommandHGlobalDataObject&) = delete;
+    ShellCommandHGlobalDataObject(ShellCommandHGlobalDataObject&&) = delete;
+    ShellCommandHGlobalDataObject& operator=(const ShellCommandHGlobalDataObject&) = delete;
+    ShellCommandHGlobalDataObject& operator=(ShellCommandHGlobalDataObject&&) = delete;
+
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, void** object) override
+    {
+        if (! object)
+        {
+            return E_POINTER;
+        }
+        *object = nullptr;
+        if (iid == IID_IUnknown || iid == IID_IDataObject)
+        {
+            *object = static_cast<IDataObject*>(this);
+            AddRef();
+            return S_OK;
+        }
+        return E_NOINTERFACE;
+    }
+
+    ULONG STDMETHODCALLTYPE AddRef() override
+    {
+        return ++_refCount;
+    }
+
+    ULONG STDMETHODCALLTYPE Release() override
+    {
+        const ULONG remaining = --_refCount;
+        if (remaining == 0u)
+        {
+            delete this;
+        }
+        return remaining;
+    }
+
+    HRESULT STDMETHODCALLTYPE GetData(FORMATETC* format, STGMEDIUM* medium) override
+    {
+        if (! format || ! medium)
+        {
+            return E_POINTER;
+        }
+        if (FAILED(QueryGetData(format)))
+        {
+            return DV_E_FORMATETC;
+        }
+
+        HGLOBAL duplicate = static_cast<HGLOBAL>(OleDuplicateData(_data.get(), _format, 0u));
+        if (! duplicate)
+        {
+            return E_OUTOFMEMORY;
+        }
+        *medium                 = {};
+        medium->tymed           = TYMED_HGLOBAL;
+        medium->hGlobal         = duplicate;
+        medium->pUnkForRelease  = nullptr;
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE GetDataHere(FORMATETC*, STGMEDIUM*) override { return DATA_E_FORMATETC; }
+    HRESULT STDMETHODCALLTYPE QueryGetData(FORMATETC* format) override
+    {
+        if (! format)
+        {
+            return E_POINTER;
+        }
+        return format->cfFormat == _format && (format->tymed & TYMED_HGLOBAL) != 0 ? S_OK : DV_E_FORMATETC;
+    }
+    HRESULT STDMETHODCALLTYPE GetCanonicalFormatEtc(FORMATETC*, FORMATETC* result) override
+    {
+        if (! result)
+        {
+            return E_POINTER;
+        }
+        *result = {};
+        return DATA_S_SAMEFORMATETC;
+    }
+    HRESULT STDMETHODCALLTYPE SetData(FORMATETC*, STGMEDIUM*, BOOL) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE EnumFormatEtc(DWORD, IEnumFORMATETC**) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE DAdvise(FORMATETC*, DWORD, IAdviseSink*, DWORD*) override { return OLE_E_ADVISENOTSUPPORTED; }
+    HRESULT STDMETHODCALLTYPE DUnadvise(DWORD) override { return OLE_E_ADVISENOTSUPPORTED; }
+    HRESULT STDMETHODCALLTYPE EnumDAdvise(IEnumSTATDATA**) override { return OLE_E_ADVISENOTSUPPORTED; }
+
+private:
+    std::atomic<ULONG> _refCount{1u};
+    CLIPFORMAT _format = 0;
+    wil::unique_hglobal _data;
+};
+
+[[nodiscard]] wil::com_ptr<IDataObject> MakeShellCommandHGlobalDataObject(CLIPFORMAT format, wil::unique_hglobal data) noexcept
+{
+    wil::com_ptr<IDataObject> result;
+    auto* object = new (std::nothrow) ShellCommandHGlobalDataObject(format, std::move(data));
+    if (object)
+    {
+        result.attach(object);
+    }
+    return result;
+}
+
 [[nodiscard]] std::wstring DescribePathForShellCommandTest(const std::filesystem::path& path)
 {
     return path.wstring();
@@ -2452,6 +2559,25 @@ struct ClipboardDropEffectReadStatus
     ec.clear();
     state.Require(! std::filesystem::exists(betaPath, ec), L"Paste after Ctrl+X should move beta.txt out of source-b, not copy it.");
 
+    const auto clipboardDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
+    std::vector<std::filesystem::path> remainingClipboardPaths;
+    do
+    {
+        PumpPendingMessages();
+        remainingClipboardPaths = ReadClipboardDropPathsForShellCommandTest(mainWindow);
+        if (remainingClipboardPaths.empty())
+        {
+            break;
+        }
+        std::this_thread::sleep_for(SelfTest::Scale(10ms));
+    } while (std::chrono::steady_clock::now() < clipboardDeadline);
+    state.Require(remainingClipboardPaths.empty(), L"Verified MOVE completion should invalidate the stale cut clipboard payload.");
+
+    HostResetTestPromptRequestCount();
+    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_CLIPBOARD_PASTE, 0), 0);
+    PumpPendingMessages();
+    state.Require(HostGetTestPromptRequestCount() == 0u, L"A second paste after completed MOVE must not retry the stale cut source list.");
+
     return state.failure.empty();
 }
 
@@ -3100,6 +3226,344 @@ struct ClipboardDropEffectReadStatus
                   L"Missing drag/drop callback fallback test should expose a pane alert snapshot.");
     state.Require(alert.visible, L"Missing drag/drop callback should show visible pane feedback.");
     state.Require(alert.severity == FolderView::OverlaySeverity::Error, L"Missing drag/drop callback pane feedback should be an error.");
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestFolderViewDropIntegrityGuards(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        state.Require(false, L"Main window handle invalid for FolderView drop-integrity guards.");
+        return false;
+    }
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    const std::filesystem::path root       = suiteRoot / L"work" / (L"drop_integrity_" + NewGuidText());
+    const std::filesystem::path sourceRoot = root / L"sources";
+    const std::filesystem::path destRoot   = root / L"dest";
+    const std::filesystem::path archive    = destRoot / L"Archive";
+    const std::filesystem::path work       = destRoot / L"Work";
+    const std::filesystem::path workSub    = work / L"Sub";
+    const std::filesystem::path alpha      = sourceRoot / L"alpha.txt";
+    const std::filesystem::path beta       = sourceRoot / L"beta.txt";
+    const std::filesystem::path gamma      = sourceRoot / L"gamma.txt";
+    const std::filesystem::path delta      = sourceRoot / L"delta.txt";
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    ec.clear();
+    const auto cleanupFiles = wil::scope_exit([root]() noexcept
+    {
+        std::error_code cleanupEc;
+        std::filesystem::remove_all(root, cleanupEc);
+    });
+
+    state.Require(SelfTest::EnsureDirectory(sourceRoot), L"Failed to create drop-integrity source root.");
+    state.Require(SelfTest::EnsureDirectory(archive), L"Failed to create hovered Archive destination.");
+    state.Require(SelfTest::EnsureDirectory(workSub), L"Failed to create descendant destination.");
+    state.Require(SelfTest::WriteTextFile(alpha, "alpha"), L"Failed to create alpha drop source.");
+    state.Require(SelfTest::WriteTextFile(beta, "beta"), L"Failed to create beta drop source.");
+    state.Require(SelfTest::WriteTextFile(gamma, "gamma"), L"Failed to create gamma drop source.");
+    state.Require(SelfTest::WriteTextFile(delta, "delta"), L"Failed to create delta drop source.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring leftPluginBefore                       = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftPathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const auto restorePane = wil::scope_exit([&]
+    {
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+        if (leftPathBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftPathBefore.value());
+        }
+    });
+
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to activate local provider for drop-integrity guards.");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, destRoot);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, destRoot, SelfTest::Scale(3000ms)),
+                  L"Failed to enumerate drop-integrity destination.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"Archive", L"Work"}, SelfTest::Scale(3000ms)),
+                  L"Drop-integrity destination items were not ready.");
+
+    FolderView* folderView = GetFolderViewForShellCommandTest(FolderWindow::Pane::Left);
+    auto* fileOps          = g_folderWindow.DebugGetFileOperationState();
+    state.Require(folderView != nullptr && fileOps != nullptr, L"FolderView/File Operations unavailable for drop-integrity guards.");
+    if (! folderView || ! fileOps || ! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::optional<POINT> archivePoint = folderView->DebugGetItemCenterClientPointForSelfTest(L"Archive");
+    state.Require(archivePoint.has_value(), L"Could not resolve Archive client point for hovered drop.");
+    if (! archivePoint.has_value())
+    {
+        return false;
+    }
+
+    auto existingTaskIds = CollectFileOperationTaskIdsForShellCommandTest(fileOps);
+    DWORD performed      = DROPEFFECT_NONE;
+    HRESULT dropHr       = folderView->DebugPerformFileDropForSelfTest({alpha}, DROPEFFECT_COPY, &performed, archivePoint.value());
+    state.Require(SUCCEEDED(dropHr) && performed == DROPEFFECT_COPY,
+                  std::format(L"Hovered subfolder drop should report COPY; hr=0x{:08X}, effect={}.",
+                              static_cast<unsigned long>(dropHr),
+                              static_cast<unsigned long>(performed)));
+    static_cast<void>(RequireQueuedShellFileOperationTask(state, fileOps, existingTaskIds, FILESYSTEM_COPY, archive, L"Hovered subfolder drop"));
+    state.Require(WaitForPathExistsForShellCommandTest(archive / alpha.filename(), SelfTest::Scale(5000ms)),
+                  L"Hovered subfolder drop should copy into Archive.");
+
+    existingTaskIds = CollectFileOperationTaskIdsForShellCommandTest(fileOps);
+    performed       = DROPEFFECT_NONE;
+    dropHr          = folderView->DebugPerformFileDropForSelfTest({beta}, DROPEFFECT_COPY, &performed);
+    state.Require(SUCCEEDED(dropHr) && performed == DROPEFFECT_COPY, L"Background drop should report COPY.");
+    static_cast<void>(RequireQueuedShellFileOperationTask(state, fileOps, existingTaskIds, FILESYSTEM_COPY, destRoot, L"Background drop"));
+    state.Require(WaitForPathExistsForShellCommandTest(destRoot / beta.filename(), SelfTest::Scale(5000ms)),
+                  L"Background drop should copy into the displayed folder.");
+
+    existingTaskIds = CollectFileOperationTaskIdsForShellCommandTest(fileOps);
+    performed       = DROPEFFECT_NONE;
+    dropHr = folderView->DebugPerformFileDropForSelfTest(
+        {delta}, DROPEFFECT_COPY, &performed, POINT{-1, -1}, false, DROPEFFECT_COPY | DROPEFFECT_MOVE, 0u);
+    state.Require(SUCCEEDED(dropHr) && performed == DROPEFFECT_MOVE,
+                  L"No-modifier same-volume drop should select MOVE when COPY and MOVE are both allowed.");
+    static_cast<void>(RequireQueuedShellFileOperationTask(state, fileOps, existingTaskIds, FILESYSTEM_MOVE, destRoot, L"Same-volume default drop"));
+    state.Require(WaitForPathExistsForShellCommandTest(destRoot / delta.filename(), SelfTest::Scale(5000ms)),
+                  L"Same-volume default MOVE should eventually commit through the host.");
+
+    existingTaskIds = CollectFileOperationTaskIdsForShellCommandTest(fileOps);
+    performed       = DROPEFFECT_NONE;
+    dropHr = folderView->DebugPerformFileDropForSelfTest({gamma}, DROPEFFECT_MOVE, &performed, POINT{-1, -1}, true);
+    state.Require(SUCCEEDED(dropHr) && performed == DROPEFFECT_COPY,
+                  std::format(L"External asynchronous MOVE must report COPY until completion; hr=0x{:08X}, effect={}.",
+                              static_cast<unsigned long>(dropHr),
+                              static_cast<unsigned long>(performed)));
+    static_cast<void>(RequireQueuedShellFileOperationTask(state, fileOps, existingTaskIds, FILESYSTEM_MOVE, destRoot, L"External asynchronous MOVE drop"));
+    state.Require(WaitForPathExistsForShellCommandTest(destRoot / gamma.filename(), SelfTest::Scale(5000ms)),
+                  L"External asynchronous MOVE task should eventually commit through the host.");
+
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, workSub);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, workSub, SelfTest::Scale(3000ms)),
+                  L"Failed to enumerate descendant target for self-drop rejection.");
+    existingTaskIds = CollectFileOperationTaskIdsForShellCommandTest(fileOps);
+    performed       = DROPEFFECT_MOVE;
+    dropHr          = folderView->DebugPerformFileDropForSelfTest({work}, DROPEFFECT_MOVE, &performed);
+    state.Require(dropHr == DRAGDROP_S_CANCEL && performed == DROPEFFECT_NONE,
+                  std::format(L"Drop into own descendant should cancel; hr=0x{:08X}, effect={}.",
+                              static_cast<unsigned long>(dropHr),
+                              static_cast<unsigned long>(performed)));
+    state.Require(! ResolveNewFileOperationsTaskIdForSelfTest(fileOps, existingTaskIds, SelfTest::Scale(250ms)).has_value(),
+                  L"Drop into own descendant must not queue a task.");
+    state.Require(std::filesystem::exists(work / L"Sub", ec), L"Rejected descendant drop should leave the source tree intact.");
+
+    const std::filesystem::path pendingDestination = root / L"pending-destination";
+    state.Require(SelfTest::EnsureDirectory(pendingDestination), L"Failed to create unsettled destination probe.");
+    folderView->DebugSetCurrentFolderWithoutEnumerationForSelfTest(pendingDestination);
+    existingTaskIds = CollectFileOperationTaskIdsForShellCommandTest(fileOps);
+    performed       = DROPEFFECT_COPY;
+    dropHr          = folderView->DebugPerformFileDropForSelfTest({alpha}, DROPEFFECT_COPY, &performed);
+    state.Require(dropHr == DRAGDROP_S_CANCEL && performed == DROPEFFECT_NONE,
+                  L"Drop into an unenumerated destination must be rejected.");
+    state.Require(! ResolveNewFileOperationsTaskIdForSelfTest(fileOps, existingTaskIds, SelfTest::Scale(250ms)).has_value(),
+                  L"Unenumerated destination drop must not queue a task.");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, workSub);
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestFolderViewRejectsMalformedDropPayloads(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        state.Require(false, L"Main window handle invalid for malformed drop payload test.");
+        return false;
+    }
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    const std::filesystem::path root       = suiteRoot / L"work" / (L"malformed_drop_" + NewGuidText());
+    state.Require(SelfTest::EnsureDirectory(root), L"Failed to create malformed-drop destination.");
+    state.Require(SelfTest::WriteTextFile(root / L"keep.txt", "keep"), L"Failed to create malformed-drop marker.");
+    const auto cleanupFiles = wil::scope_exit([root]() noexcept
+    {
+        std::error_code cleanupEc;
+        std::filesystem::remove_all(root, cleanupEc);
+    });
+    const std::wstring leftPluginBefore                       = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftPathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const auto restorePane = wil::scope_exit([&]
+    {
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+        if (leftPathBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftPathBefore.value());
+        }
+    });
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to activate local provider for malformed-drop injection.");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)),
+                  L"FolderView must settle before malformed drop payload injection.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"keep.txt"}, SelfTest::Scale(3000ms)),
+                  L"Malformed-drop destination enumeration did not complete.");
+
+    FolderView* folderView = GetFolderViewForShellCommandTest(FolderWindow::Pane::Left);
+    state.Require(folderView != nullptr && folderView->IsCurrentFolderEnumerated(),
+                  L"FolderView must have a settled folder before malformed drop payload injection.");
+    if (! folderView || ! folderView->IsCurrentFolderEnumerated() || ! state.failure.empty())
+    {
+        return false;
+    }
+
+    struct InternalHeader
+    {
+        uint32_t version;
+        uint32_t pluginIdChars;
+        uint32_t instanceContextChars;
+        uint32_t pathCount;
+    };
+
+    wil::unique_hglobal hostileInternal(GlobalAlloc(GHND, sizeof(InternalHeader) + 2u * sizeof(wchar_t)));
+    state.Require(static_cast<bool>(hostileInternal), L"Failed to allocate hostile internal drop payload.");
+    if (! hostileInternal)
+    {
+        return false;
+    }
+    auto* internalHeader = static_cast<InternalHeader*>(GlobalLock(hostileInternal.get()));
+    state.Require(internalHeader != nullptr, L"Failed to lock hostile internal drop payload.");
+    if (! internalHeader)
+    {
+        return false;
+    }
+    *internalHeader = InternalHeader{1u, 0u, 0u, (std::numeric_limits<uint32_t>::max)()};
+    GlobalUnlock(hostileInternal.get());
+
+    const CLIPFORMAT internalFormat = static_cast<CLIPFORMAT>(RegisterClipboardFormatW(L"RedSalamander.InternalFileDrop.V1"));
+    wil::com_ptr<IDataObject> internalObject = MakeShellCommandHGlobalDataObject(internalFormat, std::move(hostileInternal));
+    DWORD performed                         = DROPEFFECT_COPY;
+    const HRESULT internalHr = folderView->DebugPerformDropFromDataObjectForSelfTest(internalObject.get(), DROPEFFECT_COPY, &performed);
+    state.Require(internalHr == HRESULT_FROM_WIN32(ERROR_INVALID_DATA) && performed == DROPEFFECT_NONE,
+                  std::format(L"Hostile internal pathCount should fail closed; hr=0x{:08X}, effect={}.",
+                              static_cast<unsigned long>(internalHr),
+                              static_cast<unsigned long>(performed)));
+
+    wil::unique_hglobal malformedHdrop(GlobalAlloc(GHND, sizeof(DROPFILES) + 2u * sizeof(wchar_t)));
+    state.Require(static_cast<bool>(malformedHdrop), L"Failed to allocate malformed CF_HDROP payload.");
+    if (! malformedHdrop)
+    {
+        return false;
+    }
+    auto* dropFiles = static_cast<DROPFILES*>(GlobalLock(malformedHdrop.get()));
+    state.Require(dropFiles != nullptr, L"Failed to lock malformed CF_HDROP payload.");
+    if (! dropFiles)
+    {
+        return false;
+    }
+    dropFiles->pFiles = static_cast<DWORD>(GlobalSize(malformedHdrop.get()) + sizeof(wchar_t));
+    dropFiles->fWide  = TRUE;
+    GlobalUnlock(malformedHdrop.get());
+
+    wil::com_ptr<IDataObject> hdropObject = MakeShellCommandHGlobalDataObject(CF_HDROP, std::move(malformedHdrop));
+    performed                              = DROPEFFECT_COPY;
+    const HRESULT hdropHr = folderView->DebugPerformDropFromDataObjectForSelfTest(hdropObject.get(), DROPEFFECT_COPY, &performed);
+    state.Require(hdropHr == HRESULT_FROM_WIN32(ERROR_INVALID_DATA) && performed == DROPEFFECT_NONE,
+                  std::format(L"Out-of-range DROPFILES::pFiles should fail closed; hr=0x{:08X}, effect={}.",
+                              static_cast<unsigned long>(hdropHr),
+                              static_cast<unsigned long>(performed)));
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestFolderViewPointerTargetsAndStaleHoverAreSafe(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        state.Require(false, L"Main window handle invalid for FolderView pointer-target guards.");
+        return false;
+    }
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    const std::filesystem::path root       = suiteRoot / L"work" / (L"pointer_targets_" + NewGuidText());
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    ec.clear();
+    const auto cleanupFiles = wil::scope_exit([root]() noexcept
+    {
+        std::error_code cleanupEc;
+        std::filesystem::remove_all(root, cleanupEc);
+    });
+    state.Require(SelfTest::EnsureDirectory(root), L"Failed to create pointer-target root.");
+    for (const std::wstring_view name : {L"a.txt", L"b.txt", L"c.txt", L"z.txt"})
+    {
+        state.Require(SelfTest::WriteTextFile(root / name, "x"), std::format(L"Failed to create {}.", name));
+    }
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring leftPluginBefore                       = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftPathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const auto restorePane = wil::scope_exit([&]
+    {
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+        if (leftPathBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftPathBefore.value());
+        }
+    });
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to activate local provider for pointer-target guards.");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)), L"Failed to enumerate pointer-target root.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"a.txt", L"b.txt", L"c.txt", L"z.txt"}, SelfTest::Scale(3000ms)),
+                  L"Pointer-target items were not ready.");
+
+    FolderView* folderView = GetFolderViewForShellCommandTest(FolderWindow::Pane::Left);
+    state.Require(folderView != nullptr, L"FolderView unavailable for pointer-target guards.");
+    if (! folderView || ! state.failure.empty())
+    {
+        return false;
+    }
+
+    g_folderWindow.SetPaneSelectionByDisplayNamePredicate(
+        FolderWindow::Pane::Left, [](std::wstring_view name) noexcept { return name == L"a.txt" || name == L"b.txt" || name == L"c.txt"; }, true);
+    state.Require(g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 3u, L"Expected a three-item selection before plain click.");
+    const std::optional<POINT> zPoint = folderView->DebugGetItemCenterClientPointForSelfTest(L"z.txt");
+    state.Require(zPoint.has_value(), L"Could not resolve z.txt client point.");
+    if (! zPoint.has_value())
+    {
+        return false;
+    }
+
+    const HWND viewHwnd = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
+    SendMessageW(viewHwnd, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(zPoint->x, zPoint->y));
+    SendMessageW(viewHwnd, WM_LBUTTONUP, 0, MAKELPARAM(zPoint->x, zPoint->y));
+    state.Require(g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 1u &&
+                      g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"z.txt"),
+                  L"Plain click on an unselected item should collapse selection to that item.");
+
+    constexpr short kEmptyCoordinate = -20;
+    SendMessageW(viewHwnd,
+                 WM_LBUTTONDOWN,
+                 MK_LBUTTON,
+                 MAKELPARAM(static_cast<WORD>(kEmptyCoordinate), static_cast<WORD>(kEmptyCoordinate)));
+    SendMessageW(viewHwnd,
+                 WM_LBUTTONUP,
+                 0,
+                 MAKELPARAM(static_cast<WORD>(kEmptyCoordinate), static_cast<WORD>(kEmptyCoordinate)));
+    state.Require(folderView->DebugGetDragSourcePathsForSelfTest().empty(),
+                  L"Empty-background click should disarm stale focused-item drag sources.");
+
+    folderView->DebugSetHoveredIndexForSelfTest(folderView->DebugGetItemCount() + 5u);
+    state.Require(folderView->DebugWarmRenderingForSelfTest(), L"Rendering should survive a stale out-of-range hover index.");
 
     return state.failure.empty();
 }
@@ -3807,6 +4271,12 @@ void RunShellCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestOpti
     { return TestFileOpsMissingCallbackRejectsDirectFallback(mainWindow, state); });
     SelfTest::RunCase(options, suite, L"Commands_FileOpsDragDropMissingCallbackRejectsDirectFallback", [=](CaseState& state) noexcept
     { return TestFileOpsDragDropMissingCallbackRejectsDirectFallback(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"folderView_drop_integrity_guards", [=](CaseState& state) noexcept
+    { return TestFolderViewDropIntegrityGuards(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"folderView_drop_rejects_malformed_payloads", [=](CaseState& state) noexcept
+    { return TestFolderViewRejectsMalformedDropPayloads(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"folderView_pointer_targets_and_stale_hover_are_safe", [=](CaseState& state) noexcept
+    { return TestFolderViewPointerTargetsAndStaleHoverAreSafe(mainWindow, state); });
     SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPasteShortcut_creates_unique_links", [=](CaseState& state) noexcept
     { return TestPaneClipboardPasteShortcutCreatesLinks(mainWindow, state); });
     SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPasteShortcut_concurrent_invocations_create_distinct_links", [=](CaseState& state) noexcept

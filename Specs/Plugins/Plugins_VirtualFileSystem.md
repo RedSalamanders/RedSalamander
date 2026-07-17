@@ -87,6 +87,12 @@ The optional module-level quiet-point exports from `Common/PlugInterfaces/Factor
 
 Runtime settings refresh MUST release pane-owned file-system references first: close live viewers, clear FolderView/NavigationView file-system references and navigation callbacks, then rediscover file-system plugins, rediscover viewer plugins, and reload pane file-system instances. The effective quiet-point sequence is: stop host producers, clear registration callbacks such as `INavigationMenu::SetCallback(nullptr, nullptr)`, cancel/drain watches or provider-owned async work, release COM instances, invoke optional module shutdown, unregister resources, then release the module unless process-shutdown retention is explicitly requested.
 
+Independently unloadable DLLs that use libcurl MUST coordinate through
+`Common::CurlRuntime::ProcessLease`. Each DLL acquires one process participant before creating curl handles,
+stops new work and drains every easy/share/pool handle at its quiet point, then releases its participant outside
+loader lock. Only the final process participant may call `curl_global_cleanup`; unloading or refreshing Curl and
+Google Drive independently must leave the surviving DLL able to create and use a curl easy handle.
+
 A file-system threadpool callback that carries an owning module pin from
 `AcquireModuleReferenceFromAddress(...)` MUST call
 `TransferModulePinToCallbackReturn(instance, modulePin)` at callback entry. The helper transfers ownership to
@@ -96,7 +102,7 @@ the module-pin helper.
 
 Disabling a file-system plugin marks it unavailable for new selection and may switch the active plugin, but it MUST NOT `FreeLibrary` a loaded file-system DLL immediately because folders, navigation views, compare/search, or file-operation code may still hold external `IFileSystem` references. A later rediscovery or process shutdown performs centralized unload once the manager is closing plugin entries.
 
-`builtin/file-system-s3` / `builtin/file-system-s3table` are the shipped exception that request process-shutdown module retention: AWS SDK lifetime is still reference-counted by live instances and I/O objects, but the DLL remains mapped until OS process teardown to avoid documented AWS CRT late-thread execution after dependency unload.
+`builtin/file-system-s3` / `builtin/file-system-s3table` are the shipped exception that request process-shutdown module retention: AWS SDK lifetime is reference-counted by successfully initialized instances and I/O objects, and the DLL remains mapped until OS process teardown to avoid documented AWS CRT late-thread execution after dependency unload. Runtime refresh is nevertheless explicit: shutdown rejects new AWS acquisitions and starts pending multipart-abort reconciliation; `RedSalamanderPluginCanUnloadNow()` remains false until cleanup is drained, the final owner is released, and `Aws::ShutdownAPI` has returned. A failed `Aws::InitAPI` transition is factory-visible and keeps the partially initialized module non-unloadable.
 
 **Interface discovery:**
 - The factory only creates `IFileSystem`.
@@ -234,6 +240,17 @@ Field types:
 - `x-ui-hidden` (optional, boolean): keeps the field in the plugin JSON configuration but hides it from host-rendered editors; hosts MUST preserve the current/default value when saving visible fields so hidden settings are not dropped.
 
 `GetConfiguration()` / `SetConfiguration()` exchange a JSON/JSON5 object (UTF-8 string) keyed by `fields[].key` with values matching the declared types.
+
+`SetConfiguration()` is transactional. It MUST parse and validate a complete candidate before changing live
+settings or clearing caches, preserve unknown object members for forward compatibility, and publish the candidate
+only after all validation succeeds. Malformed JSON or a non-object root returns
+`HRESULT_FROM_WIN32(ERROR_INVALID_DATA)` and leaves the prior configuration and derived state unchanged.
+
+Passwords, passphrases, refresh tokens, access tokens, and equivalent credentials MUST NOT be emitted by
+`GetConfiguration()` or declared as ordinary persisted schema fields. Connection-scoped secrets use the host
+secret service and persisted JSON contains only stable non-secret profile identity/intent. A provider may import
+a legacy inline secret for the current session, but it MUST remove that member from the returned configuration,
+securely clear superseded/session/cache storage, and never write the secret back.
 
 ### 0b. IFileSystemInitialize Interface (optional)
 
@@ -665,6 +682,26 @@ interface __declspec(uuid("12519afa-30e7-4e3a-9db2-7990c4be9a21"))
 - `GetTransferHints(...)` is a host-tuning contract only; plugins MUST NOT treat it as a user-visible policy surface.
 - `GetStorageCharacteristics(...)` is the authoritative plugin-to-host classification for Auto concurrency and diagnostics; the host does not infer storage behavior from plugin type.
 
+### 3a. IFileSystemCancellableDirectoryEnumeration Interface (optional)
+
+**UUID:** `{32f1b16a-fb45-4e59-98ca-61e16445c527}`
+
+Providers whose single-call enumeration can perform substantial local work MAY implement
+`IFileSystemCancellableDirectoryEnumeration`. The host queries it when the calling worker has a stop token and
+falls back to `IFileSystem::ReadDirectoryInfo()` for providers that do not implement it.
+
+The `IFileSystemDirectoryEnumerationCallback` is a synchronous per-call observer. A provider MUST NOT retain or
+invoke it after `ReadDirectoryInfoCancellable()` returns. It reports scanned/total entries where known and polls
+for cancellation at bounded intervals. A failed progress callback or a true cancellation result stops work
+promptly, returns `HRESULT_FROM_WIN32(ERROR_CANCELLED)`, and publishes no partial directory buffer.
+
+FileSystem7z applies this contract while waiting for another index builder, opening the archive, scanning entries,
+constructing/sorting the index, and running injected delays. Mount/configuration changes increment a generation;
+stale builders cannot publish. The provider caps the index at 1,000,000 items and 128 MiB of retained key text,
+does not cache cancellation as a permanent failure, and securely clears password copies owned by index/open/read
+sessions. FolderView already performs enumeration on its background worker, so no second plugin-owned worker is
+created solely for this interface.
+
 **Transfer/storage-hint contract notes:**
 - `path` is always interpreted in the plugin's own path space.
 - The host calls `GetTransferHints(...)` separately for the source side with `FILESYSTEM_TRANSFER_SOURCE_READ` and for the destination side with `FILESYSTEM_TRANSFER_DESTINATION_WRITE`.
@@ -744,6 +781,11 @@ interface __declspec(uuid("2c7c32b3-8a0f-4e25-8d3a-6a5f1d0a1e2c"))
     ) noexcept = 0;
 };
 ```
+
+`FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY` authorizes replacement of a read-only destination; it has no
+standalone meaning without `FILESYSTEM_FLAG_ALLOW_OVERWRITE`. A writer MUST reject that contradictory flag set
+before opening or changing the destination. In particular, a failed `CREATE_NEW` path must never clear a
+pre-existing file's read-only attribute in order to retry the same non-overwrite operation.
 
 ### Stream and Provider Data-Integrity Contracts
 
@@ -1896,6 +1938,12 @@ The `Plugins/FileSystemDummy/` project provides a deterministic in-memory file s
 - Deterministic procedural generation driven by `seed` (and `maxChildrenPerDirectory`); enumeration order does not affect the generated structure.
 - Path traversal generates intermediate directory contents on-demand, so operations do not require enumerating parent folders first.
 - Generated names include ASCII, Latin diacritics, emoji, and non-Latin scripts (Japanese, Arabic, Thai, Korean).
+- Recursive copy/move into an existing directory is atomic with respect to policy validation: the provider
+  preflights the complete merge for type collisions, overwrite permission, and read-only replacement before
+  moving or cloning the first child. A late collision therefore leaves both source and destination unchanged.
+- Recursive delete applies read-only policy to every materialized descendant before removing the root. An
+  unmaterialized synthetic subtree with possible read-only descendants fails closed unless
+  `ALLOW_REPLACE_READONLY` is explicit; it is never deleted under an unproven descendant policy.
 - Optional latency simulation (`latencyMs`) to model slow file systems:
   - Adds delay per `GetAttributes` call.
   - Adds delay per directory entry returned by `ReadDirectoryInfo`.

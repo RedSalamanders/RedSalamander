@@ -1,0 +1,30 @@
+name: AddressSanitizer
+
+"on":
+  workflow_dispatch:
+  schedule:
+    - cron: "30 4 * * 2"
+  pull_request:
+    branches: [master]
+    paths:
+      - "**/*.cpp"
+      - "**/*.h"
+      - "**/*.vcxproj"
+      - "Directory.Build.props"
+      - "Directory.Build.targets"
+      - "vcpkg.json"
+      - "vcpkg-tool.json"
+      - ".github/workflows/asan.yml"
+      - ".github/workflows/build-reusable.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  x64-asan-plugin-contracts:
+    uses: ./.github/workflows/build-reusable.yml
+    with:
+      configuration: ASan Debug
+      platform: x64
+      upload_build_output: false
+      run_asan_plugin_contracts: true

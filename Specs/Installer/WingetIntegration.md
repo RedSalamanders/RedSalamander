@@ -24,6 +24,17 @@ PackageVersion: 7.0.183
 
 The Winget workflow starts with the x64 and ARM64 portable ZIPs. Both assets are required for publication so Winget can select the native installer for the user's machine.
 
+The upstream GitHub release is fail closed. `.github/workflows/release.yml` derives the exact package set from
+`build_arm64` and `build_msix`; every requested portable leg is mandatory, while MSIX omission is allowed only when
+that explicit input disables MSIX. `Tools/ReleaseArtifactPolicy.ps1` requires exact deterministic filenames,
+nonempty files, matching x64/ARM64 PE or MSIX architecture, matching MSIX identity metadata, and an exact verified
+SHA256 manifest before release creation. A failed build, package, artifact upload/download, validation, or checksum
+step prevents publication; a partial requested matrix is never a valid release.
+
+All active third-party GitHub Actions are pinned to reviewed full commit SHAs with exact version comments.
+Dependabot owns the `github-actions` ecosystem update feed, and CODEOWNERS requires repository-owner review for
+workflow, dependency-automation, and release-policy changes.
+
 ## Manifest Shape
 
 RedSalamander uses a multi-file manifest under `Installer/winget/templates/`:

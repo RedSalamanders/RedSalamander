@@ -1,4 +1,5 @@
 #include "FileSystemS3.Internal.h"
+#include "PaginationGuard.h"
 
 #include <aws/s3-crt/model/ListObjectsV2Request.h>
 
@@ -15,7 +16,80 @@ namespace
 {
     return hr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND) || hr == HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND);
 }
+
+[[nodiscard]] HRESULT CompleteDirectorySize(uint64_t scannedEntries,
+                                            IFileSystemDirectorySizeCallback* callback,
+                                            void* cookie,
+                                            FileSystemDirectorySizeResult& result) noexcept
+{
+    if (callback != nullptr)
+    {
+        const HRESULT progressHr =
+            callback->DirectorySizeProgress(scannedEntries, result.totalBytes, result.fileCount, result.directoryCount, nullptr, cookie);
+        if (FAILED(progressHr))
+        {
+            result.status = progressHr;
+            return progressHr;
+        }
+    }
+
+    result.status = S_OK;
+    return S_OK;
+}
 } // namespace
+
+#if defined(_DEBUG)
+void FsS3::RunDebugDirectorySizeCallbackContractSelfTest(unsigned int& passed, unsigned int& failed) noexcept
+{
+    struct AbortOnCompletion final : IFileSystemDirectorySizeCallback
+    {
+        HRESULT STDMETHODCALLTYPE DirectorySizeProgress(
+            uint64_t, uint64_t, uint64_t, uint64_t, const wchar_t* currentPath, void*) noexcept override
+        {
+            ++progressCalls;
+            completionPathWasNull = currentPath == nullptr;
+            return E_ABORT;
+        }
+
+        HRESULT STDMETHODCALLTYPE DirectorySizeShouldCancel(BOOL*, void*) noexcept override
+        {
+            return E_UNEXPECTED;
+        }
+
+        unsigned int progressCalls = 0u;
+        bool completionPathWasNull = false;
+    } callback;
+
+    FileSystemDirectorySizeResult result{
+        .sizeBytes = sizeof(FileSystemDirectorySizeResult),
+        .totalBytes = 42u,
+        .fileCount = 1u,
+        .directoryCount = 0u,
+        .status = S_OK,
+    };
+    const HRESULT abortHr = CompleteDirectorySize(1u, &callback, nullptr, result);
+    if (abortHr == E_ABORT && result.status == E_ABORT && callback.progressCalls == 1u && callback.completionPathWasNull)
+    {
+        ++passed;
+    }
+    else
+    {
+        ++failed;
+        Debug::Error(L"FileSystemS3 directory-size selftest failed: final callback failure was not preserved");
+    }
+
+    result.status = E_FAIL;
+    if (CompleteDirectorySize(1u, nullptr, nullptr, result) == S_OK && result.status == S_OK)
+    {
+        ++passed;
+    }
+    else
+    {
+        ++failed;
+        Debug::Error(L"FileSystemS3 directory-size selftest failed: completion without a callback did not succeed");
+    }
+}
+#endif
 
 HRESULT STDMETHODCALLTYPE FileSystemS3::CreateDirectory(const wchar_t* path) noexcept
 {
@@ -186,16 +260,9 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::GetDirectorySize(
                     return result->status;
                 }
 
-                const HRESULT finalProgressHr =
-                    callback->DirectorySizeProgress(1, result->totalBytes, result->fileCount, result->directoryCount, nullptr, cookie);
-                if (FAILED(finalProgressHr))
-                {
-                    result->status = finalProgressHr;
-                    return result->status;
-                }
             }
 
-            return S_OK;
+            return CompleteDirectorySize(1u, callback, cookie, *result);
         }
     }
 
@@ -271,8 +338,22 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::GetDirectorySize(
         seenCommonPrefixesUtf8.reserve(256);
     }
 
+    const uint64_t pagingDurationMs = std::clamp<uint64_t>(static_cast<uint64_t>(bucketCtx.requestTimeoutMs) * 10u, 60'000u, 600'000u);
+    Common::Paging::Utf8ContinuationGuard pager(Common::Paging::Limits{
+        .deadlineTickMs = Common::Paging::DeadlineFromNow(GetTickCount64(), pagingDurationMs),
+    });
+    std::string continuationToken;
+    bool firstPage = true;
     while (true)
     {
+        const HRESULT pageBoundaryHr = firstPage ? pager.BeginFirstPage(GetTickCount64()) : pager.BeginContinuation(continuationToken, GetTickCount64());
+        firstPage = false;
+        if (FAILED(pageBoundaryHr))
+        {
+            result->status = pageBoundaryHr;
+            return result->status;
+        }
+
         const auto outcome = client->ListObjectsV2(req);
         if (! outcome.IsSuccess())
         {
@@ -284,12 +365,17 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::GetDirectorySize(
         }
 
         const auto& res = outcome.GetResult();
+        size_t pageBytes = 0u;
+        const auto addPageBytes = [&pageBytes](size_t bytes) noexcept {
+            pageBytes += (std::min)(bytes, (std::numeric_limits<size_t>::max)() - pageBytes);
+        };
 
         if (! recursive)
         {
             for (const auto& cp : res.GetCommonPrefixes())
             {
                 const Aws::String& full = cp.GetPrefix();
+                addPageBytes(full.size());
                 std::string_view fullView(full.c_str(), full.size());
 
                 if (! seenCommonPrefixesUtf8.emplace(fullView).second)
@@ -309,6 +395,7 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::GetDirectorySize(
         for (const auto& obj : res.GetContents())
         {
             const Aws::String& objKey = obj.GetKey();
+            addPageBytes(objKey.size());
             const std::string_view objKeyView(objKey.c_str(), objKey.size());
 
             // Skip a "folder marker" for the prefix itself.
@@ -334,25 +421,24 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::GetDirectorySize(
             }
         }
 
-        if (! res.GetIsTruncated())
+        const bool isTruncated      = res.GetIsTruncated();
+        const Aws::String& nextToken = res.GetNextContinuationToken();
+        const std::string_view nextTokenView(nextToken.c_str(), nextToken.size());
+        const HRESULT pageHr = pager.CompletePage(
+            res.GetCommonPrefixes().size() + res.GetContents().size(), pageBytes, isTruncated, nextTokenView, GetTickCount64());
+        if (FAILED(pageHr))
+        {
+            result->status = pageHr;
+            return result->status;
+        }
+        if (! isTruncated)
         {
             break;
         }
 
-        const Aws::String& token = res.GetNextContinuationToken();
-        req.SetContinuationToken(token);
+        continuationToken.assign(nextToken.c_str(), nextToken.size());
+        req.SetContinuationToken(nextToken);
     }
 
-    if (callback != nullptr)
-    {
-        const HRESULT progressHr =
-            callback->DirectorySizeProgress(scannedEntries, result->totalBytes, result->fileCount, result->directoryCount, nullptr, cookie);
-        if (FAILED(progressHr))
-        {
-            result->status = progressHr;
-        }
-    }
-
-    result->status = S_OK;
-    return result->status;
+    return CompleteDirectorySize(scannedEntries, callback, cookie, *result);
 }

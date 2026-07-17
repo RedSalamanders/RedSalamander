@@ -288,6 +288,12 @@ instead of inventing a numeric value.
 - Focused item has additional border
 - Selection persists when focus moves to another item
 
+**Pointer target semantics:**
+- A plain click on an unselected item MUST replace the prior selection with that item before drag detection or command routing reads the selection. A plain click on an already-selected item MAY preserve the existing multi-selection while moving focus.
+- A right-click on an unselected item MUST establish that item as the sole target before the context menu is built. A right-click on an already-selected item MAY preserve the existing multi-selection.
+- A plain click on the empty background MUST clear selection, focus/anchor state, and any armed drag source. Empty-background movement MUST NOT start a drag from a stale selection.
+- Destructive context-menu commands MUST execute only when the selected/focused display-name set still matches the snapshot captured before the nested menu loop. A refresh that removes a named focused item MUST leave focus unset rather than migrate it by positional index, and deferred external commands MUST validate their named target and dispatch in the same refresh turn.
+
 ## Features
 ### 1. Folder Content Display
 
@@ -337,6 +343,7 @@ instead of inventing a numeric value.
 - The host obtains an `IFileSystem` instance via the plugin factory (`RedSalamanderCreate(..., pluginId, ...)`) and uses it as the only source of directory entries.
 - Each enumeration calls `IFileSystem::ReadDirectoryInfo(path, info.put())` to obtain an `IFilesInformation` result object.
 - The returned `FileInfo` buffer is traversed via `NextEntryOffset` (preferred) to build `FolderItem` entries.
+- `IFilesInformation::GetCount()` is an untrusted allocation hint. FolderView MUST clamp any reserve derived from it by the validated buffer size and a fixed implementation ceiling, and allocation/reserve work MUST remain inside the enumeration worker's exception boundary.
 
 **Traversal Example (NextEntryOffset):**
 ```cpp
@@ -400,6 +407,8 @@ while (entry != nullptr)
 - `CF_HDROP`: Shell-compatible file list (most important)
 - `CFSTR_SHELLIDLIST`: Shell ID list for advanced operations
 - `CFSTR_PREFERREDDROPEFFECT`: Suggests copy vs. move. FolderView paste MUST honor `DROPEFFECT_MOVE` as a real file-operation move and treat `DROPEFFECT_COPY`, missing metadata, malformed payloads shorter than `sizeof(DWORD)`, or unsupported metadata as copy.
+- Private FolderView drop data and `CF_HDROP` are untrusted. Readers MUST validate `GlobalSize`, header/offset/alignment, wide encoding, required terminators, count-derived minimum bytes, per-path length, aggregate path length, and a fixed maximum item count before reserving or constructing strings. Clipboard readers MUST apply the same item/path/aggregate bounds; CF_HDROP writers MUST reject arithmetic overflow before `GlobalAlloc`.
+- A paste carrying `DROPEFFECT_MOVE` MUST invalidate the unchanged move clipboard only after the delegated/synchronous operation reports verified success. Failure, cancellation, or a clipboard sequence change MUST preserve the current clipboard; copy clipboard content remains repeatable.
 - When a `FileOperationRequestCallback` is installed by `FolderWindow`, FolderView copy/move/paste/drop paths MUST delegate copy and move work without showing a local pre-confirmation. The shared File Operations layer owns the single OK/Cancel confirmation for those delegated operations. Clipboard paste and folder-picker move MUST use the same delegated route and MUST NOT pre-grant overwrite, replace-read-only, or continue-on-error flags.
 - Paste Shortcut is local-file-system only. FolderView reads the clipboard on the UI thread, then creates `.lnk` files on value-only background work that captures copied source paths, target folder, path-visit generation, original filesystem identity, request id, and `HWND`, but never captures or dereferences `this`. A FolderView MUST serialize Paste Shortcut requests: if one worker is in flight, later invocations queue the already-captured clipboard payload and run after completion. The worker initializes COM as MTA before calling shell-link APIs and posts completion through `PostMessagePayload`.
 - Paste Shortcut shortcut creation MUST be collision-safe. Each deterministic `GenerateShortcutPath` candidate is probed and saved without replace semantics; if a racing creator wins the same slot (`ERROR_FILE_EXISTS` / `ERROR_ALREADY_EXISTS`), the worker retries the next candidate. Short and long final paths share the same temp-file-plus-move save path. The shell-persist temp path remains reserved between `GetTempFileNameW` and `IPersistFile::Save`; the placeholder is not deleted and exposed to name stealing.
@@ -427,14 +436,19 @@ DoDragDrop(dataObj.get(), dropSource.get(),
 
 **Drop Operations:**
 - **Copy**: Ctrl key held during drop
-- **Move**: Default (no modifiers)
+- **Move**: Shift key held, or the no-modifier default when every local source and the destination are on the same volume and MOVE is allowed
+- **Copy across volume/provider boundaries**: Default when no modifier is held and same-volume MOVE cannot be established
 - **Link**: Ctrl+Shift keys held
 - **Cancel**: Escape key
 - Delegated copy/move drops follow the same confirmation ownership as clipboard paste: exactly one shared File Operations prompt, not an additional FolderView prompt.
+- An external OLE drop that queues an asynchronous MOVE MUST report COPY to the external source at drop return. Queuing is not proof that MOVE committed and MUST NOT authorize early source deletion. Internal FolderView gestures retain their provider-qualified source identity for the host operation.
 
 **Drop Validation:**
-- Check if drop target is a folder
-- Validate file system supports operation
+- The screen drop point MUST be converted to client coordinates. A hovered directory is the destination; pane background uses the currently displayed folder.
+- Drop, paste, and cross-pane copy/move destinations MUST be fully enumerated. A destination still loading is rejected with localized pane feedback rather than silently re-targeted.
+- Every source MUST be rejected when the resolved destination is its current parent, the same path, or its own descendant.
+- External `CF_HDROP` sources are local filesystem paths. When the destination pane is virtual, the host MUST use the builtin local provider as the source and the pane provider as the destination, subject to the cross-filesystem capability gate; it MUST NOT ask the destination provider to read local paths.
+- Validate the resolved source/destination providers support the operation.
 - Highlight drop target folder during hover
 - Show appropriate cursor (copy/move/no-drop arrow)
 ### 3. Context Menus
@@ -965,7 +979,11 @@ case WndMsg::kFolderViewEnumerateComplete: {
 }
 ```
 
-**Teardown note:** windows that receive payload messages should call `InitPostedPayloadWindow(hwnd)` on create and `DrainPostedPayloadsForWindow(hwnd)` in `WM_NCDESTROY` to prevent leak-on-destroy.
+**Teardown note:** windows that receive payload messages must call `InitPostedPayloadWindow(hwnd)` on create and
+`DrainPostedPayloadsForWindow(hwnd)` in `WM_NCDESTROY`. Posted nonzero `lParam` values are opaque registry tokens,
+not payload pointers. Draining fences new posts, invalidates the window's tokens, and deletes registered storage
+exactly once; a stale token left in the thread queue or observed after numeric `HWND` reuse is rejected by
+`TakeMessagePayload<T>` and must be ignored.
 
 ### IconCache Integration
 
@@ -1141,6 +1159,29 @@ void RequestIconBatch(const std::vector<size_t>& indices) {
 **Pattern:** report failures via the in-window overlay system (no `MessageBox*`).
 
 Example: `FolderView::ReportError(L"EnumerateFolder", hr)` logs the failure and updates the current in-window overlay state.
+
+## Make File List output
+
+- File output from **Make File List** MUST use `Common::Files::LocalFileTransaction`; it must write the complete
+  rendered UTF-8 document to a unique sibling, flush and size-check it, then replace the selected local target.
+- Conversion, write, flush, verification, or promotion failure MUST preserve any previous target and remove the
+  abandoned temporary sibling. Direct `CREATE_ALWAYS` writes to the requested final path are forbidden.
+- The output transaction is only the commit boundary. Enumeration/rendering responsiveness, cancellation,
+  progress, explicit destination selection, and overwrite consent remain command-workflow responsibilities.
+- For interactive file output, the options prompt MUST be followed by a Save picker. The picker owns the final
+  destination decision and MUST request overwrite consent before an existing target can be replaced; the raw
+  remembered path is only a suggestion for that picker. Test automation may supply the destination directly.
+- Local enumeration, sorting, text/CSV/JSON rendering, and file output MUST run on the pane's owned background
+  `std::jthread`. The UI thread may snapshot command inputs and create/update the informational File Operations
+  task, but it MUST return before recursive enumeration starts.
+- Progress MUST remain visible through an informational File Operations task during collection, rendering, and
+  output. Invoking Make File List again for the same pane requests cancellation; window teardown also requests
+  stop and joins the worker. Collection and rendering MUST poll the stop token, and file output MUST recheck it
+  after the temporary write and before promotion so cancellation cannot publish a new target.
+- Clipboard publication remains a UI-thread operation. The worker may build clipboard text, but ownership crosses
+  to the UI through `PostMessagePayload(...)`, and settings/success feedback update only after clipboard or file
+  publication actually succeeds.
+
 ## Testing
 
 ### Unit Tests

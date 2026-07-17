@@ -4278,8 +4278,9 @@ bool MenuBar::ActivateItem(WindowHost& host, size_t index, bool keyboardInvocati
         itemRect.right,
         itemRect.bottom,
         std::wstring_view{_items[index].text});
-    _onOpenItem(index, screenPoint, keyboardInvocation);
+    const auto openItem = _onOpenItem;
     RequestInvalidate();
+    openItem(index, screenPoint, keyboardInvocation);
     return true;
 }
 

@@ -3,6 +3,48 @@
 namespace
 {
 constexpr HRESULT kMissingFileOperationHostHr = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+constexpr uint32_t kMaxDropPathCount           = 65'536u;
+constexpr size_t kMaxDropPathChars             = 32'768u;
+constexpr size_t kMaxDropTotalChars            = 16u * 1024u * 1024u;
+
+[[nodiscard]] std::wstring_view TrimTrailingPathSeparators(std::wstring_view path) noexcept
+{
+    while (path.size() > 1u && (path.back() == L'\\' || path.back() == L'/'))
+    {
+        path.remove_suffix(1u);
+    }
+    return path;
+}
+
+// FolderView provider paths use Windows-style case-insensitive identity but may use either separator.
+// Keep this lexical: resolving symlinks/reparse points belongs to the operation host/provider.
+[[nodiscard]] bool IsSameOrDescendantPath(std::wstring_view root, std::wstring_view candidate) noexcept
+{
+    root      = TrimTrailingPathSeparators(root);
+    candidate = TrimTrailingPathSeparators(candidate);
+    if (root.empty() || candidate.size() < root.size() || ! OrdinalString::StartsWithNoCase(candidate, root))
+    {
+        return false;
+    }
+    if (candidate.size() == root.size())
+    {
+        return true;
+    }
+    const wchar_t boundary = candidate[root.size()];
+    return boundary == L'\\' || boundary == L'/';
+}
+
+[[nodiscard]] bool AreSameLocalVolume(const std::filesystem::path& source, const std::filesystem::path& destination) noexcept
+{
+    std::array<wchar_t, MAX_PATH> sourceVolume{};
+    std::array<wchar_t, MAX_PATH> destinationVolume{};
+    if (GetVolumePathNameW(source.c_str(), sourceVolume.data(), static_cast<DWORD>(sourceVolume.size())) == FALSE ||
+        GetVolumePathNameW(destination.c_str(), destinationVolume.data(), static_cast<DWORD>(destinationVolume.size())) == FALSE)
+    {
+        return false;
+    }
+    return CompareStringOrdinal(sourceVolume.data(), -1, destinationVolume.data(), -1, TRUE) == CSTR_EQUAL;
+}
 
 [[nodiscard]] bool IsDirectFileOperationFallbackEnabledForDropSelfTest() noexcept
 {
@@ -143,8 +185,10 @@ public:
         }
 
         const DWORD allowed = _allowedEffects ? _allowedEffects : *effect;
-        DWORD performed     = DROPEFFECT_NONE;
-        HRESULT hr          = _owner.PerformDrop(dataObject, keyState, allowed, &performed);
+        POINT clientPoint{point.x, point.y};
+        static_cast<void>(ScreenToClient(_owner.GetHWND(), &clientPoint));
+        DWORD performed = DROPEFFECT_NONE;
+        HRESULT hr      = _owner.PerformDrop(dataObject, keyState, allowed, clientPoint, &performed);
         _currentDataObject.reset();
         _allowedEffects = DROPEFFECT_NONE;
         _lastEffect     = performed;
@@ -200,6 +244,11 @@ void FolderView::EnsureDropTarget()
 
 void FolderView::BeginDragDrop()
 {
+    if (_drag.anchorIndex == static_cast<size_t>(-1))
+    {
+        return;
+    }
+
     auto paths = GetSelectedOrFocusedPaths();
     if (paths.empty())
     {
@@ -258,7 +307,13 @@ void FolderView::BeginDragDrop()
 }
 
 #ifdef ENABLE_TESTS
-HRESULT FolderView::DebugPerformFileDropForSelfTest(const std::vector<std::filesystem::path>& paths, DWORD effect, DWORD* performedEffect) noexcept
+HRESULT FolderView::DebugPerformFileDropForSelfTest(const std::vector<std::filesystem::path>& paths,
+                                                    DWORD effect,
+                                                    DWORD* performedEffect,
+                                                    POINT clientPoint,
+                                                    bool externalSource,
+                                                    DWORD allowedEffects,
+                                                    DWORD keyState) noexcept
 {
     DWORD localPerformed = DROPEFFECT_NONE;
     if (! performedEffect)
@@ -267,7 +322,8 @@ HRESULT FolderView::DebugPerformFileDropForSelfTest(const std::vector<std::files
     }
     *performedEffect = DROPEFFECT_NONE;
 
-    auto* dataObjectRaw = new (std::nothrow) FolderViewDataObject(paths, L"builtin/file-system", std::wstring{}, effect, true);
+    auto* dataObjectRaw =
+        new (std::nothrow) FolderViewDataObject(paths, L"builtin/file-system", std::wstring{}, effect, true, ! externalSource);
     if (! dataObjectRaw)
     {
         return E_OUTOFMEMORY;
@@ -275,7 +331,23 @@ HRESULT FolderView::DebugPerformFileDropForSelfTest(const std::vector<std::files
 
     wil::com_ptr<IDataObject> dataObject;
     dataObject.attach(dataObjectRaw);
-    return PerformDrop(dataObject.get(), 0, effect, performedEffect);
+    const DWORD effectiveAllowedEffects = allowedEffects == DROPEFFECT_NONE ? effect : allowedEffects;
+    return PerformDrop(dataObject.get(), keyState, effectiveAllowedEffects, clientPoint, performedEffect);
+}
+
+HRESULT FolderView::DebugPerformDropFromDataObjectForSelfTest(IDataObject* dataObject,
+                                                              DWORD effect,
+                                                              DWORD* performedEffect,
+                                                              POINT clientPoint,
+                                                              DWORD keyState) noexcept
+{
+    DWORD localPerformed = DROPEFFECT_NONE;
+    if (! performedEffect)
+    {
+        performedEffect = &localPerformed;
+    }
+    *performedEffect = DROPEFFECT_NONE;
+    return PerformDrop(dataObject, keyState, effect, clientPoint, performedEffect);
 }
 #endif
 
@@ -350,7 +422,7 @@ bool FolderView::HasFileDrop(IDataObject* dataObject) const
     return SUCCEEDED(dataObject->QueryGetData(&format));
 }
 
-HRESULT FolderView::PerformDrop(IDataObject* dataObject, DWORD keyState, DWORD allowedEffects, DWORD* performedEffect)
+HRESULT FolderView::PerformDrop(IDataObject* dataObject, DWORD keyState, DWORD allowedEffects, POINT clientPoint, DWORD* performedEffect)
 {
     if (! dataObject || ! performedEffect)
     {
@@ -362,8 +434,18 @@ HRESULT FolderView::PerformDrop(IDataObject* dataObject, DWORD keyState, DWORD a
     {
         return E_FAIL;
     }
+    if (! IsCurrentFolderEnumerated())
+    {
+        return DRAGDROP_S_CANCEL;
+    }
 
-    const DWORD effect = ResolveDropEffect(keyState, allowedEffects);
+    std::filesystem::path destination = _currentFolder.value();
+    if (const auto hit = HitTest(clientPoint); hit.has_value() && hit.value() < _items.size() && _items[hit.value()].isDirectory)
+    {
+        destination = GetItemFullPath(_items[hit.value()]);
+    }
+
+    DWORD effect = ResolveDropEffect(keyState, allowedEffects);
     if (effect == DROPEFFECT_NONE)
     {
         return S_OK;
@@ -434,6 +516,10 @@ HRESULT FolderView::PerformDrop(IDataObject* dataObject, DWORD keyState, DWORD a
 
         auto readString = [&](uint32_t chars, std::wstring& out) noexcept -> bool
         {
+            if (chars > kMaxDropPathChars)
+            {
+                return false;
+            }
             const size_t bytes = (static_cast<size_t>(chars) + 1u) * sizeof(wchar_t);
             if (offset > bytesAvailable || bytes > bytesAvailable - offset)
             {
@@ -456,8 +542,16 @@ HRESULT FolderView::PerformDrop(IDataObject* dataObject, DWORD keyState, DWORD a
             return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
         }
 
+        const size_t remainingBytes = offset <= bytesAvailable ? bytesAvailable - offset : 0u;
+        constexpr size_t kMinimumPathRecordBytes = sizeof(uint32_t) + sizeof(wchar_t);
+        if (header->pathCount > kMaxDropPathCount || static_cast<size_t>(header->pathCount) > remainingBytes / kMinimumPathRecordBytes)
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+
         paths.clear();
         paths.reserve(header->pathCount);
+        size_t totalPathChars = 0u;
         for (uint32_t i = 0; i < header->pathCount; ++i)
         {
             if (offset > bytesAvailable || sizeof(uint32_t) > bytesAvailable - offset)
@@ -468,6 +562,12 @@ HRESULT FolderView::PerformDrop(IDataObject* dataObject, DWORD keyState, DWORD a
             uint32_t chars = 0;
             memcpy(&chars, base + offset, sizeof(chars));
             offset += sizeof(chars);
+
+            if (chars > kMaxDropPathChars || totalPathChars > kMaxDropTotalChars - static_cast<size_t>(chars))
+            {
+                return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+            }
+            totalPathChars += chars;
 
             std::wstring text;
             if (! readString(chars, text))
@@ -517,23 +617,64 @@ HRESULT FolderView::PerformDrop(IDataObject* dataObject, DWORD keyState, DWORD a
             return DV_E_TYMED;
         }
 
-        auto* dropFiles = static_cast<DROPFILES*>(GlobalLock(medium.hGlobal));
+        const SIZE_T bytesAvailable = GlobalSize(medium.hGlobal);
+        if (bytesAvailable < sizeof(DROPFILES))
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+
+        const auto* dropFiles = static_cast<const DROPFILES*>(GlobalLock(medium.hGlobal));
         if (! dropFiles)
         {
             return E_FAIL;
         }
         auto unlock = wil::scope_exit([&]() { GlobalUnlock(medium.hGlobal); });
 
-        if (! dropFiles->fWide)
+        if (! dropFiles->fWide || dropFiles->pFiles < sizeof(DROPFILES) || dropFiles->pFiles > bytesAvailable ||
+            (dropFiles->pFiles % alignof(wchar_t)) != 0u)
         {
-            return E_FAIL;
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
         }
 
-        const wchar_t* current = reinterpret_cast<const wchar_t*>(reinterpret_cast<const BYTE*>(dropFiles) + dropFiles->pFiles);
-        while (current && *current)
+        const size_t pathBytes = bytesAvailable - dropFiles->pFiles;
+        if (pathBytes < 2u * sizeof(wchar_t) || (pathBytes % sizeof(wchar_t)) != 0u)
         {
-            paths.emplace_back(current);
-            current += wcslen(current) + 1;
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+        const auto* pathBuffer = reinterpret_cast<const wchar_t*>(reinterpret_cast<const std::byte*>(dropFiles) + dropFiles->pFiles);
+        const size_t pathChars = pathBytes / sizeof(wchar_t);
+        if (pathBuffer[pathChars - 1u] != L'\0' || pathBuffer[pathChars - 2u] != L'\0')
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+
+        // The structural bounds above make the shell parser safe to use while retaining its canonical
+        // handling of DROPFILES details.
+        const HDROP drop       = static_cast<HDROP>(medium.hGlobal);
+        const UINT fileCount   = DragQueryFileW(drop, 0xFFFFFFFFu, nullptr, 0u);
+        if (fileCount > kMaxDropPathCount)
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+        paths.clear();
+        paths.reserve(fileCount);
+        size_t totalPathChars = 0u;
+        for (UINT index = 0u; index < fileCount; ++index)
+        {
+            const UINT length = DragQueryFileW(drop, index, nullptr, 0u);
+            if (length == 0u || length > kMaxDropPathChars || totalPathChars > kMaxDropTotalChars - static_cast<size_t>(length))
+            {
+                return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+            }
+
+            std::wstring path(static_cast<size_t>(length) + 1u, L'\0');
+            if (DragQueryFileW(drop, index, path.data(), length + 1u) != length)
+            {
+                return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+            }
+            totalPathChars += length;
+            path.resize(length);
+            paths.emplace_back(std::move(path));
         }
     }
     else if (FAILED(hr))
@@ -546,7 +687,27 @@ HRESULT FolderView::PerformDrop(IDataObject* dataObject, DWORD keyState, DWORD a
         return S_OK;
     }
 
+    const bool hasModifier = (keyState & (MK_CONTROL | MK_SHIFT)) != 0 || (GetKeyState(VK_MENU) & 0x8000) != 0;
+    if (! hasModifier && effect == DROPEFFECT_COPY && (allowedEffects & DROPEFFECT_MOVE) != 0 &&
+        std::ranges::all_of(paths, [&](const std::filesystem::path& source) noexcept { return AreSameLocalVolume(source, destination); }))
+    {
+        effect = DROPEFFECT_MOVE;
+    }
+
+    const std::filesystem::path normalizedDestination = destination.lexically_normal();
+    for (const auto& source : paths)
+    {
+        const std::filesystem::path normalizedSource = source.lexically_normal();
+        const std::filesystem::path sourceParent     = normalizedSource.parent_path().lexically_normal();
+        if ((! sourceParent.empty() && OrdinalString::EqualsNoCasePath(sourceParent, normalizedDestination)) ||
+            IsSameOrDescendantPath(normalizedSource.native(), normalizedDestination.native()))
+        {
+            return DRAGDROP_S_CANCEL;
+        }
+    }
+
     HRESULT operationHr = S_OK;
+    DWORD reportedEffect = effect;
     switch (effect)
     {
         case DROPEFFECT_MOVE:
@@ -569,10 +730,16 @@ HRESULT FolderView::PerformDrop(IDataObject* dataObject, DWORD keyState, DWORD a
                 request.sourceContextSpecified = internalDrop;
                 request.sourcePluginId         = std::move(sourcePluginId);
                 request.sourceInstanceContext  = std::move(sourceInstanceContext);
-                request.destinationFolder      = _currentFolder.value();
+                request.destinationFolder      = destination;
                 request.flags                  = flags;
 
                 operationHr = _fileOperationRequestCallback(std::move(request));
+                if (SUCCEEDED(operationHr) && effect == DROPEFFECT_MOVE && ! internalDrop)
+                {
+                    // The host operation is asynchronous. Reporting MOVE here would authorize an external
+                    // source to delete before our worker has committed the move.
+                    reportedEffect = DROPEFFECT_COPY;
+                }
                 break;
             }
 
@@ -583,7 +750,7 @@ HRESULT FolderView::PerformDrop(IDataObject* dataObject, DWORD keyState, DWORD a
                 break;
             }
 
-            if (! ConfirmNonRevertableFileOperation(_hWnd.get(), _fileSystem.get(), operationType, paths, _currentFolder.value()))
+            if (! ConfirmNonRevertableFileOperation(_hWnd.get(), _fileSystem.get(), operationType, paths, destination))
             {
                 return DRAGDROP_S_CANCEL;
             }
@@ -600,11 +767,11 @@ HRESULT FolderView::PerformDrop(IDataObject* dataObject, DWORD keyState, DWORD a
 
             if (effect == DROPEFFECT_COPY)
             {
-                operationHr = _fileSystem->CopyItems(sourcePaths, count, _currentFolder->c_str(), flags, nullptr, nullptr, nullptr);
+                operationHr = _fileSystem->CopyItems(sourcePaths, count, destination.c_str(), flags, nullptr, nullptr, nullptr);
             }
             else
             {
-                operationHr = _fileSystem->MoveItems(sourcePaths, count, _currentFolder->c_str(), flags, nullptr, nullptr, nullptr);
+                operationHr = _fileSystem->MoveItems(sourcePaths, count, destination.c_str(), flags, nullptr, nullptr, nullptr);
             }
             break;
         }
@@ -648,7 +815,7 @@ HRESULT FolderView::PerformDrop(IDataObject* dataObject, DWORD keyState, DWORD a
                 bool foundSlot = false;
                 for (int attempt = 0; attempt < 256; ++attempt)
                 {
-                    linkPath = GenerateShortcutPath(*_currentFolder, path, attempt);
+                    linkPath = GenerateShortcutPath(destination, path, attempt);
                     if (! std::filesystem::exists(linkPath, ec))
                     {
                         ec.clear();
@@ -690,6 +857,6 @@ HRESULT FolderView::PerformDrop(IDataObject* dataObject, DWORD keyState, DWORD a
         EnumerateFolder();
     }
 
-    *performedEffect = effect;
+    *performedEffect = reportedEffect;
     return S_OK;
 }

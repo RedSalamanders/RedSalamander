@@ -7,10 +7,13 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <condition_variable>
 #include <mutex>
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
+#include <utility>
 #include <vector>
 
 #pragma warning(push)
@@ -169,6 +172,10 @@ public:
         unsigned long pageSize    = 200;
     };
 
+#if defined(_DEBUG)
+    static HRESULT RunDebugSelfTests(unsigned int* passed, unsigned int* failed) noexcept;
+#endif
+
 private:
     ~FileSystemGoogleDrive();
     [[nodiscard]] IHostAlerts* GetHostAlerts() const noexcept;
@@ -223,12 +230,51 @@ private:
 
     struct AccessTokenCacheEntry
     {
+        AccessTokenCacheEntry() = default;
+        ~AccessTokenCacheEntry()
+        {
+            SecureWipe::SecureClear(token);
+        }
+        AccessTokenCacheEntry(const AccessTokenCacheEntry&)            = delete;
+        AccessTokenCacheEntry& operator=(const AccessTokenCacheEntry&) = delete;
+        AccessTokenCacheEntry(AccessTokenCacheEntry&& other) noexcept
+            : token(std::move(other.token)),
+              expiresAtTickMs(std::exchange(other.expiresAtTickMs, 0u))
+        {
+            SecureWipe::SecureClear(other.token);
+        }
+        AccessTokenCacheEntry& operator=(AccessTokenCacheEntry&& other) noexcept
+        {
+            if (this != &other)
+            {
+                SecureWipe::SecureClear(token);
+                token           = std::move(other.token);
+                expiresAtTickMs = std::exchange(other.expiresAtTickMs, 0u);
+                SecureWipe::SecureClear(other.token);
+            }
+            return *this;
+        }
+
         std::wstring token;
         uint64_t expiresAtTickMs = 0;
     };
 
     std::mutex _tokenMutex;
+    std::condition_variable _tokenCv;
     std::unordered_map<std::wstring, AccessTokenCacheEntry> _accessTokensByConnectionKey;
+    std::unordered_set<std::wstring> _tokenRefreshesInFlight;
+    std::unordered_map<std::wstring, HRESULT> _lastTokenRefreshStatus;
+    uint64_t _tokenCacheGeneration = 0u;
 };
 
 [[nodiscard]] const char* GetFileSystemGoogleDriveStaticConfigurationSchema() noexcept;
+
+namespace FileSystemGoogleDriveInternal
+{
+[[nodiscard]] bool CanCreateInstance() noexcept;
+void BeginShutdown() noexcept;
+[[nodiscard]] bool CanUnloadNow() noexcept;
+#if defined(_DEBUG)
+[[nodiscard]] HRESULT RunDebugCurlRuntimeProbe() noexcept;
+#endif
+} // namespace FileSystemGoogleDriveInternal

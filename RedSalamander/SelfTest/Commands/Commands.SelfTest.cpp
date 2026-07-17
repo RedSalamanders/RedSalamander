@@ -45,6 +45,7 @@ struct ForceWilTemplateInstantiations
 {
     wil::unique_hfile file;
     wil::unique_hlocal_ptr<wchar_t*> argv;
+    wil::unique_hglobal global;
 };
 } // namespace CommandsSelfTestWilWarningSilence
 #pragma warning(pop)
@@ -112,8 +113,8 @@ struct ForceWilTemplateInstantiations
 #include "resource.h"
 #pragma warning(pop)
 
-extern FolderWindow g_folderWindow;
-extern Common::Settings::Settings g_settings;
+static FolderWindow& g_folderWindow           = GetApplicationFolderWindowForSelfTest();
+static Common::Settings::Settings& g_settings = GetApplicationSettingsForSelfTest();
 
 namespace
 {
@@ -182,6 +183,93 @@ void PumpPendingMessages() noexcept
         DispatchMessageW(&msg);
     }
 }
+
+// Canonical Commands self-test guard for the rare probes that must sample real
+// desktop input. Keep this in the shared Commands translation unit so every
+// included test family uses the same warning lifetime and RAII ownership.
+class DirectedSelfTestInputWarning
+{
+public:
+    DirectedSelfTestInputWarning() noexcept
+    {
+        const int screenW = GetSystemMetrics(SM_CXSCREEN);
+        const int screenH = GetSystemMetrics(SM_CYSCREEN);
+        if (screenW <= 0 || screenH <= 0)
+        {
+            return;
+        }
+
+        const int width  = std::min(screenW, 900);
+        const int height = std::min(screenH, 220);
+        const int left   = (std::max)(0, (screenW - width) / 2);
+        const int top    = (std::max)(0, (screenH - height) / 3);
+
+        _font.reset(CreateFontW(-56,
+                                0,
+                                0,
+                                0,
+                                FW_BOLD,
+                                FALSE,
+                                FALSE,
+                                FALSE,
+                                DEFAULT_CHARSET,
+                                OUT_DEFAULT_PRECIS,
+                                CLIP_DEFAULT_PRECIS,
+                                CLEARTYPE_QUALITY,
+                                DEFAULT_PITCH | FF_SWISS,
+                                L"Segoe UI"));
+
+        HWND hwnd = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_LAYERED | WS_EX_TRANSPARENT,
+                                    L"STATIC",
+                                    L"don't touch the mouse",
+                                    WS_POPUP | WS_VISIBLE | WS_BORDER | SS_CENTER | SS_CENTERIMAGE,
+                                    left,
+                                    top,
+                                    width,
+                                    height,
+                                    nullptr,
+                                    nullptr,
+                                    GetModuleHandleW(nullptr),
+                                    nullptr);
+        if (! hwnd)
+        {
+            return;
+        }
+
+        _hwnd.reset(hwnd);
+        if (_font)
+        {
+            SendMessageW(_hwnd.get(), WM_SETFONT, reinterpret_cast<WPARAM>(_font.get()), TRUE);
+        }
+        static_cast<void>(SetLayeredWindowAttributes(_hwnd.get(), 0, 230, LWA_ALPHA));
+        SetWindowPos(_hwnd.get(), HWND_TOPMOST, left, top, width, height, SWP_NOACTIVATE | SWP_SHOWWINDOW);
+        UpdateWindow(_hwnd.get());
+        PumpPendingMessages();
+        _shownAt = GetTickCount64();
+    }
+
+    ~DirectedSelfTestInputWarning() noexcept
+    {
+        if (_hwnd)
+        {
+            const ULONGLONG elapsedMs = GetTickCount64() - _shownAt;
+            if (elapsedMs < 250u)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(250u - elapsedMs));
+                PumpPendingMessages();
+            }
+            _hwnd.reset();
+        }
+    }
+
+    DirectedSelfTestInputWarning(const DirectedSelfTestInputWarning&)            = delete;
+    DirectedSelfTestInputWarning& operator=(const DirectedSelfTestInputWarning&) = delete;
+
+private:
+    wil::unique_hwnd _hwnd;
+    wil::unique_hfont _font;
+    ULONGLONG _shownAt = 0;
+};
 
 using CaseState = SelfTest::CaseState;
 
@@ -276,6 +364,10 @@ void CleanupSettingsArtifacts(std::wstring_view appId) noexcept
     if (! settingsPath.empty())
     {
         std::filesystem::remove(settingsPath, ec);
+        ec.clear();
+        std::filesystem::path lockPath = settingsPath;
+        lockPath += L".lock";
+        std::filesystem::remove(lockPath, ec);
         ec.clear();
 
         const std::filesystem::path directory = settingsPath.parent_path();

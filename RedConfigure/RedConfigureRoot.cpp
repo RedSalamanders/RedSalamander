@@ -8,6 +8,7 @@
 #include "RedConfigureApp.h"
 #include "RedConfigureGridModels.h"
 #include "RedConfigureLocalizationExampleControl.h"
+#include "RedConfigurePagePresenters.h"
 #include "RedConfigureSession.h"
 #include "RedConfigureThemeExampleControl.h"
 #include "RedConfigureUiHelpers.h"
@@ -245,6 +246,21 @@ BOOL CALLBACK CollectLocaleNameProc(LPWSTR localeName, DWORD, LPARAM userData) n
     return cultures;
 }
 
+[[nodiscard]] std::wstring ValidationCategoryText(HINSTANCE instance, RedConfigure::Workflow::ValidationCategory category)
+{
+    return LoadAppString(instance, static_cast<UINT>(ReviewExportPagePresenter::GetCategoryResourceId(category)));
+}
+
+[[nodiscard]] std::wstring ValidationMessageText(HINSTANCE instance, const RedConfigure::Workflow::ValidationIssue& issue)
+{
+    const UINT resourceId = static_cast<UINT>(ReviewExportPagePresenter::GetMessageResourceId(issue.code));
+    if (issue.code == RedConfigure::Workflow::ValidationCode::DuplicateAccelerator)
+    {
+        return FormatStringResource(instance, resourceId, issue.arguments.empty() ? std::wstring{} : issue.arguments.front());
+    }
+    return LoadAppString(instance, resourceId);
+}
+
 [[nodiscard]] std::wstring Utf16FromUtf8(std::string_view text)
 {
     return Common::Strings::Utf16FromUtf8StrictOrEmpty(text);
@@ -272,6 +288,7 @@ public:
 
     void ReloadWorkspaceFromFields()
     {
+        InvalidatePendingApprovals();
         _workspaceRoot       = RedConfigure::ResolveWorkspaceRootForLaunchPath(std::filesystem::path(std::wstring(_workspaceRootField->GetText())));
         std::wstring culture = ! _localizationReviewViewOptions.visibleCultureNames.empty()
                                    ? _localizationReviewViewOptions.visibleCultureNames.front()
@@ -922,13 +939,14 @@ private:
     void SyncFromSession()
     {
         _syncing = true;
+        const StartPageSummary startSummary = StartPagePresenter::Build(_session);
         _workspaceRootField->SetText(_workspaceRoot.wstring());
         _ownerCountLabel->SetText(LoadAppString(_instance, IDS_REDCONFIGURE_LABEL_RESOURCE_OWNERS) + L": " +
-                                  std::to_wstring(_session.GetWorkspace().resourceOwners.size()));
+                                  std::to_wstring(startSummary.resourceOwnerCount));
         _themeFileCountLabel->SetText(LoadAppString(_instance, IDS_REDCONFIGURE_LABEL_THEME_FILES) + L": " +
-                                      std::to_wstring(_session.GetThemeCatalog().themes.size()));
+                                      std::to_wstring(startSummary.themeFileCount));
         _scanErrorCountLabel->SetText(LoadAppString(_instance, IDS_REDCONFIGURE_LABEL_SCAN_ERRORS) + L": " +
-                                      std::to_wstring(_session.GetWorkspace().errors.size()));
+                                      std::to_wstring(startSummary.scanErrorCount));
         _activeOwnerLabel->SetText(LoadAppString(_instance, IDS_REDCONFIGURE_LABEL_ACTIVE_OWNER) + L": " + std::wstring(_session.GetActiveResourceOwnerName()));
         _translationCountLabel->SetText(LoadAppString(_instance, IDS_REDCONFIGURE_LABEL_TRANSLATION_COUNT) + L": " +
                                         std::to_wstring(_session.GetLocalizationReviewRows().size()));
@@ -956,8 +974,15 @@ private:
         }
     }
 
+    void InvalidatePendingApprovals() noexcept
+    {
+        _localizationPresenter.Invalidate();
+        _themesPresenter.Invalidate();
+    }
+
     void RebuildTranslationView(bool preserveSelection)
     {
+        InvalidatePendingApprovals();
         SyncLocalizationReviewFilterDefaults();
         _localizationReviewViewRows = RedConfigure::BuildLocalizationReviewView(_session.GetLocalizationReviewRows(), _localizationReviewViewOptions);
         _localizationReviewModel.SetVisibleCultures(_localizationReviewViewOptions.visibleCultureNames);
@@ -1166,15 +1191,16 @@ private:
         if (catalog.themes.empty())
         {
             const auto& fallback = _session.GetThemePreviewModel().GetTheme();
-            themeItems.push_back(ComboBox::Item{.value = fallback.id, .display = L"[Built-in] " + fallback.name});
+            themeItems.push_back(
+                ComboBox::Item{.value = fallback.id, .display = LoadAppString(_instance, IDS_REDCONFIGURE_THEME_ORIGIN_BUILTIN) + fallback.name});
         }
         else
         {
             themeItems.reserve(catalog.themes.size());
             for (const auto& theme : catalog.themes)
             {
-                const bool userTheme = theme.path.wstring().find(L"RedConfigureOutput") != std::wstring::npos;
-                const std::wstring section = theme.definition.id.starts_with(L"builtin/") ? L"[Built-in] " : userTheme ? L"[User] " : L"[File] ";
+                const UINT originId = static_cast<UINT>(ThemesPagePresenter::GetOriginResourceId(theme.origin));
+                const std::wstring section = LoadAppString(_instance, originId);
                 themeItems.push_back(ComboBox::Item{.value = theme.definition.id, .display = section + theme.definition.name});
             }
         }
@@ -1288,6 +1314,7 @@ private:
 
     void SyncExportPreviews()
     {
+        InvalidatePendingApprovals();
         if (! _reviewOutputScroll)
         {
             return;
@@ -1817,9 +1844,12 @@ private:
 
         std::wstring text = LoadAppString(_instance, IDS_REDCONFIGURE_LABEL_SCOPE) + L": ";
         text += _workspaceRoot.wstring();
-        text += std::format(L" | Dirty {}{} | ",
-                            _session.GetDirtyLocalizationCellCount(),
-                            _session.IsThemeDirty() ? L" + theme" : L"");
+        text += L" | " + FormatStringResource(_instance,
+                                               IDS_REDCONFIGURE_FMT_DIRTY_SCOPE,
+                                               _session.GetDirtyLocalizationCellCount(),
+                                               LoadAppString(_instance,
+                                                             _session.IsThemeDirty() ? IDS_REDCONFIGURE_VALUE_YES : IDS_REDCONFIGURE_VALUE_NO)) +
+                L" | ";
         if (_selectedPage == 0u)
         {
             text += LoadAppString(_instance, IDS_REDCONFIGURE_LABEL_RESOURCE_OWNERS) + L" " + std::to_wstring(_session.GetWorkspace().resourceOwners.size());
@@ -1862,7 +1892,7 @@ private:
         for (size_t index = 0u; index < visibleIssueCount; ++index)
         {
             const auto& issue = _validationSummary.issues[index];
-            text += std::format(L"\n{}: {}", issue.category, issue.message);
+            text += L"\n" + ValidationCategoryText(_instance, issue.category) + L": " + ValidationMessageText(_instance, issue);
             if (! issue.resourceId.empty()) text += L" [" + issue.resourceId + L"]";
             if (! issue.cultureName.empty()) text += L" (" + issue.cultureName + L")";
         }
@@ -1995,24 +2025,39 @@ private:
                 break;
             }
         }
-        if (_pendingLocalizationBatch.has_value() && _pendingLocalizationBatch->request.kind == kind &&
-            _pendingLocalizationBatch->request.targetCulture == _selectedReviewCulture)
+        const BatchInteraction interaction = _localizationPresenter.Execute(_session, request);
+        if (interaction.phase == BatchInteractionPhase::Apply)
         {
-            if (_session.ApplyLocalizationBatch(_pendingLocalizationBatch.value()))
+            if (interaction.result == RedConfigure::Workflow::BatchApprovalResult::Applied)
             {
-                _pendingLocalizationBatch.reset();
                 RebuildTranslationView(true);
                 SyncExportPreviews();
                 RunValidation(false);
             }
+            else
+            {
+                _statusLabel->SetText(LoadAppString(_instance,
+                                                    interaction.result == RedConfigure::Workflow::BatchApprovalResult::Stale
+                                                        ? IDS_REDCONFIGURE_STATUS_BATCH_STALE
+                                                        : IDS_REDCONFIGURE_STATUS_BATCH_FAILED));
+            }
             return;
         }
-        _pendingLocalizationBatch = RedConfigure::Workflow::PreviewLocalizationBatch(_session.GetLocalizationReviewRows(), request);
-        std::wstring previewText = FormatStringResource(_instance, IDS_REDCONFIGURE_FMT_BATCH_PREVIEW, _pendingLocalizationBatch->changes.size());
-        if (! _pendingLocalizationBatch->changes.empty())
+        if (interaction.result == RedConfigure::Workflow::BatchApprovalResult::Invalid)
         {
-            const auto& first = _pendingLocalizationBatch->changes.front();
-            previewText += L"\n" + FormatStringResource(_instance, IDS_REDCONFIGURE_FMT_BEFORE_AFTER, first.resourceId, first.before, first.after);
+            _statusLabel->SetText(LoadAppString(_instance, IDS_REDCONFIGURE_STATUS_BATCH_INVALID));
+            return;
+        }
+        if (interaction.result == RedConfigure::Workflow::BatchApprovalResult::NoChanges)
+        {
+            _statusLabel->SetText(LoadAppString(_instance, IDS_REDCONFIGURE_STATUS_BATCH_NO_CHANGES));
+            return;
+        }
+        std::wstring previewText = FormatStringResource(_instance, IDS_REDCONFIGURE_FMT_BATCH_PREVIEW, interaction.changeCount);
+        if (interaction.firstChange.has_value())
+        {
+            const BatchChangeSummary& first = interaction.firstChange.value();
+            previewText += L"\n" + FormatStringResource(_instance, IDS_REDCONFIGURE_FMT_BEFORE_AFTER, first.identity, first.before, first.after);
         }
         _statusLabel->SetText(previewText);
     }
@@ -2062,24 +2107,40 @@ private:
         {
             if (ThemeKeyGroup(key) == group) request.keys.push_back(key);
         }
-        if (_pendingThemeBatch.has_value() && _pendingThemeBatch->request.recipe == recipe && _pendingThemeBatch->request.keys == request.keys)
+        const BatchInteraction interaction = _themesPresenter.Execute(_session, request);
+        if (interaction.phase == BatchInteractionPhase::Apply)
         {
-            if (RedConfigure::Workflow::ApplyThemeMassChange(_session.GetThemePreviewModel(), _pendingThemeBatch.value()))
+            if (interaction.result == RedConfigure::Workflow::BatchApprovalResult::Applied)
             {
-                _pendingThemeBatch.reset();
                 SyncThemeColorKeyCombo({});
                 SyncThemeColorEditor();
                 SyncExportPreviews();
                 _themePreview->Refresh();
             }
+            else
+            {
+                _statusLabel->SetText(LoadAppString(_instance,
+                                                    interaction.result == RedConfigure::Workflow::BatchApprovalResult::Stale
+                                                        ? IDS_REDCONFIGURE_STATUS_BATCH_STALE
+                                                        : IDS_REDCONFIGURE_STATUS_BATCH_FAILED));
+            }
             return;
         }
-        _pendingThemeBatch = RedConfigure::Workflow::PreviewThemeMassChange(_session.GetThemePreviewModel(), request);
-        std::wstring previewText = FormatStringResource(_instance, IDS_REDCONFIGURE_FMT_BATCH_PREVIEW, _pendingThemeBatch->changes.size());
-        if (! _pendingThemeBatch->changes.empty())
+        if (interaction.result == RedConfigure::Workflow::BatchApprovalResult::Invalid)
         {
-            const auto& first = _pendingThemeBatch->changes.front();
-            previewText += L"\n" + FormatStringResource(_instance, IDS_REDCONFIGURE_FMT_BEFORE_AFTER, first.key, first.before, first.after);
+            _statusLabel->SetText(LoadAppString(_instance, IDS_REDCONFIGURE_STATUS_BATCH_INVALID));
+            return;
+        }
+        if (interaction.result == RedConfigure::Workflow::BatchApprovalResult::NoChanges)
+        {
+            _statusLabel->SetText(LoadAppString(_instance, IDS_REDCONFIGURE_STATUS_BATCH_NO_CHANGES));
+            return;
+        }
+        std::wstring previewText = FormatStringResource(_instance, IDS_REDCONFIGURE_FMT_BATCH_PREVIEW, interaction.changeCount);
+        if (interaction.firstChange.has_value())
+        {
+            const BatchChangeSummary& first = interaction.firstChange.value();
+            previewText += L"\n" + FormatStringResource(_instance, IDS_REDCONFIGURE_FMT_BEFORE_AFTER, first.identity, first.before, first.after);
         }
         _statusLabel->SetText(previewText);
     }
@@ -2122,17 +2183,28 @@ private:
     void DuplicateActiveTheme()
     {
         const auto& active = _session.GetThemePreviewModel().GetTheme();
-        std::wstring id = active.id;
-        if (id.starts_with(L"builtin/")) id = L"user/" + id.substr(8u);
-        id += L"-copy";
-        std::wstring name = active.name + L" Copy";
-        for (uint32_t suffix = 2u; ! _session.DuplicateActiveTheme(id, name); ++suffix)
+        const std::wstring copyLabel = LoadAppString(_instance, IDS_REDCONFIGURE_THEME_COPY_LABEL);
+        for (uint32_t sequence = 1u; sequence <= 100u; ++sequence)
         {
-            id = std::format(L"{}-copy-{}", active.id.starts_with(L"builtin/") ? L"user/" + active.id.substr(8u) : active.id, suffix);
-            name = std::format(L"{} Copy {}", active.name, suffix);
-            if (suffix > 100u) return;
+            const auto candidate = RedConfigure::Workflow::BuildDuplicateThemeCandidate(active.id, active.name, copyLabel, sequence);
+            if (! candidate.has_value())
+            {
+                _statusLabel->SetText(LoadAppString(_instance, IDS_REDCONFIGURE_STATUS_DUPLICATE_INVALID));
+                return;
+            }
+            const RedConfigure::DuplicateThemeResult result = _session.DuplicateActiveTheme(candidate->id, candidate->name);
+            if (result == RedConfigure::DuplicateThemeResult::Created)
+            {
+                SyncFromSession();
+                return;
+            }
+            if (result != RedConfigure::DuplicateThemeResult::Collision)
+            {
+                _statusLabel->SetText(LoadAppString(_instance, IDS_REDCONFIGURE_STATUS_DUPLICATE_INVALID));
+                return;
+            }
         }
-        SyncFromSession();
+        _statusLabel->SetText(LoadAppString(_instance, IDS_REDCONFIGURE_STATUS_DUPLICATE_EXHAUSTED));
     }
 
     [[nodiscard]] ThemePalette ResolvePalette() const noexcept
@@ -2824,8 +2896,8 @@ private:
     std::vector<std::wstring> _recentThemeColors;
     RedConfigure::Workflow::LanguageColumnModel _languageColumns;
     RedConfigure::Workflow::ValidationSummary _validationSummary;
-    std::optional<RedConfigure::Workflow::LocalizationBatchPreview> _pendingLocalizationBatch;
-    std::optional<RedConfigure::Workflow::ThemeMassPreview> _pendingThemeBatch;
+    LocalizationPagePresenter _localizationPresenter;
+    ThemesPagePresenter _themesPresenter;
     bool _validationDrawerExpanded = false;
     bool _warningsAcknowledged = false;
 

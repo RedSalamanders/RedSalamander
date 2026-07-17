@@ -137,6 +137,10 @@ inline constexpr UINT kBatchRenameCompleted  = WM_APP + 0x545;
 inline constexpr UINT kBatchRenameWindowDebug = WM_APP + 0x546;
 #endif
 
+// Make File List (background)
+inline constexpr UINT kMakeFileListTaskUpdate = WM_APP + 0x547;
+inline constexpr UINT kMakeFileListCompleted  = WM_APP + 0x548;
+
 // Splash screen
 inline constexpr UINT kSplashScreenSetText  = WM_APP + 0x6F0;
 inline constexpr UINT kSplashScreenRecenter = WM_APP + 0x6F1;

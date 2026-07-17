@@ -282,21 +282,36 @@ std::wstring MakeAbsolutePath(const std::wstring& path)
         return input;
     }
 
-    DWORD required = GetFullPathNameW(input.c_str(), 0, nullptr, nullptr);
+    constexpr DWORD kMaximumAbsolutePathChars = 32u * 1024u;
+    DWORD required                            = GetFullPathNameW(input.c_str(), 0, nullptr, nullptr);
     if (required == 0)
     {
         return input;
     }
 
-    std::wstring absolute(static_cast<size_t>(required) + 1, L'\0');
-    DWORD written = GetFullPathNameW(input.c_str(), static_cast<DWORD>(absolute.size()), absolute.data(), nullptr);
-    if (written == 0)
+    for (unsigned int attempt = 0u; attempt < 8u; ++attempt)
     {
-        return input;
+        if (required > kMaximumAbsolutePathChars)
+        {
+            return input;
+        }
+
+        std::wstring absolute(static_cast<size_t>(required), L'\0');
+        const DWORD written = GetFullPathNameW(input.c_str(), static_cast<DWORD>(absolute.size()), absolute.data(), nullptr);
+        if (written == 0)
+        {
+            return input;
+        }
+        if (written < absolute.size())
+        {
+            absolute.resize(static_cast<size_t>(written));
+            return absolute;
+        }
+
+        required = written;
     }
 
-    absolute.resize(static_cast<size_t>(written));
-    return absolute;
+    return input;
 }
 
 std::wstring ToExtendedPath(const std::wstring& path)

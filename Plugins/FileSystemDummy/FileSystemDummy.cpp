@@ -4194,6 +4194,94 @@ HRESULT FileSystemDummy::CreateDirectoryClone(
     return S_OK;
 }
 
+HRESULT FileSystemDummy::ValidateDirectoryMerge(DummyNode& sourceDirectory, DummyNode& destinationDirectory, FileSystemFlags flags)
+{
+    EnsureChildrenGenerated(sourceDirectory);
+    EnsureChildrenGenerated(destinationDirectory);
+
+    for (const auto& child : sourceDirectory.children)
+    {
+        if (! child)
+        {
+            continue;
+        }
+
+        DummyNode* existing = FindChild(&destinationDirectory, child->name);
+        if (existing == nullptr)
+        {
+            continue;
+        }
+
+        if (child->isDirectory && existing->isDirectory)
+        {
+            const HRESULT childHr = ValidateDirectoryMerge(*child, *existing, flags);
+            if (FAILED(childHr))
+            {
+                return childHr;
+            }
+            continue;
+        }
+
+        if (! HasFlag(flags, FILESYSTEM_FLAG_ALLOW_OVERWRITE))
+        {
+            return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+        }
+        if ((existing->attributes & FILE_ATTRIBUTE_READONLY) != 0 && ! HasFlag(flags, FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY))
+        {
+            return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+        }
+    }
+
+    return S_OK;
+}
+
+HRESULT FileSystemDummy::ValidateDeleteNode(DummyNode& target, FileSystemFlags flags)
+{
+    const bool allowReplaceReadOnly = HasFlag(flags, FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY);
+    if ((target.attributes & FILE_ATTRIBUTE_READONLY) != 0 && ! allowReplaceReadOnly)
+    {
+        return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+    }
+
+    if (! target.isDirectory)
+    {
+        return S_OK;
+    }
+
+    const bool recursive = HasFlag(flags, FILESYSTEM_FLAG_RECURSIVE);
+    const bool hasChildren = target.childrenGenerated ? ! target.children.empty() : target.plannedChildCount > 0;
+    if (! recursive)
+    {
+        return hasChildren ? HRESULT_FROM_WIN32(ERROR_DIR_NOT_EMPTY) : S_OK;
+    }
+
+    if (! target.childrenGenerated && hasChildren && ! allowReplaceReadOnly)
+    {
+        // Lazy descendants can contain READONLY nodes. Without materializing an unbounded synthetic tree,
+        // fail closed unless the caller explicitly authorizes replacing read-only descendants.
+        return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+    }
+
+    if (! target.childrenGenerated)
+    {
+        return S_OK;
+    }
+
+    for (const auto& child : target.children)
+    {
+        if (child)
+        {
+            const HRESULT childHr = ValidateDeleteNode(*child, flags);
+            if (FAILED(childHr))
+            {
+                return childHr;
+            }
+        }
+    }
+
+    return S_OK;
+}
+
 HRESULT FileSystemDummy::MergeCopyDirectory(DummyNode& sourceDirectory, DummyNode& destinationDirectory, FileSystemFlags flags, uint64_t* outBytes)
 {
     if (! sourceDirectory.isDirectory || ! destinationDirectory.isDirectory)
@@ -4203,6 +4291,12 @@ HRESULT FileSystemDummy::MergeCopyDirectory(DummyNode& sourceDirectory, DummyNod
 
     EnsureChildrenGenerated(sourceDirectory);
     EnsureChildrenGenerated(destinationDirectory);
+
+    const HRESULT validateHr = ValidateDirectoryMerge(sourceDirectory, destinationDirectory, flags);
+    if (FAILED(validateHr))
+    {
+        return validateHr;
+    }
 
     uint64_t copiedBytes = 0;
     for (const auto& child : sourceDirectory.children)
@@ -4239,6 +4333,12 @@ HRESULT FileSystemDummy::MergeMoveDirectory(DummyNode& sourceDirectory, DummyNod
 
     EnsureChildrenGenerated(sourceDirectory);
     EnsureChildrenGenerated(destinationDirectory);
+
+    const HRESULT validateHr = ValidateDirectoryMerge(sourceDirectory, destinationDirectory, flags);
+    if (FAILED(validateHr))
+    {
+        return validateHr;
+    }
 
     uint64_t movedBytes = 0;
     while (! sourceDirectory.children.empty())
@@ -4452,18 +4552,10 @@ HRESULT FileSystemDummy::DeleteNode(DummyNode& target, FileSystemFlags flags)
         return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
     }
 
-    if ((target.attributes & FILE_ATTRIBUTE_READONLY) != 0 && ! HasFlag(flags, FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY))
+    const HRESULT validateHr = ValidateDeleteNode(target, flags);
+    if (FAILED(validateHr))
     {
-        return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
-    }
-
-    if (target.isDirectory && ! HasFlag(flags, FILESYSTEM_FLAG_RECURSIVE))
-    {
-        const bool hasChildren = target.childrenGenerated ? ! target.children.empty() : target.plannedChildCount > 0;
-        if (hasChildren)
-        {
-            return HRESULT_FROM_WIN32(ERROR_DIR_NOT_EMPTY);
-        }
+        return validateHr;
     }
 
     auto removed = ExtractChild(parent, &target);

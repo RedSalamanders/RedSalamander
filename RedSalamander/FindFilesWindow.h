@@ -17,6 +17,7 @@
 #include "SettingsStore.h"
 
 struct IFileSystem;
+class FolderWindow;
 
 struct FindFilesPaneContext
 {
@@ -27,7 +28,11 @@ struct FindFilesPaneContext
     std::filesystem::path rootPluginPath;
 };
 
-[[nodiscard]] bool ShowFindFilesWindow(HWND owner, Common::Settings::Settings& settings, const AppTheme& theme, FindFilesPaneContext context) noexcept;
+[[nodiscard]] bool ShowFindFilesWindow(HWND owner,
+                                       FolderWindow& applicationFolderWindow,
+                                       Common::Settings::Settings& settings,
+                                       const AppTheme& theme,
+                                       FindFilesPaneContext context) noexcept;
 
 void UpdateFindFilesWindowsTheme(const AppTheme& theme) noexcept;
 

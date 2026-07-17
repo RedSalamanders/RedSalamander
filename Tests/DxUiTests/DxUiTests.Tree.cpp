@@ -78,6 +78,118 @@ void TestTreeExpanderClickRequestsToggle()
     Require(delegate.lastExpandedState, "tree expander click requests expansion");
 }
 
+void TestTreeExpanderReResolvesStableItemAfterSelectionReorder()
+{
+    using namespace RedSalamander::DxUi;
+
+    class ReorderingDelegate final : public IDxTreeDelegate
+    {
+    public:
+        explicit ReorderingDelegate(MutableTreeModel& model) noexcept : _model(model)
+        {
+        }
+
+        ReorderingDelegate(const ReorderingDelegate&)            = delete;
+        ReorderingDelegate(ReorderingDelegate&&)                 = delete;
+        ReorderingDelegate& operator=(const ReorderingDelegate&) = delete;
+        ReorderingDelegate& operator=(ReorderingDelegate&&)      = delete;
+
+        void OnTreeSelectionChanged(uint64_t itemId) override
+        {
+            selectedItemId = itemId;
+            _model.SetVisibleItems({
+                TreeItemData{.id = 2u, .text = L"Second", .hasChildren = true, .expanded = false},
+                TreeItemData{.id = 1u, .text = L"First", .hasChildren = true, .expanded = false},
+            });
+        }
+
+        void OnTreeToggleExpanded(uint64_t itemId, bool) override
+        {
+            toggledItemId = itemId;
+        }
+
+        uint64_t selectedItemId = 0u;
+        uint64_t toggledItemId  = 0u;
+
+    private:
+        MutableTreeModel& _model;
+    };
+
+    WindowHost host;
+    auto root  = std::make_unique<Panel>();
+    auto* tree = root->AddChild<Tree>();
+    tree->SetBounds(D2D1::RectF(0.0f, 0.0f, 220.0f, 120.0f));
+
+    MutableTreeModel model;
+    model.SetVisibleItems({
+        TreeItemData{.id = 1u, .text = L"First", .hasChildren = true, .expanded = false},
+        TreeItemData{.id = 2u, .text = L"Second", .hasChildren = true, .expanded = false},
+    });
+    ReorderingDelegate delegate(model);
+    tree->SetModel(&model);
+    tree->SetDelegate(&delegate);
+
+    host.SetRoot(std::move(root));
+    static_cast<Panel*>(host.GetRoot())->SetBounds(D2D1::RectF(0.0f, 0.0f, 240.0f, 160.0f));
+
+    bool handled = false;
+    static_cast<void>(host.HandleMessage(nullptr, WM_LBUTTONDOWN, 0, MAKELPARAM(14, 16), handled));
+
+    Require(handled, "tree expander click remains handled when selection reorders visible rows");
+    Require(delegate.selectedItemId == 1u, "tree selection delegate receives the originally hit stable item id");
+    Require(delegate.toggledItemId == 1u, "tree expander re-resolves the originally hit item instead of reusing its old row index");
+}
+
+void TestTreeSelectionDelegateCanReplaceRootSafely()
+{
+    using namespace RedSalamander::DxUi;
+
+    class RootReplacingDelegate final : public IDxTreeDelegate
+    {
+    public:
+        explicit RootReplacingDelegate(WindowHost& host) noexcept : _host(host)
+        {
+        }
+
+        RootReplacingDelegate(const RootReplacingDelegate&)            = delete;
+        RootReplacingDelegate(RootReplacingDelegate&&)                 = delete;
+        RootReplacingDelegate& operator=(const RootReplacingDelegate&) = delete;
+        RootReplacingDelegate& operator=(RootReplacingDelegate&&)      = delete;
+
+        void OnTreeSelectionChanged(uint64_t itemId) override
+        {
+            selectedItemId = itemId;
+            _host.SetRoot(std::make_unique<Panel>());
+        }
+
+        uint64_t selectedItemId = 0u;
+
+    private:
+        WindowHost& _host;
+    };
+
+    WindowHost host;
+    auto root  = std::make_unique<Panel>();
+    auto* tree = root->AddChild<Tree>();
+    tree->SetBounds(D2D1::RectF(0.0f, 0.0f, 220.0f, 120.0f));
+
+    MutableTreeModel model;
+    model.SetVisibleItems({TreeItemData{.id = 10u, .text = L"General"}});
+    RootReplacingDelegate delegate(host);
+    tree->SetModel(&model);
+    tree->SetDelegate(&delegate);
+
+    host.SetRoot(std::move(root));
+    static_cast<Panel*>(host.GetRoot())->SetBounds(D2D1::RectF(0.0f, 0.0f, 240.0f, 160.0f));
+
+    bool handled = false;
+    static_cast<void>(host.HandleMessage(nullptr, WM_LBUTTONDOWN, 0, MAKELPARAM(60, 16), handled));
+
+    Require(handled, "tree pointer selection remains handled when its delegate replaces the root");
+    Require(delegate.selectedItemId == 10u, "tree selection delegate receives the stable item id before replacing the root");
+    Require(host.GetRoot() != nullptr, "tree selection delegate can replace the root without post-dispatch access");
+}
+
 void TestTreeKeyboardRightAndLeftHandleExpansionAndParentTraversal()
 {
     using namespace RedSalamander::DxUi;
@@ -1145,6 +1257,8 @@ void RunTreeTests()
 {
     TestTreePointerSelectionNotifiesDelegate();
     TestTreeExpanderClickRequestsToggle();
+    TestTreeExpanderReResolvesStableItemAfterSelectionReorder();
+    TestTreeSelectionDelegateCanReplaceRootSafely();
     TestTreeKeyboardRightAndLeftHandleExpansionAndParentTraversal();
     TestTreeTypeaheadSelectsVisibleMatch();
     TestTreeTypeaheadFallsBackToSingleCharacterAfterPrefixMiss();

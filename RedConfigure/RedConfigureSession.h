@@ -42,7 +42,9 @@ struct LocalizationTargetCell
 
 namespace Workflow
 {
+enum class BatchApprovalResult : uint8_t;
 struct LocalizationBatchPreview;
+struct ThemeMassPreview;
 struct ValidationSummary;
 } // namespace Workflow
 
@@ -95,6 +97,14 @@ enum class LocalizationStatusFilter : uint8_t
     Problems,
 };
 
+enum class DuplicateThemeResult : uint8_t
+{
+    Created,
+    Collision,
+    InvalidId,
+    InvalidName,
+};
+
 struct LocalizationViewOptions
 {
     std::wstring searchText;
@@ -144,10 +154,11 @@ public:
     [[nodiscard]] bool UpdateLocalizationReviewTarget(size_t rowIndex, std::wstring_view cultureName, std::wstring_view targetText);
     [[nodiscard]] bool UpdateThemeColor(std::wstring_view colorKey, std::wstring_view colorText);
     [[nodiscard]] HRESULT ImportTheme(const std::filesystem::path& path);
-    [[nodiscard]] bool DuplicateActiveTheme(std::wstring_view newId, std::wstring_view newName);
+    [[nodiscard]] DuplicateThemeResult DuplicateActiveTheme(std::wstring_view newId, std::wstring_view newName);
     [[nodiscard]] bool ResetActiveTheme();
     [[nodiscard]] bool IsThemeDirty() const noexcept;
-    [[nodiscard]] bool ApplyLocalizationBatch(const Workflow::LocalizationBatchPreview& preview);
+    [[nodiscard]] Workflow::BatchApprovalResult ApplyLocalizationBatch(const Workflow::LocalizationBatchPreview& preview);
+    [[nodiscard]] Workflow::BatchApprovalResult ApplyThemeMassChange(const Workflow::ThemeMassPreview& preview);
     [[nodiscard]] bool ApplyClipboardMatrix(size_t startRow, size_t startCultureIndex, std::wstring_view clipboardText);
     [[nodiscard]] bool Undo();
     [[nodiscard]] bool Redo();

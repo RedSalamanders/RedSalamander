@@ -24,13 +24,18 @@ enum class SecretKind : uint8_t
     RefreshToken,
 };
 
+enum class SecretAccessPurpose : uint8_t
+{
+    Interactive,
+    Background,
+};
+
 [[nodiscard]] std::wstring BuildCredentialTargetName(std::wstring_view connectionId, SecretKind kind);
 
 HRESULT SaveGenericCredential(std::wstring_view targetName, std::wstring_view userName, std::wstring_view secret) noexcept;
 HRESULT LoadGenericCredential(std::wstring_view targetName, std::wstring& userNameOut, std::wstring& secretOut) noexcept;
 HRESULT DeleteGenericCredential(std::wstring_view targetName) noexcept;
 
-inline constexpr std::wstring_view kQuickConnectConnectionId   = L"00000000-0000-0000-0000-000000000001";
 inline constexpr std::wstring_view kQuickConnectConnectionName = L"@quick";
 
 [[nodiscard]] bool IsQuickConnectConnectionId(std::wstring_view connectionId) noexcept;
@@ -48,16 +53,20 @@ void SetQuickConnectProfile(const Common::Settings::ConnectionProfile& profile) 
 void SetQuickConnectSecret(SecretKind kind, std::wstring_view secret) noexcept;
 void ClearQuickConnectSecret(SecretKind kind) noexcept;
 
-// Tracks whether the user recently approved secret access for a given connection profile id.
+// Tracks whether the user approved secret access for one profile and secret kind.
 //
-// This is used to avoid re-prompting Windows Hello when the user recently:
+// Approval is recorded when the user:
 // - completed Windows Hello verification, or
 // - manually entered a password/passphrase to connect.
 //
-// `reauthTimeoutMs == 0` is treated as "always prompt" (never considered authorized).
-void NoteSecretAccessAuthorized(std::wstring_view connectionId) noexcept;
-[[nodiscard]] bool HasSecretAccessAuthorization(std::wstring_view connectionId) noexcept;
-[[nodiscard]] bool IsSecretAccessAuthorized(std::wstring_view connectionId, uint64_t reauthTimeoutMs) noexcept;
+// Interactive access is valid only inside `reauthTimeoutMs`; zero always prompts.
+// Background access uses the explicit app-run grant created by the same approval.
+void NoteSecretAccessAuthorized(std::wstring_view connectionId, SecretKind kind) noexcept;
+[[nodiscard]] bool IsSecretAccessAuthorized(std::wstring_view connectionId,
+                                            SecretKind kind,
+                                            SecretAccessPurpose purpose,
+                                            uint64_t reauthTimeoutMs) noexcept;
+void ClearSecretAccessAuthorization(std::wstring_view connectionId, SecretKind kind) noexcept;
 void ClearSecretAccessAuthorization(std::wstring_view connectionId) noexcept;
 void ClearAllSecretAccessAuthorizations() noexcept;
 
@@ -71,6 +80,10 @@ enum class CredentialPersistenceFault : uint8_t
 
 void SetCredentialPersistenceFaultForTesting(CredentialPersistenceFault fault) noexcept;
 // Test hook: allows selftests to simulate an expired authorization timestamp without sleeping.
-void SetSecretAccessAuthorizationTickForTesting(std::wstring_view connectionId, uint64_t tick) noexcept;
+void SetSecretAccessAuthorizationTickForTesting(std::wstring_view connectionId,
+                                                SecretKind kind,
+                                                SecretAccessPurpose purpose,
+                                                uint64_t tick) noexcept;
+[[nodiscard]] bool IsSecretAccessAuthorizationFreshForTesting(uint64_t now, uint64_t authorizedAt, uint64_t timeoutMs) noexcept;
 #endif
 } // namespace RedSalamander::Connections

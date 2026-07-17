@@ -351,9 +351,18 @@ void FolderView::OnContextMenu(POINT screenPt)
     auto hit      = HitTest(clientPt);
     if (hit)
     {
-        FocusItem(*hit, false);
+        if (*hit < _items.size() && ! _items[*hit].selected)
+        {
+            SelectSingle(*hit);
+        }
+        else
+        {
+            FocusItem(*hit, false);
+        }
         _anchorIndex = *hit;
     }
+
+    const std::vector<std::wstring> targetSnapshot = GetSelectedOrFocusedDisplayNames();
 
     UpdateContextMenuState(menu);
     if (! IsOverlaySampleEnabled())
@@ -371,7 +380,25 @@ void FolderView::OnContextMenu(POINT screenPt)
     }
     if (result.has_value())
     {
-        PostMessageW(_hWnd.get(), WM_COMMAND, MAKEWPARAM(static_cast<WORD>(result.value()), 0), 0);
+        const UINT commandId = static_cast<UINT>(result.value());
+        const bool targetBoundCommand = commandId == CmdDelete || commandId == CmdMove || commandId == CmdRename || commandId == CmdCopy;
+        const auto snapshotStillMatches = [&]() noexcept
+        {
+            const std::vector<std::wstring> currentTargets = GetSelectedOrFocusedDisplayNames();
+            if (currentTargets.size() != targetSnapshot.size())
+            {
+                return false;
+            }
+            return std::ranges::all_of(targetSnapshot, [&](const std::wstring& expected) noexcept
+            {
+                return std::ranges::any_of(currentTargets, [&](const std::wstring& current) noexcept
+                { return OrdinalString::EqualsNoCase(expected, current); });
+            });
+        };
+        if (! targetBoundCommand || snapshotStillMatches())
+        {
+            PostMessageW(_hWnd.get(), WM_COMMAND, MAKEWPARAM(static_cast<WORD>(commandId), 0), 0);
+        }
     }
 }
 

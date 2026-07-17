@@ -1,6 +1,6 @@
 # File Operations Specification
 
-Last updated: 2026-07-09
+Last updated: 2026-07-16
 
 Normative sections use RFC-2119 keywords (MUST/SHOULD/MAY). Appendices are informative.
 
@@ -80,21 +80,46 @@ Progress-display investigations MUST keep UI cadence and operation cadence separ
 - Plugin operation and callback contracts: `Specs/Plugins/Plugins_VirtualFileSystem.md`
 - Theme key list (including file ops keys): `Specs/Core/Core_SettingsStore.md`
 
+## FolderView Transfer Ingress (Normative)
+
+FolderView copy/move requests carry source paths, a resolved destination folder, and—when the gesture originated in another FolderView—the source plugin and instance identity. The host MUST preserve that identity through task creation and cache notifications. An external `CF_HDROP` has no provider-qualified pane source and MUST be treated as local filesystem input; a virtual destination uses the builtin local provider as source plus the destination pane provider behind the normal cross-filesystem capability gate.
+
+Task creation success means only that asynchronous work was accepted. It MUST NOT be interpreted as completed MOVE proof for an external OLE source. External drops therefore report COPY at drop return when a MOVE was queued. Per-request completion callbacks MUST run on the UI thread with the verified terminal `HRESULT`; callbacks used for move-paste clipboard invalidation run only after success and are discarded with their task state.
+
+Copy/move requests MUST reject an unenumerated destination pane before comparing or using its folder path. The user receives the localized destination-loading pane alert and may retry after enumeration settles.
+
 ## Archive Operations (Normative)
 
 `cmd/pane/pack` creates an archive from the active local pane selection. `cmd/pane/unpack` extracts selected or focused local archives to a destination selected by the Unpack prompt. Unsupported providers MUST keep the pane in place and show localized pane feedback.
 
 Pack uses the selected items, or the focused item when nothing is selected. The built-in `ZIP (Plugin)` packer writes deterministic stored ZIP archives with `/` separators, preserved selected empty directories, and entries sorted by archive path. Other writable archive formats are discovered from the bundled `7zip.dll` and are created through `IOutArchive::UpdateItems`.
 
-Unpack supports stored ZIP entries through the built-in reader and delegates compressed ZIP entries, 7-Zip archives, and other formats supported by the bundled `7zip.dll` to the 7-Zip extraction path. Both extraction paths preserve the same destination, overwrite, mask, and safe-entry-path contract. Unsupported/encrypted methods fail with localized pane feedback.
+Unpack supports stored ZIP entries through the built-in reader and delegates compressed ZIP entries, 7-Zip archives, and other formats supported by the bundled `7zip.dll` to the 7-Zip extraction path. Both extraction paths preserve the same destination, existing-target policy, mask, and safe-entry-path contract. Unsupported/encrypted methods fail with localized pane feedback.
+
+The Unpack prompt MUST expose one existing-file policy for the entire command: **Skip existing files** (the safe
+default) or **Replace existing files**. Cancel closes the prompt without extraction. Before extraction begins, both
+engines MUST classify every masked target without following reparse targets, skip known conflicts under Skip, and
+reject file/directory type mismatches under Replace. A target that appears after preflight MUST still be skipped,
+not replaced, under Skip. The debug result records `skippedConflictCount` so deterministic tests can distinguish a
+successful skip policy from replacement.
 
 Archive delete-after options are destructive cleanup operations. When `delete after packing` or `delete after unpacking` is enabled, the host MUST show the permanent-delete confirmation prompt with default Cancel before removing selected sources or selected archive files. Cancelling that prompt MUST prevent the cleanup delete from running.
+
+Before packing, the host MUST compare the final extension-adjusted archive path with every selected local source
+using absolute lexical normalization that does not follow reparse targets. It MUST reject output equal to any
+selected source and output inside any selected source directory. A successful pack with delete-after enabled MUST
+queue source deletion through the cancellable File Operations engine only after archive creation/verification
+succeeds; it MUST NOT call direct recursive filesystem removal from the command path.
 
 Archive entry names MUST be relative `/`-separated paths. Both extraction paths MUST reject empty names, absolute paths, drive-qualified paths, UNC-style prefixes, backslashes, `.` / `..` components, colons, embedded NULs, and reserved DOS device names such as `CON`, `PRN`, `AUX`, `NUL`, `COM1`-`COM9`, and `LPT1`-`LPT9` even when followed by an extension.
 
 After combining an entry name with the chosen destination, both extraction paths MUST verify that the normalized target remains inside the destination directory before creating directories, opening files, or moving temp files into place. 7-Zip extraction MUST reject symbolic-link and hard-link entries with `ERROR_NOT_SUPPORTED`.
 
-ZIP names MUST be decoded as UTF-8 when general-purpose flag bit 11 is set, and as CP437 otherwise. Extraction should create parent directories before file entries and should commit file contents via same-directory temp files. Transient `ERROR_SHARING_VIOLATION` / `ERROR_LOCK_VIOLATION` failures while replacing the final output MAY be retried briefly before reporting failure.
+ZIP names MUST be decoded as UTF-8 when general-purpose flag bit 11 is set, and as CP437 otherwise. Extraction
+creates parent directories before file entries. Both stored-ZIP and 7-Zip file streams MUST commit through
+`Common::Files::LocalFileTransaction`: unique same-directory sibling, complete write, flush/size verification, and
+same-volume fail-if-exists or replace promotion. Any failed entry preserves the prior target and cleans its staged
+sibling.
 
 ## Settings And Ownership (Normative)
 
@@ -316,6 +341,9 @@ Conflict handling covers per-item failures that require a user decision (overwri
 - A retry/re-run Copy/Move MAY suppress an `already exists` prompt only when the existing destination file is byte-identical to the current source. Same size and last-write time alone are insufficient proof and MUST still surface the normal conflict.
 - A byte-identical existing-file optimization returns per-item `S_FALSE`, not full `S_OK`: bytes were not rewritten and destination metadata, ACLs, and alternate data streams were not synchronized. The host treats this as a visible skipped/partial outcome. Directory copies propagate an identical-child `S_FALSE` when no stronger failure/skip occurred.
 - A source directory whose destination path already exists as a directory MUST be merged by recursing into the existing destination directory. Directory-vs-directory existence is not an overwrite conflict; only file-vs-existing-file, file-vs-existing-directory, and directory-vs-existing-file collisions raise the `already exists` conflict. Same-volume Move MUST apply the same merge rule, falling back to copy/delete when the platform rename API cannot move a directory onto an existing directory.
+- A provider that presents directory Copy/Move as one successful item MUST preflight every policy-visible
+  collision before mutating either tree or maintain a complete rollback journal. FileSystemDummy uses full
+  preflight: a collision in a later child cannot leave earlier children copied or moved.
 - Directory reparse-point copy under copy-reparse policy MUST NOT silently convert an existing real destination directory into a link/reparse object. Empty real-directory replacement requires an explicit Overwrite decision for that item; non-empty real-directory replacement MUST surface the non-empty-directory conflict bucket and preserve the destination unless the user explicitly authorizes replacement.
 - Delete SHOULD start by using Recycle Bin when supported.
 - A Delete operation that cannot be guaranteed to use the local Recycle Bin MUST show the permanent-delete confirmation prompt with default Cancel before any file operation task is created. This guard belongs at the host operation boundary, so commands, shortcuts, context menus, drag/drop routing, and future callers cannot bypass it by omitting a separate confirmation flag.
@@ -325,10 +353,17 @@ Conflict handling covers per-item failures that require a user decision (overwri
 
 - Built-in local FileSystem delete and overwrite-cleanup paths MUST decide file/directory/reparse status from a handle opened with `FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS`, not only from a prior path attribute snapshot. Reparse points MUST be deleted as links and MUST NOT be recursively traversed by delete or overwrite cleanup.
 - Recursive delete implementations MUST re-open each queued child/frame no-follow before deciding whether to recurse. Enumeration attributes are advisory only and MUST NOT be the final destructive decision when another process could have swapped the path.
+- Recursive delete read-only policy applies to descendants as well as the selected root. A provider must inspect
+  the descendant policy before the first removal or fail closed; FileSystemDummy requires explicit
+  `ALLOW_REPLACE_READONLY` for a lazy synthetic subtree whose descendant attributes have not been materialized.
 - Empty-only replacement of an existing real directory by a reparse-point copy MUST use a single non-recursive remove attempt on the destination directory. It MUST NOT pre-scan with `IsDirectoryEmpty` and then perform a separate destructive action, because a concurrent child creation between those steps would turn an empty-only grant into a stale decision.
 - Cross-volume Move copy/delete fallback MUST report `HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY)` when the copy succeeded but the source delete or cleanup cannot finish. The completed task diagnostics and Issues pane MUST make the outcome explicit with "source preserved" and "partial copy left" wording so users know both sides may need review.
 - Cross-filesystem Copy and Move MUST NOT report success unless the destination file has been byte-proven complete. When the source reader reports a size, copied bytes MUST match that size before commit/promotion is eligible. If the source size cannot be obtained, the bridge MUST either prove the destination against another reliable source-size signal or fail the item with `HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY)`; Move must preserve the source and Copy must not commit the staged destination.
 - Built-in local overwrite writers MUST preserve a pre-existing destination until replacement bytes have been written, flushed, and successfully promoted. Releasing an overwrite writer without `Commit()` is an abort and MUST delete only the staged temp file, never the original destination. Successful overwrite commit MUST promote a sibling temp file into the final path with same-volume replace/rename semantics; a failed commit must leave the original destination intact whenever the filesystem can preserve it. Writer-created temp attributes (`HIDDEN`, `TEMPORARY`) are implementation details and MUST NOT leak to the final file.
+- Built-in local writers reject `ALLOW_REPLACE_READONLY` unless `ALLOW_OVERWRITE` is also present. Contradictory
+  flags return `E_INVALIDARG` before touching the path, and failed create-new attempts never clear destination
+  attributes. Local absolute-path expansion treats the Win32 required length as advisory, retries when the next
+  call reports a larger requirement, and stays within a named 32K-character/eight-attempt bound.
 - Built-in local same-filesystem copy overwrite paths MUST use the same preservation model instead of copying over the live destination. When overwrite is authorized, regular-file copy MUST copy to a unique sibling temp path created with exclusive-create semantics, verify the temp byte count against the source size, and promote the temp into the final path only after the copy is complete. Copy-reparse overwrite paths MUST also stage into a sibling temp and promote the completed link object rather than mutating the live destination. Reparse-point replacements MUST NOT be promoted through `ReplaceFileW`; they use rename/replace semantics that preserve the staged link object. Failure, cancellation, injected promotion failure, or readonly replacement failure MUST leave the original destination bytes/object and original readonly attribute intact, roll back staged per-item progress accounting in both sequential and parallel copy paths, and remove the staged temp on best effort. Staged-temp cleanup MUST handle file and directory reparse points as links and try both file-style and directory-style deletion when path attributes are ambiguous.
 - Local staged promotion is shared by writer and copy paths. Promotion MUST clear `READONLY` on the staged temp before calling `ReplaceFileW`, then re-apply replacement `READONLY` to the final file when the source/replacement was read-only. Replacing a read-only destination still requires explicit replace-readonly consent; if promotion fails after temporarily clearing the destination bit, the original destination attributes MUST be restored on best effort. Regular-file replacement SHOULD use `REPLACEFILE_IGNORE_MERGE_ERRORS` to avoid demoting non-fatal metadata merge errors into a wholesale rename fallback. If `ReplaceFileW` is unavailable and the code falls back to `MoveFileExW`, it MUST restore captured destination DACL and creation time on best effort while preserving the replacement's source-derived last-write/last-access times. After promotion has committed, a required final attribute adjustment is part of the operation result: failure MUST be logged and returned as a failed HRESULT even though the replacement bytes have reached the final path.
 - Cross-filesystem bridge staging uses a unique sibling `.rs_tmp_<128-bit-random>_<streamId>` destination and strips overwrite grants when creating that temp. Failed, cancelled, or unproven transfers MUST abandon/purge the temp on best effort and log `bridge.temp.cleanup` if cleanup fails. A process crash can leave an orphaned `.rs_tmp_*` file; the v1 cleanup policy is user-visible safe deletion plus hiding recognized RedSalamander staging names from search/index results, not a blind startup sweep. Any future automatic sweep MUST only delete recognized staging names in the owning destination directory after conservative age/handle checks.

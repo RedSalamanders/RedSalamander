@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project>
+  <PropertyGroup Condition="'$(RSIsFirstPartyProject)'=='true'">
+    <RSVcpkgRuntimeBinDir Condition="'$(Configuration)'=='Release'">bin\</RSVcpkgRuntimeBinDir>
+    <RSVcpkgRuntimeBinDir Condition="'$(RSVcpkgRuntimeBinDir)'==''">debug\bin\</RSVcpkgRuntimeBinDir>
+  </PropertyGroup>
+  <Import Project="$(MSBuildThisFileDirectory)RuntimeDependencies.props"
+          Condition="'$(RSIsFirstPartyProject)'=='true' and Exists('$(MSBuildThisFileDirectory)RuntimeDependencies.props')" />
   <PropertyGroup Condition="'$(MSBuildProjectExtension)'=='.vcxproj'">
     <RSVersioningEnabled Condition="'$(RSVersioningEnabled)'=='' and '$(RSIsFirstPartyProject)'=='true' and ('$(ConfigurationType)'=='Application' or '$(ConfigurationType)'=='DynamicLibrary')">true</RSVersioningEnabled>
     <RSVersioningEnabled Condition="'$(RSVersioningEnabled)'==''">false</RSVersioningEnabled>
@@ -94,5 +100,39 @@
           AfterTargets="Build"
           Condition="'$(MSBuildProjectExtension)'=='.vcxproj' and '$(EnableASAN)'=='true' and '$(ConfigurationType)'=='Application' and '$(RSAsanRuntimeFileName)'!='' and '$(RSAsanRuntimeSourcePath)'==''">
     <Warning Text="AddressSanitizer runtime '$(RSAsanRuntimeFileName)' was not found under '$(VCToolsInstallDir)bin'. ASan executables in '$(TargetDir)' may fail to launch until the runtime DLL is available on PATH." />
+  </Target>
+
+  <Target Name="RSCopyRuntimeDependencies"
+          AfterTargets="Build"
+          Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj' and '@(RSRuntimeDependency)'!=''">
+    <ItemGroup>
+      <_RSRuntimeDependency Include="@(RSRuntimeDependency)"
+        Condition="$([System.String]::Copy(';%(RSRuntimeDependency.Projects);').Contains(';$(MSBuildProjectName);')) and
+                   ('%(RSRuntimeDependency.Flavor)'=='Any' or ('%(RSRuntimeDependency.Flavor)'=='Debug' and '$(Configuration)'!='Release') or ('%(RSRuntimeDependency.Flavor)'=='Release' and '$(Configuration)'=='Release')) and
+                   ('%(RSRuntimeDependency.Platform)'=='Any' or '%(RSRuntimeDependency.Platform)'=='$(Platform)')" />
+      <_RSRuntimeDependencySource Include="$(VcpkgInstalledDir)$(RSVcpkgTriplet)\%(_RSRuntimeDependency.Source)"
+        Condition="'@(_RSRuntimeDependency)'!=''">
+        <OutputName>%(_RSRuntimeDependency.OutputName)</OutputName>
+        <Required>%(_RSRuntimeDependency.Required)</Required>
+      </_RSRuntimeDependencySource>
+      <_RSMissingRuntimeDependency Include="@(_RSRuntimeDependencySource)"
+        Condition="'%(_RSRuntimeDependencySource.Required)'!='false' and !Exists('%(_RSRuntimeDependencySource.Identity)')" />
+      <_RSPresentRuntimeDependency Include="@(_RSRuntimeDependencySource)"
+        Condition="Exists('%(_RSRuntimeDependencySource.Identity)')" />
+
+      <_RSRuntimeDependencyRemove Include="@(RSRuntimeDependencyRemove)"
+        Condition="$([System.String]::Copy(';%(RSRuntimeDependencyRemove.Projects);').Contains(';$(MSBuildProjectName);')) and
+                   ('%(RSRuntimeDependencyRemove.Flavor)'=='Any' or ('%(RSRuntimeDependencyRemove.Flavor)'=='Debug' and '$(Configuration)'!='Release') or ('%(RSRuntimeDependencyRemove.Flavor)'=='Release' and '$(Configuration)'=='Release')) and
+                   ('%(RSRuntimeDependencyRemove.Platform)'=='Any' or '%(RSRuntimeDependencyRemove.Platform)'=='$(Platform)')" />
+      <_RSStaleRuntimeDependency Include="@(_RSRuntimeDependencyRemove->'$(OutDir)%(OutputName)')"
+        Condition="'@(_RSRuntimeDependencyRemove)'!=''" />
+    </ItemGroup>
+
+    <Error Condition="'@(_RSMissingRuntimeDependency)'!=''"
+           Text="Missing required runtime dependencies for $(MSBuildProjectName): @(_RSMissingRuntimeDependency, ', ')" />
+    <Delete Files="@(_RSStaleRuntimeDependency)" />
+    <Copy SourceFiles="@(_RSPresentRuntimeDependency)"
+          DestinationFiles="@(_RSPresentRuntimeDependency->'$(OutDir)%(OutputName)')"
+          SkipUnchangedFiles="true" />
   </Target>
 </Project>

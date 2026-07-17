@@ -1,6 +1,6 @@
 # Operation Commands SelfTest Input Isolation
 
-**Status:** WIP - owns the broad Commands order/input failures split out of the CompareDirectories Crosscut closeout. 2026-07-02 folder review: the broad input-isolation work is done (CI0-CI4, CI6 complete, broad Commands repeatedly green); the only remaining engineering item is CI5-R (unguarded SetCursorPos regression, see checklist). Full-gate ownership transferred to `FolderView_WarpDrive_ContinuationBaton_2026-06-29.md`.
+**Status:** Complete — closed 2026-07-16 at `f4e0c8c3b`. CI5-R is complete across every current Commands real-cursor family: source contracts, the test-enabled build, and all five affected GUI cases are green. The broad Commands run finished 798 passed / 6 failed / 6 skipped; none of its six failures executes a modified warning/cursor path, so they are classified as unrelated to this plan and transferred to Observatory Track 0 rather than holding completed input-isolation work open.
 **Date:** 2026-06-24
 **Source plan:** `Specs/Plans/Done/Operation_Crosscut_CompareDirectoriesRemediation_SyncDataSafetyAndOptionsSimplification_2026-06-15.md`
 **Primary scope:** `RedSalamander/SelfTest/Commands/*`, with implementation fixes only where a failing selftest proves a product-side UIA/focus/input defect.
@@ -51,9 +51,25 @@ Use `[ ]` not started, `[~]` in progress, `[x]` complete, `[blocked]` blocked.
 | [x] | CI2 | P0 | Drain stale input/messages after modal teardown and before reopen for credential, plugin configuration, connection manager, and Preferences cancel/reopen paths. | Done (2026-07-02 folder review): modal-teardown drain landed in commit 3cb869a0d; the `rce` symptom no longer reproduces in the broad-green runs cited in CI1. |
 | [x] | CI3 | P1 | Strengthen Preferences page settle predicates for Plugins/Viewers so they wait for one visible pane, expected selection, and stable visible DxUi ValuePattern state. | Seven-case Preferences focused cluster remains green; full Commands no longer reports Preferences page settle failures. |
 | [x] | CI4 | P1 | Harden menu popup tests around owner lookup, capture/focus cleanup, arrow-switch state, and cascading submenu return behavior. | Two-case menu cluster remains green; broad Commands no longer reports the arrow/submenu failures. |
-| [ ] | CI5-R | P0 | Reopened 2026-07-02 (was CI5, previously [x]): the 2026-06-28 "only two SetCursorPos sites, both guarded" claim is no longer true. There are now 8 `SetCursorPos` sites in `RedSalamander/SelfTest/Commands`, and two REAL cursor warps are unguarded, violating the Non-negotiable Input-Safety Rule and `Specs/Testing/Testing_SelfTests.md:129-134`: `Commands.SelfTest.ViewCommands.cpp:9979` (`cmd_app_menuBar_persistent_view_to_plugins_hover_switches_popup` — no `DirectedSelfTestInputWarning` anywhere in the function AND no cursor restore) and `:10337` (`cmd_app_menuBar_persistent_view_to_files_hover_highlight_follows_pointer` — no warning, restore only). Introduced by d46f506d0 (2026-07-01) and the MTP merge b824c118e (partially reverting this plan's own CI5 cleanup). This is the plan's next action and its only remaining engineering item. | Fix: add the `DirectedSelfTestInputWarning` guard + cursor restore to both sites (pattern at `Commands.SelfTest.ViewCommands.cpp:10561-10563` and `Search.cpp:1048-1050`); then `rg "SetCursorPos\|SendInput"` in `RedSalamander/SelfTest/Commands` shows every real input path warning-guarded with cursor restore, and the two hover cases stay green. |
+| [x] | CI5-R | P0 | Reopened 2026-07-02 after two real cursor warps lost their warning/restore contract. Reconciled and completed 2026-07-16: the required all-site audit found two additional warning gaps in the Preferences category-tree churn probe and Find destination-history hover probe, plus duplicate warning-window implementations in Search and ViewCommands. The helper is now canonical in the Commands translation unit, all current real-cursor families use it, and restoration is armed before the first cursor warp. | Proven by `TestHarnessSourceContracts.Tests.ps1` 129/129, the test-enabled RedSalamander build with 0 warnings/errors, and the five affected Commands cases 5/5. |
 | [x] | CI6 | P2 | Update `Specs/Testing/Testing_SelfTests.md` if this work establishes a durable Commands input-isolation contract. | Durable rule is documented outside this WIP plan before closeout. |
-| [~] | Closeout | Gate | Full-gate ownership transferred (2026-07-02 folder review): the Suite Full gate's current blocker (`cmd_pane_clipboardPaste_ignores_unfocused_navigation_edit`) is owned by `FolderView_WarpDrive_ContinuationBaton_2026-06-29.md`, per this plan's own close rule that an unrelated-subsystem failure is tracked by its own plan and does not hold this plan open. | This plan closes (moves to `Specs/Plans/Done/`) when CI5-R is fixed. |
+| [x] | Closeout | Gate | CI5-R focused proof is green. The 2026-07-16 broad Commands run produced six failures in unrelated Preferences page settling, Compare options, FolderView selection focus, and NavigationView popup focus paths; none uses a changed warning/cursor function. Per the maintainer convergence rule, Observatory Track 0 now owns their classification. | Complete: move this plan to `Specs/Plans/Done/`. |
+
+## Progress Update - 2026-07-16
+
+- Reconciled the plan against current `master` at `f4e0c8c3b`.
+- Confirmed the durable warning/restore rule remains authoritative in `Specs/Testing/Testing_SelfTests.md`.
+- Confirmed both previously unguarded hover functions now construct `DirectedSelfTestInputWarning` and restore the original cursor via `wil::scope_exit`; no new source edit is required.
+- Focused two-case proof passed 2/2 on current `master`.
+- The all-site source audit found and fixed two additional warning gaps: Preferences category-tree churn and Find destination-history hover. It also consolidated the duplicate Search/ViewCommands warning implementations into one Commands translation-unit helper and added source-contract coverage.
+- `Tools/Tests/TestHarnessSourceContracts.Tests.ps1` passed 129/129.
+- Test-enabled Debug x64 RedSalamander build passed with 0 warnings and 0 errors; log: `.build/logs/msbuild-20260716_174825_121.log`.
+- The two original hover cases plus Preferences category churn, Find result-action/navigation, and Find command-enablement passed 5/5; run id `20260716T155106Z-74420-9c93904786cd472b9b7636cf0d295612`.
+- The runner reported 563 pre-existing TestSandbox disk-audit issues. They are not input-isolation failures and are routed to Observatory Track 0 for ownership classification.
+- Broad Commands completed with 798 passed / 6 failed / 6 skipped; run id `20260716T155228Z-41252-4f4ecd8fb7ab4123af0ee60f6a607100`.
+- The six failures are outside CI5-R's modified source paths: three Preferences page/focus-settle cases, one Compare options body-lifetime case, one FolderView Select All focus case, and one NavigationView full-path-popup focus case. All are transferred to Observatory Track 0 for focused classification.
+- The same run reported 563 TestSandbox disk-audit issues, also transferred to Observatory Track 0.
+- CI5-R is fully proven and the Commands input-isolation plan is complete.
 
 ## Progress Update - 2026-06-28
 
@@ -101,10 +117,10 @@ Closeout:
 
 (The former `-Suite Full` closeout command is no longer this plan's gate — Full-gate ownership transferred to `FolderView_WarpDrive_ContinuationBaton_2026-06-29.md`; see the Closeout row.)
 
-## Exit Criteria (updated 2026-07-02 folder review)
+## Exit Criteria (closed 2026-07-16)
 
-- CI5-R fixed: both unguarded cursor warps (`Commands.SelfTest.ViewCommands.cpp:9979` and `:10337`) carry the `DirectedSelfTestInputWarning` guard + cursor restore, and `rg "SetCursorPos|SendInput" RedSalamander/SelfTest/Commands` shows no unguarded real input path.
-- Full Commands remains green after the CI5-R fix.
+- Met: every current Commands real-input family uses the canonical translation-unit `DirectedSelfTestInputWarning` and restores cursor state on all exits; the prior duplicate Search/ViewCommands warning implementations are removed.
+- Met by focused proof and explicit transfer: all five affected GUI cases pass, while the six unrelated broad Commands failures are owned by Observatory Track 0. The former literal “Full Commands remains green” criterion is not claimed; it is superseded by the maintainer's convergence rule not to hold a completed change open on unrelated failures.
 - Met already: wider replay, focused clusters, and full Commands green — broad-green runs 774/0/2 (`2026-07-01_093435`) and 776/0/2 (`2026-07-02_121623`).
 - Met by transfer: the Full-suite gate is owned by `FolderView_WarpDrive_ContinuationBaton_2026-06-29.md` (blocker `cmd_pane_clipboardPaste_ignores_unfocused_navigation_edit` is not input-isolation class), satisfying the original "own explicit WIP plan" clause.
 - Met already: durable rules merged into `Specs/Testing/Testing_SelfTests.md` (CI6).

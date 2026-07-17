@@ -21,7 +21,7 @@
 #include "FileSystemS3Resources.h"
 #include "Helpers.h"
 
-#include "FileSystemS3.h"
+#include "FileSystemS3.Internal.h"
 
 #include "PlugInterfaces/FactoryImpl.h"
 
@@ -99,6 +99,12 @@ HRESULT CreateInstanceS3(const FactoryOptions* /*factoryOptions*/, IHost* host, 
     auto* instance = new (std::nothrow) FileSystemS3(FileSystemS3Mode::S3, host);
     if (! instance)
         return E_OUTOFMEMORY;
+    const HRESULT initializationHr = instance->InitializationStatus();
+    if (FAILED(initializationHr))
+    {
+        instance->Release();
+        return initializationHr;
+    }
     const HRESULT hr = instance->QueryInterface(__uuidof(IFileSystem), result);
     instance->Release();
     return hr;
@@ -108,6 +114,12 @@ HRESULT CreateInstanceS3Table(const FactoryOptions* /*factoryOptions*/, IHost* h
     auto* instance = new (std::nothrow) FileSystemS3(FileSystemS3Mode::S3Table, host);
     if (! instance)
         return E_OUTOFMEMORY;
+    const HRESULT initializationHr = instance->InitializationStatus();
+    if (FAILED(initializationHr))
+    {
+        instance->Release();
+        return initializationHr;
+    }
     const HRESULT hr = instance->QueryInterface(__uuidof(IFileSystem), result);
     instance->Release();
     return hr;
@@ -136,7 +148,14 @@ extern "C" HRESULT __stdcall RedSalamanderGetConfigurationSchema(REFIID riid, co
 
 extern "C" PLUGFACTORY_API void __stdcall RedSalamanderPluginShutdown() noexcept
 {
-    // AWS SDK lifetime is reference-counted by FileSystemS3 instances and I/O objects.
+    FileSystemS3Internal::SchedulePendingMultipartAbortCleanup();
+    FileSystemS3Internal::AwsSdkLifetime::BeginShutdown();
+}
+
+extern "C" PLUGFACTORY_API BOOL __stdcall RedSalamanderPluginCanUnloadNow() noexcept
+{
+    FileSystemS3Internal::SchedulePendingMultipartAbortCleanup();
+    return FileSystemS3Internal::CanUnloadPendingMultipartAbortCleanup() && FileSystemS3Internal::AwsSdkLifetime::CanUnloadNow() ? TRUE : FALSE;
 }
 
 extern "C" PLUGFACTORY_API BOOL __stdcall RedSalamanderPluginRetainModuleUntilProcessExit() noexcept

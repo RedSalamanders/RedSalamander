@@ -202,7 +202,9 @@
     <ClInclude Include="Common.h" />
     <ClInclude Include="..\EmbeddedViewerBase.h" />
     <ClInclude Include="..\LocalizationManager.h" />
+    <ClInclude Include="..\LocalFileTransaction.h" />
     <ClInclude Include="..\MinimumOsVersion.h" />
+    <ClInclude Include="..\PaginationGuard.h" />
     <ClInclude Include="..\PluginConfiguration.h" />
     <ClInclude Include="..\ThemeDefinitionIo.h" />
     <ClInclude Include="..\ThemeExpression.h" />

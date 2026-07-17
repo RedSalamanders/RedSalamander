@@ -28,12 +28,16 @@ Describe 'Test inventory helper' {
         . $helperScript
     }
 
-    It 'counts the in-product self-test surfaces from source' {
+    It 'derives in-product self-test surfaces without frozen registration totals' {
         $inventory = Get-RSTestInventory -RepoRoot $repoRoot
 
-        Assert-RSEqual -Actual $inventory.SelfTests.Commands.RunCaseRegistrations -Expected 707 -Message 'Commands static RunCase count drifted.'
-        Assert-RSEqual -Actual $inventory.SelfTests.CompareDirectories.RunCaseRegistrations -Expected 249 -Message 'CompareDirectories static RunCase count drifted.'
-        Assert-RSEqual -Actual $inventory.SelfTests.FileOperations.ActivePhases -Expected 126 -Message 'FileOperations active phase count drifted.'
+        Assert-RSEqual -Actual ($inventory.SelfTests.Commands.RunCaseRegistrations -gt 0) -Expected $true -Message 'Commands source inventory should not be empty.'
+        Assert-RSEqual -Actual ($inventory.SelfTests.CompareDirectories.RunCaseRegistrations -gt 0) -Expected $true -Message 'CompareDirectories source inventory should not be empty.'
+        Assert-RSEqual -Actual ($inventory.SelfTests.FileOperations.ActivePhases -gt 0) -Expected $true -Message 'FileOperations source inventory should not be empty.'
+
+        $commandsFamilyTotal = ($inventory.SelfTests.Commands.FamilyRunCaseRegistrations.PSObject.Properties.Value | Measure-Object -Sum).Sum
+        Assert-RSEqual -Actual $inventory.SelfTests.Commands.CoordinatorRunCaseRegistrations -Expected 1 -Message 'Commands coordinator should retain one isolation-failure RunCase registration.'
+        Assert-RSEqual -Actual ($commandsFamilyTotal + $inventory.SelfTests.Commands.CoordinatorRunCaseRegistrations) -Expected $inventory.SelfTests.Commands.RunCaseRegistrations -Message 'Commands family and coordinator registrations should account for the aggregate source inventory.'
 
         $settingsHeader = Get-Content -LiteralPath (Join-Path $repoRoot 'Common\SettingsStore.h') -Raw
         $settingsCases = Get-Content -LiteralPath (Join-Path $repoRoot 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Settings.cpp') -Raw
@@ -53,92 +57,88 @@ Describe 'Test inventory helper' {
         Assert-RSEqual -Actual $fieldCaseDrift.Count -Expected 0 -Message 'Every FileOperationsSettings field must have exactly one isolated persistence case.'
     }
 
-    It 'counts standalone, performance, and script test surfaces from source' {
+    It 'derives every native test project and its kind from the canonical run plan' {
         $inventory = Get-RSTestInventory -RepoRoot $repoRoot
+        $projectNames = @(Get-RSTestProjectNames -RepoRoot $repoRoot)
+        $inventoryProjectNames = @($inventory.RunPlan.ProjectBackedSurfaces.Name)
+        $projectDrift = @(Compare-Object -ReferenceObject $projectNames -DifferenceObject $inventoryProjectNames)
+        Assert-RSEqual -Actual $projectDrift.Count -Expected 0 -Message 'Tests project files and run-plan-backed inventory surfaces should have set equality.'
 
-        Assert-RSEqual -Actual $inventory.Standalone.PerformanceTests2.TestMethods -Expected 14 -Message 'PerformanceTests2 method count drifted.'
-        Assert-RSEqual -Actual $inventory.Standalone.DxUiTests.NativeTextInputCases -Expected 118 -Message 'NativeTextInput method count drifted.'
-        Assert-RSEqual -Actual $inventory.Scripts.ToolsPester.Cases -Expected 294 -Message 'Tools Pester test count drifted.'
-        Assert-RSEqual -Actual $inventory.Scripts.ToolsPester.RequiresBuildToolchainCases -Expected 1 -Message 'Build-toolchain Pester count drifted.'
-        Assert-RSEqual -Actual $inventory.Scripts.VcpkgMergeSynthetic.Cases -Expected 5 -Message 'Synthetic vcpkg merge count drifted.'
-        Assert-RSEqual -Actual $inventory.Scripts.VcpkgMergeLockValidation.Cases -Expected 3 -Message 'Lock-validation vcpkg count drifted.'
+        foreach ($surface in $inventory.RunPlan.ProjectBackedSurfaces) {
+            $expectedKind = if ($surface.Name -eq 'PerformanceTests2') { 'CppUnitTest' } else { 'Executable' }
+            Assert-RSEqual -Actual $surface.Kind -Expected $expectedKind -Message "Run-plan kind drifted for test project '$($surface.Name)'."
+            Assert-RSEqual -Actual ($surface.PlanEntries.Count -gt 0) -Expected $true -Message "Test project '$($surface.Name)' should have at least one run-plan entry."
+        }
     }
 
-    It 'exports JSON that can be used as a manifest artifact' {
+    It 'keeps critical CI and Full surfaces visible with their run-plan kinds' {
         $inventory = Get-RSTestInventory -RepoRoot $repoRoot
-        $json = ConvertTo-RSTestInventoryJson -Inventory $inventory
-        $roundTrip = $json | ConvertFrom-Json
+        $allEntries = @($inventory.RunPlan.CI + $inventory.RunPlan.Full)
+        $requiredKinds = [ordered]@{
+            PluginContractTests = 'Executable'
+            SettingsSchemaTests = 'Executable'
+            CrashHandlingTests = 'Executable'
+            RedSalamanderMonitorEtwLatency = 'Executable'
+            PerformanceTests2 = 'CppUnitTest'
+            ToolsPesterTests = 'Pester'
+            VcpkgMergeSynthetic = 'PowerShellScript'
+        }
 
-        Assert-RSEqual -Actual $roundTrip.selfTests.commands.runCaseRegistrations -Expected 707 -Message 'JSON manifest should include Commands count.'
-        Assert-RSEqual -Actual $roundTrip.standalone.dxUiTests.nativeTextInputCases -Expected 118 -Message 'JSON manifest should include NativeTextInput count.'
-        Assert-RSEqual -Actual $roundTrip.scripts.toolsPester.cases -Expected 294 -Message 'JSON manifest should include Tools Pester count.'
+        foreach ($required in $requiredKinds.GetEnumerator()) {
+            $matches = @($allEntries | Where-Object { $_.Name -eq $required.Key -and $_.Kind -eq $required.Value })
+            Assert-RSEqual -Actual ($matches.Count -gt 0) -Expected $true -Message "Required test surface '$($required.Key)' with kind '$($required.Value)' is missing from CI/Full inventory."
+        }
+    }
+
+    It 'exports JSON as a lossless manifest of source and run-plan inventory' {
+        $inventory = Get-RSTestInventory -RepoRoot $repoRoot
+        $roundTrip = ConvertTo-RSTestInventoryJson -Inventory $inventory | ConvertFrom-Json
+
+        Assert-RSEqual -Actual $roundTrip.selfTests.commands.runCaseRegistrations -Expected $inventory.SelfTests.Commands.RunCaseRegistrations -Message 'JSON manifest should preserve the derived Commands registration count.'
+        Assert-RSEqual -Actual $roundTrip.standalone.dxUiTests.nativeTextInputCases -Expected $inventory.Standalone.DxUiTests.NativeTextInputCases -Message 'JSON manifest should preserve the derived NativeTextInput count.'
+        Assert-RSEqual -Actual $roundTrip.scripts.toolsPester.cases -Expected $inventory.Scripts.ToolsPester.Cases -Message 'JSON manifest should preserve the derived Tools Pester count.'
+        Assert-RSEqual -Actual @($roundTrip.scripts.toolsPester.sourceContracts.cases).Count -Expected @($inventory.Scripts.ToolsPester.SourceContracts.Cases).Count -Message 'JSON manifest should preserve every classified source-contract case.'
+        Assert-RSEqual -Actual @($roundTrip.scripts.toolsPester.sourceContracts.replacementCandidates).Count -Expected @($inventory.Scripts.ToolsPester.SourceContracts.ReplacementCandidates).Count -Message 'JSON manifest should preserve the behavioral replacement queue.'
+        Assert-RSEqual -Actual @($roundTrip.runPlan.projectBackedSurfaces).Count -Expected @($inventory.RunPlan.ProjectBackedSurfaces).Count -Message 'JSON manifest should preserve every project-backed test surface.'
+        Assert-RSEqual -Actual @($roundTrip.runPlan.ci).Count -Expected @($inventory.RunPlan.CI).Count -Message 'JSON manifest should preserve every CI run-plan entry.'
+        Assert-RSEqual -Actual @($roundTrip.runPlan.full).Count -Expected @($inventory.RunPlan.Full).Count -Message 'JSON manifest should preserve every Full run-plan entry.'
+    }
+
+    It 'classifies every source-contract case for replacement decisions' {
+        $inventory = Get-RSTestInventory -RepoRoot $repoRoot
+        $sourceContracts = $inventory.Scripts.ToolsPester.SourceContracts
+        $sourceContractPath = Join-Path $repoRoot 'Tools\Tests\TestHarnessSourceContracts.Tests.ps1'
+        $declaredCount = Get-RSSelectStringCount -Path @($sourceContractPath) -Pattern '^\s*It\s'
+
+        Assert-RSEqual -Actual @($sourceContracts.Cases).Count -Expected $declaredCount -Message 'Every source-contract It block should have one live classification.'
+        Assert-RSEqual -Actual @($sourceContracts.Cases.Name | Sort-Object -Unique).Count -Expected $declaredCount -Message 'Source-contract classification names should be unique.'
+        Assert-RSEqual -Actual (($sourceContracts.CategoryCounts.PSObject.Properties.Value | Measure-Object -Sum).Sum) -Expected $declaredCount -Message 'Source-contract category totals should account for every case.'
+        Assert-RSEqual -Actual (@($sourceContracts.ReplacementCandidates).Count -gt 0) -Expected $true -Message 'The inventory should expose behavioral source-shape checks that still need runtime replacement.'
     }
 
     It 'guards FileOperations Step enum values against phase-order drift' {
+        $inventory = Get-RSTestInventory -RepoRoot $repoRoot
         $coordinator = Join-Path $repoRoot 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.cpp'
         $integrity = Get-RSFileOpsPhaseIntegrity -FilePath $coordinator
 
-        Assert-RSEqual -Actual $integrity.ActiveEnumValues.Count -Expected 126 -Message 'FileOperations active Step count drifted.'
+        Assert-RSEqual -Actual $integrity.ActiveEnumValues.Count -Expected $inventory.SelfTests.FileOperations.ActivePhases -Message 'FileOperations active Step inventory should be derived from the phase order.'
         Assert-RSEqual -Actual $integrity.MissingActivePhases.Count -Expected 0 -Message 'Every active Step enum value should appear in kFileOpsPhaseOrder.'
         Assert-RSEqual -Actual $integrity.DuplicateOrderedPhases.Count -Expected 0 -Message 'kFileOpsPhaseOrder should not list an active phase more than once.'
         Assert-RSEqual -Actual $integrity.ExtraOrderedPhases.Count -Expected 0 -Message 'kFileOpsPhaseOrder should not reference unknown Step values.'
     }
 
-    It 'keeps documented inventory counts aligned with the source manifest' {
-        $inventory = Get-RSTestInventory -RepoRoot $repoRoot
-        $coverageDoc = Get-RSTestInventoryDocSnapshot -Path (Join-Path $repoRoot 'Specs\Testing\Testing_TestCoverage.md')
-        $readmeDoc = Get-RSTestInventoryDocSnapshot -Path (Join-Path $repoRoot 'Tests\README.md')
-        $readmeInventory = Get-RSTestsReadmeInventorySnapshot -Path (Join-Path $repoRoot 'Tests\README.md')
+    It 'documents commands for live inventory instead of checked-in current totals' {
+        $readme = Get-Content -LiteralPath (Join-Path $repoRoot 'Tests\README.md') -Raw
+        $coverage = Get-Content -LiteralPath (Join-Path $repoRoot 'Specs\Testing\Testing_TestCoverage.md') -Raw
 
-        Assert-RSEqual -Actual $coverageDoc.CommandsRunCases -Expected $inventory.SelfTests.Commands.RunCaseRegistrations -Message 'Coverage spec Commands count drifted from source.'
-        Assert-RSEqual -Actual $coverageDoc.CompareRunCases -Expected $inventory.SelfTests.CompareDirectories.RunCaseRegistrations -Message 'Coverage spec CompareDirectories count drifted from source.'
-        Assert-RSEqual -Actual $coverageDoc.FileOpsActivePhases -Expected $inventory.SelfTests.FileOperations.ActivePhases -Message 'Coverage spec FileOperations count drifted from source.'
-        Assert-RSEqual -Actual $coverageDoc.PerformanceTestMethods -Expected $inventory.Standalone.PerformanceTests2.TestMethods -Message 'Coverage spec PerformanceTests2 count drifted from source.'
-        Assert-RSEqual -Actual $coverageDoc.NativeTextInputCases -Expected $inventory.Standalone.DxUiTests.NativeTextInputCases -Message 'Coverage spec NativeTextInput count drifted from source.'
-        Assert-RSEqual -Actual $readmeDoc.NativeTextInputCases -Expected $inventory.Standalone.DxUiTests.NativeTextInputCases -Message 'Tests README NativeTextInput count drifted from source.'
-        Assert-RSEqual -Actual $coverageDoc.ToolsPesterCases -Expected $inventory.Scripts.ToolsPester.Cases -Message 'Coverage spec Tools Pester count drifted from source.'
-        Assert-RSEqual -Actual $readmeDoc.ToolsPesterCases -Expected $inventory.Scripts.ToolsPester.Cases -Message 'Tests README Tools Pester count drifted from source.'
-        Assert-RSEqual -Actual $readmeDoc.VcpkgSyntheticCases -Expected $inventory.Scripts.VcpkgMergeSynthetic.Cases -Message 'Tests README vcpkg synthetic count drifted from source.'
-
-        Assert-RSEqual -Actual $readmeInventory.CommandsListedCases.Count -Expected 3 -Message 'Tests README should expose Commands listed count in overview, heading, and narrative.'
-        foreach ($count in $readmeInventory.CommandsListedCases) {
-            Assert-RSEqual -Actual $count -Expected 809 -Message 'Tests README Commands listed counts disagree.'
+        foreach ($document in @($readme, $coverage)) {
+            $document | Should Match 'Tools[\\/]Get-TestInventory\.ps1\s+-Format\s+Json'
+            $document | Should Not Match 'Counts below are current as of'
+            $document | Should Not Match 'Current runner-native inventory as of'
+            $document | Should Not Match 'Current source-derived fallback counts'
         }
-        Assert-RSEqual -Actual $readmeInventory.CommandsStaticRunCases.Count -Expected 1 -Message 'Tests README should expose one Commands static-registration count.'
-        Assert-RSEqual -Actual $readmeInventory.CommandsStaticRunCases[0] -Expected $inventory.SelfTests.Commands.RunCaseRegistrations -Message 'Tests README Commands static count drifted from source.'
 
-        Assert-RSEqual -Actual $readmeInventory.CompareListedCases.Count -Expected 3 -Message 'Tests README should expose Compare listed count in overview, heading, and narrative.'
-        foreach ($count in $readmeInventory.CompareListedCases) {
-            Assert-RSEqual -Actual $count -Expected 256 -Message 'Tests README Compare listed counts disagree.'
-        }
-        Assert-RSEqual -Actual $readmeInventory.CompareStaticRunCases.Count -Expected 1 -Message 'Tests README should expose one Compare static-registration count.'
-        Assert-RSEqual -Actual $readmeInventory.CompareStaticRunCases[0] -Expected $inventory.SelfTests.CompareDirectories.RunCaseRegistrations -Message 'Tests README Compare static count drifted from source.'
-
-        Assert-RSEqual -Actual $readmeInventory.FileOpsListedCases.Count -Expected 3 -Message 'Tests README should expose FileOps listed count in overview, heading, and narrative.'
-        foreach ($count in $readmeInventory.FileOpsListedCases) {
-            Assert-RSEqual -Actual $count -Expected ($inventory.SelfTests.FileOperations.ActivePhases + 2) -Message 'Tests README FileOps listed counts disagree.'
-        }
-        Assert-RSEqual -Actual $readmeInventory.FileOpsActivePhases.Count -Expected 1 -Message 'Tests README should expose one FileOps active-phase count.'
-        Assert-RSEqual -Actual $readmeInventory.FileOpsActivePhases[0] -Expected $inventory.SelfTests.FileOperations.ActivePhases -Message 'Tests README FileOps active count drifted from source.'
-
-        Assert-RSEqual -Actual $readmeInventory.ToolsPesterCases.Count -Expected 1 -Message 'Tests README should expose one Tools Pester aggregate count.'
-        Assert-RSEqual -Actual $readmeInventory.ToolsPesterCases[0] -Expected $inventory.Scripts.ToolsPester.Cases -Message 'Tests README Tools Pester aggregate drifted from source.'
-
-        foreach ($property in $inventory.SelfTests.Commands.FamilyRunCaseRegistrations.PSObject.Properties) {
-            $documented = $readmeInventory.CommandsFamilyCases.PSObject.Properties[$property.Name]
-            Assert-RSEqual -Actual ($null -ne $documented) -Expected $true -Message "Tests README is missing Commands family '$($property.Name)'."
-            Assert-RSEqual -Actual $documented.Value -Expected $property.Value -Message "Tests README Commands family '$($property.Name)' drifted from source."
-        }
-        $commandsFamilyTotal = ($inventory.SelfTests.Commands.FamilyRunCaseRegistrations.PSObject.Properties.Value | Measure-Object -Sum).Sum
-        Assert-RSEqual -Actual $inventory.SelfTests.Commands.CoordinatorRunCaseRegistrations -Expected 1 -Message 'Commands coordinator should retain one isolation-failure RunCase registration.'
-        Assert-RSEqual -Actual ($commandsFamilyTotal + $inventory.SelfTests.Commands.CoordinatorRunCaseRegistrations) -Expected $inventory.SelfTests.Commands.RunCaseRegistrations -Message 'Commands family and coordinator registrations should account for the aggregate source count.'
-        Assert-RSEqual -Actual @($readmeInventory.CommandsFamilyCases.PSObject.Properties).Count -Expected @($inventory.SelfTests.Commands.FamilyRunCaseRegistrations.PSObject.Properties).Count -Message 'Tests README Commands family table has extra or missing rows.'
-
-        foreach ($property in $inventory.Scripts.ToolsPester.FileCases.PSObject.Properties) {
-            $documented = $readmeInventory.ToolsPesterFileCases.PSObject.Properties[$property.Name]
-            Assert-RSEqual -Actual ($null -ne $documented) -Expected $true -Message "Tests README is missing Tools Pester file '$($property.Name)'."
-            Assert-RSEqual -Actual $documented.Value -Expected $property.Value -Message "Tests README Tools Pester file '$($property.Name)' drifted from source."
-        }
-        Assert-RSEqual -Actual @($readmeInventory.ToolsPesterFileCases.PSObject.Properties).Count -Expected @($inventory.Scripts.ToolsPester.FileCases.PSObject.Properties).Count -Message 'Tests README Tools Pester table has extra or missing rows.'
+        $readme | Should Not Match 'runner-listed\s+(cases|phases)'
+        $readme | Should Not Match 'source fallback scan reports\s+\d+'
     }
 }

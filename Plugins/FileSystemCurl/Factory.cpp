@@ -23,6 +23,7 @@
 #include "Helpers.h"
 
 #include "FileSystemCurl.h"
+#include "FileSystemCurl.Internal.h"
 
 #include "PlugInterfaces/FactoryImpl.h"
 
@@ -137,6 +138,8 @@ const char* GetSchemaImap() noexcept
 // Per-entry creation thunks (bake in the plugin id for dispatch to the existing helper).
 HRESULT CreateInstanceFtp(const FactoryOptions* /*factoryOptions*/, IHost* host, void** result) noexcept
 {
+    if (! FileSystemCurlInternal::CanCreateFileSystemCurl())
+        return HRESULT_FROM_WIN32(ERROR_SHUTDOWN_IN_PROGRESS);
     auto* instance = new (std::nothrow) FileSystemCurl(FileSystemCurlProtocol::Ftp, host);
     if (! instance)
         return E_OUTOFMEMORY;
@@ -146,6 +149,8 @@ HRESULT CreateInstanceFtp(const FactoryOptions* /*factoryOptions*/, IHost* host,
 }
 HRESULT CreateInstanceSftp(const FactoryOptions* /*factoryOptions*/, IHost* host, void** result) noexcept
 {
+    if (! FileSystemCurlInternal::CanCreateFileSystemCurl())
+        return HRESULT_FROM_WIN32(ERROR_SHUTDOWN_IN_PROGRESS);
     auto* instance = new (std::nothrow) FileSystemCurl(FileSystemCurlProtocol::Sftp, host);
     if (! instance)
         return E_OUTOFMEMORY;
@@ -155,6 +160,8 @@ HRESULT CreateInstanceSftp(const FactoryOptions* /*factoryOptions*/, IHost* host
 }
 HRESULT CreateInstanceScp(const FactoryOptions* /*factoryOptions*/, IHost* host, void** result) noexcept
 {
+    if (! FileSystemCurlInternal::CanCreateFileSystemCurl())
+        return HRESULT_FROM_WIN32(ERROR_SHUTDOWN_IN_PROGRESS);
     auto* instance = new (std::nothrow) FileSystemCurl(FileSystemCurlProtocol::Scp, host);
     if (! instance)
         return E_OUTOFMEMORY;
@@ -164,6 +171,8 @@ HRESULT CreateInstanceScp(const FactoryOptions* /*factoryOptions*/, IHost* host,
 }
 HRESULT CreateInstanceImap(const FactoryOptions* /*factoryOptions*/, IHost* host, void** result) noexcept
 {
+    if (! FileSystemCurlInternal::CanCreateFileSystemCurl())
+        return HRESULT_FROM_WIN32(ERROR_SHUTDOWN_IN_PROGRESS);
     auto* instance = new (std::nothrow) FileSystemCurl(FileSystemCurlProtocol::Imap, host);
     if (! instance)
         return E_OUTOFMEMORY;
@@ -194,3 +203,20 @@ extern "C" HRESULT __stdcall RedSalamanderGetConfigurationSchema(REFIID riid, co
 {
     return FactoryGetConfigurationSchema<IFileSystem>(kEntries, riid, pluginId, schemaJsonUtf8);
 }
+
+extern "C" PLUGFACTORY_API void __stdcall RedSalamanderPluginShutdown() noexcept
+{
+    FileSystemCurlInternal::BeginFileSystemCurlShutdown();
+}
+
+extern "C" PLUGFACTORY_API BOOL __stdcall RedSalamanderPluginCanUnloadNow() noexcept
+{
+    return FileSystemCurlInternal::CanUnloadFileSystemCurlNow() ? TRUE : FALSE;
+}
+
+#if defined(_DEBUG)
+extern "C" PLUGFACTORY_API HRESULT __stdcall RedSalamanderDebugCurlRuntimeProbe() noexcept
+{
+    return FileSystemCurlInternal::RunDebugCurlRuntimeProbe();
+}
+#endif

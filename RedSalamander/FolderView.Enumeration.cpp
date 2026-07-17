@@ -319,7 +319,8 @@ std::unique_ptr<FolderView::EnumerationPayload> FolderView::ExecuteEnumeration(c
         return payload;
     }
 
-    auto borrowed = DirectoryInfoCache::GetInstance().BorrowDirectoryInfo(_fileSystem.get(), folder, DirectoryInfoCache::BorrowMode::AllowEnumerate);
+    auto borrowed =
+        DirectoryInfoCache::GetInstance().BorrowDirectoryInfo(_fileSystem.get(), folder, DirectoryInfoCache::BorrowMode::AllowEnumerate, stopToken);
     if (borrowed.Status() != S_OK)
     {
         payload->status = borrowed.Status();
@@ -347,15 +348,26 @@ std::unique_ptr<FolderView::EnumerationPayload> FolderView::ExecuteEnumeration(c
 
     std::vector<FolderItem> directories;
     std::vector<FolderItem> files;
-    // Pre-allocate with better estimates (reduces reallocations)
-    const size_t estimatedDirs  = static_cast<size_t>(entryCount) / 4u; // Estimate ~25% directories
-    const size_t estimatedFiles = static_cast<size_t>(entryCount);      // Upper bound for files
-    directories.reserve(std::max(estimatedDirs, static_cast<size_t>(128u)));
-    files.reserve(std::max(estimatedFiles, static_cast<size_t>(256u)));
 
     // Best-effort: this runs on a background worker; translate exceptions into a failed payload.
     try
     {
+        constexpr size_t kEnumerationReserveCeiling = 1u << 20;
+        unsigned long bufferSizeHint                = 0;
+        if (FAILED(filesInformation->GetBufferSize(&bufferSizeHint)))
+        {
+            bufferSizeHint = 0;
+        }
+        const size_t countHint = static_cast<size_t>(entryCount);
+        const size_t maxByBuffer = bufferSizeHint > 0u ? static_cast<size_t>(bufferSizeHint) / sizeof(FileInfo) : countHint;
+        const size_t clampedCount = std::min(countHint, std::min(maxByBuffer, kEnumerationReserveCeiling));
+
+        // GetCount is an untrusted allocation hint; reserve only a bounded amount derived from the real buffer.
+        const size_t estimatedDirs  = clampedCount / 4u;
+        const size_t estimatedFiles = clampedCount;
+        directories.reserve(std::max(estimatedDirs, static_cast<size_t>(128u)));
+        files.reserve(std::max(estimatedFiles, static_cast<size_t>(256u)));
+
         FileInfo* entry = nullptr;
         hr              = filesInformation->GetBuffer(&entry);
         if (FAILED(hr))
@@ -1327,11 +1339,11 @@ void FolderView::ApplyCurrentSort(std::wstring_view preferredFocusedPath, size_t
         {
             newFocusedIndex = firstSelected;
         }
-        else if (fallbackFocusIndex != invalidIndex)
+        else if (focusedName.empty() && fallbackFocusIndex != invalidIndex)
         {
             newFocusedIndex = std::min(fallbackFocusIndex, _items.size() - 1);
         }
-        else
+        else if (focusedName.empty())
         {
             newFocusedIndex = 0;
         }
@@ -2001,7 +2013,9 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
 #ifdef ENABLE_TESTS
             SelfTest::AppendSelfTestTrace(std::format(L"FolderView::ProcessEnumerationResult: dispatching pending command id={}", pending.commandId));
 #endif
-            PostMessageW(_hWnd.get(), WM_COMMAND, MAKEWPARAM(pending.commandId, 0), 0);
+            // Execute against the focus identity just validated above. Posting would reopen a window in
+            // which another refresh could migrate the command to a different positional neighbor.
+            OnCommandMessage(pending.commandId);
         }
     }
 #ifdef ENABLE_TESTS

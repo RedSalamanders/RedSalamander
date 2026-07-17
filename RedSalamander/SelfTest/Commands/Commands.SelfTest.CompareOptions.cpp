@@ -1459,27 +1459,32 @@ struct CompareOptionsEditDiagnosticState
     };
 
     const bool initialEditSetOk = setAndWaitForEditValue(editedValue, L"initial live DX body interaction edit set");
-    state.Require(initialEditSetOk,
-                  std::format(L"Compare Directories options DX edit '{}' did not update after UIA ValuePattern SetValue; {}.",
-                              editName,
-                              describeEditFailure(L"initial edit set", editedValue)));
-    if (! state.failure.empty())
+    if (! initialEditSetOk)
     {
+        state.Require(false,
+                      std::format(L"Compare Directories options DX edit '{}' did not update after UIA ValuePattern SetValue; {}.",
+                                  editName,
+                                  describeEditFailure(L"initial edit set", editedValue)));
         return false;
     }
 
     const bool initialEditStillSet = waitForEditValue(editedValue);
-    state.Require(initialEditStillSet,
-                  std::format(L"Compare Directories options DX edit '{}' did not stay updated after UIA ValuePattern SetValue; {}.",
-                              editName,
-                              describeEditFailure(L"initial edit set stability", editedValue)));
-    const bool initialEditRestored = setAndWaitForEditValue(initialEditValue, L"initial live DX body interaction edit restore");
-    state.Require(initialEditRestored,
-                  std::format(L"Compare Directories options DX edit '{}' did not restore its original value; {}.",
-                              editName,
-                              describeEditFailure(L"initial edit restore", initialEditValue)));
-    if (! state.failure.empty())
+    if (! initialEditStillSet)
     {
+        state.Require(false,
+                      std::format(L"Compare Directories options DX edit '{}' did not stay updated after UIA ValuePattern SetValue; {}.",
+                                  editName,
+                                  describeEditFailure(L"initial edit set stability", editedValue)));
+        return false;
+    }
+
+    const bool initialEditRestored = setAndWaitForEditValue(initialEditValue, L"initial live DX body interaction edit restore");
+    if (! initialEditRestored)
+    {
+        state.Require(false,
+                      std::format(L"Compare Directories options DX edit '{}' did not restore its original value; {}.",
+                                  editName,
+                                  describeEditFailure(L"initial edit restore", initialEditValue)));
         return false;
     }
 

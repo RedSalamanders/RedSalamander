@@ -375,6 +375,30 @@ void TestSetActionExtensions(Common::Settings::FileActionDefinition& action, std
     return false;
 }
 
+[[nodiscard]] bool WaitForMakeFileListWorkerIdle(std::chrono::milliseconds timeout) noexcept
+{
+    using namespace std::chrono_literals;
+
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        PumpPendingMessages();
+        if (! DebugIsMakeFileListWorkerActive())
+        {
+            for (size_t index = 0u; index < 5u; ++index)
+            {
+                std::this_thread::sleep_for(10ms);
+                PumpPendingMessages();
+            }
+            return ! DebugIsMakeFileListWorkerActive();
+        }
+        std::this_thread::sleep_for(10ms);
+    }
+
+    PumpPendingMessages();
+    return ! DebugIsMakeFileListWorkerActive();
+}
+
 [[nodiscard]] bool WaitForPreviewPaneTextAndFocus(std::wstring_view expected,
                                                   std::wstring_view forbidden,
                                                   HWND expectedFocus,
@@ -3578,7 +3602,9 @@ void RemoveTestShortcutBinding(std::vector<Common::Settings::ShortcutBinding>& b
     state.Require(inFlightSuppressed.status == SettingsHotReload::ChangedSettingsStatus::NoChange,
                   L"The exact stamp of an in-flight self-save should suppress only that atomic replacement.");
 
-    Common::Settings::Settings externalDuringSelfSave = selfSaved;
+    Common::Settings::Settings externalDuringSelfSave{};
+    state.Require(Common::Settings::TryLoadSettingsNoRecovery(kTestAppId, externalDuringSelfSave) == S_OK,
+                  L"Failed to load the current revision for the external replacement race.");
     externalDuringSelfSave.theme.currentThemeId       = L"builtin/rainbow";
     const uint32_t beforeExternalRaceSave = windowState.changeCount.load(std::memory_order_acquire);
     const HRESULT externalRaceSaveHr      = Common::Settings::SaveSettings(kTestAppId, externalDuringSelfSave);
@@ -3625,27 +3651,22 @@ void RemoveTestShortcutBinding(std::vector<Common::Settings::ShortcutBinding>& b
     state.Require(reloadDelayEntered, L"Changed-settings load did not enter the deterministic post-stamp epoch race window.");
 
     const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(kTestAppId);
-    std::filesystem::path blockedTempPath    = settingsPath;
-    blockedTempPath += L".tmp";
-    wil::unique_handle blockedTemp(CreateFileW(blockedTempPath.c_str(),
-                                               GENERIC_READ | GENERIC_WRITE,
-                                               0u,
-                                               nullptr,
-                                               CREATE_ALWAYS,
-                                               FILE_ATTRIBUTE_NORMAL,
-                                               nullptr));
-    state.Require(static_cast<bool>(blockedTemp), L"Failed to lock the atomic settings temp file for failed-save epoch coverage.");
-    if (reloadDelayEntered && blockedTemp)
+    wil::unique_hfile blockedTarget(CreateFileW(settingsPath.c_str(),
+                                                GENERIC_READ,
+                                                FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                                nullptr,
+                                                OPEN_EXISTING,
+                                                FILE_ATTRIBUTE_NORMAL,
+                                                nullptr));
+    state.Require(static_cast<bool>(blockedTarget), L"Failed to deny replacement of the settings target for failed-save epoch coverage.");
+    if (reloadDelayEntered && blockedTarget)
     {
         Common::Settings::Settings failedInternalSave = externalBeforeFailedSave;
         failedInternalSave.theme.currentThemeId       = L"builtin/dark";
         const HRESULT failedSaveHr = SettingsHotReload::SaveSettingsAndSchema(kTestAppId, failedInternalSave);
-        state.Require(FAILED(failedSaveHr), L"The locked temp-file fixture should force the internal settings save to fail.");
+        state.Require(FAILED(failedSaveHr), L"The replacement-denied target fixture should force the internal settings save to fail.");
     }
-    blockedTemp.reset();
-    std::error_code blockedTempCleanupError;
-    std::filesystem::remove(blockedTempPath, blockedTempCleanupError);
-    state.Require(! blockedTempCleanupError, L"Failed to remove the locked settings temp-file fixture.");
+    blockedTarget.reset();
     SettingsHotReload::DebugSetSettingsReloadPostStampDelayForSelfTest(0u);
     epochRaceLoader.join();
 
@@ -3660,11 +3681,73 @@ void RemoveTestShortcutBinding(std::vector<Common::Settings::ShortcutBinding>& b
 constexpr wchar_t kSettingsSaveTeardownChildEnv[] = L"REDSALAMANDER_SETTINGS_SAVE_TEARDOWN_CHILD";
 constexpr wchar_t kSettingsSaveTeardownChildRootEnv[] = L"REDSALAMANDER_SELFTEST_ROOT";
 
-[[nodiscard]] bool IsSettingsSaveTeardownChild() noexcept
+enum class SettingsSaveChildMode : uint8_t
 {
-    std::array<wchar_t, 8> value{};
+    None,
+    FinalSaveOrdering,
+    BoundedTeardown,
+    SessionEnd,
+};
+
+[[nodiscard]] SettingsSaveChildMode GetSettingsSaveChildMode() noexcept
+{
+    std::array<wchar_t, 32> value{};
     const DWORD length = GetEnvironmentVariableW(kSettingsSaveTeardownChildEnv, value.data(), static_cast<DWORD>(value.size()));
-    return length == 1u && value[0] == L'1';
+    if (length == 8u && std::wstring_view(value.data(), length) == L"ordering")
+    {
+        return SettingsSaveChildMode::FinalSaveOrdering;
+    }
+    if (length == 8u && std::wstring_view(value.data(), length) == L"teardown")
+    {
+        return SettingsSaveChildMode::BoundedTeardown;
+    }
+    if (length == 10u && std::wstring_view(value.data(), length) == L"sessionend")
+    {
+        return SettingsSaveChildMode::SessionEnd;
+    }
+    return SettingsSaveChildMode::None;
+}
+
+[[nodiscard]] bool RunSettingsFinalSaveOrderingChild(CaseState& state) noexcept
+{
+    constexpr std::wstring_view kTestAppId = L"RedSalamanderSelfTestSettingsFinalSaveOrderingChild";
+    static_cast<void>(SettingsHotReload::FlushQueuedSettingsSaves(INFINITE));
+    CleanupSettingsArtifacts(kTestAppId);
+    const auto cleanup = wil::scope_exit([&]() noexcept { CleanupSettingsArtifacts(kTestAppId); });
+
+    Common::Settings::Settings firstFinal{};
+    firstFinal.theme.currentThemeId = L"builtin/highContrast";
+    const SettingsHotReload::SettingsSaveDebugSnapshot before = SettingsHotReload::DebugGetSettingsSaveSnapshotForSelfTest();
+
+    SettingsHotReload::BeginProcessShutdown();
+
+    HRESULT concurrentNormalHr = E_PENDING;
+    std::jthread concurrentNormal([&]() noexcept
+    { concurrentNormalHr = SettingsHotReload::QueueSettingsSave(kTestAppId, firstFinal, L"", L"after-shutdown-fence"); });
+    concurrentNormal.join();
+    state.Require(concurrentNormalHr == HRESULT_FROM_WIN32(ERROR_SHUTDOWN_IN_PROGRESS),
+                  L"A normal submitter must not cross the serialized process-shutdown fence.");
+
+    const HRESULT firstFinalHr = SettingsHotReload::SaveSettingsAndSchemaForProcessShutdown(kTestAppId, firstFinal, 5000u);
+    state.Require(SUCCEEDED(firstFinalHr), L"BeginProcessShutdown followed by the final settings save should succeed.");
+
+    Common::Settings::Settings duplicateFinal = firstFinal;
+    duplicateFinal.theme.currentThemeId       = L"builtin/rainbow";
+    const HRESULT duplicateFinalHr = SettingsHotReload::SaveSettingsAndSchemaForProcessShutdown(kTestAppId, duplicateFinal, 5000u);
+    state.Require(SUCCEEDED(duplicateFinalHr), L"Duplicate process-final settings persistence should be idempotent.");
+
+    const SettingsHotReload::SettingsSaveDebugSnapshot after = SettingsHotReload::DebugGetSettingsSaveSnapshotForSelfTest();
+    state.Require(after.queuedGeneration == before.queuedGeneration + 1u,
+                  L"Process finalization should admit exactly one settings snapshot.");
+    state.Require(SettingsHotReload::SaveSettingsAndSchema(kTestAppId, duplicateFinal) == HRESULT_FROM_WIN32(ERROR_SHUTDOWN_IN_PROGRESS),
+                  L"Normal synchronous persistence should remain rejected after process finalization.");
+
+    Common::Settings::Settings loaded{};
+    state.Require(Common::Settings::TryLoadSettingsNoRecovery(kTestAppId, loaded) == S_OK,
+                  L"The process-final settings snapshot should be readable.");
+    state.Require(loaded.theme.currentThemeId == firstFinal.theme.currentThemeId,
+                  L"Duplicate finalization must preserve the first admitted final snapshot.");
+    return state.failure.empty();
 }
 
 [[nodiscard]] bool RunSettingsSaveTeardownChild(CaseState& state) noexcept
@@ -3707,7 +3790,103 @@ constexpr wchar_t kSettingsSaveTeardownChildRootEnv[] = L"REDSALAMANDER_SELFTEST
     return state.failure.empty();
 }
 
-[[nodiscard]] bool RequireBoundedSettingsSaveProcessTeardown(CaseState& state) noexcept
+[[nodiscard]] bool RunSettingsSessionEndChild(const HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+    constexpr std::wstring_view kTestAppId = L"RedSalamander";
+    constexpr std::string_view kSchemaSentinel = "session-end-schema-sentinel";
+
+    state.Require(mainWindow != nullptr && IsWindow(mainWindow) != FALSE,
+                  L"The real WM_ENDSESSION regression requires the child main window.");
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        return false;
+    }
+
+    static_cast<void>(SettingsHotReload::FlushQueuedSettingsSaves(INFINITE));
+    CleanupSettingsArtifacts(kTestAppId);
+
+    const std::filesystem::path schemaPath = Common::Settings::GetSettingsSchemaPath(kTestAppId);
+    state.Require(! schemaPath.empty(), L"Session-end regression schema path is unavailable.");
+    state.Require(SelfTest::WriteTextFile(schemaPath, kSchemaSentinel), L"Failed to seed the session-end schema sentinel.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    Common::Settings::Settings olderInFlight{};
+    olderInFlight.theme.currentThemeId = L"builtin/dark";
+    const DWORD delayMs                = static_cast<DWORD>(SelfTest::Scale(500ms).count());
+    SettingsHotReload::DebugSetSettingsSaveDelayForSelfTest(delayMs);
+    state.Require(SUCCEEDED(SettingsHotReload::QueueSettingsSave(kTestAppId, olderInFlight, L"", L"session-end-older-in-flight")),
+                  L"Failed to queue the deliberately stalled older settings snapshot.");
+
+    const auto startDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
+    while (std::chrono::steady_clock::now() < startDeadline &&
+           ! SettingsHotReload::DebugGetSettingsSaveSnapshotForSelfTest().saveInProgress)
+    {
+        std::this_thread::sleep_for(5ms);
+    }
+    state.Require(SettingsHotReload::DebugGetSettingsSaveSnapshotForSelfTest().saveInProgress,
+                  L"Older settings snapshot did not enter the deterministic storage stall.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    SettingsHotReload::DebugSetSettingsSaveDelayForSelfTest(0u);
+    Common::Settings::Settings olderQueued = olderInFlight;
+    olderQueued.theme.currentThemeId       = L"builtin/light";
+    state.Require(SUCCEEDED(SettingsHotReload::QueueSettingsSave(kTestAppId, olderQueued, L"", L"session-end-older-queued")),
+                  L"Failed to queue the older snapshot behind the stalled save.");
+
+    // This child deliberately leaves the writer seam unset: WM_ENDSESSION must use the real
+    // coordinator path because its shutdown fence is intentionally process-lifetime.
+    DebugResetSessionEndSettingsSaveForSelfTest();
+    g_settings.theme.currentThemeId = L"builtin/highContrast";
+    SendMessageW(mainWindow, WM_ENDSESSION, TRUE, ENDSESSION_CLOSEAPP);
+
+    const SessionEndSettingsDebugSnapshot sessionEnd = DebugGetSessionEndSettingsSnapshotForSelfTest();
+    const uint64_t maxDurationUs = static_cast<uint64_t>(
+        std::chrono::duration_cast<std::chrono::microseconds>(SelfTest::Scale(5000ms)).count());
+    state.Require(sessionEnd.writerCallCount == 1u, L"Real WM_ENDSESSION should submit exactly one final settings snapshot.");
+    state.Require(sessionEnd.normalTeardownCallCount == 0u, L"WM_ENDSESSION must not enter normal teardown.");
+    state.Require(SUCCEEDED(sessionEnd.lastResult), L"The bounded session-end coordinator save should complete successfully.");
+    state.Require(sessionEnd.durationUs < maxDurationUs,
+                  L"The session-end coordinator save exceeded its documented five-second deadline.");
+
+    Common::Settings::Settings persisted{};
+    state.Require(Common::Settings::TryLoadSettingsNoRecovery(kTestAppId, persisted) == S_OK,
+                  L"Failed to read the real session-end settings snapshot from disk.");
+    state.Require(persisted.theme.currentThemeId == L"builtin/highContrast",
+                  L"The session-end snapshot must win over both older serialized settings snapshots.");
+    state.Require(ReadAuditTextFile(schemaPath) == kSchemaSentinel,
+                  L"The settings-only session-end request must leave the schema sidecar unchanged.");
+
+    Common::Settings::Settings laterSubmission = persisted;
+    laterSubmission.theme.currentThemeId        = L"builtin/rainbow";
+    state.Require(SettingsHotReload::QueueSettingsSave(kTestAppId, laterSubmission, L"", L"after-session-end") ==
+                      HRESULT_FROM_WIN32(ERROR_SHUTDOWN_IN_PROGRESS),
+                  L"The session-end final-save fence must reject later asynchronous submissions.");
+    state.Require(SettingsHotReload::SaveSettingsAndSchema(kTestAppId, laterSubmission) == HRESULT_FROM_WIN32(ERROR_SHUTDOWN_IN_PROGRESS),
+                  L"The session-end final-save fence must reject later synchronous submissions.");
+
+    const std::wstring artifactText = std::format(L"{{\n"
+                                                   L"  \"scenario\": \"app/windows-session-end-settings-save-real\",\n"
+                                                   L"  \"App.Shutdown.SessionEndSettingsSave_us\": {},\n"
+                                                   L"  \"writer_call_count\": {},\n"
+                                                   L"  \"result_hr\": {}\n"
+                                                   L"}}\n",
+                                                   sessionEnd.durationUs,
+                                                   sessionEnd.writerCallCount,
+                                                   static_cast<uint32_t>(sessionEnd.lastResult));
+    const std::filesystem::path artifactPath = SelfTest::GetPerfArtifactPath(L"session_end_settings_real_metrics.json");
+    state.Require(! artifactPath.empty() && SelfTest::WriteTextFile(artifactPath, artifactText),
+                  L"Failed to record the real session-end coordinator metric artifact.");
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool RequireSettingsSaveChild(CaseState& state, std::wstring_view childMode, std::wstring_view sandboxName) noexcept
 {
     std::array<wchar_t, 32768> modulePath{};
     const DWORD modulePathLength =
@@ -3741,16 +3920,17 @@ constexpr wchar_t kSettingsSaveTeardownChildRootEnv[] = L"REDSALAMANDER_SELFTEST
         static_cast<void>(SetEnvironmentVariableW(kSettingsSaveTeardownChildEnv,
                                                    hadPreviousValue ? previousValue.c_str() : nullptr));
     });
-    state.Require(SetEnvironmentVariableW(kSettingsSaveTeardownChildEnv, L"1") != FALSE,
-                  L"Failed to configure the settings-save teardown child process.");
+    const std::wstring childModeText(childMode);
+    state.Require(SetEnvironmentVariableW(kSettingsSaveTeardownChildEnv, childModeText.c_str()) != FALSE,
+                  L"Failed to configure the settings-save child process.");
     if (! state.failure.empty())
     {
         return false;
     }
 
     const SelfTest::TestSandbox sandbox =
-        SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::Commands, L"settings_save_bounded_process_teardown");
-    state.Require(sandbox.IsValid(), L"Could not acquire an isolated test root for the settings-save teardown child process.");
+        SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::Commands, sandboxName);
+    state.Require(sandbox.IsValid(), L"Could not acquire an isolated test root for the settings-save child process.");
     if (! sandbox.IsValid())
     {
         return false;
@@ -3839,7 +4019,7 @@ constexpr wchar_t kSettingsSaveTeardownChildRootEnv[] = L"REDSALAMANDER_SELFTEST
     const DWORD waitResult = WaitForSingleObject(process.get(), static_cast<DWORD>(SelfTest::ScaleTimeout(12'000u)));
     state.Require(waitResult == WAIT_OBJECT_0,
                   waitResult == WAIT_TIMEOUT
-                      ? L"Settings-save child process exceeded the bounded teardown deadline; a worker was likely joined after the flush timed out."
+                      ? L"Settings-save child process exceeded its bounded deadline."
                       : std::format(L"Waiting for the settings-save teardown child process failed. error={}", GetLastError()));
     if (waitResult != WAIT_OBJECT_0)
     {
@@ -3851,15 +4031,49 @@ constexpr wchar_t kSettingsSaveTeardownChildRootEnv[] = L"REDSALAMANDER_SELFTEST
                   std::format(L"Could not read the settings-save teardown child exit code. error={}", GetLastError()));
     state.Require(exitCode == 0u,
                   std::format(L"Settings-save teardown child process exited with code {}.", exitCode));
+    if (childMode == L"sessionend" && exitCode == 0u)
+    {
+        const std::filesystem::path sourceMetricSummary =
+            childSelfTestRoot / L"last_run" / L"perf" / L"session_end_settings_real_metrics.json";
+        const std::filesystem::path destinationMetricSummary = SelfTest::GetPerfArtifactPath(L"session_end_settings_real_metrics.json");
+        std::error_code copyError;
+        const bool copiedSummary = ! destinationMetricSummary.empty() &&
+                                   std::filesystem::copy_file(sourceMetricSummary,
+                                                              destinationMetricSummary,
+                                                              std::filesystem::copy_options::overwrite_existing,
+                                                              copyError);
+        state.Require(copiedSummary && ! copyError,
+                      std::format(L"Failed to preserve the real session-end metric artifact from the child process. error={}",
+                                  copyError.value()));
+
+        const std::filesystem::path sourceMetricRows = childSelfTestRoot / L"last_run" / L"perf" / L"perf_metrics.jsonl";
+        const std::string childMetricRows             = ReadAuditTextFile(sourceMetricRows);
+        state.Require(childMetricRows.find("\"metric\":\"App.Shutdown.SessionEndSettingsSave\"") != std::string::npos,
+                      L"The real session-end child process did not record App.Shutdown.SessionEndSettingsSave.");
+        copyError.clear();
+        const std::filesystem::path destinationMetricRows =
+            SelfTest::GetPerfArtifactPath(L"session_end_settings_real_perf_metrics.jsonl");
+        const bool copiedRows = ! destinationMetricRows.empty() &&
+                                std::filesystem::copy_file(sourceMetricRows,
+                                                           destinationMetricRows,
+                                                           std::filesystem::copy_options::overwrite_existing,
+                                                           copyError);
+        state.Require(copiedRows && ! copyError,
+                      std::format(L"Failed to preserve the real session-end metric rows from the child process. error={}",
+                                  copyError.value()));
+    }
     return state.failure.empty();
 }
 
-[[nodiscard]] bool TestSettingsSaveQueueSerializesCoalescesAndFlushes(CaseState& state) noexcept
+[[nodiscard]] bool TestSettingsSaveQueueSerializesCoalescesAndFlushes(const HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
-    if (IsSettingsSaveTeardownChild())
+    switch (GetSettingsSaveChildMode())
     {
-        return RunSettingsSaveTeardownChild(state);
+        case SettingsSaveChildMode::FinalSaveOrdering: return RunSettingsFinalSaveOrderingChild(state);
+        case SettingsSaveChildMode::BoundedTeardown: return RunSettingsSaveTeardownChild(state);
+        case SettingsSaveChildMode::SessionEnd: return RunSettingsSessionEndChild(mainWindow, state);
+        case SettingsSaveChildMode::None: break;
     }
 
     constexpr std::wstring_view kTestAppId = L"RedSalamanderSelfTestSerializedSettingsSave";
@@ -3964,8 +4178,12 @@ constexpr wchar_t kSettingsSaveTeardownChildRootEnv[] = L"REDSALAMANDER_SELFTEST
                   L"Settings-save flush should complete the latest queued generation.");
     state.Require(completed.lastSaveThreadId != 0 && completed.lastSaveThreadId != uiThreadId,
                   L"Asynchronous and serialized settings persistence should execute off the UI thread.");
-    state.Require(RequireBoundedSettingsSaveProcessTeardown(state),
+    state.Require(RequireSettingsSaveChild(state, L"ordering", L"settings_save_final_ordering"),
+                  L"Settings-save process finalization ordering was not deterministic.");
+    state.Require(RequireSettingsSaveChild(state, L"teardown", L"settings_save_bounded_process_teardown"),
                   L"Settings-save process teardown was not bounded while storage remained stalled.");
+    state.Require(RequireSettingsSaveChild(state, L"sessionend", L"settings_save_real_session_end"),
+                  L"Real WM_ENDSESSION did not fence and serialize the final settings snapshot.");
     return state.failure.empty();
 }
 
@@ -7896,19 +8114,8 @@ template <typename Predicate>
 
 [[nodiscard]] std::wstring NewGuidText() noexcept
 {
-    GUID guid{};
-    if (FAILED(::CoCreateGuid(&guid)))
-    {
-        return std::format(L"tick_{}", GetTickCount64());
-    }
-
-    wchar_t buffer[64]{};
-    if (::StringFromGUID2(guid, buffer, static_cast<int>(std::size(buffer))) <= 0)
-    {
-        return std::format(L"tick_{}", GetTickCount64());
-    }
-
-    return std::wstring(buffer);
+    std::wstring id;
+    return SUCCEEDED(Common::Settings::CreateConnectionProfileId(id)) ? id : std::format(L"tick_{}", GetTickCount64());
 }
 
 constexpr std::wstring_view kBuiltinLocalFileSystemId = L"builtin/file-system";
@@ -10149,10 +10356,20 @@ struct StoredZipDeclaredEntryForCommandSelfTest
 
     const std::filesystem::path root = suiteRoot / L"work" / (L"make_file_list_" + NewGuidText());
     const std::filesystem::path sub  = root / L"sub";
-    state.Require(SelfTest::EnsureDirectory(sub), L"Failed to create Make File List test folder.");
+    const std::filesystem::path bulk = root / L"bulk";
+    state.Require(SelfTest::EnsureDirectory(sub) && SelfTest::EnsureDirectory(bulk), L"Failed to create Make File List test folders.");
     state.Require(SelfTest::WriteTextFile(root / L"alpha.txt", "alpha"), L"Failed to create alpha fixture.");
     state.Require(SelfTest::WriteTextFile(root / L"comma,name.txt", "csv"), L"Failed to create CSV escaping fixture.");
     state.Require(SelfTest::WriteTextFile(sub / L"nested.log", "nested"), L"Failed to create nested fixture.");
+    constexpr uint64_t bulkFileCount = 1024u;
+    for (uint64_t index = 0u; index < bulkFileCount; ++index)
+    {
+        state.Require(SelfTest::WriteTextFile(bulk / std::format(L"item-{:04}.txt", index), "x"), L"Failed to create bulk Make File List fixture.");
+        if (! state.failure.empty())
+        {
+            return false;
+        }
+    }
 
     const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
     const std::wstring leftPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
@@ -10195,8 +10412,9 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     DebugSetMakeFileListAutomation(jsonOptions);
     const auto jsonStarted = std::chrono::steady_clock::now();
     state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/makeFileList"), L"cmd/pane/makeFileList should dispatch through the shortcut path.");
-    PumpPendingMessages();
     const auto jsonUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - jsonStarted);
+    state.Require(jsonUs < 250ms, L"Make File List command should return promptly while enumeration continues in the background.");
+    state.Require(WaitForMakeFileListWorkerIdle(SelfTest::Scale(15000ms)), L"Make File List JSON worker did not complete.");
     state.Require(SelfTest::PathExists(jsonOptions.outputFile), L"Make File List JSON output file was not created.");
 
     const std::wstring jsonText = ReadUtf8TextFileForCommandSelfTest(jsonOptions.outputFile);
@@ -10206,13 +10424,22 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(g_settings.makeFileList.has_value() && g_settings.makeFileList->format == Common::Settings::MakeFileListFormat::Json,
                   L"Make File List should save last JSON options.");
 
+    Common::Settings::MakeFileListSettings cancelOptions = jsonOptions;
+    cancelOptions.outputFile                             = root / L"cancelled.json";
+    DebugSetMakeFileListAutomation(cancelOptions);
+    DebugSetMakeFileListWorkerDelay(500u);
+    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/makeFileList"), L"Make File List cancellable worker should start.");
+    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/makeFileList"), L"Running Make File List command should request cancellation.");
+    state.Require(WaitForMakeFileListWorkerIdle(SelfTest::Scale(5000ms)), L"Cancelled Make File List worker did not stop.");
+    state.Require(! SelfTest::PathExists(cancelOptions.outputFile), L"Cancelled Make File List must not publish an output file.");
+
     Common::Settings::MakeFileListSettings csvOptions = jsonOptions;
     csvOptions.format                                 = Common::Settings::MakeFileListFormat::Csv;
     csvOptions.recursive                              = false;
     csvOptions.outputFile                             = root / L"out.csv";
     DebugSetMakeFileListAutomation(csvOptions);
     state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/makeFileList"), L"cmd/pane/makeFileList CSV should dispatch.");
-    PumpPendingMessages();
+    state.Require(WaitForMakeFileListWorkerIdle(SelfTest::Scale(15000ms)), L"Make File List CSV worker did not complete.");
     const std::wstring csvText = ReadUtf8TextFileForCommandSelfTest(csvOptions.outputFile);
     state.Require(csvText.find(L"\"comma,name.txt\"") != std::wstring::npos, L"Make File List CSV should quote fields containing commas.");
     state.Require(csvText.find(L"nested.log") == std::wstring::npos, L"Make File List CSV should respect non-recursive current-folder scope.");
@@ -10223,17 +10450,17 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     textOptions.textMacro                              = L"{filename}|{size}|{attributes}";
     DebugSetMakeFileListAutomation(textOptions);
     state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/makeFileList"), L"cmd/pane/makeFileList text should dispatch.");
-    PumpPendingMessages();
+    state.Require(WaitForMakeFileListWorkerIdle(SelfTest::Scale(15000ms)), L"Make File List text worker did not complete.");
     const std::wstring textOutput = ReadUtf8TextFileForCommandSelfTest(textOptions.outputFile);
     state.Require(textOutput.find(L"alpha.txt|5|") != std::wstring::npos, L"Make File List text macro should expand filename, size, and attributes.");
 
     const std::wstring perfArtifactText      = std::format(L"{{\n"
                                                            L"  \"scenario\": \"cmd/pane/makeFileList\",\n"
-                                                           L"  \"makeFileList.generate_json_us\": {},\n"
+                                                           L"  \"makeFileList.command_return_us\": {},\n"
                                                            L"  \"entryCount\": {}\n"
                                                            L"}}\n",
                                                            jsonUs.count(),
-                                                           4u);
+                                                           bulkFileCount + 5u);
     const std::filesystem::path artifactPath = SelfTest::GetPerfArtifactPath(L"make_file_list_metrics.json");
     const bool artifactWriteOk               = ! artifactPath.empty() && SelfTest::WriteTextFile(artifactPath, perfArtifactText);
     state.Require(artifactWriteOk && SelfTest::PathExists(artifactPath), L"Failed to write Make File List perf artifact.");
@@ -10715,6 +10942,24 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     }
     state.Require(ReadUtf8TextFileForCommandSelfTest(existingArchivePath) == L"old", L"Pack overwrite rejection should preserve the existing archive.");
 
+    const std::filesystem::path unsafeArchivePath = nestedRoot / L"inside.zip";
+    FolderWindow::ArchiveCommandDebugOptions unsafePackOptions{};
+    unsafePackOptions.archivePath = unsafeArchivePath;
+    unsafePackOptions.overwrite   = true;
+    g_folderWindow.DebugSetNextArchiveCommandOptionsForTest(unsafePackOptions);
+    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/pack"), L"cmd/pane/pack unsafe-output validation should dispatch.");
+    PumpPendingMessages();
+    const std::optional<FolderWindow::ArchiveCommandDebugResult> unsafePackResult = g_folderWindow.DebugGetLastArchiveCommandResultForTest();
+    state.Require(unsafePackResult.has_value(), L"Pack unsafe-output validation should record a debug result.");
+    if (unsafePackResult.has_value())
+    {
+        state.Require(unsafePackResult->hr == HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED),
+                      L"Pack command should reject an archive output inside a selected source directory.");
+    }
+    state.Require(! SelfTest::PathExists(unsafeArchivePath), L"Rejected pack output must not create an archive inside the selected source.");
+    state.Require(ReadUtf8TextFileForCommandSelfTest(nestedRoot / L"beta.txt") == L"beta",
+                  L"Rejected pack output must preserve selected source contents.");
+
     const std::filesystem::path extractRoot = root / L"extracted";
     state.Require(SelfTest::EnsureDirectory(extractRoot), L"Failed to create archive extraction root.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, outputRoot);
@@ -10760,14 +11005,31 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/unpack"), L"cmd/pane/unpack overwrite validation should dispatch.");
     PumpPendingMessages();
     const std::optional<FolderWindow::ArchiveCommandDebugResult> noOverwriteUnpackResult = g_folderWindow.DebugGetLastArchiveCommandResultForTest();
-    state.Require(noOverwriteUnpackResult.has_value(), L"Unpack overwrite validation should record a debug result.");
+    state.Require(noOverwriteUnpackResult.has_value(), L"Unpack skip-existing validation should record a debug result.");
     if (noOverwriteUnpackResult.has_value())
     {
-        state.Require(noOverwriteUnpackResult->hr == HRESULT_FROM_WIN32(ERROR_FILE_EXISTS),
-                      L"Unpack command should reject existing destination files when overwrite is off.");
+        state.Require(SUCCEEDED(noOverwriteUnpackResult->hr), L"Unpack skip-existing policy should complete successfully.");
+        state.Require(noOverwriteUnpackResult->skippedConflictCount >= 1u,
+                      L"Unpack skip-existing policy should report at least the preserved conflicting file.");
     }
     state.Require(ReadUtf8TextFileForCommandSelfTest(extractRoot / L"alpha.txt") == L"stale",
-                  L"Unpack overwrite rejection should preserve existing destination file.");
+                  L"Unpack skip-existing policy should preserve existing destination file.");
+
+    FolderWindow::ArchiveCommandDebugOptions replaceUnpackOptions{};
+    replaceUnpackOptions.destinationPath = extractRoot;
+    replaceUnpackOptions.overwrite       = true;
+    g_folderWindow.DebugSetNextArchiveCommandOptionsForTest(replaceUnpackOptions);
+    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/unpack"), L"cmd/pane/unpack replace-existing validation should dispatch.");
+    PumpPendingMessages();
+    const std::optional<FolderWindow::ArchiveCommandDebugResult> replaceUnpackResult = g_folderWindow.DebugGetLastArchiveCommandResultForTest();
+    state.Require(replaceUnpackResult.has_value(), L"Unpack replace-existing validation should record a debug result.");
+    if (replaceUnpackResult.has_value())
+    {
+        state.Require(SUCCEEDED(replaceUnpackResult->hr), L"Unpack replace-existing policy should complete successfully.");
+        state.Require(replaceUnpackResult->skippedConflictCount == 0u, L"Unpack replace-existing policy should not report skipped conflicts.");
+    }
+    state.Require(ReadUtf8TextFileForCommandSelfTest(extractRoot / L"alpha.txt") == L"alpha",
+                  L"Unpack replace-existing policy should publish the archive content.");
 
     const std::filesystem::path cp437ArchivePath = outputRoot / L"cp437.zip";
     std::string cp437EntryName                   = "caf";
@@ -14985,8 +15247,8 @@ void RunSettingsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestO
     SelfTest::RunCase(options, suite, L"settings_hot_reload_self_save_suppression", [=](CaseState& state) noexcept {
         return TestSettingsHotReloadSelfSaveSuppression(mainWindow, state);
     });
-    SelfTest::RunCase(options, suite, L"settings_save_queue_serializes_coalesces_and_flushes", [](CaseState& state) noexcept {
-        return TestSettingsSaveQueueSerializesCoalescesAndFlushes(state);
+    SelfTest::RunCase(options, suite, L"settings_save_queue_serializes_coalesces_and_flushes", [=](CaseState& state) noexcept {
+        return TestSettingsSaveQueueSerializesCoalescesAndFlushes(mainWindow, state);
     });
     SelfTest::RunCase(options, suite, L"settings_hot_reload_invalid_external_file", [=](CaseState& state) noexcept {
         return TestSettingsHotReloadInvalidExternalFile(mainWindow, state);

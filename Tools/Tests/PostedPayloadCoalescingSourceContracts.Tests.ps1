@@ -13,6 +13,15 @@ function Get-RSText {
 }
 
 Describe 'Posted payload coalescing source contracts' {
+    It 'uses opaque registered tokens so teardown never exposes payload storage through lParam' {
+        $source = Get-RSText -Path 'Common\Helpers.h'
+
+        $source | Should Match 'std::unordered_map<LPARAM,\s*PostedMessagePayloadEntry>\s+entriesByToken'
+        $source | Should Match 'PostMessageW\(hwnd,\s*msg,\s*wParam,\s*token\)'
+        $source | Should Match 'TakeRegisteredPostedMessagePayload\(lParam'
+        $source | Should Not Match 'std::unique_ptr<T>\(reinterpret_cast<T\*>\(lParam\)\)'
+    }
+
     It 'checks the unfiltered queue head before removing an exact operation-key match' {
         $source = Get-RSText -Path 'Common\Helpers.h'
 

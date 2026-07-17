@@ -3,6 +3,7 @@
 #include "ThemeExpression.h"
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <initializer_list>
@@ -190,10 +191,19 @@ struct MonitorFilterState
     MonitorFilterPreset preset = MonitorFilterPreset::Custom;
 };
 
+struct MonitorRetentionSettings
+{
+    uint32_t maxQueuedEvents       = 4'096u;
+    uint32_t maxRetainedLines      = 100'000u;
+    uint64_t maxRetainedTextBytes  = 64u * 1024u * 1024u;
+    uint32_t maxSearchMatches      = 100'000u;
+};
+
 struct MonitorSettings
 {
     MonitorMenuState menu;
     MonitorFilterState filter;
+    MonitorRetentionSettings retention;
 };
 
 struct DirectoryInfoCacheSettings
@@ -248,10 +258,16 @@ struct ThemeDefinition
 
 struct ThemeSettings
 {
+    struct OpaqueEntry
+    {
+        size_t originalIndex = 0u;
+        JsonValue value;
+    };
+
     std::wstring currentThemeId = L"builtin/system";
     std::vector<ThemeDefinition> themes;
-    // Structurally unusable inline entries are retained verbatim at the JSON-value level for lossless-enough round trips.
-    std::vector<JsonValue> opaqueThemeEntries;
+    // Structurally unusable and duplicate inline entries retain their JSON value and array position for repair-safe round trips.
+    std::vector<OpaqueEntry> opaqueThemeEntries;
 };
 
 struct PluginsSettings
@@ -302,6 +318,14 @@ struct ConnectionsSettings
     bool allowInsecureTlsInAutomation        = false;
     uint32_t windowsHelloReauthTimeoutMinute = 10;
 };
+
+// Persisted connection IDs use one canonical representation so settings, WinCred
+// targets, and in-memory authorization state cannot disagree about identity.
+inline constexpr std::wstring_view kQuickConnectConnectionId = L"00000000-0000-0000-0000-000000000001";
+
+COMMON_API HRESULT CreateConnectionProfileId(std::wstring& idOut) noexcept;
+COMMON_API HRESULT NormalizeConnectionProfileId(std::wstring_view id, std::wstring& canonicalIdOut) noexcept;
+COMMON_API HRESULT ValidateConnectionProfileIds(const ConnectionsSettings& settings) noexcept;
 
 struct GridColumnLayoutEntry
 {
@@ -776,11 +800,26 @@ enum class SettingsSavePermission : uint8_t
     ExplicitReplacementRequired,
 };
 
+struct SettingsFileStamp
+{
+    uint32_t volumeSerialNumber = 0;
+    uint64_t fileIndexHigh      = 0;
+    uint64_t fileIndexLow       = 0;
+    uint64_t lastWriteTime      = 0;
+    uint64_t fileSize           = 0;
+
+    bool operator==(const SettingsFileStamp&) const noexcept = default;
+};
+
 struct SettingsPersistenceState
 {
     // Unknown top-level members and malformed optional sections are copied out of the yyjson
     // document so a later canonical save does not silently discard data this build cannot use.
     std::vector<std::pair<std::string, JsonValue>> opaqueTopLevelMembers;
+    // Identity of the canonical save target when this snapshot was loaded or last committed.
+    // nullopt means the target did not exist. Writers compare this under the cross-process
+    // commit lock and fail with ERROR_REVISION_MISMATCH instead of overwriting a newer file.
+    std::optional<SettingsFileStamp> expectedFileStamp;
     SettingsSavePermission savePermission = SettingsSavePermission::Automatic;
     int64_t sourceSchemaVersion           = 16;
 };
@@ -812,17 +851,6 @@ struct Settings
     SettingsPersistenceState persistence;
 };
 
-struct SettingsFileStamp
-{
-    uint32_t volumeSerialNumber = 0;
-    uint64_t fileIndexHigh      = 0;
-    uint64_t fileIndexLow       = 0;
-    uint64_t lastWriteTime      = 0;
-    uint64_t fileSize           = 0;
-
-    bool operator==(const SettingsFileStamp&) const noexcept = default;
-};
-
 enum class SettingsLoadRecoveryReason : uint8_t
 {
     None,
@@ -836,6 +864,15 @@ enum class SettingsLoadRecoveryReason : uint8_t
     FileActionsInvalid,
     UserMenuInvalid,
     ShortcutsInvalid,
+    ConnectionProfileIdsMigrated,
+};
+
+struct ConnectionProfileIdMigration
+{
+    std::wstring profileName;
+    std::wstring previousId;
+    std::wstring replacementId;
+    bool savedSecretReferenceCleared = false;
 };
 
 struct SettingsSectionRecoveryInfo
@@ -854,6 +891,7 @@ struct SettingsLoadRecoveryInfo
     bool usedDefaults                = false;
     bool backedUp                    = false;
     std::vector<SettingsSectionRecoveryInfo> sectionRecoveries;
+    std::vector<ConnectionProfileIdMigration> connectionProfileIdMigrations;
 };
 
 COMMON_API std::filesystem::path GetSettingsPath(std::wstring_view appId) noexcept;
@@ -890,16 +928,20 @@ COMMON_API HRESULT TryGetSettingsFileStamp(std::wstring_view appId, SettingsFile
 // first step for an explicit replacement of settings written by a newer schema version.
 COMMON_API HRESULT BackupSettingsForExplicitReplacement(std::wstring_view appId, std::filesystem::path& backupPath) noexcept;
 
+// On success the snapshot's expectedFileStamp advances to the committed file identity.
+COMMON_API HRESULT SaveSettings(std::wstring_view appId, Settings& settings) noexcept;
+// One-shot compatibility overload for immutable shutdown/test snapshots. Prefer the mutable
+// overload whenever the caller can save the same in-memory snapshot again.
 COMMON_API HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept;
 
 // Saves only the settings JSON. Use when an existing schema remains valid and must not be regenerated.
-COMMON_API HRESULT SaveSettingsValuesOnly(std::wstring_view appId, const Settings& settings) noexcept;
+COMMON_API HRESULT SaveSettingsValuesOnly(std::wstring_view appId, Settings& settings) noexcept;
 
 // Saves only the settings JSON and returns the identity of the exact flushed temporary file moved
 // into place. Callers that watch the settings directory use this to distinguish their own atomic
 // replacement from a later external replacement without re-statting the path.
 COMMON_API HRESULT SaveSettingsValuesOnlyWithStamp(std::wstring_view appId,
-                                                   const Settings& settings,
+                                                   Settings& settings,
                                                    SettingsFileStamp& writtenStamp) noexcept;
 
 // Saves a JSON Schema file alongside the settings file (UTF-8 JSON, no BOM).

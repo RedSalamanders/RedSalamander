@@ -263,6 +263,8 @@
     <ClInclude Include="FolderWindow.FileOperations.Popup.h" />
     <ClInclude Include="SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.h" />
     <ClInclude Include="FolderWindowInternal.h" />
+    <ClInclude Include="FolderWindow.FileSystem.Private.h" />
+    <ClInclude Include="FolderWindow.FileOperations.State.Private.h" />
     <ClInclude Include="FolderWatcher.h" />
     <ClInclude Include="FileActionLauncher.h" />
     <ClInclude Include="FileActionResolver.h" />
@@ -447,11 +449,11 @@
     <ClCompile Include="WSLDistro.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="FolderWindow.FileSystem.Commands.Part.cpp" />
-    <None Include="FolderWindow.FileSystem.Navigation.Part.cpp" />
-    <None Include="FolderWindow.FileOperations.State.Runtime.Part.cpp" />
-    <None Include="FolderWindow.FileOperations.State.Diagnostics.Part.cpp" />
-    <None Include="FolderWindow.FileOperations.State.Queue.Part.cpp" />
+    <ClCompile Include="FolderWindow.FileSystem.Commands.cpp" />
+    <ClCompile Include="FolderWindow.FileSystem.Navigation.cpp" />
+    <ClCompile Include="FolderWindow.FileOperations.State.Runtime.cpp" />
+    <ClCompile Include="FolderWindow.FileOperations.State.Diagnostics.cpp" />
+    <ClCompile Include="FolderWindow.FileOperations.State.Queue.cpp" />
     <None Include="SelfTest\Commands\Commands.SelfTest.CompareOptions.cpp" />
     <None Include="SelfTest\Commands\Commands.SelfTest.BatchRename.cpp" />
     <None Include="SelfTest\Commands\Commands.SelfTest.Connections.cpp" />

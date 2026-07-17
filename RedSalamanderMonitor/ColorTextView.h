@@ -120,6 +120,26 @@ public:
 
     // ETW event batching - thread-safe queue for worker thread
     void QueueEtwEvent(const Debug::InfoParam& info, std::wstring message);
+    struct RetentionLimits
+    {
+        size_t maxQueuedEvents      = 4'096u;
+        size_t maxRetainedLines     = 100'000u;
+        uint64_t maxRetainedTextBytes = 64u * 1024u * 1024u;
+        size_t maxSearchMatches     = 100'000u;
+    };
+    void SetRetentionLimits(const RetentionLimits& limits) noexcept;
+    [[nodiscard]] uint64_t GetDroppedEventCount() const noexcept
+    {
+        return _queueDroppedEvents.load(std::memory_order_relaxed) + _retainedDroppedEvents.load(std::memory_order_relaxed);
+    }
+    [[nodiscard]] uint64_t GetQueueHighWaterMark() const noexcept
+    {
+        return _queueHighWaterMark.load(std::memory_order_relaxed);
+    }
+    [[nodiscard]] uint64_t GetRetainedTextBytes() const
+    {
+        return _document.RetainedTextBytes();
+    }
 
     // Content
     void SetText(const std::wstring& text);
@@ -129,6 +149,24 @@ public:
 
     // Editing Helpers
     void CopySelection();
+
+#if defined(ENABLE_TESTS)
+    void DebugSetSelectionState(UINT32 selectionStart, UINT32 selectionEnd, UINT32 caretPosition) noexcept
+    {
+        _selStart = selectionStart;
+        _selEnd   = selectionEnd;
+        _caretPos = caretPosition;
+    }
+    [[nodiscard]] std::tuple<UINT32, UINT32, UINT32> DebugGetSelectionState() const noexcept
+    {
+        return {_selStart, _selEnd, _caretPos};
+    }
+    [[nodiscard]] size_t DebugGetQueuedEventCount()
+    {
+        auto lock = _etwQueueCS.lock();
+        return _etwEventQueue.size();
+    }
+#endif
 
     // Coloring
     void AddColorRange(UINT32 start, UINT32 length, const D2D1_COLOR_F& color);
@@ -146,6 +184,7 @@ public:
 
 private:
     void MaybeRefreshVirtualSliceOnScroll();
+    void HandleDocumentEviction(const Document::RetentionResult& eviction);
 
     // Win32 plumbing
     static LRESULT CALLBACK WndProcThunk(HWND, UINT, WPARAM, LPARAM) noexcept;
@@ -227,6 +266,7 @@ private:
     void ClampScroll();
     void CopySelectionToClipboard();
     void RebuildMatches();
+    void AppendMatchesForRange(size_t firstSourceLine);
     bool ValidateDeviceState() const;
     void LogSystemInfo() const;
     std::wstring_view RenderModePerfDetail() const noexcept;
@@ -494,6 +534,13 @@ private:
     // ETW event queue with wil::critical_section for efficient bounded draining (prevents message loop flooding)
     std::deque<EtwEventEntry> _etwEventQueue;
     wil::critical_section _etwQueueCS;
+    std::atomic<size_t> _maxQueuedEvents{4'096u};
+    size_t _maxRetainedLines       = 100'000u;
+    uint64_t _maxRetainedTextBytes = 64u * 1024u * 1024u;
+    size_t _maxSearchMatches       = 100'000u;
+    std::atomic<uint64_t> _queueDroppedEvents{0u};
+    std::atomic<uint64_t> _retainedDroppedEvents{0u};
+    std::atomic<uint64_t> _queueHighWaterMark{0u};
 
     // Find bar UI
     wil::unique_hwnd _hFindPanel;

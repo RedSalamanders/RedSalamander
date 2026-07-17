@@ -93,6 +93,11 @@ The color editor accepts direct colors and expression text:
 
 Amounts may use `0.0` to `1.0` or percentage syntax such as `20%`.
 
+Formatter/export output uses the canonical camelCase function spellings above; parsing remains case-insensitive for
+compatibility. `ensureContrast` measures the foreground as rendered over its background. The background must be
+opaque because the expression has no surface-backdrop input. Foreground alpha is preserved only when a candidate at
+that alpha can meet the requested ratio; otherwise the edit is invalid and the previous valid preview remains.
+
 The theme editor exposes version 2 palette entries separately from semantic tokens. Authors can add, rename, remove, and reference palette entries. Creating a palette entry from a repeated direct literal rewrites matching sources to references. Rename rewrites references, while delete is blocked until displayed dependents are removed. Batch darken/blend actions remain authored as palette-backed functions rather than flattened colors. The dependency display identifies palette and semantic references, reports missing references and cycles, and labels load-time, event-time, and paint-time sources. Expressions are not nested; the UI guides authors to create a named palette entry for an intermediate result.
 
 Valid edits update the live preview immediately. Invalid edits show an error state and keep the last valid preview.
@@ -106,6 +111,22 @@ Clicking a visible preview region selects the corresponding token so the user ca
 Batch controls may apply direct color transforms to the current token group. A group is the part before the first dot, such as `menu` or `folderView`.
 
 The scene selector provides App Shell, Folder View, Menu Popup, Dialogs, File Operations, Monitor Log, and Viewer Diff views and narrows the token navigator to that semantic group while the composite sample remains available. The authored value combo is the hex/expression field and includes recent/copied values. The alpha slider supplies the set-alpha recipe. Recipe/mass changes use two-step review and include dark/light variants, accent recolor, softened selections, increased contrast, semantic status colors, alpha, reference replacement, solid-to-palette conversion, and override removal.
+
+Theme and localization mass changes use the shared typed approval states `NoChanges`, `Ready`, `Stale`,
+`Invalid`, and `Applied`. A ready preview is bound to the complete request and the complete theme snapshot or
+stable localization `(owner, resource ID, culture)` identity plus its recorded before-value. Approval preflights
+every change before mutation. Any request change, intervening edit, reload, filter/sort rebuild, invalid candidate,
+or failed apply clears the pending approval. A stale or invalid preview changes nothing; a successful batch is one
+session Undo step.
+
+Reference replacement edits exact parsed reference nodes only and never partial names. Solid-to-palette conversion
+accepts direct sources only and requires an existing palette target. All ten recipes validate the complete
+candidate theme before the preview is shown. Theme numeric grammar is locale-invariant: `.` is the only decimal
+separator, input must be finite and fully consumed, and comma-decimal forms are rejected under every process locale.
+
+The deterministic Debug contract keeps the 6-owner/1,500-row/10-theme scan below 500 ms, validation below 250 ms,
+a single theme edit below 16 ms, and a validated 512-token explicit mass preview below 100 ms. Curated Track 19
+evidence is archived under `Specs/TestRuns/4cb089111a23/RedConfigure/2026-07-17_1548_observatory_track19/`.
 
 When Themes is inactive, its preview detaches from the model so an inactive page does not retain an active heavy preview surface. Returning to Themes reconnects the model and repaints current state.
 
@@ -123,6 +144,10 @@ The page must make output paths and generated text visible before writing existi
 
 The two previews are output-file cards in the review basket. Combined errors block export. Warnings require the user to see the issue list and invoke export again. Successful export shows the written path; each writer has already reopened and reparsed its written file before success is reported.
 
+Validation carries typed category, code, severity, and structured arguments. Workflow correctness never searches
+localized diagnostic text. Category/message formatting happens only at the presentation boundary through resource
+strings.
+
 Theme preview and export display the same authored version 2 JSON5 representation, including `formatVersion`, `palette`, and expressions. Export never replaces expressions with resolved hex values.
 
 The localization `.rc` preview lists exactly the changed target-language satellite files that the export action will write: one generated file per dirty owner/culture pair. Export writes only those changed target-language satellite files and must not rewrite embedded English resources.
@@ -130,5 +155,9 @@ The localization `.rc` preview lists exactly the changed target-language satelli
 ## Localization
 
 All RedConfigure user-facing labels, descriptions, menu text, validation labels, and help text must live in `RedConfigure/RedConfigure.rc`.
+
+Theme origin labels, dirty-scope text, duplicate-theme naming, validation categories/messages, token descriptions,
+and source/contrast labels follow the same resource rule. Duplicate-theme creation returns a typed result, reserves
+space for suffixes within the 64-character ID/name limits, and retries only identifier collisions.
 
 Static menus must be `.rc` menu resources.

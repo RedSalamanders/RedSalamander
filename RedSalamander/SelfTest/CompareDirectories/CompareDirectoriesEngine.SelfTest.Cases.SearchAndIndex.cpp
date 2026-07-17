@@ -3017,8 +3017,8 @@ SelfTest::RunCase(options,
                   L"Failed to read CompareDirectoriesWindow.cpp for low-hardening guard.");
     state.Require(readSourceFile(repoRoot / L"Common" / L"DxUi" / L"DxUi.Controls.cpp", dxUiControlsSource),
                   L"Failed to read DxUi.Controls.cpp for low-hardening guard.");
-    state.Require(readSourceFile(repoRoot / L"RedSalamander" / L"FolderWindow.FileOperations.State.Diagnostics.Part.cpp", fileOpsDiagnosticsSource),
-                  L"Failed to read FolderWindow.FileOperations.State.Diagnostics.Part.cpp for low-hardening guard.");
+    state.Require(readSourceFile(repoRoot / L"RedSalamander" / L"FolderWindow.FileOperations.State.Diagnostics.cpp", fileOpsDiagnosticsSource),
+                  L"Failed to read FolderWindow.FileOperations.State.Diagnostics.cpp for low-hardening guard.");
     if (! state.failure.empty())
     {
         return false;

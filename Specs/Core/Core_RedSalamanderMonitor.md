@@ -130,19 +130,59 @@ When filtering is active, the VisibleLine architecture provides:
 - Windows monitor that receives log lines over **ETW (Event Tracing for Windows)** (see `Common/Helpers.h`): structured `Debug::InfoParam` records (time, process id, thread id, type Text/Error/Warning/Info/Debug).
 - **ETW message intake**:
   - **`WM_APP_ETW_BATCH`**: ETW events queued and processed in batches from the EtwListener worker thread
-  - The cross-thread ETW queue is a `std::deque` drained in bounded chunks on the UI thread; overflow stays queued in order and a follow-up message is posted instead of moving overflow back into a vector under the queue lock.
+  - The cross-thread ETW queue is a bounded `std::deque` drained in chunks of at most 200 on the UI thread. When
+    the configured producer cap is reached, the oldest queued event is dropped so current diagnostics continue;
+    remaining work stays ordered and one follow-up message is posted.
   - Batch processing moves the drained chunk into `Document::AppendInfoLines(...)`, taking the document write lock once and performing a single mode-specific update at the end of the batch.
 - Single main window with menu and toolbar: New/Open/Save As, Copy, toggle toolbar, toggle line numbers, show/hide IDs, auto-scroll, always-on-top; debug builds can start a random message generator.
 - Display surface is `ColorTextView` rendered with Direct2D/DirectWrite on a D3D11/DXGI swap chain; per-monitor DPI aware; supports line numbers, colored metadata prefixes, keyword colorization for Error/Warning/Debug, and optional auto-scroll.
 - Input pipeline normalizes CR/LF, appends text to the document, caches prefixes per line, and updates gutter width; selection and clipboard copy are supported (Ctrl+C, Ctrl+A); find bar via Ctrl+F with F3 navigation; mouse wheel scroll with Shift for horizontal.
-- File open/save uses BOM detection (UTF-8/UTF-16LE), registry-backed config for email, and basic about dialog; device-loss and DPI-change handling recreate swap chain/targets.
+- File open is cancellable worker I/O with strict UTF-8/UTF-16LE validation and configured byte/line budgets;
+  save is strict transactional UTF-8+BOM output. Registry-backed email configuration and the about dialog remain,
+  and device-loss/DPI-change handling recreates swap-chain targets.
+
+### Bounded pipeline and lifetime contract
+
+- `monitor.retention` owns four validated settings. Defaults are `maxQueuedEvents=4096`,
+  `maxRetainedLines=100000`, `maxRetainedTextBytes=67108864`, and `maxSearchMatches=100000`. Load clamps them
+  respectively to 200–1,000,000 events, 1,000–5,000,000 lines, 1 MiB–4 GiB, and 1,000–1,000,000 matches.
+- Queue overflow and retained-history eviction are oldest-first. The status strip includes the cumulative dropped
+  count. `monitor.etw.queue_high_water_mark`, `monitor.etw.dropped_count`,
+  `monitor.document.retained_text_bytes`, and `monitor.document.retained_lines` make the bound observable.
+- `Document` owns lines in a `std::deque`, tracks UTF-16 payload bytes, and applies the line and byte ceilings in one
+  eviction operation. Eviction must shift/clamp selection, caret, scrolling, display rows, width/layout generations,
+  visible-line mappings, and search offsets together.
+- Search indexes only appended ranges while query/case/filter policy is stable, shifts/removes matches after oldest
+  eviction, and stores no more than `maxSearchMatches`. Query, case, filter, or full-text replacement may rebuild.
+  `monitor.search.match_update_us` and `monitor.search.match_rebuild_us` distinguish the paths.
+- `Document::GetVisibleLine`, `GetSourceLine`, `VisibleLines`, `GetDisplayText*`, and display-text batches return
+  locked snapshots by value. No public API may return a line/container/string reference whose internal lock has
+  already been released.
+- ETW callback identity is per session through `EVENT_TRACE_LOGFILE::Context` / `EVENT_RECORD::UserContext`; a
+  process-global listener pointer is forbidden. The worker receives its trace handle by value, passes only a local
+  copy by address to `ProcessTrace`, and owns shared callback state. Stop disables callback acceptance, closes the
+  consumer handle, waits at most five seconds, and may detach only the shared lifetime-owned consumer state after
+  that real bounded wait. The MonitorTest shutdown drill covers both prompt join and bounded fallback.
+- SCROLL_BACK layout and width workers capture the target HWND, `IDWriteFactory`, and `IDWriteTextFormat` COM
+  references by value. They must not retain `ColorTextView*` or read UI-mutated COM/window members. Posted results
+  use the registered payload helper and are drained at `WM_NCDESTROY`.
+- Unicode copy uses `Common::Clipboard::TrySetUnicodeText`. The helper builds a `wil::unique_hglobal` payload before
+  opening or emptying the clipboard, keeps WIL ownership through every failure, and calls `release()` only after
+  successful `SetClipboardData`. Do not reintroduce per-Win32-call forwarding wrappers solely for fault injection.
+- File open keeps the picker on the UI thread, then uses one owned `std::jthread` to read 64 KiB chunks. It rejects
+  the byte budget from `GetFileSizeEx` before allocation, polls cancellation during read and line validation,
+  reports progress, accepts UTF-8 (optional BOM) and UTF-16LE BOM strictly, rejects UTF-16BE/malformed text, and
+  enforces the line budget. Only the current generation may publish text on the UI thread.
+- Clear and full text replacement invalidate pending layout/width generations. Clear also resets caret, selection,
+  mouse-selection, search, pending-scroll, and layout state so stale interaction state cannot survive an empty view.
 
 ## Existing performance/architecture traits
 - **Two-mode rendering system**: AUTO-SCROLL mode uses dynamic tail layout (viewport-sized, min 100 lines) with direct rendering for <0.5ms append latency; SCROLL-BACK mode uses full virtualization with slice-based rendering (`kSliceBlockLines=256`) for historical review.
 - **Display row mapping**: All Y position calculations use display-row offsets (`Document::DisplayRowForVisible()` / `Document::DisplayRowForSource()`) to correctly handle multi-line content with embedded newlines.
 - **Batched message intake**: ETW events are processed in bounded batches via `WM_APP_ETW_BATCH` to avoid per-message overhead at high throughput while preventing a single mega-burst from monopolizing the UI thread.
 - **D3D11 texture limits**: Validates slice bitmap dimensions against 16384px limit, falls back to direct rendering when exceeded.
-- Layout and width measurements in SCROLL-BACK mode run on a thread pool with slice prefetch; layouts are cached to skip reflow when the same slice is requested.
+- Layout and width measurements in SCROLL-BACK mode run on a thread pool with immutable HWND/COM snapshots and
+  slice prefetch; layouts are cached to skip reflow when the same slice is requested.
 - AUTO-SCROLL mode uses synchronous layout updates and direct-to-backbuffer rendering; SCROLL-BACK mode uses offscreen slice bitmap when possible (within texture limits), otherwise direct rendering.
 - Partial present is used for scroll deltas to minimize redraw.
 - Line metadata (time/pid/tid/type) and brushes are cached; display-row offsets are precomputed for quick gutter/hit-testing.
@@ -150,7 +190,11 @@ When filtering is active, the VisibleLine architecture provides:
 - **Mode detection timing (current implementation)**: `WM_APP_ETW_BATCH` appends the whole batch first, then applies AUTO_SCROLL vs SCROLL_BACK invalidation/layout behavior once per batch.
 - **ColorTextView frame metrics**: monitor paint paths emit per-frame aggregate rows `monitor.frame.total_us`, `monitor.frame.present_us`, `monitor.frame.mode`, and `monitor.frame.tail_layout_us`. AUTO_SCROLL append visibility is measured with `monitor.frame.append_to_visible_us`. `monitor.frame.scrollback_slice_us` remains optional and is only expected for real SCROLL_BACK scenarios.
 - **Monitor scrollback drill**: `RedSalamanderMonitor.exe --chrome-selftest --perf --monitor-scrollback-selftest` is the focused SCROLL_BACK frame gate. It appends enough ETW lines for historical navigation, toggles auto-scroll through `IDM_OPTION_AUTO_SCROLL`/`WM_COMMAND`, drives ColorTextView scroll input, forces a visible render, restores auto-scroll through the same command path, and adds `monitorScrollbackSelfTest.metricPresence` plus p50/p95/p99/max summaries for `monitor.frame.scrollback_slice_us`, `monitor.frame.mode`, `monitor.frame.total_us`, and `monitor.frame.present_us`.
-- **ETW batch and scheduling metrics**: `monitor.etw.batch_drain_us` records UI-thread batch-drain cost, `monitor.etw.queue_depth` records queue depth at drain start, and `monitor.etw.batch_repost_count` records whether overflow required a follow-up batch message. Paint scheduling is intentionally a no-op unless there is real pending work; measured Task 9 scheduling changes were not promoted as performance improvements.
+- **ETW batch and scheduling metrics**: `monitor.etw.batch_drain_us` records UI-thread batch-drain cost,
+  `monitor.etw.queue_depth` records queue depth at drain start, `monitor.etw.queue_high_water_mark` records the peak,
+  `monitor.etw.dropped_count` records queue plus retained-history drops, and `monitor.etw.batch_repost_count` records
+  whether overflow required a follow-up batch message. Paint scheduling is intentionally a no-op unless there is
+  real pending work.
 - **Monitor ETW latency drill**: `RedSalamanderMonitor.exe --chrome-selftest --perf --monitor-etw-burst-mode=latency --monitor-etw-burst-count=60 --monitor-etw-burst-size=260` is the focused append-to-visible perf gate. It preserves the default chrome selftest path and adds `monitorEtwBurstLatency.metricPresence` plus p50/p95/p99/max `metricSummary` rows to `results.json`.
 - **Monitor scheduling gate**: frame scheduling must preserve append order, avoid self-posting when no paint/append work is pending, and keep AUTO_SCROLL vs SCROLL_BACK behavior explicit. Any scheduling optimization requires same-machine `append_to_visible`, `batch_drain`, and frame metric evidence before being called an improvement. If the latency drill keeps `monitor.etw.batch_drain_us` p95 at or below `8,333us`, p99 at or below `16,667us`, and `monitor.frame.append_to_visible_us` p95 at or below `50,000us`, scheduling changes are a measured no-op and should not be promoted.
 
@@ -281,12 +325,20 @@ bool LoadFromFile(const std::wstring& path);      // Load text file (BOM detecti
 bool SaveToFile(const std::wstring& path);        // Save visible content
 ```
 
+- Monitor text export MUST encode every line with strict UTF-16-to-UTF-8 conversion and fail the entire save if
+  malformed input is encountered. It must not silently replace invalid code units.
+- Save writes MUST use `Common::Files::LocalFileTransaction`: write a UTF-8 BOM and the complete document to a
+  unique sibling, verify/flush it, then atomically replace the requested local target. Conversion, write, flush,
+  verification, or promotion failure MUST preserve the previous target and clean up the temporary sibling.
+- `MonitorTest --document-model-selftest` is the focused regression guard for malformed-input preservation,
+  successful UTF-8+BOM output, and abandoned-temporary cleanup.
+
 ### Document Class Methods
 
 **Line Access:**
 ```cpp
-const Line& GetVisibleLine(size_t visibleIndex);  // Access by visible index (0-based)
-const Line& GetSourceLine(size_t sourceIndex);    // Access by source index (all lines)
+Line GetVisibleLine(size_t visibleIndex);         // Locked snapshot by visible index (0-based)
+Line GetSourceLine(size_t sourceIndex);           // Locked snapshot by source index (all lines)
 size_t VisibleLineCount() const;                  // Count of visible lines
 size_t TotalLineCount() const;                    // Count of all lines
 ```
@@ -321,7 +373,8 @@ bool IsLineVisible(size_t sourceIndex) const;     // Check if source line is vis
 **Memory Usage:**
 - Base overhead: ~5MB (ColorTextView + resources)
 - Per-line overhead: ~150 bytes (Line struct + cached strings)
-- 100K lines: ~20MB total
+- Default retained ceiling: 100K lines and 64 MiB of UTF-16 payload, whichever is reached first
+- Default queued-event ceiling: 4,096; default stored-search-match ceiling: 100,000
 - Icon cache: ~2MB (cached D2D bitmaps for prefixes)
 
 **Rendering Performance:**
@@ -540,7 +593,8 @@ for (size_t visIdx = startVisIdx; visIdx <= endVisIdx; ++visIdx) {
   - Display row offset mapping for correct positioning
   - → Acceptable latency for historical review
 - Replace content scanning in `AddLine` with severity-driven coloring from metadata; avoid per-append keyword rescans.
-- Batch intake: queue ETW events (via `WM_APP_ETW_BATCH`), coalesce append/layout/width work per frame, and clamp history with a bounded ring (configurable cap, optional disk spill).
+- Batch intake is implemented with a settings-backed producer cap, coalesced UI drain, and line/byte retained-history
+  ceilings. Disk spill is not part of the current contract.
 - Instrument append→layout→paint durations with metrics: target zero blank lines (ACHIEVED), zero dropped frames at 10k logs/sec in AUTO-SCROLL mode.
 
 ### Communication (ETW/TraceLogging Only)
@@ -555,6 +609,9 @@ for (size_t visIdx = startVisIdx; visIdx <= endVisIdx; ++visIdx) {
 - Monitor surfaces ETW statistics in UI/status bar, logging write failures when they occur.
 - Default Debug / ASan Debug builds of `RedSalamanderMonitor` MUST NOT enable `ENABLE_TESTS` automatically. Monitor-specific test hooks are opt-in only, otherwise the monitor can surface its own test/perf ETW chatter and pollute the default live display.
 - Monitor chrome selftest coverage requires a test-enabled `RedSalamanderMonitor` build and must verify that `monitor.frame.total_us`, `monitor.frame.present_us`, `monitor.frame.append_to_visible_us`, `monitor.frame.tail_layout_us`, `monitor.frame.mode`, and `monitor.etw.batch_drain_us` are present. The opt-in ETW latency burst mode must additionally verify `monitor.etw.selftest_burst_drain_us`, `monitor.etw.queue_depth`, and `monitor.etw.batch_repost_count`, and must include quantile summaries for append-to-visible, batch-drain, total-frame, and present timings. The opt-in scrollback mode must additionally verify `monitor.frame.scrollback_slice_us` without making that cold-path metric mandatory for the default chrome selftest. Test-enabled Debug and Release builds are produced with `RSBuildEnableTests=true`; Release `ClCompile` definitions must include `$(RSBuildTestDefinitions)` so the opt-in defines `ENABLE_TESTS` without enabling Monitor self diagnostics by default. Helper functions used only by these opt-in drills must also stay behind `ENABLE_TESTS` so normal builds do not carry unreferenced selftest code or warning noise.
+- `MonitorTest.exe --document-model-selftest` is the focused non-UI Track 6 guard. It covers retained line/byte
+  eviction, strict/budgeted/cancelled file reads, Unicode clipboard storage construction, and ETW consumer shutdown
+  through both the normal join path and a deterministic short-timeout lifetime-owned fallback.
 - Invalid/dirty rectangle visualization MUST be opt-in only. Default Debug builds must not paint invalid rectangles in color; rebuilding with `RS_MONITOR_SHOW_INVALID_RECTS` enables that visual diagnostic. All brushes, palette state, and paint overlays for this diagnostic must stay behind the `RS_MONITOR_INVALID_RECT_VISUALIZATION_ENABLED` contract.
 
 ### UX and robustness

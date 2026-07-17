@@ -1,6 +1,7 @@
 #include "FileSystem.Internal.h"
 #include "Helpers.h"
 #include "PathUtils.h"
+#include "YyjsonHelpers.h"
 
 #include <array>
 #include <atomic>
@@ -1953,6 +1954,11 @@ HRESULT STDMETHODCALLTYPE FileSystem::CreateFileWriter(const wchar_t* path, File
     const bool allowReplaceReadOnly = (flags & FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY) != 0;
     const std::wstring filePath     = FileSystemInternal::ToExtendedPath(path);
 
+    if (allowReplaceReadOnly && ! allowOverwrite)
+    {
+        return E_INVALIDARG;
+    }
+
     if (allowOverwrite)
     {
         const DWORD destinationAttributes = ::GetFileAttributesW(filePath.c_str());
@@ -2007,40 +2013,10 @@ HRESULT STDMETHODCALLTYPE FileSystem::CreateFileWriter(const wchar_t* path, File
         return S_OK;
     }
 
-    auto tryCreate = [&](DWORD* outLastError) -> wil::unique_handle
-    {
-        wil::unique_handle file(CreateFileW(filePath.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr));
-        if (file)
-        {
-            if (outLastError)
-            {
-                *outLastError = ERROR_SUCCESS;
-            }
-            return file;
-        }
-
-        const DWORD lastError = GetLastError();
-        if (outLastError)
-        {
-            *outLastError = lastError != 0 ? lastError : ERROR_GEN_FAILURE;
-        }
-        return {};
-    };
-
-    DWORD lastError         = ERROR_SUCCESS;
-    wil::unique_handle file = tryCreate(&lastError);
-    if (! file && allowReplaceReadOnly && (lastError == ERROR_ACCESS_DENIED || lastError == ERROR_SHARING_VIOLATION))
-    {
-        const DWORD attributes = GetFileAttributesW(filePath.c_str());
-        if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_READONLY) != 0)
-        {
-            static_cast<void>(SetFileAttributesW(filePath.c_str(), attributes & ~FILE_ATTRIBUTE_READONLY));
-            file = tryCreate(&lastError);
-        }
-    }
-
+    wil::unique_handle file(CreateFileW(filePath.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr));
     if (! file)
     {
+        const DWORD lastError = GetLastError();
         return HRESULT_FROM_WIN32(lastError != 0 ? lastError : ERROR_GEN_FAILURE);
     }
 
@@ -2459,18 +2435,18 @@ HRESULT STDMETHODCALLTYPE FileSystem::SetConfiguration(const char* configuration
     constexpr unsigned long kMiB     = 1024u * 1024u;
     const unsigned long maxBufferMiB = (std::numeric_limits<unsigned long>::max)() / kMiB;
 
+    std::string sourceConfiguration = "{}";
+    Common::Json::ObjectDocument parsed;
     if (configurationJsonUtf8 != nullptr && configurationJsonUtf8[0] != '\0')
     {
-        const std::string_view configText(configurationJsonUtf8);
-
-        yyjson_doc* doc = yyjson_read(configText.data(), configText.size(), YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM);
-        if (doc)
+        sourceConfiguration = configurationJsonUtf8;
+        parsed = Common::Json::ParseObjectDocument(sourceConfiguration, YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM);
+        if (! parsed)
         {
-            auto freeDoc = wil::scope_exit([&] { yyjson_doc_free(doc); });
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
 
-            yyjson_val* root = yyjson_doc_get_root(doc);
-            if (root && yyjson_is_obj(root))
-            {
+        yyjson_val* root = parsed.root;
                 yyjson_val* concurrencyModeVal = yyjson_obj_get(root, "concurrencyMode");
                 if (concurrencyModeVal && yyjson_is_str(concurrencyModeVal))
                 {
@@ -2583,8 +2559,6 @@ HRESULT STDMETHODCALLTYPE FileSystem::SetConfiguration(const char* configuration
                     }
                 }
 #endif
-            }
-        }
     }
 
     copyMoveMaxConcurrency         = std::clamp(copyMoveMaxConcurrency, 1u, kMaxCopyMoveMaxConcurrency);
@@ -2596,16 +2570,17 @@ HRESULT STDMETHODCALLTYPE FileSystem::SetConfiguration(const char* configuration
     enumerationSoftMaxBufferMiB = std::clamp(enumerationSoftMaxBufferMiB, 1ul, maxBufferMiB);
     enumerationHardMaxBufferMiB = std::clamp(enumerationHardMaxBufferMiB, enumerationSoftMaxBufferMiB, maxBufferMiB);
 
-    std::string newConfigurationJson = BuildConfigurationJson(concurrencyMode,
-                                                              copyMoveMaxConcurrency,
-                                                              deleteMaxConcurrency,
-                                                              deleteRecycleBinMaxConcurrency,
-                                                              recycleBinBatchSize,
-                                                              enumerationSoftMaxBufferMiB,
-                                                              enumerationHardMaxBufferMiB,
-                                                              reparsePointPolicy,
-                                                              searchBackendPreference,
-                                                              searchMaxDirectoryWalkers);
+    std::string newConfigurationJson = parsed ? std::move(sourceConfiguration)
+                                              : BuildConfigurationJson(concurrencyMode,
+                                                                       copyMoveMaxConcurrency,
+                                                                       deleteMaxConcurrency,
+                                                                       deleteRecycleBinMaxConcurrency,
+                                                                       recycleBinBatchSize,
+                                                                       enumerationSoftMaxBufferMiB,
+                                                                       enumerationHardMaxBufferMiB,
+                                                                       reparsePointPolicy,
+                                                                       searchBackendPreference,
+                                                                       searchMaxDirectoryWalkers);
 
     std::lock_guard lock(_stateMutex);
 

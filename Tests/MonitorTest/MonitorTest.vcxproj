@@ -85,7 +85,8 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup>
-    <RSTestAdditionalIncludeDirectories>$(SolutionDir)Common;$(SolutionDir)RedSalamanderMonitor</RSTestAdditionalIncludeDirectories>
+    <RSTestAdditionalIncludeDirectories>$(SolutionDir)Common;$(SolutionDir)RedSalamanderMonitor;$(SolutionDir)Tests\TestSupport</RSTestAdditionalIncludeDirectories>
+    <RSTestAdditionalPreprocessorDefinitions>ENABLE_TESTS;$(RSTestAdditionalPreprocessorDefinitions)</RSTestAdditionalPreprocessorDefinitions>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -123,6 +124,8 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\..\RedSalamanderMonitor\Document.cpp" />
+    <ClCompile Include="..\..\RedSalamanderMonitor\EtwListener.cpp" />
+    <ClCompile Include="..\..\RedSalamanderMonitor\MonitorFileReader.cpp" />
     <ClCompile Include="MonitorTest.cpp" />
   </ItemGroup>
   <ItemGroup>

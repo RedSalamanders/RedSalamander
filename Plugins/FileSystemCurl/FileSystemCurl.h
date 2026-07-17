@@ -205,7 +205,7 @@ public:
     HRESULT STDMETHODCALLTYPE UnwatchDirectory(const wchar_t* path) noexcept override;
 
 private:
-    ~FileSystemCurl() = default;
+    ~FileSystemCurl();
 
     static constexpr wchar_t kPluginIdFtp[]  = L"builtin/file-system-ftp";
     static constexpr wchar_t kPluginIdSftp[] = L"builtin/file-system-sftp";
@@ -384,13 +384,6 @@ private:
        "description": "User name used when not provided in the URI."
      },
      {
-       "key": "defaultPassword",
-       "label": "Default password",
-       "type": "text",
-       "default": "",
-       "description": "Password used when not provided in the URI (stored in settings as plain text)."
-     },
-     {
        "key": "defaultBasePath",
        "label": "Default base path",
        "type": "text",
@@ -470,13 +463,6 @@ private:
       "description": "User name used when not provided in the URI."
     },
     {
-      "key": "defaultPassword",
-      "label": "Default password",
-      "type": "text",
-      "default": "",
-      "description": "Password used when not provided in the URI (stored in settings as plain text)."
-    },
-    {
       "key": "defaultBasePath",
       "label": "Default base path",
       "type": "text",
@@ -532,13 +518,6 @@ private:
       "description": "Optional path to public key file for SFTP authentication."
     },
     {
-      "key": "sshKeyPassphrase",
-      "label": "SSH key passphrase",
-      "type": "text",
-      "default": "",
-      "description": "Optional passphrase for the SSH private key (stored in settings as plain text)."
-    },
-    {
       "key": "sshKnownHosts",
       "label": "SSH known_hosts file",
       "type": "text",
@@ -575,13 +554,6 @@ private:
       "type": "text",
       "default": "",
       "description": "User name used when not provided in the URI."
-    },
-    {
-      "key": "defaultPassword",
-      "label": "Default password",
-      "type": "text",
-      "default": "",
-      "description": "Password used for SSH authentication when not provided elsewhere (stored in settings as plain text)."
     },
     {
       "key": "defaultBasePath",
@@ -639,13 +611,6 @@ private:
       "description": "Optional path to public key file for SCP authentication."
     },
     {
-      "key": "sshKeyPassphrase",
-      "label": "SSH key passphrase",
-      "type": "text",
-      "default": "",
-      "description": "Optional passphrase for the SSH private key (stored in settings as plain text)."
-    },
-    {
       "key": "sshKnownHosts",
       "label": "SSH known_hosts file",
       "type": "text",
@@ -689,13 +654,6 @@ private:
       "type": "text",
       "default": "",
       "description": "User name used when not provided in the URI."
-    },
-    {
-      "key": "defaultPassword",
-      "label": "Default password",
-      "type": "text",
-      "default": "",
-      "description": "Password used when not provided in the URI (stored in settings as plain text)."
     },
     {
       "key": "defaultBasePath",

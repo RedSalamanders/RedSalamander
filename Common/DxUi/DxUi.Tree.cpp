@@ -378,8 +378,7 @@ bool Tree::RequestSelectVisibleItem(size_t visibleIndex) noexcept
         return false;
     }
 
-    SelectVisibleIndex(visibleIndex, true);
-    return true;
+    return SelectVisibleIndex(visibleIndex, true);
 }
 
 bool Tree::RequestExpandedState(size_t visibleIndex, bool expanded) noexcept
@@ -403,7 +402,13 @@ bool Tree::RequestExpandedState(size_t visibleIndex, bool expanded) noexcept
     }
 
     StartExpanderAnimation(item.id, item.expanded, expanded);
-    _delegate->OnTreeToggleExpanded(item.id, expanded);
+    const std::weak_ptr<int> selfLifetime = GetLifetimeToken();
+    IDxTreeDelegate* const delegate       = _delegate;
+    delegate->OnTreeToggleExpanded(item.id, expanded);
+    if (selfLifetime.expired())
+    {
+        return false;
+    }
     BeginTreeExpansionAnimation(item.id, expanded, std::move(beforeItems), CaptureVisibleItems(), GetTickCount64());
     RefreshAccessibilitySnapshot();
     return true;
@@ -759,10 +764,19 @@ bool Tree::OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightButton, 
         return true;
     }
 
-    SelectVisibleIndex(hit.visibleIndex, true);
+    TreeItemData hitItem;
+    _model->GetVisibleItem(hit.visibleIndex, hitItem);
+    if (! SelectVisibleIndex(hit.visibleIndex, true))
+    {
+        return true;
+    }
     if (hit.zone == HitZone::Expander)
     {
-        ToggleExpanded(hit.visibleIndex);
+        const std::optional<size_t> currentIndex = _model ? _model->FindVisibleItemById(hitItem.id) : std::nullopt;
+        if (! currentIndex.has_value() || ! ToggleExpanded(currentIndex.value()))
+        {
+            return true;
+        }
         if (! host.GetTheme().reducedMotion)
         {
             host.RequestAnimation();
@@ -786,13 +800,27 @@ bool Tree::OnMouseDoubleClick(WindowHost& host, D2D1_POINT_2F point, bool rightB
     }
 
     host.SetFocusControl(this);
-    SelectVisibleIndex(hit.visibleIndex, true);
-
     TreeItemData item;
     _model->GetVisibleItem(hit.visibleIndex, item);
-    if (item.hasChildren)
+    if (! SelectVisibleIndex(hit.visibleIndex, true))
     {
-        ToggleExpanded(hit.visibleIndex);
+        return true;
+    }
+
+    const std::optional<size_t> currentIndex = _model ? _model->FindVisibleItemById(item.id) : std::nullopt;
+    if (! currentIndex.has_value())
+    {
+        return true;
+    }
+
+    TreeItemData currentItem;
+    _model->GetVisibleItem(currentIndex.value(), currentItem);
+    if (currentItem.hasChildren)
+    {
+        if (! ToggleExpanded(currentIndex.value()))
+        {
+            return true;
+        }
         if (! host.GetTheme().reducedMotion)
         {
             host.RequestAnimation();
@@ -800,7 +828,9 @@ bool Tree::OnMouseDoubleClick(WindowHost& host, D2D1_POINT_2F point, bool rightB
     }
     else if (_delegate)
     {
-        _delegate->OnTreeItemInvoked(item.id);
+        Invalidate(host);
+        _delegate->OnTreeItemInvoked(currentItem.id);
+        return true;
     }
     Invalidate(host);
     return true;
@@ -867,7 +897,10 @@ bool Tree::OnKeyDown(WindowHost& host, UINT virtualKey, UINT /*modifiers*/)
 
     const auto selectAndInvalidate = [this, &host](size_t visibleIndex) -> bool
     {
-        SelectVisibleIndex(visibleIndex, true);
+        if (! SelectVisibleIndex(visibleIndex, true))
+        {
+            return true;
+        }
         if (const HWND hwnd = host.GetHwnd(); hwnd && IsWindow(hwnd) != FALSE && GetFocus() != hwnd)
         {
             static_cast<void>(SetFocus(hwnd));
@@ -880,7 +913,10 @@ bool Tree::OnKeyDown(WindowHost& host, UINT virtualKey, UINT /*modifiers*/)
     if (! currentIndex)
     {
         currentIndex = 0u;
-        SelectVisibleIndex(currentIndex.value(), false);
+        if (! SelectVisibleIndex(currentIndex.value(), false))
+        {
+            return true;
+        }
     }
 
     TreeItemData item;
@@ -900,7 +936,10 @@ bool Tree::OnKeyDown(WindowHost& host, UINT virtualKey, UINT /*modifiers*/)
         case VK_LEFT:
             if (item.hasChildren && item.expanded)
             {
-                ToggleExpanded(currentIndex.value());
+                if (! ToggleExpanded(currentIndex.value()))
+                {
+                    return true;
+                }
                 if (! host.GetTheme().reducedMotion)
                 {
                     host.RequestAnimation();
@@ -919,7 +958,10 @@ bool Tree::OnKeyDown(WindowHost& host, UINT virtualKey, UINT /*modifiers*/)
         case VK_RIGHT:
             if (item.hasChildren && ! item.expanded)
             {
-                ToggleExpanded(currentIndex.value());
+                if (! ToggleExpanded(currentIndex.value()))
+                {
+                    return true;
+                }
                 if (! host.GetTheme().reducedMotion)
                 {
                     host.RequestAnimation();
@@ -965,7 +1007,10 @@ bool Tree::OnChar(WindowHost& host, wchar_t ch, UINT /*modifiers*/)
 
     if (const std::optional<size_t> matchIndex = FindNextTypeaheadMatch(_typeaheadBuffer))
     {
-        SelectVisibleIndex(matchIndex.value(), true);
+        if (! SelectVisibleIndex(matchIndex.value(), true))
+        {
+            return true;
+        }
         Invalidate(host);
         return true;
     }
@@ -975,7 +1020,10 @@ bool Tree::OnChar(WindowHost& host, wchar_t ch, UINT /*modifiers*/)
         _typeaheadBuffer.assign(1u, ch);
         if (const std::optional<size_t> matchIndex = FindNextTypeaheadMatch(_typeaheadBuffer))
         {
-            SelectVisibleIndex(matchIndex.value(), true);
+            if (! SelectVisibleIndex(matchIndex.value(), true))
+            {
+                return true;
+            }
             Invalidate(host);
             return true;
         }
@@ -1020,18 +1068,32 @@ bool Tree::OnContextMenu(WindowHost& host, bool keyboardInvocation, D2D1_POINT_2
             return false;
         }
 
-        visibleIndex                                    = hit.visibleIndex;
+        visibleIndex = hit.visibleIndex;
+    }
+
+    TreeItemData item;
+    _model->GetVisibleItem(visibleIndex, item);
+    const POINT screenPoint = host.DipPointToScreenPoint(anchorDip);
+
+    if (! keyboardInvocation)
+    {
         const std::optional<uint64_t> previousSelection = _selectedItemId;
-        SelectVisibleIndex(visibleIndex, true);
+        if (! SelectVisibleIndex(visibleIndex, true))
+        {
+            return true;
+        }
         if (_selectedItemId != previousSelection)
         {
             Invalidate(host);
         }
     }
 
-    TreeItemData item;
-    _model->GetVisibleItem(visibleIndex, item);
-    _delegate->OnTreeContextMenu(item.id, host.DipPointToScreenPoint(anchorDip));
+    if (! _model || ! _delegate || ! _model->FindVisibleItemById(item.id).has_value())
+    {
+        return true;
+    }
+
+    _delegate->OnTreeContextMenu(item.id, screenPoint);
     return true;
 }
 
@@ -1411,11 +1473,11 @@ void Tree::EnsureVisibleIndex(size_t visibleIndex) noexcept
     ClampScrollOffset();
 }
 
-void Tree::SelectVisibleIndex(size_t visibleIndex, bool notifyDelegate)
+bool Tree::SelectVisibleIndex(size_t visibleIndex, bool notifyDelegate)
 {
     if (! _model || visibleIndex >= _model->GetVisibleItemCount())
     {
-        return;
+        return false;
     }
 
     TreeItemData item;
@@ -1424,21 +1486,30 @@ void Tree::SelectVisibleIndex(size_t visibleIndex, bool notifyDelegate)
     EnsureVisibleIndex(visibleIndex);
     if (notifyDelegate && _delegate)
     {
-        _delegate->OnTreeSelectionChanged(item.id);
+        const std::weak_ptr<int> selfLifetime = GetLifetimeToken();
+        IDxTreeDelegate* const delegate       = _delegate;
+        delegate->OnTreeSelectionChanged(item.id);
+        if (selfLifetime.expired())
+        {
+            return false;
+        }
     }
     RefreshAccessibilitySnapshot();
+    return true;
 }
 
-void Tree::ToggleExpanded(size_t visibleIndex)
+bool Tree::ToggleExpanded(size_t visibleIndex)
 {
     if (! _model || visibleIndex >= _model->GetVisibleItemCount())
     {
-        return;
+        return true;
     }
 
     TreeItemData item;
     _model->GetVisibleItem(visibleIndex, item);
+    const std::weak_ptr<int> selfLifetime = GetLifetimeToken();
     static_cast<void>(RequestExpandedState(visibleIndex, ! item.expanded));
+    return ! selfLifetime.expired();
 }
 
 float Tree::ComputeExpanderProgress(uint64_t itemId, bool expanded, uint64_t nowTickMs) const noexcept

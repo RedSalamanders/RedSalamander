@@ -2,7 +2,9 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <deque>
 #include <fstream>
+#include <mutex>
 #include <optional>
 #include <shared_mutex>
 #include <string>
@@ -71,9 +73,19 @@ public:
     void AppendInfoLines(std::vector<InfoLineInput> lines);
     void Clear();
 
+    struct RetentionResult
+    {
+        size_t linesEvicted                 = 0u;
+        uint64_t textBytesEvicted           = 0u;
+        uint64_t characterPositionsEvicted = 0u;
+        uint64_t displayRowsEvicted         = 0u;
+    };
+    [[nodiscard]] RetentionResult EnforceRetentionLimits(size_t maxLines, uint64_t maxTextBytes);
+
     // Content queries
     size_t TotalLength() const;
     size_t LongestLineChars() const;
+    uint64_t RetainedTextBytes() const;
     bool SaveTextToFile(const std::wstring& path) const;
 
     // Line count methods - explicit visible vs total
@@ -89,10 +101,9 @@ public:
     bool IsLineVisible(size_t sourceIndex) const;
 
     // Line access methods
-    const Line& GetVisibleLine(size_t visibleIndex) const; // Access by visible index
-    const Line& GetSourceLine(size_t sourceIndex) const;   // Access by source index
-    const std::vector<Line>& Lines() const;                // Direct access to lines vector (read-only)
-    const std::vector<VisibleLine>& VisibleLines() const;  // Direct access to visibleLines vector (read-only)
+    Line GetVisibleLine(size_t visibleIndex) const;              // Locked snapshot by visible index
+    Line GetSourceLine(size_t sourceIndex) const;                 // Locked snapshot by source index
+    std::vector<VisibleLine> VisibleLines() const;                // Locked visibility snapshot
 
     // Display row mapping (VisibleLine architecture)
     UINT32 DisplayRowForVisible(size_t visibleIndex) const;
@@ -108,8 +119,8 @@ public:
 
     // Get text slice without full copy (use source indices)
     std::wstring GetTextRange(UINT32 start, UINT32 length) const;
-    const std::wstring& GetDisplayTextRef(size_t visibleIndex) const;
-    const std::wstring& GetDisplayTextRefAll(size_t sourceIndex) const;
+    std::wstring GetDisplayText(size_t visibleIndex) const;
+    std::wstring GetDisplayTextAll(size_t sourceIndex) const;
 
     // Optimization - Batch API for range access with single lock
     struct DisplayTextBatch
@@ -122,14 +133,14 @@ public:
         DisplayTextBatch& operator=(const DisplayTextBatch&) = delete;
 
         std::vector<std::reference_wrapper<const std::wstring>> texts;
-        std::shared_lock<std::shared_mutex> lock;
+        std::unique_lock<std::shared_mutex> lock;
     };
     DisplayTextBatch GetDisplayTextBatch(size_t firstVisible, size_t lastVisible) const;
     DisplayTextBatch GetDisplayTextBatchAll(size_t firstAll, size_t lastAll) const;
 
     // Optimization - Build filtered tail text in a single locked scope
     // Returns concatenated display text for visible lines in [firstAll..lastAll], plus per-line metadata
-    // for coloring. Avoids per-line IsLineVisible() + GetDisplayTextRefAll() lock overhead.
+    // for coloring. Avoids per-line visibility and display-text lock overhead.
     struct TailLineInfo
     {
         size_t sourceIndex = 0;
@@ -190,7 +201,7 @@ private:
     bool IsLineVisibleUnsafe(size_t sourceIndex) const;
 
     // Document content
-    std::vector<Line> _lines;               // Source of truth: all lines (append-only)
+    std::deque<Line> _lines;                // Source of truth: oldest retained line at the front
     std::vector<VisibleLine> _visibleLines; // Computed view: maps visible index -> source index + display row
     mutable std::shared_mutex _rwMutex;     // Reader-writer lock for better concurrency
 
@@ -202,6 +213,7 @@ private:
     mutable bool _maxLineCharsValid = false;
     mutable size_t _maxLineChars    = 0;
     mutable size_t _maxLineIndex    = 0;
+    uint64_t _retainedTextBytes     = 0u; // UTF-16 payload bytes; excludes container/cache overhead
 
     // Settings for how to display metadata
     bool _showIds            = true;

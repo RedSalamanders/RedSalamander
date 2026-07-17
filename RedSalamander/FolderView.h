@@ -200,6 +200,8 @@ public:
         std::wstring sourceInstanceContext;
         std::optional<std::filesystem::path> destinationFolder;
         FileSystemFlags flags = static_cast<FileSystemFlags>(0);
+        // Invoked on the UI thread after the queued host operation reaches a verified terminal result.
+        std::function<void(HRESULT)> completionCallback;
     };
 
     using FileOperationRequestCallback = std::function<HRESULT(FileOperationRequest request)>;
@@ -234,7 +236,16 @@ public:
     [[nodiscard]] static bool DebugIsDirectFileOperationFallbackEnabledForSelfTest() noexcept;
     [[nodiscard]] HRESULT DebugPerformFileDropForSelfTest(const std::vector<std::filesystem::path>& paths,
                                                           DWORD effect,
-                                                          DWORD* performedEffect = nullptr) noexcept;
+                                                          DWORD* performedEffect = nullptr,
+                                                          POINT clientPoint = POINT{-1, -1},
+                                                          bool externalSource = false,
+                                                          DWORD allowedEffects = DROPEFFECT_NONE,
+                                                          DWORD keyState = 0) noexcept;
+    [[nodiscard]] HRESULT DebugPerformDropFromDataObjectForSelfTest(IDataObject* dataObject,
+                                                                    DWORD effect,
+                                                                    DWORD* performedEffect = nullptr,
+                                                                    POINT clientPoint = POINT{-1, -1},
+                                                                    DWORD keyState = 0) noexcept;
 
     [[nodiscard]] uint64_t DebugGetForceRefreshCount() const noexcept
     {
@@ -279,6 +290,19 @@ public:
     [[nodiscard]] size_t DebugGetSelectedItemCount() const noexcept;
     [[nodiscard]] bool DebugWarmRenderingForSelfTest() noexcept;
     [[nodiscard]] bool DebugSetHoveredItemByDisplayName(std::wstring_view displayName) noexcept;
+    [[nodiscard]] std::optional<POINT> DebugGetItemCenterClientPointForSelfTest(std::wstring_view displayName) const noexcept;
+    void DebugSetHoveredIndexForSelfTest(size_t index) noexcept
+    {
+        _hoveredIndex = index;
+    }
+    void DebugSetCurrentFolderWithoutEnumerationForSelfTest(std::filesystem::path folder)
+    {
+        _currentFolder = std::move(folder);
+    }
+    [[nodiscard]] std::vector<std::filesystem::path> DebugGetDragSourcePathsForSelfTest() const
+    {
+        return GetSelectedOrFocusedPaths();
+    }
     void DebugResetDrawItemTransientBrushCreateCount() noexcept;
     [[nodiscard]] bool DebugIsEmptyFolderStateActive() const noexcept;
     [[nodiscard]] std::wstring_view DebugGetEmptyStateMessage() const noexcept;
@@ -1425,7 +1449,7 @@ private:
     void UpdateContextMenuState(HMENU menu) const;
     DWORD ResolveDropEffect(DWORD keyState, DWORD allowedEffects) const;
     bool HasFileDrop(IDataObject* dataObject) const;
-    HRESULT PerformDrop(IDataObject* dataObject, DWORD keyState, DWORD allowedEffects, DWORD* performedEffect);
+    HRESULT PerformDrop(IDataObject* dataObject, DWORD keyState, DWORD allowedEffects, POINT clientPoint, DWORD* performedEffect);
 
     void ReportError(const std::wstring& context, HRESULT hr) const;
     bool CheckHR(HRESULT hr, const wchar_t* context) const;

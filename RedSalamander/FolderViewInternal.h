@@ -1328,13 +1328,19 @@ class FolderViewDataObject final : public IDataObject
 {
 public:
     FolderViewDataObject(
-        std::vector<std::filesystem::path> paths, std::wstring pluginId, std::wstring instanceContext, DWORD preferredEffect, bool includeHDrop)
+        std::vector<std::filesystem::path> paths,
+        std::wstring pluginId,
+        std::wstring instanceContext,
+        DWORD preferredEffect,
+        bool includeHDrop,
+        bool includeInternalFormat = true)
         : _refCount(1),
           _paths(std::move(paths)),
           _pluginId(std::move(pluginId)),
           _instanceContext(std::move(instanceContext)),
           _preferredEffect(preferredEffect),
-          _includeHDrop(includeHDrop)
+          _includeHDrop(includeHDrop),
+          _includeInternalFormat(includeInternalFormat)
     {
     }
 
@@ -1389,6 +1395,10 @@ public:
 
         if (format->cfFormat == static_cast<CLIPFORMAT>(RedSalamanderInternalFileDropFormat()))
         {
+            if (! _includeInternalFormat)
+            {
+                return DV_E_FORMATETC;
+            }
             auto data = CreateInternalFileDrop();
             if (! data)
             {
@@ -1451,7 +1461,7 @@ public:
         }
         if (format->cfFormat == static_cast<CLIPFORMAT>(RedSalamanderInternalFileDropFormat()) || format->cfFormat == PreferredDropEffectFormat())
         {
-            return S_OK;
+            return format->cfFormat == static_cast<CLIPFORMAT>(RedSalamanderInternalFileDropFormat()) && ! _includeInternalFormat ? DV_E_FORMATETC : S_OK;
         }
         if (format->cfFormat == CF_HDROP)
         {
@@ -1494,8 +1504,11 @@ public:
         hdrop.ptd      = nullptr;
         hdrop.tymed    = TYMED_HGLOBAL;
 
-        hdrop.cfFormat = static_cast<CLIPFORMAT>(RedSalamanderInternalFileDropFormat());
-        formats.push_back(hdrop);
+        if (_includeInternalFormat)
+        {
+            hdrop.cfFormat = static_cast<CLIPFORMAT>(RedSalamanderInternalFileDropFormat());
+            formats.push_back(hdrop);
+        }
 
         if (_includeHDrop)
         {
@@ -1642,13 +1655,21 @@ private:
 
     wil::unique_hglobal CreateHDrop() const
     {
-        size_t totalChars = 0;
+        size_t totalChars = 1u; // final double-null terminator
         for (const auto& path : _paths)
         {
-            totalChars += path.native().size() + 1;
+            const size_t pathChars = path.native().size();
+            if (pathChars == (std::numeric_limits<size_t>::max)() || totalChars > (std::numeric_limits<size_t>::max)() - pathChars - 1u)
+            {
+                return nullptr;
+            }
+            totalChars += pathChars + 1u;
         }
-        totalChars += 1; // double-null terminator
 
+        if (totalChars > ((std::numeric_limits<size_t>::max)() - sizeof(DROPFILES)) / sizeof(wchar_t))
+        {
+            return nullptr;
+        }
         const size_t bytes = sizeof(DROPFILES) + totalChars * sizeof(wchar_t);
         wil::unique_hglobal memory(GlobalAlloc(GMEM_MOVEABLE, bytes));
         if (! memory)
@@ -1703,6 +1724,7 @@ private:
     std::wstring _instanceContext;
     DWORD _preferredEffect = DROPEFFECT_COPY;
     bool _includeHDrop     = false;
+    bool _includeInternalFormat = true;
 };
 
 class FolderViewDropSource final : public IDropSource

@@ -1,6 +1,7 @@
 #include "FileSystemCurl.Internal.h"
 #include "FileSystemCurlResources.h"
 #include "HandleIo.h"
+#include "CurlProcessRuntime.h"
 #include "YyjsonHelpers.h"
 
 using namespace FileSystemCurlInternal;
@@ -10,6 +11,7 @@ extern HINSTANCE g_hInstance;
 namespace
 {
 std::atomic<unsigned long> g_fileSystemCurlInstanceCount{0};
+std::atomic<bool> g_fileSystemCurlShutdownRequested{false};
 
 [[nodiscard]] const wchar_t* LocalizedPluginName(FileSystemCurlProtocol protocol) noexcept
 {
@@ -1766,23 +1768,39 @@ namespace FileSystemCurlInternal
     return std::format("{}://{}{}", scheme, authority, remotePath);
 }
 
+namespace
+{
+[[nodiscard]] HRESULT EnsureSharedCurlRuntime() noexcept;
+}
+
 HRESULT EnsureCurlInitialized() noexcept
 {
-    static std::once_flag initOnce;
-    static std::atomic<HRESULT> initResult{E_FAIL};
-
-    std::call_once(initOnce,
-                   []() noexcept
-    {
-        const CURLcode code = curl_global_init(CURL_GLOBAL_DEFAULT);
-        initResult.store(code == CURLE_OK ? S_OK : E_FAIL, std::memory_order_release);
-    });
-
-    return initResult.load(std::memory_order_acquire);
+    return EnsureSharedCurlRuntime();
 }
 
 namespace
 {
+[[nodiscard]] Common::CurlRuntime::ProcessLease& GetCurlRuntimeLease() noexcept
+{
+    static Common::CurlRuntime::ProcessLease lease;
+    return lease;
+}
+
+[[nodiscard]] HRESULT EnsureSharedCurlRuntime() noexcept
+{
+    if (g_fileSystemCurlShutdownRequested.load(std::memory_order_acquire))
+    {
+        return HRESULT_FROM_WIN32(ERROR_SHUTDOWN_IN_PROGRESS);
+    }
+    return GetCurlRuntimeLease().Acquire(
+        []() noexcept -> HRESULT { return curl_global_init(CURL_GLOBAL_DEFAULT) == CURLE_OK ? S_OK : E_FAIL; });
+}
+
+void CleanupSharedCurlRuntime() noexcept
+{
+    curl_global_cleanup();
+}
+
 struct CurlShareContext final
 {
     CurlShareContext() = default;
@@ -1794,9 +1812,16 @@ struct CurlShareContext final
 
     ~CurlShareContext() = default;
 
+    std::mutex lifecycleMutex;
     std::array<std::mutex, static_cast<size_t>(CURL_LOCK_DATA_LAST)> locks{};
     CURLSH* share = nullptr;
 };
+
+[[nodiscard]] CurlShareContext& GetCurlShareContext() noexcept
+{
+    static CurlShareContext context{};
+    return context;
+}
 
 void CurlShareLock(CURL* /*handle*/, curl_lock_data data, curl_lock_access /*access*/, void* userptr) noexcept
 {
@@ -1835,12 +1860,12 @@ void CurlShareUnlock(CURL* /*handle*/, curl_lock_data data, void* userptr) noexc
 [[nodiscard]] CURLSH* GetCurlShareHandle() noexcept
 {
     static std::once_flag initOnce;
-    static CurlShareContext ctx{};
+    CurlShareContext& ctx = GetCurlShareContext();
 
     std::call_once(initOnce,
                    [&]() noexcept
     {
-        if (FAILED(EnsureCurlInitialized()))
+        if (FAILED(EnsureSharedCurlRuntime()))
         {
             return;
         }
@@ -1859,10 +1884,23 @@ void CurlShareUnlock(CURL* /*handle*/, curl_lock_data data, void* userptr) noexc
         curl_share_setopt(share, CURLSHOPT_SHARE, CURL_LOCK_DATA_SSL_SESSION);
         curl_share_setopt(share, CURLSHOPT_SHARE, CURL_LOCK_DATA_CONNECT);
 
+        std::lock_guard lock(ctx.lifecycleMutex);
         ctx.share = share;
     });
 
+    std::lock_guard lock(ctx.lifecycleMutex);
     return ctx.share;
+}
+
+void CleanupCurlShareHandle() noexcept
+{
+    CurlShareContext& ctx = GetCurlShareContext();
+    std::lock_guard lock(ctx.lifecycleMutex);
+    if (ctx.share)
+    {
+        static_cast<void>(curl_share_cleanup(ctx.share));
+        ctx.share = nullptr;
+    }
 }
 } // namespace
 
@@ -1875,6 +1913,11 @@ CurlEasyPool::BorrowedHandle CurlEasyPool::Borrow(std::wstring_view limiterKey) 
     const uint64_t now = GetTickCount64();
     {
         std::scoped_lock lock(_mutex);
+        if (_shutdownRequested)
+        {
+            return {};
+        }
+        ++_activeBorrowCount;
         EvictExpired(now, cleanup);
 
         auto it = _idle.find(key);
@@ -1895,6 +1938,7 @@ CurlEasyPool::BorrowedHandle CurlEasyPool::Borrow(std::wstring_view limiterKey) 
         handle.reset(curl_easy_init());
         if (! handle)
         {
+            CancelBorrow();
             return {};
         }
     }
@@ -1915,14 +1959,59 @@ void CurlEasyPool::ReturnHandle(std::wstring key, unique_curl_easy handle) noexc
 
     const uint64_t now = GetTickCount64();
 
-    std::scoped_lock lock(_mutex);
-
-    auto& vec = _idle[std::move(key)];
-    if (vec.size() >= kMaxIdlePerConnection)
     {
-        return; // drop handle — pool is full for this connection
+        std::scoped_lock lock(_mutex);
+        if (_activeBorrowCount > 0u)
+        {
+            --_activeBorrowCount;
+        }
+        if (_shutdownRequested)
+        {
+            return;
+        }
+
+        auto& vec = _idle[std::move(key)];
+        if (vec.size() >= kMaxIdlePerConnection)
+        {
+            return; // drop handle — pool is full for this connection
+        }
+        vec.push_back(IdleEntry(std::move(handle), now));
     }
-    vec.push_back(IdleEntry(std::move(handle), now));
+}
+
+void CurlEasyPool::CancelBorrow() noexcept
+{
+    std::scoped_lock lock(_mutex);
+    if (_activeBorrowCount > 0u)
+    {
+        --_activeBorrowCount;
+    }
+}
+
+void CurlEasyPool::BeginShutdown() noexcept
+{
+    std::vector<unique_curl_easy> cleanup;
+    {
+        std::scoped_lock lock(_mutex);
+        _shutdownRequested = true;
+        for (auto& [key, entries] : _idle)
+        {
+            for (IdleEntry& entry : entries)
+            {
+                if (entry.handle)
+                {
+                    cleanup.push_back(std::move(entry.handle));
+                }
+            }
+        }
+        _idle.clear();
+    }
+}
+
+bool CurlEasyPool::CanUnloadNow() noexcept
+{
+    std::scoped_lock lock(_mutex);
+    return _shutdownRequested && _activeBorrowCount == 0u && _idle.empty();
 }
 
 void CurlEasyPool::EvictExpired(uint64_t now, std::vector<unique_curl_easy>& cleanup) noexcept
@@ -1954,6 +2043,67 @@ void CurlEasyPool::EvictExpired(uint64_t now, std::vector<unique_curl_easy>& cle
     static CurlEasyPool pool;
     return pool;
 }
+
+namespace
+{
+void TryCompleteFileSystemCurlShutdown() noexcept
+{
+    if (! g_fileSystemCurlShutdownRequested.load(std::memory_order_acquire) ||
+        g_fileSystemCurlInstanceCount.load(std::memory_order_acquire) != 0u)
+    {
+        return;
+    }
+
+    CurlEasyPool& pool = GetCurlEasyPool();
+    pool.BeginShutdown();
+    if (! pool.CanUnloadNow())
+    {
+        return;
+    }
+
+    CleanupCurlShareHandle();
+    Common::CurlRuntime::ProcessLease& lease = GetCurlRuntimeLease();
+    if (lease.IsAcquired())
+    {
+        static_cast<void>(lease.Release(CleanupSharedCurlRuntime));
+    }
+}
+} // namespace
+
+void BeginFileSystemCurlShutdown() noexcept
+{
+    g_fileSystemCurlShutdownRequested.store(true, std::memory_order_release);
+    ShutdownSharedCopyMoveJobScheduler();
+    GetCurlEasyPool().BeginShutdown();
+    TryCompleteFileSystemCurlShutdown();
+}
+
+bool CanUnloadFileSystemCurlNow() noexcept
+{
+    TryCompleteFileSystemCurlShutdown();
+    return g_fileSystemCurlShutdownRequested.load(std::memory_order_acquire) &&
+           g_fileSystemCurlInstanceCount.load(std::memory_order_acquire) == 0u && GetCurlEasyPool().CanUnloadNow() &&
+           ! GetCurlRuntimeLease().IsAcquired();
+}
+
+bool CanCreateFileSystemCurl() noexcept
+{
+    return ! g_fileSystemCurlShutdownRequested.load(std::memory_order_acquire);
+}
+
+#if defined(_DEBUG)
+HRESULT RunDebugCurlRuntimeProbe() noexcept
+{
+    const HRESULT initializeHr = EnsureSharedCurlRuntime();
+    if (FAILED(initializeHr))
+    {
+        return initializeHr;
+    }
+
+    auto handle = GetCurlEasyPool().Borrow(L"observatory/runtime-probe");
+    return handle ? S_OK : E_OUTOFMEMORY;
+}
+#endif
 
 [[nodiscard]] HRESULT HResultFromCurl(CURLcode code) noexcept
 {
@@ -3275,6 +3425,12 @@ FileSystemCurl::FileSystemCurl(FileSystemCurlProtocol protocol, IHost* host) : _
     }
 }
 
+FileSystemCurl::~FileSystemCurl()
+{
+    SecureWipe::SecureClear(_settings.defaultPassword);
+    SecureWipe::SecureClear(_settings.sshKeyPassphrase);
+}
+
 HRESULT STDMETHODCALLTYPE FileSystemCurl::QueryInterface(REFIID riid, void** ppvObject) noexcept
 {
     if (ppvObject == nullptr)
@@ -3349,6 +3505,7 @@ ULONG STDMETHODCALLTYPE FileSystemCurl::Release() noexcept
         if (remainingInstances == 0)
         {
             ShutdownSharedCopyMoveJobScheduler();
+            TryCompleteFileSystemCurlShutdown();
         }
 
         delete this;
@@ -3746,32 +3903,39 @@ const char* FileSystemCurl::StaticConfigurationSchema(FileSystemCurlProtocol pro
 
 HRESULT STDMETHODCALLTYPE FileSystemCurl::SetConfiguration(const char* configurationJsonUtf8) noexcept
 {
+    std::string nextConfiguration = "{}";
+    Common::Json::ObjectDocument parsed;
+
+    if (configurationJsonUtf8 != nullptr && configurationJsonUtf8[0] != '\0')
+    {
+        nextConfiguration = configurationJsonUtf8;
+        parsed = Common::Json::ParseObjectDocument(nextConfiguration, YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM);
+        if (! parsed)
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+
+        constexpr std::array<const char*, 2> secretMembers{{"defaultPassword", "sshKeyPassphrase"}};
+        const std::optional<std::string> sanitized = Common::Json::WriteObjectWithoutMembers(parsed, secretMembers);
+        if (! sanitized.has_value())
+        {
+            return E_OUTOFMEMORY;
+        }
+        nextConfiguration = sanitized.value();
+    }
+
     std::lock_guard lock(_stateMutex);
+    SecureWipe::SecureClear(_settings.defaultPassword);
+    SecureWipe::SecureClear(_settings.sshKeyPassphrase);
+    _settings          = {};
+    _configurationJson = std::move(nextConfiguration);
 
-    _settings = {};
-
-    if (configurationJsonUtf8 == nullptr || configurationJsonUtf8[0] == '\0')
-    {
-        _configurationJson = "{}";
-        return S_OK;
-    }
-
-    _configurationJson = configurationJsonUtf8;
-
-    yyjson_read_err err{};
-    yyjson_doc* doc = yyjson_read_opts(_configurationJson.data(), _configurationJson.size(), YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM, nullptr, &err);
-    if (! doc)
+    if (! parsed)
     {
         return S_OK;
     }
 
-    Common::Json::UniqueDocument docOwner{doc};
-
-    yyjson_val* root = yyjson_doc_get_root(doc);
-    if (! root || ! yyjson_is_obj(root))
-    {
-        return S_OK;
-    }
+    yyjson_val* root = parsed.root;
 
     const auto defaultHost = TryGetJsonString(root, "defaultHost");
     if (defaultHost.has_value())

@@ -1316,6 +1316,8 @@ LRESULT FolderWindow::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         case WndMsg::kChangeCaseCompleted: return OnChangeCaseCompleted(lp);
         case WndMsg::kChangeAttributesTaskUpdate: return OnChangeAttributesTaskUpdate(lp);
         case WndMsg::kChangeAttributesCompleted: return OnChangeAttributesCompleted(lp);
+        case WndMsg::kMakeFileListTaskUpdate: return OnMakeFileListTaskUpdate(lp);
+        case WndMsg::kMakeFileListCompleted: return OnMakeFileListCompleted(lp);
         case WndMsg::kFolderWindowCloseOpenedFilesDialog: CloseOpenedFilesDialog(); return 0;
         case WndMsg::kFolderWindowCloseSharedDirectoriesDialog: CloseSharedDirectoriesDialog(); return 0;
         case WndMsg::kHostShowAlert: return OnHostServicesMessage(msg, wp, lp);
@@ -2232,6 +2234,17 @@ void FolderWindow::OnDestroy()
         _rightPane.selectionSizeThread.request_stop();
         _rightPane.selectionSizeCv.notify_all();
         _rightPane.selectionSizeThread = std::jthread{};
+    }
+
+    RequestMakeFileListCancellation(Pane::Left);
+    if (_leftPane.makeFileListThread.joinable())
+    {
+        _leftPane.makeFileListThread = std::jthread{};
+    }
+    RequestMakeFileListCancellation(Pane::Right);
+    if (_rightPane.makeFileListThread.joinable())
+    {
+        _rightPane.makeFileListThread = std::jthread{};
     }
 
     if (_draggingSplitter)
