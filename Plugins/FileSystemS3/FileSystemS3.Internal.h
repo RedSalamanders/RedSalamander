@@ -169,13 +169,14 @@ struct S3MultipartUploadSession
 
 struct AwsSdkLifetime
 {
-    static void AddRef() noexcept;
+    [[nodiscard]] static HRESULT Acquire() noexcept;
     static void Release() noexcept;
-
-private:
-    static inline std::atomic_ulong s_refCount{0};
-    static inline Aws::SDKOptions s_options{};
+    static void BeginShutdown() noexcept;
+    [[nodiscard]] static bool CanUnloadNow() noexcept;
 };
+
+void SchedulePendingMultipartAbortCleanup() noexcept;
+[[nodiscard]] bool CanUnloadPendingMultipartAbortCleanup() noexcept;
 
 [[nodiscard]] std::wstring Utf16FromUtf8(std::string_view text) noexcept;
 [[nodiscard]] std::wstring Utf16FromUtf8(const char* text) noexcept;
@@ -276,10 +277,14 @@ template <typename AwsErrors> [[nodiscard]] HRESULT HresultFromAwsError(const Aw
                                             __int64& outLastWriteTime,
                                             bool& outFound) noexcept;
 [[nodiscard]] HRESULT ValidateS3RangeResponseLength(uint64_t expectedBytes, long long responseContentLength, uint64_t bodyBytesRead) noexcept;
+[[nodiscard]] HRESULT ValidateS3UploadReadResult(uint64_t declaredBytes, uint64_t consumedBytes, HRESULT readStatus) noexcept;
 
 #if defined(_DEBUG)
 void RunDebugRangeReadContractSelfTest(unsigned int& passed, unsigned int& failed) noexcept;
 void RunDebugMultipartWriterContractSelfTest(unsigned int& passed, unsigned int& failed) noexcept;
+void RunDebugDirectorySizeCallbackContractSelfTest(unsigned int& passed, unsigned int& failed) noexcept;
+void RunDebugAwsSdkLifetimeContractSelfTest(unsigned int& passed, unsigned int& failed) noexcept;
+[[nodiscard]] bool WaitForPendingMultipartAbortCleanupForTest(unsigned long timeoutMs) noexcept;
 #endif
 
 [[nodiscard]] constexpr std::wstring_view CoreErrorNameFromInt(int code) noexcept

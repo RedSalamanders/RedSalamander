@@ -203,6 +203,7 @@
     <ClInclude Include="EtwListener.h" />
     <ClInclude Include="Framework.h" />
     <ClInclude Include="InvalidRectVisualization.h" />
+    <ClInclude Include="MonitorFileReader.h" />
     <ClInclude Include="MonitorDiagnostics.h" />
     <ClInclude Include="RedSalamanderMonitor.h" />
     <ClInclude Include="resource.h" />
@@ -213,6 +214,7 @@
     <ClCompile Include="Configuration.cpp" />
     <ClCompile Include="Document.cpp" />
     <ClCompile Include="EtwListener.cpp" />
+    <ClCompile Include="MonitorFileReader.cpp" />
     <ClCompile Include="RedSalamanderMonitor.cpp" />
   </ItemGroup>
   <ItemGroup>

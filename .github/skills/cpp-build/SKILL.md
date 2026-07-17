@@ -25,6 +25,9 @@ metadata:
 # Clean and rebuild
 .\build.ps1 -Clean
 .\build.ps1 -Rebuild
+
+# Bound worker processes when the host cannot sustain MSBuild's default
+.\build.ps1 -Rebuild -MaxCpuCount 4
 ```
 
 ## Parameters
@@ -36,6 +39,7 @@ metadata:
 | `-ProjectName` | RedSalamander, RedSalamanderMonitor, Common, FileSystem | All projects |
 | `-Clean` | Switch | False |
 | `-Rebuild` | Switch | False |
+| `-MaxCpuCount` | 0-256 | 0 (MSBuild default) |
 
 ## Output Locations
 
@@ -61,8 +65,18 @@ metadata:
 
 - Uses vcpkg for package management
 - Dependencies defined in `vcpkg.json`
-- Keep vcpkg.json files up to date
-- Pin versions for critical dependencies
+- The executable checkout is independently pinned by `vcpkg-tool.json`; local installs and CI must validate the
+  exact Git commit
+- Do not use global `vcpkg integrate install`; the repository supplies manifest/toolchain integration explicitly
+- Keep both pin files intentional and reviewed
+
+## Runtime Dependency Staging
+
+- `Build/RuntimeDependencies.props` is the canonical list of app-local plugin runtime DLLs
+- `Directory.Build.targets` owns required-file failure, copying, and stale-output removal
+- Do not add plugin-local `PostBuildEvent` or `xcopy` dependency batches; extend the canonical manifest
+- `Installer/zip/build-zip.ps1` consumes the same manifest and runs a fresh-extraction app/plugin smoke
+- See `Specs/Installer/Installer_PortableZip.md`
 
 ## Shared MSBuild Defaults
 
@@ -93,7 +107,7 @@ metadata:
 - `build.ps1` and every `Run-AllTests.ps1` lane, including `-SkipBuild`, hold the same repository-scoped exclusive lock file. `.build\artifact-operation-owner.json` identifies the root PID, operation, and UTC start; only a direct child synchronously launched in a kill-on-close Job Object may reuse that ownership. Do not start unrelated operations in parallel or edit build inputs while either is running.
 - Interrupted launch trees are contained by a kill-on-close Job Object. If abandoned ownership marks `.build\artifact-operation-contaminated.json`, run one serialized `build.ps1 -Rebuild` before trusting incremental outputs or starting tests.
 - Shows build time and output file sizes
-- Supports multi-processor builds (`/m`)
+- Supports multi-processor builds (`/m`) and an explicit `-MaxCpuCount` stability bound
 - Displays both executables when building full solution
 
 ## Required Validation Loop

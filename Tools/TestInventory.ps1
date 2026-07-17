@@ -121,115 +121,161 @@ function Get-RSPesterTagCaseCount {
     return $count
 }
 
-function Get-RSRegexInt {
+function Get-RSTestProjectNames {
     param(
         [Parameter(Mandatory = $true)]
-        [string]$Text,
-
-        [Parameter(Mandatory = $true)]
-        [string]$Pattern
+        [string]$RepoRoot
     )
 
-    $match = [Regex]::Match($Text, $Pattern, [System.Text.RegularExpressions.RegexOptions]::Singleline)
-    if (-not $match.Success) {
-        return $null
-    }
-
-    return [int]$match.Groups[1].Value
+    $testsRoot = Join-Path $RepoRoot 'Tests'
+    return @(Get-ChildItem -LiteralPath $testsRoot -Recurse -Filter '*.vcxproj' |
+        Where-Object { $_.FullName -notmatch '[\\/]Lang[\\/]' } |
+        ForEach-Object { $_.BaseName } |
+        Sort-Object -Unique)
 }
 
-function Get-RSRegexInts {
+function Get-RSSourceContractInventory {
     param(
         [Parameter(Mandatory = $true)]
-        [string]$Text,
-
-        [Parameter(Mandatory = $true)]
-        [string]$Pattern
+        [string]$FilePath
     )
 
-    return @([Regex]::Matches($Text, $Pattern, [System.Text.RegularExpressions.RegexOptions]::Singleline) |
-        ForEach-Object { [int]$_.Groups[1].Value })
-}
-
-function Get-RSMarkdownTableCountMap {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Text,
-
-        [Parameter(Mandatory = $true)]
-        [string]$StartHeading,
-
-        [Parameter(Mandatory = $true)]
-        [string]$EndHeading
-    )
-
-    $start = $Text.IndexOf($StartHeading, [StringComparison]::Ordinal)
-    $end = $Text.IndexOf($EndHeading, [Math]::Max(0, $start + $StartHeading.Length), [StringComparison]::Ordinal)
-    if ($start -lt 0 -or $end -le $start) {
-        return [pscustomobject]@{}
+    $tokens = $null
+    $parseErrors = $null
+    $ast = [System.Management.Automation.Language.Parser]::ParseFile($FilePath, [ref]$tokens, [ref]$parseErrors)
+    if ($parseErrors.Count -ne 0) {
+        $messages = @($parseErrors | ForEach-Object { $_.Message }) -join '; '
+        throw "Source-contract inventory could not parse '$FilePath': $messages"
     }
 
-    $map = [ordered]@{}
-    $section = $Text.Substring($start, $end - $start)
-    foreach ($match in [Regex]::Matches($section, '(?m)^\|\s*([^|]+?)\s*\|\s*(?:`[^`]+`\s*\|\s*)?(\d+)\s*\|')) {
-        $name = $match.Groups[1].Value.Trim().Trim('`')
-        if ($name -ne 'Family' -and $name -ne 'File') {
-            $map[$name] = [int]$match.Groups[2].Value
+    $allowedCategories = @('LexicalSafetyBan', 'StructuralGraphInvariant', 'BehavioralShadow', 'MixedSourceShape')
+    $caseCommands = @($ast.FindAll({
+                param($node)
+                return $node -is [System.Management.Automation.Language.CommandAst] -and $node.GetCommandName() -eq 'It'
+            }, $true))
+
+    $cases = foreach ($command in $caseCommands) {
+        $nameNode = @($command.CommandElements | Where-Object {
+                $_ -is [System.Management.Automation.Language.StringConstantExpressionAst]
+            } | Select-Object -Skip 1 -First 1)
+        if ($nameNode.Count -ne 1) {
+            throw "Source-contract inventory requires every It block in '$FilePath' to use a literal name."
+        }
+
+        $bodyNode = @($command.CommandElements | Where-Object {
+                $_ -is [System.Management.Automation.Language.ScriptBlockExpressionAst]
+            } | Select-Object -First 1)
+        if ($bodyNode.Count -ne 1) {
+            throw "Source-contract inventory could not find the body for '$($nameNode[0].Value)'."
+        }
+
+        $name = $nameNode[0].Value
+        $body = $bodyNode[0].Extent.Text
+        $hasPositiveRegex = $body -match 'Should\s+Match'
+        $hasNegativeRegex = $body -match 'Should\s+Not\s+Match'
+        $hasGraphEvidence = $name -match '(?i)build|project|run[- ]plan|inventory|translation unit|test artifact|package|dependency|runner|case listing|repeat|shuffle' -or
+            $body -match '(?i)\.vcxproj|\.props|\.targets|Directory\.Build|Get-RSTestRunPlan|Get-RSTestInventory'
+
+        $category = if ($hasGraphEvidence) {
+            'StructuralGraphInvariant'
+        }
+        elseif ($hasNegativeRegex -and -not $hasPositiveRegex) {
+            'LexicalSafetyBan'
+        }
+        elseif ($hasPositiveRegex -and $hasNegativeRegex) {
+            'MixedSourceShape'
+        }
+        else {
+            'BehavioralShadow'
+        }
+
+        if ($category -notin $allowedCategories) {
+            throw "Source-contract case '$name' received unsupported category '$category'."
+        }
+
+        [pscustomobject]@{
+            Name = $name
+            Category = $category
+            Line = $command.Extent.StartLineNumber
+            PositiveRegexAssertions = ([regex]::Matches($body, 'Should\s+Match')).Count
+            NegativeRegexAssertions = ([regex]::Matches($body, 'Should\s+Not\s+Match')).Count
         }
     }
 
-    return [pscustomobject]$map
-}
+    $duplicateNames = @($cases | Group-Object Name | Where-Object { $_.Count -gt 1 } | ForEach-Object { $_.Name })
+    if ($duplicateNames.Count -ne 0) {
+        throw "Source-contract case names must be unique: $($duplicateNames -join ', ')."
+    }
 
-function Get-RSTestInventoryDocSnapshot {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Path
-    )
-
-    $text = Get-Content -LiteralPath $Path -Raw
+    $categoryCounts = [ordered]@{}
+    foreach ($category in $allowedCategories) {
+        $categoryCounts[$category] = @($cases | Where-Object { $_.Category -eq $category }).Count
+    }
 
     return [pscustomobject]@{
-        CommandsRunCases = Get-RSRegexInt -Text $text -Pattern 'Commands:\s+(\d+)\s+static'
-        CompareRunCases = Get-RSRegexInt -Text $text -Pattern 'CompareDirectories:\s+(\d+)\s+static'
-        FileOpsActivePhases = Get-RSRegexInt -Text $text -Pattern 'FileOperations:\s+(\d+)\s+active'
-        PerformanceTestMethods = Get-RSRegexInt -Text $text -Pattern 'PerformanceTests2:\s+(\d+)\s+CppUnitTest'
-        NativeTextInputCases = Get-RSRegexInt -Text $text -Pattern '\|\s+(?:NativeTextInput|\*\*DxUiTests / NativeTextInput\*\*)\s+\|(?:\s+`[^`]+`\s+\|)?\s+(\d+)\s+\|'
-        ToolsPesterCases = Get-RSRegexInt -Text $text -Pattern '(\d+)\s+Pester-style'
-        VcpkgSyntheticCases = Get-RSRegexInt -Text $text -Pattern '(\d+)\s+fast\s+synthetic'
+        File = [System.IO.Path]::GetFileName($FilePath)
+        Cases = @($cases)
+        CategoryCounts = [pscustomobject]$categoryCounts
+        ReplacementCandidates = @($cases | Where-Object { $_.Category -in @('BehavioralShadow', 'MixedSourceShape') } | ForEach-Object { $_.Name })
     }
 }
 
-function Get-RSTestsReadmeInventorySnapshot {
+function Get-RSTestRunPlanSurfaceInventory {
     param(
         [Parameter(Mandatory = $true)]
-        [string]$Path
+        [string]$RepoRoot
     )
 
-    $text = Get-Content -LiteralPath $Path -Raw
+    if (-not (Get-Command Get-RSTestRunPlan -CommandType Function -ErrorAction SilentlyContinue)) {
+        . (Join-Path $RepoRoot 'Tools\TestRunPlan.ps1')
+    }
+
+    $redSalamanderExe = Join-Path $RepoRoot '.build\x64\Debug\RedSalamander.exe'
+    $planArguments = @{
+        RepoRoot = $RepoRoot
+        Platform = 'x64'
+        Configuration = 'Debug'
+        RedSalamanderExePath = $redSalamanderExe
+    }
+    $ciPlan = @(Get-RSTestRunPlan -Suite CI @planArguments)
+    $fullPlan = @(Get-RSTestRunPlan -Suite Full @planArguments)
+
+    $projectNames = @(Get-RSTestProjectNames -RepoRoot $RepoRoot)
+    $projectBackedSurfaces = foreach ($projectName in $projectNames) {
+        $matchingEntries = @($ciPlan + $fullPlan | Where-Object {
+                [System.IO.Path]::GetFileNameWithoutExtension([string]$_.Path) -eq $projectName
+            })
+        $kinds = @($matchingEntries.Kind | Sort-Object -Unique)
+        if ($matchingEntries.Count -eq 0) {
+            throw "Test project '$projectName' is not represented in the CI or Full run plan."
+        }
+        if ($kinds.Count -ne 1) {
+            throw "Test project '$projectName' has inconsistent run-plan kinds: $($kinds -join ', ')."
+        }
+
+        [pscustomobject]@{
+            Name = $projectName
+            Kind = $kinds[0]
+            PlanEntries = @($matchingEntries.Name | Sort-Object -Unique)
+        }
+    }
+
+    $convertPlan = {
+        param([object[]]$Entries)
+
+        return @($Entries | ForEach-Object {
+                [pscustomobject]@{
+                    Name = $_.Name
+                    Kind = $_.Kind
+                    Artifact = [System.IO.Path]::GetFileName([string]$_.Path)
+                }
+            })
+    }
 
     return [pscustomobject]@{
-        CommandsListedCases = @(
-            Get-RSRegexInt -Text $text -Pattern '\|\s*Self-Tests \(in-process\)\s*\|\s*3\s*\|\s*(\d+)\s+Commands listed cases'
-            Get-RSRegexInt -Text $text -Pattern '## 1\. Commands Self-Test Suite — (\d+) runner-listed cases'
-            Get-RSRegexInt -Text $text -Pattern '--selftest-list-cases --commands-selftest`\s*\r?\nlists (\d+) cases'
-        )
-        CommandsStaticRunCases = @(Get-RSRegexInts -Text $text -Pattern '--selftest-list-cases --commands-selftest`\s*\r?\nlists\s+\d+\s+cases\.\s+The source fallback scan reports\s+(\d+)\s+static')
-        CompareListedCases = @(
-            Get-RSRegexInt -Text $text -Pattern '\|\s*Self-Tests \(in-process\)\s*\|\s*3\s*\|\s*\d+\s+Commands listed cases,\s*(\d+)\s+Compare listed cases'
-            Get-RSRegexInt -Text $text -Pattern '## 2\. Compare Directories Self-Test Suite — (\d+) runner-listed cases'
-            Get-RSRegexInt -Text $text -Pattern '--selftest-list-cases --compare-selftest`\s*\r?\nlists (\d+) cases'
-        )
-        CompareStaticRunCases = @(Get-RSRegexInts -Text $text -Pattern 'source fallback scan reports (\d+) static\s*\r?\n`SelfTest::RunCase` call sites plus explicit')
-        FileOpsListedCases = @(
-            Get-RSRegexInt -Text $text -Pattern '\|\s*Self-Tests \(in-process\)\s*\|\s*3\s*\|[^|]*,\s*(\d+)\s+FileOps listed phases'
-            Get-RSRegexInt -Text $text -Pattern '## 3\. File Operations Self-Test Suite — (\d+) runner-listed phases'
-            Get-RSRegexInt -Text $text -Pattern '--selftest-list-cases --fileops-selftest`\s*\r?\nlists (\d+) phases'
-        )
-        FileOpsActivePhases = @(Get-RSRegexInts -Text $text -Pattern 'phases: setup,\s*(\d+) active ordered phases')
-        ToolsPesterCases = @(Get-RSRegexInts -Text $text -Pattern '(\d+) Pester-style/tool cases')
-        CommandsFamilyCases = Get-RSMarkdownTableCountMap -Text $text -StartHeading '| Family | File | Tests | Coverage |' -EndHeading '## 2. Compare Directories'
-        ToolsPesterFileCases = Get-RSMarkdownTableCountMap -Text $text -StartHeading '| File | Cases | Coverage |' -EndHeading 'Fast vcpkg merge coverage:'
+        CI = & $convertPlan $ciPlan
+        Full = & $convertPlan $fullPlan
+        ProjectBackedSurfaces = @($projectBackedSurfaces)
     }
 }
 
@@ -246,8 +292,10 @@ function Get-RSTestInventory {
     $performanceFiles = @(Get-ChildItem -LiteralPath (Join-Path $RepoRoot 'Tests\PerformanceTests2') -Filter '*.cpp')
     $nativeTextInputTests = Join-Path $RepoRoot 'Tests\DxUiTests\DxUiTests.NativeTextInput.cpp'
     $toolTestFiles = @(Get-ChildItem -LiteralPath (Join-Path $RepoRoot 'Tools\Tests') -Filter '*.Tests.ps1')
+    $sourceContractFile = Join-Path $RepoRoot 'Tools\Tests\TestHarnessSourceContracts.Tests.ps1'
     $syntheticScript = Join-Path $RepoRoot 'Tests\vcpkg-merge-synthetic-test.ps1'
     $lockValidationScript = Join-Path $RepoRoot 'Tests\vcpkg-merge-lock-validation.ps1'
+    $runPlanInventory = Get-RSTestRunPlanSurfaceInventory -RepoRoot $RepoRoot
 
     $commandsFamilyFiles = [ordered]@{
         Settings = 'Commands.SelfTest.Settings.cpp'
@@ -275,16 +323,6 @@ function Get-RSTestInventory {
         $toolsPesterFileCases[$file.Name] = Get-RSSelectStringCount -Path @($file.FullName) -Pattern '^\s*It\s'
     }
 
-    $standaloneNames = @(
-        'DxUiTests',
-        'FileSystemCurlTests',
-        'ViewerPETests',
-        'ViewerSqliteTests',
-        'MonitorTest',
-        'LocalizationTests',
-        'RedConfigureTests'
-    )
-
     return [pscustomobject]@{
         GeneratedAt = (Get-Date).ToString('o')
         SelfTests = [pscustomobject]@{
@@ -301,7 +339,8 @@ function Get-RSTestInventory {
             }
         }
         Standalone = [pscustomobject]@{
-            NativeExecutables = $standaloneNames
+            NativeProjects = @($runPlanInventory.ProjectBackedSurfaces)
+            NativeExecutables = @($runPlanInventory.ProjectBackedSurfaces | Where-Object { $_.Kind -eq 'Executable' } | ForEach-Object { $_.Name })
             PerformanceTests2 = [pscustomobject]@{
                 TestMethods = Get-RSSelectStringCount -Path @($performanceFiles.FullName) -Pattern 'TEST_METHOD\('
             }
@@ -314,6 +353,7 @@ function Get-RSTestInventory {
                 Cases = Get-RSSelectStringCount -Path @($toolTestFiles.FullName) -Pattern '^\s*It\s'
                 RequiresBuildToolchainCases = Get-RSPesterTagCaseCount -Files $toolTestFiles -Tag 'RequiresBuildToolchain'
                 FileCases = [pscustomobject]$toolsPesterFileCases
+                SourceContracts = Get-RSSourceContractInventory -FilePath $sourceContractFile
             }
             VcpkgMergeSynthetic = [pscustomobject]@{
                 Cases = Get-RSSelectStringCount -Path @($syntheticScript) -Pattern "Write-Host\s+'\[\d+\]"
@@ -322,6 +362,7 @@ function Get-RSTestInventory {
                 Cases = Get-RSSelectStringCount -Path @($lockValidationScript) -Pattern 'Write-Host\s+"\[Test\s+\d+\]'
             }
         }
+        RunPlan = $runPlanInventory
     }
 }
 
@@ -348,6 +389,13 @@ function ConvertTo-RSTestInventoryJson {
         }
         standalone = [ordered]@{
             nativeExecutables = @($Inventory.Standalone.NativeExecutables)
+            nativeProjects = @($Inventory.Standalone.NativeProjects | ForEach-Object {
+                    [ordered]@{
+                        name = $_.Name
+                        kind = $_.Kind
+                        planEntries = @($_.PlanEntries)
+                    }
+                })
             performanceTests2 = [ordered]@{
                 testMethods = $Inventory.Standalone.PerformanceTests2.TestMethods
             }
@@ -360,6 +408,20 @@ function ConvertTo-RSTestInventoryJson {
                 cases = $Inventory.Scripts.ToolsPester.Cases
                 requiresBuildToolchainCases = $Inventory.Scripts.ToolsPester.RequiresBuildToolchainCases
                 fileCases = $Inventory.Scripts.ToolsPester.FileCases
+                sourceContracts = [ordered]@{
+                    file = $Inventory.Scripts.ToolsPester.SourceContracts.File
+                    categoryCounts = $Inventory.Scripts.ToolsPester.SourceContracts.CategoryCounts
+                    replacementCandidates = @($Inventory.Scripts.ToolsPester.SourceContracts.ReplacementCandidates)
+                    cases = @($Inventory.Scripts.ToolsPester.SourceContracts.Cases | ForEach-Object {
+                            [ordered]@{
+                                name = $_.Name
+                                category = $_.Category
+                                line = $_.Line
+                                positiveRegexAssertions = $_.PositiveRegexAssertions
+                                negativeRegexAssertions = $_.NegativeRegexAssertions
+                            }
+                        })
+                }
             }
             vcpkgMergeSynthetic = [ordered]@{
                 cases = $Inventory.Scripts.VcpkgMergeSynthetic.Cases
@@ -368,7 +430,18 @@ function ConvertTo-RSTestInventoryJson {
                 cases = $Inventory.Scripts.VcpkgMergeLockValidation.Cases
             }
         }
+        runPlan = [ordered]@{
+            ci = @($Inventory.RunPlan.CI | ForEach-Object {
+                    [ordered]@{ name = $_.Name; kind = $_.Kind; artifact = $_.Artifact }
+                })
+            full = @($Inventory.RunPlan.Full | ForEach-Object {
+                    [ordered]@{ name = $_.Name; kind = $_.Kind; artifact = $_.Artifact }
+                })
+            projectBackedSurfaces = @($Inventory.RunPlan.ProjectBackedSurfaces | ForEach-Object {
+                    [ordered]@{ name = $_.Name; kind = $_.Kind; planEntries = @($_.PlanEntries) }
+                })
+        }
     }
 
-    return ($jsonReady | ConvertTo-Json -Depth 8)
+    return ($jsonReady | ConvertTo-Json -Depth 10)
 }

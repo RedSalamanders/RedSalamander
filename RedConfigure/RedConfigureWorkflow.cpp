@@ -2,6 +2,7 @@
 
 #include "SettingsStore.h"
 #include "Helpers.h"
+#include "ThemeDefinitionIo.h"
 
 #include <algorithm>
 #include <cmath>
@@ -179,6 +180,55 @@ namespace
     return result;
 }
 
+[[nodiscard]] bool ThemeDefinitionsEqual(const Common::Settings::ThemeDefinition& lhs,
+                                         const Common::Settings::ThemeDefinition& rhs) noexcept
+{
+    return lhs.formatVersion == rhs.formatVersion && lhs.id == rhs.id && lhs.name == rhs.name && lhs.baseThemeId == rhs.baseThemeId &&
+           lhs.palette == rhs.palette && lhs.colors == rhs.colors;
+}
+
+[[nodiscard]] bool BuildCandidateTheme(const RedConfigure::Workflow::ThemeMassPreview& preview,
+                                       Common::Settings::ThemeDefinition& candidate,
+                                       RedConfigure::Workflow::ThemeMassDiagnostic& diagnostic)
+{
+    candidate = preview.beforeTheme;
+    for (const RedConfigure::Workflow::ThemeMassChange& change : preview.changes)
+    {
+        if (! change.sourcePaletteName.empty())
+        {
+            if (! change.sourceValueSource.has_value() ||
+                ! candidate.palette.emplace(change.sourcePaletteName, change.sourceValueSource.value()).second)
+            {
+                diagnostic = RedConfigure::Workflow::ThemeMassDiagnostic::InvalidGeneratedSource;
+                return false;
+            }
+        }
+
+        constexpr std::wstring_view palettePrefix = L"palette.";
+        const bool isPalette = change.key.starts_with(palettePrefix);
+        auto& destination    = isPalette ? candidate.palette : candidate.colors;
+        const std::wstring destinationKey(isPalette ? std::wstring_view(change.key).substr(palettePrefix.size()) : std::wstring_view(change.key));
+        if (preview.request.recipe == RedConfigure::Workflow::ThemeRecipe::RemoveOverrides)
+        {
+            if (destination.erase(destinationKey) == 0u)
+            {
+                diagnostic = RedConfigure::Workflow::ThemeMassDiagnostic::InvalidCandidate;
+                return false;
+            }
+        }
+        else if (! change.afterSource.has_value())
+        {
+            diagnostic = RedConfigure::Workflow::ThemeMassDiagnostic::InvalidGeneratedSource;
+            return false;
+        }
+        else
+        {
+            destination[destinationKey] = change.afterSource.value();
+        }
+    }
+    return true;
+}
+
 using Common::Colors::ContrastRatioFromRelativeLuminance;
 using Common::Colors::RelativeLuminanceFromArgb;
 
@@ -293,12 +343,17 @@ ValidationSummary ValidateWorkspace(const RedConfigureSession& session,
 
     for (const std::wstring& error : session.GetWorkspace().errors)
     {
-        const bool parseError = error.find(L"Parse localization") != std::wstring::npos || error.find(L"Duplicate resource id") != std::wstring::npos;
-        add({.severity = parseError ? ValidationSeverity::Error : ValidationSeverity::Warning, .category = L"Workspace", .message = error});
+        add({.severity = ValidationSeverity::Error,
+             .category = ValidationCategory::Workspace,
+             .code = ValidationCode::WorkspaceProcessingError,
+             .arguments = {error}});
     }
     for (const std::wstring& error : session.GetThemeCatalog().errors)
     {
-        add({.severity = ValidationSeverity::Error, .category = L"Theme", .message = error});
+        add({.severity = ValidationSeverity::Error,
+             .category = ValidationCategory::Theme,
+             .code = ValidationCode::ThemeCatalogError,
+             .arguments = {error}});
     }
     for (const auto& row : session.GetLocalizationReviewRows())
     {
@@ -307,8 +362,8 @@ ValidationSummary ValidateWorkspace(const RedConfigureSession& session,
             if (cell.validation.status != Localization::PlaceholderStatus::Ok)
             {
                 add({.severity = ValidationSeverity::Error,
-                     .category = L"Localization",
-                     .message = L"The target placeholders do not match the English source.",
+                     .category = ValidationCategory::Localization,
+                     .code = ValidationCode::PlaceholderMismatch,
                      .ownerName = row.ownerName,
                      .resourceId = row.id,
                      .cultureName = cell.cultureName});
@@ -316,8 +371,8 @@ ValidationSummary ValidateWorkspace(const RedConfigureSession& session,
             else if (! cell.hasExistingTranslation && ! cell.dirty)
             {
                 add({.severity = ValidationSeverity::Warning,
-                     .category = L"Localization",
-                     .message = L"Translation is missing; export will fall back to English.",
+                     .category = ValidationCategory::Localization,
+                     .code = ValidationCode::MissingTranslation,
                      .ownerName = row.ownerName,
                      .resourceId = row.id,
                      .cultureName = cell.cultureName});
@@ -328,25 +383,30 @@ ValidationSummary ValidateWorkspace(const RedConfigureSession& session,
     const auto& theme = session.GetThemePreviewModel().GetTheme();
     if (theme.id.empty() || theme.id.find_first_of(L" \\:\t\r\n") != std::wstring::npos)
     {
-        add({.severity = ValidationSeverity::Error, .category = L"Theme", .message = L"Theme ID is empty or contains invalid characters."});
+        add({.severity = ValidationSeverity::Error, .category = ValidationCategory::Theme, .code = ValidationCode::InvalidThemeId});
     }
     if (! session.GetThemePreviewModel().GetLastError().empty())
     {
-        add({.severity = ValidationSeverity::Error, .category = L"Theme", .message = std::wstring(session.GetThemePreviewModel().GetLastError())});
+        add({.severity = ValidationSeverity::Error,
+             .category = ValidationCategory::Theme,
+             .code = ValidationCode::ThemeResolutionError,
+             .arguments = {std::wstring(session.GetThemePreviewModel().GetLastError())}});
     }
     if (localizationOutputRoot.empty() || themeOutputPath.empty())
     {
-        add({.severity = ValidationSeverity::Error, .category = L"Export", .message = L"An output path is empty."});
+        add({.severity = ValidationSeverity::Error, .category = ValidationCategory::Export, .code = ValidationCode::EmptyOutputPath});
     }
     else if (localizationOutputRoot == themeOutputPath)
     {
-        add({.severity = ValidationSeverity::Error, .category = L"Export", .message = L"Localization and theme outputs conflict."});
+        add({.severity = ValidationSeverity::Error, .category = ValidationCategory::Export, .code = ValidationCode::OutputConflict});
     }
 
     std::vector<LocalizationExportPreview> previews;
     if (FAILED(session.BuildLocalizationReviewExportPreviews(previews)))
     {
-        add({.severity = ValidationSeverity::Error, .category = L"Export", .message = L"Localization output previews could not be built."});
+        add({.severity = ValidationSeverity::Error,
+             .category = ValidationCategory::Export,
+             .code = ValidationCode::LocalizationPreviewBuildFailed});
     }
     else
     {
@@ -357,11 +417,15 @@ ValidationSummary ValidateWorkspace(const RedConfigureSession& session,
             std::ranges::transform(normalized, normalized.begin(), [](wchar_t ch) noexcept { return static_cast<wchar_t>(std::towlower(ch)); });
             if (! outputPaths.insert(normalized).second)
             {
-                add({.severity = ValidationSeverity::Error, .category = L"Export", .message = L"Two localization outputs resolve to the same path."});
+                add({.severity = ValidationSeverity::Error,
+                     .category = ValidationCategory::Export,
+                     .code = ValidationCode::DuplicateLocalizationOutputPath});
             }
             if (EqualIgnoreCase(normalized, themeOutputPath.lexically_normal().wstring()))
             {
-                add({.severity = ValidationSeverity::Error, .category = L"Export", .message = L"A localization output conflicts with the theme output path."});
+                add({.severity = ValidationSeverity::Error,
+                     .category = ValidationCategory::Export,
+                     .code = ValidationCode::LocalizationThemeOutputConflict});
             }
         }
     }
@@ -371,8 +435,9 @@ ValidationSummary ValidateWorkspace(const RedConfigureSession& session,
         for (const DuplicateAccelerator& duplicate : FindDuplicateSiblingAccelerators(session.GetLocalizationReviewRows(), culture))
         {
             add({.severity = ValidationSeverity::Warning,
-                 .category = L"Accelerator",
-                 .message = std::format(L"Duplicate '&{}' accelerator in sibling items.", duplicate.accelerator),
+                 .category = ValidationCategory::Accelerator,
+                 .code = ValidationCode::DuplicateAccelerator,
+                 .arguments = {std::wstring(1u, duplicate.accelerator)},
                  .ownerName = duplicate.ownerName,
                  .cultureName = std::wstring(culture)});
         }
@@ -383,6 +448,13 @@ ValidationSummary ValidateWorkspace(const RedConfigureSession& session,
 LocalizationBatchPreview PreviewLocalizationBatch(std::span<const LocalizationReviewRow> rows, const LocalizationBatchRequest& request)
 {
     LocalizationBatchPreview preview{.request = request};
+    if (request.targetCulture.empty() ||
+        (request.kind == LocalizationBatchKind::CopyCulture && request.sourceCulture.empty()) ||
+        (request.kind == LocalizationBatchKind::FindReplace && request.findText.empty()))
+    {
+        preview.result = BatchApprovalResult::Invalid;
+        return preview;
+    }
     std::vector<size_t> indices = request.rowIndices;
     if (indices.empty())
     {
@@ -391,7 +463,12 @@ LocalizationBatchPreview PreviewLocalizationBatch(std::span<const LocalizationRe
     }
     for (const size_t rowIndex : indices)
     {
-        if (rowIndex >= rows.size()) continue;
+        if (rowIndex >= rows.size())
+        {
+            preview.changes.clear();
+            preview.result = BatchApprovalResult::Invalid;
+            return preview;
+        }
         const LocalizationReviewRow& row = rows[rowIndex];
         const LocalizationTargetCell* target = FindCell(row, request.targetCulture);
         if (! target) continue;
@@ -409,16 +486,19 @@ LocalizationBatchPreview PreviewLocalizationBatch(std::span<const LocalizationRe
             case LocalizationBatchKind::MarkReviewed: break;
             default: break;
         }
-        if (after != target->targetText || request.kind == LocalizationBatchKind::MarkReviewed)
+        const bool afterReviewed = request.kind == LocalizationBatchKind::MarkReviewed || target->reviewed;
+        if (after != target->targetText || afterReviewed != target->reviewed)
         {
-            preview.changes.push_back({.rowIndex = rowIndex,
-                                       .ownerName = row.ownerName,
+            preview.changes.push_back({.ownerName = row.ownerName,
                                        .resourceId = row.id,
                                        .cultureName = request.targetCulture,
                                        .before = target->targetText,
-                                       .after = std::move(after)});
+                                       .after = std::move(after),
+                                       .beforeReviewed = target->reviewed,
+                                       .afterReviewed = afterReviewed});
         }
     }
+    preview.result = preview.changes.empty() ? BatchApprovalResult::NoChanges : BatchApprovalResult::Ready;
     return preview;
 }
 
@@ -493,10 +573,55 @@ std::wstring SerializeClipboardMatrix(const ClipboardMatrix& matrix)
 
 ThemeMassPreview PreviewThemeMassChange(const Themes::ThemePreviewModel& model, const ThemeMassRequest& request)
 {
-    ThemeMassPreview preview{.request = request};
+    ThemeMassPreview preview{.request = request, .beforeTheme = model.GetTheme()};
+    if (request.recipe == ThemeRecipe::SetAlpha && request.alphaPercent > 100u)
+    {
+        preview.result = BatchApprovalResult::Invalid;
+        preview.diagnostic = ThemeMassDiagnostic::InvalidAlpha;
+        return preview;
+    }
+
+    std::wstring replaceFrom;
+    std::wstring replaceTo;
+    if (request.recipe == ThemeRecipe::ReplaceReference)
+    {
+        const size_t separator = request.argument.find(L'=');
+        if (separator == std::wstring::npos || separator == 0u || separator + 1u >= request.argument.size() ||
+            request.argument.find(L'=', separator + 1u) != std::wstring::npos)
+        {
+            preview.result = BatchApprovalResult::Invalid;
+            preview.diagnostic = ThemeMassDiagnostic::MalformedReferenceReplacement;
+            return preview;
+        }
+        replaceFrom = request.argument.substr(0u, separator);
+        replaceTo   = request.argument.substr(separator + 1u);
+    }
+    if (request.recipe == ThemeRecipe::ConvertSolidsToReferences &&
+        (! Common::Settings::IsValidThemePaletteName(request.argument) || ! model.GetTheme().palette.contains(request.argument)))
+    {
+        preview.result = BatchApprovalResult::Invalid;
+        preview.diagnostic = ThemeMassDiagnostic::MissingPaletteTarget;
+        return preview;
+    }
+
     for (const std::wstring& key : request.keys)
     {
         const std::wstring before = model.GetAuthoredColorText(key);
+        std::optional<Common::Settings::ThemeColorSource> beforeSource;
+        if (! before.empty())
+        {
+            Common::Settings::ThemeColorSource parsed;
+            std::wstring parseMessage;
+            if (FAILED(Common::Settings::ParseThemeColorSource(before, parsed, &parseMessage)))
+            {
+                preview.result = BatchApprovalResult::Invalid;
+                preview.diagnostic = ThemeMassDiagnostic::InvalidExistingSource;
+                preview.changes.clear();
+                return preview;
+            }
+            beforeSource = std::move(parsed);
+        }
+
         std::wstring sourcePaletteName;
         std::wstring sourceValue;
         std::wstring operand = before;
@@ -517,38 +642,159 @@ ThemeMassPreview PreviewThemeMassChange(const Themes::ThemePreviewModel& model, 
             }
             operand = std::wstring(L"palette.") + sourcePaletteName;
         }
-        const std::wstring after = RecipeValue(request.recipe, key, operand, request.argument, request.alphaPercent);
+        std::wstring after;
+        std::optional<Common::Settings::ThemeColorSource> afterSource;
+        if (request.recipe == ThemeRecipe::ReplaceReference)
+        {
+            if (! beforeSource.has_value()) continue;
+            Common::Settings::ThemeColorSource rewritten = beforeSource.value();
+            bool changed = false;
+            for (std::wstring& reference : rewritten.references)
+            {
+                if (reference == replaceFrom)
+                {
+                    reference = replaceTo;
+                    changed   = true;
+                }
+            }
+            if (! changed) continue;
+            after       = Common::Settings::FormatThemeColorSource(rewritten);
+            afterSource = std::move(rewritten);
+        }
+        else if (request.recipe == ThemeRecipe::ConvertSolidsToReferences)
+        {
+            if (! beforeSource.has_value() || beforeSource->kind != Common::Settings::ThemeColorSourceKind::Direct) continue;
+            Common::Settings::ThemeColorSource reference;
+            reference.kind = Common::Settings::ThemeColorSourceKind::Reference;
+            reference.references.push_back(std::wstring(L"palette.") + request.argument);
+            after       = Common::Settings::FormatThemeColorSource(reference);
+            afterSource = std::move(reference);
+        }
+        else if (request.recipe == ThemeRecipe::RemoveOverrides)
+        {
+            if (! beforeSource.has_value()) continue;
+        }
+        else
+        {
+            after = RecipeValue(request.recipe, key, operand, request.argument, request.alphaPercent);
+            Common::Settings::ThemeColorSource parsed;
+            std::wstring parseMessage;
+            if (FAILED(Common::Settings::ParseThemeColorSource(after, parsed, &parseMessage)))
+            {
+                preview.result = BatchApprovalResult::Invalid;
+                preview.diagnostic = ThemeMassDiagnostic::InvalidGeneratedSource;
+                preview.changes.clear();
+                return preview;
+            }
+            afterSource = std::move(parsed);
+        }
         if (before != after)
         {
+            std::optional<Common::Settings::ThemeColorSource> sourceValueSource;
+            if (! sourcePaletteName.empty())
+            {
+                Common::Settings::ThemeColorSource parsed;
+                std::wstring parseMessage;
+                if (sourceValue.empty() || FAILED(Common::Settings::ParseThemeColorSource(sourceValue, parsed, &parseMessage)))
+                {
+                    preview.result = BatchApprovalResult::Invalid;
+                    preview.diagnostic = ThemeMassDiagnostic::InvalidGeneratedSource;
+                    preview.changes.clear();
+                    return preview;
+                }
+                sourceValueSource = std::move(parsed);
+            }
             preview.changes.push_back({.key = key,
                                        .before = before,
                                        .after = after,
+                                       .beforeSource = std::move(beforeSource),
+                                       .afterSource = std::move(afterSource),
                                        .sourcePaletteName = std::move(sourcePaletteName),
-                                       .sourceValue = std::move(sourceValue)});
+                                       .sourceValue = std::move(sourceValue),
+                                       .sourceValueSource = std::move(sourceValueSource)});
         }
     }
+
+    if (preview.changes.empty())
+    {
+        preview.result = BatchApprovalResult::NoChanges;
+        return preview;
+    }
+    Common::Settings::ThemeDefinition candidate;
+    if (! BuildCandidateTheme(preview, candidate, preview.diagnostic))
+    {
+        preview.result = BatchApprovalResult::Invalid;
+        return preview;
+    }
+    Themes::ThemePreviewModel candidateModel;
+    candidateModel.SetTheme(candidate);
+    if (! candidateModel.GetLastError().empty())
+    {
+        preview.result = BatchApprovalResult::Invalid;
+        preview.diagnostic = ThemeMassDiagnostic::InvalidCandidate;
+        return preview;
+    }
+    preview.result = BatchApprovalResult::Ready;
     return preview;
 }
 
-bool ApplyThemeMassChange(Themes::ThemePreviewModel& model, const ThemeMassPreview& preview)
+BatchApprovalResult ApplyThemeMassChange(Themes::ThemePreviewModel& model, const ThemeMassPreview& preview)
 {
-    const Common::Settings::ThemeDefinition original = model.GetTheme();
-    for (const ThemeMassChange& change : preview.changes)
+    if (preview.result != BatchApprovalResult::Ready)
     {
-        if (! change.sourcePaletteName.empty() && ! model.CreatePaletteEntry(change.sourcePaletteName, change.sourceValue, false))
-        {
-            model.SetTheme(original);
-            return false;
-        }
-        const bool changed = preview.request.recipe == ThemeRecipe::RemoveOverrides ? model.ResetOverride(change.key)
-                                                                                    : model.TryEditOverride(change.key, change.after);
-        if (! changed)
-        {
-            model.SetTheme(original);
-            return false;
-        }
+        return preview.result == BatchApprovalResult::NoChanges ? BatchApprovalResult::NoChanges : BatchApprovalResult::Invalid;
     }
-    return true;
+    if (! ThemeDefinitionsEqual(model.GetTheme(), preview.beforeTheme))
+    {
+        return BatchApprovalResult::Stale;
+    }
+    Common::Settings::ThemeDefinition candidate;
+    ThemeMassDiagnostic diagnostic = ThemeMassDiagnostic::None;
+    if (! BuildCandidateTheme(preview, candidate, diagnostic))
+    {
+        return BatchApprovalResult::Invalid;
+    }
+    Themes::ThemePreviewModel candidateModel;
+    candidateModel.SetTheme(candidate);
+    if (! candidateModel.GetLastError().empty())
+    {
+        return BatchApprovalResult::Invalid;
+    }
+    model.SetTheme(candidate);
+    return BatchApprovalResult::Applied;
+}
+
+std::optional<DuplicateThemeCandidate> BuildDuplicateThemeCandidate(std::wstring_view sourceId,
+                                                                    std::wstring_view sourceName,
+                                                                    std::wstring_view localizedCopyLabel,
+                                                                    uint32_t sequence)
+{
+    constexpr size_t maximumLength = 64u;
+    if (sequence == 0u || sourceName.empty() || localizedCopyLabel.empty())
+    {
+        return std::nullopt;
+    }
+
+    std::wstring idStem(sourceId);
+    if (sourceId.starts_with(L"builtin/"))
+    {
+        idStem = std::wstring(L"user/") + std::wstring(sourceId.substr(8u));
+    }
+    const std::wstring idSuffix = sequence == 1u ? L"-copy" : std::format(L"-copy-{}", sequence);
+    const std::wstring nameSuffix = sequence == 1u ? std::format(L" {}", localizedCopyLabel)
+                                                   : std::format(L" {} {}", localizedCopyLabel, sequence);
+    if (idSuffix.size() >= maximumLength || nameSuffix.size() >= maximumLength)
+    {
+        return std::nullopt;
+    }
+    idStem.resize(std::min(idStem.size(), maximumLength - idSuffix.size()));
+    std::wstring nameStem(sourceName.substr(0u, std::min(sourceName.size(), maximumLength - nameSuffix.size())));
+    DuplicateThemeCandidate candidate{.id = idStem + idSuffix, .name = nameStem + nameSuffix};
+    if (! Common::Settings::IsValidUserThemeId(candidate.id) || candidate.name.empty() || candidate.name.size() > maximumLength)
+    {
+        return std::nullopt;
+    }
+    return candidate;
 }
 
 ThemeTokenMetadata BuildThemeTokenMetadata(const Themes::ThemePreviewModel& model, std::wstring_view key)
@@ -557,11 +803,11 @@ ThemeTokenMetadata BuildThemeTokenMetadata(const Themes::ThemePreviewModel& mode
     metadata.key = key;
     const size_t dot = key.find(L'.');
     metadata.group = std::wstring(dot == std::wstring_view::npos ? key : key.substr(0u, dot));
-    metadata.description = std::format(L"{} color token used by the {} preview surface.", key, metadata.group);
     const auto kind = model.GetSourceKind(key);
-    metadata.sourceType = ! kind.has_value() ? L"Inherited" : kind.value() == Common::Settings::ThemeColorSourceKind::Direct
-                                                                    ? L"Literal"
-                                                                    : kind.value() == Common::Settings::ThemeColorSourceKind::Reference ? L"Reference" : L"Function";
+    metadata.sourceKind = ! kind.has_value() ? ThemeTokenSourceKind::Inherited
+                          : kind.value() == Common::Settings::ThemeColorSourceKind::Direct ? ThemeTokenSourceKind::Literal
+                          : kind.value() == Common::Settings::ThemeColorSourceKind::Reference ? ThemeTokenSourceKind::Reference
+                                                                                              : ThemeTokenSourceKind::Function;
     metadata.usageCount = model.GetAffected(key).size() + 1u;
     if (const std::optional<std::wstring_view> peer = ContrastPeer(key))
     {

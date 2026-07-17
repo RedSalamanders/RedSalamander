@@ -1,5 +1,7 @@
 #include "EtwListener.h"
 #include "Helpers.h" // For Debug::InfoParam definition
+#include <exception>
+#include <new>
 #include <vector>
 
 #pragma warning(push)
@@ -8,10 +10,27 @@
 #include <wil/resource.h>
 #pragma warning(pop)
 
-// Static instance pointer for callback routing (atomic: written on UI thread, read from ETW worker thread)
-std::atomic<EtwListener*> EtwListener::s_instance{nullptr};
+struct EtwListener::CallbackState final
+{
+    explicit CallbackState(EventCallback callbackIn) : callback(std::move(callbackIn))
+    {
+    }
 
-EtwListener::EtwListener() : _sessionHandle(INVALID_PROCESSTRACE_HANDLE), _traceHandle(INVALID_PROCESSTRACE_HANDLE), _isRunning(false)
+    CallbackState(const CallbackState&)            = delete;
+    CallbackState& operator=(const CallbackState&) = delete;
+    CallbackState(CallbackState&&)                 = delete;
+    CallbackState& operator=(CallbackState&&)      = delete;
+
+    EventCallback callback;
+    std::atomic<bool> accepting{true};
+    std::atomic<bool> running{false};
+    std::atomic<bool> callbackFailureLogged{false};
+    std::atomic<ULONG> buffersProcessed{0};
+    std::atomic<ULONG> eventsProcessed{0};
+    std::atomic<ULONG> eventsLost{0};
+};
+
+EtwListener::EtwListener() : _sessionHandle(INVALID_PROCESSTRACE_HANDLE), _traceHandle(INVALID_PROCESSTRACE_HANDLE)
 {
 }
 
@@ -25,7 +44,7 @@ bool EtwListener::Start(EventCallback callback)
     _lastErrorCode = ERROR_SUCCESS;
     _lastError.clear();
 
-    if (_isRunning.load())
+    if (IsRunning())
     {
         _lastError     = L"Listener is already running";
         _lastErrorCode = ERROR_ALREADY_EXISTS;
@@ -39,8 +58,7 @@ bool EtwListener::Start(EventCallback callback)
         return false;
     }
 
-    _userCallback = std::move(callback);
-    s_instance.store(this, std::memory_order_release);
+    auto callbackState = std::make_shared<CallbackState>(std::move(callback));
 
     // Stop any existing session with the same name
     std::vector<BYTE> sessionBuffer(sizeof(EVENT_TRACE_PROPERTIES) + (wcslen(kSessionName) + 1) * sizeof(wchar_t));
@@ -123,6 +141,7 @@ bool EtwListener::Start(EventCallback callback)
     logfile.ProcessTraceMode    = PROCESS_TRACE_MODE_REAL_TIME | PROCESS_TRACE_MODE_EVENT_RECORD;
     logfile.EventRecordCallback = EventRecordCallback;
     logfile.BufferCallback      = BufferCallback;
+    logfile.Context             = callbackState.get();
 
     _traceHandle = OpenTrace(&logfile);
     if (_traceHandle == INVALID_PROCESSTRACE_HANDLE)
@@ -135,47 +154,111 @@ bool EtwListener::Start(EventCallback callback)
         return false;
     }
 
-    // Start worker thread to process events
-    _isRunning.store(true);
-    _workerThread = std::jthread([this]([[maybe_unused]] std::stop_token st) { ProcessTraceThread(); });
+    _callbackState = callbackState;
+    StartConsumerWorker(_traceHandle, callbackState, ProcessTraceConsumer, nullptr);
 
     return true;
 }
 
+ULONG EtwListener::ProcessTraceConsumer(void*, TRACEHANDLE traceHandle) noexcept
+{
+    TRACEHANDLE stableTraceHandle = traceHandle;
+    return ProcessTrace(&stableTraceHandle, 1, nullptr, nullptr);
+}
+
+void EtwListener::StartConsumerWorker(TRACEHANDLE traceHandle,
+                                      const std::shared_ptr<CallbackState>& callbackState,
+                                      ProcessTraceFunction processTrace,
+                                      void* processTraceContext)
+{
+    // The worker receives the handle by value and owns the callback state. Stop can close its copy without
+    // mutating ProcessTrace's local handle, and a bounded fallback cannot dangle EVENT_RECORD::UserContext.
+    callbackState->running.store(true, std::memory_order_release);
+    _workerThread = std::jthread([traceHandle, callbackState, processTrace, processTraceContext]([[maybe_unused]] std::stop_token stopToken) noexcept
+    {
+        const ULONG result = processTrace(processTraceContext, traceHandle);
+        if (result != ERROR_SUCCESS && result != ERROR_CANCELLED)
+        {
+            Debug::Warning(L"ProcessTrace ended with error: 0x{:08X}", static_cast<unsigned long>(result));
+        }
+        callbackState->accepting.store(false, std::memory_order_release);
+        callbackState->running.store(false, std::memory_order_release);
+    });
+}
+
+#if defined(ENABLE_TESTS)
+void EtwListener::DebugStartConsumerForTesting(TRACEHANDLE traceHandle,
+                                               DebugProcessTraceFunction processTrace,
+                                               DebugCloseTraceFunction closeTrace,
+                                               void* context,
+                                               DWORD shutdownTimeoutMs)
+{
+    if (_workerThread.joinable() || ! processTrace || ! closeTrace || traceHandle == INVALID_PROCESSTRACE_HANDLE)
+    {
+        return;
+    }
+
+    auto callbackState     = std::make_shared<CallbackState>([](const Debug::InfoParam&, const std::wstring&) {});
+    _callbackState         = callbackState;
+    _traceHandle           = traceHandle;
+    _debugCloseTrace       = closeTrace;
+    _debugTraceContext     = context;
+    _shutdownTimeoutMs     = shutdownTimeoutMs;
+    StartConsumerWorker(traceHandle, callbackState, processTrace, context);
+}
+#endif
+
 void EtwListener::Stop()
 {
-    const bool wasRunning = _isRunning.exchange(false);
-
-    if (s_instance.load(std::memory_order_acquire) == this)
+    const std::shared_ptr<CallbackState> callbackState = _callbackState;
+    if (callbackState)
     {
-        s_instance.store(nullptr, std::memory_order_release);
+        callbackState->accepting.store(false, std::memory_order_release);
     }
 
-    // Close the trace handle (this will cause ProcessTrace to return)
+    // Close the consumer handle without mutating the worker-local handle passed to ProcessTrace.
     if (_traceHandle != INVALID_PROCESSTRACE_HANDLE)
     {
-        CloseTrace(_traceHandle);
+        const TRACEHANDLE traceHandle = _traceHandle;
         _traceHandle = INVALID_PROCESSTRACE_HANDLE;
+#if defined(ENABLE_TESTS)
+        if (_debugCloseTrace)
+        {
+            _debugCloseTrace(_debugTraceContext, traceHandle);
+        }
+        else
+#endif
+        {
+        static_cast<void>(CloseTrace(traceHandle));
+        }
     }
 
-    if (wasRunning)
+    if (_workerThread.joinable())
     {
-        // Wait for worker thread to finish. CloseTrace should cause ProcessTrace to return,
-        // but if it hangs we want to know about it rather than silently deadlock.
-        if (_workerThread.joinable())
+        const HANDLE workerHandle = _workerThread.native_handle();
+#if defined(ENABLE_TESTS)
+        const DWORD shutdownTimeoutMs = _shutdownTimeoutMs;
+#else
+        constexpr DWORD shutdownTimeoutMs = 5'000u;
+#endif
+        const DWORD waitResult = workerHandle ? WaitForSingleObject(workerHandle, shutdownTimeoutMs) : WAIT_FAILED;
+        if (waitResult == WAIT_OBJECT_0)
         {
-            auto handle = _workerThread.native_handle();
-            if (handle)
-            {
-                const DWORD waitResult = WaitForSingleObject(handle, 5000);
-                if (waitResult == WAIT_TIMEOUT)
-                {
-                    Debug::Warning(L"EtwListener::Stop: worker thread did not exit within 5 seconds after CloseTrace");
-                }
-            }
+            _workerThread.join();
         }
-        _workerThread = std::jthread(); // Join (should be instant if wait succeeded)
+        else
+        {
+            Debug::Warning(L"EtwListener::Stop: bounded wait ended with result 0x{:08X}; detaching lifetime-owned consumer state",
+                           waitResult);
+            _workerThread.detach();
+        }
     }
+
+#if defined(ENABLE_TESTS)
+    _debugCloseTrace   = nullptr;
+    _debugTraceContext = nullptr;
+    _shutdownTimeoutMs = 5'000u;
+#endif
 
     // Stop the trace session
     if (_sessionHandle != INVALID_PROCESSTRACE_HANDLE)
@@ -189,48 +272,49 @@ void EtwListener::Stop()
     }
 }
 
-void EtwListener::ProcessTraceThread()
-{
-    // ProcessTrace blocks until CloseTrace is called or an error occurs
-    const ULONG result = ProcessTrace(&_traceHandle, 1, nullptr, nullptr);
-
-    if (result != ERROR_SUCCESS && result != ERROR_CANCELLED)
-    {
-#ifdef _DEBUG
-        auto msg = std::format(L"ProcessTrace ended with error: 0x{:08X}\n", static_cast<unsigned long>(result));
-        OutputDebugStringW(msg.c_str());
-#endif
-    }
-
-    _isRunning.store(false);
-}
-
 ULONG WINAPI EtwListener::BufferCallback(PEVENT_TRACE_LOGFILEW logfile)
 {
-    // Track buffer statistics
-    auto* inst = s_instance.load(std::memory_order_acquire);
-    if (inst && logfile)
+    auto* state = logfile ? static_cast<CallbackState*>(logfile->Context) : nullptr;
+    if (state && state->accepting.load(std::memory_order_acquire))
     {
-        inst->_buffersProcessed.fetch_add(1u, std::memory_order_relaxed);
-        inst->_eventsLost.fetch_add(logfile->EventsLost, std::memory_order_relaxed);
+        state->buffersProcessed.fetch_add(1u, std::memory_order_relaxed);
+        state->eventsLost.fetch_add(logfile->EventsLost, std::memory_order_relaxed);
     }
 
-    // Return TRUE to continue processing
-    return TRUE;
+    return state && state->accepting.load(std::memory_order_acquire) ? TRUE : FALSE;
 }
 
 VOID WINAPI EtwListener::EventRecordCallback(PEVENT_RECORD eventRecord)
 {
-    auto* inst = s_instance.load(std::memory_order_acquire);
-    if (inst)
+    auto* state = eventRecord ? static_cast<CallbackState*>(eventRecord->UserContext) : nullptr;
+    if (! state || ! state->accepting.load(std::memory_order_acquire))
     {
-        inst->HandleEvent(eventRecord);
+        return;
+    }
+
+    // ETW invokes this C ABI callback. Named catches prevent C++ exceptions crossing the ABI;
+    // allocation failure remains fatal, while other standard failures stop this consumer once.
+    try
+    {
+        HandleEvent(*state, eventRecord);
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::terminate();
+    }
+    catch (const std::exception&)
+    {
+        state->accepting.store(false, std::memory_order_release);
+        if (! state->callbackFailureLogged.exchange(true, std::memory_order_acq_rel))
+        {
+            Debug::Error(L"ETW event callback failed at the ABI boundary");
+        }
     }
 }
 
-void EtwListener::HandleEvent(PEVENT_RECORD eventRecord)
+void EtwListener::HandleEvent(CallbackState& state, PEVENT_RECORD eventRecord)
 {
-    if (! eventRecord || ! _userCallback)
+    if (! eventRecord || ! state.callback || ! state.accepting.load(std::memory_order_acquire))
     {
         return;
     }
@@ -242,7 +326,7 @@ void EtwListener::HandleEvent(PEVENT_RECORD eventRecord)
     }
 
     // Track events processed
-    _eventsProcessed.fetch_add(1u, std::memory_order_relaxed);
+    state.eventsProcessed.fetch_add(1u, std::memory_order_relaxed);
 
     // Extract event data
     Debug::InfoParam info{};
@@ -250,7 +334,7 @@ void EtwListener::HandleEvent(PEVENT_RECORD eventRecord)
 
     if (ExtractEventData(eventRecord, info, message))
     {
-        _userCallback(info, message);
+        state.callback(info, message);
     }
 }
 
@@ -440,15 +524,27 @@ bool EtwListener::ExtractEventData(PEVENT_RECORD eventRecord, Debug::InfoParam& 
 
 EtwListener::Statistics EtwListener::GetStatistics() const
 {
-    const ULONG eventsProcessed = _eventsProcessed.load(std::memory_order_relaxed);
-    const ULONG eventsLost      = _eventsLost.load(std::memory_order_relaxed);
+    const std::shared_ptr<CallbackState> state = _callbackState;
+    if (! state)
+    {
+        return {};
+    }
+
+    const ULONG eventsProcessed = state->eventsProcessed.load(std::memory_order_relaxed);
+    const ULONG eventsLost      = state->eventsLost.load(std::memory_order_relaxed);
     const ULONG totalEvents     = eventsProcessed + eventsLost;
 
     Statistics stats{};
-    stats.buffersProcessed = _buffersProcessed.load(std::memory_order_relaxed);
+    stats.buffersProcessed = state->buffersProcessed.load(std::memory_order_relaxed);
     stats.eventsProcessed  = eventsProcessed;
     stats.eventsLost       = eventsLost;
     stats.eventLossRate    = totalEvents > 0 ? (static_cast<double>(eventsLost) / static_cast<double>(totalEvents)) * 100.0 : 0.0;
 
     return stats;
+}
+
+bool EtwListener::IsRunning() const
+{
+    const std::shared_ptr<CallbackState> state = _callbackState;
+    return state && state->running.load(std::memory_order_acquire);
 }

@@ -102,9 +102,18 @@ void ShowClipboardFormattedOverlay(FolderView& view, UINT titleStringId, UINT me
     size_t totalChars = 1u;
     for (const auto& path : paths)
     {
-        totalChars += path.native().size() + 1u;
+        const size_t pathChars = path.native().size();
+        if (pathChars == (std::numeric_limits<size_t>::max)() || totalChars > (std::numeric_limits<size_t>::max)() - pathChars - 1u)
+        {
+            return nullptr;
+        }
+        totalChars += pathChars + 1u;
     }
 
+    if (totalChars > ((std::numeric_limits<size_t>::max)() - sizeof(DROPFILES)) / sizeof(wchar_t))
+    {
+        return nullptr;
+    }
     const size_t bytes = sizeof(DROPFILES) + totalChars * sizeof(wchar_t);
     wil::unique_hglobal memory(GlobalAlloc(GMEM_MOVEABLE, bytes));
     if (! memory)
@@ -205,6 +214,10 @@ void ShowClipboardFormattedOverlay(FolderView& view, UINT titleStringId, UINT me
 
 [[nodiscard]] std::vector<std::filesystem::path> ReadFileDropClipboard(HWND ownerWindow) noexcept
 {
+    constexpr UINT kMaxClipboardDropPaths = 65'536u;
+    constexpr UINT kMaxClipboardPathChars = 32'768u;
+    constexpr size_t kMaxClipboardTotalChars = 16u * 1024u * 1024u;
+
     std::vector<std::filesystem::path> result;
     if (! OpenClipboardWithRetriesForFolderView(ownerWindow))
     {
@@ -219,13 +232,19 @@ void ShowClipboardFormattedOverlay(FolderView& view, UINT titleStringId, UINT me
     }
 
     const auto fileCount = DragQueryFileW(static_cast<HDROP>(handle), 0xFFFFFFFFu, nullptr, 0u);
+    if (fileCount > kMaxClipboardDropPaths)
+    {
+        return result;
+    }
     result.reserve(fileCount);
+    size_t totalPathChars = 0u;
     for (UINT index = 0; index < fileCount; ++index)
     {
         const UINT length = DragQueryFileW(static_cast<HDROP>(handle), index, nullptr, 0u);
-        if (length == 0u)
+        if (length == 0u || length > kMaxClipboardPathChars || totalPathChars > kMaxClipboardTotalChars - static_cast<size_t>(length))
         {
-            continue;
+            result.clear();
+            return result;
         }
 
         std::wstring path(static_cast<size_t>(length) + 1u, L'\0');
@@ -233,6 +252,7 @@ void ShowClipboardFormattedOverlay(FolderView& view, UINT titleStringId, UINT me
         {
             path.resize(length);
             result.emplace_back(path);
+            totalPathChars += length;
         }
     }
 
@@ -272,6 +292,23 @@ void ShowClipboardFormattedOverlay(FolderView& view, UINT titleStringId, UINT me
 
     const DWORD result = *effect;
     return result;
+}
+
+void InvalidateMoveClipboardAfterVerifiedCompletion(DWORD expectedSequenceNumber) noexcept
+{
+    if (expectedSequenceNumber == 0u || GetClipboardSequenceNumber() != expectedSequenceNumber || ! OpenClipboardWithRetriesForFolderView(nullptr))
+    {
+        return;
+    }
+    const auto closeClipboard = wil::scope_exit([] { CloseClipboard(); });
+    if (GetClipboardSequenceNumber() != expectedSequenceNumber)
+    {
+        return;
+    }
+    if (EmptyClipboard() == 0)
+    {
+        Debug::Warning(L"FolderView: failed to invalidate completed MOVE clipboard (error={}).", GetLastError());
+    }
 }
 
 [[nodiscard]] bool IsShortcutSlotCollision(HRESULT hr) noexcept
@@ -753,10 +790,15 @@ void FolderView::PasteItemsFromClipboard()
     {
         return;
     }
+    if (! IsCurrentFolderEnumerated())
+    {
+        return;
+    }
 
     const DWORD preferredDropEffect     = ReadPreferredDropEffectClipboard(_hWnd.get()).value_or(DROPEFFECT_COPY);
     const bool moveRequested            = preferredDropEffect == DROPEFFECT_MOVE;
     const FileSystemOperation operation = moveRequested ? FILESYSTEM_MOVE : FILESYSTEM_COPY;
+    const DWORD clipboardSequenceNumber = moveRequested ? GetClipboardSequenceNumber() : 0u;
 
 #ifdef ENABLE_TESTS
     SelfTest::AppendSelfTestTrace(std::format(L"FolderView::PasteItemsFromClipboard sources={} preferredDropEffect=0x{:X} operation={} callback={}",
@@ -774,6 +816,16 @@ void FolderView::PasteItemsFromClipboard()
         request.sourcePaths       = std::move(sources);
         request.destinationFolder = _currentFolder.value();
         request.flags             = flags;
+        if (moveRequested)
+        {
+            request.completionCallback = [clipboardSequenceNumber](HRESULT completionHr) noexcept
+            {
+                if (SUCCEEDED(completionHr))
+                {
+                    InvalidateMoveClipboardAfterVerifiedCompletion(clipboardSequenceNumber);
+                }
+            };
+        }
 
         const HRESULT hrStart = _fileOperationRequestCallback(std::move(request));
         if (FAILED(hrStart))
@@ -826,6 +878,10 @@ void FolderView::PasteItemsFromClipboard()
         }
     }
     cache.NotifyFolderContentsChanged(_fileSystem.get(), _currentFolder.value());
+    if (moveRequested)
+    {
+        InvalidateMoveClipboardAfterVerifiedCompletion(clipboardSequenceNumber);
+    }
     if (! _currentFolder || ! cache.IsFolderWatched(_fileSystem.get(), _currentFolder.value()))
     {
         ForceRefresh();

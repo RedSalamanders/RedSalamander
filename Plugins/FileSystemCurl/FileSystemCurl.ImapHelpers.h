@@ -31,6 +31,33 @@ struct ImapMailboxStatus
     std::optional<uint64_t> unseen;
 };
 
+struct ImapMessageIdentity
+{
+    uint64_t uidValidity = 0;
+    uint64_t uid         = 0;
+};
+
+struct ImapCapabilities
+{
+    bool uidPlus = false;
+};
+
+enum class ImapDeleteCommand
+{
+    AddDeletedFlag,
+    UidExpunge,
+    RemoveDeletedFlag,
+};
+
+using ImapDeleteCommandExecutor = long (*)(void* context, ImapDeleteCommand command, uint64_t uid) noexcept;
+
+struct ImapDeleteOutcome
+{
+    bool targetMarkedDeleted = false;
+    bool rollbackAttempted   = false;
+    long rollbackHr          = 0;
+};
+
 struct ImapUidBatchRange
 {
     size_t offset = 0;
@@ -38,9 +65,17 @@ struct ImapUidBatchRange
 };
 
 [[nodiscard]] bool TryParseImapUidFromLeafName(std::wstring_view leafName, uint64_t& outUid) noexcept;
+[[nodiscard]] bool TryParseImapMessageIdentityFromLeafName(std::wstring_view leafName, ImapMessageIdentity& outIdentity) noexcept;
 [[nodiscard]] std::wstring DecodeRfc2047EncodedWordsToUtf16(std::string_view headerValue) noexcept;
-[[nodiscard]] std::wstring BuildImapMessageLeafName(std::wstring_view subject, std::wstring_view from, uint64_t uid) noexcept;
+[[nodiscard]] std::wstring BuildImapMessageLeafName(std::wstring_view subject, std::wstring_view from, uint64_t uidValidity, uint64_t uid) noexcept;
 [[nodiscard]] bool TryParseImapMailboxStatus(std::string_view response, ImapMailboxStatus& out) noexcept;
+[[nodiscard]] bool TryParseImapCapabilities(std::string_view response, ImapCapabilities& out) noexcept;
+[[nodiscard]] long ValidateImapMessageUidValidity(uint64_t expectedUidValidity, const std::optional<uint64_t>& observedUidValidity) noexcept;
+[[nodiscard]] long ExecuteImapSingleMessageDelete(bool uidPlusAvailable,
+                                                  uint64_t uid,
+                                                  ImapDeleteCommandExecutor executor,
+                                                  void* context,
+                                                  ImapDeleteOutcome& outOutcome) noexcept;
 [[nodiscard]] std::vector<ImapUidBatchRange> BuildImapUidBatchRanges(size_t uidCount, size_t maxBatchSize);
 [[nodiscard]] size_t ResolveImapSummaryRepairFetchBudget(size_t requestedUidCount) noexcept;
 } // namespace FileSystemCurlInternal

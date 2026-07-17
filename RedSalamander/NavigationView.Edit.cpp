@@ -367,7 +367,8 @@ LRESULT NavigationView::OnEditSuggestResults(std::unique_ptr<EditSuggestResultsP
     {
         return 0;
     }
-    if (owned->requestId != _editSuggestRequestId.load(std::memory_order_acquire))
+    if (! _editMode || ! _pathEdit || ! _pathEdit->field || owned->requestId != _editSuggestRequestId.load(std::memory_order_acquire) ||
+        owned->editSessionId != _editSuggestEditSessionId || owned->queryText != _pathEdit->field->GetText())
     {
         return 0;
     }
@@ -581,6 +582,7 @@ void NavigationView::EnterEditMode()
         _pathEdit.reset();
     }
 
+    ++_editSuggestEditSessionId;
     _editMode                        = true;
     _renderMode                      = RenderMode::Edit;
     _pathEditBlurSuppressActive      = ! _embeddedDestinationMode;
@@ -773,6 +775,13 @@ void NavigationView::EnterEditMode()
     {
         if (_editSuggestPopup)
         {
+            static_cast<void>(_editSuggestRequestId.fetch_add(1, std::memory_order_acq_rel));
+            {
+                std::lock_guard lock(_editSuggestMutex);
+                _editSuggestPendingQuery.reset();
+            }
+            _editSuggestAdditionalRequestId = 0;
+            _editSuggestAdditionalItems.clear();
             CloseEditSuggestPopup();
             return true;
         }
@@ -846,6 +855,7 @@ void NavigationView::ExitEditMode(bool accept, std::wstring_view reason)
 
     CloseEditSuggestPopup();
     static_cast<void>(_editSuggestRequestId.fetch_add(1, std::memory_order_acq_rel));
+    ++_editSuggestEditSessionId;
     {
         std::lock_guard lock(_editSuggestMutex);
         _editSuggestPendingQuery.reset();
@@ -1543,9 +1553,11 @@ void NavigationView::UpdateEditSuggest()
         std::lock_guard lock(_editSuggestMutex);
         EditSuggestQuery query{};
         query.requestId          = requestId;
+        query.editSessionId      = _editSuggestEditSessionId;
         query.fileSystem         = fileSystem;
         query.displayFolder      = parseResult.displayFolder;
         query.pluginFolder       = parseResult.pluginFolder;
+        query.queryText          = text;
         query.prefix             = std::move(parseResult.filter);
         query.directorySeparator = parseResult.directorySeparator;
         query.keepAlive          = keepAlive;
@@ -1959,6 +1971,13 @@ void NavigationView::ApplyEditSuggestIndex(size_t index)
     _editSuggestHoveredIndex  = -1;
     _editSuggestSelectedIndex = -1;
     _editSuggestHighlightText.clear();
+    static_cast<void>(_editSuggestRequestId.fetch_add(1, std::memory_order_acq_rel));
+    {
+        std::lock_guard lock(_editSuggestMutex);
+        _editSuggestPendingQuery.reset();
+    }
+    _editSuggestAdditionalRequestId = 0;
+    _editSuggestAdditionalItems.clear();
     CloseEditSuggestPopup();
 }
 
@@ -2236,13 +2255,22 @@ void NavigationView::EditSuggestWorker(std::stop_token stopToken)
             return;
         }
 
-        PostEditSuggestResults(query.requestId, hasMore, query.directorySeparator, std::move(query.prefix), std::move(displayItems), std::move(insertItems));
+        PostEditSuggestResults(query.requestId,
+                               query.editSessionId,
+                               hasMore,
+                               query.directorySeparator,
+                               std::move(query.queryText),
+                               std::move(query.prefix),
+                               std::move(displayItems),
+                               std::move(insertItems));
     }
 }
 
 void NavigationView::PostEditSuggestResults(uint64_t requestId,
+                                            uint64_t editSessionId,
                                             bool hasMore,
                                             wchar_t directorySeparator,
+                                            std::wstring&& queryText,
                                             std::wstring&& highlightText,
                                             std::vector<std::wstring>&& displayItems,
                                             std::vector<std::wstring>&& insertItems)
@@ -2254,13 +2282,34 @@ void NavigationView::PostEditSuggestResults(uint64_t requestId,
 
     auto payload                = std::make_unique<EditSuggestResultsPayload>();
     payload->requestId          = requestId;
+    payload->editSessionId      = editSessionId;
     payload->hasMore            = hasMore;
     payload->directorySeparator = directorySeparator;
+    payload->queryText          = std::move(queryText);
     payload->highlightText      = std::move(highlightText);
     payload->displayItems       = std::move(displayItems);
     payload->insertItems        = std::move(insertItems);
     static_cast<void>(PostMessagePayload(_hWnd.get(), WndMsg::kEditSuggestResults, 0, std::move(payload)));
 }
+
+#ifdef ENABLE_TESTS
+bool NavigationView::DebugPostCurrentEditSuggestResultForSelfTest()
+{
+    if (! _hWnd || ! _editMode || ! _pathEdit || ! _pathEdit->field)
+    {
+        return false;
+    }
+
+    auto payload           = std::make_unique<EditSuggestResultsPayload>();
+    payload->requestId     = _editSuggestRequestId.load(std::memory_order_acquire);
+    payload->editSessionId = _editSuggestEditSessionId;
+    payload->queryText     = std::wstring(_pathEdit->field->GetText());
+    payload->highlightText = L"stale";
+    payload->displayItems.push_back(L"stale result");
+    payload->insertItems.push_back(L"stale result");
+    return PostMessagePayload(_hWnd.get(), WndMsg::kEditSuggestResults, 0, std::move(payload));
+}
+#endif
 
 bool NavigationView::ValidatePath(const std::wstring& pathStr)
 {

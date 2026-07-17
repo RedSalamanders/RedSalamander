@@ -106,6 +106,7 @@
     <ClCompile Include="..\..\RedConfigure\Localization\RcParser.cpp" />
     <ClCompile Include="..\..\RedConfigure\Localization\RcWriter.cpp" />
     <ClCompile Include="..\..\RedConfigure\RedConfigureApp.cpp" />
+    <ClCompile Include="..\..\RedConfigure\RedConfigurePagePresenters.cpp" />
     <ClCompile Include="..\..\RedConfigure\RedConfigureRoot.cpp" />
     <ClCompile Include="..\..\RedConfigure\RedConfigureSession.cpp" />
     <ClCompile Include="..\..\RedConfigure\RedConfigureWorkflow.cpp" />

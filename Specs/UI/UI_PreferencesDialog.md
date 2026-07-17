@@ -213,6 +213,14 @@ Normative behavior:
 - The `General -> Display` controls edit `ui.language` in `workingSettings`.
 - The `General -> DxUI` controls edit `ui.compactMode`, `ui.reducedMotion`, and `ui.windowBackdrop` in `workingSettings`.
 - The Monitor page controls edit `workingMonitorSettings` and persist through the `RedSalamanderMonitor` settings/schema path.
+- Main and Monitor settings are separate conflict-aware documents, not one atomic transaction. `Apply` / `OK`
+  saves the main document first. If that succeeds but the Monitor save fails, Preferences MUST apply and advance
+  the baseline for the committed main settings, MUST leave the Monitor baseline unchanged so those edits remain
+  dirty, and MUST show a localized message that identifies the partial success and failed Monitor path.
+- A Monitor-only revision conflict MAY be rebased once by loading the newest Monitor document and replacing its
+  entire Monitor section with `workingMonitorSettings`, because Preferences owns that whole section. A second
+  conflict or any other Monitor save failure remains pending; it MUST NOT roll back or misreport the already
+  committed main document.
 - The Advanced and Monitor settings-file links are command affordances, not persisted settings, and MUST NOT require schema metadata.
 - Plugin child pages use plugin-provided configuration schema and current configuration payload as the source of truth for rendered fields.
 - Plugin fields marked `x-ui-hidden: true` MUST remain JSON-only advanced settings and MUST NOT be rendered in the embedded editor.

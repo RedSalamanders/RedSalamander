@@ -88,6 +88,9 @@ Use the `build.ps1` PowerShell script for easy building:
 # Rebuild all
 .\build.ps1 -Rebuild
 
+# Bound MSBuild workers on resource-constrained machines
+.\build.ps1 -Rebuild -MaxCpuCount 4
+
 # Combined options
 .\build.ps1 -Configuration Release -ProjectName RedSalamanderMonitor -Rebuild
 ```
@@ -99,6 +102,7 @@ Use the `build.ps1` PowerShell script for easy building:
 - `-ProjectName` : Specific project name (builds entire solution if not specified)
 - `-Clean` : Perform clean build
 - `-Rebuild` : Rebuild all projects
+- `-MaxCpuCount` : Optional MSBuild worker limit; `0` uses the default
 - `-Msix` : Build an MSIX package after a successful Release build
 - `-Msi` : Build an MSI package after a successful Release build
 
@@ -357,29 +361,29 @@ See `Specs/Installer/Installer_Msi.md` for details.
 
 ### Installing dependencies
 
-Install all libraries from `vcpkg.json` into `.build\vcpkg_installed`:
+Install all libraries from `vcpkg.json` into `.build\vcpkg_installed`. The vcpkg executable itself must come from a
+Git checkout at the exact commit in `vcpkg-tool.json`. A repo-local `vcpkg\vcpkg.exe` is discovered automatically:
 
 ```powershell
+git clone https://github.com/microsoft/vcpkg.git vcpkg
+git -C .\vcpkg checkout --detach ((Get-Content .\vcpkg-tool.json -Raw | ConvertFrom-Json).commit)
+.\vcpkg\bootstrap-vcpkg.bat
+
 .\vcpkg-install.ps1
 
 # ARM64:
 .\vcpkg-install.ps1 -Platform ARM64
 ```
 
-### (Optional) Enable user-wide MSBuild integration
-
-If your Visual Studio/MSBuild setup does not pick up vcpkg manifest dependencies automatically, enable vcpkg's MSBuild integration:
-
-```powershell
-vcpkg.exe integrate install
-```
+The install script validates that local tool identity before modifying `.build\vcpkg_installed`. The repository and
+CI use manifest/toolchain integration and do not require or permit a user-wide `vcpkg integrate install` step.
 
 ### Adding New Libraries
 
 To add a new library:
 
 ```powershell
-vcpkg.exe add port <library-name>
+.\vcpkg\vcpkg.exe add port <library-name>
 ```
 
 Then re-run `.\vcpkg-install.ps1`.

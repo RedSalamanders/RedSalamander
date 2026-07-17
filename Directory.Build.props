@@ -104,6 +104,7 @@
   <ItemDefinitionGroup Condition="'$(RSIsFirstPartyProject)'=='true' and '$(RSUsesSharedTestSupport)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj'">
     <ClCompile>
       <AdditionalIncludeDirectories>$(SolutionDir)Tests;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>$(RSTestAdditionalPreprocessorDefinitions)%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
 

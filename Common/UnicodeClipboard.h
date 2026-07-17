@@ -32,17 +32,8 @@ enum class EmptyUnicodeTextPolicy
     {
         return false;
     }
-    if (text.size() >= (std::numeric_limits<size_t>::max)() / sizeof(wchar_t))
-    {
-        return false;
-    }
-    if (OpenClipboard(ownerWindow) == FALSE)
-    {
-        return false;
-    }
-    auto closeClipboard = wil::scope_exit([] { static_cast<void>(CloseClipboard()); });
 
-    if (EmptyClipboard() == FALSE)
+    if (text.size() >= (std::numeric_limits<size_t>::max)() / sizeof(wchar_t))
     {
         return false;
     }
@@ -54,24 +45,33 @@ enum class EmptyUnicodeTextPolicy
         return false;
     }
 
-    auto* buffer = static_cast<wchar_t*>(GlobalLock(storage.get()));
-    if (! buffer)
+    {
+        auto* buffer = static_cast<wchar_t*>(GlobalLock(storage.get()));
+        if (! buffer)
+        {
+            return false;
+        }
+        const auto unlockStorage = wil::scope_exit([handle = storage.get()]() noexcept { static_cast<void>(GlobalUnlock(handle)); });
+        if (! text.empty())
+        {
+            std::memcpy(buffer, text.data(), text.size() * sizeof(wchar_t));
+        }
+        buffer[text.size()] = L'\0';
+    }
+
+    // Prepare the complete payload before changing the system clipboard. WIL retains ownership until
+    // SetClipboardData succeeds and Windows takes it.
+    if (OpenClipboard(ownerWindow) == FALSE)
     {
         return false;
     }
-    if (! text.empty())
-    {
-        std::memcpy(buffer, text.data(), text.size() * sizeof(wchar_t));
-    }
-    buffer[text.size()] = L'\0';
-    static_cast<void>(GlobalUnlock(storage.get()));
+    const auto closeClipboard = wil::scope_exit([]() noexcept { static_cast<void>(CloseClipboard()); });
 
-    if (SetClipboardData(CF_UNICODETEXT, storage.get()) == nullptr)
+    if (EmptyClipboard() == FALSE || SetClipboardData(CF_UNICODETEXT, storage.get()) == nullptr)
     {
         return false;
     }
-
-    storage.release();
+    static_cast<void>(storage.release());
     return true;
 }
 } // namespace Common::Clipboard

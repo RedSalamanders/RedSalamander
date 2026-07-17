@@ -136,6 +136,8 @@ public:
     };
 
     [[nodiscard]] BorrowedHandle Borrow(std::wstring_view limiterKey) noexcept;
+    void BeginShutdown() noexcept;
+    [[nodiscard]] bool CanUnloadNow() noexcept;
 
 private:
     struct IdleEntry
@@ -157,10 +159,13 @@ private:
     static constexpr uint64_t kIdleExpiryMs       = 60000;
 
     void ReturnHandle(std::wstring key, unique_curl_easy handle) noexcept;
+    void CancelBorrow() noexcept;
     void EvictExpired(uint64_t now, std::vector<unique_curl_easy>& cleanup) noexcept;
 
     std::mutex _mutex;
     std::unordered_map<std::wstring, std::vector<IdleEntry>> _idle;
+    size_t _activeBorrowCount = 0u;
+    bool _shutdownRequested   = false;
 };
 
 [[nodiscard]] CurlEasyPool& GetCurlEasyPool() noexcept;
@@ -379,6 +384,12 @@ template <typename Func>
 }
 
 HRESULT EnsureCurlInitialized() noexcept;
+void BeginFileSystemCurlShutdown() noexcept;
+[[nodiscard]] bool CanUnloadFileSystemCurlNow() noexcept;
+[[nodiscard]] bool CanCreateFileSystemCurl() noexcept;
+#if defined(_DEBUG)
+[[nodiscard]] HRESULT RunDebugCurlRuntimeProbe() noexcept;
+#endif
 [[nodiscard]] HRESULT HResultFromCurl(CURLcode code) noexcept;
 void ApplyCommonCurlOptions(CURL* curl, const ConnectionInfo& conn, const FileSystemOptions* options, bool forUpload) noexcept;
 

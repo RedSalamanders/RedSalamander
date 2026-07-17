@@ -13,6 +13,7 @@
 #include "SettingsStore.h"
 
 struct IFileSystem;
+class FolderWindow;
 class ShortcutManager;
 
 #ifdef ENABLE_TESTS
@@ -125,6 +126,7 @@ struct CompareDirectoriesPaneContext
 };
 
 [[nodiscard]] bool ShowCompareDirectoriesWindow(HWND owner,
+                                                FolderWindow& applicationFolderWindow,
                                                 Common::Settings::Settings& settings,
                                                 const AppTheme& theme,
                                                 const ShortcutManager* shortcuts,

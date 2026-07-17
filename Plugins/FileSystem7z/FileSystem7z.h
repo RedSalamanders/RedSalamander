@@ -66,6 +66,7 @@ private:
 };
 
 class FileSystem7z final : public IFileSystem,
+                           public IFileSystemCancellableDirectoryEnumeration,
                            public IFileSystemIO,
                            public IFileSystemDirectoryOperations,
                            public IInformations,
@@ -103,6 +104,10 @@ public:
     HRESULT STDMETHODCALLTYPE Initialize(const wchar_t* rootPath, const char* optionsJsonUtf8 = nullptr) noexcept override;
 
     HRESULT STDMETHODCALLTYPE ReadDirectoryInfo(const wchar_t* path, IFilesInformation** ppFilesInformation) noexcept override;
+    HRESULT STDMETHODCALLTYPE ReadDirectoryInfoCancellable(const wchar_t* path,
+                                                           IFileSystemDirectoryEnumerationCallback* callback,
+                                                           void* cookie,
+                                                           IFilesInformation** ppFilesInformation) noexcept override;
     HRESULT STDMETHODCALLTYPE CopyItem(const wchar_t* sourcePath,
                                        const wchar_t* destinationPath,
                                        FileSystemFlags flags,
@@ -175,7 +180,7 @@ public:
                                                FileSystemDirectorySizeResult* result) noexcept override;
 
 private:
-    ~FileSystem7z() = default;
+    ~FileSystem7z();
 
     static constexpr wchar_t kPluginId[]      = L"builtin/file-system-7z";
     static constexpr wchar_t kPluginShortId[] = L"7z";
@@ -220,15 +225,7 @@ private:
 {
   "version": 1,
   "title": "7-Zip",
-  "fields": [
-    {
-      "key": "defaultPassword",
-      "label": "Default password",
-      "type": "text",
-      "default": "",
-      "description": "Optional password used when listing encrypted archives (stored in settings as plain text)."
-    }
-  ]
+  "fields": []
 }
 )json";
 
@@ -240,13 +237,16 @@ private:
         std::optional<uint32_t> itemIndex;
     };
 
-    HRESULT EnsureIndex() noexcept;
+    HRESULT EnsureIndex(IFileSystemDirectoryEnumerationCallback* callback = nullptr, void* cookie = nullptr) noexcept;
     void ClearIndexLocked() noexcept;
 
-    static HRESULT BuildIndex(const std::wstring& archivePath,
-                              const std::wstring& password,
-                              std::unordered_map<std::wstring, ArchiveEntry>& outEntries,
-                              std::unordered_map<std::wstring, std::vector<std::wstring>>& outChildren) noexcept;
+    HRESULT BuildIndex(const std::wstring& archivePath,
+                       const std::wstring& password,
+                       uint64_t expectedGeneration,
+                       IFileSystemDirectoryEnumerationCallback* callback,
+                       void* cookie,
+                       std::unordered_map<std::wstring, ArchiveEntry>& outEntries,
+                       std::unordered_map<std::wstring, std::vector<std::wstring>>& outChildren) noexcept;
 
     static std::wstring NormalizeInternalPath(std::wstring_view path) noexcept;
     static std::wstring NormalizeArchiveEntryKey(std::wstring_view path) noexcept;
@@ -278,6 +278,8 @@ private:
     bool _indexReady           = false;
     bool _indexBuildInProgress = false;
     HRESULT _indexStatus       = S_OK;
+    std::atomic<uint64_t> _indexGeneration{1u};
+    std::atomic<uint64_t> _indexScannedEntries{0u};
     std::wstring _indexedArchivePath;
     std::wstring _indexedPassword;
 

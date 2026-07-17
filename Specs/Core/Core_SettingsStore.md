@@ -76,10 +76,17 @@ Notes:
   asynchronous settings queue. Those saves capture an immutable caller-thread snapshot, debounce and
   coalesce consecutive snapshots for the same app, write only the settings JSON, and leave the
   existing schema file unchanged.
-- Process shutdown stops the directory watcher without waiting for old saves, captures the final
-  settings and plugin-schema snapshots, enqueues one schema-writing final request, and waits at most
-  five seconds for that request. Timeout returns `ERROR_TIMEOUT`; the request and its completion
-  remain worker-owned, and UI teardown continues without a join.
+- Confirmed Windows session end submits one bounded, settings-only final request through that same
+  serialized coordinator. Entering this final-save mode rejects later submissions, prevents older
+  queued snapshots from writing, and serializes the final snapshot behind any write already in
+  progress. The handler does not collect plugin schemas or rewrite the schema sidecar.
+- Process shutdown stops the directory watcher without waiting for old saves, then closes normal
+  submissions and reserves the final-save transition under the same submission lock. The public final-save
+  call remains admissible after `BeginProcessShutdown()`, captures one settings/plugin-schema snapshot,
+  enqueues exactly one schema-writing request, and waits at most five seconds. Concurrent normal submissions
+  fail with `ERROR_SHUTDOWN_IN_PROGRESS`; duplicate finalization reuses the first request's completion and
+  never enqueues another snapshot. Timeout returns `ERROR_TIMEOUT`; the request and its completion remain
+  worker-owned, and UI teardown continues without a join.
 - The serialized worker and hot-reload session state are explicitly process-lifetime in
   `RedSalamander.exe`. Entering process shutdown rejects later submissions and prevents late worker
   completion from posting UI payloads or emitting Debug/perf callbacks. This process-lifetime
@@ -99,11 +106,23 @@ Notes:
 
 ### Atomic saves
 
-Saving must be atomic to prevent partial/corrupt writes:
-1. Write JSON to a temp file in the same directory:
-   - `<SettingsFileName>.tmp` (e.g., `<AppId>-7.0.settings.json.tmp`)
-2. Flush buffers.
-3. Replace the target file using an atomic rename/replace operation (Windows `MoveFileExW` with replace/write-through semantics).
+Saving must be atomic and conflict-aware to prevent partial writes and stale-snapshot overwrites:
+
+1. A loaded `Settings` snapshot retains the exact identity of the canonical save target read from the same
+   handle as its bytes. A missing target is represented explicitly by no stamp.
+2. Serialize the complete document before publication. Malformed UTF-16 is a save failure
+   (`ERROR_NO_UNICODE_TRANSLATION`); it is never replaced by an empty JSON string.
+3. Stage the bytes through `Common::Files::LocalFileTransaction`, which creates a unique sibling in the same
+   directory, uses the bounded zero-progress-safe handle writer, verifies the requested size, and flushes it.
+4. Under the per-target cross-process commit lock, compare the current target identity with the snapshot's
+   expected identity. A mismatch returns `ERROR_REVISION_MISMATCH` and leaves the target unchanged.
+5. Publish the unique sibling using `MoveFileExW` replace/write-through semantics. The identity returned to the
+   caller is captured from the finalized sibling held through the move; do not re-stat the destination afterward.
+6. A successful mutable save advances the caller's expected identity so the same snapshot can be saved again.
+
+The immutable `SaveSettings(..., const Settings&)` overload is a one-shot compatibility surface for shutdown
+and focused test snapshots. A caller that may save the same in-memory object again MUST use the mutable overload.
+Schema-file publication uses the same unique-sibling transaction but has no settings-snapshot CAS contract.
 
 ### Recovery behavior
 
@@ -125,6 +144,10 @@ For the normal startup / explicit recovery path (`LoadSettings(...)`):
   user-approved replacement may clear the block only after the source has been moved successfully to the
   standard timestamped backup path. The startup decision defaults to preservation; replacement requires an
   explicit affirmative choice and keeps the exact newer source bytes in that backup.
+- When any whole-document recovery attempts to back up an invalid source but the move fails, the defaults
+  snapshot MUST also be marked `ExplicitReplacementRequired`. Automatic, asynchronous, and shutdown saves may
+  not overwrite the only remaining recovery artifact. Explicit replacement first moves that source to the
+  standard backup path, then saves against the now-missing canonical target.
 
 For the non-destructive hot-reload path (`TryLoadSettingsNoRecovery(...)`):
 - Missing file returns `S_FALSE`.
@@ -175,7 +198,11 @@ namespace Common::Settings
     HRESULT TryLoadSettingsNoRecovery(std::wstring_view appId, Settings& out) noexcept;
     HRESULT TryGetSettingsFileStamp(std::wstring_view appId, SettingsFileStamp& out) noexcept;
     HRESULT BackupSettingsForExplicitReplacement(std::wstring_view appId, std::filesystem::path& backupPath) noexcept;
-    HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept;
+    HRESULT SaveSettings(std::wstring_view appId, Settings& settings) noexcept;
+    HRESULT SaveSettings(std::wstring_view appId, const Settings& oneShotSettings) noexcept;
+    HRESULT SaveSettingsValuesOnly(std::wstring_view appId, Settings& settings) noexcept;
+    HRESULT SaveSettingsValuesOnlyWithStamp(
+        std::wstring_view appId, Settings& settings, SettingsFileStamp& writtenStamp) noexcept;
 
     // Writes `<AppId>.settings.schema.json` next to the settings file.
     HRESULT SaveSettingsSchema(std::wstring_view appId, std::string_view schemaJsonUtf8) noexcept;
@@ -193,7 +220,8 @@ replacement character.
 
 ### File-stamp helper
 
-`SettingsFileStamp` is a stable identity/value snapshot of the current settings file used by live-reload callers to de-duplicate notifications and suppress self-saves.
+`SettingsFileStamp` is a stable identity/value snapshot of the current settings file used both for optimistic
+save concurrency and by live-reload callers to de-duplicate notifications and suppress self-saves.
 
 Fields:
 - `volumeSerialNumber`
@@ -209,12 +237,15 @@ Return contract:
   - failure `HRESULT`: unexpected I/O/query failure
 - `TryLoadSettingsNoRecovery(...)`
   - `S_OK`: settings loaded; malformed recoverable optional sections use their defaults and retain their
-    opaque source member
+    opaque source member; `SettingsPersistenceState::expectedFileStamp` identifies the exact loaded target
   - `S_FALSE`: file missing
   - failure `HRESULT`: invalid/unreadable/unsupported file without fallback or backup
 - `SaveSettingsValuesOnlyWithStamp(...)` returns the stamp of the flushed temporary file that was
   atomically moved into place. It MUST NOT re-stat the destination path after replacement, because a
   later external writer may already own that path.
+- Save entry points compare `expectedFileStamp` under the cross-process target lock. Both a changed identity and
+  an unexpected create/delete are conflicts. `ERROR_REVISION_MISMATCH` means no settings bytes were published.
+- Numeric accessors for 32-bit fields MUST reject values greater than `UINT32_MAX`; they MUST NOT truncate.
 
 ## Live Reload Semantics (RedSalamander.exe)
 
@@ -237,9 +268,19 @@ Watcher rules:
 - If an internal-save epoch begins or ends between a reload stamp/load check, the reload retries its
   observation. Repeated epoch churn reposts a change notification; it must not silently consume an
   external event, including when the internal save fails.
+- The serialized save coordinator may advance queued snapshots only along its own known source-to-commit
+  lineage. A snapshot matching neither the original source nor the coordinator's latest commit is an external
+  revision and MUST still fail CAS rather than being silently rebased.
 - A changed stamp already recorded as `lastAppliedStamp` or `lastRejectedStamp` is ignored on the next reload check.
 - `Themes\\*.theme.json5` files are **not** watched in this iteration.
 - `RedSalamanderMonitor.exe` settings do not participate in this main-app hot-reload flow.
+
+Preferences commits the main and Monitor settings documents independently because NTFS does not provide an
+atomic rename spanning two files. If the main document commits but the Monitor document fails, the main settings
+remain committed and are applied to the running app; the dialog advances only the main baseline, keeps Monitor
+changes dirty, and shows a localized partial-success error. Because Preferences owns the complete Monitor
+section, a Monitor-only revision conflict may load the newest Monitor document, replace that section from the
+working copy, and retry CAS once. A second conflict or any other failure remains pending for the user to retry.
 
 Merge policy after a valid external reload:
 - Disk is authoritative for persisted main-app user-editable sections such as `theme`, `ui`, `plugins`, `connections`, `extensions`, `shortcuts`, `cache`, `fileOperations`, `compareDirectories`, `hotPaths`, `mainMenu`, `startup`, `search`, and folder preference fields.
@@ -598,6 +639,7 @@ Inline settings themes use a lenient recovery policy so one damaged theme cannot
 - Structurally valid theme objects are retained when possible. Names are clamped to the supported length, unknown `baseThemeId` values are preserved for forward compatibility, and invalid known color overrides are ignored while valid fields continue to load.
 - Structurally unusable or non-object `theme.themes[]` entries are preserved as opaque JSON entries and written back unchanged by the settings store instead of being silently discarded.
 - The settings loader emits one aggregate recovery warning for skipped or repaired inline-theme data rather than logging one warning per field or entry.
+- Inline theme IDs are case-sensitive. The first exact ID is active; later exact duplicates and structurally unusable entries retain their authored JSON value and original `theme.themes[]` array position as opaque repair data. Canonical save must re-emit that data instead of silently deleting it. IDs that differ only by case remain distinct because selection, inheritance, and editing use the same case-sensitive identity contract.
 - Standalone `Themes\\*.theme.json5` files remain strict: malformed files fail that file's load and do not use the inline-settings recovery policy.
 
 ### UI integration (v1)
@@ -632,6 +674,8 @@ In addition to `theme.themes[]` stored in the settings file, `RedSalamander` may
 - `seededChoice(runtime.seed,key1,key2[,key3...key8])`
 
 Amounts accept `0.0` through `1.0` or percentage syntax. Expressions are deliberately non-nested; authors name intermediate palette entries instead. Missing references, dependency cycles, references to paint-time sources, and sources longer than 256 UTF-16 code units are validation errors. Resolution has a maximum dependency depth of 32. Theme definitions are bounded to 128 palette entries and 512 semantic entries.
+
+Formatter output uses exactly the camelCase spellings listed above and must remain accepted by `SettingsStore.schema.json`; parsing remains case-insensitive for compatibility. `ensureContrast` evaluates WCAG contrast from the rendered foreground composite, not from its uncomposited RGB channels. Its background must be opaque because the expression has no surface-backdrop argument. Foreground alpha is preserved only when some candidate at that alpha can meet the requested ratio; otherwise resolution fails instead of certifying an inaccessible color.
 
 Static and event-time values resolve when a theme is applied or a relevant system event occurs. Paint-time sources are parsed and compiled once, then evaluated from a stable 32-bit runtime seed without parsing, allocation, locking, or I/O in the paint path. `seededChoice` has two through eight pre-resolved candidates. High Contrast continues to override authored and Rainbow output.
 

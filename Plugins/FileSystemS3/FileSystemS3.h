@@ -110,6 +110,11 @@ class FileSystemS3 final : public IFileSystem,
 public:
     explicit FileSystemS3(FileSystemS3Mode mode, IHost* host);
 
+    [[nodiscard]] HRESULT InitializationStatus() const noexcept
+    {
+        return _awsRuntimeStatus;
+    }
+
     FileSystemS3(const FileSystemS3&)            = delete;
     FileSystemS3(FileSystemS3&&)                 = delete;
     FileSystemS3& operator=(const FileSystemS3&) = delete;
@@ -498,6 +503,7 @@ private:
     PluginMetaData _metaData{};
 
     std::atomic_ulong _refCount{1};
+    HRESULT _awsRuntimeStatus = E_UNEXPECTED;
 
     wil::com_ptr<IHostConnections> _hostConnections;
 

@@ -5376,6 +5376,52 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                             }
                         }
                     }
+                    else if (info.kind == FolderWindow::InformationalTaskUpdate::Kind::MakeFileList)
+                    {
+                        if (! info.makeFileListCurrentPath.empty())
+                        {
+                            drawLabeledPathLine(IDS_FILEOPS_LABEL_FROM, info.makeFileListCurrentPath);
+                        }
+
+                        if (_smallFormat && _textBrush &&
+                            (info.makeFileListCollecting || info.makeFileListScannedFolders > 0u || info.makeFileListScannedEntries > 0u))
+                        {
+                            const std::wstring scanPath =
+                                info.makeFileListCurrentPath.empty() ? std::wstring(L".") : info.makeFileListCurrentPath.native();
+                            const std::wstring scanText = FormatStringResource(
+                                nullptr, IDS_FMT_COMPARE_SCAN_STATUS, scanPath, info.makeFileListScannedFolders, info.makeFileListScannedEntries);
+                            const D2D1_RECT_F scanRc = D2D1::RectF(textX, textY, contentRight, textY + lineH);
+                            _target->DrawTextW(scanText.data(),
+                                               static_cast<UINT32>(scanText.size()),
+                                               _smallFormat.get(),
+                                               scanRc,
+                                               _textBrush.get(),
+                                               D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                            textY += lineH;
+                        }
+
+                        if (_smallFormat && _subTextBrush &&
+                            (info.makeFileListRendering || info.makeFileListWriting || info.makeFileListTotalEntries > 0u))
+                        {
+                            const std::wstring countsText =
+                                info.makeFileListTotalEntries > 0u
+                                    ? FormatEmbeddedStringResource(nullptr,
+                                                                   IDS_FMT_FILEOPS_OP_COUNTS,
+                                                                   info.title,
+                                                                   info.makeFileListRenderedEntries,
+                                                                   info.makeFileListTotalEntries)
+                                    : FormatEmbeddedStringResource(
+                                          nullptr, IDS_FMT_FILEOPS_OP_COUNTS_UNKNOWN_TOTAL, info.title, info.makeFileListRenderedEntries);
+                            const D2D1_RECT_F countsRc = D2D1::RectF(textX, textY, contentRight, textY + lineH);
+                            _target->DrawTextW(countsText.data(),
+                                               static_cast<UINT32>(countsText.size()),
+                                               _smallFormat.get(),
+                                               countsRc,
+                                               _subTextBrush.get(),
+                                               D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                            textY += lineH;
+                        }
+                    }
 
                     if (_smallFormat && _textBrush && info.contentActive)
                     {
@@ -5579,7 +5625,9 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                         ((info.kind == FolderWindow::InformationalTaskUpdate::Kind::CompareDirectories && (info.scanActive || info.contentActive)) ||
                          (info.kind == FolderWindow::InformationalTaskUpdate::Kind::ChangeCase && (info.changeCaseEnumerating || info.changeCaseRenaming)) ||
                          (info.kind == FolderWindow::InformationalTaskUpdate::Kind::ChangeAttributes &&
-                          (info.changeAttributesEnumerating || info.changeAttributesApplying)));
+                          (info.changeAttributesEnumerating || info.changeAttributesApplying)) ||
+                         (info.kind == FolderWindow::InformationalTaskUpdate::Kind::MakeFileList &&
+                          (info.makeFileListCollecting || info.makeFileListRendering || info.makeFileListWriting)));
                     if (showProgressBar)
                     {
                         const float barH        = DipsToPixels(8.0f, _dpi);
@@ -5618,6 +5666,14 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                                 frac     = hasTotal ? Clamp01(static_cast<float>(static_cast<double>(info.changeAttributesCompletedItems) /
                                                                                  static_cast<double>(info.changeAttributesPlannedItems)))
                                                     : 0.0f;
+                            }
+                            else if (info.kind == FolderWindow::InformationalTaskUpdate::Kind::MakeFileList)
+                            {
+                                hasTotal = info.makeFileListRendering && info.makeFileListTotalEntries > 0u &&
+                                           info.makeFileListRenderedEntries <= info.makeFileListTotalEntries;
+                                frac = hasTotal ? Clamp01(static_cast<float>(static_cast<double>(info.makeFileListRenderedEntries) /
+                                                                            static_cast<double>(info.makeFileListTotalEntries)))
+                                                : 0.0f;
                             }
 
                             const D2D1_RECT_F fill = hasTotal ? D2D1::RectF(barRc.left, barRc.top, barRc.left + (barRc.right - barRc.left) * frac, barRc.bottom)

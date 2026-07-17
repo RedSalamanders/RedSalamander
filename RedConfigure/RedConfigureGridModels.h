@@ -649,15 +649,33 @@ public:
                 }
                 break;
             case 3u: outCell.text = _session.GetThemePreviewModel().GetAuthoredColorText(key); break;
-            case 4u: outCell.text = metadata.sourceType; break;
+            case 4u:
+            {
+                const UINT sourceId = static_cast<UINT>(metadata.sourceKind == RedConfigure::Workflow::ThemeTokenSourceKind::Inherited
+                                                            ? IDS_REDCONFIGURE_SOURCE_BASE
+                                                        : metadata.sourceKind == RedConfigure::Workflow::ThemeTokenSourceKind::Literal
+                                                            ? IDS_REDCONFIGURE_SOURCE_LITERAL
+                                                        : metadata.sourceKind == RedConfigure::Workflow::ThemeTokenSourceKind::Reference
+                                                            ? IDS_REDCONFIGURE_SOURCE_TOKEN_REFERENCE
+                                                            : IDS_REDCONFIGURE_SOURCE_FUNCTION);
+                outCell.text = LoadAppString(_instance, sourceId);
+                break;
+            }
             case 5u: outCell.text = std::to_wstring(metadata.usageCount); break;
             case 6u:
-                outCell.text = metadata.contrastKnown ? std::format(L"{:.1f}:1 {}", metadata.contrastRatio, metadata.contrastPass ? L"AA" : L"Fail") : L"—";
+                outCell.text = metadata.contrastKnown
+                                   ? FormatStringResource(_instance,
+                                                          IDS_REDCONFIGURE_FMT_CONTRAST_VALUE,
+                                                          metadata.contrastRatio,
+                                                          LoadAppString(_instance,
+                                                                        metadata.contrastPass ? IDS_REDCONFIGURE_CONTRAST_PASS
+                                                                                              : IDS_REDCONFIGURE_CONTRAST_FAIL))
+                                   : L"—";
                 break;
             default: break;
         }
 
-        outCell.tooltipText = metadata.description;
+        outCell.tooltipText = FormatStringResource(_instance, IDS_REDCONFIGURE_FMT_THEME_TOKEN_DESCRIPTION, metadata.key, metadata.group);
         outCell.multiline   = false;
     }
 

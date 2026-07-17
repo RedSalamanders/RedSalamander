@@ -69,6 +69,13 @@ function ConvertFrom-RSTestRunId {
     )
 
     $match = [regex]::Match($RunId, '^(?<timestamp>\d{8}T\d{6}Z)-(?<pid>\d+)-(?<guid>[0-9a-fA-F]{32})$')
+    $format = 'Runner'
+    if (-not $match.Success) {
+        # Standalone native harnesses use TestSupport's crash-tolerant fallback
+        # <harness>-<pid>-<tick> form when no runner-owned id is supplied.
+        $match = [regex]::Match($RunId, '^(?<prefix>[A-Za-z0-9][A-Za-z0-9._-]*?)-(?<pid>\d+)-(?<tick>\d+)$')
+        $format = 'HarnessFallback'
+    }
     if (-not $match.Success) {
         return $null
     }
@@ -80,21 +87,58 @@ function ConvertFrom-RSTestRunId {
 
     [pscustomobject]@{
         RunId = $RunId
+        Format = $format
         Timestamp = $match.Groups['timestamp'].Value
         ProcessId = $processId
         Guid = $match.Groups['guid'].Value
+        Prefix = $match.Groups['prefix'].Value
+        TickCount = $match.Groups['tick'].Value
     }
 }
 
-function Get-RSLiveProcessIds {
+function Get-RSLiveProcessSnapshots {
     $processes = @([System.Diagnostics.Process]::GetProcesses())
+    $snapshots = @()
     try {
-        return @($processes | ForEach-Object { [int64]$_.Id })
+        $snapshots = @($processes | ForEach-Object {
+                $startTimeUtc = $null
+                try {
+                    $startTimeUtc = $_.StartTime.ToUniversalTime()
+                } catch {
+                    # Access to protected process metadata can be denied. A null
+                    # start time keeps the conservative live-PID behavior.
+                }
+
+                [pscustomobject]@{
+                    ProcessId = [int64]$_.Id
+                    StartTimeUtc = $startTimeUtc
+                }
+            })
     } finally {
         foreach ($process in $processes) {
             $process.Dispose()
         }
     }
+
+    $missingStartIds = @($snapshots | Where-Object { $null -eq $_.StartTimeUtc } | ForEach-Object { [int64]$_.ProcessId })
+    if ($missingStartIds.Count -gt 0) {
+        try {
+            foreach ($process in @(Get-CimInstance Win32_Process -Property ProcessId, CreationDate -ErrorAction Stop)) {
+                if ($null -eq $process.CreationDate -or [int64]$process.ProcessId -notin $missingStartIds) {
+                    continue
+                }
+
+                $snapshot = $snapshots | Where-Object { $_.ProcessId -eq [int64]$process.ProcessId } | Select-Object -First 1
+                if ($null -ne $snapshot) {
+                    $snapshot.StartTimeUtc = ([datetime]$process.CreationDate).ToUniversalTime()
+                }
+            }
+        } catch {
+            # Keep null start times conservative when process metadata is unavailable.
+        }
+    }
+
+    return $snapshots
 }
 
 function Get-RSTestSandboxRoot {
@@ -345,7 +389,9 @@ function Resolve-RSTestSandboxStaleRunTargets {
 
         [string[]]$AllowedRunIds = @(),
 
-        [int64[]]$LiveProcessIds = @()
+        [int64[]]$LiveProcessIds = @(),
+
+        [hashtable]$LiveProcessStartTimesUtc = @{}
     )
 
     $normalizedTestRoot = ConvertTo-RSFullPath -Path $TestRoot
@@ -361,10 +407,19 @@ function Resolve-RSTestSandboxStaleRunTargets {
     $allowedRunIds = @($allowedRunIds | Select-Object -Unique)
 
     $liveIds = @()
+    $liveStartTimesUtc = @{}
     if ($PSBoundParameters.ContainsKey('LiveProcessIds')) {
         $liveIds = @($LiveProcessIds | ForEach-Object { [int64]$_ })
+        foreach ($key in $LiveProcessStartTimesUtc.Keys) {
+            $liveStartTimesUtc[[string]$key] = [datetime]$LiveProcessStartTimesUtc[$key]
+        }
     } else {
-        $liveIds = @(Get-RSLiveProcessIds)
+        foreach ($process in @(Get-RSLiveProcessSnapshots)) {
+            $liveIds += [int64]$process.ProcessId
+            if ($null -ne $process.StartTimeUtc) {
+                $liveStartTimesUtc[[string]$process.ProcessId] = [datetime]$process.StartTimeUtc
+            }
+        }
     }
 
     $targets = @()
@@ -382,7 +437,11 @@ function Resolve-RSTestSandboxStaleRunTargets {
         }
 
         if (@($liveIds | Where-Object { $_ -eq $runInfo.ProcessId }).Count -gt 0) {
-            continue
+            $processKey = [string]$runInfo.ProcessId
+            if (-not $liveStartTimesUtc.ContainsKey($processKey) -or
+                $runDir.CreationTimeUtc -ge ([datetime]$liveStartTimesUtc[$processKey]).ToUniversalTime()) {
+                continue
+            }
         }
 
         $targets += [pscustomobject]@{
@@ -390,7 +449,7 @@ function Resolve-RSTestSandboxStaleRunTargets {
             RunId = $runDir.Name
             ProcessId = $runInfo.ProcessId
             Category = 'stale-test-run-dir'
-            Reason = "Runner process $($runInfo.ProcessId) is no longer live; the sibling TestSandbox run directory can be swept before this run starts."
+            Reason = "The owning process $($runInfo.ProcessId) is no longer live (or its PID has been reused by a newer process); the sibling TestSandbox run directory can be swept before this run starts."
         }
     }
 
@@ -406,7 +465,9 @@ function Remove-RSTestSandboxStaleRunDirectories {
 
         [string[]]$AllowedRunIds = @(),
 
-        [int64[]]$LiveProcessIds = @()
+        [int64[]]$LiveProcessIds = @(),
+
+        [hashtable]$LiveProcessStartTimesUtc = @{}
     )
 
     $normalizedTestRoot = ConvertTo-RSFullPath -Path $TestRoot
@@ -418,6 +479,7 @@ function Remove-RSTestSandboxStaleRunDirectories {
     }
     if ($PSBoundParameters.ContainsKey('LiveProcessIds')) {
         $resolveParams['LiveProcessIds'] = @($LiveProcessIds)
+        $resolveParams['LiveProcessStartTimesUtc'] = $LiveProcessStartTimesUtc
     }
 
     $results = @()

@@ -67,7 +67,7 @@ Both pumps poll cancellation and pause per chunk, update atomic task-wide counte
 
 ## Buffering & Adaptive Sizing
 
-- Setting: `fileOperations.crossFsBridgeBufferSizeKB`, default 4096 KB, clamped 512–16384 KB at load (`Common/SettingsStore.cpp:3307`), snapshotted into the task at start (`State.Runtime.Part.cpp:684`).
+- Setting: `fileOperations.crossFsBridgeBufferSizeKB`, default 4096 KB, clamped 512–16384 KB at load (`Common/SettingsStore.cpp:3307`), snapshotted into the task at start (`FolderWindow.FileOperations.State.Runtime.cpp`).
 - Provider hints remain active even when the user changed the configured buffer setting. The source and destination are queried for `FileSystemTransferHints`; the maximum nonzero preferred buffer is clamped to 512 KiB–16 MiB and wins. Without an explicit buffer hint, WAN latency or `PREFERS_LARGE_BUFFERS` raises the configured fallback to at least 8 MiB.
 - The bridge merges the maximum latency class, ORs flags, and uses the maximum requested progress period. `HIGH_METADATA_COST` also controls pre-calculation as described above.
 - The resolved tuning is frozen for the task and emitted in perf details; there is no mid-flight retune. Curl advertises 1 MiB to match its ring; local/7z/cloud providers retain provider-appropriate hints.

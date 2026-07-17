@@ -18,6 +18,12 @@
     <ClCompile Include="..\..\RedSalamanderMonitor\Document.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\RedSalamanderMonitor\EtwListener.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\RedSalamanderMonitor\MonitorFileReader.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="MonitorTest.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>

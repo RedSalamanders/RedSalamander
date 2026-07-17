@@ -20,9 +20,9 @@
     _DISABLE_VECTOR_ANNOTATION / _DISABLE_STRING_ANNOTATION to avoid MSVC STL
     annotation mismatches, so no separate ASan-instrumented vcpkg triplet is needed.
 
-    Automatically discovers vcpkg from: explicit -VcpkgExe parameter, repo-local vcpkg\,
-    VCPKG_ROOT environment variable, PATH, Visual Studio bundled vcpkg, Chocolatey,
-    Scoop, and common installation directories.
+    Discovers vcpkg from the supported locations below, then requires the executable
+    to belong to a Git checkout at the commit pinned by vcpkg-tool.json. This keeps
+    local dependency installation on the same tool identity as CI.
 
 .PARAMETER Platform
     Target platform (x64, ARM64, or All). Default is "All" which installs both platforms.
@@ -100,6 +100,7 @@ if ($Help) {
 }
 
 . (Join-Path $PSScriptRoot "Tools\VcpkgInstallSafety.ps1")
+. (Join-Path $PSScriptRoot "Tools\VcpkgToolIdentity.ps1")
 
 $validPlatforms = @('x64', 'ARM64', 'All')
 if ($Platform -notin $validPlatforms) {
@@ -230,8 +231,11 @@ function Resolve-VcpkgExePath {
 }
 
 $vcpkgExePath = Resolve-VcpkgExePath -RepoRoot $repoRoot -ExplicitVcpkgExe $VcpkgExe
+$vcpkgToolPin = Get-RSVcpkgToolPin -RepoRoot $repoRoot
+$vcpkgExePath = Assert-RSVcpkgToolIdentity -VcpkgExe $vcpkgExePath -ExpectedCommit $vcpkgToolPin.Commit
 
 Write-Host "vcpkg exe:     $vcpkgExePath" -ForegroundColor Cyan
+Write-Host "vcpkg commit:  $($vcpkgToolPin.Commit)" -ForegroundColor Cyan
 Write-Host "manifest root: $manifestRoot" -ForegroundColor Cyan
 Write-Host "install root:  $installRoot" -ForegroundColor Cyan
 Write-Host "staging root:  $stagingRoot" -ForegroundColor Cyan

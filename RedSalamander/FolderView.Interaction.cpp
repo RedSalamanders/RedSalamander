@@ -486,14 +486,23 @@ void FolderView::OnLButtonDown(POINT pt, WPARAM keys)
         }
         else
         {
-            FocusItem(*hit, false);
+            if (! _items[*hit].selected)
+            {
+                SelectSingle(*hit);
+            }
+            else
+            {
+                FocusItem(*hit, false);
+            }
             _anchorIndex = *hit;
         }
     }
     else
     {
         ClearSelection();
-        _anchorIndex = _focusedIndex != static_cast<size_t>(-1) ? _focusedIndex : static_cast<size_t>(-1);
+        _drag.dragging = false;
+        _focusedIndex  = static_cast<size_t>(-1);
+        _anchorIndex   = static_cast<size_t>(-1);
     }
 }
 

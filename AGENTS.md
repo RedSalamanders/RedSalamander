@@ -65,6 +65,11 @@ Completed WIP plans MUST be moved to `Specs/Plans/Done/`. Any durable behavior, 
   Name that difference, document it at the definition, and cover it in the relevant reviewed allowlist or
   source-contract test. Adding a new shared helper also requires updating the shared-helper catalog and the
   authoritative domain spec that owns its behavior.
+- **Runtime dependency staging is centralized:** add or change app-local plugin DLLs in
+  root `RuntimeDependencies.props`; do not reintroduce plugin-local `PostBuildEvent`/`xcopy` batches. Required
+  inputs must fail through the shared MSBuild tasks, obsolete outputs must be removed declaratively, and portable
+  packaging must consume the same manifest and pass the clean-extraction smoke contract in
+  `Specs/Installer/Installer_PortableZip.md`.
 - **Ban `sprintf_s` / `swprintf_s`** in non-PoC code:
   - Diagnostics: `std::format` / `std::format_to_n` + `OutputDebugStringA/W`
   - User-facing/localized: `.rc` resources + `FormatStringResource(...)` with **positional** placeholders
@@ -72,7 +77,7 @@ Completed WIP plans MUST be moved to `Specs/Plans/Done/`. Any durable behavior, 
 - **COM ownership:** never store owning raw COM interface pointers (no manual `Release()`); use `wil::com_ptr<T>` for members and locals.
 - **COM ref-counting:** never do `obj->AddRef(); ptr.attach(obj);` (two-step hazard); prefer `ptr = obj;` / `wil::com_ptr<T> ptr = obj;`.
 - **`wil::unique_hwnd` ownership:** never call `DestroyWindow(_hWnd.get())` on a `wil::unique_hwnd` owner; use `_hWnd.reset()` (or `.release()` only when transferring ownership explicitly).
-- **Cross-thread `PostMessageW` payloads:** use `PostMessagePayload(...)` + `TakeMessagePayload<T>(lParam)`; never `PostMessageW(...payload.release())` or raw `new` payload posts. Capture every payload field needed for `msg`/`wParam`/other arguments before the call; never dereference a `unique_ptr` in the same function-call expression that also passes `std::move(payload)`, because argument evaluation may move it first. For windows that receive payload messages, call `InitPostedPayloadWindow(hwnd)` during create (`WM_NCCREATE`/`WM_CREATE`) and `DrainPostedPayloadsForWindow(hwnd)` in `WM_NCDESTROY` to prevent leak-on-destroy. Every UI-host cross-thread change must review: payload ownership, UI-thread boundary, cancellation path, teardown drain, and a focused teardown stress/selftest when the touched host can queue payloads.
+- **Cross-thread `PostMessageW` payloads:** use `PostMessagePayload(...)` + `TakeMessagePayload<T>(lParam)`; never `PostMessageW(...payload.release())` or raw `new` payload posts. A helper-owned nonzero `lParam` is an opaque registry token, never a pointer: do not cast or adopt it directly. If a nonzero token yields null, it is stale/drained/type-mismatched and must be ignored before message-specific work. Zero is reserved for an explicitly posted payload-less fallback only when that message defines one. Capture every payload field needed for `msg`/`wParam`/other arguments before the call; never dereference a `unique_ptr` in the same function-call expression that also passes `std::move(payload)`, because argument evaluation may move it first. For windows that receive payload messages, call `InitPostedPayloadWindow(hwnd)` during create (`WM_NCCREATE`/`WM_CREATE`) and `DrainPostedPayloadsForWindow(hwnd)` in `WM_NCDESTROY`; the drain closes posting, invalidates all registered tokens, and deletes the registered storage. A stale queued token can survive numeric HWND reuse but can never be adopted. Every UI-host cross-thread change must review: payload ownership, UI-thread boundary, cancellation path, teardown drain, and a focused teardown stress/selftest when the touched host can queue payloads.
 - **IconCache COM contract:** `IconCache::Initialize(...)` stays UI-thread/STA responsibility; any worker thread calling `IconCache::ExtractSystemIcon()` must initialize COM as MTA (`wil::CoInitializeEx(COINIT_MULTITHREADED)`).
 - **MTP/WPD worker contract:** portable-device workers must initialize COM as MTA before using WPD, serialize each device session, honor watchdog/cancel/quarantine teardown, and keep `GetCapabilities()` honest for read-only, writable, invalid-profile, and disconnected states.
 - **File-action IDs:** treat viewer/editor/user-menu action IDs as stable but case-insensitive identifiers. Uniqueness and lookup are case-insensitive, IDs that differ only by case are invalid duplicates, and parameterized command dispatch or association resolution must never require exact casing.
@@ -145,7 +150,7 @@ To verify a change is green, use `.\Tools\Run-AllTests.ps1 -Suite Full` (builds 
 ## Dependencies
 
 - **WIL**: Windows Implementation Library (RAII wrappers)
-- **fmt**: Modern C++ formatting
+- **yyjson**: JSON parsing and serialization
 - **DirectX**: Graphics APIs (D2D, D3D11, DXGI)
 
 ## LLM Assistant Guidelines

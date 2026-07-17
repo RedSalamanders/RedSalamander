@@ -60,6 +60,11 @@ HRESULT SaveSettingsAndSchema(std::wstring_view appId, Common::Settings::Setting
 HRESULT SaveSettingsAndSchema(std::wstring_view appId,
                               Common::Settings::Settings& settings,
                               std::span<const PluginConfigurationSchemaSource> pluginSchemas) noexcept;
+// Serializes a final settings-only snapshot with earlier saves, rejects later submissions,
+// and waits only for the caller-supplied session-end deadline.
+HRESULT SaveSettingsForSessionEnd(std::wstring_view appId,
+                                  const Common::Settings::Settings& settings,
+                                  DWORD timeoutMs) noexcept;
 HRESULT SaveSettingsAndSchemaForProcessShutdown(std::wstring_view appId,
                                                 Common::Settings::Settings& settings,
                                                 DWORD timeoutMs) noexcept;

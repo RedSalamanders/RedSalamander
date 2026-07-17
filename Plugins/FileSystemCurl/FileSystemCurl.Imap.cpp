@@ -2942,13 +2942,27 @@ size_t CurlWriteImapFetchToFile(void* ptr, size_t size, size_t nmemb, void* user
     return S_OK;
 }
 
+[[nodiscard]] HRESULT ImapValidateMessageUidValidity(const ConnectionInfo& conn,
+                                                     std::wstring_view mailboxPath,
+                                                     wchar_t delimiter,
+                                                     uint64_t expectedUidValidity) noexcept
+{
+    ImapMailboxStatus status;
+    const HRESULT hr = ImapFetchMailboxStatus(conn, mailboxPath, delimiter, status);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+    return ValidateImapMessageUidValidity(expectedUidValidity, status.uidValidity);
+}
+
 [[nodiscard]] HRESULT ImapDownloadMessageToFile(const ConnectionInfo& conn, std::wstring_view pluginPath, HANDLE file) noexcept
 {
     const std::wstring fullPath = JoinPluginPathWide(conn.basePathWide, pluginPath);
 
     const std::wstring_view leaf = LeafName(fullPath);
-    uint64_t uid                 = 0;
-    if (! TryParseImapUidFromLeafName(leaf, uid))
+    ImapMessageIdentity identity;
+    if (! TryParseImapMessageIdentityFromLeafName(leaf, identity))
     {
         return HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
     }
@@ -2972,13 +2986,67 @@ size_t CurlWriteImapFetchToFile(void* ptr, size_t size, size_t nmemb, void* user
         return hr;
     }
 
+    hr = ImapValidateMessageUidValidity(conn, mailboxPath, delimiter, identity.uidValidity);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
     const std::wstring serverMailboxPath = ImapMailboxPathToServerMailboxPath(mailboxPath, delimiter);
     if (serverMailboxPath.empty())
     {
         return E_OUTOFMEMORY;
     }
 
-    return ImapFetchMessageToFile(conn, serverMailboxPath, uid, file);
+    return ImapFetchMessageToFile(conn, serverMailboxPath, identity.uid, file);
+}
+
+[[nodiscard]] HRESULT ImapFetchCapabilities(const ConnectionInfo& conn, ImapCapabilities& outCapabilities) noexcept
+{
+    outCapabilities = {};
+    std::string response;
+    const auto started = std::chrono::steady_clock::now();
+    HRESULT hr         = CurlPerformImapCustomRequest(conn, L"/", "CAPABILITY", response);
+    if (SUCCEEDED(hr) && ! TryParseImapCapabilities(response, outCapabilities))
+    {
+        hr = HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+    }
+    Debug::Perf::EmitDurationUs(
+        L"filesystem.imap.capability_us", Debug::Perf::ElapsedUs(started), static_cast<uint64_t>(response.size()), outCapabilities.uidPlus ? 1u : 0u, hr);
+    return hr;
+}
+
+struct ImapDeleteCommandContext
+{
+    const ConnectionInfo* conn = nullptr;
+    std::wstring_view serverMailboxPath;
+    std::string response;
+};
+
+[[nodiscard]] HRESULT ExecuteImapDeleteCommand(void* opaqueContext, ImapDeleteCommand command, uint64_t uid) noexcept
+{
+    if (opaqueContext == nullptr)
+    {
+        return E_INVALIDARG;
+    }
+
+    auto& context = *static_cast<ImapDeleteCommandContext*>(opaqueContext);
+    if (context.conn == nullptr)
+    {
+        return E_INVALIDARG;
+    }
+    switch (command)
+    {
+        case ImapDeleteCommand::AddDeletedFlag:
+            return CurlPerformImapCustomRequest(
+                *context.conn, context.serverMailboxPath, std::format("UID STORE {} +FLAGS.SILENT (\\Deleted)", uid), context.response);
+        case ImapDeleteCommand::UidExpunge:
+            return CurlPerformImapCustomRequest(*context.conn, context.serverMailboxPath, std::format("UID EXPUNGE {}", uid), context.response);
+        case ImapDeleteCommand::RemoveDeletedFlag:
+            return CurlPerformImapCustomRequest(
+                *context.conn, context.serverMailboxPath, std::format("UID STORE {} -FLAGS.SILENT (\\Deleted)", uid), context.response);
+    }
+    return E_INVALIDARG;
 }
 
 [[nodiscard]] HRESULT ImapDeleteMessage(const ConnectionInfo& conn, std::wstring_view pluginPath) noexcept
@@ -2986,8 +3054,8 @@ size_t CurlWriteImapFetchToFile(void* ptr, size_t size, size_t nmemb, void* user
     const std::wstring fullPath = JoinPluginPathWide(conn.basePathWide, pluginPath);
 
     const std::wstring_view leaf = LeafName(fullPath);
-    uint64_t uid                 = 0;
-    if (! TryParseImapUidFromLeafName(leaf, uid))
+    ImapMessageIdentity identity;
+    if (! TryParseImapMessageIdentityFromLeafName(leaf, identity))
     {
         return HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
     }
@@ -3011,26 +3079,37 @@ size_t CurlWriteImapFetchToFile(void* ptr, size_t size, size_t nmemb, void* user
         return hr;
     }
 
+    hr = ImapValidateMessageUidValidity(conn, mailboxPath, delimiter, identity.uidValidity);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
     const std::wstring serverMailboxPath = ImapMailboxPathToServerMailboxPath(mailboxPath, delimiter);
     if (serverMailboxPath.empty())
     {
         return E_OUTOFMEMORY;
     }
 
-    std::string sink;
-    hr = CurlPerformImapCustomRequest(conn, serverMailboxPath, std::format("UID STORE {} +FLAGS.SILENT (\\Deleted)", uid), sink);
+    ImapCapabilities capabilities;
+    hr = ImapFetchCapabilities(conn, capabilities);
     if (FAILED(hr))
     {
         return hr;
     }
 
-    hr = CurlPerformImapCustomRequest(conn, serverMailboxPath, std::format("UID EXPUNGE {}", uid), sink);
-    if (SUCCEEDED(hr))
+    ImapDeleteCommandContext context{.conn = &conn, .serverMailboxPath = serverMailboxPath};
+    ImapDeleteOutcome outcome;
+    hr = ExecuteImapSingleMessageDelete(capabilities.uidPlus, identity.uid, ExecuteImapDeleteCommand, &context, outcome);
+    if (FAILED(hr) && outcome.rollbackAttempted && FAILED(outcome.rollbackHr))
     {
-        return S_OK;
+        Debug::Error(L"imap single-message delete rollback failed: expungeHr={:#x} rollbackHr={:#x} mailbox='{}' uid={}",
+                     hr,
+                     outcome.rollbackHr,
+                     mailboxPath,
+                     identity.uid);
     }
-
-    return CurlPerformImapCustomRequest(conn, serverMailboxPath, "EXPUNGE", sink);
+    return hr;
 }
 
 [[nodiscard]] HRESULT ImapDeleteMailbox(const ConnectionInfo& conn, std::wstring_view pluginPath) noexcept
@@ -3255,6 +3334,26 @@ size_t CurlWriteImapFetchToFile(void* ptr, size_t size, size_t nmemb, void* user
         perf.SetValue0(entries.size());
         return S_OK;
     }
+
+    std::wstring mailboxPath;
+    mailboxPath.reserve(mailboxName.size() + 1u);
+    mailboxPath.push_back(L'/');
+    mailboxPath.append(mailboxName);
+
+    ImapMailboxStatus mailboxStatus;
+    hr = ImapFetchMailboxStatus(conn, mailboxPath, delimiter, mailboxStatus);
+    if (FAILED(hr))
+    {
+        perf.SetHr(hr);
+        return hr;
+    }
+    if (! mailboxStatus.uidValidity.has_value() || mailboxStatus.uidValidity.value() == 0u)
+    {
+        hr = HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        perf.SetHr(hr);
+        return hr;
+    }
+    const uint64_t uidValidity = mailboxStatus.uidValidity.value();
 
     std::vector<uint64_t> uids;
     auto listUidsStarted = std::chrono::steady_clock::now();
@@ -3485,12 +3584,12 @@ size_t CurlWriteImapFetchToFile(void* ptr, size_t size, size_t nmemb, void* user
                 entry.attributes |= kImapFileAttributeDeleted;
             }
 
-            entry.name = BuildImapMessageLeafName(meta.subject, meta.from, uid);
+            entry.name = BuildImapMessageLeafName(meta.subject, meta.from, uidValidity, uid);
         }
 
         if (entry.name.empty())
         {
-            entry.name = std::format(L"{}.eml", uid);
+            entry.name = std::format(L"message [{}-{}].eml", uidValidity, uid);
         }
         entries.push_back(std::move(entry));
     }
@@ -3506,7 +3605,10 @@ size_t CurlWriteImapFetchToFile(void* ptr, size_t size, size_t nmemb, void* user
     return S_OK;
 }
 
-[[nodiscard]] void FillImapMessageEntryFromSummary(FilesInformationCurl::Entry& entry, const ImapMessageSummary& meta, uint64_t uid) noexcept
+[[nodiscard]] void FillImapMessageEntryFromSummary(FilesInformationCurl::Entry& entry,
+                                                   const ImapMessageSummary& meta,
+                                                   uint64_t uidValidity,
+                                                   uint64_t uid) noexcept
 {
     entry.attributes    = FILE_ATTRIBUTE_NORMAL;
     entry.fileIndex     = (uid <= static_cast<uint64_t>((std::numeric_limits<unsigned long>::max)())) ? static_cast<unsigned long>(uid) : 0u;
@@ -3529,10 +3631,10 @@ size_t CurlWriteImapFetchToFile(void* ptr, size_t size, size_t nmemb, void* user
         entry.attributes |= kImapFileAttributeDeleted;
     }
 
-    entry.name = BuildImapMessageLeafName(meta.subject, meta.from, uid);
+    entry.name = BuildImapMessageLeafName(meta.subject, meta.from, uidValidity, uid);
     if (entry.name.empty())
     {
-        entry.name = std::format(L"{}.eml", uid);
+        entry.name = std::format(L"message [{}-{}].eml", uidValidity, uid);
     }
 }
 
@@ -3551,8 +3653,8 @@ size_t CurlWriteImapFetchToFile(void* ptr, size_t size, size_t nmemb, void* user
     }
 
     const std::wstring_view leaf = LeafName(trimmed);
-    uint64_t uid                 = 0;
-    if (TryParseImapUidFromLeafName(leaf, uid))
+    ImapMessageIdentity identity;
+    if (TryParseImapMessageIdentityFromLeafName(leaf, identity))
     {
         std::wstring mailboxPath = ParentPath(trimmed);
         mailboxPath              = std::wstring(TrimTrailingSlash(mailboxPath));
@@ -3568,6 +3670,12 @@ size_t CurlWriteImapFetchToFile(void* ptr, size_t size, size_t nmemb, void* user
             return hr;
         }
 
+        hr = ImapValidateMessageUidValidity(conn, mailboxPath, delimiter, identity.uidValidity);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
         const std::wstring serverMailboxPath = ImapMailboxPathToServerMailboxPath(mailboxPath, delimiter);
         if (serverMailboxPath.empty())
         {
@@ -3575,20 +3683,20 @@ size_t CurlWriteImapFetchToFile(void* ptr, size_t size, size_t nmemb, void* user
         }
 
         std::unordered_map<uint64_t, ImapMessageSummary> summaries;
-        const uint64_t uidArr[1]{uid};
+        const uint64_t uidArr[1]{identity.uid};
         hr = ImapFetchMessageSummaries(conn, serverMailboxPath, std::span<const uint64_t>(uidArr, 1), summaries);
         if (FAILED(hr))
         {
             return hr;
         }
 
-        const auto it = summaries.find(uid);
+        const auto it = summaries.find(identity.uid);
         if (it == summaries.end())
         {
             return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
         }
 
-        FillImapMessageEntryFromSummary(out, it->second, uid);
+        FillImapMessageEntryFromSummary(out, it->second, identity.uidValidity, identity.uid);
         return S_OK;
     }
 

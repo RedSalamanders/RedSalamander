@@ -17,6 +17,7 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <thread>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -57,6 +58,7 @@
 #include "LocalizationManager.h"
 #include "MinimumOsVersion.h"
 #include "MonitorDiagnostics.h"
+#include "MonitorFileReader.h"
 #include "RedSalamanderMonitor.h"
 #include "SettingsStore.h"
 #include "Version.h"
@@ -118,6 +120,8 @@ constexpr std::wstring_view kMonitorEtwBurstLatencyMode   = L"latency";
 constexpr std::wstring_view kMonitorAreaName              = L"Monitor";
 constexpr std::wstring_view kMonitorScenarioName          = L"monitor.chrome.dxui_toolbar_statusstrip";
 constexpr UINT kMsgRunMonitorChromeSelfTest               = WM_APP + 0x61C;
+constexpr UINT kMsgMonitorFileOpenProgress                 = WM_APP + 0x61D;
+constexpr UINT kMsgMonitorFileOpenCompleted                = WM_APP + 0x61E;
 
 #if defined(_DEBUG)
 constexpr std::wstring_view kMonitorBuildFlavor = L"Debug";
@@ -262,6 +266,24 @@ struct MonitorChromeSelfTestContext final
 MonitorChromeSelfTestContext g_monitorChromeSelfTest;
 MonitorEtwBurstOptions g_monitorEtwBurstOptions;
 MonitorScrollbackSelfTestOptions g_monitorScrollbackSelfTestOptions;
+
+struct MonitorFileOpenProgress final
+{
+    uint64_t generation = 0u;
+    uint64_t bytesRead  = 0u;
+    uint64_t totalBytes = 0u;
+};
+
+struct MonitorFileOpenCompletion final
+{
+    RedSalamanderMonitor::MonitorFileReadResult result;
+    uint64_t generation = 0u;
+    uint64_t durationUs = 0u;
+};
+
+std::jthread g_monitorFileOpenThread;
+std::atomic<bool> g_monitorFileOpenActive{false};
+uint64_t g_monitorFileOpenGeneration = 0u;
 
 constexpr std::array<std::wstring_view, 6> kRequiredMonitorFrameMetrics{{
     L"monitor.frame.total_us",
@@ -2473,37 +2495,40 @@ void CreateStatusStripHost(HWND hWnd)
     static_cast<void>(g_statusDxHost.PrimeForShow());
 }
 
-std::wstring ReadFileAsTextUTF(const std::wstring& path)
+void RequestMonitorFileOpenCancellation() noexcept
 {
-    std::wstring result;
-    std::ifstream f(path, std::ios::binary);
-    if (! f)
-        return result;
-    std::vector<unsigned char> bytes((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
-    if (bytes.empty())
-        return result;
+    if (! g_monitorFileOpenThread.joinable())
+    {
+        return;
+    }
 
-    // BOM detection: UTF-16LE, UTF-8
-    if (bytes.size() >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE)
+    g_monitorFileOpenThread.request_stop();
+    if (CancelSynchronousIo(g_monitorFileOpenThread.native_handle()) == FALSE)
     {
-        // UTF-16 LE with BOM
-        size_t wcharCount = (bytes.size() - 2) / 2;
-        result.resize(wcharCount);
-        memcpy(result.data(), bytes.data() + 2, wcharCount * sizeof(wchar_t));
-        return result;
+        const DWORD error = GetLastError();
+        if (error != ERROR_NOT_FOUND)
+        {
+            Debug::Warning(L"Monitor file open: CancelSynchronousIo failed (gle=0x{:08X})", error);
+        }
     }
-    if (bytes.size() >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
-    {
-        // UTF-8 BOM
-        return Common::Strings::Utf16FromUtf8ReplacingInvalid(
-            std::string_view(reinterpret_cast<const char*>(bytes.data() + 3), bytes.size() - 3));
-    }
-    // Assume UTF-8 without BOM
-    return Common::Strings::Utf16FromUtf8ReplacingInvalid(std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
 }
 
 bool DoFileOpen(HWND owner)
 {
+    if (g_monitorFileOpenActive.load(std::memory_order_acquire))
+    {
+        RequestMonitorFileOpenCancellation();
+        if (g_statusStrip)
+        {
+            g_statusStrip->SetSectionText(4u, LoadStringResource(g_hInstance, IDS_MSG_OPEN_CANCEL_REQUESTED));
+        }
+        return false;
+    }
+    if (g_monitorFileOpenThread.joinable())
+    {
+        g_monitorFileOpenThread = std::jthread{};
+    }
+
     wchar_t file[MAX_PATH]        = L"";
     const std::wstring filter     = LoadStringResource(g_hInstance, IDS_FILE_FILTER_OPEN);
     const std::wstring defaultExt = LoadStringResource(g_hInstance, IDS_FILE_DEFAULT_EXT_TXT);
@@ -2519,17 +2544,97 @@ bool DoFileOpen(HWND owner)
     if (! GetOpenFileNameW(&ofn))
         return false;
 
-    auto text = ReadFileAsTextUTF(file);
-    if (text.empty())
+    const Common::Settings::MonitorRetentionSettings retention =
+        g_settings.monitor.value_or(Common::Settings::MonitorSettings{}).retention;
+    const RedSalamanderMonitor::MonitorFileReadLimits limits{
+        .maxBytes = retention.maxRetainedTextBytes,
+        .maxLines = retention.maxRetainedLines,
+    };
+    const std::filesystem::path path(file);
+    const uint64_t generation = ++g_monitorFileOpenGeneration;
+    g_monitorFileOpenActive.store(true, std::memory_order_release);
+    g_monitorFileOpenThread = std::jthread([owner, path, limits, generation](std::stop_token stopToken)
     {
+        const auto started = std::chrono::steady_clock::now();
+        uint64_t lastPostedBytes = 0u;
+        RedSalamanderMonitor::MonitorFileReadResult result = RedSalamanderMonitor::ReadMonitorTextFile(
+            path,
+            stopToken,
+            limits,
+            [owner, generation, &lastPostedBytes](uint64_t bytesRead, uint64_t totalBytes)
+            {
+                constexpr uint64_t kProgressStepBytes = 1u * 1024u * 1024u;
+                if (bytesRead != totalBytes && bytesRead - lastPostedBytes < kProgressStepBytes)
+                {
+                    return;
+                }
+                lastPostedBytes = bytesRead;
+                auto progress = std::make_unique<MonitorFileOpenProgress>(MonitorFileOpenProgress{
+                    .generation = generation,
+                    .bytesRead  = bytesRead,
+                    .totalBytes = totalBytes,
+                });
+                static_cast<void>(PostMessagePayload(owner, kMsgMonitorFileOpenProgress, 0, std::move(progress)));
+            });
+
+        auto completion = std::make_unique<MonitorFileOpenCompletion>(MonitorFileOpenCompletion{
+            .result     = std::move(result),
+            .generation = generation,
+            .durationUs = Debug::Perf::ElapsedUs(started),
+        });
+        g_monitorFileOpenActive.store(false, std::memory_order_release);
+        static_cast<void>(PostMessagePayload(owner, kMsgMonitorFileOpenCompleted, 0, std::move(completion)));
+    });
+    return true;
+}
+
+LRESULT OnMonitorFileOpenProgress(LPARAM lParam)
+{
+    auto progress = TakeMessagePayload<MonitorFileOpenProgress>(lParam);
+    if (progress && progress->generation == g_monitorFileOpenGeneration && g_statusStrip)
+    {
+        g_statusStrip->SetSectionText(
+            4u, FormatStringResource(g_hInstance, IDS_STATUS_OPEN_PROGRESS_FMT, progress->bytesRead, progress->totalBytes));
+    }
+    return 0;
+}
+
+LRESULT OnMonitorFileOpenCompleted(HWND owner, LPARAM lParam)
+{
+    auto completion = TakeMessagePayload<MonitorFileOpenCompletion>(lParam);
+    if (! completion)
+    {
+        return 0;
+    }
+    if (completion->generation != g_monitorFileOpenGeneration)
+    {
+        return 0;
+    }
+
+    Debug::Perf::EmitDurationUs(L"monitor.file_open.total_us",
+                                completion->durationUs,
+                                completion->result.bytesRead,
+                                static_cast<uint64_t>(completion->result.lineCount),
+                                completion->result.hr);
+    if (completion->result.hr == HRESULT_FROM_WIN32(ERROR_CANCELLED))
+    {
+        UpdateStatusBar();
+        return 0;
+    }
+    if (FAILED(completion->result.hr))
+    {
+        Debug::Warning(L"Monitor file open failed before publication: 0x{:08X}", static_cast<uint32_t>(completion->result.hr));
         const std::wstring caption = LoadStringResource(g_hInstance, IDS_CAPTION_OPEN);
         const std::wstring message = LoadStringResource(g_hInstance, IDS_MSG_OPEN_FAILED_READ);
         ShowModalMessageDialog(g_hInstance, owner, caption.c_str(), message.c_str());
-        return false;
+        UpdateStatusBar();
+        return 0;
     }
+
     g_colorView.ClearColoring();
-    g_colorView.SetText(text);
-    return true;
+    g_colorView.SetText(completion->result.text);
+    UpdateStatusBar();
+    return 0;
 }
 
 bool DoFileSaveAs(HWND owner)
@@ -2671,7 +2776,8 @@ void UpdateStatusBar()
     const std::wstring autoText    = LoadStringResource(g_hInstance, isAutoScrollEnabled ? IDS_STATUS_AUTOSCROLL_ON : IDS_STATUS_AUTOSCROLL_OFF);
     const std::wstring visibleText = FormatStringResource(g_hInstance, IDS_STATUS_VISIBLE_FMT, visibleLines);
     const std::wstring totalText   = FormatStringResource(g_hInstance, IDS_STATUS_TOTAL_FMT, totalLines);
-    const std::wstring etwText     = FormatStringResource(g_hInstance, IDS_STATUS_ETW_RECEIVED_FMT, etwReceived);
+    const std::wstring etwText =
+        FormatStringResource(g_hInstance, IDS_STATUS_ETW_RECEIVED_FMT, etwReceived, g_colorView.GetDroppedEventCount());
 
     g_statusStrip->SetSectionText(0u, autoText);
     g_statusStrip->SetSectionText(1u, filterText);
@@ -2794,6 +2900,58 @@ LRESULT RunMonitorChromeSelfTest(HWND hWnd)
     passed &= require(L"status visible section", g_statusStrip && ! g_statusStrip->GetSectionText(2u).empty());
     passed &= require(L"status total section", g_statusStrip && ! g_statusStrip->GetSectionText(3u).empty());
     passed &= require(L"status etw section", g_statusStrip && ! g_statusStrip->GetSectionText(4u).empty());
+
+    g_colorView.SetText(L"clear state regression");
+    g_colorView.DebugSetSelectionState(2u, 7u, 5u);
+    g_colorView.ClearText();
+    const auto [clearSelectionStart, clearSelectionEnd, clearCaretPosition] = g_colorView.DebugGetSelectionState();
+    passed &= require(L"clear resets selection and caret",
+                      clearSelectionStart == 0u && clearSelectionEnd == 0u && clearCaretPosition == 0u && g_colorView.GetTotalLineCount() == 0u);
+
+    const uint64_t droppedBeforeOverload = g_colorView.GetDroppedEventCount();
+    g_colorView.SetRetentionLimits(ColorTextView::RetentionLimits{
+        .maxQueuedEvents       = 32u,
+        .maxRetainedLines      = 24u,
+        .maxRetainedTextBytes  = 1u * 1024u * 1024u,
+        .maxSearchMatches      = 1'000u,
+    });
+    for (size_t i = 0u; i < 80u; ++i)
+    {
+        Debug::InfoParam info{};
+        info.processID = ::GetCurrentProcessId();
+        info.threadID  = ::GetCurrentThreadId();
+        info.type      = Debug::InfoParam::Type::Warning;
+        g_colorView.QueueEtwEvent(info, std::format(L"Monitor bounded overload event {}", i));
+    }
+    MSG overloadMessage{};
+    for (int pump = 0; pump < 64 && g_colorView.DebugGetQueuedEventCount() != 0u; ++pump)
+    {
+        while (::PeekMessageW(&overloadMessage, g_hColorView.get(), 0, 0, PM_REMOVE))
+        {
+            ::TranslateMessage(&overloadMessage);
+            ::DispatchMessageW(&overloadMessage);
+        }
+        if (g_colorView.DebugGetQueuedEventCount() != 0u)
+        {
+            ::Sleep(1);
+        }
+    }
+    const uint64_t overloadDropped = g_colorView.GetDroppedEventCount() - droppedBeforeOverload;
+    passed &= require(L"etw overload stays bounded",
+                      g_colorView.DebugGetQueuedEventCount() == 0u && g_colorView.GetTotalLineCount() == 24u && overloadDropped == 56u,
+                      std::format(L"queued={} retained={} dropped={}",
+                                  g_colorView.DebugGetQueuedEventCount(),
+                                  g_colorView.GetTotalLineCount(),
+                                  overloadDropped));
+    g_colorView.ClearText();
+    const Common::Settings::MonitorRetentionSettings configuredRetention =
+        g_settings.monitor.value_or(Common::Settings::MonitorSettings{}).retention;
+    g_colorView.SetRetentionLimits(ColorTextView::RetentionLimits{
+        .maxQueuedEvents       = configuredRetention.maxQueuedEvents,
+        .maxRetainedLines      = configuredRetention.maxRetainedLines,
+        .maxRetainedTextBytes  = configuredRetention.maxRetainedTextBytes,
+        .maxSearchMatches      = configuredRetention.maxSearchMatches,
+    });
 
     if (passed)
     {
@@ -3579,6 +3737,7 @@ namespace
 {
 LRESULT OnCreateMainWindow(HWND hWnd)
 {
+    InitPostedPayloadWindow(hWnd);
     g_hColorView.reset(g_colorView.Create(hWnd, 0, 0, 0, 0));
     if (! g_hColorView)
     {
@@ -3603,6 +3762,14 @@ LRESULT OnCreateMainWindow(HWND hWnd)
     g_colorView.EnableLineNumbers(g_lineNumbersVisible);
     g_colorView.SetAutoScroll(g_autoScrollEnabled);
     g_colorView.SetFilterMask(g_filterMask);
+    const Common::Settings::MonitorRetentionSettings retention =
+        g_settings.monitor.value_or(Common::Settings::MonitorSettings{}).retention;
+    g_colorView.SetRetentionLimits(ColorTextView::RetentionLimits{
+        .maxQueuedEvents       = retention.maxQueuedEvents,
+        .maxRetainedLines      = retention.maxRetainedLines,
+        .maxRetainedTextBytes  = retention.maxRetainedTextBytes,
+        .maxSearchMatches      = retention.maxSearchMatches,
+    });
     ApplyMonitorTheme();
 
     if (g_hToolbar)
@@ -3991,6 +4158,14 @@ LRESULT OnDestroyMainWindow(HWND hWnd)
         g_etwListener.reset();
     }
 
+    if (g_monitorFileOpenThread.joinable())
+    {
+        RequestMonitorFileOpenCancellation();
+        g_monitorFileOpenThread = std::jthread{};
+    }
+    ++g_monitorFileOpenGeneration;
+    g_monitorFileOpenActive.store(false, std::memory_order_release);
+
     g_hColorView.reset();
     if (g_hToolbar)
     {
@@ -4037,9 +4212,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         case WM_DWMCOLORIZATIONCOLORCHANGED:
         case WM_SYSCOLORCHANGE: return OnSystemThemeChangedMainWindow(hWnd);
         case kMsgRunMonitorChromeSelfTest: return RunMonitorChromeSelfTest(hWnd);
+        case kMsgMonitorFileOpenProgress: return OnMonitorFileOpenProgress(lParam);
+        case kMsgMonitorFileOpenCompleted: return OnMonitorFileOpenCompleted(hWnd, lParam);
         case WM_COMMAND: return OnCommandMainWindow(hWnd, LOWORD(wParam), HIWORD(wParam), reinterpret_cast<HWND>(lParam));
         case WM_PAINT: return OnPaintMainWindow(hWnd);
         case WM_DESTROY: return OnDestroyMainWindow(hWnd);
+        case WM_NCDESTROY:
+            static_cast<void>(DrainPostedPayloadsForWindow(hWnd));
+            return DefWindowProc(hWnd, message, wParam, lParam);
         default: return DefWindowProc(hWnd, message, wParam, lParam);
     }
 }

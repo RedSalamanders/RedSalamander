@@ -45,10 +45,18 @@ public:
     void Stop();
 
     // Check if listener is currently running
-    [[maybe_unused]] bool IsRunning() const
-    {
-        return _isRunning;
-    }
+    [[maybe_unused]] bool IsRunning() const;
+
+#if defined(ENABLE_TESTS)
+    using DebugProcessTraceFunction = ULONG (*)(void* context, TRACEHANDLE traceHandle) noexcept;
+    using DebugCloseTraceFunction   = void (*)(void* context, TRACEHANDLE traceHandle) noexcept;
+
+    void DebugStartConsumerForTesting(TRACEHANDLE traceHandle,
+                                      DebugProcessTraceFunction processTrace,
+                                      DebugCloseTraceFunction closeTrace,
+                                      void* context,
+                                      DWORD shutdownTimeoutMs);
+#endif
 
     // Get last error message (if Start failed)
     std::wstring GetLastError() const
@@ -63,6 +71,8 @@ public:
     }
 
 private:
+    struct CallbackState;
+
     static constexpr wchar_t kSessionName[] = L"RedSalamanderMonitor_ETW_Session";
     static constexpr GUID kProviderGuid     = {0x440c70f6, 0x6c6b, 0x4ff7, {0x9a, 0x3f, 0x0b, 0x7d, 0xb4, 0x11, 0xb3, 0x1a}};
 
@@ -70,31 +80,31 @@ private:
     static ULONG WINAPI BufferCallback(PEVENT_TRACE_LOGFILEW logfile);
     static VOID WINAPI EventRecordCallback(PEVENT_RECORD eventRecord);
 
-    // Instance method to handle events
-    void HandleEvent(PEVENT_RECORD eventRecord);
+    // Per-session callback handlers. EVENT_TRACE_LOGFILE::Context owns the routing identity.
+    static void HandleEvent(CallbackState& state, PEVENT_RECORD eventRecord);
 
     // Extract data from TraceLogging event
-    bool ExtractEventData(PEVENT_RECORD eventRecord, Debug::InfoParam& info, std::wstring& message);
+    static bool ExtractEventData(PEVENT_RECORD eventRecord, Debug::InfoParam& info, std::wstring& message);
 
-    // Worker thread function
-    void ProcessTraceThread();
+    using ProcessTraceFunction = ULONG (*)(void* context, TRACEHANDLE traceHandle) noexcept;
+    static ULONG ProcessTraceConsumer(void* context, TRACEHANDLE traceHandle) noexcept;
+    void StartConsumerWorker(TRACEHANDLE traceHandle,
+                             const std::shared_ptr<CallbackState>& callbackState,
+                             ProcessTraceFunction processTrace,
+                             void* processTraceContext);
 
     // Member variables
-    EventCallback _userCallback;
+    std::shared_ptr<CallbackState> _callbackState;
     TRACEHANDLE _sessionHandle;
     TRACEHANDLE _traceHandle;
     std::jthread _workerThread;
-    std::atomic<bool> _isRunning;
     std::wstring _lastError;
     ULONG _lastErrorCode = ERROR_SUCCESS;
-
-    // Buffer statistics for monitoring
-    std::atomic<ULONG> _buffersProcessed{0};
-    std::atomic<ULONG> _eventsProcessed{0};
-    std::atomic<ULONG> _eventsLost{0};
-
-    // Static instance pointer for callbacks (atomic: written on UI thread, read from ETW worker thread)
-    static std::atomic<EtwListener*> s_instance;
+#if defined(ENABLE_TESTS)
+    DebugCloseTraceFunction _debugCloseTrace = nullptr;
+    void* _debugTraceContext                = nullptr;
+    DWORD _shutdownTimeoutMs                = 5'000u;
+#endif
 
 public:
     // Get buffer statistics (for diagnostics)

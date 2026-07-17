@@ -91,60 +91,24 @@
       <PreprocessorDefinitions>_DEBUG;_WINDOWS;VIEWERIMGRAW_EXPORTS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <OpenMPSupport>true</OpenMPSupport>
     </ClCompile>
-    <PostBuildEvent>
-      <Command>xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\raw_rd.dll" "$(OutDir)"
-xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\jasperd.dll" "$(OutDir)"
-xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\jpeg8.dll" "$(OutDir)"
-xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\turbojpeg.dll" "$(OutDir)"
-xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\lcms2-2.dll" "$(OutDir)"
-xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\zd.dll" "$(OutDir)"
-xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\yyjson.dll" "$(OutDir)"</Command>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
     <ClCompile>
       <PreprocessorDefinitions>_DEBUG;_WINDOWS;VIEWERIMGRAW_EXPORTS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <OpenMPSupport>true</OpenMPSupport>
     </ClCompile>
-    <PostBuildEvent>
-      <Command>xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\raw_rd.dll" "$(OutDir)"
-xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\jasperd.dll" "$(OutDir)"
-xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\jpeg8.dll" "$(OutDir)"
-xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\turbojpeg.dll" "$(OutDir)"
-xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\lcms2-2.dll" "$(OutDir)"
-xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\zd.dll" "$(OutDir)"
-xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\yyjson.dll" "$(OutDir)"</Command>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ASan Debug|x64'">
     <ClCompile>
       <PreprocessorDefinitions>_DEBUG;_WINDOWS;VIEWERIMGRAW_EXPORTS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <OpenMPSupport>true</OpenMPSupport>
     </ClCompile>
-    <PostBuildEvent>
-      <Command>xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\raw_rd.dll" "$(OutDir)"
-xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\jasperd.dll" "$(OutDir)"
-xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\jpeg8.dll" "$(OutDir)"
-xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\turbojpeg.dll" "$(OutDir)"
-xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\lcms2-2.dll" "$(OutDir)"
-xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\zd.dll" "$(OutDir)"
-xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\yyjson.dll" "$(OutDir)"</Command>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ASan Debug|ARM64'">
     <ClCompile>
       <PreprocessorDefinitions>_DEBUG;_WINDOWS;VIEWERIMGRAW_EXPORTS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <OpenMPSupport>true</OpenMPSupport>
     </ClCompile>
-    <PostBuildEvent>
-      <Command>xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\raw_rd.dll" "$(OutDir)"
-xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\jasperd.dll" "$(OutDir)"
-xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\jpeg8.dll" "$(OutDir)"
-xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\turbojpeg.dll" "$(OutDir)"
-xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\lcms2-2.dll" "$(OutDir)"
-xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\zd.dll" "$(OutDir)"
-xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\yyjson.dll" "$(OutDir)"</Command>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -153,15 +117,6 @@ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\yyjson.dll" "$(OutD
       <PreprocessorDefinitions>NDEBUG;_WINDOWS;VIEWERIMGRAW_EXPORTS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <OpenMPSupport>true</OpenMPSupport>
     </ClCompile>
-    <PostBuildEvent>
-      <Command>xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\raw_r.dll" "$(OutDir)"
-xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\jasper.dll" "$(OutDir)"
-xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\jpeg8.dll" "$(OutDir)"
-xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\turbojpeg.dll" "$(OutDir)"
-xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\lcms2-2.dll" "$(OutDir)"
-xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\z.dll" "$(OutDir)"
-xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\yyjson.dll" "$(OutDir)"</Command>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
     <ClCompile>
@@ -170,15 +125,6 @@ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\yyjson.dll" "$(OutDir)"</
       <PreprocessorDefinitions>NDEBUG;_WINDOWS;VIEWERIMGRAW_EXPORTS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <OpenMPSupport>true</OpenMPSupport>
     </ClCompile>
-    <PostBuildEvent>
-      <Command>xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\raw_r.dll" "$(OutDir)"
-xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\jasper.dll" "$(OutDir)"
-xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\jpeg8.dll" "$(OutDir)"
-xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\turbojpeg.dll" "$(OutDir)"
-xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\lcms2-2.dll" "$(OutDir)"
-xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\z.dll" "$(OutDir)"
-xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\yyjson.dll" "$(OutDir)"</Command>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp" />

@@ -41,9 +41,11 @@
 #include <shellapi.h>
 #include <shlobj_core.h>
 #include <strsafe.h>
+#include <wtsapi32.h>
 #include <winnetwk.h>
 
 #pragma comment(lib, "Mpr.lib")
+#pragma comment(lib, "Wtsapi32.lib")
 
 // Define the ETW provider for RedSalamander.exe
 // Each executable must have its own provider instance with the same GUID
@@ -102,12 +104,45 @@ PCWSTR REDSALAMANDER_TEXT_VERSION = L"RedSalamander " VERSINFO_VERSION;
 
 constexpr int MAX_LOADSTRING = 100;
 
-// Global Variables:
-HINSTANCE g_hInstance = nullptr; // current instance
-FolderWindow g_folderWindow;     // folder window (integrates NavigationView + FolderView)
-std::atomic<HWND> g_hFolderWindow{nullptr};
-ThemeMode g_themeMode = ThemeMode::System;
-Common::Settings::Settings g_settings;
+namespace
+{
+struct ApplicationContext final
+{
+    ApplicationContext()                                   = default;
+    ApplicationContext(const ApplicationContext&)          = delete;
+    ApplicationContext& operator=(const ApplicationContext&) = delete;
+    ApplicationContext(ApplicationContext&&)               = delete;
+    ApplicationContext& operator=(ApplicationContext&&)    = delete;
+
+    HINSTANCE instance = nullptr;
+    FolderWindow folderWindow;
+    std::atomic<HWND> folderWindowHandle{nullptr};
+    ThemeMode themeMode = ThemeMode::System;
+    Common::Settings::Settings settings;
+};
+
+ApplicationContext g_applicationContext;
+
+// Keep the staged migration readable inside this composition-root translation unit. These
+// aliases have internal linkage; production consumers receive explicit narrow dependencies.
+HINSTANCE& g_hInstance                 = g_applicationContext.instance;
+FolderWindow& g_folderWindow           = g_applicationContext.folderWindow;
+std::atomic<HWND>& g_hFolderWindow     = g_applicationContext.folderWindowHandle;
+ThemeMode& g_themeMode                 = g_applicationContext.themeMode;
+Common::Settings::Settings& g_settings = g_applicationContext.settings;
+}
+
+#ifdef ENABLE_TESTS
+FolderWindow& GetApplicationFolderWindowForSelfTest() noexcept
+{
+    return g_applicationContext.folderWindow;
+}
+
+Common::Settings::Settings& GetApplicationSettingsForSelfTest() noexcept
+{
+    return g_applicationContext.settings;
+}
+#endif
 
 void ApplyThemeId(HWND hWnd, std::wstring_view themeId);
 
@@ -2605,7 +2640,8 @@ void CaptureRuntimeSettings(HWND hWnd) noexcept
     }
 #endif
 
-    return Common::Settings::SaveSettings(kAppId, settings);
+    constexpr DWORD kSessionEndSettingsSaveTimeoutMs = 5000u;
+    return SettingsHotReload::SaveSettingsForSessionEnd(kAppId, settings, kSessionEndSettingsSaveTimeoutMs);
 }
 
 void CaptureAndSaveRuntimeSettingsForSessionEnd(HWND hWnd) noexcept
@@ -7182,6 +7218,8 @@ bool DebugIsRedSalamanderDiagnosticsEnabledByDefault() noexcept
 // Separate function with C++ objects (cannot use __try/__except)
 static int RunApplication(HINSTANCE hInstance, int nCmdShow)
 {
+    ConfigureHostServices(g_folderWindow, g_hFolderWindow, g_settings);
+
     const auto hasArg = [](PCWSTR needle) noexcept -> bool
     {
         if (! needle || needle[0] == L'\0')
@@ -7609,6 +7647,35 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
     const bool runHeadlessCompareSelfTest = false;
     const bool anySelfTest                = false;
 #endif
+
+    if (! settingsRecovery.connectionProfileIdMigrations.empty())
+    {
+        const HRESULT migrationSaveHr = Common::Settings::SaveSettings(kAppId, g_settings);
+        if (FAILED(migrationSaveHr))
+        {
+            Debug::Error(L"Failed to persist migrated connection profile IDs (count={}, hr=0x{:08X}).",
+                         settingsRecovery.connectionProfileIdMigrations.size(),
+                         static_cast<unsigned long>(migrationSaveHr));
+        }
+
+        if (! anySelfTest)
+        {
+            const std::wstring title = LoadStringResource(nullptr, IDS_CAPTION_CONNECTION_PROFILE_IDS_MIGRATED);
+            std::wstring message = FormatStringResource(nullptr,
+                                                        IDS_FMT_CONNECTION_PROFILE_IDS_MIGRATED,
+                                                        settingsRecovery.connectionProfileIdMigrations.size(),
+                                                        settingsRecovery.settingsPath.wstring());
+            if (FAILED(migrationSaveHr))
+            {
+                message.append(L"\r\n\r\n");
+                message.append(FormatStringResource(nullptr,
+                                                    IDS_FMT_SETTINGS_SAVE_FAILED,
+                                                    settingsRecovery.settingsPath.wstring(),
+                                                    static_cast<unsigned long>(migrationSaveHr)));
+            }
+            MessageBoxCenteredText(nullptr, message, title, MB_OK | MB_ICONWARNING);
+        }
+    }
 
     if (! anySelfTest &&
         g_settings.persistence.savePermission == Common::Settings::SettingsSavePermission::ExplicitReplacementRequired)
@@ -8910,6 +8977,11 @@ LRESULT OnMainWindowCreate(HWND hWnd, [[maybe_unused]] const CREATESTRUCTW* crea
     }
 #endif
 
+    if (WTSRegisterSessionNotification(hWnd, NOTIFY_FOR_THIS_SESSION) == FALSE)
+    {
+        Debug::Warning(L"Failed to register the main window for session-boundary notifications (error={}).", GetLastError());
+    }
+
     g_menuBarVisible     = true;
     g_functionBarVisible = true;
     if (g_settings.mainMenu.has_value())
@@ -9703,7 +9775,7 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
             right.rootPluginPath  = rightRoot.value();
 
             const AppTheme theme = ResolveConfiguredTheme();
-            static_cast<void>(ShowCompareDirectoriesWindow(hWnd, g_settings, theme, &g_shortcutManager, std::move(left), std::move(right)));
+            static_cast<void>(ShowCompareDirectoriesWindow(hWnd, g_folderWindow, g_settings, theme, &g_shortcutManager, std::move(left), std::move(right)));
             break;
         }
         case IDM_PANE_FIND:
@@ -9718,7 +9790,7 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
             context.rootPluginPath  = g_folderWindow.GetCurrentPluginPath(pane).value_or(std::filesystem::path{});
 
             const AppTheme theme = ResolveConfiguredTheme();
-            static_cast<void>(ShowFindFilesWindow(hWnd, g_settings, theme, std::move(context)));
+            static_cast<void>(ShowFindFilesWindow(hWnd, g_folderWindow, g_settings, theme, std::move(context)));
             break;
         }
         case IDM_PANE_BATCH_RENAME:
@@ -10403,7 +10475,7 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
             const FolderWindow::Pane pane = g_folderWindow.GetActivePane();
             const AppTheme theme          = ResolveConfiguredTheme();
 
-            static_cast<void>(ShowConnectionManagerWindow(hWnd, kAppId, g_settings, theme, {}, static_cast<uint8_t>(pane)));
+            static_cast<void>(ShowConnectionManagerWindow(hWnd, g_folderWindow, kAppId, g_settings, theme, {}, static_cast<uint8_t>(pane)));
             break;
         }
         case IDM_PANE_MAKE_FILE_LIST:
@@ -11256,13 +11328,29 @@ LRESULT OnMainWindowEndSession(HWND hWnd, bool sessionEnding) noexcept
 {
     if (sessionEnding)
     {
+        HostClearConnectionSessionState();
         CaptureAndSaveRuntimeSettingsForSessionEnd(hWnd);
+    }
+    return 0;
+}
+
+LRESULT OnMainWindowSessionChange(WPARAM reason) noexcept
+{
+    switch (reason)
+    {
+        case WTS_SESSION_LOCK:
+        case WTS_SESSION_LOGOFF:
+        case WTS_CONSOLE_DISCONNECT:
+        case WTS_REMOTE_DISCONNECT: HostClearConnectionSessionState(); break;
+        default: break;
     }
     return 0;
 }
 
 LRESULT OnMainWindowDestroy(HWND hWnd)
 {
+    static_cast<void>(WTSUnRegisterSessionNotification(hWnd));
+    HostClearConnectionSessionState();
     SettingsHotReload::StopWatchingForProcessShutdown();
     g_mainMenuBarHost.Destroy();
 
@@ -11490,6 +11578,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             return 0;
         case WM_QUERYENDSESSION: return OnMainWindowQueryEndSession();
         case WM_ENDSESSION: return OnMainWindowEndSession(hWnd, wParam != FALSE);
+        case WM_WTSSESSION_CHANGE: return OnMainWindowSessionChange(wParam);
         case WM_CLOSE: return OnMainWindowClose(hWnd);
         case WM_SETTINGCHANGE:
         case WM_THEMECHANGED:

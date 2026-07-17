@@ -1983,6 +1983,23 @@ void TestAccessibilityProviderExposesTextPatternForTextField()
     Require(moved == -1, "text field TextPattern start endpoint reports moved words backward");
     Require(ReadTextRangeText(*wordRange.get(), -1, "text field document range restores after moved-word text") == L"alpha beta",
             "text field TextPattern word endpoint movement restores the document text");
+    wil::com_ptr_nothrow<ITextRangeProvider> enclosingCharacterRange;
+    RequireSucceeded(clonedDocumentRange->Clone(enclosingCharacterRange.put()), "text field document range clones for character expansion");
+    moved = 0;
+    RequireSucceeded(enclosingCharacterRange->MoveEndpointByUnit(TextPatternRangeEndpoint_Start, TextUnit_Character, 2, &moved),
+                     "text field character-expansion range moves inside the first word");
+    RequireSucceeded(enclosingCharacterRange->ExpandToEnclosingUnit(TextUnit_Character),
+                     "text field range expands to the enclosing character unit");
+    Require(ReadTextRangeText(*enclosingCharacterRange.get(), -1, "text field character-expanded range exposes text") == L"p",
+            "text field character expansion normalizes a longer range to the text element at its start");
+    wil::com_ptr_nothrow<ITextRangeProvider> enclosingWordRange;
+    RequireSucceeded(clonedDocumentRange->Clone(enclosingWordRange.put()), "text field document range clones for word expansion");
+    moved = 0;
+    RequireSucceeded(enclosingWordRange->MoveEndpointByUnit(TextPatternRangeEndpoint_Start, TextUnit_Character, 2, &moved),
+                     "text field word-expansion range moves inside the first word");
+    RequireSucceeded(enclosingWordRange->ExpandToEnclosingUnit(TextUnit_Word), "text field range expands to the enclosing word unit");
+    Require(ReadTextRangeText(*enclosingWordRange.get(), -1, "text field word-expanded range exposes text") == L"alpha",
+            "text field word expansion normalizes a longer range to the word containing its start");
     const POINT rangePointScreen = window.Host().DipPointToScreenPoint(D2D1::Point2F(0.0f, 44.0f));
     const UiaPoint rangePoint{static_cast<double>(rangePointScreen.x), static_cast<double>(rangePointScreen.y)};
     wil::com_ptr_nothrow<ITextRangeProvider> pointRange;
@@ -2056,6 +2073,16 @@ void TestAccessibilityProviderExposesTextPatternForTextField()
     Require(ReadTextRangeText(*emojiDocumentRange.get(), -1, "emoji text field document range exposes backward text-element moved text") ==
                 emojiText.substr(1u),
             "emoji text field TextPattern backward character movement restores the full ZWJ emoji cluster");
+    wil::com_ptr_nothrow<ITextRangeProvider> emojiEnclosingCharacterRange;
+    RequireSucceeded(emojiTextPattern->get_DocumentRange(emojiEnclosingCharacterRange.put()),
+                     "emoji text field TextPattern exposes a fresh range for character expansion");
+    moved = 0;
+    RequireSucceeded(emojiEnclosingCharacterRange->MoveEndpointByUnit(TextPatternRangeEndpoint_Start, TextUnit_Character, 1, &moved),
+                     "emoji character-expansion range moves to the ZWJ cluster");
+    RequireSucceeded(emojiEnclosingCharacterRange->ExpandToEnclosingUnit(TextUnit_Character),
+                     "emoji range expands to the enclosing character unit");
+    Require(ReadTextRangeText(*emojiEnclosingCharacterRange.get(), -1, "emoji character-expanded range exposes text") == emojiText.substr(1u, 5u),
+            "character expansion keeps the complete ZWJ emoji cluster as one UIA character");
 
     SAFEARRAY* selectionRanges = nullptr;
     RequireSucceeded(textPattern->GetSelection(&selectionRanges), "text field TextPattern selection lookup succeeds");
@@ -2139,6 +2166,15 @@ void TestAccessibilityProviderExposesTextPatternForTextField()
     Require(moved == -1, "multiline text field start endpoint reports moved lines backward");
     Require(ReadTextRangeText(*multilineDocumentRange.get(), -1, "multiline text field document range restores after moved-line text") == L"red\ngreen\nblue",
             "multiline text field line endpoint movement restores the document text");
+    wil::com_ptr_nothrow<ITextRangeProvider> enclosingLineRange;
+    RequireSucceeded(multilineTextPattern->get_DocumentRange(enclosingLineRange.put()),
+                     "multiline text field exposes a fresh range for line expansion");
+    moved = 0;
+    RequireSucceeded(enclosingLineRange->MoveEndpointByUnit(TextPatternRangeEndpoint_Start, TextUnit_Character, 6, &moved),
+                     "multiline line-expansion range moves inside the second line");
+    RequireSucceeded(enclosingLineRange->ExpandToEnclosingUnit(TextUnit_Line), "multiline range expands to the enclosing line unit");
+    Require(ReadTextRangeText(*enclosingLineRange.get(), -1, "multiline line-expanded range exposes text") == L"green",
+            "line expansion normalizes a longer range to the logical line containing its start");
     SAFEARRAY* multilineSelectionRanges = nullptr;
     RequireSucceeded(multilineTextPattern->GetSelection(&multilineSelectionRanges), "multiline text field TextPattern selection lookup succeeds");
     const auto destroyMultilineSelectionRanges = wil::scope_exit([&] { SafeArrayDestroy(multilineSelectionRanges); });
@@ -2763,6 +2799,51 @@ void TestAccessibilityTextRangeEndpointLineMovementDispatchesToWindowThread()
     Require(movedResult.load(std::memory_order_acquire) == 1, "cross-thread TextRange endpoint line movement reports one visual line");
     Require(ReadTextRangeText(*documentRange.get(), -1, "cross-thread endpoint line movement exposes moved text") == text.substr(secondLineStart),
             "cross-thread TextRange endpoint line movement lands on the second visual line");
+
+    wil::com_ptr_nothrow<ITextRangeProvider> expandingRange;
+    RequireSucceeded(textPattern->get_DocumentRange(expandingRange.put()), "cross-thread line expansion gets a fresh document range");
+    int movedInsideLine = 0;
+    RequireSucceeded(expandingRange->MoveEndpointByUnit(
+                         TextPatternRangeEndpoint_Start, TextUnit_Character, static_cast<int>(secondLineStart + 1u), &movedInsideLine),
+                     "cross-thread line expansion moves the range start inside the second visual line");
+
+    constexpr HRESULT kPendingExpansion = E_PENDING;
+    std::atomic<bool> expansionWorkerStarted{false};
+    std::atomic<HRESULT> expansionResult{kPendingExpansion};
+    std::thread expansionWorker([&]
+    {
+        expansionWorkerStarted.store(true, std::memory_order_release);
+        expansionResult.store(expandingRange->ExpandToEnclosingUnit(TextUnit_Line), std::memory_order_release);
+    });
+
+    const auto expansionStartDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(500);
+    while (! expansionWorkerStarted.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < expansionStartDeadline)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    Require(expansionWorkerStarted.load(std::memory_order_acquire), "cross-thread TextRange line expansion worker starts");
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    if (expansionResult.load(std::memory_order_acquire) != kPendingExpansion)
+    {
+        expansionWorker.join();
+        Require(false, "cross-thread TextRange line expansion waits for host window-thread dispatch");
+    }
+
+    const auto expansionDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (expansionResult.load(std::memory_order_acquire) == kPendingExpansion && std::chrono::steady_clock::now() < expansionDeadline)
+    {
+        window.PumpMessages();
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+
+    const HRESULT expandedResult = expansionResult.load(std::memory_order_acquire);
+    expansionWorker.join();
+    Require(expandedResult != kPendingExpansion, "cross-thread TextRange line expansion completes after host window-thread dispatch");
+    RequireSucceeded(expandedResult, "cross-thread TextRange line expansion succeeds after dispatch");
+    const size_t thirdLineStart = visualLineStarts.size() > 2u ? visualLineStarts[2] : text.size();
+    Require(ReadTextRangeText(*expandingRange.get(), -1, "cross-thread line-expanded range exposes text") ==
+                text.substr(secondLineStart, thirdLineStart - secondLineStart),
+            "cross-thread TextRange line expansion normalizes to the visual line containing its start");
 }
 
 void TestAccessibilityTextRangeSpanLineMovementDispatchesToWindowThread()
@@ -3867,6 +3948,118 @@ void TestAccessibilityProviderExposesTreeAndGridMetadata()
             "root provider focus lookup returns the selected tree item provider for a focused tree");
     Require(ReadProviderStringProperty(*focusedSimple.get(), UIA_NamePropertyId, "focused tree item exposes accessibility name") == L"Panes",
             "root provider focus lookup returns the selected visible tree item");
+}
+
+void TestAccessibilityTreeItemProviderKeepsStableIdentityAcrossReorder()
+{
+    using namespace RedSalamander::DxUi;
+
+    constexpr uint64_t kAlphaId = 0x1'0000'0011ull;
+    constexpr uint64_t kBetaId  = 0x2'0000'0022ull;
+    constexpr uint64_t kGammaId = 0x3'0000'0033ull;
+
+    AttachedHostWindow window;
+    auto root       = std::make_unique<Panel>();
+    auto* treeLabel = root->AddChild<Label>(L"Categories");
+    treeLabel->SetBounds(D2D1::RectF(0.0f, 0.0f, 120.0f, 24.0f));
+    auto* tree = root->AddChild<Tree>();
+    tree->SetBounds(D2D1::RectF(0.0f, 28.0f, 240.0f, 120.0f));
+
+    MutableTreeModel treeModel;
+    treeModel.SetVisibleItems({
+        TreeItemData{.id = kAlphaId, .text = L"Alpha"},
+        TreeItemData{.id = kBetaId, .text = L"Beta"},
+        TreeItemData{.id = kGammaId, .text = L"Gamma"},
+    });
+    tree->SetModel(&treeModel);
+    treeLabel->SetMnemonicTarget(tree);
+    window.Host().SetRoot(std::move(root));
+
+    wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> rootProvider;
+    rootProvider.attach(window.Host().DebugCreateAccessibilityProvider());
+    Require(rootProvider != nullptr, "stable tree-item identity test creates a root provider");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> treeLabelProvider =
+        GetProviderAtDipPoint(window.Hwnd(), window.Host(), *rootProvider.get(), 48.0f, 12.0f, "stable tree label provider is resolved by point");
+    wil::com_ptr_nothrow<IRawElementProviderFragment> treeProvider;
+    RequireSucceeded(treeLabelProvider->Navigate(NavigateDirection_NextSibling, treeProvider.put()),
+                     "stable tree label provider navigates to the tree");
+    wil::com_ptr_nothrow<IRawElementProviderFragment> alphaProvider;
+    RequireSucceeded(treeProvider->Navigate(NavigateDirection_FirstChild, alphaProvider.put()),
+                     "stable tree provider navigates to the first item");
+    wil::com_ptr_nothrow<IRawElementProviderFragment> retainedBetaProvider;
+    RequireSucceeded(alphaProvider->Navigate(NavigateDirection_NextSibling, retainedBetaProvider.put()),
+                     "stable tree first item navigates to Beta");
+    Require(retainedBetaProvider != nullptr, "stable tree test retains the Beta provider");
+
+    wil::com_ptr_nothrow<IRawElementProviderSimple> retainedBetaSimple;
+    RequireSucceeded(retainedBetaProvider.query_to(retainedBetaSimple.put()), "retained Beta provider exposes the simple-provider interface");
+    wil::com_ptr_nothrow<IUnknown> selectionUnknown;
+    RequireSucceeded(retainedBetaSimple->GetPatternProvider(UIA_SelectionItemPatternId, selectionUnknown.put()),
+                     "retained Beta provider exposes SelectionItemPattern");
+    wil::com_ptr_nothrow<ISelectionItemProvider> selectionPattern;
+    RequireSucceeded(selectionUnknown.query_to(selectionPattern.put()), "retained Beta selection pattern exposes ISelectionItemProvider");
+
+    const auto readRuntimeId = [](IRawElementProviderFragment& provider, const char* context)
+    {
+        SAFEARRAY* runtimeId = nullptr;
+        RequireSucceeded(provider.GetRuntimeId(&runtimeId), context);
+        const auto destroyRuntimeId = wil::scope_exit([&] { SafeArrayDestroy(runtimeId); });
+        Require(runtimeId != nullptr, "tree item runtime ID is present");
+        LONG lowerBound = 0;
+        LONG upperBound = -1;
+        RequireSucceeded(SafeArrayGetLBound(runtimeId, 1, &lowerBound), "tree item runtime ID lower bound is readable");
+        RequireSucceeded(SafeArrayGetUBound(runtimeId, 1, &upperBound), "tree item runtime ID upper bound is readable");
+        std::vector<LONG> values;
+        values.reserve(static_cast<size_t>(upperBound - lowerBound + 1));
+        for (LONG index = lowerBound; index <= upperBound; ++index)
+        {
+            LONG value = 0;
+            RequireSucceeded(SafeArrayGetElement(runtimeId, &index, &value), "tree item runtime ID value is readable");
+            values.push_back(value);
+        }
+        return values;
+    };
+
+    const std::vector<LONG> runtimeIdBefore = readRuntimeId(*retainedBetaProvider.get(), "retained Beta runtime ID lookup succeeds before reorder");
+
+    treeModel.SetVisibleItems({
+        TreeItemData{.id = kBetaId, .text = L"Beta"},
+        TreeItemData{.id = kAlphaId, .text = L"Alpha"},
+        TreeItemData{.id = kGammaId, .text = L"Gamma"},
+    });
+    tree->NotifyDataChanged();
+
+    Require(ReadProviderStringProperty(*retainedBetaSimple.get(), UIA_NamePropertyId, "retained Beta name lookup succeeds after reorder") == L"Beta",
+            "retained tree-item provider follows its stable item ID after its visible index changes");
+    Require(readRuntimeId(*retainedBetaProvider.get(), "retained Beta runtime ID lookup succeeds after reorder") == runtimeIdBefore,
+            "tree-item runtime ID remains unchanged when the item moves to another visible index");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> nextAfterBeta;
+    RequireSucceeded(retainedBetaProvider->Navigate(NavigateDirection_NextSibling, nextAfterBeta.put()),
+                     "retained Beta provider navigates using its current visible position");
+    wil::com_ptr_nothrow<IRawElementProviderSimple> nextAfterBetaSimple;
+    RequireSucceeded(nextAfterBeta.query_to(nextAfterBetaSimple.put()), "retained Beta next sibling exposes a simple provider");
+    Require(ReadProviderStringProperty(*nextAfterBetaSimple.get(), UIA_NamePropertyId, "retained Beta next sibling name lookup succeeds") == L"Alpha",
+            "retained tree-item navigation re-resolves the stable item before choosing its sibling");
+
+    RequireSucceeded(selectionPattern->Select(), "retained Beta selection succeeds after reorder");
+    Require(tree->GetSelectedItemId() && tree->GetSelectedItemId().value() == kBetaId,
+            "retained tree-item action selects the stable item rather than the row that occupied its former index");
+
+    treeModel.SetVisibleItems({
+        TreeItemData{.id = kAlphaId, .text = L"Alpha"},
+        TreeItemData{.id = kGammaId, .text = L"Gamma"},
+    });
+    tree->NotifyDataChanged();
+
+    VARIANT staleName{};
+    VariantInit(&staleName);
+    const HRESULT stalePropertyResult = retainedBetaSimple->GetPropertyValue(UIA_NamePropertyId, &staleName);
+    VariantClear(&staleName);
+    Require(stalePropertyResult == UIA_E_ELEMENTNOTAVAILABLE, "removed retained tree-item provider reports element-not-available for properties");
+    Require(selectionPattern->Select() == UIA_E_ELEMENTNOTAVAILABLE,
+            "removed retained tree-item provider reports element-not-available instead of selecting a replacement row");
 }
 
 void TestAccessibilityProviderExposesTreeItemSelectionAndExpandCollapsePatterns()
@@ -5058,6 +5251,7 @@ void RunAccessibilityTests()
     TestAccessibilityNativeTextInputRaisesTextAndTextEditEventCounters();
     TestAccessibilityGridSnapshotRebuildMeetsTenThousandRowSelectionBudget();
     TestAccessibilityProviderExposesTreeAndGridMetadata();
+    TestAccessibilityTreeItemProviderKeepsStableIdentityAcrossReorder();
     TestAccessibilityProviderExposesTreeItemSelectionAndExpandCollapsePatterns();
     TestAccessibilityProviderExposesGridRowSelectionPatterns();
     TestAccessibilityProviderExposesHorizontallyScrolledGridRowStructure();

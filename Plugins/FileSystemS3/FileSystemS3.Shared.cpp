@@ -3,61 +3,297 @@
 #include "YyjsonHelpers.h"
 
 #include <functional>
+#include <stdexcept>
 
 namespace FileSystemS3Internal
 {
-void AwsSdkLifetime::AddRef() noexcept
+namespace
 {
-    const unsigned long prev = s_refCount.fetch_add(1, std::memory_order_acq_rel);
-    if (prev != 0)
+class AwsSdkRuntime final
+{
+public:
+    using Action = void (*)(void* cookie);
+
+    AwsSdkRuntime(Action initialize, Action shutdown, void* cookie) noexcept : _initialize(initialize), _shutdown(shutdown), _cookie(cookie) {}
+
+    [[nodiscard]] HRESULT Acquire() noexcept
     {
-        return;
+        while (true)
+        {
+            AcquireSRWLockExclusive(&_lock);
+            if (_shutdownRequested)
+            {
+                ReleaseSRWLockExclusive(&_lock);
+                return HRESULT_FROM_WIN32(ERROR_SHUTDOWN_IN_PROGRESS);
+            }
+
+            if (_state == State::Initialized)
+            {
+                ++_refCount;
+                ReleaseSRWLockExclusive(&_lock);
+                return S_OK;
+            }
+            if (_state == State::Failed)
+            {
+                const HRESULT failure = _failureStatus;
+                ReleaseSRWLockExclusive(&_lock);
+                return failure;
+            }
+            if (_state == State::Uninitialized)
+            {
+                _state = State::Initializing;
+                ReleaseSRWLockExclusive(&_lock);
+                break;
+            }
+
+            const BOOL waited = SleepConditionVariableSRW(&_changed, &_lock, INFINITE, 0u);
+            const DWORD waitError = waited != FALSE ? ERROR_SUCCESS : GetLastError();
+            ReleaseSRWLockExclusive(&_lock);
+            if (waited == FALSE)
+            {
+                return HRESULT_FROM_WIN32(waitError != ERROR_SUCCESS ? waitError : ERROR_GEN_FAILURE);
+            }
+        }
+
+        const HRESULT initializeStatus = InvokeAction(_initialize, L"Aws::InitAPI");
+
+        AcquireSRWLockExclusive(&_lock);
+        if (FAILED(initializeStatus))
+        {
+            _failureStatus = initializeStatus;
+            _state         = State::Failed;
+            WakeAllConditionVariable(&_changed);
+            ReleaseSRWLockExclusive(&_lock);
+            return initializeStatus;
+        }
+
+        if (! _shutdownRequested)
+        {
+            _refCount = 1u;
+            _state    = State::Initialized;
+            WakeAllConditionVariable(&_changed);
+            ReleaseSRWLockExclusive(&_lock);
+            return S_OK;
+        }
+
+        _state = State::ShuttingDown;
+        WakeAllConditionVariable(&_changed);
+        ReleaseSRWLockExclusive(&_lock);
+        const HRESULT shutdownStatus = InvokeAction(_shutdown, L"Aws::ShutdownAPI");
+        FinishShutdown(shutdownStatus);
+        return HRESULT_FROM_WIN32(ERROR_SHUTDOWN_IN_PROGRESS);
     }
 
-    // Mandatory: noexcept boundary. AWS SDK init is best-effort but must not throw.
-    try
+    void Release() noexcept
     {
-        Debug::Warning(L"S3: Initializing AWS SDK");
-        Aws::InitAPI(s_options);
+        AcquireSRWLockExclusive(&_lock);
+        if (_state != State::Initialized || _refCount == 0u)
+        {
+            ReleaseSRWLockExclusive(&_lock);
+            Debug::Error(L"S3: AWS SDK lifetime release without a matching successful acquire");
+            return;
+        }
+
+        --_refCount;
+        if (_refCount != 0u)
+        {
+            ReleaseSRWLockExclusive(&_lock);
+            return;
+        }
+
+        _state = State::ShuttingDown;
+        ReleaseSRWLockExclusive(&_lock);
+
+        const HRESULT shutdownStatus = InvokeAction(_shutdown, L"Aws::ShutdownAPI");
+        FinishShutdown(shutdownStatus);
     }
-    catch (const std::bad_alloc&)
+
+    void BeginShutdown() noexcept
     {
-        // Out-of-memory is treated as fatal. Fail-fast so the crash pipeline can capture a dump.
-        std::terminate();
+        AcquireSRWLockExclusive(&_lock);
+        _shutdownRequested = true;
+        if (_state == State::Uninitialized)
+        {
+            _state = State::ShutdownComplete;
+        }
+        WakeAllConditionVariable(&_changed);
+        ReleaseSRWLockExclusive(&_lock);
     }
-    catch (const std::exception&)
+
+    [[nodiscard]] bool CanUnloadNow() noexcept
     {
-        Debug::Error(L"S3: Aws::InitAPI threw an exception");
+        AcquireSRWLockShared(&_lock);
+        const bool canUnload = _shutdownRequested && _refCount == 0u && _state == State::ShutdownComplete;
+        ReleaseSRWLockShared(&_lock);
+        return canUnload;
     }
+
+private:
+    enum class State
+    {
+        Uninitialized,
+        Initializing,
+        Initialized,
+        ShuttingDown,
+        ShutdownComplete,
+        Failed,
+    };
+
+    [[nodiscard]] HRESULT InvokeAction(Action action, std::wstring_view name) noexcept
+    {
+        if (action == nullptr)
+        {
+            return E_POINTER;
+        }
+        try
+        {
+            action(_cookie);
+            return S_OK;
+        }
+        catch (const std::bad_alloc&)
+        {
+            std::terminate();
+        }
+        catch (const std::exception& error)
+        {
+            // AWS actions are third-party noexcept boundaries. Preserve a failed state so callers
+            // cannot use or unload a partially initialized runtime.
+            Debug::Error(L"S3: {} threw an exception: {}", name, Utf16FromUtf8(error.what()));
+            return E_FAIL;
+        }
+    }
+
+    void FinishShutdown(HRESULT status) noexcept
+    {
+        AcquireSRWLockExclusive(&_lock);
+        if (FAILED(status))
+        {
+            _failureStatus = status;
+            _state         = State::Failed;
+        }
+        else
+        {
+            _state = _shutdownRequested ? State::ShutdownComplete : State::Uninitialized;
+        }
+        WakeAllConditionVariable(&_changed);
+        ReleaseSRWLockExclusive(&_lock);
+    }
+
+    SRWLOCK _lock = SRWLOCK_INIT;
+    CONDITION_VARIABLE _changed = CONDITION_VARIABLE_INIT;
+    Action _initialize = nullptr;
+    Action _shutdown   = nullptr;
+    void* _cookie      = nullptr;
+    State _state       = State::Uninitialized;
+    unsigned long _refCount = 0u;
+    HRESULT _failureStatus  = E_FAIL;
+    bool _shutdownRequested = false;
+};
+
+[[nodiscard]] Aws::SDKOptions& AwsOptions() noexcept
+{
+    static Aws::SDKOptions options{};
+    return options;
+}
+
+void InitializeAwsSdk(void* cookie)
+{
+    auto* options = static_cast<Aws::SDKOptions*>(cookie);
+    Aws::InitAPI(*options);
+}
+
+void ShutdownAwsSdk(void* cookie)
+{
+    auto* options = static_cast<Aws::SDKOptions*>(cookie);
+    Aws::ShutdownAPI(*options);
+}
+
+[[nodiscard]] AwsSdkRuntime& Runtime() noexcept
+{
+    static AwsSdkRuntime runtime(&InitializeAwsSdk, &ShutdownAwsSdk, &AwsOptions());
+    return runtime;
+}
+} // namespace
+
+HRESULT AwsSdkLifetime::Acquire() noexcept
+{
+    return Runtime().Acquire();
 }
 
 void AwsSdkLifetime::Release() noexcept
 {
-    const unsigned long prev = s_refCount.fetch_sub(1, std::memory_order_acq_rel);
-    if (prev != 1)
-    {
-        return;
-    }
-
-    // Mandatory: noexcept boundary. AWS SDK shutdown is best-effort but must not throw.
-    try
-    {
-        Debug::Warning(L"S3: Shutting down AWS SDK");
-        const uint64_t startTickMs = GetTickCount64();
-        Aws::ShutdownAPI(s_options);
-        const uint64_t elapsedMs = GetTickCount64() - startTickMs;
-        Debug::Warning(L"S3: AWS SDK shutdown complete ({} ms)", elapsedMs);
-    }
-    catch (const std::bad_alloc&)
-    {
-        // Out-of-memory is treated as fatal. Fail-fast so the crash pipeline can capture a dump.
-        std::terminate();
-    }
-    catch (const std::exception&)
-    {
-        Debug::Error(L"S3: Aws::ShutdownAPI threw an exception");
-    }
+    Runtime().Release();
 }
+
+void AwsSdkLifetime::BeginShutdown() noexcept
+{
+    Runtime().BeginShutdown();
+}
+
+bool AwsSdkLifetime::CanUnloadNow() noexcept
+{
+    return Runtime().CanUnloadNow();
+}
+
+#if defined(_DEBUG)
+void RunDebugAwsSdkLifetimeContractSelfTest(unsigned int& passed, unsigned int& failed) noexcept
+{
+    const auto check = [&](bool condition, const wchar_t* message) noexcept
+    {
+        if (condition)
+        {
+            ++passed;
+        }
+        else
+        {
+            ++failed;
+            Debug::Error(L"FileSystemS3 AWS-lifetime selftest failed: {}", message);
+        }
+    };
+
+    struct Context
+    {
+        unsigned int initializeCalls = 0u;
+        unsigned int shutdownCalls   = 0u;
+        bool throwDuringInitialize   = false;
+    };
+
+    const auto initialize = [](void* cookie)
+    {
+        auto* context = static_cast<Context*>(cookie);
+        ++context->initializeCalls;
+        if (context->throwDuringInitialize)
+        {
+            throw std::runtime_error("injected init failure");
+        }
+    };
+    const auto shutdown = [](void* cookie)
+    {
+        auto* context = static_cast<Context*>(cookie);
+        ++context->shutdownCalls;
+    };
+
+    Context failedContext{.throwDuringInitialize = true};
+    AwsSdkRuntime failedRuntime(initialize, shutdown, &failedContext);
+    check(failedRuntime.Acquire() == E_FAIL, L"AWS runtime should convert an InitAPI exception into factory-visible failure");
+    check(failedRuntime.Acquire() == E_FAIL && failedContext.initializeCalls == 1u,
+          L"AWS runtime should not increment or retry a partially initialized failed state");
+    failedRuntime.BeginShutdown();
+    check(! failedRuntime.CanUnloadNow(), L"AWS runtime should keep a partially initialized failed module mapped");
+
+    Context normalContext{};
+    AwsSdkRuntime normalRuntime(initialize, shutdown, &normalContext);
+    check(normalRuntime.Acquire() == S_OK && normalRuntime.Acquire() == S_OK && normalContext.initializeCalls == 1u,
+          L"AWS runtime should initialize once for concurrent owners");
+    normalRuntime.BeginShutdown();
+    check(! normalRuntime.CanUnloadNow(), L"AWS runtime should reject unload while acquired owners remain");
+    normalRuntime.Release();
+    check(! normalRuntime.CanUnloadNow(), L"AWS runtime should reject unload until the final owner releases");
+    normalRuntime.Release();
+    check(normalContext.shutdownCalls == 1u && normalRuntime.CanUnloadNow(),
+          L"AWS runtime should permit unload only after ShutdownAPI returns for the final owner");
+}
+#endif
 
 [[nodiscard]] std::wstring Utf16FromUtf8(std::string_view text) noexcept
 {

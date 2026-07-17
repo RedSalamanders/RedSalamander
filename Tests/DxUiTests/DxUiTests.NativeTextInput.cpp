@@ -4389,9 +4389,18 @@ void TestNativeTextInputBackendImeCompositionClearsOnWindowDeactivate()
 
     window.Host().SetRoot(std::move(root));
     window.Host().SetFocusControl(field);
+    field->SetSelectionRange(5u, 5u);
+    window.Host().SyncTextInput(field);
     static_cast<void>(SendMessageW(window.Hwnd(), WM_IME_STARTCOMPOSITION, 0, 0));
 
+    NativeTextInputImePayload previewPayload;
+    previewPayload.hasCompositionString = true;
+    previewPayload.compositionString    = L"-preview";
+    window.Host().DebugSetNativeTextInputImePayloadForTest(previewPayload);
+    static_cast<void>(SendMessageW(window.Hwnd(), WM_IME_COMPOSITION, 0, GCS_COMPSTR));
+
     NativeTextInputState state{};
+    Require(field->GetText() == L"alpha-preview", "native ime deactivation test applies preview text before window deactivation");
     Require(window.Host().TryReadNativeTextInputState(field, state) && state.compositionStartIndex.has_value(),
             "native ime deactivation test starts with an active composition");
 
@@ -4403,9 +4412,15 @@ void TestNativeTextInputBackendImeCompositionClearsOnWindowDeactivate()
     Require(! field->HasFocus(), "native ime window deactivation clears active focus visuals");
     Require(! window.Host().DebugHasActiveNativeTextInputSession(), "native ime window deactivation clears the native session");
     Require(! window.Host().TryReadNativeTextInputState(field, state), "native ime window deactivation clears readable session state");
+    Require(field->GetText() == L"alpha", "native ime window deactivation restores the pre-composition text");
+    Require(field->GetCaretIndex() == 5u, "native ime window deactivation restores the pre-composition caret");
 
     window.Host().SetFocusControl(field);
     static_cast<void>(SendMessageW(window.Hwnd(), WM_IME_STARTCOMPOSITION, 0, 0));
+    previewPayload.compositionString = L"-again";
+    window.Host().DebugSetNativeTextInputImePayloadForTest(previewPayload);
+    static_cast<void>(SendMessageW(window.Hwnd(), WM_IME_COMPOSITION, 0, GCS_COMPSTR));
+    Require(field->GetText() == L"alpha-again", "native ime deactivation test applies preview text before app deactivation");
     Require(window.Host().TryReadNativeTextInputState(field, state) && state.compositionStartIndex.has_value(),
             "native ime deactivation test restarts composition before app deactivation");
 
@@ -4417,6 +4432,8 @@ void TestNativeTextInputBackendImeCompositionClearsOnWindowDeactivate()
     Require(! field->HasFocus(), "native ime app deactivation clears active focus visuals");
     Require(! window.Host().DebugHasActiveNativeTextInputSession(), "native ime app deactivation clears the native session");
     Require(! window.Host().TryReadNativeTextInputState(field, state), "native ime app deactivation clears readable session state");
+    Require(field->GetText() == L"alpha", "native ime app deactivation restores the pre-composition text");
+    Require(field->GetCaretIndex() == 5u, "native ime app deactivation restores the pre-composition caret");
 }
 
 void TestNativeTextInputBackendRevealedMaskedFieldRemasksOnWindowDeactivate()

@@ -1541,6 +1541,8 @@ void TestTextFieldSingleLineLayoutCacheInvalidatesAndFeedsHotPaths()
     const std::string_view invalidationBlock = findBlock("void TextField::InvalidateSingleLineLayoutCache", "\nvoid TextField::EnsureCaretVisible");
     Require(invalidationBlock.find("ClearSingleLineTextLayoutCache(_singleLineLayoutCache, true)") != std::string_view::npos,
             "single-line layout invalidation securely clears cached text retained for DirectWrite layout reuse");
+    Require(invalidationBlock.find("_maskedSourceTextElementBoundaries.clear()") != std::string_view::npos,
+            "single-line layout invalidation retires the masked source/display index map");
 
     const std::array<std::string_view, 11> requiredInvalidators = {{
         "void TextField::SetText",
@@ -1611,7 +1613,8 @@ void TestTextFieldMaskedDotCountStaysBounded()
     Require(functionStart != std::string::npos && functionEnd != std::string::npos && functionStart < functionEnd, "TextField masked dot-count block is found");
     const std::string_view functionBlock(source.data() + functionStart, functionEnd - functionStart);
 
-    Require(functionBlock.find("CountTextElements(_text)") != std::string_view::npos, "exact masked dot count follows Unicode text-element boundaries");
+    Require(functionBlock.find("GetMaskedSourceTextElementBoundaries().size() - 1u") != std::string_view::npos,
+            "exact masked dot count follows the cached Unicode text-element boundary map");
     Require(functionBlock.find("GetConcealedMaskVisibleDotCount(exactCount)") != std::string_view::npos,
             "concealed masked dot count uses the retained bucket cache helper");
 
@@ -1622,6 +1625,93 @@ void TestTextFieldMaskedDotCountStaysBounded()
     const std::string_view concealedBlock(source.data() + concealedStart, concealedEnd - concealedStart);
     Require(concealedBlock.find("_concealedMaskVisibleDotCountValid") != std::string_view::npos, "concealed masked dot count keeps a validity flag");
     Require(concealedBlock.find("_concealedMaskVisibleDotCount") != std::string_view::npos, "concealed masked dot count stores the retained count");
+}
+
+void TestTextFieldReplaceSelectionSynchronizesBeforeTerminalNotification()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    window.Host().SetTextInputBackend(TextInputBackend::Native);
+
+    auto root   = std::make_unique<Panel>();
+    auto* field = root->AddChild<TextField>(L"alpha beta");
+    field->SetBounds(D2D1::RectF(0.0f, 0.0f, 220.0f, 32.0f));
+    window.Host().SetRoot(std::move(root));
+    window.Host().SetFocusControl(field);
+    field->SetSelectionRange(6u, 10u);
+
+    bool callbackInvoked        = false;
+    bool callbackSawSyncedState = false;
+    field->SetOnTextChanged([&](std::wstring_view text)
+    {
+        NativeTextInputState state{};
+        callbackInvoked        = text == L"alpha helper";
+        callbackSawSyncedState = window.Host().TryReadNativeTextInputState(field, state) && state.text == text && state.caretIndex == 12u &&
+                                 ! state.selectionAnchorIndex.has_value();
+        window.Host().SetRoot(std::make_unique<Panel>());
+    });
+
+    field->ReplaceSelectionAndNotify(L"helper");
+
+    Require(callbackInvoked, "selection replacement invokes its notification with the final text");
+    Require(callbackSawSyncedState, "selection replacement synchronizes focused native state before its terminal notification");
+    Require(window.Host().GetRoot() != nullptr, "selection replacement notification can replace the retained root safely");
+}
+
+void TestMaskedTextFieldGeometryMapsUtf16SourceToDisplayElements()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    const std::wstring secret = L"A\U0001F469\u200D\U0001F4BBB";
+    const size_t afterA       = StepToNextTextElement(secret, 0u);
+    const size_t afterEmoji   = StepToNextTextElement(secret, afterA);
+    const size_t afterB       = StepToNextTextElement(secret, afterEmoji);
+    Require(afterA == 1u && afterEmoji > afterA + 1u && afterB == secret.size(), "masked geometry fixture contains a multi-unit ZWJ text element");
+
+    auto root   = std::make_unique<Panel>();
+    auto* field = root->AddChild<TextField>(secret);
+    field->SetBounds(D2D1::RectF(12.0f, 12.0f, 260.0f, 44.0f));
+    field->SetClearButtonEnabled(false);
+    field->SetMasked(true);
+    field->SetPasswordMaskLengthPolicy(PasswordMaskLengthPolicy::Exact);
+    window.Host().SetRoot(std::move(root));
+    window.Host().SetFocusControl(field);
+
+    Require(field->GetSecretVisibleDotCount() == 3u, "exact masked geometry fixture renders one dot per text element");
+
+    const std::optional<D2D1_RECT_F> caret0 = field->TryGetTextInputCaretRect(window.Host(), 0u);
+    const std::optional<D2D1_RECT_F> caret1 = field->TryGetTextInputCaretRect(window.Host(), afterA);
+    const std::optional<D2D1_RECT_F> caret2 = field->TryGetTextInputCaretRect(window.Host(), afterEmoji);
+    const std::optional<D2D1_RECT_F> caret3 = field->TryGetTextInputCaretRect(window.Host(), afterB);
+    Require(caret0.has_value() && caret1.has_value() && caret2.has_value() && caret3.has_value(),
+            "exact masked text exposes caret geometry for every source text-element boundary");
+    Require(caret0->left < caret1->left && caret1->left < caret2->left && caret2->left < caret3->left,
+            "source text-element boundaries advance through all three displayed mask dots");
+
+    const std::optional<std::vector<D2D1_RECT_F>> emojiRange = field->TryGetTextInputRangeRects(window.Host(), afterA, afterEmoji);
+    Require(emojiRange.has_value() && ! emojiRange->empty(), "ZWJ source range maps to visible mask geometry");
+    float rangeLeft  = emojiRange->front().left;
+    float rangeRight = emojiRange->front().right;
+    for (const D2D1_RECT_F& rect : emojiRange.value())
+    {
+        rangeLeft  = std::min(rangeLeft, rect.left);
+        rangeRight = std::max(rangeRight, rect.right);
+    }
+    RequireFloatNear(rangeLeft, caret1->left, 1.0f, "ZWJ source range starts at the second mask dot");
+    RequireFloatNear(rangeRight, caret2->left, 1.0f, "ZWJ source range spans exactly one mask dot");
+
+    const D2D1_POINT_2F trailingEmojiPoint = D2D1::Point2F(caret2->left - 0.25f, (caret2->top + caret2->bottom) * 0.5f);
+    const std::optional<size_t> hitIndex   = field->TryHitTestTextInputPoint(window.Host(), trailingEmojiPoint);
+    Require(hitIndex.has_value() && hitIndex.value() == afterEmoji, "mask-dot hit testing maps back to the ZWJ source boundary");
+
+    field->SetSelectionRange(afterA, afterEmoji);
+    TextFieldDebugSingleLinePaintState paint{};
+    Require(field->DebugGetSingleLinePaintState(window.Host(), paint) && paint.hasSelectionPaintRect,
+            "ZWJ source selection exposes masked selection paint geometry");
+    RequireFloatNear(paint.selectionPaintRect.left, caret1->left, 1.0f, "masked selection paint starts at the mapped source boundary");
+    RequireFloatNear(paint.selectionPaintRect.right, caret2->left, 1.0f, "masked selection paint ends at the mapped source boundary");
 }
 
 void TestTextFieldCompactDensityShrinksDefaultVerticalPadding()
@@ -2068,6 +2158,8 @@ void RunTextFieldTests()
     runTest("TestTextFieldPaintEnsuresSingleLineCaretVisibleOncePerFrame", TestTextFieldPaintEnsuresSingleLineCaretVisibleOncePerFrame);
     runTest("TestTextFieldSingleLineLayoutCacheInvalidatesAndFeedsHotPaths", TestTextFieldSingleLineLayoutCacheInvalidatesAndFeedsHotPaths);
     runTest("TestTextFieldMaskedDotCountStaysBounded", TestTextFieldMaskedDotCountStaysBounded);
+    runTest("TestTextFieldReplaceSelectionSynchronizesBeforeTerminalNotification", TestTextFieldReplaceSelectionSynchronizesBeforeTerminalNotification);
+    runTest("TestMaskedTextFieldGeometryMapsUtf16SourceToDisplayElements", TestMaskedTextFieldGeometryMapsUtf16SourceToDisplayElements);
     runTest("TestTextFieldCompactDensityShrinksDefaultVerticalPadding", TestTextFieldCompactDensityShrinksDefaultVerticalPadding);
     runTest("TestTextFieldLongSelectionPaintStaysInsideTextViewport", TestTextFieldLongSelectionPaintStaysInsideTextViewport);
     runTest("TestTextFieldBidiSelectionPaintStaysOutsideTrailingButtons", TestTextFieldBidiSelectionPaintStaysOutsideTrailingButtons);

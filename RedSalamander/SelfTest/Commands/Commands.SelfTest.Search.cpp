@@ -905,90 +905,6 @@ enum class FindResultContextMenuOpenMode
     return state.failure.empty();
 }
 
-class SearchDirectedSelfTestInputWarning
-{
-public:
-    SearchDirectedSelfTestInputWarning() noexcept
-    {
-        const int screenW = GetSystemMetrics(SM_CXSCREEN);
-        const int screenH = GetSystemMetrics(SM_CYSCREEN);
-        if (screenW <= 0 || screenH <= 0)
-        {
-            return;
-        }
-
-        const int width  = std::min(screenW, 900);
-        const int height = std::min(screenH, 220);
-        const int left   = (std::max)(0, (screenW - width) / 2);
-        const int top    = (std::max)(0, (screenH - height) / 3);
-
-        _font.reset(CreateFontW(-56,
-                                0,
-                                0,
-                                0,
-                                FW_BOLD,
-                                FALSE,
-                                FALSE,
-                                FALSE,
-                                DEFAULT_CHARSET,
-                                OUT_DEFAULT_PRECIS,
-                                CLIP_DEFAULT_PRECIS,
-                                CLEARTYPE_QUALITY,
-                                DEFAULT_PITCH | FF_SWISS,
-                                L"Segoe UI"));
-
-        HWND hwnd = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_LAYERED | WS_EX_TRANSPARENT,
-                                    L"STATIC",
-                                    L"don't touch the mouse",
-                                    WS_POPUP | WS_VISIBLE | WS_BORDER | SS_CENTER | SS_CENTERIMAGE,
-                                    left,
-                                    top,
-                                    width,
-                                    height,
-                                    nullptr,
-                                    nullptr,
-                                    GetModuleHandleW(nullptr),
-                                    nullptr);
-        if (! hwnd)
-        {
-            return;
-        }
-
-        _hwnd.reset(hwnd);
-        if (_font)
-        {
-            SendMessageW(_hwnd.get(), WM_SETFONT, reinterpret_cast<WPARAM>(_font.get()), TRUE);
-        }
-        static_cast<void>(SetLayeredWindowAttributes(_hwnd.get(), 0, 230, LWA_ALPHA));
-        SetWindowPos(_hwnd.get(), HWND_TOPMOST, left, top, width, height, SWP_NOACTIVATE | SWP_SHOWWINDOW);
-        UpdateWindow(_hwnd.get());
-        PumpPendingMessages();
-        _shownAt = GetTickCount64();
-    }
-
-    ~SearchDirectedSelfTestInputWarning() noexcept
-    {
-        if (_hwnd)
-        {
-            const ULONGLONG elapsedMs = GetTickCount64() - _shownAt;
-            if (elapsedMs < 250u)
-            {
-                std::this_thread::sleep_for(std::chrono::milliseconds(250u - elapsedMs));
-                PumpPendingMessages();
-            }
-            _hwnd.reset();
-        }
-    }
-
-    SearchDirectedSelfTestInputWarning(const SearchDirectedSelfTestInputWarning&)            = delete;
-    SearchDirectedSelfTestInputWarning& operator=(const SearchDirectedSelfTestInputWarning&) = delete;
-
-private:
-    wil::unique_hwnd _hwnd;
-    wil::unique_hfont _font;
-    ULONGLONG _shownAt = 0;
-};
-
 [[nodiscard]] bool ProbeFindSplitMenuStationaryHover(HWND findWindow, HWND ownerWindow, size_t itemIndex, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
@@ -1066,8 +982,14 @@ private:
 
     POINT cursorBefore{};
     const bool haveCursorBefore = GetCursorPos(&cursorBefore) != FALSE;
-    std::optional<SearchDirectedSelfTestInputWarning> inputWarning;
-    inputWarning.emplace();
+    const auto restoreCursor = wil::scope_exit([&]() noexcept
+    {
+        if (haveCursorBefore)
+        {
+            static_cast<void>(SetCursorPos(cursorBefore.x, cursorBefore.y));
+        }
+    });
+    DirectedSelfTestInputWarning inputWarning;
     static_cast<void>(SetCursorPos(itemScreenCenter->x, itemScreenCenter->y));
     POINT cursorAfterSet{};
     state.Require(waitForCursorAtScreenPoint(itemScreenCenter.value(), SelfTest::Scale(1000ms), cursorAfterSet),
@@ -1080,14 +1002,6 @@ private:
     {
         return false;
     }
-
-    const auto restoreCursor = wil::scope_exit([&]() noexcept
-    {
-        if (haveCursorBefore)
-        {
-            static_cast<void>(SetCursorPos(cursorBefore.x, cursorBefore.y));
-        }
-    });
 
     std::atomic<bool> hoverObserved{false};
     std::atomic<bool> cursorMovedToItem{false};
@@ -1365,6 +1279,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
             static_cast<void>(SetCursorPos(cursorBefore.x, cursorBefore.y));
         }
     });
+    DirectedSelfTestInputWarning inputWarning;
 
     std::jthread menuDriver([&](std::stop_token stopToken) noexcept
     {
@@ -3662,7 +3577,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     staleContext.rootPluginPath  = std::filesystem::path(L"gdrive://@stale");
 
     const AppTheme theme = ResolveAppTheme(ThemeMode::Dark, L"find-selftest-local-override");
-    state.Require(ShowFindFilesWindow(mainWindow, g_settings, theme, std::move(staleContext)), L"Failed to open Find window with stale context.");
+    state.Require(ShowFindFilesWindow(mainWindow, g_folderWindow, g_settings, theme, std::move(staleContext)), L"Failed to open Find window with stale context.");
 
     const HWND findWindow = WaitForWindow([] noexcept { return GetFindFilesWindowHandle(); }, SelfTest::Scale(5000ms));
     state.Require(findWindow != nullptr && IsWindow(findWindow) != FALSE, L"Find window did not open for stale-context override test.");
@@ -5078,7 +4993,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     context.rootPluginPath = root;
 
     const AppTheme theme = ResolveAppTheme(ThemeMode::Dark, L"find-selftest-large-incremental");
-    state.Require(ShowFindFilesWindow(mainWindow, g_settings, theme, std::move(context)), L"Failed to open Find window for incremental-update test.");
+    state.Require(ShowFindFilesWindow(mainWindow, g_folderWindow, g_settings, theme, std::move(context)), L"Failed to open Find window for incremental-update test.");
 
     const HWND findWindow = WaitForWindow([] noexcept { return GetFindFilesWindowHandle(); }, SelfTest::Scale(5000ms));
     state.Require(findWindow != nullptr && IsWindow(findWindow) != FALSE, L"Find window did not open for incremental-update test.");
@@ -5179,7 +5094,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     staleContext.rootPluginPath  = std::filesystem::path(L"onedrive://@stale");
 
     const AppTheme theme = ResolveAppTheme(ThemeMode::Dark, L"find-selftest-running-status");
-    state.Require(ShowFindFilesWindow(mainWindow, g_settings, theme, std::move(staleContext)), L"Failed to open Find window for running-status test.");
+    state.Require(ShowFindFilesWindow(mainWindow, g_folderWindow, g_settings, theme, std::move(staleContext)), L"Failed to open Find window for running-status test.");
 
     const HWND findWindow = WaitForWindow([] noexcept { return GetFindFilesWindowHandle(); }, SelfTest::Scale(5000ms));
     state.Require(findWindow != nullptr && IsWindow(findWindow) != FALSE, L"Find window did not open for running-status test.");
@@ -5266,7 +5181,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     FindFilesPaneContext context{};
     context.rootPluginPath = root;
     const AppTheme theme   = ResolveAppTheme(ThemeMode::Dark, L"find-selftest-active-close");
-    state.Require(ShowFindFilesWindow(mainWindow, g_settings, theme, std::move(context)), L"Failed to open Find window for active-close validation.");
+    state.Require(ShowFindFilesWindow(mainWindow, g_folderWindow, g_settings, theme, std::move(context)), L"Failed to open Find window for active-close validation.");
 
     const HWND findWindow = WaitForWindow([] noexcept { return GetFindFilesWindowHandle(); }, SelfTest::Scale(5000ms));
     state.Require(findWindow != nullptr && IsWindow(findWindow) != FALSE, L"Find window did not open for active-close validation.");
@@ -5571,7 +5486,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     context.rootPluginPath = root;
 
     const AppTheme theme = ResolveAppTheme(ThemeMode::Dark, L"find-selftest-service-status");
-    state.Require(ShowFindFilesWindow(mainWindow, g_settings, theme, std::move(context)), L"Failed to open Find window for service backend-status test.");
+    state.Require(ShowFindFilesWindow(mainWindow, g_folderWindow, g_settings, theme, std::move(context)), L"Failed to open Find window for service backend-status test.");
 
     const HWND findWindow = WaitForWindow([] noexcept { return GetFindFilesWindowHandle(); }, SelfTest::Scale(5000ms));
     state.Require(findWindow != nullptr && IsWindow(findWindow) != FALSE, L"Find window did not open for service backend-status test.");
@@ -5783,7 +5698,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     context.rootPluginPath = root;
 
     const AppTheme theme = ResolveAppTheme(ThemeMode::Dark, L"find-selftest-service-unavailable");
-    state.Require(ShowFindFilesWindow(mainWindow, g_settings, theme, std::move(context)), L"Failed to open Find window for unavailable-service warning test.");
+    state.Require(ShowFindFilesWindow(mainWindow, g_folderWindow, g_settings, theme, std::move(context)), L"Failed to open Find window for unavailable-service warning test.");
 
     const HWND findWindow = WaitForWindow([] noexcept { return GetFindFilesWindowHandle(); }, SelfTest::Scale(5000ms));
     state.Require(findWindow != nullptr && IsWindow(findWindow) != FALSE, L"Find window did not open for unavailable-service warning test.");
@@ -8445,7 +8360,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     FindFilesPaneContext context{};
     context.rootPluginPath = root;
     const AppTheme theme   = ResolveAppTheme(ThemeMode::Dark, L"find-selftest-persisted-grid-layout");
-    state.Require(ShowFindFilesWindow(mainWindow, g_settings, theme, std::move(context)), L"Failed to open Find window for persisted-grid-layout test.");
+    state.Require(ShowFindFilesWindow(mainWindow, g_folderWindow, g_settings, theme, std::move(context)), L"Failed to open Find window for persisted-grid-layout test.");
 
     const HWND findWindow = WaitForWindow([] noexcept { return GetFindFilesWindowHandle(); }, SelfTest::Scale(5000ms));
     state.Require(findWindow != nullptr && IsWindow(findWindow) != FALSE, L"Find window did not open for persisted-grid-layout test.");
@@ -8552,7 +8467,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     FindFilesPaneContext context{};
     context.rootPluginPath = root;
     const AppTheme theme   = ResolveAppTheme(ThemeMode::Dark, L"find-selftest-header-reorder");
-    state.Require(ShowFindFilesWindow(mainWindow, g_settings, theme, std::move(context)), L"Failed to open Find window for header reorder validation.");
+    state.Require(ShowFindFilesWindow(mainWindow, g_folderWindow, g_settings, theme, std::move(context)), L"Failed to open Find window for header reorder validation.");
 
     const HWND findWindow = WaitForWindow([] noexcept { return GetFindFilesWindowHandle(); }, SelfTest::Scale(5000ms));
     state.Require(findWindow != nullptr && IsWindow(findWindow) != FALSE, L"Find window did not open for header reorder validation.");
@@ -8685,7 +8600,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     FindFilesPaneContext context{};
     context.rootPluginPath = root;
     const AppTheme theme   = ResolveAppTheme(ThemeMode::Dark, L"find-selftest-copy-reordered-columns");
-    state.Require(ShowFindFilesWindow(mainWindow, g_settings, theme, std::move(context)), L"Failed to open Find window for reordered-copy validation.");
+    state.Require(ShowFindFilesWindow(mainWindow, g_folderWindow, g_settings, theme, std::move(context)), L"Failed to open Find window for reordered-copy validation.");
 
     const HWND findWindow = WaitForWindow([] noexcept { return GetFindFilesWindowHandle(); }, SelfTest::Scale(5000ms));
     state.Require(findWindow != nullptr && IsWindow(findWindow) != FALSE, L"Find window did not open for reordered-copy validation.");
@@ -8841,7 +8756,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     FindFilesPaneContext context{};
     context.rootPluginPath = root;
     const AppTheme theme   = ResolveAppTheme(ThemeMode::Dark, L"find-selftest-reordered-sort-cycles");
-    state.Require(ShowFindFilesWindow(mainWindow, g_settings, theme, std::move(context)), L"Failed to open Find window for reorder/sort validation.");
+    state.Require(ShowFindFilesWindow(mainWindow, g_folderWindow, g_settings, theme, std::move(context)), L"Failed to open Find window for reorder/sort validation.");
 
     const HWND findWindow = WaitForWindow([] noexcept { return GetFindFilesWindowHandle(); }, SelfTest::Scale(5000ms));
     state.Require(findWindow != nullptr && IsWindow(findWindow) != FALSE, L"Find window did not open for reorder/sort validation.");
@@ -8993,7 +8908,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     FindFilesPaneContext context{};
     context.rootPluginPath = root;
     const AppTheme theme   = ResolveAppTheme(ThemeMode::Dark, L"find-selftest-header-resize");
-    state.Require(ShowFindFilesWindow(mainWindow, g_settings, theme, std::move(context)), L"Failed to open Find window for header resize validation.");
+    state.Require(ShowFindFilesWindow(mainWindow, g_folderWindow, g_settings, theme, std::move(context)), L"Failed to open Find window for header resize validation.");
 
     const HWND findWindow = WaitForWindow([] noexcept { return GetFindFilesWindowHandle(); }, SelfTest::Scale(5000ms));
     state.Require(findWindow != nullptr && IsWindow(findWindow) != FALSE, L"Find window did not open for header resize validation.");
@@ -9161,7 +9076,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     FindFilesPaneContext context{};
     context.rootPluginPath = root;
     const AppTheme theme   = ResolveAppTheme(ThemeMode::Dark, L"find-selftest-reordered-search-rerun");
-    state.Require(ShowFindFilesWindow(mainWindow, g_settings, theme, std::move(context)), L"Failed to open Find window for reorder/rerun validation.");
+    state.Require(ShowFindFilesWindow(mainWindow, g_folderWindow, g_settings, theme, std::move(context)), L"Failed to open Find window for reorder/rerun validation.");
 
     const HWND findWindow = WaitForWindow([] noexcept { return GetFindFilesWindowHandle(); }, SelfTest::Scale(5000ms));
     state.Require(findWindow != nullptr && IsWindow(findWindow) != FALSE, L"Find window did not open for reorder/rerun validation.");
@@ -9343,7 +9258,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     FindFilesPaneContext context{};
     context.rootPluginPath = root;
     const AppTheme theme   = ResolveAppTheme(ThemeMode::Dark, L"find-selftest-resized-search-rerun");
-    state.Require(ShowFindFilesWindow(mainWindow, g_settings, theme, std::move(context)), L"Failed to open Find window for resize/rerun validation.");
+    state.Require(ShowFindFilesWindow(mainWindow, g_folderWindow, g_settings, theme, std::move(context)), L"Failed to open Find window for resize/rerun validation.");
 
     const HWND findWindow = WaitForWindow([] noexcept { return GetFindFilesWindowHandle(); }, SelfTest::Scale(5000ms));
     state.Require(findWindow != nullptr && IsWindow(findWindow) != FALSE, L"Find window did not open for resize/rerun validation.");
@@ -9556,7 +9471,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     FindFilesPaneContext context{};
     context.rootPluginPath = root;
     const AppTheme theme   = ResolveAppTheme(ThemeMode::Dark, L"find-selftest-reordered-resized-search-rerun");
-    state.Require(ShowFindFilesWindow(mainWindow, g_settings, theme, std::move(context)), L"Failed to open Find window for reorder+resize/rerun validation.");
+    state.Require(ShowFindFilesWindow(mainWindow, g_folderWindow, g_settings, theme, std::move(context)), L"Failed to open Find window for reorder+resize/rerun validation.");
 
     const HWND findWindow = WaitForWindow([] noexcept { return GetFindFilesWindowHandle(); }, SelfTest::Scale(5000ms));
     state.Require(findWindow != nullptr && IsWindow(findWindow) != FALSE, L"Find window did not open for reorder+resize/rerun validation.");
@@ -9737,7 +9652,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     FindFilesPaneContext context{};
     context.rootPluginPath = root;
     const AppTheme theme   = ResolveAppTheme(ThemeMode::Dark, L"find-selftest-reordered-resized-sort-cycles");
-    state.Require(ShowFindFilesWindow(mainWindow, g_settings, theme, std::move(context)), L"Failed to open Find window for reorder+resize/sort validation.");
+    state.Require(ShowFindFilesWindow(mainWindow, g_folderWindow, g_settings, theme, std::move(context)), L"Failed to open Find window for reorder+resize/sort validation.");
 
     const HWND findWindow = WaitForWindow([] noexcept { return GetFindFilesWindowHandle(); }, SelfTest::Scale(5000ms));
     state.Require(findWindow != nullptr && IsWindow(findWindow) != FALSE, L"Find window did not open for reorder+resize/sort validation.");
@@ -9904,7 +9819,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     FindFilesPaneContext context{};
     context.rootPluginPath = root;
     const AppTheme theme   = ResolveAppTheme(ThemeMode::Dark, L"find-selftest-resized-sort-cycles");
-    state.Require(ShowFindFilesWindow(mainWindow, g_settings, theme, std::move(context)), L"Failed to open Find window for resize/sort validation.");
+    state.Require(ShowFindFilesWindow(mainWindow, g_folderWindow, g_settings, theme, std::move(context)), L"Failed to open Find window for resize/sort validation.");
 
     const HWND findWindow = WaitForWindow([] noexcept { return GetFindFilesWindowHandle(); }, SelfTest::Scale(5000ms));
     state.Require(findWindow != nullptr && IsWindow(findWindow) != FALSE, L"Find window did not open for resize/sort validation.");
@@ -10219,7 +10134,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         FindFilesPaneContext context{};
         context.rootPluginPath = root;
         const AppTheme theme   = ResolveAppTheme(ThemeMode::Dark, themeTag);
-        state.Require(ShowFindFilesWindow(mainWindow, g_settings, theme, std::move(context)), L"Failed to open Find window for resized-layout validation.");
+        state.Require(ShowFindFilesWindow(mainWindow, g_folderWindow, g_settings, theme, std::move(context)), L"Failed to open Find window for resized-layout validation.");
         if (! state.failure.empty())
         {
             return nullptr;
@@ -10401,7 +10316,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         FindFilesPaneContext context{};
         context.rootPluginPath = root;
         const AppTheme theme   = ResolveAppTheme(ThemeMode::Dark, themeTag);
-        state.Require(ShowFindFilesWindow(mainWindow, g_settings, theme, std::move(context)), L"Failed to open Find window for reordered-layout validation.");
+        state.Require(ShowFindFilesWindow(mainWindow, g_folderWindow, g_settings, theme, std::move(context)), L"Failed to open Find window for reordered-layout validation.");
         if (! state.failure.empty())
         {
             return nullptr;
@@ -10575,7 +10490,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         FindFilesPaneContext context{};
         context.rootPluginPath = root;
         const AppTheme theme   = ResolveAppTheme(ThemeMode::Dark, themeTag);
-        state.Require(ShowFindFilesWindow(mainWindow, g_settings, theme, std::move(context)),
+        state.Require(ShowFindFilesWindow(mainWindow, g_folderWindow, g_settings, theme, std::move(context)),
                       L"Failed to open Find window for restored-reordered-copy validation.");
         if (! state.failure.empty())
         {
@@ -10816,7 +10731,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         FindFilesPaneContext context{};
         context.rootPluginPath = root;
         const AppTheme theme   = ResolveAppTheme(ThemeMode::Dark, themeTag);
-        state.Require(ShowFindFilesWindow(mainWindow, g_settings, theme, std::move(context)), L"Failed to open Find window for persisted-sort validation.");
+        state.Require(ShowFindFilesWindow(mainWindow, g_folderWindow, g_settings, theme, std::move(context)), L"Failed to open Find window for persisted-sort validation.");
         if (! state.failure.empty())
         {
             return nullptr;
@@ -10969,7 +10884,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         FindFilesPaneContext context{};
         context.rootPluginPath = root;
         const AppTheme theme   = ResolveAppTheme(ThemeMode::Dark, themeTag);
-        state.Require(ShowFindFilesWindow(mainWindow, g_settings, theme, std::move(context)),
+        state.Require(ShowFindFilesWindow(mainWindow, g_folderWindow, g_settings, theme, std::move(context)),
                       L"Failed to open Find window for reordered-sorted-layout validation.");
         if (! state.failure.empty())
         {
@@ -11402,7 +11317,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         FindFilesPaneContext context{};
         context.rootPluginPath = root;
         const AppTheme theme   = ResolveAppTheme(ThemeMode::Dark, themeTag);
-        state.Require(ShowFindFilesWindow(mainWindow, g_settings, theme, std::move(context)),
+        state.Require(ShowFindFilesWindow(mainWindow, g_folderWindow, g_settings, theme, std::move(context)),
                       L"Failed to open Find window for restored combined-view-state copy validation.");
         if (! state.failure.empty())
         {
@@ -11708,7 +11623,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         FindFilesPaneContext context{};
         context.rootPluginPath = root;
         const AppTheme theme   = ResolveAppTheme(ThemeMode::Dark, themeTag);
-        state.Require(ShowFindFilesWindow(mainWindow, g_settings, theme, std::move(context)),
+        state.Require(ShowFindFilesWindow(mainWindow, g_folderWindow, g_settings, theme, std::move(context)),
                       L"Failed to open Find window for restored combined-view-state rerun validation.");
         if (! state.failure.empty())
         {
@@ -11981,7 +11896,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         FindFilesPaneContext context{};
         context.rootPluginPath = root;
         const AppTheme theme   = ResolveAppTheme(ThemeMode::Dark, themeTag);
-        state.Require(ShowFindFilesWindow(mainWindow, g_settings, theme, std::move(context)),
+        state.Require(ShowFindFilesWindow(mainWindow, g_folderWindow, g_settings, theme, std::move(context)),
                       L"Failed to open Find window for restored combined-view-state sort-cycles validation.");
         if (! state.failure.empty())
         {
@@ -12245,7 +12160,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         FindFilesPaneContext context{};
         context.rootPluginPath = root;
         const AppTheme theme   = ResolveAppTheme(ThemeMode::Dark, themeTag);
-        state.Require(ShowFindFilesWindow(mainWindow, g_settings, theme, std::move(context)),
+        state.Require(ShowFindFilesWindow(mainWindow, g_folderWindow, g_settings, theme, std::move(context)),
                       L"Failed to open Find window for restored combined-view-state copy-after-sort-cycles validation.");
         if (! state.failure.empty())
         {
@@ -12550,7 +12465,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         FindFilesPaneContext context{};
         context.rootPluginPath = root;
         const AppTheme theme   = ResolveAppTheme(ThemeMode::Dark, themeTag);
-        state.Require(ShowFindFilesWindow(mainWindow, g_settings, theme, std::move(context)),
+        state.Require(ShowFindFilesWindow(mainWindow, g_folderWindow, g_settings, theme, std::move(context)),
                       L"Failed to open Find window for restored combined-view-state copy-after-search-rerun validation.");
         if (! state.failure.empty())
         {
@@ -12899,7 +12814,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         FindFilesPaneContext context{};
         context.rootPluginPath = root;
         const AppTheme theme   = ResolveAppTheme(ThemeMode::Dark, themeTag);
-        state.Require(ShowFindFilesWindow(mainWindow, g_settings, theme, std::move(context)),
+        state.Require(ShowFindFilesWindow(mainWindow, g_folderWindow, g_settings, theme, std::move(context)),
                       L"Failed to open Find window for restored combined-view-state Enter activation validation.");
         if (! state.failure.empty())
         {
@@ -13170,7 +13085,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         FindFilesPaneContext context{};
         context.rootPluginPath = root;
         const AppTheme theme   = ResolveAppTheme(ThemeMode::Dark, themeTag);
-        state.Require(ShowFindFilesWindow(mainWindow, g_settings, theme, std::move(context)),
+        state.Require(ShowFindFilesWindow(mainWindow, g_folderWindow, g_settings, theme, std::move(context)),
                       L"Failed to open Find window for restored combined-view-state double-click activation validation.");
         if (! state.failure.empty())
         {
@@ -13444,7 +13359,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         FindFilesPaneContext context{};
         context.rootPluginPath = root;
         const AppTheme theme   = ResolveAppTheme(ThemeMode::Dark, themeTag);
-        state.Require(ShowFindFilesWindow(mainWindow, g_settings, theme, std::move(context)),
+        state.Require(ShowFindFilesWindow(mainWindow, g_folderWindow, g_settings, theme, std::move(context)),
                       L"Failed to open Find window for restored combined-view-state action-button validation.");
         if (! state.failure.empty())
         {
@@ -13753,7 +13668,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         FindFilesPaneContext context{};
         context.rootPluginPath = root;
         const AppTheme theme   = ResolveAppTheme(ThemeMode::Dark, themeTag);
-        state.Require(ShowFindFilesWindow(mainWindow, g_settings, theme, std::move(context)),
+        state.Require(ShowFindFilesWindow(mainWindow, g_folderWindow, g_settings, theme, std::move(context)),
                       L"Failed to open Find window for restored combined-view-state action-button sort-cycle validation.");
         if (! state.failure.empty())
         {
@@ -14088,7 +14003,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         FindFilesPaneContext context{};
         context.rootPluginPath = root;
         const AppTheme theme   = ResolveAppTheme(ThemeMode::Dark, themeTag);
-        state.Require(ShowFindFilesWindow(mainWindow, g_settings, theme, std::move(context)),
+        state.Require(ShowFindFilesWindow(mainWindow, g_folderWindow, g_settings, theme, std::move(context)),
                       L"Failed to open Find window for restored combined-view-state action-button sort-cycle search-rerun validation.");
         if (! state.failure.empty())
         {
@@ -14498,7 +14413,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         FindFilesPaneContext context{};
         context.rootPluginPath = root;
         const AppTheme theme   = ResolveAppTheme(ThemeMode::Dark, themeTag);
-        state.Require(ShowFindFilesWindow(mainWindow, g_settings, theme, std::move(context)),
+        state.Require(ShowFindFilesWindow(mainWindow, g_folderWindow, g_settings, theme, std::move(context)),
                       L"Failed to open Find window for restored combined-view-state Enter sort-cycle search-rerun validation.");
         if (! state.failure.empty())
         {
@@ -14873,7 +14788,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         FindFilesPaneContext context{};
         context.rootPluginPath = root;
         const AppTheme theme   = ResolveAppTheme(ThemeMode::Dark, themeTag);
-        state.Require(ShowFindFilesWindow(mainWindow, g_settings, theme, std::move(context)),
+        state.Require(ShowFindFilesWindow(mainWindow, g_folderWindow, g_settings, theme, std::move(context)),
                       L"Failed to open Find window for restored combined-view-state double-click sort-cycle search-rerun validation.");
         if (! state.failure.empty())
         {
@@ -15201,7 +15116,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     FindFilesPaneContext context{};
     context.rootPluginPath      = root;
     const AppTheme initialTheme = ResolveAppTheme(ThemeMode::Dark, L"find-selftest-theme-cycle-initial");
-    state.Require(ShowFindFilesWindow(mainWindow, g_settings, initialTheme, std::move(context)), L"Failed to open Find window for theme-cycle validation.");
+    state.Require(ShowFindFilesWindow(mainWindow, g_folderWindow, g_settings, initialTheme, std::move(context)), L"Failed to open Find window for theme-cycle validation.");
 
     const HWND findWindow = WaitForWindow([] noexcept { return GetFindFilesWindowHandle(); }, SelfTest::Scale(5000ms));
     state.Require(findWindow != nullptr && IsWindow(findWindow) != FALSE, L"Find window did not open for theme-cycle validation.");
@@ -15416,7 +15331,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     AppTheme standardTheme    = ResolveAppTheme(ThemeMode::Dark, L"find-selftest-compact-standard");
     standardTheme.compactMode = false;
 
-    state.Require(ShowFindFilesWindow(mainWindow, g_settings, standardTheme, std::move(context)), L"Failed to open Find window for compact-mode validation.");
+    state.Require(ShowFindFilesWindow(mainWindow, g_folderWindow, g_settings, standardTheme, std::move(context)), L"Failed to open Find window for compact-mode validation.");
 
     const HWND findWindow = WaitForWindow([] noexcept { return GetFindFilesWindowHandle(); }, SelfTest::Scale(5000ms));
     state.Require(findWindow != nullptr && IsWindow(findWindow) != FALSE, L"Find window did not open for compact-mode validation.");

@@ -2291,8 +2291,16 @@ int PrefsUi::ShowSharedPageEmptyState(HWND host,
 
 namespace
 {
+struct PreferencesSaveResult final
+{
+    HRESULT hr        = E_FAIL;
+    bool mainSaved    = false;
+    bool monitorSaved = false;
+};
+
 [[nodiscard]] HRESULT SaveMonitorSettingsFromDialog(HWND dlg, PreferencesDialogState& state) noexcept
 {
+    static_cast<void>(dlg);
     if (AreEquivalentMonitorSettings(state.monitorBaselineSettings, state.workingMonitorSettings))
     {
         return S_OK;
@@ -2301,26 +2309,35 @@ namespace
     Common::Settings::Settings merged = state.monitorBaselineSettings;
     merged.monitor                    = GetMonitorSettingsOrDefault(state.workingMonitorSettings);
 
-    Common::Settings::Settings settingsToSave = SettingsSave::PrepareForSave(merged);
-    const HRESULT hr                          = SettingsHotReload::SaveSettingsAndSchema(kPreferencesMonitorAppId, merged);
+    HRESULT hr = SettingsHotReload::SaveSettingsAndSchema(kPreferencesMonitorAppId, merged);
+    if (hr == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH))
+    {
+        // Monitor Preferences owns only the Monitor section. Rebase that section once onto
+        // the newest document; the store CAS still prevents a second concurrent overwrite.
+        Common::Settings::Settings latest{};
+        if (Common::Settings::TryLoadSettingsNoRecovery(kPreferencesMonitorAppId, latest) == S_OK)
+        {
+            latest.monitor = GetMonitorSettingsOrDefault(state.workingMonitorSettings);
+            merged         = std::move(latest);
+            hr             = SettingsHotReload::SaveSettingsAndSchema(kPreferencesMonitorAppId, merged);
+        }
+    }
     if (FAILED(hr))
     {
-        const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(kPreferencesMonitorAppId);
-        const std::wstring title                 = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
-        const std::wstring message = FormatStringResource(nullptr, IDS_FMT_SETTINGS_SAVE_FAILED, settingsPath.wstring(), static_cast<unsigned long>(hr));
-        ShowDialogAlert(dlg, HOST_ALERT_ERROR, title, message);
         return hr;
     }
 
-    state.workingMonitorSettings = std::move(settingsToSave);
+    state.workingMonitorSettings = SettingsSave::PrepareForSave(merged);
     return S_OK;
 }
 
-[[nodiscard]] HRESULT SaveSettingsFromDialog(HWND dlg, PreferencesDialogState& state) noexcept
+[[nodiscard]] PreferencesSaveResult SaveSettingsFromDialog(HWND dlg, PreferencesDialogState& state) noexcept
 {
+    PreferencesSaveResult result{};
     if (state.appId.empty())
     {
-        return E_INVALIDARG;
+        result.hr = E_INVALIDARG;
+        return result;
     }
 
     if (state.owner && IsWindow(state.owner))
@@ -2459,8 +2476,6 @@ namespace
 
     merged.monitor.reset();
 
-    Common::Settings::Settings settingsToSave = SettingsSave::PrepareForSave(merged);
-
     const HRESULT hr = SettingsHotReload::SaveSettingsAndSchema(state.appId, merged);
     if (FAILED(hr))
     {
@@ -2468,12 +2483,25 @@ namespace
         const std::wstring title                 = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
         const std::wstring message = FormatStringResource(nullptr, IDS_FMT_SETTINGS_SAVE_FAILED, settingsPath.wstring(), static_cast<unsigned long>(hr));
         ShowDialogAlert(dlg, HOST_ALERT_ERROR, title, message);
-        return hr;
+        result.hr = hr;
+        return result;
     }
 
-    state.workingSettings = std::move(settingsToSave);
+    state.workingSettings = SettingsSave::PrepareForSave(merged);
+    result.mainSaved       = true;
 
-    return SaveMonitorSettingsFromDialog(dlg, state);
+    result.hr = SaveMonitorSettingsFromDialog(dlg, state);
+    if (FAILED(result.hr))
+    {
+        const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(kPreferencesMonitorAppId);
+        const std::wstring title                 = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
+        const std::wstring message =
+            FormatStringResource(nullptr, IDS_FMT_PREFS_MONITOR_SAVE_FAILED_AFTER_MAIN, settingsPath.wstring(), static_cast<unsigned long>(result.hr));
+        ShowDialogAlert(dlg, HOST_ALERT_ERROR, title, message);
+        return result;
+    }
+    result.monitorSaved = true;
+    return result;
 }
 
 void RefreshPreferencesDialogThemeImpl(HWND dlg, PreferencesDialogState& state) noexcept;
@@ -2709,8 +2737,8 @@ void CommitAndApply(HWND dlg, PreferencesDialogState& state) noexcept
         return;
     }
 
-    const HRESULT saveHr = SaveSettingsFromDialog(dlg, state);
-    if (FAILED(saveHr))
+    const PreferencesSaveResult saveResult = SaveSettingsFromDialog(dlg, state);
+    if (! saveResult.mainSaved)
     {
         return;
     }
@@ -2719,7 +2747,10 @@ void CommitAndApply(HWND dlg, PreferencesDialogState& state) noexcept
 
     *state.settings               = state.workingSettings;
     state.baselineSettings        = state.workingSettings;
-    state.monitorBaselineSettings = state.workingMonitorSettings;
+    if (saveResult.monitorSaved)
+    {
+        state.monitorBaselineSettings = state.workingMonitorSettings;
+    }
     state.previewApplied          = false;
     state.staleFromExternalReload = false;
 

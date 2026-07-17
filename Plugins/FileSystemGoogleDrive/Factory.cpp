@@ -49,6 +49,11 @@ namespace
 
 HRESULT CreateInstance(const FactoryOptions* /*factoryOptions*/, IHost* host, void** result) noexcept
 {
+    if (! FileSystemGoogleDriveInternal::CanCreateInstance())
+    {
+        return HRESULT_FROM_WIN32(ERROR_SHUTDOWN_IN_PROGRESS);
+    }
+
     auto* instance = new (std::nothrow) FileSystemGoogleDrive(host);
     if (! instance)
     {
@@ -79,3 +84,20 @@ extern "C" HRESULT __stdcall RedSalamanderGetConfigurationSchema(REFIID riid, co
 {
     return FactoryGetConfigurationSchema<IFileSystem>(kEntries, riid, pluginId, schemaJsonUtf8);
 }
+
+extern "C" PLUGFACTORY_API void __stdcall RedSalamanderPluginShutdown() noexcept
+{
+    FileSystemGoogleDriveInternal::BeginShutdown();
+}
+
+extern "C" PLUGFACTORY_API BOOL __stdcall RedSalamanderPluginCanUnloadNow() noexcept
+{
+    return FileSystemGoogleDriveInternal::CanUnloadNow() ? TRUE : FALSE;
+}
+
+#if defined(_DEBUG)
+extern "C" PLUGFACTORY_API HRESULT __stdcall RedSalamanderDebugCurlRuntimeProbe() noexcept
+{
+    return FileSystemGoogleDriveInternal::RunDebugCurlRuntimeProbe();
+}
+#endif

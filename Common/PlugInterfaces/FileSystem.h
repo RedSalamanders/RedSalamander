@@ -528,6 +528,24 @@ interface __declspec(uuid("12519afa-30e7-4e3a-9db2-7990c4be9a21")) __declspec(no
     virtual HRESULT STDMETHODCALLTYPE GetStorageCharacteristics(const wchar_t* path, FileSystemStorageCharacteristics* characteristics) noexcept = 0;
 };
 
+// Optional cancellation/progress contract for potentially expensive directory enumeration.
+// The callback is per-call and synchronous: implementations MUST NOT retain it or invoke it
+// after ReadDirectoryInfoCancellable returns. A failed progress callback or TRUE cancellation
+// request must stop work promptly and return HRESULT_FROM_WIN32(ERROR_CANCELLED).
+interface __declspec(novtable) IFileSystemDirectoryEnumerationCallback
+{
+    virtual HRESULT STDMETHODCALLTYPE DirectoryEnumerationProgress(uint64_t scannedEntries, uint64_t totalEntries, void* cookie) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE DirectoryEnumerationShouldCancel(BOOL * pCancel, void* cookie) noexcept                              = 0;
+};
+
+interface __declspec(uuid("32f1b16a-fb45-4e59-98ca-61e16445c527")) __declspec(novtable) IFileSystemCancellableDirectoryEnumeration : public IUnknown
+{
+    virtual HRESULT STDMETHODCALLTYPE ReadDirectoryInfoCancellable(const wchar_t* path,
+                                                                   IFileSystemDirectoryEnumerationCallback* callback,
+                                                                   void* cookie,
+                                                                   IFilesInformation** ppFilesInformation) noexcept = 0;
+};
+
 // Minimal Win32-like file reader for filesystem plugins.
 // Notes:
 // - The reader is read-only.

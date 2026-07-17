@@ -8,6 +8,7 @@
 #include <limits>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 
@@ -45,6 +46,85 @@ struct MallocStringDeleter
 using UniqueDocument        = std::unique_ptr<yyjson_doc, ImmutableDocumentDeleter>;
 using UniqueMutableDocument = std::unique_ptr<yyjson_mut_doc, MutableDocumentDeleter>;
 using UniqueMallocString    = std::unique_ptr<char, MallocStringDeleter>;
+
+struct ObjectDocument
+{
+    ObjectDocument() = default;
+
+    ObjectDocument(const ObjectDocument&)            = delete;
+    ObjectDocument& operator=(const ObjectDocument&) = delete;
+    ObjectDocument(ObjectDocument&&)                 = default;
+    ObjectDocument& operator=(ObjectDocument&&)      = default;
+
+    UniqueDocument document;
+    yyjson_val* root = nullptr;
+
+    [[nodiscard]] explicit operator bool() const noexcept
+    {
+        return document != nullptr && root != nullptr;
+    }
+};
+
+[[nodiscard]] inline ObjectDocument ParseObjectDocument(std::string_view text, uint32_t readFlags) noexcept
+{
+    yyjson_read_err error{};
+    UniqueDocument document(yyjson_read_opts(const_cast<char*>(text.data()), text.size(), readFlags, nullptr, &error));
+    if (! document)
+    {
+        return {};
+    }
+
+    yyjson_val* root = yyjson_doc_get_root(document.get());
+    if (! root || ! yyjson_is_obj(root))
+    {
+        return {};
+    }
+
+    ObjectDocument result;
+    result.document = std::move(document);
+    result.root     = root;
+    return result;
+}
+
+[[nodiscard]] inline std::optional<std::string> WriteObjectWithoutMembers(const ObjectDocument& source,
+                                                                          std::span<const char* const> memberNames) noexcept
+{
+    if (! source)
+    {
+        return std::nullopt;
+    }
+
+    UniqueMutableDocument document(yyjson_mut_doc_new(nullptr));
+    if (! document)
+    {
+        return std::nullopt;
+    }
+
+    yyjson_mut_val* root = yyjson_val_mut_copy(document.get(), source.root);
+    if (! root)
+    {
+        return std::nullopt;
+    }
+    yyjson_mut_doc_set_root(document.get(), root);
+
+    for (const char* memberName : memberNames)
+    {
+        if (memberName && memberName[0] != '\0')
+        {
+            static_cast<void>(yyjson_mut_obj_remove_key(root, memberName));
+        }
+    }
+
+    size_t length = 0;
+    yyjson_write_err error{};
+    UniqueMallocString text(yyjson_mut_write_opts(document.get(), YYJSON_WRITE_NOFLAG, nullptr, &length, &error));
+    if (! text)
+    {
+        return std::nullopt;
+    }
+
+    return std::string(text.get(), length);
+}
 
 enum class MemberRequirement : uint8_t
 {

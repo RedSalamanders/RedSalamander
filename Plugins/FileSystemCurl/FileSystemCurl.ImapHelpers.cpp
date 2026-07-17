@@ -50,6 +50,23 @@ namespace
     return true;
 }
 
+[[nodiscard]] bool EqualsAsciiNoCase(std::string_view left, std::string_view right) noexcept
+{
+    if (left.size() != right.size())
+    {
+        return false;
+    }
+
+    for (size_t index = 0; index < left.size(); ++index)
+    {
+        if (AsciiLower(left[index]) != AsciiLower(right[index]))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 [[nodiscard]] bool TryParseAsciiUint64(std::wstring_view text, uint64_t& out) noexcept
 {
     out = 0;
@@ -674,6 +691,13 @@ struct EncodedWord
 {
     outUid = 0;
 
+    ImapMessageIdentity identity;
+    if (TryParseImapMessageIdentityFromLeafName(leafName, identity))
+    {
+        outUid = identity.uid;
+        return true;
+    }
+
     constexpr std::wstring_view kExt = L".eml";
     if (! EndsWithNoCase(leafName, kExt))
     {
@@ -702,6 +726,45 @@ struct EncodedWord
     }
 
     return false;
+}
+
+[[nodiscard]] bool TryParseImapMessageIdentityFromLeafName(std::wstring_view leafName, ImapMessageIdentity& outIdentity) noexcept
+{
+    outIdentity = {};
+
+    constexpr std::wstring_view kExt = L".eml";
+    if (! EndsWithNoCase(leafName, kExt))
+    {
+        return false;
+    }
+
+    const std::wstring_view base = leafName.substr(0, leafName.size() - kExt.size());
+    if (base.empty() || base.back() != L']')
+    {
+        return false;
+    }
+
+    const size_t open = base.rfind(L'[');
+    if (open == std::wstring_view::npos || open + 1u >= base.size() - 1u)
+    {
+        return false;
+    }
+
+    const std::wstring_view encodedIdentity = base.substr(open + 1u, base.size() - open - 2u);
+    const size_t separator                  = encodedIdentity.find(L'-');
+    if (separator == std::wstring_view::npos || separator == 0u || separator + 1u >= encodedIdentity.size() ||
+        encodedIdentity.find(L'-', separator + 1u) != std::wstring_view::npos)
+    {
+        return false;
+    }
+
+    if (! TryParseAsciiUint64(encodedIdentity.substr(0, separator), outIdentity.uidValidity) ||
+        ! TryParseAsciiUint64(encodedIdentity.substr(separator + 1u), outIdentity.uid) || outIdentity.uidValidity == 0u || outIdentity.uid == 0u)
+    {
+        outIdentity = {};
+        return false;
+    }
+    return true;
 }
 
 [[nodiscard]] std::wstring DecodeRfc2047EncodedWordsToUtf16(std::string_view headerValue) noexcept
@@ -786,7 +849,7 @@ struct EncodedWord
     return out;
 }
 
-[[nodiscard]] std::wstring BuildImapMessageLeafName(std::wstring_view subject, std::wstring_view from, uint64_t uid) noexcept
+[[nodiscard]] std::wstring BuildImapMessageLeafName(std::wstring_view subject, std::wstring_view from, uint64_t uidValidity, uint64_t uid) noexcept
 {
     static_cast<void>(from);
 
@@ -794,13 +857,13 @@ struct EncodedWord
     safeSubject              = TruncateSubjectForLeafName(safeSubject, 96u);
 
     const std::wstring_view subjectPart = safeSubject.empty() ? std::wstring_view(L"message") : std::wstring_view(safeSubject);
-    const std::wstring uidText          = std::format(L"{}", uid);
+    const std::wstring identityText     = std::format(L"{}-{}", uidValidity, uid);
 
     std::wstring out;
-    out.reserve(subjectPart.size() + uidText.size() + 8u);
+    out.reserve(subjectPart.size() + identityText.size() + 8u);
     out.append(subjectPart);
     out.append(L" [");
-    out.append(uidText);
+    out.append(identityText);
     out.append(L"].eml");
     return out;
 }
@@ -887,6 +950,131 @@ struct EncodedWord
     }
 
     return recognized;
+}
+
+[[nodiscard]] bool TryParseImapCapabilities(std::string_view response, ImapCapabilities& out) noexcept
+{
+    out = {};
+
+    bool foundCapabilityLine = false;
+    size_t lineStart         = 0;
+    while (lineStart < response.size())
+    {
+        size_t lineEnd = response.find('\n', lineStart);
+        if (lineEnd == std::string_view::npos)
+        {
+            lineEnd = response.size();
+        }
+
+        std::string_view line = response.substr(lineStart, lineEnd - lineStart);
+        if (! line.empty() && line.back() == '\r')
+        {
+            line.remove_suffix(1u);
+        }
+        lineStart = lineEnd + 1u;
+
+        size_t pos = 0;
+        while (pos < line.size() && IsAsciiWhitespace(line[pos]))
+        {
+            ++pos;
+        }
+        if (pos >= line.size() || line[pos] != '*')
+        {
+            continue;
+        }
+        ++pos;
+        while (pos < line.size() && IsAsciiWhitespace(line[pos]))
+        {
+            ++pos;
+        }
+
+        const size_t commandStart = pos;
+        while (pos < line.size() && ! IsAsciiWhitespace(line[pos]))
+        {
+            ++pos;
+        }
+        if (! EqualsAsciiNoCase(line.substr(commandStart, pos - commandStart), "CAPABILITY"))
+        {
+            continue;
+        }
+
+        foundCapabilityLine = true;
+        while (pos < line.size())
+        {
+            while (pos < line.size() && IsAsciiWhitespace(line[pos]))
+            {
+                ++pos;
+            }
+            const size_t tokenStart = pos;
+            while (pos < line.size() && ! IsAsciiWhitespace(line[pos]))
+            {
+                ++pos;
+            }
+            if (EqualsAsciiNoCase(line.substr(tokenStart, pos - tokenStart), "UIDPLUS"))
+            {
+                out.uidPlus = true;
+            }
+        }
+    }
+
+    return foundCapabilityLine;
+}
+
+[[nodiscard]] HRESULT ValidateImapMessageUidValidity(uint64_t expectedUidValidity, const std::optional<uint64_t>& observedUidValidity) noexcept
+{
+    if (expectedUidValidity == 0u)
+    {
+        return E_INVALIDARG;
+    }
+    if (! observedUidValidity.has_value() || observedUidValidity.value() == 0u)
+    {
+        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+    }
+    if (observedUidValidity.value() != expectedUidValidity)
+    {
+        return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+    }
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT ExecuteImapSingleMessageDelete(bool uidPlusAvailable,
+                                                     uint64_t uid,
+                                                     ImapDeleteCommandExecutor executor,
+                                                     void* context,
+                                                     ImapDeleteOutcome& outOutcome) noexcept
+{
+    outOutcome = {};
+    if (uid == 0u || executor == nullptr)
+    {
+        return E_INVALIDARG;
+    }
+    if (! uidPlusAvailable)
+    {
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+
+    HRESULT hr = executor(context, ImapDeleteCommand::AddDeletedFlag, uid);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+    outOutcome.targetMarkedDeleted = true;
+
+    hr = executor(context, ImapDeleteCommand::UidExpunge, uid);
+    if (SUCCEEDED(hr))
+    {
+        outOutcome.targetMarkedDeleted = false;
+        return S_OK;
+    }
+
+    const HRESULT expungeHr       = hr;
+    outOutcome.rollbackAttempted  = true;
+    outOutcome.rollbackHr         = executor(context, ImapDeleteCommand::RemoveDeletedFlag, uid);
+    if (SUCCEEDED(outOutcome.rollbackHr))
+    {
+        outOutcome.targetMarkedDeleted = false;
+    }
+    return expungeHr;
 }
 
 [[nodiscard]] std::vector<ImapUidBatchRange> BuildImapUidBatchRanges(size_t uidCount, size_t maxBatchSize)

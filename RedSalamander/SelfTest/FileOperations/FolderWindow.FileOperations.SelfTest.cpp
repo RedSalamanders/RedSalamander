@@ -67,6 +67,7 @@
 #include "FolderWindow.FileOperationsInternal.h"
 #include "FolderWindow.h"
 #include "HostServices.h"
+#include "RedSalamander.h"
 #include "SplashScreen.h"
 #include "WindowMessages.h"
 #pragma warning(push)
@@ -74,7 +75,7 @@
 #include "Helpers.h"
 #pragma warning(pop)
 
-extern Common::Settings::Settings g_settings;
+static Common::Settings::Settings& g_settings = GetApplicationSettingsForSelfTest();
 
 namespace
 {
@@ -2807,20 +2808,8 @@ void CleanupRemoteOneDrivePersonalCase(SelfTestState& state) noexcept
 
 [[nodiscard]] std::wstring NewGuidString() noexcept
 {
-    GUID id{};
-    if (FAILED(CoCreateGuid(&id)))
-    {
-        return {};
-    }
-
-    wchar_t buffer[64]{};
-    const int written = StringFromGUID2(id, buffer, static_cast<int>(std::size(buffer)));
-    if (written <= 0)
-    {
-        return {};
-    }
-
-    return buffer;
+    std::wstring id;
+    return SUCCEEDED(Common::Settings::CreateConnectionProfileId(id)) ? id : std::wstring{};
 }
 
 [[nodiscard]] Common::Settings::JsonValue MakeJsonObjectWithUIntMembers(std::initializer_list<std::pair<std::string_view, uint64_t>> members) noexcept

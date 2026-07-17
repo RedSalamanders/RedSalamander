@@ -10,12 +10,15 @@
 #include "AppTheme.h"
 #include "SettingsStore.h"
 
+class FolderWindow;
+
 // Shows the Connection Manager dialog facade.
 // Returns:
 // - S_OK: user chose a connection (selectedConnectionNameOut set)
 // - S_FALSE: user cancelled (selectedConnectionNameOut cleared)
 // - failure HRESULT: unexpected error
 HRESULT ShowConnectionManagerDialog(HWND owner,
+                                    FolderWindow& applicationFolderWindow,
                                     std::wstring_view appId,
                                     Common::Settings::Settings& settings,
                                     const AppTheme& theme,
@@ -25,6 +28,7 @@ HRESULT ShowConnectionManagerDialog(HWND owner,
 // Shows a modeless Connection Manager window (similar to Preferences).
 // `targetPane` is an app-defined identifier (0=Left, 1=Right) used when the user clicks Connect.
 [[nodiscard]] bool ShowConnectionManagerWindow(HWND owner,
+                                               FolderWindow& applicationFolderWindow,
                                                std::wstring_view appId,
                                                Common::Settings::Settings& settings,
                                                const AppTheme& theme,
@@ -192,6 +196,7 @@ namespace RedSalamander::ConnectionManager::SingleCanvas
 // Modeless single-instance entry point, modeled on `ShowConnectionManagerWindow`.
 // Returns false if the window cannot be created.
 [[nodiscard]] bool ShowWindow(HWND owner,
+                              FolderWindow& applicationFolderWindow,
                               std::wstring_view appId,
                               Common::Settings::Settings& settings,
                               const AppTheme& theme,
@@ -203,6 +208,7 @@ namespace RedSalamander::ConnectionManager::SingleCanvas
 // message pump until the user picks a connection (S_OK), cancels (S_FALSE), or
 // hits an error (failure HRESULT).
 [[nodiscard]] HRESULT ShowDialog(HWND owner,
+                                 FolderWindow& applicationFolderWindow,
                                  std::wstring_view appId,
                                  Common::Settings::Settings& settings,
                                  const AppTheme& theme,

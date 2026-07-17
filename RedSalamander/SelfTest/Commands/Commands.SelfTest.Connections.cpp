@@ -7245,10 +7245,57 @@ template <typename Predicate>
     return state.failure.empty();
 }
 
+[[nodiscard]] bool TestConnectionSecretAuthorizationScopes(CaseState& state) noexcept
+{
+    using RedSalamander::Connections::IsSecretAccessAuthorized;
+    using RedSalamander::Connections::SecretAccessPurpose;
+    using RedSalamander::Connections::SecretKind;
+
+    constexpr std::wstring_view profileId = L"11111111-2222-3333-4444-555555555555";
+    RedSalamander::Connections::ClearAllSecretAccessAuthorizations();
+    const auto cleanup = wil::scope_exit([]() noexcept { RedSalamander::Connections::ClearAllSecretAccessAuthorizations(); });
+
+    RedSalamander::Connections::NoteSecretAccessAuthorized(profileId, SecretKind::Password);
+    state.Require(IsSecretAccessAuthorized(profileId, SecretKind::Password, SecretAccessPurpose::Interactive, 60'000u),
+                  L"A recent interactive approval should satisfy the timed interactive scope.");
+    state.Require(! IsSecretAccessAuthorized(profileId, SecretKind::Password, SecretAccessPurpose::Interactive, 0u),
+                  L"An interactive timeout of zero should always require a new prompt.");
+    state.Require(IsSecretAccessAuthorized(profileId, SecretKind::Password, SecretAccessPurpose::Background, 0u),
+                  L"The same approval should establish an explicit app-run background grant.");
+    state.Require(! IsSecretAccessAuthorized(profileId, SecretKind::SshKeyPassphrase, SecretAccessPurpose::Background, 0u),
+                  L"A password grant must not authorize a passphrase.");
+
+    RedSalamander::Connections::SetSecretAccessAuthorizationTickForTesting(
+        profileId, SecretKind::Password, SecretAccessPurpose::Interactive, 0u);
+    state.Require(! IsSecretAccessAuthorized(profileId, SecretKind::Password, SecretAccessPurpose::Interactive, 1u),
+                  L"An expired interactive grant should require another prompt.");
+    state.Require(IsSecretAccessAuthorized(profileId, SecretKind::Password, SecretAccessPurpose::Background, 0u),
+                  L"Interactive expiry must not revoke an explicit background continuation grant.");
+
+    constexpr uint64_t beforeWrap = std::numeric_limits<uint64_t>::max() - 5u;
+    state.Require(RedSalamander::Connections::IsSecretAccessAuthorizationFreshForTesting(3u, beforeWrap, 10u),
+                  L"Authorization expiry arithmetic should remain fresh across unsigned tick wrap.");
+    state.Require(! RedSalamander::Connections::IsSecretAccessAuthorizationFreshForTesting(3u, beforeWrap, 9u),
+                  L"Authorization expiry arithmetic should expire at the exact timeout across tick wrap.");
+
+    RedSalamander::Connections::ClearSecretAccessAuthorization(profileId, SecretKind::Password);
+    state.Require(! IsSecretAccessAuthorized(profileId, SecretKind::Password, SecretAccessPurpose::Background, 0u),
+                  L"Clearing one secret kind should revoke its interactive and background grants.");
+
+    RedSalamander::Connections::NoteSecretAccessAuthorized(profileId, SecretKind::Password);
+    HostClearConnectionSessionState();
+    state.Require(! IsSecretAccessAuthorized(profileId, SecretKind::Password, SecretAccessPurpose::Background, 0u),
+                  L"Clearing connection session state should revoke app-run background grants.");
+    return state.failure.empty();
+}
+
 } // namespace (tests)
 
 void RunConnectionsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestOptions& options, SelfTest::SelfTestSuiteResult& suite) noexcept
 {
+    SelfTest::RunCase(options, suite, L"connection_secret_authorization_scopes", [](CaseState& state) noexcept {
+        return TestConnectionSecretAuthorizationScopes(state);
+    });
     SelfTest::RunCase(options, suite, L"cmd_connection_manager_window_uses_dxui_command_buttons", [=](CaseState& state) noexcept {
         return TestConnectionManagerWindowUsesDxUiCommandButtonsOnly(mainWindow, state);
     });

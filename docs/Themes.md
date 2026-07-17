@@ -117,9 +117,18 @@ Supported functions are:
 
 Amounts accept decimals from `0.0` to `1.0` or percentages. Runtime functions use stable seeds, are compiled when the theme is resolved, and do not parse or allocate while painting. High Contrast overrides all authored and Rainbow output.
 
+Theme files are formatted with the camelCase spellings shown above; input parsing remains case-insensitive for
+compatibility. `ensureContrast(foreground,background,ratio)` measures the rendered foreground composite. Its
+background must be opaque, and the foreground's authored alpha is retained only when that alpha can attain the
+requested ratio. Otherwise the expression is invalid instead of reporting contrast that users will not actually
+see.
+
 ## Loading and recovery
 
 - Themes in the settings file are user themes and take precedence over a disk theme with the same ID.
+- Inline theme IDs are case-sensitive. The first exact ID is active; later exact duplicates and structurally invalid
+  array entries are retained in their authored positions as opaque repair data so a canonical save does not destroy
+  them.
 - Standalone theme files are strict: malformed expressions, missing references, cycles, unsupported dynamic targets, and invalid versions reject that file.
 - A failed settings hot reload keeps the last valid live theme rather than partially applying a broken graph.
 - `builtin/rainbow` can be used as a base. A static override replaces Rainbow only for that semantic token; the rest of the inherited Rainbow behavior remains active.

@@ -7,8 +7,6 @@
 
 #include <windowsx.h>
 
-extern FolderWindow g_folderWindow;
-
 namespace CompareDirectoriesWindowInternal
 {
 // UI-thread-only registry for theme refresh.
@@ -287,12 +285,14 @@ struct CompareDetailsTextStrings
     return strings;
 }
 
-CompareDirectoriesWindow::CompareDirectoriesWindow(Common::Settings::Settings& settings,
+CompareDirectoriesWindow::CompareDirectoriesWindow(FolderWindow& applicationFolderWindow,
+                                                   Common::Settings::Settings& settings,
                                                    AppTheme theme,
                                                    const ShortcutManager* shortcuts,
                                                    CompareDirectoriesPaneContext left,
                                                    CompareDirectoriesPaneContext right) noexcept
     : _settings(&settings),
+      _applicationFolderWindow(&applicationFolderWindow),
       _theme(std::move(theme)),
       _shortcuts(shortcuts),
       _leftContext(std::move(left)),
@@ -553,16 +553,16 @@ bool CompareDirectoriesWindow::Create(HWND owner) noexcept
 
 HWND CompareDirectoriesWindow::ResolveRestoreFolderViewWindow() const noexcept
 {
-    const HWND folderWindow = g_folderWindow.GetHwnd();
+    const HWND folderWindow = _applicationFolderWindow->GetHwnd();
     if (! folderWindow || IsWindow(folderWindow) == FALSE)
     {
         return nullptr;
     }
 
-    HWND focusedFolderView = g_folderWindow.GetFocusedFolderViewHwnd();
+    HWND focusedFolderView = _applicationFolderWindow->GetFocusedFolderViewHwnd();
     if (! focusedFolderView)
     {
-        focusedFolderView = g_folderWindow.GetFolderViewHwnd(g_folderWindow.GetFocusedPane());
+        focusedFolderView = _applicationFolderWindow->GetFolderViewHwnd(_applicationFolderWindow->GetFocusedPane());
     }
 
     if (! focusedFolderView || IsWindow(focusedFolderView) == FALSE)
@@ -597,7 +597,7 @@ void CompareDirectoriesWindow::RestoreOwnerFocusAfterClose() noexcept
 
     if (restoreFocus)
     {
-        g_folderWindow.RequestRestoreFolderViewFocus(restoreFocus);
+        _applicationFolderWindow->RequestRestoreFolderViewFocus(restoreFocus);
     }
     else if (restoreOwner)
     {
@@ -2737,6 +2737,7 @@ LRESULT CompareDirectoriesWindow::OnExecuteShortcutCommand(LPARAM lp) noexcept
 } // namespace CompareDirectoriesWindowInternal
 
 bool ShowCompareDirectoriesWindow(HWND owner,
+                                  FolderWindow& applicationFolderWindow,
                                   Common::Settings::Settings& settings,
                                   const AppTheme& theme,
                                   const ShortcutManager* shortcuts,
@@ -2745,7 +2746,8 @@ bool ShowCompareDirectoriesWindow(HWND owner,
 {
     SessionState::UpdateActiveFileSystemPluginIdsAndOperation({left.pluginId, right.pluginId}, SessionState::OperationKind::Compare);
 
-    auto window = std::make_unique<CompareDirectoriesWindowInternal::CompareDirectoriesWindow>(settings, theme, shortcuts, std::move(left), std::move(right));
+    auto window = std::make_unique<CompareDirectoriesWindowInternal::CompareDirectoriesWindow>(
+        applicationFolderWindow, settings, theme, shortcuts, std::move(left), std::move(right));
     if (! window->Create(owner))
     {
         return false;

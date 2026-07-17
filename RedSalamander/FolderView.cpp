@@ -1186,6 +1186,18 @@ void FolderView::DebugResetDrawItemTransientBrushCreateCount() noexcept
 {
     _debugDrawItemTransientBrushCreateCount.store(0, std::memory_order_release);
 }
+
+std::optional<POINT> FolderView::DebugGetItemCenterClientPointForSelfTest(std::wstring_view displayName) const noexcept
+{
+    const auto itemIt = std::ranges::find_if(_items, [&](const FolderItem& item) noexcept { return item.displayName == displayName; });
+    if (itemIt == _items.end())
+    {
+        return std::nullopt;
+    }
+
+    const D2D1_RECT_F bounds = OffsetRect(itemIt->bounds, -_horizontalOffset, -_scrollOffset);
+    return POINT{PxFromDip((bounds.left + bounds.right) * 0.5f), PxFromDip((bounds.top + bounds.bottom) * 0.5f)};
+}
 #endif
 
 void FolderView::SetTheme(const FolderViewTheme& theme)

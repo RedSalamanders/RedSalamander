@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <!--
+    Single source of truth for app-local vcpkg runtime DLLs copied by plugin builds
+    and validated by portable packaging. Flavor Debug also applies to ASan Debug.
+  -->
+  <ItemGroup>
+    <RSRuntimeDependency Include="7zip">
+      <Projects>FileSystem7z</Projects><Flavor>Any</Flavor><Platform>Any</Platform>
+      <Source>bin\7zip.dll</Source><OutputName>7zip.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+
+    <RSRuntimeDependency Include="curl-debug">
+      <Projects>FileSystemCurl;FileSystemGoogleDrive</Projects><Flavor>Debug</Flavor><Platform>Any</Platform>
+      <Source>debug\bin\libcurl-d.dll</Source><OutputName>libcurl-d.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="curl-release">
+      <Projects>FileSystemCurl;FileSystemGoogleDrive</Projects><Flavor>Release</Flavor><Platform>Any</Platform>
+      <Source>bin\libcurl.dll</Source><OutputName>libcurl.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="curl-ssh-debug">
+      <Projects>FileSystemCurl</Projects><Flavor>Debug</Flavor><Platform>Any</Platform>
+      <Source>debug\bin\libssh2.dll</Source><OutputName>libssh2.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="curl-ssh-release">
+      <Projects>FileSystemCurl</Projects><Flavor>Release</Flavor><Platform>Any</Platform>
+      <Source>bin\libssh2.dll</Source><OutputName>libssh2.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="openssl-ssl-debug-x64">
+      <Projects>FileSystemCurl;FileSystemGoogleDrive</Projects><Flavor>Debug</Flavor><Platform>x64</Platform>
+      <Source>debug\bin\libssl-3-x64.dll</Source><OutputName>libssl-3-x64.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="openssl-crypto-debug-x64">
+      <Projects>FileSystemCurl;FileSystemGoogleDrive</Projects><Flavor>Debug</Flavor><Platform>x64</Platform>
+      <Source>debug\bin\libcrypto-3-x64.dll</Source><OutputName>libcrypto-3-x64.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="openssl-ssl-release-x64">
+      <Projects>FileSystemCurl;FileSystemGoogleDrive</Projects><Flavor>Release</Flavor><Platform>x64</Platform>
+      <Source>bin\libssl-3-x64.dll</Source><OutputName>libssl-3-x64.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="openssl-crypto-release-x64">
+      <Projects>FileSystemCurl;FileSystemGoogleDrive</Projects><Flavor>Release</Flavor><Platform>x64</Platform>
+      <Source>bin\libcrypto-3-x64.dll</Source><OutputName>libcrypto-3-x64.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="openssl-ssl-debug-arm64">
+      <Projects>FileSystemCurl;FileSystemGoogleDrive</Projects><Flavor>Debug</Flavor><Platform>ARM64</Platform>
+      <Source>debug\bin\libssl-3-arm64.dll</Source><OutputName>libssl-3-arm64.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="openssl-crypto-debug-arm64">
+      <Projects>FileSystemCurl;FileSystemGoogleDrive</Projects><Flavor>Debug</Flavor><Platform>ARM64</Platform>
+      <Source>debug\bin\libcrypto-3-arm64.dll</Source><OutputName>libcrypto-3-arm64.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="openssl-ssl-release-arm64">
+      <Projects>FileSystemCurl;FileSystemGoogleDrive</Projects><Flavor>Release</Flavor><Platform>ARM64</Platform>
+      <Source>bin\libssl-3-arm64.dll</Source><OutputName>libssl-3-arm64.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="openssl-crypto-release-arm64">
+      <Projects>FileSystemCurl;FileSystemGoogleDrive</Projects><Flavor>Release</Flavor><Platform>ARM64</Platform>
+      <Source>bin\libcrypto-3-arm64.dll</Source><OutputName>libcrypto-3-arm64.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="zlib-debug">
+      <Projects>FileSystemCurl;FileSystemGoogleDrive;FileSystemS3</Projects><Flavor>Debug</Flavor><Platform>Any</Platform>
+      <Source>debug\bin\zd.dll</Source><OutputName>zd.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="zlib-release">
+      <Projects>FileSystemCurl;FileSystemGoogleDrive;FileSystemS3</Projects><Flavor>Release</Flavor><Platform>Any</Platform>
+      <Source>bin\z.dll</Source><OutputName>z.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="brotli-common-debug">
+      <Projects>FileSystemCurl;FileSystemGoogleDrive</Projects><Flavor>Debug</Flavor><Platform>Any</Platform>
+      <Source>debug\bin\brotlicommon.dll</Source><OutputName>brotlicommon.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="brotli-decoder-debug">
+      <Projects>FileSystemCurl;FileSystemGoogleDrive</Projects><Flavor>Debug</Flavor><Platform>Any</Platform>
+      <Source>debug\bin\brotlidec.dll</Source><OutputName>brotlidec.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="brotli-common-release">
+      <Projects>FileSystemCurl;FileSystemGoogleDrive</Projects><Flavor>Release</Flavor><Platform>Any</Platform>
+      <Source>bin\brotlicommon.dll</Source><OutputName>brotlicommon.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="brotli-decoder-release">
+      <Projects>FileSystemCurl;FileSystemGoogleDrive</Projects><Flavor>Release</Flavor><Platform>Any</Platform>
+      <Source>bin\brotlidec.dll</Source><OutputName>brotlidec.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="nghttp2-debug">
+      <Projects>FileSystemGoogleDrive</Projects><Flavor>Debug</Flavor><Platform>Any</Platform>
+      <Source>debug\bin\nghttp2.dll</Source><OutputName>nghttp2.dll</OutputName><Required>false</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="nghttp2d-debug">
+      <Projects>FileSystemGoogleDrive</Projects><Flavor>Debug</Flavor><Platform>Any</Platform>
+      <Source>debug\bin\nghttp2d.dll</Source><OutputName>nghttp2d.dll</OutputName><Required>false</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="nghttp2-release">
+      <Projects>FileSystemGoogleDrive</Projects><Flavor>Release</Flavor><Platform>Any</Platform>
+      <Source>bin\nghttp2.dll</Source><OutputName>nghttp2.dll</OutputName><Required>false</Required>
+    </RSRuntimeDependency>
+
+    <RSRuntimeDependency Include="image-raw-debug">
+      <Projects>ViewerImgRaw</Projects><Flavor>Debug</Flavor><Platform>Any</Platform>
+      <Source>debug\bin\raw_rd.dll</Source><OutputName>raw_rd.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="image-raw-release">
+      <Projects>ViewerImgRaw</Projects><Flavor>Release</Flavor><Platform>Any</Platform>
+      <Source>bin\raw_r.dll</Source><OutputName>raw_r.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="image-jasper-debug">
+      <Projects>ViewerImgRaw</Projects><Flavor>Debug</Flavor><Platform>Any</Platform>
+      <Source>debug\bin\jasperd.dll</Source><OutputName>jasperd.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="image-jasper-release">
+      <Projects>ViewerImgRaw</Projects><Flavor>Release</Flavor><Platform>Any</Platform>
+      <Source>bin\jasper.dll</Source><OutputName>jasper.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="image-jpeg-debug">
+      <Projects>ViewerImgRaw</Projects><Flavor>Debug</Flavor><Platform>Any</Platform>
+      <Source>debug\bin\jpeg8.dll</Source><OutputName>jpeg8.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="image-jpeg-release">
+      <Projects>ViewerImgRaw</Projects><Flavor>Release</Flavor><Platform>Any</Platform>
+      <Source>bin\jpeg8.dll</Source><OutputName>jpeg8.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="image-turbojpeg-debug">
+      <Projects>ViewerImgRaw</Projects><Flavor>Debug</Flavor><Platform>Any</Platform>
+      <Source>debug\bin\turbojpeg.dll</Source><OutputName>turbojpeg.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="image-turbojpeg-release">
+      <Projects>ViewerImgRaw</Projects><Flavor>Release</Flavor><Platform>Any</Platform>
+      <Source>bin\turbojpeg.dll</Source><OutputName>turbojpeg.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="image-lcms-debug">
+      <Projects>ViewerImgRaw</Projects><Flavor>Debug</Flavor><Platform>Any</Platform>
+      <Source>debug\bin\lcms2-2.dll</Source><OutputName>lcms2-2.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="image-lcms-release">
+      <Projects>ViewerImgRaw</Projects><Flavor>Release</Flavor><Platform>Any</Platform>
+      <Source>bin\lcms2-2.dll</Source><OutputName>lcms2-2.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="image-zlib-debug">
+      <Projects>ViewerImgRaw</Projects><Flavor>Debug</Flavor><Platform>Any</Platform>
+      <Source>debug\bin\zd.dll</Source><OutputName>zd.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="image-zlib-release">
+      <Projects>ViewerImgRaw</Projects><Flavor>Release</Flavor><Platform>Any</Platform>
+      <Source>bin\z.dll</Source><OutputName>z.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="image-yyjson-debug">
+      <Projects>ViewerImgRaw</Projects><Flavor>Debug</Flavor><Platform>Any</Platform>
+      <Source>debug\bin\yyjson.dll</Source><OutputName>yyjson.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="image-yyjson-release">
+      <Projects>ViewerImgRaw</Projects><Flavor>Release</Flavor><Platform>Any</Platform>
+      <Source>bin\yyjson.dll</Source><OutputName>yyjson.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+
+    <RSRuntimeDependency Include="webview2-debug">
+      <Projects>ViewerWeb</Projects><Flavor>Debug</Flavor><Platform>Any</Platform>
+      <Source>debug\bin\WebView2Loader.dll</Source><OutputName>WebView2Loader.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="webview2-release">
+      <Projects>ViewerWeb</Projects><Flavor>Release</Flavor><Platform>Any</Platform>
+      <Source>bin\WebView2Loader.dll</Source><OutputName>WebView2Loader.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+
+    <RSRuntimeDependency Include="aws-sdk-core"><Projects>FileSystemS3</Projects><Flavor>Any</Flavor><Platform>Any</Platform><Source>$(RSVcpkgRuntimeBinDir)aws-cpp-sdk-core.dll</Source><OutputName>aws-cpp-sdk-core.dll</OutputName><Required>true</Required></RSRuntimeDependency>
+    <RSRuntimeDependency Include="aws-sdk-s3-crt"><Projects>FileSystemS3</Projects><Flavor>Any</Flavor><Platform>Any</Platform><Source>$(RSVcpkgRuntimeBinDir)aws-cpp-sdk-s3-crt.dll</Source><OutputName>aws-cpp-sdk-s3-crt.dll</OutputName><Required>true</Required></RSRuntimeDependency>
+    <RSRuntimeDependency Include="aws-sdk-s3tables"><Projects>FileSystemS3</Projects><Flavor>Any</Flavor><Platform>Any</Platform><Source>$(RSVcpkgRuntimeBinDir)aws-cpp-sdk-s3tables.dll</Source><OutputName>aws-cpp-sdk-s3tables.dll</OutputName><Required>true</Required></RSRuntimeDependency>
+    <RSRuntimeDependency Include="aws-crt-cpp"><Projects>FileSystemS3</Projects><Flavor>Any</Flavor><Platform>Any</Platform><Source>$(RSVcpkgRuntimeBinDir)aws-crt-cpp.dll</Source><OutputName>aws-crt-cpp.dll</OutputName><Required>true</Required></RSRuntimeDependency>
+    <RSRuntimeDependency Include="aws-c-auth"><Projects>FileSystemS3</Projects><Flavor>Any</Flavor><Platform>Any</Platform><Source>$(RSVcpkgRuntimeBinDir)aws-c-auth.dll</Source><OutputName>aws-c-auth.dll</OutputName><Required>true</Required></RSRuntimeDependency>
+    <RSRuntimeDependency Include="aws-c-cal"><Projects>FileSystemS3</Projects><Flavor>Any</Flavor><Platform>Any</Platform><Source>$(RSVcpkgRuntimeBinDir)aws-c-cal.dll</Source><OutputName>aws-c-cal.dll</OutputName><Required>true</Required></RSRuntimeDependency>
+    <RSRuntimeDependency Include="aws-c-common"><Projects>FileSystemS3</Projects><Flavor>Any</Flavor><Platform>Any</Platform><Source>$(RSVcpkgRuntimeBinDir)aws-c-common.dll</Source><OutputName>aws-c-common.dll</OutputName><Required>true</Required></RSRuntimeDependency>
+    <RSRuntimeDependency Include="aws-c-compression"><Projects>FileSystemS3</Projects><Flavor>Any</Flavor><Platform>Any</Platform><Source>$(RSVcpkgRuntimeBinDir)aws-c-compression.dll</Source><OutputName>aws-c-compression.dll</OutputName><Required>true</Required></RSRuntimeDependency>
+    <RSRuntimeDependency Include="aws-c-event-stream"><Projects>FileSystemS3</Projects><Flavor>Any</Flavor><Platform>Any</Platform><Source>$(RSVcpkgRuntimeBinDir)aws-c-event-stream.dll</Source><OutputName>aws-c-event-stream.dll</OutputName><Required>true</Required></RSRuntimeDependency>
+    <RSRuntimeDependency Include="aws-checksums"><Projects>FileSystemS3</Projects><Flavor>Any</Flavor><Platform>Any</Platform><Source>$(RSVcpkgRuntimeBinDir)aws-checksums.dll</Source><OutputName>aws-checksums.dll</OutputName><Required>true</Required></RSRuntimeDependency>
+    <RSRuntimeDependency Include="aws-c-http"><Projects>FileSystemS3</Projects><Flavor>Any</Flavor><Platform>Any</Platform><Source>$(RSVcpkgRuntimeBinDir)aws-c-http.dll</Source><OutputName>aws-c-http.dll</OutputName><Required>true</Required></RSRuntimeDependency>
+    <RSRuntimeDependency Include="aws-c-io"><Projects>FileSystemS3</Projects><Flavor>Any</Flavor><Platform>Any</Platform><Source>$(RSVcpkgRuntimeBinDir)aws-c-io.dll</Source><OutputName>aws-c-io.dll</OutputName><Required>true</Required></RSRuntimeDependency>
+    <RSRuntimeDependency Include="aws-c-mqtt"><Projects>FileSystemS3</Projects><Flavor>Any</Flavor><Platform>Any</Platform><Source>$(RSVcpkgRuntimeBinDir)aws-c-mqtt.dll</Source><OutputName>aws-c-mqtt.dll</OutputName><Required>true</Required></RSRuntimeDependency>
+    <RSRuntimeDependency Include="aws-c-s3"><Projects>FileSystemS3</Projects><Flavor>Any</Flavor><Platform>Any</Platform><Source>$(RSVcpkgRuntimeBinDir)aws-c-s3.dll</Source><OutputName>aws-c-s3.dll</OutputName><Required>true</Required></RSRuntimeDependency>
+    <RSRuntimeDependency Include="aws-c-sdkutils"><Projects>FileSystemS3</Projects><Flavor>Any</Flavor><Platform>Any</Platform><Source>$(RSVcpkgRuntimeBinDir)aws-c-sdkutils.dll</Source><OutputName>aws-c-sdkutils.dll</OutputName><Required>true</Required></RSRuntimeDependency>
+
+    <RSRuntimeDependencyRemove Include="brotli-encoder"><Projects>FileSystemCurl;FileSystemGoogleDrive</Projects><Flavor>Any</Flavor><Platform>Any</Platform><OutputName>brotlienc.dll</OutputName></RSRuntimeDependencyRemove>
+    <RSRuntimeDependencyRemove Include="unused-dynamodb"><Projects>FileSystemS3</Projects><Flavor>Any</Flavor><Platform>Any</Platform><OutputName>aws-cpp-sdk-dynamodb.dll</OutputName></RSRuntimeDependencyRemove>
+    <RSRuntimeDependencyRemove Include="unused-kinesis"><Projects>FileSystemS3</Projects><Flavor>Any</Flavor><Platform>Any</Platform><OutputName>aws-cpp-sdk-kinesis.dll</OutputName></RSRuntimeDependencyRemove>
+    <RSRuntimeDependencyRemove Include="unused-s3"><Projects>FileSystemS3</Projects><Flavor>Any</Flavor><Platform>Any</Platform><OutputName>aws-cpp-sdk-s3.dll</OutputName></RSRuntimeDependencyRemove>
+  </ItemGroup>
+</Project>

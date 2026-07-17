@@ -30,7 +30,7 @@ Notes:
 Examples:
 
 - `imap://user@example.com/INBOX/`
-- Stable direct access by UID: `imap://user@example.com/INBOX/12345.eml`
+- Epoch-qualified message access: `imap://user@example.com/INBOX/Quarterly%20report%20[777-12345].eml`
 - With defaults (`defaultHost = imap.example.com`): `imap:/INBOX/`
 
 ## Connection Manager Integration
@@ -59,19 +59,19 @@ Secret acquisition (high level):
 
 ### Files (messages)
 
-- Directory listing names are formatted as `<subject> [<uid>].eml`.
-  - Example: `Quarterly report [12345].eml`.
+- Directory listing names are formatted as `<subject> [<uidValidity>-<uid>].eml`.
+  - Example: `Quarterly report [777-12345].eml`.
   - `<subject>` is best-effort decoded from RFC2047 encoded-words (Q/B) into UTF-16; missing/empty becomes `(no subject)`.
   - RFC2047 decoding supports UTF-8, US-ASCII, ISO-8859 families, Windows code pages, and common Japanese, Chinese, Korean, Cyrillic, Thai, and Macintosh MIME charset aliases through Windows code-page conversion. Unknown charsets fall back to UTF-8, the active Windows code page, then Windows-1252.
   - Malformed encoded-word fragments already using the sanitized `=_charset_q_...` shape are decoded as a recovery path before filename sanitization. U+00AD soft hyphen in decoded subjects is normalized to a visible `-` for pane and property display.
-  - Subject text is sanitized for Windows filenames and capped at 96 UTF-16 code units. If it exceeds the cap, the first 93 code units are kept and ASCII `...` is appended before the ` [<uid>].eml` suffix.
-  - The UID in the final bracketed suffix is the stable operation key. Subjects are display text only and are never used for message identity.
+  - Subject text is sanitized for Windows filenames and capped at 96 UTF-16 code units. If it exceeds the cap, the first 93 code units are kept and ASCII `...` is appended before the epoch-qualified suffix.
+  - The final bracketed suffix is the stable operation key: mailbox path plus UIDVALIDITY plus UID identify the message. Subjects are display text only and are never used for message identity.
 - Directory enumeration retrieves message metadata using:
   - `UID FETCH <uid-set> (UID FLAGS INTERNALDATE RFC822.SIZE ENVELOPE)`
-- When a bulk summary fetch fails or returns incomplete metadata for requested UIDs, directory enumeration MUST retry missing summaries in bounded smaller UID batches and then single UID fetches before falling back to numeric `<uid>.eml`, zero size, or missing timestamps in the pane.
-- The plugin also accepts `<uid>.eml` for direct navigation/bookmarks even if the directory listing shows the decorated name.
-- Ambiguous names such as `Quarterly report 12345.eml` are not valid IMAP message keys; use the bracketed suffix or direct numeric UID form.
-- Opening a message file downloads the RFC822 message content using `UID FETCH <uid> BODY.PEEK[]` and exposes it as a read-only file.
+- When a bulk summary fetch fails or returns incomplete metadata for requested UIDs, directory enumeration MUST retry missing summaries in bounded smaller UID batches and then single UID fetches before falling back to `message [<uidValidity>-<uid>].eml`, zero size, or missing timestamps in the pane.
+- Legacy UID-only names such as `<uid>.eml` and `<subject> [<uid>].eml` are parseable only for compatibility diagnostics; version-sensitive fetch/delete operations reject them. Refresh the mailbox to obtain an epoch-qualified identity.
+- Ambiguous names such as `Quarterly report 12345.eml` are not valid IMAP message keys.
+- Before opening a message, the plugin re-reads mailbox STATUS UIDVALIDITY. A missing epoch fails closed; a changed epoch returns `ERROR_REVISION_MISMATCH` so the stale path cannot fetch a different message with a reused UID. Only then does `UID FETCH <uid> BODY.PEEK[]` expose the RFC822 content as a read-only file.
 
 #### FileInfo field mapping (messages)
 
@@ -92,7 +92,7 @@ The IMAP plugin populates `FileInfo` fields for message entries as follows:
 
 - `GetItemProperties` exposes general item data, remote/display paths, connection metadata, and IMAP metadata when available.
 - Mailbox directories commonly do not have meaningful filesystem timestamps; unavailable timestamp fields MUST be omitted rather than shown as `0`.
-- Message properties may include sent time, received/internal time, flags, UID, sender, subject, and size. Standard timestamp fields are included only when non-zero.
+- Message properties may include sent time, received/internal time, flags, UID, UIDVALIDITY-qualified path identity, sender, subject, and size. Standard timestamp fields are included only when non-zero.
 - Message properties MUST fetch metadata for the selected UID only; they must not enumerate and summarize the full mailbox just to show one message's Properties.
 - Mailbox folder properties include the plugin mailbox path, server mailbox path, hierarchy delimiter, root/mailbox identity, connection metadata, and `STATUS` counts (`MESSAGES`, `RECENT`, `UIDNEXT`, `UIDVALIDITY`, `UNSEEN`) when the server provides them.
 - Passwords and raw secrets are never emitted in properties; boolean presence fields such as `hasPassword` are sufficient.
@@ -103,13 +103,13 @@ For a message with subject `Quarterly report`, UID `12345`, received time `2026-
 
 | Pane mode | Display |
 |-----------|---------|
-| Brief | `Quarterly report [12345].eml` |
+| Brief | `Quarterly report [777-12345].eml` |
 | Detailed | Name line plus `2026-05-13 21:33 • 45 KB • -` on the details line |
 | Extra Detailed | Same name and details line unless a later metadata provider adds a third line |
 | Thumbnails | File icon/thumbnail slot with the same name and details text |
 | Status bar | `45 KB • 2026-05-13 21:33 • -` for a focused or singly selected message |
 
-The full subject and sender belong in Properties. The filename may be truncated for display and layout, but the bracketed UID remains visible at the end of the logical leaf name.
+The full subject and sender belong in Properties. The filename may be truncated for display and layout, but the bracketed UIDVALIDITY/UID identity remains visible at the end of the logical leaf name.
 
 ## Performance Metrics
 
@@ -127,10 +127,18 @@ The IMAP implementation emits these metric names when diagnostics or perf JSONL 
 - `filesystem.imap.properties_message_us`
 - `filesystem.imap.properties_mailbox_us`
 - `filesystem.imap.status_mailbox_us`
+- `filesystem.imap.capability_us`
 
 Message Properties performance is protected by a command-count contract: opening Properties for one message must stay constant with respect to mailbox size. The selected UID path uses targeted UID metadata fetches rather than a full mailbox summary refetch.
 
 Mailbox listing summary repair is bounded per listing. The repair path may batch missing UID summaries first and then fall back to singleton fetches, but it MUST cap repair fetch attempts with a per-listing budget, log one warning when the budget is exhausted, and proceed with any summaries already recovered instead of issuing unbounded singleton fetches against flaky servers.
+
+UIDVALIDITY/UIDPLUS security validation has a constant command-count contract independent of mailbox size: one
+STATUS command per mailbox listing or message fetch/delete, plus one CAPABILITY command per delete. STATUS latency is
+measured by `filesystem.imap.status_mailbox_us`; CAPABILITY latency, response bytes, UIDPLUS availability, and HRESULT
+are measured by `filesystem.imap.capability_us`. Credential-free Release evidence is archived under
+`Specs/TestRuns/4cb089111a23/FileSystemCurl/2026-07-16_2028_observatory_track2_imap_safety/`; live network latency
+remains explicitly unclaimed until a deterministic network-capable IMAP fixture is available.
 
 ## Operations
 
@@ -147,8 +155,15 @@ Mailbox listing summary repair is bounded per listing. The repair path may batch
 ### Delete
 
 - Deleting a message file:
-  - `UID STORE <uid> +FLAGS.SILENT (\Deleted)`
-  - `UID EXPUNGE <uid>` (falls back to `EXPUNGE` if unsupported)
+  - Re-read STATUS and require the enumerated UIDVALIDITY; return `ERROR_REVISION_MISMATCH` when it changed.
+  - Issue CAPABILITY and require the exact `UIDPLUS` token. A server without UIDPLUS is rejected with
+    `ERROR_NOT_SUPPORTED` before the target is marked deleted.
+  - `UID STORE <uid> +FLAGS.SILENT (\Deleted)`.
+  - `UID EXPUNGE <uid>`.
+  - If safe expunge fails, preserve that original failure and attempt
+    `UID STORE <uid> -FLAGS.SILENT (\Deleted)` as compensation. Cleanup failure is retained in diagnostic context.
+  - Never issue mailbox-wide `EXPUNGE` as a single-message fallback; unrelated pre-existing `\Deleted` messages
+    must remain untouched.
 - Deleting a mailbox directory:
   - `DELETE "<mailbox>"`
 - Recursive directory deletion deletes contained messages and sub-mailboxes before deleting the mailbox.

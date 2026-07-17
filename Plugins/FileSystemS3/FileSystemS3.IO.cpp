@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <condition_variable>
 #include <cstring>
+#include <deque>
 #include <format>
 #include <limits>
 #include <semaphore>
@@ -146,6 +147,15 @@ HRESULT FsS3::ValidateS3RangeResponseLength(uint64_t expectedBytes, long long re
     return S_OK;
 }
 
+HRESULT FsS3::ValidateS3UploadReadResult(uint64_t declaredBytes, uint64_t consumedBytes, HRESULT readStatus) noexcept
+{
+    if (FAILED(readStatus))
+    {
+        return readStatus;
+    }
+    return consumedBytes == declaredBytes ? S_OK : HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+}
+
 namespace
 {
 struct S3ContentRange final
@@ -218,6 +228,11 @@ void FsS3::RunDebugRangeReadContractSelfTest(unsigned int& passed, unsigned int&
           L"S3 range read contract should fail an overlong ranged response length");
     check(ValidateS3RangeResponseLength(10u, -1, 0u) == HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
           L"S3 range read contract should fail missing or invalid Content-Length");
+    check(ValidateS3UploadReadResult(10u, 10u, S_OK) == S_OK, L"S3 upload should accept exact declared-byte consumption");
+    check(ValidateS3UploadReadResult(10u, 9u, S_OK) == HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY),
+          L"S3 upload should reject fake SDK success after early source EOF");
+    check(ValidateS3UploadReadResult(10u, 10u, HRESULT_FROM_WIN32(ERROR_READ_FAULT)) == HRESULT_FROM_WIN32(ERROR_READ_FAULT),
+          L"S3 upload should preserve the underlying source read failure");
 
     S3ContentRange contentRange{};
     check(ShouldDiscoverS3SizeFromRange(HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED)),
@@ -430,7 +445,12 @@ public:
           _key(std::move(key)),
           _client(std::move(client))
     {
-        FsS3::AwsSdkLifetime::AddRef();
+        _awsRuntimeStatus = FsS3::AwsSdkLifetime::Acquire();
+    }
+
+    [[nodiscard]] HRESULT InitializationStatus() const noexcept
+    {
+        return _awsRuntimeStatus;
     }
 
     S3RangedFileReader(const S3RangedFileReader&)            = delete;
@@ -656,7 +676,10 @@ public:
 private:
     ~S3RangedFileReader()
     {
-        FsS3::AwsSdkLifetime::Release();
+        if (SUCCEEDED(_awsRuntimeStatus))
+        {
+            FsS3::AwsSdkLifetime::Release();
+        }
     }
 
     [[nodiscard]] HRESULT EnsureSizeKnown() noexcept
@@ -807,6 +830,7 @@ private:
     std::string _bucket;
     std::string _key;
     std::shared_ptr<Aws::S3Crt::S3CrtClient> _client;
+    HRESULT _awsRuntimeStatus = E_UNEXPECTED;
 
     bool _sizeKnown     = false;
     uint64_t _sizeBytes = 0;
@@ -972,8 +996,225 @@ struct MultipartWriterDebugContext final
     unsigned int uploadCalls = 0u;
     unsigned int completeCalls = 0u;
     unsigned int abortCalls = 0u;
+    unsigned int abortFailuresRemaining = 0u;
 };
 #endif
+
+struct PendingMultipartAbort final
+{
+    wil::com_ptr<FileSystemS3> owner;
+    FsS3::S3MultipartUploadSession session;
+    std::wstring pluginPath;
+    unsigned int attemptCount = 0u;
+#if defined(_DEBUG)
+    void* debugCookie = nullptr;
+    HRESULT (*debugAbort)(void*) noexcept = nullptr;
+#endif
+};
+
+const int kMultipartAbortCleanupModuleAnchor = 0;
+constexpr auto kMultipartAbortRetryDelay = std::chrono::seconds(1);
+constexpr size_t kMultipartAbortMaxItemsPerPass = 16u;
+
+class PendingMultipartAbortQueue final
+{
+public:
+    PendingMultipartAbortQueue() = default;
+    ~PendingMultipartAbortQueue() = default;
+    PendingMultipartAbortQueue(const PendingMultipartAbortQueue&)            = delete;
+    PendingMultipartAbortQueue(PendingMultipartAbortQueue&&)                 = delete;
+    PendingMultipartAbortQueue& operator=(const PendingMultipartAbortQueue&) = delete;
+    PendingMultipartAbortQueue& operator=(PendingMultipartAbortQueue&&)      = delete;
+
+    void Queue(FileSystemS3* owner,
+               FsS3::S3MultipartUploadSession session,
+               std::wstring_view pluginPath
+#if defined(_DEBUG)
+               ,
+               void* debugCookie,
+               HRESULT (*debugAbort)(void*) noexcept
+#endif
+               ) noexcept
+    {
+        auto pending        = std::make_unique<PendingMultipartAbort>();
+        pending->owner      = owner;
+        pending->session    = std::move(session);
+        pending->pluginPath = pluginPath;
+#if defined(_DEBUG)
+        pending->debugCookie = debugCookie;
+        pending->debugAbort  = debugAbort;
+#endif
+
+        {
+            std::lock_guard lock(_mutex);
+            _pending.push_back(std::move(pending));
+            _nextAttempt = std::chrono::steady_clock::now();
+        }
+        _changed.notify_all();
+        Schedule();
+    }
+
+    void Schedule() noexcept
+    {
+        {
+            std::lock_guard lock(_mutex);
+            if (_workerScheduled || _pending.empty() || std::chrono::steady_clock::now() < _nextAttempt)
+            {
+                return;
+            }
+            _workerScheduled = true;
+        }
+
+        auto work             = std::make_unique<WorkItem>();
+        work->queue           = this;
+        work->moduleKeepAlive = AcquireModuleReferenceFromAddress(&kMultipartAbortCleanupModuleAnchor);
+        if (! work->moduleKeepAlive)
+        {
+            MarkSubmissionFailed();
+            Debug::Error(L"S3: unable to pin the plugin module for multipart-abort cleanup.");
+            return;
+        }
+
+        const BOOL submitted = TrySubmitThreadpoolCallback(
+            [](PTP_CALLBACK_INSTANCE instance, void* context) noexcept
+            {
+                std::unique_ptr<WorkItem> work(static_cast<WorkItem*>(context));
+                if (! work)
+                {
+                    return;
+                }
+                TransferModulePinToCallbackReturn(instance, work->moduleKeepAlive);
+                work->queue->RunOnePass();
+            },
+            work.get(),
+            nullptr);
+        if (submitted == FALSE)
+        {
+            MarkSubmissionFailed();
+            Debug::ErrorWithLastError(L"S3: unable to submit multipart-abort cleanup.");
+            return;
+        }
+        work.release();
+    }
+
+    [[nodiscard]] bool IsDrained() noexcept
+    {
+        std::lock_guard lock(_mutex);
+        return _pending.empty() && ! _workerScheduled;
+    }
+
+#if defined(_DEBUG)
+    [[nodiscard]] bool WaitUntilDrained(unsigned long timeoutMs) noexcept
+    {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeoutMs);
+        while (true)
+        {
+            Schedule();
+            std::unique_lock lock(_mutex);
+            if (_pending.empty() && ! _workerScheduled)
+            {
+                return true;
+            }
+            if (_changed.wait_until(lock, deadline) == std::cv_status::timeout)
+            {
+                return _pending.empty() && ! _workerScheduled;
+            }
+        }
+    }
+#endif
+
+private:
+    struct WorkItem final
+    {
+        WorkItem() = default;
+        ~WorkItem() = default;
+        WorkItem(const WorkItem&)            = delete;
+        WorkItem(WorkItem&&)                 = delete;
+        WorkItem& operator=(const WorkItem&) = delete;
+        WorkItem& operator=(WorkItem&&)      = delete;
+
+        PendingMultipartAbortQueue* queue = nullptr;
+        wil::unique_hmodule moduleKeepAlive;
+    };
+
+    [[nodiscard]] static HRESULT Abort(const PendingMultipartAbort& pending) noexcept
+    {
+#if defined(_DEBUG)
+        if (pending.debugAbort != nullptr)
+        {
+            return pending.debugAbort(pending.debugCookie);
+        }
+#endif
+        return pending.owner ? FsS3::AbortS3MultipartUpload(*pending.owner.get(), pending.session)
+                             : HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+    }
+
+    void RunOnePass() noexcept
+    {
+        size_t itemCount = 0u;
+        {
+            std::lock_guard lock(_mutex);
+            itemCount = (std::min)(_pending.size(), kMultipartAbortMaxItemsPerPass);
+        }
+
+        bool retryNeeded = false;
+        for (size_t index = 0u; index < itemCount; ++index)
+        {
+            std::unique_ptr<PendingMultipartAbort> pending;
+            {
+                std::lock_guard lock(_mutex);
+                if (_pending.empty())
+                {
+                    break;
+                }
+                pending = std::move(_pending.front());
+                _pending.pop_front();
+            }
+
+            ++pending->attemptCount;
+            const HRESULT hr = Abort(*pending);
+            if (FAILED(hr))
+            {
+                Debug::Warning(L"S3: multipart-abort cleanup still pending path='{}' attempt={} hr=0x{:08X}.",
+                               pending->pluginPath,
+                               pending->attemptCount,
+                               static_cast<unsigned long>(hr));
+                std::lock_guard lock(_mutex);
+                _pending.push_back(std::move(pending));
+                retryNeeded = true;
+            }
+        }
+
+        {
+            std::lock_guard lock(_mutex);
+            _workerScheduled = false;
+            _nextAttempt = retryNeeded ? std::chrono::steady_clock::now() + kMultipartAbortRetryDelay : std::chrono::steady_clock::now();
+        }
+        _changed.notify_all();
+    }
+
+    void MarkSubmissionFailed() noexcept
+    {
+        {
+            std::lock_guard lock(_mutex);
+            _workerScheduled = false;
+            _nextAttempt     = std::chrono::steady_clock::now() + kMultipartAbortRetryDelay;
+        }
+        _changed.notify_all();
+    }
+
+    std::mutex _mutex;
+    std::condition_variable _changed;
+    std::deque<std::unique_ptr<PendingMultipartAbort>> _pending;
+    std::chrono::steady_clock::time_point _nextAttempt{};
+    bool _workerScheduled = false;
+};
+
+[[nodiscard]] PendingMultipartAbortQueue& MultipartAbortQueue() noexcept
+{
+    static PendingMultipartAbortQueue queue;
+    return queue;
+}
 
 constexpr ptrdiff_t kMultipartWriterBufferSlots = 4;
 constexpr uint64_t kMultipartWriterBufferBudgetBytes =
@@ -1399,12 +1640,31 @@ private:
 
 #if defined(_DEBUG)
         const MultipartWriterDebugTransport* debugTransport = g_multipartWriterDebugTransport.load(std::memory_order_acquire);
+        void* debugCookie                     = debugTransport != nullptr ? debugTransport->cookie : nullptr;
+        HRESULT (*debugAbort)(void*) noexcept = debugTransport != nullptr ? debugTransport->abort : nullptr;
         const HRESULT hr = (debugTransport != nullptr && debugTransport->abort != nullptr) ? debugTransport->abort(debugTransport->cookie)
                                                                                            : FsS3::AbortS3MultipartUpload(*_owner.get(), _session);
 #else
         const HRESULT hr = FsS3::AbortS3MultipartUpload(*_owner.get(), _session);
 #endif
-        _hasSession      = false;
+        if (FAILED(hr))
+        {
+            Debug::Warning(L"S3: queued failed multipart-abort cleanup path='{}' hr=0x{:08X}.", _pluginPath, static_cast<unsigned long>(hr));
+            MultipartAbortQueue().Queue(_owner.get(),
+                                        std::move(_session),
+                                        _pluginPath
+#if defined(_DEBUG)
+                                        ,
+                                        debugCookie,
+                                        debugAbort
+#endif
+            );
+        }
+        else
+        {
+            _session = {};
+        }
+        _hasSession = false;
         _parts.clear();
         return hr;
     }
@@ -1433,7 +1693,22 @@ private:
 };
 } // namespace
 
+void FsS3::SchedulePendingMultipartAbortCleanup() noexcept
+{
+    MultipartAbortQueue().Schedule();
+}
+
+bool FsS3::CanUnloadPendingMultipartAbortCleanup() noexcept
+{
+    return MultipartAbortQueue().IsDrained();
+}
+
 #if defined(_DEBUG)
+bool FsS3::WaitForPendingMultipartAbortCleanupForTest(unsigned long timeoutMs) noexcept
+{
+    return MultipartAbortQueue().WaitUntilDrained(timeoutMs);
+}
+
 void FsS3::RunDebugMultipartWriterContractSelfTest(unsigned int& passed, unsigned int& failed) noexcept
 {
     const auto check = [&](bool condition, const wchar_t* message) noexcept
@@ -1503,7 +1778,18 @@ void FsS3::RunDebugMultipartWriterContractSelfTest(unsigned int& passed, unsigne
         .abort = [](void* cookie) noexcept -> HRESULT
         {
             auto* value = static_cast<MultipartWriterDebugContext*>(cookie);
+            std::lock_guard lock(value->mutex);
             ++value->abortCalls;
+            const bool fail = value->abortFailuresRemaining != 0u;
+            if (fail)
+            {
+                --value->abortFailuresRemaining;
+            }
+            value->cv.notify_all();
+            if (fail)
+            {
+                return HRESULT_FROM_WIN32(ERROR_NETWORK_UNREACHABLE);
+            }
             return S_OK;
         },
     };
@@ -1536,6 +1822,37 @@ void FsS3::RunDebugMultipartWriterContractSelfTest(unsigned int& passed, unsigne
     check(SUCCEEDED(commitHr), L"multipart Commit should join the in-flight part and complete the upload");
     check(context.beginCalls == 1u && context.uploadCalls == 1u && context.completeCalls == 1u && context.abortCalls == 0u,
           L"multipart writer should use one begin, one overlapped part, one complete, and no abort");
+    writer.reset();
+
+    {
+        std::lock_guard lock(context.mutex);
+        context.uploadStarted          = false;
+        context.allowUploadCompletion  = true;
+        context.abortFailuresRemaining = 1u;
+    }
+
+    wil::com_ptr<IFileWriter> abandonedWriter;
+    abandonedWriter.attach(new (std::nothrow)
+                               MultipartS3FileWriter(owner.get(), FsS3::ResolvedAwsContext{}, "bucket", "orphan.bin", L"/bucket/orphan.bin", true));
+    check(static_cast<bool>(abandonedWriter), L"multipart cleanup test writer allocation should succeed");
+    if (! abandonedWriter)
+    {
+        return;
+    }
+
+    bytesWritten                 = 0u;
+    const HRESULT abandonedWrite = abandonedWriter->Write(part.data(), static_cast<unsigned long>(part.size()), &bytesWritten);
+    check(SUCCEEDED(abandonedWrite) && bytesWritten == part.size(), L"multipart cleanup test should establish an upload session");
+    abandonedWriter.reset();
+
+    const bool cleanupDrained = FsS3::WaitForPendingMultipartAbortCleanupForTest(5000u);
+    unsigned int abortCalls   = 0u;
+    {
+        std::lock_guard lock(context.mutex);
+        abortCalls = context.abortCalls;
+    }
+    check(cleanupDrained && abortCalls == 2u,
+          L"a failed destructor abort should be retried asynchronously and drained before plugin unload");
 }
 #endif
 
@@ -1763,6 +2080,13 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::CreateFileReader(const wchar_t* path, IF
         if (! impl)
         {
             return E_OUTOFMEMORY;
+        }
+
+        const HRESULT initializationHr = impl->InitializationStatus();
+        if (FAILED(initializationHr))
+        {
+            impl->Release();
+            return initializationHr;
         }
 
         *reader = impl;

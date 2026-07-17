@@ -81,7 +81,8 @@ LRESULT CALLBACK CompareDxChromeHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPAR
 class CompareDirectoriesWindow final
 {
 public:
-    CompareDirectoriesWindow(Common::Settings::Settings& settings,
+    CompareDirectoriesWindow(FolderWindow& applicationFolderWindow,
+                             Common::Settings::Settings& settings,
                              AppTheme theme,
                              const ShortcutManager* shortcuts,
                              CompareDirectoriesPaneContext left,
@@ -583,6 +584,7 @@ private:
     OptionsPanelController _optionsPanel{};
 
     Common::Settings::Settings* _settings = nullptr;
+    FolderWindow* _applicationFolderWindow = nullptr;
     AppTheme _theme{};
     const ShortcutManager* _shortcuts = nullptr;
     HWND _ownerWindow                 = nullptr;

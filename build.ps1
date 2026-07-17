@@ -15,6 +15,8 @@
     Perform a clean build
 .PARAMETER Rebuild
     Rebuild all projects
+.PARAMETER MaxCpuCount
+    Optional maximum MSBuild worker count. Zero uses MSBuild's default.
 .PARAMETER Msix
     Build MSIX package after a successful build (Release only)
 .PARAMETER Msi
@@ -68,6 +70,10 @@ param(
     
     [Parameter(HelpMessage = "Rebuild all projects")]
     [switch]$Rebuild,
+
+    [Parameter(HelpMessage = "Maximum MSBuild worker count (0 uses the default)")]
+    [ValidateRange(0, 256)]
+    [int]$MaxCpuCount = 0,
 
     [Parameter(HelpMessage = "Build MSIX package after build (Release only)")]
     [switch]$Msix,
@@ -631,6 +637,7 @@ Write-Host "  Solution:      $SolutionFile"
 Write-Host "  Target:        $(if ($ProjectName) { $ProjectName } else { 'All Projects' })"
 Write-Host "  Configuration: $Configuration"
 Write-Host "  Platform:      $Platform"
+Write-Host "  Build workers: $(if ($MaxCpuCount -gt 0) { $MaxCpuCount } else { 'MSBuild default' })" -ForegroundColor Gray
 Write-Host "  Version:       $($versionContext.DisplayVersion)" -ForegroundColor Gray
 Write-Host "  Build number:  $($versionContext.BuildNumber)" -ForegroundColor Gray
 Write-Host "  Version state: $versionStatePath" -ForegroundColor Gray
@@ -670,7 +677,7 @@ $buildParams = @(
     "/t:$msbuildTarget"
     "/p:Configuration=$Configuration"
     "/p:Platform=$Platform"
-    "/m"              # Multi-processor build
+    $(if ($MaxCpuCount -gt 0) { "/m:$MaxCpuCount" } else { "/m" })
     "/v:minimal"      # Minimal verbosity
     "/nologo"         # Suppress MSBuild banner
 )

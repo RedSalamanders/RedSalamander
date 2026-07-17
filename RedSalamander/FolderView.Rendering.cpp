@@ -2292,7 +2292,8 @@ void FolderView::DrawItem(FolderItem& item, DrawItemPerfStats* perfStats)
     D2D1_RECT_F bounds = OffsetRect(item.bounds, -_horizontalOffset, -_scrollOffset);
 
     // Determine item state for color selection
-    const bool isHovered = (_hoveredIndex != static_cast<size_t>(-1) && std::addressof(item) == std::addressof(_items[_hoveredIndex]));
+    const bool isHovered = (_hoveredIndex != static_cast<size_t>(-1) && _hoveredIndex < _items.size() &&
+                            std::addressof(item) == std::addressof(_items[_hoveredIndex]));
 
     const float itemWidth                 = std::max(0.0f, bounds.right - bounds.left);
     const float itemHeight                = std::max(0.0f, bounds.bottom - bounds.top);

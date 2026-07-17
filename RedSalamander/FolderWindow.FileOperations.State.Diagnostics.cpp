@@ -1,3 +1,41 @@
+#include "FolderWindow.FileOperations.State.Private.h"
+
+#include "ConnectionProfileUtils.h"
+#include "FileSystemPathIdentity.h"
+#include "FolderWindow.FileOperations.IssuesPane.h"
+#include "HostServices.h"
+#include "NavigationLocation.h"
+#include "SessionState.h"
+#include "SettingsHotReload.h"
+#include "SettingsSave.h"
+#include "SettingsStore.h"
+
+#include <algorithm>
+#include <array>
+#include <cassert>
+#include <chrono>
+#include <condition_variable>
+#include <cstring>
+#include <cwchar>
+#include <deque>
+#include <functional>
+#include <iterator>
+#include <set>
+#include <system_error>
+#include <thread>
+#include <unordered_map>
+#include <utility>
+
+#include <psapi.h>
+#include <shellapi.h>
+
+#pragma warning(push)
+#pragma warning(disable : 6297 28182)
+#include <yyjson.h>
+#pragma warning(pop)
+
+using namespace FolderWindowFileOperationsStateInternal;
+
 bool FolderWindow::FileOperationState::OpenDiagnosticsLogForTask(uint64_t taskId) noexcept
 {
     FlushDiagnostics(true);

@@ -1,12 +1,17 @@
 // MonitorTest.cpp : This file contains the 'main' function. Program execution begins and ends there.
 //
 
+#include <atomic>
+#include <array>
 #include <chrono>
 #include <fcntl.h>
 #include <format>
+#include <fstream>
+#include <filesystem>
 #include <io.h>
 #include <iomanip>
 #include <iostream>
+#include <iterator>
 #include <limits>
 #include <random>
 #include <string>
@@ -16,6 +21,7 @@
 #include <Windows.h>
 
 #include "InvalidRectVisualization.h"
+#include "LocalFileTransaction.h"
 
 static_assert(! RedSalamanderMonitor::kInvalidRectVisualizationEnabled,
               "RedSalamanderMonitor invalid rectangle visualization must stay opt-in; "
@@ -28,9 +34,18 @@ static_assert(! RedSalamanderMonitor::kInvalidRectVisualizationEnabled,
 #define REDSAL_DEFINE_TRACE_PROVIDER
 #include "ColorTextScrollBars.h"
 #include "Document.h"
+#include "EtwListener.h"
 #include "ExceptionHelpers.h"
 #include "Helpers.h"
 #include "MonitorDiagnostics.h"
+#include "MonitorFileReader.h"
+#include "TestSupport.h"
+#include "UnicodeClipboard.h"
+
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
+#include <wil/resource.h>
+#pragma warning(pop)
 
 #if defined(RS_DIAGNOSTICS_RUNTIME_OPT_IN)
 static_assert(! Debug::detail::IsMonitorDiagnosticsBuild(),
@@ -141,6 +156,394 @@ namespace
     return batchAppended && document.VisibleLineCount() == 2u && document.TotalDisplayRows() == 3u && firstVisibleSource.value_or(kNoSourceLine) == 1u &&
            wrappedVisibleSource.value_or(kNoSourceLine) == 2u && forwardAnchor.value_or(kNoSourceLine) == 1u && exactAnchor.value_or(kNoSourceLine) == 2u &&
            backwardAnchor.value_or(kNoSourceLine) == 2u && document.DisplayRowForSource(1u) == 0u && document.DisplayRowForSource(2u) == 1u;
+}
+
+[[nodiscard]] bool RunMonitorDocumentRetentionSelfTest()
+{
+    Document lineBounded;
+    std::vector<Document::InfoLineInput> lines;
+    for (uint32_t i = 0u; i < 10u; ++i)
+    {
+        lines.push_back(Document::InfoLineInput{
+            .info = MakeTestInfo(Debug::InfoParam::Type::Info, i),
+            .text = std::format(L"retained row {}", i),
+        });
+    }
+    lineBounded.AppendInfoLines(std::move(lines));
+    const Document::RetentionResult lineEviction = lineBounded.EnforceRetentionLimits(4u, 1u * 1024u * 1024u);
+    if (lineEviction.linesEvicted != 6u || lineEviction.displayRowsEvicted != 6u || lineEviction.characterPositionsEvicted == 0u ||
+        lineBounded.TotalLineCount() != 4u || lineBounded.GetSourceLine(0u).text != L"retained row 6")
+    {
+        return false;
+    }
+
+    Document byteBounded;
+    byteBounded.AppendInfoLine(L"0123456789", MakeTestInfo(Debug::InfoParam::Type::Info, 20u));
+    byteBounded.AppendInfoLine(L"abcdefghij", MakeTestInfo(Debug::InfoParam::Type::Info, 21u));
+    byteBounded.AppendInfoLine(L"ABCDEFGHIJ", MakeTestInfo(Debug::InfoParam::Type::Info, 22u));
+    const uint64_t oneLineBytes = 10u * sizeof(wchar_t);
+    const Document::RetentionResult byteEviction = byteBounded.EnforceRetentionLimits(10u, oneLineBytes);
+    return byteEviction.linesEvicted == 2u && byteEviction.textBytesEvicted == 2u * oneLineBytes && byteBounded.TotalLineCount() == 1u &&
+           byteBounded.RetainedTextBytes() == oneLineBytes && byteBounded.GetSourceLine(0u).text == L"ABCDEFGHIJ";
+}
+
+[[nodiscard]] bool RunMonitorFileReaderSelfTest()
+{
+    std::error_code ec;
+    const std::filesystem::path root = RedSalamander::TestSupport::AcquireTestDirectory(
+        {.harnessSegment = L"MonitorTest", .leafSegment = L"bounded_file_reader", .fallbackRunIdPrefix = L"monitor-test"}, ec);
+    if (ec || root.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path validPath = root / L"valid-utf8.txt";
+    {
+        std::ofstream valid(validPath, std::ios::binary | std::ios::trunc);
+        constexpr std::array<unsigned char, 13u> validBytes{{
+            0xEFu, 0xBBu, 0xBFu, 'a', 'l', 'p', 'h', 'a', '\n', 'b', 'e', 't', 'a',
+        }};
+        valid.write(reinterpret_cast<const char*>(validBytes.data()), static_cast<std::streamsize>(validBytes.size()));
+        if (! valid.good())
+        {
+            return false;
+        }
+    }
+
+    uint64_t reportedBytes = 0u;
+    const auto validResult = RedSalamanderMonitor::ReadMonitorTextFile(
+        validPath,
+        std::stop_token{},
+        {.maxBytes = 1u * 1024u * 1024u, .maxLines = 10u},
+        [&reportedBytes](uint64_t bytesRead, uint64_t) noexcept { reportedBytes = bytesRead; });
+    if (FAILED(validResult.hr) || validResult.text != L"alpha\nbeta" || validResult.lineCount != 2u || reportedBytes != validResult.totalBytes)
+    {
+        return false;
+    }
+
+    const std::filesystem::path invalidPath = root / L"invalid-utf8.txt";
+    {
+        std::ofstream invalid(invalidPath, std::ios::binary | std::ios::trunc);
+        constexpr std::array<unsigned char, 2u> invalidBytes{{0xC3u, 0x28u}};
+        invalid.write(reinterpret_cast<const char*>(invalidBytes.data()), static_cast<std::streamsize>(invalidBytes.size()));
+    }
+    if (RedSalamanderMonitor::ReadMonitorTextFile(invalidPath, std::stop_token{}, {.maxBytes = 1'024u, .maxLines = 10u}).hr !=
+        HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION))
+    {
+        return false;
+    }
+
+    const std::filesystem::path lineBudgetPath = root / L"too-many-lines.txt";
+    {
+        std::ofstream lineBudget(lineBudgetPath, std::ios::binary | std::ios::trunc);
+        lineBudget << "one\ntwo\nthree";
+    }
+    if (RedSalamanderMonitor::ReadMonitorTextFile(lineBudgetPath, std::stop_token{}, {.maxBytes = 1'024u, .maxLines = 2u}).hr !=
+        HRESULT_FROM_WIN32(ERROR_BUFFER_OVERFLOW))
+    {
+        return false;
+    }
+
+    const std::filesystem::path hugePath = root / L"sparse-over-2gib.txt";
+    wil::unique_hfile hugeFile(CreateFileW(hugePath.c_str(), GENERIC_WRITE, 0u, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
+    LARGE_INTEGER hugeSize{};
+    hugeSize.QuadPart = (2ll * 1024ll * 1024ll * 1024ll) + 1ll;
+    if (! hugeFile || SetFilePointerEx(hugeFile.get(), hugeSize, nullptr, FILE_BEGIN) == FALSE || SetEndOfFile(hugeFile.get()) == FALSE)
+    {
+        return false;
+    }
+    hugeFile.reset();
+    const auto hugeResult = RedSalamanderMonitor::ReadMonitorTextFile(
+        hugePath, std::stop_token{}, {.maxBytes = 64u * 1024u * 1024u, .maxLines = 100'000u});
+    if (hugeResult.hr != HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE) || hugeResult.bytesRead != 0u || hugeResult.totalBytes != static_cast<uint64_t>(hugeSize.QuadPart))
+    {
+        return false;
+    }
+
+    std::stop_source cancelled;
+    cancelled.request_stop();
+    return RedSalamanderMonitor::ReadMonitorTextFile(validPath, cancelled.get_token(), {.maxBytes = 1'024u, .maxLines = 10u}).hr ==
+           HRESULT_FROM_WIN32(ERROR_CANCELLED);
+}
+
+[[nodiscard]] bool RunUnicodeClipboardContractSelfTest()
+{
+    using Common::Clipboard::EmptyUnicodeTextPolicy;
+    if (Common::Clipboard::TrySetUnicodeText(nullptr, {}, EmptyUnicodeTextPolicy::Reject))
+    {
+        return false;
+    }
+
+    const wchar_t sentinel = L'x';
+    const std::wstring_view oversized(&sentinel, (std::numeric_limits<size_t>::max)() / sizeof(wchar_t));
+    return ! Common::Clipboard::TrySetUnicodeText(nullptr, oversized);
+}
+
+struct EtwConsumerShutdownTestContext final
+{
+    EtwConsumerShutdownTestContext() = default;
+    EtwConsumerShutdownTestContext(const EtwConsumerShutdownTestContext&)            = delete;
+    EtwConsumerShutdownTestContext& operator=(const EtwConsumerShutdownTestContext&) = delete;
+    EtwConsumerShutdownTestContext(EtwConsumerShutdownTestContext&&)                 = delete;
+    EtwConsumerShutdownTestContext& operator=(EtwConsumerShutdownTestContext&&)      = delete;
+
+    wil::unique_event started;
+    wil::unique_event release;
+    wil::unique_event completed;
+    std::atomic<TRACEHANDLE> processHandle{INVALID_PROCESSTRACE_HANDLE};
+    std::atomic<TRACEHANDLE> closeHandle{INVALID_PROCESSTRACE_HANDLE};
+    bool releaseOnClose = true;
+};
+
+[[nodiscard]] bool InitializeEtwConsumerShutdownTestContext(EtwConsumerShutdownTestContext& context)
+{
+    context.started.create();
+    context.release.create();
+    context.completed.create();
+    return context.started && context.release && context.completed;
+}
+
+ULONG ProcessEtwConsumerForTest(void* rawContext, TRACEHANDLE traceHandle) noexcept
+{
+    auto* context = static_cast<EtwConsumerShutdownTestContext*>(rawContext);
+    if (! context)
+    {
+        return ERROR_INVALID_PARAMETER;
+    }
+
+    context->processHandle.store(traceHandle, std::memory_order_release);
+    static_cast<void>(SetEvent(context->started.get()));
+    const DWORD waitResult = WaitForSingleObject(context->release.get(), 2'000u);
+    static_cast<void>(SetEvent(context->completed.get()));
+    return waitResult == WAIT_OBJECT_0 ? ERROR_CANCELLED : ERROR_TIMEOUT;
+}
+
+void CloseEtwConsumerForTest(void* rawContext, TRACEHANDLE traceHandle) noexcept
+{
+    auto* context = static_cast<EtwConsumerShutdownTestContext*>(rawContext);
+    if (! context)
+    {
+        return;
+    }
+
+    context->closeHandle.store(traceHandle, std::memory_order_release);
+    if (context->releaseOnClose)
+    {
+        static_cast<void>(SetEvent(context->release.get()));
+    }
+}
+
+[[nodiscard]] bool RunEtwConsumerShutdownSelfTest()
+{
+    constexpr TRACEHANDLE kJoinedHandle  = 0x1020u;
+    constexpr TRACEHANDLE kDetachedHandle = 0x3040u;
+
+    EtwConsumerShutdownTestContext joinedContext;
+    if (! InitializeEtwConsumerShutdownTestContext(joinedContext))
+    {
+        return false;
+    }
+    {
+        EtwListener listener;
+        listener.DebugStartConsumerForTesting(
+            kJoinedHandle, ProcessEtwConsumerForTest, CloseEtwConsumerForTest, &joinedContext, 1'000u);
+        if (WaitForSingleObject(joinedContext.started.get(), 1'000u) != WAIT_OBJECT_0)
+        {
+            return false;
+        }
+        listener.Stop();
+        if (listener.IsRunning() || joinedContext.processHandle.load(std::memory_order_acquire) != kJoinedHandle ||
+            joinedContext.closeHandle.load(std::memory_order_acquire) != kJoinedHandle ||
+            WaitForSingleObject(joinedContext.completed.get(), 0u) != WAIT_OBJECT_0)
+        {
+            return false;
+        }
+    }
+
+    EtwConsumerShutdownTestContext detachedContext;
+    detachedContext.releaseOnClose = false;
+    if (! InitializeEtwConsumerShutdownTestContext(detachedContext))
+    {
+        return false;
+    }
+    EtwListener listener;
+    listener.DebugStartConsumerForTesting(
+        kDetachedHandle, ProcessEtwConsumerForTest, CloseEtwConsumerForTest, &detachedContext, 20u);
+    if (WaitForSingleObject(detachedContext.started.get(), 1'000u) != WAIT_OBJECT_0)
+    {
+        return false;
+    }
+
+    const auto stopStarted = std::chrono::steady_clock::now();
+    listener.Stop();
+    const auto stopElapsed = std::chrono::steady_clock::now() - stopStarted;
+    if (stopElapsed >= std::chrono::milliseconds(500) || detachedContext.closeHandle.load(std::memory_order_acquire) != kDetachedHandle)
+    {
+        return false;
+    }
+
+    static_cast<void>(SetEvent(detachedContext.release.get()));
+    if (WaitForSingleObject(detachedContext.completed.get(), 1'000u) != WAIT_OBJECT_0)
+    {
+        return false;
+    }
+    for (size_t attempt = 0u; attempt < 100u && listener.IsRunning(); ++attempt)
+    {
+        std::this_thread::yield();
+    }
+    return ! listener.IsRunning() && detachedContext.processHandle.load(std::memory_order_acquire) == kDetachedHandle;
+}
+
+[[nodiscard]] std::string ReadMonitorTestFile(const std::filesystem::path& path)
+{
+    std::ifstream input(path, std::ios::binary);
+    if (! input)
+    {
+        return {};
+    }
+    return std::string(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+}
+
+[[nodiscard]] bool RunMonitorDocumentAtomicSaveSelfTest()
+{
+    std::error_code ec;
+    const std::filesystem::path root = RedSalamander::TestSupport::AcquireTestDirectory(
+        {.harnessSegment = L"MonitorTest", .leafSegment = L"document_atomic_save", .fallbackRunIdPrefix = L"monitor-test"}, ec);
+    if (ec || root.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path target = root / L"monitor-export.txt";
+    {
+        std::ofstream original(target, std::ios::binary | std::ios::trunc);
+        original << "previous-good";
+        if (! original.good())
+        {
+            return false;
+        }
+    }
+
+    Document invalidDocument;
+    std::wstring malformed(1u, static_cast<wchar_t>(0xD800u));
+    invalidDocument.AppendInfoLine(malformed, MakeTestInfo(Debug::InfoParam::Type::Text, 10u));
+    if (invalidDocument.SaveTextToFile(target.wstring()) || ReadMonitorTestFile(target) != "previous-good")
+    {
+        return false;
+    }
+
+    Document validDocument;
+    validDocument.AppendInfoLine(L"valid export", MakeTestInfo(Debug::InfoParam::Type::Text, 11u));
+    const std::string expected = std::string("\xEF\xBB\xBF", 3u) + "valid export\n";
+    if (! validDocument.SaveTextToFile(target.wstring()) || ReadMonitorTestFile(target) != expected)
+    {
+        return false;
+    }
+
+    size_t fileCount = 0u;
+    for (std::filesystem::directory_iterator it(root, ec), end; ! ec && it != end; it.increment(ec))
+    {
+        ++fileCount;
+    }
+    return ! ec && fileCount == 1u;
+}
+
+[[nodiscard]] bool RunLocalFileTransactionFaultSelfTest()
+{
+    std::error_code ec;
+    const std::filesystem::path root = RedSalamander::TestSupport::AcquireTestDirectory(
+        {.harnessSegment = L"MonitorTest", .leafSegment = L"local_file_transaction_faults", .fallbackRunIdPrefix = L"monitor-test"}, ec);
+    if (ec || root.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path target = root / L"preserved.txt";
+    {
+        std::ofstream original(target, std::ios::binary | std::ios::trunc);
+        original << "previous-good";
+        if (! original.good())
+        {
+            return false;
+        }
+    }
+
+    const auto targetIsPreservedAndTempIsGone = [&]()
+    {
+        size_t fileCount = 0u;
+        for (std::filesystem::directory_iterator it(root, ec), end; ! ec && it != end; it.increment(ec))
+        {
+            ++fileCount;
+        }
+        return ! ec && fileCount == 1u && ReadMonitorTestFile(target) == "previous-good";
+    };
+
+    {
+        Common::Files::LocalFileTransaction transaction;
+        if (FAILED(Common::Files::LocalFileTransaction::Create(
+                target, Common::Files::ExistingTargetPolicy::Replace, false, transaction)) ||
+            FAILED(transaction.Write(std::string_view("abandoned"))))
+        {
+            return false;
+        }
+    }
+    if (! targetIsPreservedAndTempIsGone())
+    {
+        return false;
+    }
+
+    const HRESULT diskFull = HRESULT_FROM_WIN32(ERROR_DISK_FULL);
+    {
+        Common::Files::LocalFileTransaction transaction;
+        if (FAILED(Common::Files::LocalFileTransaction::Create(
+                target, Common::Files::ExistingTargetPolicy::Replace, false, transaction)))
+        {
+            return false;
+        }
+        Common::Files::Testing::FailNextLocalFileTransactionWrite(diskFull);
+        if (transaction.Write(std::string_view("replacement")) != diskFull)
+        {
+            return false;
+        }
+    }
+    if (! targetIsPreservedAndTempIsGone())
+    {
+        return false;
+    }
+
+    const HRESULT flushFault = HRESULT_FROM_WIN32(ERROR_WRITE_FAULT);
+    {
+        Common::Files::LocalFileTransaction transaction;
+        constexpr std::string_view replacement = "replacement";
+        if (FAILED(Common::Files::LocalFileTransaction::Create(
+                target, Common::Files::ExistingTargetPolicy::Replace, false, transaction)) ||
+            FAILED(transaction.Write(replacement)))
+        {
+            return false;
+        }
+        Common::Files::Testing::FailNextLocalFileTransactionFlush(flushFault);
+        if (transaction.Commit(replacement.size()) != flushFault)
+        {
+            return false;
+        }
+    }
+    if (! targetIsPreservedAndTempIsGone())
+    {
+        return false;
+    }
+
+    {
+        Common::Files::LocalFileTransaction transaction;
+        constexpr std::string_view replacement = "replacement";
+        if (FAILED(Common::Files::LocalFileTransaction::Create(
+                target, Common::Files::ExistingTargetPolicy::Replace, false, transaction)) ||
+            FAILED(transaction.Write(replacement)) ||
+            transaction.Commit(replacement.size() + 1u) != HRESULT_FROM_WIN32(ERROR_INVALID_DATA))
+        {
+            return false;
+        }
+    }
+    return targetIsPreservedAndTempIsGone();
 }
 } // namespace
 
@@ -395,6 +798,43 @@ static int RunMonitorTest()
         return 2;
     }
 
+
+    if (! RunMonitorDocumentRetentionSelfTest())
+    {
+        std::wcerr << L"Monitor document retention self-test failed\n";
+        return 2;
+    }
+
+    if (! RunMonitorFileReaderSelfTest())
+    {
+        std::wcerr << L"Monitor bounded file-reader self-test failed\n";
+        return 2;
+    }
+
+    if (! RunMonitorDocumentAtomicSaveSelfTest())
+    {
+        std::wcerr << L"Monitor document atomic-save self-test failed\n";
+        return 2;
+    }
+
+    if (! RunLocalFileTransactionFaultSelfTest())
+    {
+        std::wcerr << L"Local file transaction fault self-test failed\n";
+        return 2;
+    }
+
+    if (! RunUnicodeClipboardContractSelfTest())
+    {
+        std::wcerr << L"Unicode clipboard storage self-test failed\n";
+        return 2;
+    }
+
+    if (! RunEtwConsumerShutdownSelfTest())
+    {
+        std::wcerr << L"ETW consumer shutdown self-test failed\n";
+        return 2;
+    }
+
     // Force ETW registration at startup
     const bool registered = Debug::detail::EnsureTraceLoggingRegistered();
 
@@ -464,7 +904,11 @@ int main(int argc, char** argv)
     }
     if (argc > 1 && argv[1] != nullptr && lstrcmpA(argv[1], "--document-model-selftest") == 0)
     {
-        return RunMonitorDocumentBatchFilterSelfTest() ? 0 : 2;
+        return RunMonitorDocumentBatchFilterSelfTest() && RunMonitorDocumentRetentionSelfTest() && RunMonitorFileReaderSelfTest() &&
+                       RunMonitorDocumentAtomicSaveSelfTest() && RunLocalFileTransactionFaultSelfTest() && RunUnicodeClipboardContractSelfTest() &&
+                       RunEtwConsumerShutdownSelfTest()
+                   ? 0
+                   : 2;
     }
 
     // Use SEH to catch all exceptions (no C++ objects in this scope)

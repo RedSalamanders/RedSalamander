@@ -90,105 +90,21 @@
     <ClCompile>
       <PreprocessorDefinitions>_DEBUG;_WINDOWS;FILESYSTEMS3_EXPORTS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
-    <PostBuildEvent>
-      <Command>if exist "$(OutDir)aws-cpp-sdk-dynamodb.dll" del /Q "$(OutDir)aws-cpp-sdk-dynamodb.dll"
-if exist "$(OutDir)aws-cpp-sdk-kinesis.dll" del /Q "$(OutDir)aws-cpp-sdk-kinesis.dll"
-if exist "$(OutDir)aws-cpp-sdk-s3.dll" del /Q "$(OutDir)aws-cpp-sdk-s3.dll"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-cpp-sdk-core.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-cpp-sdk-s3-crt.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-cpp-sdk-s3tables.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-crt-cpp.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-auth.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-cal.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-common.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-compression.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-event-stream.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-checksums.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-http.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-io.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-mqtt.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-s3.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-sdkutils.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\zd.dll" "$(OutDir)"</Command>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
     <ClCompile>
       <PreprocessorDefinitions>_DEBUG;_WINDOWS;FILESYSTEMS3_EXPORTS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
-    <PostBuildEvent>
-      <Command>if exist "$(OutDir)aws-cpp-sdk-dynamodb.dll" del /Q "$(OutDir)aws-cpp-sdk-dynamodb.dll"
-if exist "$(OutDir)aws-cpp-sdk-kinesis.dll" del /Q "$(OutDir)aws-cpp-sdk-kinesis.dll"
-if exist "$(OutDir)aws-cpp-sdk-s3.dll" del /Q "$(OutDir)aws-cpp-sdk-s3.dll"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-cpp-sdk-core.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-cpp-sdk-s3-crt.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-cpp-sdk-s3tables.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-crt-cpp.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-auth.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-cal.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-common.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-compression.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-event-stream.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-checksums.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-http.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-io.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-mqtt.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-s3.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-sdkutils.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\zd.dll" "$(OutDir)"</Command>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ASan Debug|x64'">
     <ClCompile>
       <PreprocessorDefinitions>_DEBUG;_WINDOWS;FILESYSTEMS3_EXPORTS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
-    <PostBuildEvent>
-      <Command>if exist "$(OutDir)aws-cpp-sdk-dynamodb.dll" del /Q "$(OutDir)aws-cpp-sdk-dynamodb.dll"
-if exist "$(OutDir)aws-cpp-sdk-kinesis.dll" del /Q "$(OutDir)aws-cpp-sdk-kinesis.dll"
-if exist "$(OutDir)aws-cpp-sdk-s3.dll" del /Q "$(OutDir)aws-cpp-sdk-s3.dll"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-cpp-sdk-core.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-cpp-sdk-s3-crt.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-cpp-sdk-s3tables.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-crt-cpp.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-auth.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-cal.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-common.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-compression.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-event-stream.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-checksums.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-http.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-io.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-mqtt.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-s3.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-sdkutils.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\zd.dll" "$(OutDir)"</Command>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ASan Debug|ARM64'">
     <ClCompile>
       <PreprocessorDefinitions>_DEBUG;_WINDOWS;FILESYSTEMS3_EXPORTS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
-    <PostBuildEvent>
-      <Command>if exist "$(OutDir)aws-cpp-sdk-dynamodb.dll" del /Q "$(OutDir)aws-cpp-sdk-dynamodb.dll"
-if exist "$(OutDir)aws-cpp-sdk-kinesis.dll" del /Q "$(OutDir)aws-cpp-sdk-kinesis.dll"
-if exist "$(OutDir)aws-cpp-sdk-s3.dll" del /Q "$(OutDir)aws-cpp-sdk-s3.dll"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-cpp-sdk-core.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-cpp-sdk-s3-crt.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-cpp-sdk-s3tables.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-crt-cpp.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-auth.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-cal.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-common.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-compression.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-event-stream.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-checksums.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-http.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-io.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-mqtt.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-s3.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-sdkutils.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\zd.dll" "$(OutDir)"</Command>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -196,27 +112,6 @@ if exist "$(OutDir)aws-cpp-sdk-s3.dll" del /Q "$(OutDir)aws-cpp-sdk-s3.dll"
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>NDEBUG;_WINDOWS;FILESYSTEMS3_EXPORTS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
-    <PostBuildEvent>
-      <Command>if exist "$(OutDir)aws-cpp-sdk-dynamodb.dll" del /Q "$(OutDir)aws-cpp-sdk-dynamodb.dll"
-if exist "$(OutDir)aws-cpp-sdk-kinesis.dll" del /Q "$(OutDir)aws-cpp-sdk-kinesis.dll"
-if exist "$(OutDir)aws-cpp-sdk-s3.dll" del /Q "$(OutDir)aws-cpp-sdk-s3.dll"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\aws-cpp-sdk-core.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\aws-cpp-sdk-s3-crt.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\aws-cpp-sdk-s3tables.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\aws-crt-cpp.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\aws-c-auth.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\aws-c-cal.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\aws-c-common.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\aws-c-compression.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\aws-c-event-stream.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\aws-checksums.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\aws-c-http.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\aws-c-io.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\aws-c-mqtt.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\aws-c-s3.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\aws-c-sdkutils.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\z.dll" "$(OutDir)"</Command>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
     <ClCompile>
@@ -224,27 +119,6 @@ if exist "$(OutDir)aws-cpp-sdk-s3.dll" del /Q "$(OutDir)aws-cpp-sdk-s3.dll"
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>NDEBUG;_WINDOWS;FILESYSTEMS3_EXPORTS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
-    <PostBuildEvent>
-      <Command>if exist "$(OutDir)aws-cpp-sdk-dynamodb.dll" del /Q "$(OutDir)aws-cpp-sdk-dynamodb.dll"
-if exist "$(OutDir)aws-cpp-sdk-kinesis.dll" del /Q "$(OutDir)aws-cpp-sdk-kinesis.dll"
-if exist "$(OutDir)aws-cpp-sdk-s3.dll" del /Q "$(OutDir)aws-cpp-sdk-s3.dll"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\aws-cpp-sdk-core.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\aws-cpp-sdk-s3-crt.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\aws-cpp-sdk-s3tables.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\aws-crt-cpp.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\aws-c-auth.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\aws-c-cal.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\aws-c-common.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\aws-c-compression.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\aws-c-event-stream.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\aws-checksums.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\aws-c-http.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\aws-c-io.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\aws-c-mqtt.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\aws-c-s3.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\aws-c-sdkutils.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\z.dll" "$(OutDir)"</Command>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp" />

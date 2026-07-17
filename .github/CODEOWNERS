@@ -1,0 +1,5 @@
+# Release and dependency automation require repository-owner review.
+/.github/workflows/ @eric-jesover
+/.github/dependabot.yml @eric-jesover
+/.github/CODEOWNERS @eric-jesover
+/Tools/ReleaseArtifactPolicy.ps1 @eric-jesover

@@ -228,6 +228,7 @@ public:
 #ifdef ENABLE_TESTS
     [[nodiscard]] bool DebugGetSnapshot(NavigationViewDebugSnapshot& out) const noexcept;
     [[nodiscard]] bool DebugFocusRegion(FocusRegion region) noexcept;
+    [[nodiscard]] bool DebugPostCurrentEditSuggestResultForSelfTest();
 #endif
 
 private:
@@ -270,8 +271,10 @@ private:
     struct EditSuggestResultsPayload
     {
         uint64_t requestId         = 0;
+        uint64_t editSessionId     = 0;
         bool hasMore               = false;
         wchar_t directorySeparator = L'\\';
+        std::wstring queryText;
         std::wstring highlightText;
         std::vector<std::wstring> displayItems;
         std::vector<std::wstring> insertItems;
@@ -390,7 +393,10 @@ private:
     void DiscardFullPathPopupD2DResources();
     void BuildFullPathPopupLayout(float clientWidth);
     void RenderFullPathPopup();
-    bool TryGetSiblingFolders(const std::filesystem::path& parentPath, std::vector<std::filesystem::path>& siblings);
+    bool TryGetSiblingFolders(const std::filesystem::path& parentPath,
+                              const std::filesystem::path& preferredPath,
+                              std::vector<std::filesystem::path>& siblings,
+                              bool& truncated);
 
     void EnsureSiblingPrefetchWorker();
     void QueueSiblingPrefetchForPath(const std::filesystem::path& displayPath);
@@ -441,8 +447,10 @@ private:
     void EnsureEditSuggestWorker();
     void EditSuggestWorker(std::stop_token stopToken);
     void PostEditSuggestResults(uint64_t requestId,
+                                uint64_t editSessionId,
                                 bool hasMore,
                                 wchar_t directorySeparator,
+                                std::wstring&& queryText,
                                 std::wstring&& highlightText,
                                 std::vector<std::wstring>&& displayItems,
                                 std::vector<std::wstring>&& insertItems);
@@ -533,10 +541,12 @@ private:
 
     struct EditSuggestQuery
     {
-        uint64_t requestId = 0;
+        uint64_t requestId     = 0;
+        uint64_t editSessionId = 0;
         wil::com_ptr<IFileSystem> fileSystem;
         std::filesystem::path displayFolder;
         std::filesystem::path pluginFolder;
+        std::wstring queryText;
         std::wstring prefix;
         wchar_t directorySeparator = L'\\';
         std::shared_ptr<EditSuggestFileSystemInstance> keepAlive;
@@ -549,6 +559,7 @@ private:
     std::optional<EditSuggestQuery> _editSuggestPendingQuery;
     std::jthread _editSuggestThread;
     std::atomic<uint64_t> _editSuggestRequestId = 0;
+    uint64_t _editSuggestEditSessionId           = 0;
 
     struct SiblingPrefetchQuery
     {
@@ -834,7 +845,8 @@ private:
         ID_DRIVE_MENU_BASE = 500,
         ID_DRIVE_MENU_MAX  = 599,
 
-        ID_SIBLING_BASE = 600, // 600-699 for sibling folders
+        ID_SIBLING_BASE   = 600, // 600-698 for the bounded sibling list
+        ID_SIBLING_SEARCH = 699,
         ID_HISTORY_BASE = 700, // 700-799 for history dropdown entries
         ID_HISTORY_MAX  = 799,
     };

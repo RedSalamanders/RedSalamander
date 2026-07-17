@@ -1,4 +1,5 @@
 #include "FolderWindow.FileOperationsInternal.h"
+#include "FolderWindow.FileOperations.State.Private.h"
 
 #include "ConnectionProfileUtils.h"
 #include "FileSystemPathIdentity.h"
@@ -36,7 +37,7 @@
 #include <yyjson.h>
 #pragma warning(pop)
 
-namespace
+namespace FolderWindowFileOperationsStateInternal
 {
 using Task = FolderWindow::FileOperationState::Task;
 
@@ -77,65 +78,6 @@ std::atomic<unsigned long> g_fileOpsPreCalcThreadStartAttempts{0};
 std::atomic<bool> g_fileOpsAutoConcurrencyOverrideEnabled{false};
 std::atomic<unsigned int> g_fileOpsAutoConcurrencyOverridePreferred{1};
 std::atomic<uint32_t> g_fileOpsAutoConcurrencyOverrideStorageKind{FILESYSTEM_STORAGE_UNKNOWN};
-
-struct SelfTestPausePoint final
-{
-    SelfTestPausePoint()                                     = default;
-    SelfTestPausePoint(const SelfTestPausePoint&)            = delete;
-    SelfTestPausePoint& operator=(const SelfTestPausePoint&) = delete;
-    SelfTestPausePoint(SelfTestPausePoint&&)                 = delete;
-    SelfTestPausePoint& operator=(SelfTestPausePoint&&)      = delete;
-
-    std::atomic<bool> enabled{false};
-    std::atomic<bool> entered{false};
-    std::atomic<bool> releaseRequested{false};
-
-    void Set(bool isEnabled) noexcept
-    {
-        if (isEnabled)
-        {
-            entered.store(false, std::memory_order_release);
-            releaseRequested.store(false, std::memory_order_release);
-            enabled.store(true, std::memory_order_release);
-            return;
-        }
-
-        enabled.store(false, std::memory_order_release);
-        releaseRequested.store(true, std::memory_order_release);
-    }
-
-    [[nodiscard]] bool HasEntered() const noexcept
-    {
-        return entered.load(std::memory_order_acquire);
-    }
-
-    void Release() noexcept
-    {
-        enabled.store(false, std::memory_order_release);
-        releaseRequested.store(true, std::memory_order_release);
-    }
-
-    void Pause(ULONGLONG bailoutMs) noexcept
-    {
-        if (! enabled.load(std::memory_order_acquire))
-        {
-            return;
-        }
-
-        entered.store(true, std::memory_order_release);
-        const auto clearEntered = wil::scope_exit([&]() noexcept { entered.store(false, std::memory_order_release); });
-        const ULONGLONG startTick = GetTickCount64();
-        while (! releaseRequested.load(std::memory_order_acquire) && enabled.load(std::memory_order_acquire))
-        {
-            const ULONGLONG nowTick = GetTickCount64();
-            if (nowTick >= startTick && (nowTick - startTick) > bailoutMs)
-            {
-                break;
-            }
-            Sleep(1);
-        }
-    }
-};
 
 SelfTestPausePoint g_fileOpsPostFinishedCompletionPausePoint;
 SelfTestPausePoint g_fileOpsBridgeMoveSourceCleanupPausePoint;
@@ -909,19 +851,6 @@ void MaybeMutateBridgeDestinationBeforeMoveCleanupForSelfTest(IFileSystemIO& des
 }
 #endif
 
-enum class ReparsePointPolicy : unsigned char
-{
-    CopyReparse,
-    FollowTargets,
-    Skip,
-};
-
-enum class FileSystemConcurrencyMode : unsigned char
-{
-    Auto,
-    Manual,
-};
-
 struct AutoConcurrencyResolution final
 {
     unsigned int concurrency = 0u;
@@ -1130,40 +1059,6 @@ struct ParsedFileSystemConfiguration final
     return ReparsePointPolicy::CopyReparse;
 }
 
-constexpr std::wstring_view kFileOpsAppId                    = L"RedSalamander";
-constexpr std::wstring_view kFileOpsIssuesPaneWindowId       = L"FileOperationsIssuesPane";
-constexpr std::wstring_view kFileOpsPopupWindowId            = L"FileOperationsPopup";
-constexpr std::wstring_view kFileOpsPopupExpandedWindowId    = L"FileOperationsPopupExpanded";
-constexpr std::wstring_view kDiagnosticsLogPrefix            = L"FileOperations-";
-constexpr std::wstring_view kDiagnosticsLogExtension         = L".jsonl";
-constexpr std::wstring_view kDiagnosticsIssueReportPrefix    = L"FileOperations-Issues-";
-constexpr std::wstring_view kDiagnosticsIssueReportExtension = L".txt";
-constexpr size_t kMaxCompletedTaskSummaries                  = 24u;
-constexpr size_t kMaxTaskIssueDiagnostics                    = 128u;
-constexpr size_t kDefaultMaxDiagnosticsInMemory              = 256u;
-constexpr size_t kDefaultMaxDiagnosticsPerFlush              = 64u;
-constexpr size_t kDefaultMaxDiagnosticsLogFiles              = 14u;
-constexpr size_t kDefaultMaxDiagnosticsIssueReportFiles      = 60u;
-constexpr ULONGLONG kDefaultDiagnosticsFlushIntervalMs       = 5'000ull;
-constexpr ULONGLONG kDefaultDiagnosticsCleanupIntervalMs     = 15ull * 60ull * 1000ull;
-
-struct DiagnosticsSettings
-{
-    size_t maxDiagnosticsInMemory          = kDefaultMaxDiagnosticsInMemory;
-    size_t maxDiagnosticsPerFlush          = kDefaultMaxDiagnosticsPerFlush;
-    size_t maxDiagnosticsLogFiles          = kDefaultMaxDiagnosticsLogFiles;
-    size_t maxDiagnosticsIssueReportFiles  = kDefaultMaxDiagnosticsIssueReportFiles;
-    ULONGLONG diagnosticsFlushIntervalMs   = kDefaultDiagnosticsFlushIntervalMs;
-    ULONGLONG diagnosticsCleanupIntervalMs = kDefaultDiagnosticsCleanupIntervalMs;
-#if defined(_DEBUG) || defined(DEBUG)
-    bool infoEnabled  = true;
-    bool debugEnabled = true;
-#else
-    bool infoEnabled  = false;
-    bool debugEnabled = false;
-#endif
-};
-
 struct PreCalcProgressCookie
 {
     std::mutex* totalsMutex                   = nullptr;
@@ -1295,20 +1190,6 @@ TopLevelCompletionSnapshot MarkTopLevelItemCompleted(FolderWindow::FileOperation
     snapshot.completedFolders = task._completedTopLevelFolders;
     return snapshot;
 }
-
-struct PublishedProgressSnapshot
-{
-    unsigned long totalItems            = 0;
-    unsigned long completedItems        = 0;
-    uint64_t totalBytes                 = 0;
-    uint64_t completedBytes             = 0;
-    uint64_t itemTotalBytes             = 0;
-    uint64_t itemCompletedBytes         = 0;
-    unsigned long completedFiles        = 0;
-    unsigned long completedFolders      = 0;
-    uint64_t progressCallbackCount      = 0;
-    uint64_t itemCompletedCallbackCount = 0;
-};
 
 PublishedProgressSnapshot CapturePublishedProgressSnapshotLocked(const FolderWindow::FileOperationState::Task& task) noexcept
 {
@@ -2756,12 +2637,6 @@ void SetPopupCompactDensityInSettings(Common::Settings::Settings& settings, bool
         default: return L"unknown";
     }
 }
-
-struct ProcessMemorySnapshot
-{
-    uint64_t workingSetBytes = 0;
-    uint64_t privateBytes    = 0;
-};
 
 [[nodiscard]] ProcessMemorySnapshot CaptureProcessMemorySnapshot() noexcept
 {
@@ -5338,7 +5213,9 @@ bool RunFileOpsBridgeDirectoryBufferValidationSelfTestForSelfTestInternal() noex
     return true;
 }
 #endif
-} // namespace
+} // namespace FolderWindowFileOperationsStateInternal
+
+using namespace FolderWindowFileOperationsStateInternal;
 
 #ifdef ENABLE_TESTS
 bool RunFileOpsPerItemSchedulerShutdownQuietPointSelfTestForSelfTest(FolderWindow::FileOperationState& state) noexcept
@@ -12005,7 +11882,3 @@ HRESULT FolderWindow::FileOperationState::Task::BuildPathArrayArena(const std::v
     *outCount = static_cast<unsigned long>(count64);
     return S_OK;
 }
-
-#include "FolderWindow.FileOperations.State.Diagnostics.Part.cpp"
-#include "FolderWindow.FileOperations.State.Queue.Part.cpp"
-#include "FolderWindow.FileOperations.State.Runtime.Part.cpp"

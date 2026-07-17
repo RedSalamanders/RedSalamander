@@ -1,4 +1,5 @@
 #include "FileSystemS3.Internal.h"
+#include "PaginationGuard.h"
 
 #include <aws/s3-crt/model/Delete.h>
 #include <aws/s3-crt/model/DeleteObjectRequest.h>
@@ -11,6 +12,7 @@
 #include <filesystem>
 #include <format>
 #include <functional>
+#include <limits>
 #include <span>
 #include <unordered_map>
 #include <unordered_set>
@@ -222,11 +224,19 @@ struct DestinationBackup
     uint64_t sizeBytes = 0;
 };
 
+struct S3TransferCommitResult
+{
+    bool primaryMutationCommitted = false;
+    HRESULT cleanupStatus         = S_OK;
+    HRESULT rollbackStatus        = S_OK;
+};
+
 struct TransferJournal
 {
     std::vector<std::string> touchedDestinationKeys;
     std::vector<DestinationBackup> backups;
     std::vector<const PlannedTransferObject*> deletedSourceObjects;
+    S3TransferCommitResult* commitResult = nullptr;
 };
 
 inline constexpr size_t kMaxDeleteBatchSize                  = 1000u;
@@ -311,6 +321,23 @@ public:
     void AddObject(std::string key, std::string bytes)
     {
         objects[std::move(key)] = std::move(bytes);
+    }
+
+    void InjectObjectAfterNextDeleteBatch(std::string key, std::string bytes)
+    {
+        _afterDeleteKey   = std::move(key);
+        _afterDeleteBytes = std::move(bytes);
+    }
+
+    void FailDeletesContaining(std::string text, HRESULT status) noexcept
+    {
+        _deleteFailureText   = std::move(text);
+        _deleteFailureStatus = status;
+    }
+
+    [[nodiscard]] size_t DeleteBatchCount() const noexcept
+    {
+        return _deleteBatchCount;
     }
 
     [[nodiscard]] bool Exists(std::string_view key) const noexcept
@@ -462,12 +489,41 @@ public:
 
     [[nodiscard]] HRESULT DeleteObject(std::string_view key) noexcept
     {
+        if (! _deleteFailureText.empty() && key.find(_deleteFailureText) != std::string_view::npos)
+        {
+            return _deleteFailureStatus;
+        }
         objects.erase(std::string(key));
+        return S_OK;
+    }
+
+    [[nodiscard]] HRESULT DeleteObjects(const std::vector<std::string>& keys) noexcept
+    {
+        ++_deleteBatchCount;
+        for (const std::string& key : keys)
+        {
+            const HRESULT hr = DeleteObject(key);
+            if (FAILED(hr))
+            {
+                return hr;
+            }
+        }
+        if (! _afterDeleteKey.empty())
+        {
+            objects[std::move(_afterDeleteKey)] = std::move(_afterDeleteBytes);
+            _afterDeleteKey.clear();
+            _afterDeleteBytes.clear();
+        }
         return S_OK;
     }
 
 private:
     std::unordered_map<std::string, std::string> objects;
+    std::string _afterDeleteKey;
+    std::string _afterDeleteBytes;
+    std::string _deleteFailureText;
+    HRESULT _deleteFailureStatus = S_OK;
+    size_t _deleteBatchCount     = 0u;
 };
 
 thread_local DebugS3Graph* g_debugS3Graph = nullptr;
@@ -724,8 +780,21 @@ private:
     req.SetMaxKeys(static_cast<int>(std::min<unsigned long>(source.bucketCtx.maxKeys, 1000u)));
 
     const auto client = FsS3::GetS3Client(fs, source.bucketCtx);
+    const uint64_t pagingDurationMs = std::clamp<uint64_t>(static_cast<uint64_t>(source.bucketCtx.requestTimeoutMs) * 10u, 60'000u, 600'000u);
+    Common::Paging::Utf8ContinuationGuard pager(Common::Paging::Limits{
+        .deadlineTickMs = Common::Paging::DeadlineFromNow(GetTickCount64(), pagingDurationMs),
+    });
+    std::string continuationToken;
+    bool firstPage = true;
     while (true)
     {
+        const HRESULT pageBoundaryHr = firstPage ? pager.BeginFirstPage(GetTickCount64()) : pager.BeginContinuation(continuationToken, GetTickCount64());
+        firstPage = false;
+        if (FAILED(pageBoundaryHr))
+        {
+            return pageBoundaryHr;
+        }
+
         const auto outcome = client->ListObjectsV2(req);
         if (! outcome.IsSuccess())
         {
@@ -736,8 +805,10 @@ private:
         }
 
         const auto& result = outcome.GetResult();
+        size_t pageBytes = 0u;
         for (const auto& object : result.GetContents())
         {
+            pageBytes += (std::min)(object.GetKey().size(), (std::numeric_limits<size_t>::max)() - pageBytes);
             PlannedTransferObject entry{};
             entry.sourceKey = std::string(object.GetKey().c_str(), object.GetKey().size());
             entry.sizeBytes = static_cast<uint64_t>(object.GetSize());
@@ -745,12 +816,24 @@ private:
             outObjects.push_back(std::move(entry));
         }
 
-        if (! result.GetIsTruncated())
+        const bool isTruncated       = result.GetIsTruncated();
+        const Aws::String& nextToken = result.GetNextContinuationToken();
+        const HRESULT pageHr = pager.CompletePage(result.GetContents().size(),
+                                                  pageBytes,
+                                                  isTruncated,
+                                                  std::string_view(nextToken.c_str(), nextToken.size()),
+                                                  GetTickCount64());
+        if (FAILED(pageHr))
+        {
+            return pageHr;
+        }
+        if (! isTruncated)
         {
             break;
         }
 
-        req.SetContinuationToken(result.GetNextContinuationToken());
+        continuationToken.assign(nextToken.c_str(), nextToken.size());
+        req.SetContinuationToken(nextToken);
     }
 
     return S_OK;
@@ -991,7 +1074,12 @@ void RunDebugHiddenSiblingKeyEntropySelfTest(unsigned int& passed, unsigned int&
     // made the operation atomic.
     if (sourceRestoreFailed)
     {
-        return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+        const HRESULT rollbackStatus = HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+        if (journal.commitResult != nullptr)
+        {
+            journal.commitResult->rollbackStatus = rollbackStatus;
+        }
+        return rollbackStatus;
     }
 
     for (auto it = journal.touchedDestinationKeys.rbegin(); it != journal.touchedDestinationKeys.rend(); ++it)
@@ -1020,7 +1108,12 @@ void RunDebugHiddenSiblingKeyEntropySelfTest(unsigned int& passed, unsigned int&
         }
     }
 
-    return hadFailure ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : S_OK;
+    const HRESULT rollbackStatus = hadFailure ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : S_OK;
+    if (journal.commitResult != nullptr)
+    {
+        journal.commitResult->rollbackStatus = rollbackStatus;
+    }
+    return rollbackStatus;
 }
 
 [[nodiscard]] HRESULT RestoreBackupsFrom(FileSystemS3& fs, const ResolvedS3Path& destination, TransferJournal& journal, size_t firstBackupIndex) noexcept
@@ -1132,7 +1225,8 @@ void RunDebugHiddenSiblingKeyEntropySelfTest(unsigned int& passed, unsigned int&
 [[nodiscard]] HRESULT DeleteS3Keys(FileSystemS3& fs,
                                    const FsS3::ResolvedAwsContext& ctx,
                                    std::string_view bucket,
-                                   const std::vector<std::string>& keys) noexcept
+                                   const std::vector<std::string>& keys,
+                                   const std::function<HRESULT()>& checkCancel) noexcept
 {
     if (bucket.empty())
     {
@@ -1144,9 +1238,32 @@ void RunDebugHiddenSiblingKeyEntropySelfTest(unsigned int& passed, unsigned int&
         return S_OK;
     }
 
+#if defined(_DEBUG)
+    if (g_debugS3Graph != nullptr)
+    {
+        if (checkCancel)
+        {
+            const HRESULT cancelHr = checkCancel();
+            if (FAILED(cancelHr))
+            {
+                return cancelHr;
+            }
+        }
+        return g_debugS3Graph->DeleteObjects(keys);
+    }
+#endif
+
     const auto client = FsS3::GetS3Client(fs, ctx);
     for (size_t batchStart = 0; batchStart < keys.size(); batchStart += kMaxDeleteBatchSize)
     {
+        if (checkCancel)
+        {
+            const HRESULT cancelHr = checkCancel();
+            if (FAILED(cancelHr))
+            {
+                return cancelHr;
+            }
+        }
         const size_t batchEnd = std::min(keys.size(), batchStart + kMaxDeleteBatchSize);
 
         Aws::S3Crt::Model::DeleteObjectsRequest req;
@@ -1185,7 +1302,11 @@ void RunDebugHiddenSiblingKeyEntropySelfTest(unsigned int& passed, unsigned int&
     return S_OK;
 }
 
-[[nodiscard]] HRESULT DeleteResolvedPath(FileSystemS3& fs, const ResolvedS3Path& path, const ResolvedS3Probe& probe, FileSystemFlags flags) noexcept
+[[nodiscard]] HRESULT DeleteResolvedPath(FileSystemS3& fs,
+                                         const ResolvedS3Path& path,
+                                         const ResolvedS3Probe& probe,
+                                         FileSystemFlags flags,
+                                         const std::function<HRESULT()>& checkCancel) noexcept
 {
     if (path.isRoot || path.isBucketRoot)
     {
@@ -1207,26 +1328,52 @@ void RunDebugHiddenSiblingKeyEntropySelfTest(unsigned int& passed, unsigned int&
         return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
     }
 
-    std::vector<PlannedTransferObject> objects;
-    uint64_t totalBytes = 0;
-    HRESULT hr          = ListRecursiveObjects(fs, path, MakeDirectoryPrefix(path.key), objects, totalBytes);
-    if (FAILED(hr))
+    constexpr size_t kMaxRecursiveDeletePasses = 64u;
+    const uint64_t deleteDeadline = Common::Paging::DeadlineFromNow(
+        GetTickCount64(), std::clamp<uint64_t>(static_cast<uint64_t>(path.bucketCtx.requestTimeoutMs) * 10u, 60'000u, 600'000u));
+    const std::string prefix = MakeDirectoryPrefix(path.key);
+
+    for (size_t pass = 0u; pass < kMaxRecursiveDeletePasses; ++pass)
     {
-        return hr;
+        if (checkCancel)
+        {
+            const HRESULT cancelHr = checkCancel();
+            if (FAILED(cancelHr))
+            {
+                return cancelHr;
+            }
+        }
+        if (GetTickCount64() >= deleteDeadline)
+        {
+            return HRESULT_FROM_WIN32(ERROR_TIMEOUT);
+        }
+
+        std::vector<PlannedTransferObject> objects;
+        uint64_t totalBytes = 0;
+        HRESULT hr          = ListRecursiveObjects(fs, path, prefix, objects, totalBytes);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+        if (objects.empty())
+        {
+            return S_OK;
+        }
+
+        std::vector<std::string> keys;
+        keys.reserve(objects.size());
+        for (const auto& object : objects)
+        {
+            keys.push_back(object.sourceKey);
+        }
+        hr = DeleteS3Keys(fs, path.bucketCtx, path.bucket, keys, checkCancel);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
     }
 
-    if (objects.empty())
-    {
-        return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
-    }
-
-    std::vector<std::string> keys;
-    keys.reserve(objects.size());
-    for (const auto& object : objects)
-    {
-        keys.push_back(object.sourceKey);
-    }
-    return DeleteS3Keys(fs, path.bucketCtx, path.bucket, keys);
+    return HRESULT_FROM_WIN32(ERROR_RETRY);
 }
 
 [[nodiscard]] HRESULT EstimateTransferBytes(FileSystemS3& fs,
@@ -1298,9 +1445,14 @@ void RunDebugHiddenSiblingKeyEntropySelfTest(unsigned int& passed, unsigned int&
                                         const std::function<HRESULT()>& checkCancel,
                                         const std::function<HRESULT(uint64_t, uint64_t)>& reportBytes,
                                         uint64_t& outTotalBytes,
-                                        const TransferIssueReporter& reportIssue = {}) noexcept
+                                        const TransferIssueReporter& reportIssue = {},
+                                        S3TransferCommitResult* commitResult = nullptr) noexcept
 {
     outTotalBytes = 0;
+    if (commitResult != nullptr)
+    {
+        *commitResult = {};
+    }
 
     ResolvedS3Path source{};
     ResolvedS3Path destination{};
@@ -1404,6 +1556,7 @@ void RunDebugHiddenSiblingKeyEntropySelfTest(unsigned int& passed, unsigned int&
     const std::string destinationRootKey = plan.sourceIsPrefix ? plan.destinationPrefix : destination.key;
 
     TransferJournal journal{};
+    journal.commitResult = commitResult;
     journal.touchedDestinationKeys.reserve(plan.objects.size());
 
     std::vector<const PlannedTransferObject*> transferredObjects;
@@ -1650,10 +1803,19 @@ void RunDebugHiddenSiblingKeyEntropySelfTest(unsigned int& passed, unsigned int&
         }
     }
 
+    if (commitResult != nullptr)
+    {
+        commitResult->primaryMutationCommitted = true;
+    }
+
     const HRESULT cleanupHr = CleanupBackupObjects(fs, destination, journal);
+    if (commitResult != nullptr)
+    {
+        commitResult->cleanupStatus = cleanupHr;
+    }
     if (FAILED(cleanupHr))
     {
-        return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+        Debug::Warning(L"S3: requested transfer committed but backup cleanup remains pending (hr={:#x})", static_cast<unsigned long>(cleanupHr));
     }
 
     return hadSkipped ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : S_OK;
@@ -1863,6 +2025,117 @@ void RunDebugPlannedDestinationAncestorCollisionSelfTest(unsigned int& passed, u
     DebugCheck(! graph.HasKeyWithPrefix("dest/.rs-bak-"), L"S3 planned destination ancestor collision should leave no hidden backup objects", passed, failed);
 }
 
+void RunDebugPaginationGuardSelfTest(unsigned int& passed, unsigned int& failed)
+{
+    Common::Paging::Limits limits{};
+    limits.deadlineTickMs = Common::Paging::DeadlineFromNow(GetTickCount64(), 10'000u);
+
+    Common::Paging::Utf8ContinuationGuard repeated(limits);
+    HRESULT hr = repeated.BeginFirstPage(GetTickCount64());
+    if (SUCCEEDED(hr))
+    {
+        hr = repeated.CompletePage(1u, 4u, true, "same", GetTickCount64());
+    }
+    if (SUCCEEDED(hr))
+    {
+        hr = repeated.BeginContinuation("same", GetTickCount64());
+    }
+    if (SUCCEEDED(hr))
+    {
+        hr = repeated.CompletePage(0u, 0u, true, "same", GetTickCount64());
+    }
+    if (SUCCEEDED(hr))
+    {
+        hr = repeated.BeginContinuation("same", GetTickCount64());
+    }
+    DebugCheck(hr == HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
+               L"S3 pagination guard rejects a repeated continuation before another provider request",
+               passed,
+               failed);
+
+    Common::Paging::Utf8ContinuationGuard empty(limits);
+    hr = empty.BeginFirstPage(GetTickCount64());
+    if (SUCCEEDED(hr))
+    {
+        hr = empty.CompletePage(0u, 0u, true, {}, GetTickCount64());
+    }
+    DebugCheck(hr == HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
+               L"S3 pagination guard rejects truncation with an empty continuation token",
+               passed,
+               failed);
+}
+
+void RunDebugRecursiveDeleteConvergenceSelfTest(unsigned int& passed, unsigned int& failed)
+{
+    wil::com_ptr<FileSystemS3> fs = MakeDebugS3FileSystem();
+    if (! DebugCheck(static_cast<bool>(fs), L"debug selftest should allocate S3 instance for recursive-delete convergence", passed, failed))
+    {
+        return;
+    }
+
+    DebugS3Graph graph;
+    graph.AddObject("root/first.txt", "first");
+    graph.InjectObjectAfterNextDeleteBatch("root/late.txt", "late");
+
+    DebugS3GraphScope scope(graph);
+    ResolvedS3Path path{};
+    ResolvedS3Probe probe{};
+    HRESULT hr = graph.ResolvePath(L"/bucket/root/", path);
+    if (SUCCEEDED(hr))
+    {
+        hr = ProbeS3Path(*fs, path, probe);
+    }
+    if (SUCCEEDED(hr))
+    {
+        hr = DeleteResolvedPath(*fs, path, probe, FILESYSTEM_FLAG_RECURSIVE, []() noexcept -> HRESULT { return S_OK; });
+    }
+
+    DebugCheck(hr == S_OK, L"S3 recursive delete should converge after a child is added behind the first delete snapshot", passed, failed);
+    DebugCheck(! graph.HasKeyWithPrefix("root/"), L"S3 recursive delete should remove the concurrently added child on a later pass", passed, failed);
+    DebugCheck(graph.DeleteBatchCount() == 2u, L"S3 recursive delete should re-list and issue a second bounded delete batch", passed, failed);
+}
+
+void RunDebugCommittedCleanupDebtSelfTest(unsigned int& passed, unsigned int& failed)
+{
+    wil::com_ptr<FileSystemS3> fs = MakeDebugS3FileSystem();
+    if (! DebugCheck(static_cast<bool>(fs), L"debug selftest should allocate S3 instance for committed-cleanup debt", passed, failed))
+    {
+        return;
+    }
+
+    DebugS3Graph graph;
+    graph.AddObject("source.txt", "new");
+    graph.AddObject("destination.txt", "old");
+    graph.FailDeletesContaining(".rs-bak-", HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED));
+
+    uint64_t totalBytes = 0u;
+    S3TransferCommitResult commitResult{};
+    DebugS3GraphScope scope(graph);
+    const HRESULT hr = ExecuteCopyOrMove(*fs,
+                                         FileSystemS3Mode::S3,
+                                         nullptr,
+                                         FileSystemS3::Settings{},
+                                         L"/bucket/source.txt",
+                                         L"/bucket/destination.txt",
+                                         FILESYSTEM_FLAG_ALLOW_OVERWRITE,
+                                         false,
+                                         []() noexcept -> HRESULT { return S_OK; },
+                                         [](uint64_t, uint64_t) noexcept -> HRESULT { return S_OK; },
+                                         totalBytes,
+                                         {},
+                                         &commitResult);
+
+    DebugCheck(hr == S_OK, L"S3 cleanup debt after a committed copy must not report the primary mutation as failed", passed, failed);
+    DebugCheck(commitResult.primaryMutationCommitted, L"S3 committed cleanup result should mark the primary mutation committed", passed, failed);
+    DebugCheck(commitResult.cleanupStatus == HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED),
+               L"S3 committed cleanup result should retain the exact cleanup failure",
+               passed,
+               failed);
+    DebugCheck(graph.BytesEqual("destination.txt", "new"), L"S3 committed cleanup failure should retain the requested destination content", passed, failed);
+    DebugCheck(graph.BytesEqual("source.txt", "new"), L"S3 committed copy cleanup failure should retain the source", passed, failed);
+    DebugCheck(graph.HasKeyWithPrefix(".rs-bak-"), L"S3 committed cleanup debt should leave the recoverable backup object", passed, failed);
+}
+
 extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderS3DebugSelfTests(unsigned int* passed, unsigned int* failed)
 {
     if (! passed || ! failed)
@@ -1873,13 +2146,18 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderS3DebugSelfTests
     *passed = 0;
     *failed = 0;
 
+    FsS3::RunDebugAwsSdkLifetimeContractSelfTest(*passed, *failed);
     FsS3::RunDebugRangeReadContractSelfTest(*passed, *failed);
     FsS3::RunDebugMultipartWriterContractSelfTest(*passed, *failed);
+    FsS3::RunDebugDirectorySizeCallbackContractSelfTest(*passed, *failed);
     RunDebugHiddenSiblingKeyEntropySelfTest(*passed, *failed);
     RunDebugRootObjectSkipSelfTest(*passed, *failed);
     RunDebugRootObjectOverwriteSelfTest(*passed, *failed);
     RunDebugNestedAncestorStackSelfTest(*passed, *failed);
     RunDebugPlannedDestinationAncestorCollisionSelfTest(*passed, *failed);
+    RunDebugPaginationGuardSelfTest(*passed, *failed);
+    RunDebugRecursiveDeleteConvergenceSelfTest(*passed, *failed);
+    RunDebugCommittedCleanupDebtSelfTest(*passed, *failed);
 
     return *failed == 0u ? S_OK : E_FAIL;
 }
@@ -2264,7 +2542,7 @@ FileSystemS3::DeleteItem(const wchar_t* path, FileSystemFlags flags, const FileS
         return hr;
     }
 
-    const HRESULT itemHr = DeleteResolvedPath(*this, resolved, probe, flags);
+    const HRESULT itemHr = DeleteResolvedPath(*this, resolved, probe, flags, checkCancel);
 
     if (callback)
     {
@@ -2990,7 +3268,7 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::DeleteItems(const wchar_t* const* paths,
             continue;
         }
 
-        const HRESULT itemHr = DeleteResolvedPath(*this, resolved, probe, flags);
+        const HRESULT itemHr = DeleteResolvedPath(*this, resolved, probe, flags, checkCancel);
         if (FAILED(itemHr))
         {
             hadFailure = true;

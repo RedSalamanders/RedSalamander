@@ -44,8 +44,6 @@
 #include "WindowsHello.h"
 #include "resource.h"
 
-extern FolderWindow g_folderWindow;
-
 // Single-canvas DxUi Connection Manager window.
 //
 // Phase 2 landed: top-level WS_OVERLAPPEDWINDOW + single DxUi::WindowHost +
@@ -317,23 +315,8 @@ private:
 
 [[nodiscard]] std::wstring NewGuidString() noexcept
 {
-    GUID guid{};
-    if (FAILED(CoCreateGuid(&guid)))
-    {
-        return {};
-    }
-    wchar_t buf[64]{};
-    if (StringFromGUID2(guid, buf, static_cast<int>(std::size(buf))) <= 0)
-    {
-        return {};
-    }
-    std::wstring text(buf);
-    if (! text.empty() && text.front() == L'{' && text.back() == L'}')
-    {
-        text.erase(text.begin());
-        text.pop_back();
-    }
-    return text;
+    std::wstring id;
+    return SUCCEEDED(Common::Settings::CreateConnectionProfileId(id)) ? id : std::wstring{};
 }
 
 [[nodiscard]] std::wstring MakeUniqueConnectionName(const std::vector<Common::Settings::ConnectionProfile>& connections,
@@ -896,9 +879,15 @@ struct OwnedMtpPickerWork
 class WindowImpl final : public IDxGridDelegate
 {
 public:
-    WindowImpl(
-        std::wstring appId, Common::Settings::Settings& settings, AppTheme theme, std::wstring filterPluginId, uint8_t targetPane, HWND notifyOwner) noexcept
-        : _appId(std::move(appId)),
+    WindowImpl(FolderWindow& applicationFolderWindow,
+               std::wstring appId,
+               Common::Settings::Settings& settings,
+               AppTheme theme,
+               std::wstring filterPluginId,
+               uint8_t targetPane,
+               HWND notifyOwner) noexcept
+        : _applicationFolderWindow(&applicationFolderWindow),
+          _appId(std::move(appId)),
           _settings(&settings),
           _theme(std::move(theme)),
           _filterPluginId(std::move(filterPluginId)),
@@ -1099,6 +1088,7 @@ private:
     LRESULT WindowProc(UINT msg, WPARAM wp, LPARAM lp) noexcept;
 
     wil::unique_hwnd _hwnd;
+    FolderWindow* _applicationFolderWindow = nullptr;
     HWND _closingHwnd = nullptr;
     WindowHost _dxHost;
     HWND _restoreFolderViewWindow = nullptr;
@@ -2747,13 +2737,11 @@ HRESULT WindowImpl::VerifySecretRevealForProfile(const Common::Settings::Connect
     }
 
     const uint64_t reauthTimeoutMs = static_cast<uint64_t>(reauthTimeoutMinute) * 60'000ull;
-    if (reauthTimeoutMs != 0u)
+    const RedSalamander::Connections::SecretKind secretKind = EditableSecretKindForProfile(profile);
+    if (RedSalamander::Connections::IsSecretAccessAuthorized(
+            profile.id, secretKind, RedSalamander::Connections::SecretAccessPurpose::Interactive, reauthTimeoutMs))
     {
-        if (RedSalamander::Connections::IsSecretAccessAuthorized(profile.id, reauthTimeoutMs) ||
-            RedSalamander::Connections::HasSecretAccessAuthorization(profile.id))
-        {
-            return S_OK;
-        }
+        return S_OK;
     }
 
     std::wstring message = LoadStringResource(nullptr, IDS_CONNECTIONS_HELLO_PROMPT_CREDENTIAL);
@@ -2763,9 +2751,9 @@ HRESULT WindowImpl::VerifySecretRevealForProfile(const Common::Settings::Connect
     }
 
     const HRESULT helloHr = RedSalamander::Security::VerifyWindowsHelloForWindow(_hwnd.get(), message);
-    if (SUCCEEDED(helloHr) && reauthTimeoutMs != 0u && ! profile.id.empty())
+    if (SUCCEEDED(helloHr) && ! profile.id.empty())
     {
-        RedSalamander::Connections::NoteSecretAccessAuthorized(profile.id);
+        RedSalamander::Connections::NoteSecretAccessAuthorized(profile.id, secretKind);
     }
     return helloHr;
 }
@@ -2884,6 +2872,8 @@ void WindowImpl::DeleteSecretsForRemovedConnections() noexcept
             continue;
         }
 
+        RedSalamander::Connections::ClearSecretAccessAuthorization(id);
+
         const std::wstring passwordTarget = RedSalamander::Connections::BuildCredentialTargetName(id, RedSalamander::Connections::SecretKind::Password);
         const std::wstring passphraseTarget =
             RedSalamander::Connections::BuildCredentialTargetName(id, RedSalamander::Connections::SecretKind::SshKeyPassphrase);
@@ -2952,8 +2942,9 @@ HRESULT WindowImpl::CommitSecretsForProfile(const Common::Settings::ConnectionPr
     const std::wstring passwordTarget   = BuildCredentialTargetName(profile.id, SecretKind::Password);
     const std::wstring passphraseTarget = BuildCredentialTargetName(profile.id, SecretKind::SshKeyPassphrase);
     const std::wstring refreshTarget    = BuildCredentialTargetName(profile.id, SecretKind::RefreshToken);
-    const auto deleteStoredSecret       = [&](const std::wstring& targetName, std::wstring_view kindLabel) noexcept
+    const auto deleteStoredSecret = [&](const std::wstring& targetName, SecretKind kind, std::wstring_view kindLabel) noexcept
     {
+        RedSalamander::Connections::ClearSecretAccessAuthorization(profile.id, kind);
         if (targetName.empty())
         {
             return;
@@ -2972,29 +2963,29 @@ HRESULT WindowImpl::CommitSecretsForProfile(const Common::Settings::ConnectionPr
 
     if (! profile.savePassword)
     {
-        deleteStoredSecret(passwordTarget, L"password");
-        deleteStoredSecret(passphraseTarget, L"sshKeyPassphrase");
-        deleteStoredSecret(refreshTarget, L"refreshToken");
+        deleteStoredSecret(passwordTarget, SecretKind::Password, L"password");
+        deleteStoredSecret(passphraseTarget, SecretKind::SshKeyPassphrase, L"sshKeyPassphrase");
+        deleteStoredSecret(refreshTarget, SecretKind::RefreshToken, L"refreshToken");
         return S_OK;
     }
 
     if (profile.authMode == Common::Settings::ConnectionAuthMode::OAuth2Pkce)
     {
-        deleteStoredSecret(passwordTarget, L"password");
-        deleteStoredSecret(passphraseTarget, L"sshKeyPassphrase");
+        deleteStoredSecret(passwordTarget, SecretKind::Password, L"password");
+        deleteStoredSecret(passphraseTarget, SecretKind::SshKeyPassphrase, L"sshKeyPassphrase");
         return S_OK;
     }
 
     const bool sshPassphrase = profile.authMode == Common::Settings::ConnectionAuthMode::SshKey;
     if (sshPassphrase)
     {
-        deleteStoredSecret(passwordTarget, L"password");
+        deleteStoredSecret(passwordTarget, SecretKind::Password, L"password");
     }
     else
     {
-        deleteStoredSecret(passphraseTarget, L"sshKeyPassphrase");
+        deleteStoredSecret(passphraseTarget, SecretKind::SshKeyPassphrase, L"sshKeyPassphrase");
     }
-    deleteStoredSecret(refreshTarget, L"refreshToken");
+    deleteStoredSecret(refreshTarget, SecretKind::RefreshToken, L"refreshToken");
 
     const auto& stagedMap = sshPassphrase ? _stagedPassphraseById : _stagedPasswordById;
     const auto it         = stagedMap.find(profile.id);
@@ -3012,6 +3003,10 @@ HRESULT WindowImpl::CommitSecretsForProfile(const Common::Settings::ConnectionPr
                      profile.name,
                      profile.id,
                      static_cast<unsigned long>(credentialSaveHr));
+    }
+    else
+    {
+        RedSalamander::Connections::NoteSecretAccessAuthorized(profile.id, kind);
     }
     return credentialSaveHr;
 }
@@ -3238,7 +3233,15 @@ bool WindowImpl::SaveConnectionsSettings() noexcept
         connSettings.allowInsecureTlsInAutomation    = _settings->connections->allowInsecureTlsInAutomation;
         connSettings.windowsHelloReauthTimeoutMinute = _settings->connections->windowsHelloReauthTimeoutMinute;
     }
-    connSettings.items     = _connections;
+    connSettings.items = _connections;
+    const HRESULT identityHr = Common::Settings::ValidateConnectionProfileIds(connSettings);
+    if (FAILED(identityHr))
+    {
+        Debug::Error(L"ConnectionManagerWindow: refusing to save non-canonical or duplicate profile IDs (hr=0x{:08X}).",
+                     static_cast<unsigned long>(identityHr));
+        return false;
+    }
+
     _settings->connections = std::move(connSettings);
 
     DeleteSecretsForRemovedConnections();
@@ -3455,16 +3458,16 @@ void WindowImpl::OnNcDestroy() noexcept
 
 HWND WindowImpl::ResolveRestoreFolderViewWindow() const noexcept
 {
-    const HWND folderWindow = g_folderWindow.GetHwnd();
+    const HWND folderWindow = _applicationFolderWindow->GetHwnd();
     if (! folderWindow || IsWindow(folderWindow) == FALSE)
     {
         return nullptr;
     }
 
-    HWND focusedFolderView = g_folderWindow.GetFocusedFolderViewHwnd();
+    HWND focusedFolderView = _applicationFolderWindow->GetFocusedFolderViewHwnd();
     if (! focusedFolderView)
     {
-        focusedFolderView = g_folderWindow.GetFolderViewHwnd(g_folderWindow.GetFocusedPane());
+        focusedFolderView = _applicationFolderWindow->GetFolderViewHwnd(_applicationFolderWindow->GetFocusedPane());
     }
 
     if (! focusedFolderView || IsWindow(focusedFolderView) == FALSE)
@@ -3499,7 +3502,7 @@ void WindowImpl::RestoreOwnerFocusAfterClose() noexcept
 
     if (restoreFocus)
     {
-        g_folderWindow.RequestRestoreFolderViewFocus(restoreFocus);
+        _applicationFolderWindow->RequestRestoreFolderViewFocus(restoreFocus);
         if (restoreOwner)
         {
             static_cast<void>(SendMessageW(restoreOwner, WndMsg::kPaneRestoreFolderFocus, 0, 0));
@@ -4035,7 +4038,7 @@ void WindowImpl::OnNewClicked() noexcept
     profile.id = NewGuidString();
     if (profile.id.empty())
     {
-        Debug::Error(L"ConnectionManagerWindow: failed to allocate connection id (CoCreateGuid).");
+        Debug::Error(L"ConnectionManagerWindow: failed to allocate a canonical connection id.");
         return;
     }
     profile.pluginId            = _filterPluginId.empty() ? std::wstring(kProtocolItems[0].pluginId) : _filterPluginId;
@@ -4314,6 +4317,7 @@ LRESULT CALLBACK WindowImpl::WndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARAM
 } // namespace
 
 bool ShowWindow(HWND owner,
+                FolderWindow& applicationFolderWindow,
                 std::wstring_view appId,
                 Common::Settings::Settings& settings,
                 const AppTheme& theme,
@@ -4349,7 +4353,8 @@ bool ShowWindow(HWND owner,
         }
     }
 
-    auto impl = std::make_unique<WindowImpl>(std::wstring(appId), settings, theme, std::wstring(filterPluginId), targetPane, effectiveOwner);
+    auto impl = std::make_unique<WindowImpl>(
+        applicationFolderWindow, std::wstring(appId), settings, theme, std::wstring(filterPluginId), targetPane, effectiveOwner);
     if (! impl->Create())
     {
         return false;
@@ -4359,6 +4364,7 @@ bool ShowWindow(HWND owner,
 }
 
 HRESULT ShowDialog(HWND owner,
+                   FolderWindow& applicationFolderWindow,
                    std::wstring_view appId,
                    Common::Settings::Settings& settings,
                    const AppTheme& theme,
@@ -4379,8 +4385,13 @@ HRESULT ShowDialog(HWND owner,
     const HWND effectiveOwner = NormalizeOwnerWindow(owner);
 
     ModalFacadeResult result;
-    auto impl = std::make_unique<WindowImpl>(
-        std::wstring(appId), settings, theme, std::wstring(filterPluginId), /*targetPane=*/static_cast<uint8_t>(0), effectiveOwner);
+    auto impl = std::make_unique<WindowImpl>(applicationFolderWindow,
+                                             std::wstring(appId),
+                                             settings,
+                                             theme,
+                                             std::wstring(filterPluginId),
+                                             /*targetPane=*/static_cast<uint8_t>(0),
+                                             effectiveOwner);
     impl->EnterModalFacadeMode(&result);
     if (! impl->Create())
     {
@@ -5753,23 +5764,27 @@ bool DebugGetS3UseHttpsToggleState(bool& outChecked, std::wstring& outLabel) noe
 } // namespace RedSalamander::ConnectionManager::SingleCanvas
 
 HRESULT ShowConnectionManagerDialog(HWND owner,
+                                    FolderWindow& applicationFolderWindow,
                                     std::wstring_view appId,
                                     Common::Settings::Settings& settings,
                                     const AppTheme& theme,
                                     std::wstring_view filterPluginId,
                                     std::wstring& selectedConnectionNameOut) noexcept
 {
-    return RedSalamander::ConnectionManager::SingleCanvas::ShowDialog(owner, appId, settings, theme, filterPluginId, selectedConnectionNameOut);
+    return RedSalamander::ConnectionManager::SingleCanvas::ShowDialog(
+        owner, applicationFolderWindow, appId, settings, theme, filterPluginId, selectedConnectionNameOut);
 }
 
 bool ShowConnectionManagerWindow(HWND owner,
+                                 FolderWindow& applicationFolderWindow,
                                  std::wstring_view appId,
                                  Common::Settings::Settings& settings,
                                  const AppTheme& theme,
                                  std::wstring_view filterPluginId,
                                  uint8_t targetPane) noexcept
 {
-    return RedSalamander::ConnectionManager::SingleCanvas::ShowWindow(owner, appId, settings, theme, filterPluginId, targetPane);
+    return RedSalamander::ConnectionManager::SingleCanvas::ShowWindow(
+        owner, applicationFolderWindow, appId, settings, theme, filterPluginId, targetPane);
 }
 
 HWND GetConnectionManagerDialogHandle() noexcept

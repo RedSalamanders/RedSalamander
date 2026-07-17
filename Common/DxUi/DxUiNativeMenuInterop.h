@@ -375,7 +375,10 @@ public:
         {
             _commandTarget = commandTarget ? commandTarget : ownerWindow;
             _host.SetTheme(_theme);
-            SyncMenuModel();
+            if (! SyncMenuModelInternal(true))
+            {
+                return false;
+            }
             UpdateLayout();
             return true;
         }
@@ -425,7 +428,10 @@ public:
             SetWindowPos(ownerWindow, nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
         }
 
-        SyncMenuModel();
+        if (! SyncMenuModelInternal(true))
+        {
+            return false;
+        }
         UpdateLayout();
         return true;
     }
@@ -450,7 +456,7 @@ public:
 
     void SyncMenuModel() noexcept
     {
-        SyncMenuModelInternal(true);
+        static_cast<void>(SyncMenuModelInternal(true));
     }
 
     void UpdateLayout() noexcept
@@ -480,7 +486,10 @@ public:
 
     [[nodiscard]] bool FocusFirstItem() noexcept
     {
-        SyncMenuModelInternal(true);
+        if (! SyncMenuModelInternal(true))
+        {
+            return false;
+        }
         if (! _menuBar || ! _hwnd || IsWindow(_hwnd.get()) == FALSE)
         {
             return false;
@@ -504,7 +513,14 @@ public:
 
         CaptureFocusRestoreTarget();
         _menuBar->SetSelectedIndex(firstEnabledIndex);
-        SetFocus(_hwnd.get());
+        MenuBar* const menuBar                    = _menuBar;
+        const std::weak_ptr<int> menuBarLifetime = GetControlLifetimeToken(*menuBar);
+        const HWND hwnd                           = _hwnd.get();
+        SetFocus(hwnd);
+        if (menuBarLifetime.expired() || _menuBar != menuBar || ! _hwnd || _hwnd.get() != hwnd)
+        {
+            return false;
+        }
         _host.SetFocusControl(_menuBar);
         _host.Invalidate();
         return true;
@@ -512,16 +528,30 @@ public:
 
     [[nodiscard]] bool ActivateMnemonic(wchar_t mnemonic) noexcept
     {
-        SyncMenuModelInternal(true);
+        if (! SyncMenuModelInternal(true))
+        {
+            return false;
+        }
         if (! _menuBar || ! _hwnd || IsWindow(_hwnd.get()) == FALSE)
         {
             return false;
         }
 
         CaptureFocusRestoreTarget();
-        SetFocus(_hwnd.get());
-        _host.SetFocusControl(_menuBar);
-        const bool activated = _menuBar->ActivateMnemonic(_host, static_cast<wchar_t>(std::towupper(static_cast<wint_t>(mnemonic))));
+        MenuBar* const menuBar                    = _menuBar;
+        const std::weak_ptr<int> menuBarLifetime = GetControlLifetimeToken(*menuBar);
+        const HWND hwnd                           = _hwnd.get();
+        SetFocus(hwnd);
+        if (menuBarLifetime.expired() || _menuBar != menuBar || ! _hwnd || _hwnd.get() != hwnd)
+        {
+            return false;
+        }
+        _host.SetFocusControl(menuBar);
+        const bool activated = menuBar->ActivateMnemonic(_host, static_cast<wchar_t>(std::towupper(static_cast<wint_t>(mnemonic))));
+        if (menuBarLifetime.expired())
+        {
+            return activated;
+        }
         _host.Invalidate();
         return activated;
     }
@@ -561,22 +591,35 @@ private:
         static_cast<void>(RedSalamander::DxUi::RestoreCapturedFocus(_focusRestoreHwnd, _ownerWindow));
     }
 
-    void SyncMenuModelInternal(bool invokeRefresh) noexcept
+    [[nodiscard]] bool SyncMenuModelInternal(bool invokeRefresh) noexcept
     {
         if (! _menuBar || ! _menu)
         {
-            return;
+            return false;
         }
 
+        MenuBar* const menuBar                         = _menuBar;
+        const std::weak_ptr<int> menuBarLifetime      = GetControlLifetimeToken(*menuBar);
         if (invokeRefresh && _refreshMenuState)
         {
-            _refreshMenuState();
+            const RefreshMenuStateCallback refreshMenuState = _refreshMenuState;
+            refreshMenuState();
+            if (menuBarLifetime.expired())
+            {
+                return false;
+            }
         }
 
-        _menuBar->SetItems(BuildNativeMenuBarItems(_menu));
-        _menuBar->SetOnOpenItem([this](size_t index, POINT screenPoint, bool keyboardInvocation) noexcept
+        if (_menuBar != menuBar || ! _menu)
+        {
+            return false;
+        }
+
+        menuBar->SetItems(BuildNativeMenuBarItems(_menu));
+        menuBar->SetOnOpenItem([this](size_t index, POINT screenPoint, bool keyboardInvocation) noexcept
         { OpenPopup(index, screenPoint, keyboardInvocation); });
         _host.Invalidate();
+        return true;
     }
 
     [[nodiscard]] std::optional<size_t> HitTestScreenPoint(POINT screenPoint) const noexcept
@@ -638,7 +681,10 @@ private:
             return std::nullopt;
         }
 
-        SyncMenuModelInternal(true);
+        if (! SyncMenuModelInternal(true))
+        {
+            return std::nullopt;
+        }
         _menuBar->SetSelectedIndex(index);
         _host.Invalidate();
 
@@ -679,7 +725,10 @@ private:
         }
 
         CaptureFocusRestoreTarget();
-        SyncMenuModelInternal(true);
+        if (! SyncMenuModelInternal(true))
+        {
+            return;
+        }
 
         const auto items = _menuBar->GetItems();
         if (index >= items.size())
@@ -704,13 +753,22 @@ private:
             return;
         }
 
+        MenuBar* const menuBar                    = _menuBar;
+        const std::weak_ptr<int> menuBarLifetime = GetControlLifetimeToken(*menuBar);
+        const HWND ownerWindow                    = _ownerWindow;
+        const ThemePalette theme                  = _theme;
+
         ContextMenuSessionCallbacks sessionCallbacks{};
         sessionCallbacks.focusFirstNavigableItem   = keyboardInvocation;
         sessionCallbacks.ignoreInitialLeftButtonUp  = keyboardInvocation;
         sessionCallbacks.ignoreInitialRightButtonUp = keyboardInvocation;
         size_t activeIndex                       = index;
-        sessionCallbacks.switchRootFromPointer   = [this, &activeIndex](POINT hoverScreenPoint) -> std::optional<ContextMenuRootSwitchRequest>
+        sessionCallbacks.switchRootFromPointer = [this, &activeIndex, menuBarLifetime](POINT hoverScreenPoint) -> std::optional<ContextMenuRootSwitchRequest>
         {
+            if (menuBarLifetime.expired())
+            {
+                return std::nullopt;
+            }
             const std::optional<size_t> hitIndex = HitTestScreenPoint(hoverScreenPoint);
             if (! hitIndex.has_value() || hitIndex.value() == activeIndex || ! _menuBar)
             {
@@ -731,8 +789,12 @@ private:
 
             return std::nullopt;
         };
-        sessionCallbacks.switchRootFromDirection = [this, &activeIndex](bool forward) -> std::optional<ContextMenuRootSwitchRequest>
+        sessionCallbacks.switchRootFromDirection = [this, &activeIndex, menuBarLifetime](bool forward) -> std::optional<ContextMenuRootSwitchRequest>
         {
+            if (menuBarLifetime.expired())
+            {
+                return std::nullopt;
+            }
             const std::optional<size_t> nextIndex = FindNextEnabledItem(activeIndex, forward);
             if (! nextIndex.has_value() || nextIndex.value() == activeIndex)
             {
@@ -748,16 +810,30 @@ private:
             return std::nullopt;
         };
 
-        const auto result = ContextMenu::Show(_ownerWindow, screenPoint, flyoutItems, _theme, sessionCallbacks);
+        const auto result = ContextMenu::Show(ownerWindow, screenPoint, flyoutItems, theme, sessionCallbacks);
 
-        _menuBar->SetSelectedIndex(std::nullopt);
-        _host.Invalidate();
-        SyncMenuModelInternal(true);
-        RestoreCapturedFocus();
-
-        if (result.has_value() && _commandTarget)
+        if (menuBarLifetime.expired() || _menuBar != menuBar || ! _hwnd || IsWindow(_hwnd.get()) == FALSE || _ownerWindow != ownerWindow)
         {
-            PostMessageW(_commandTarget, WM_COMMAND, MAKEWPARAM(static_cast<WORD>(result.value()), 0), 0);
+            return;
+        }
+
+        menuBar->SetSelectedIndex(std::nullopt);
+        _host.Invalidate();
+        if (! SyncMenuModelInternal(true))
+        {
+            return;
+        }
+
+        const HWND commandTarget = _commandTarget;
+        RestoreCapturedFocus();
+        if (menuBarLifetime.expired())
+        {
+            return;
+        }
+
+        if (result.has_value() && commandTarget && IsWindow(commandTarget) != FALSE)
+        {
+            PostMessageW(commandTarget, WM_COMMAND, MAKEWPARAM(static_cast<WORD>(result.value()), 0), 0);
         }
     }
 
@@ -776,8 +852,14 @@ private:
 
         if (self)
         {
+            const bool hadMenuBar = self->_menuBar != nullptr;
+            const std::weak_ptr<int> menuBarLifetime = hadMenuBar ? GetControlLifetimeToken(*self->_menuBar) : std::weak_ptr<int>{};
             bool handled             = false;
             const LRESULT hostResult = self->_host.HandleMessage(hwnd, message, wParam, lParam, handled);
+            if (message != WM_NCDESTROY && hadMenuBar && menuBarLifetime.expired())
+            {
+                return hostResult;
+            }
             if (handled)
             {
                 if (message == WM_KILLFOCUS && self->_menuBar)
@@ -795,6 +877,7 @@ private:
                     // The host window is going away, so any captured child focus target is intentionally dropped.
                     self->_focusRestoreHwnd = nullptr;
                     self->_hwnd.release();
+                    SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
                 }
                 return hostResult;
             }
@@ -814,6 +897,7 @@ private:
                 // The host window is going away, so any captured child focus target is intentionally dropped.
                 self->_focusRestoreHwnd = nullptr;
                 self->_hwnd.release();
+                SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
             }
         }
 

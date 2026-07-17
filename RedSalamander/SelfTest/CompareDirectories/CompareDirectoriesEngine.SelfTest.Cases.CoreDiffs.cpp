@@ -100,7 +100,10 @@ SelfTest::RunCase(options,
 
 #ifdef ENABLE_TESTS
     // Simulate an expired authorization timestamp to ensure long-running operations (compare/copy) won't re-prompt.
-    RedSalamander::Connections::SetSecretAccessAuthorizationTickForTesting(profile.id, 0);
+    RedSalamander::Connections::SetSecretAccessAuthorizationTickForTesting(profile.id,
+                                                                            RedSalamander::Connections::SecretKind::Password,
+                                                                            RedSalamander::Connections::SecretAccessPurpose::Interactive,
+                                                                            0u);
 
     wil::unique_cotaskmem_string secretExpired;
     hr = hostConnections->GetConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_PASSWORD, nullptr, secretExpired.put());
@@ -114,7 +117,7 @@ SelfTest::RunCase(options,
 #endif
 
     RedSalamander::Connections::ClearSecretAccessAuthorization(profile.id);
-    RedSalamander::Connections::NoteSecretAccessAuthorized(profile.id);
+    RedSalamander::Connections::NoteSecretAccessAuthorized(profile.id, RedSalamander::Connections::SecretKind::Password);
     g_windowsHelloVerifierCalls.store(0u, std::memory_order_relaxed);
 
     wil::unique_cotaskmem_string secret3;

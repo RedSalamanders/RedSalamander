@@ -13,7 +13,7 @@ Primary files:
 
 ## Goals
 
-- Produce an MSIX installer for **Release x64** builds.
+- Produce MSIX installers for requested **Release x64 and ARM64** builds.
 - Include **RedSalamander.exe**, **RedSalamanderMonitor.exe**, plugins, and runtime dependencies.
 - Keep packaging **deterministic** and driven by the `.build\x64\Release` output.
 - Enable **optional signing** in CI with secrets.
@@ -81,10 +81,22 @@ The MSIX output is written to:
 ### CI build
 
 The GitHub workflow in `.github/workflows/release.yml`:
-- Installs vcpkg dependencies
-- Builds the solution in Release
-- Builds the MSIX package
-- Uploads the MSIX and a Release zip
+- Always builds the requested Release portable matrix: x64, plus ARM64 unless the explicit
+  `build_arm64` input disables it.
+- Builds MSIX only when the explicit `build_msix` input enables it. A disabled MSIX leg succeeds as a policy
+  no-op; it is not treated as a missing artifact.
+- Normalizes each enabled package to
+  `RedSalamander-<major.minor.build>-<x64|ARM64>.msix` before upload.
+- Fails before GitHub Release creation if any requested package job or download fails, if the exact expected
+  ZIP/MSIX set is not present, or if any package is empty, duplicated, unexpectedly named, or for the wrong
+  architecture.
+- Validates MSIX identity `Name`, `Publisher`, four-part `Version`, and `ProcessorArchitecture` through
+  `Tools/ReleaseArtifactPolicy.ps1`, then generates and revalidates the exact `checksums.sha256` entries.
+
+The package identity contract is `Name="RedSalamander"`, `Publisher="CN=RedSalmanders"`, version
+`<major>.<minor>.<build>.0`, and architecture `x64` or `arm64` matching the artifact filename. The workflow uses
+ordinary successful-dependency semantics: it must never use `always()`, `!cancelled()`, ignored artifact-download
+errors, or wildcard acceptance to publish a partial requested matrix.
 
 ## Signing
 

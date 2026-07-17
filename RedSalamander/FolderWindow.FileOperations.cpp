@@ -358,6 +358,34 @@ HRESULT FolderWindow::StartFileOperationFromFolderView(Pane pane, FolderView::Fi
     std::optional<Pane> destinationPane  = std::nullopt;
     wil::com_ptr<IFileSystem> fileSystem = destinationState.fileSystem;
     wil::com_ptr<IFileSystem> destinationFileSystem;
+    std::wstring sourcePluginIdOverride;
+    std::wstring sourcePluginShortIdOverride;
+
+    if (isCopyMove && ! request.sourceContextSpecified &&
+        CompareStringOrdinal(destinationState.pluginId.c_str(), -1, L"builtin/file-system", -1, TRUE) != CSTR_EQUAL)
+    {
+        const FileSystemPluginManager::PluginEntry* localEntry = FileSystemPluginManager::GetInstance().FindPluginById(L"builtin/file-system");
+        if (! localEntry || ! localEntry->fileSystem || localEntry->disabled || ! localEntry->loadable || localEntry->shortId.empty())
+        {
+            return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+        }
+
+        if (! CanCrossFileSystemCopyMove(
+                localEntry->fileSystem, localEntry->id, destinationState.fileSystem, destinationState.pluginId, request.operation))
+        {
+            destinationState.folderView.ShowAlertOverlay(FolderView::ErrorOverlayKind::Operation,
+                                                         FolderView::OverlaySeverity::Error,
+                                                         LoadStringResource(nullptr, IDS_CAPTION_ERROR),
+                                                         LoadStringResource(nullptr, IDS_MSG_PANE_OP_REQUIRES_COMPATIBLE_FS));
+            return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+        }
+
+        fileSystem                 = localEntry->fileSystem;
+        destinationFileSystem      = destinationState.fileSystem;
+        destinationPane            = pane;
+        sourcePluginIdOverride     = localEntry->id;
+        sourcePluginShortIdOverride = localEntry->shortId;
+    }
 
     if (isCopyMove && request.sourceContextSpecified)
     {
@@ -446,7 +474,8 @@ HRESULT FolderWindow::StartFileOperationFromFolderView(Pane pane, FolderView::Fi
         }
     }
 
-    const std::wstring& sourcePluginIdForGate = sourcePane == Pane::Left ? _leftPane.pluginId : _rightPane.pluginId;
+    const std::wstring& sourcePluginIdForGate =
+        sourcePluginIdOverride.empty() ? (sourcePane == Pane::Left ? _leftPane.pluginId : _rightPane.pluginId) : sourcePluginIdOverride;
     if (! destinationFileSystem && ! CanSameFileSystemOperation(fileSystem, request.operation, sourcePluginIdForGate))
     {
         Debug::Error(L"FolderWindow::StartFileOperationFromFolderView provider rejected same-filesystem operation plugin:{} op:{}.",
@@ -461,18 +490,29 @@ HRESULT FolderWindow::StartFileOperationFromFolderView(Pane pane, FolderView::Fi
 
     const bool waitForOthers                = _fileOperations->ShouldQueueNewTask();
     std::filesystem::path destinationFolder = request.destinationFolder.value_or(std::filesystem::path{});
-    return _fileOperations->StartOperation(request.operation,
-                                           sourcePane,
-                                           destinationPane,
-                                           fileSystem,
-                                           std::move(request.sourcePaths),
-                                           std::move(destinationFolder),
-                                           request.flags,
-                                           waitForOthers,
-                                           0,
-                                           FileOperationState::ExecutionMode::PerItem,
-                                           false,
-                                           std::move(destinationFileSystem));
+    uint64_t taskId = 0;
+    HRESULT startHr = _fileOperations->StartOperation(request.operation,
+                                                      sourcePane,
+                                                      destinationPane,
+                                                      fileSystem,
+                                                      std::move(request.sourcePaths),
+                                                      std::move(destinationFolder),
+                                                      request.flags,
+                                                      waitForOthers,
+                                                      0,
+                                                      FileOperationState::ExecutionMode::PerItem,
+                                                      false,
+                                                      std::move(destinationFileSystem),
+                                                      &taskId,
+                                                      {},
+                                                      {},
+                                                      std::move(sourcePluginIdOverride),
+                                                      std::move(sourcePluginShortIdOverride));
+    if (SUCCEEDED(startHr) && taskId != 0u && request.completionCallback)
+    {
+        _fileOperationRequestCompletionCallbacks.insert_or_assign(taskId, std::move(request.completionCallback));
+    }
+    return startHr;
 }
 
 std::optional<FolderWindow::Pane> FolderWindow::ResolveSourcePaneForResolvedPaths(std::wstring_view sourcePluginId,
@@ -1100,6 +1140,7 @@ bool FolderWindow::SanityCheckBothPanes(FolderWindow::PaneState& src, FolderWind
     bool ok             = true;
     bool sameFolder     = false;
     bool contextsDiffer = false;
+    bool destinationUnsettled = false;
     if (! _fileOperations)
     {
         Debug::Error(L"FolderWindow::SanityCheckBothPanes No active file operations.");
@@ -1122,6 +1163,13 @@ bool FolderWindow::SanityCheckBothPanes(FolderWindow::PaneState& src, FolderWind
     {
         Debug::Error(L"FolderWindow::SanityCheckBothPanes No destination path.");
         ok = false;
+    }
+
+    if (ok && ! dest.folderView.IsCurrentFolderEnumerated())
+    {
+        Debug::Warning(L"FolderWindow::SanityCheckBothPanes rejected an operation while the destination folder is still loading.");
+        destinationUnsettled = true;
+        ok                   = false;
     }
 
     if (ok)
@@ -1164,9 +1212,10 @@ bool FolderWindow::SanityCheckBothPanes(FolderWindow::PaneState& src, FolderWind
     if (! ok && _hWnd)
     {
         const std::wstring title   = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
-        int messageId              = sameFolder       ? IDS_MSG_PANE_OP_REQUIRES_DIFFERENT_FOLDER
-                                     : contextsDiffer ? IDS_MSG_PANE_OP_REQUIRES_COMPATIBLE_FS
-                                                      : IDS_MSG_PANE_OP_REQUIRES_SAME_FS;
+        int messageId              = destinationUnsettled ? IDS_MSG_PANE_OP_DESTINATION_LOADING
+                                     : sameFolder        ? IDS_MSG_PANE_OP_REQUIRES_DIFFERENT_FOLDER
+                                     : contextsDiffer    ? IDS_MSG_PANE_OP_REQUIRES_COMPATIBLE_FS
+                                                         : IDS_MSG_PANE_OP_REQUIRES_SAME_FS;
         const std::wstring message = LoadStringResource(nullptr, static_cast<UINT>(messageId));
         src.folderView.ShowAlertOverlay(FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Error, title, message);
         return false;
@@ -1280,7 +1329,19 @@ LRESULT FolderWindow::OnFileOperationCompleted(LPARAM lp) noexcept
     FileOperationState::Task* task = _fileOperations->FindTask(payload->taskId);
     if (! task)
     {
+        _fileOperationRequestCompletionCallbacks.erase(payload->taskId);
         return 0;
+    }
+
+    if (auto completionIt = _fileOperationRequestCompletionCallbacks.find(payload->taskId);
+        completionIt != _fileOperationRequestCompletionCallbacks.end())
+    {
+        std::function<void(HRESULT)> completion = std::move(completionIt->second);
+        _fileOperationRequestCompletionCallbacks.erase(completionIt);
+        if (completion)
+        {
+            completion(payload->hr);
+        }
     }
 
     const Pane sourcePane                     = task->GetSourcePane();
@@ -1440,7 +1501,7 @@ LRESULT FolderWindow::OnFileOperationCompleted(LPARAM lp) noexcept
     if (SUCCEEDED(payload->hr))
     {
         PaneState* dst         = destinationPane.has_value() ? &(destinationPane.value() == Pane::Left ? _leftPane : _rightPane) : nullptr;
-        const bool sameContext = dst != nullptr && CompareStringOrdinal(src.pluginId.c_str(), -1, dst->pluginId.c_str(), -1, TRUE) == CSTR_EQUAL &&
+        const bool sameContext = dst != nullptr && CompareStringOrdinal(task->_sourcePluginId.c_str(), -1, dst->pluginId.c_str(), -1, TRUE) == CSTR_EQUAL &&
                                  NavigationLocation::EqualsNoCase(src.instanceContext, dst->instanceContext);
 
         switch (task->GetOperation())
@@ -1470,13 +1531,13 @@ LRESULT FolderWindow::OnFileOperationCompleted(LPARAM lp) noexcept
                 }
                 else
                 {
-                    if (src.fileSystem)
+                    if (task->_fileSystem)
                     {
                         for (size_t index = 0; index < task->_sourcePaths.size(); ++index)
                         {
                             if (! isResolvedDirectoryShell(index))
                             {
-                                cache.NotifyPathDeleted(src.fileSystem.get(), task->_sourcePaths[index]);
+                                cache.NotifyPathDeleted(task->_fileSystem.get(), task->_sourcePaths[index]);
                             }
                         }
                     }

@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -11,17 +12,52 @@
 
 namespace RedConfigure::Workflow
 {
+enum class BatchApprovalResult : uint8_t
+{
+    NoChanges,
+    Ready,
+    Stale,
+    Invalid,
+    Applied,
+};
+
 enum class ValidationSeverity : uint8_t
 {
     Warning,
     Error,
 };
 
+enum class ValidationCategory : uint8_t
+{
+    Workspace,
+    Theme,
+    Localization,
+    Export,
+    Accelerator,
+};
+
+enum class ValidationCode : uint8_t
+{
+    WorkspaceProcessingError,
+    ThemeCatalogError,
+    PlaceholderMismatch,
+    MissingTranslation,
+    InvalidThemeId,
+    ThemeResolutionError,
+    EmptyOutputPath,
+    OutputConflict,
+    LocalizationPreviewBuildFailed,
+    DuplicateLocalizationOutputPath,
+    LocalizationThemeOutputConflict,
+    DuplicateAccelerator,
+};
+
 struct ValidationIssue
 {
     ValidationSeverity severity = ValidationSeverity::Error;
-    std::wstring category;
-    std::wstring message;
+    ValidationCategory category = ValidationCategory::Workspace;
+    ValidationCode code = ValidationCode::WorkspaceProcessingError;
+    std::vector<std::wstring> arguments;
     std::wstring ownerName;
     std::wstring resourceId;
     std::wstring cultureName;
@@ -80,22 +116,26 @@ struct LocalizationBatchRequest
     std::wstring findText;
     std::wstring replaceText;
     std::vector<size_t> rowIndices;
+
+    bool operator==(const LocalizationBatchRequest&) const = default;
 };
 
 struct LocalizationBatchChange
 {
-    size_t rowIndex = 0u;
     std::wstring ownerName;
     std::wstring resourceId;
     std::wstring cultureName;
     std::wstring before;
     std::wstring after;
+    bool beforeReviewed = false;
+    bool afterReviewed  = false;
 };
 
 struct LocalizationBatchPreview
 {
     LocalizationBatchRequest request;
     std::vector<LocalizationBatchChange> changes;
+    BatchApprovalResult result = BatchApprovalResult::NoChanges;
 };
 
 struct DuplicateAccelerator
@@ -130,6 +170,8 @@ struct ThemeMassRequest
     std::vector<std::wstring> keys;
     std::wstring argument;
     uint32_t alphaPercent = 80u;
+
+    bool operator==(const ThemeMassRequest&) const = default;
 };
 
 struct ThemeMassChange
@@ -137,22 +179,52 @@ struct ThemeMassChange
     std::wstring key;
     std::wstring before;
     std::wstring after;
+    std::optional<Common::Settings::ThemeColorSource> beforeSource;
+    std::optional<Common::Settings::ThemeColorSource> afterSource;
     std::wstring sourcePaletteName;
     std::wstring sourceValue;
+    std::optional<Common::Settings::ThemeColorSource> sourceValueSource;
+};
+
+enum class ThemeMassDiagnostic : uint8_t
+{
+    None,
+    InvalidAlpha,
+    MalformedReferenceReplacement,
+    MissingPaletteTarget,
+    InvalidExistingSource,
+    InvalidGeneratedSource,
+    InvalidCandidate,
 };
 
 struct ThemeMassPreview
 {
     ThemeMassRequest request;
     std::vector<ThemeMassChange> changes;
+    Common::Settings::ThemeDefinition beforeTheme;
+    BatchApprovalResult result = BatchApprovalResult::NoChanges;
+    ThemeMassDiagnostic diagnostic = ThemeMassDiagnostic::None;
+};
+
+struct DuplicateThemeCandidate
+{
+    std::wstring id;
+    std::wstring name;
+};
+
+enum class ThemeTokenSourceKind : uint8_t
+{
+    Inherited,
+    Literal,
+    Reference,
+    Function,
 };
 
 struct ThemeTokenMetadata
 {
     std::wstring key;
     std::wstring group;
-    std::wstring description;
-    std::wstring sourceType;
+    ThemeTokenSourceKind sourceKind = ThemeTokenSourceKind::Inherited;
     size_t usageCount = 0u;
     double contrastRatio = 0.0;
     bool contrastKnown = false;
@@ -170,6 +242,10 @@ struct ThemeTokenMetadata
 [[nodiscard]] ClipboardMatrix ParseClipboardMatrix(std::wstring_view text);
 [[nodiscard]] std::wstring SerializeClipboardMatrix(const ClipboardMatrix& matrix);
 [[nodiscard]] ThemeMassPreview PreviewThemeMassChange(const Themes::ThemePreviewModel& model, const ThemeMassRequest& request);
-[[nodiscard]] bool ApplyThemeMassChange(Themes::ThemePreviewModel& model, const ThemeMassPreview& preview);
+[[nodiscard]] BatchApprovalResult ApplyThemeMassChange(Themes::ThemePreviewModel& model, const ThemeMassPreview& preview);
+[[nodiscard]] std::optional<DuplicateThemeCandidate> BuildDuplicateThemeCandidate(std::wstring_view sourceId,
+                                                                                  std::wstring_view sourceName,
+                                                                                  std::wstring_view localizedCopyLabel,
+                                                                                  uint32_t sequence);
 [[nodiscard]] ThemeTokenMetadata BuildThemeTokenMetadata(const Themes::ThemePreviewModel& model, std::wstring_view key);
 } // namespace RedConfigure::Workflow

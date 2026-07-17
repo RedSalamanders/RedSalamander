@@ -43,7 +43,8 @@ HRESULT LoadThemeCatalog(std::span<const Workspace::ThemeFile> files, ThemeCatal
             continue;
         }
 
-        outCatalog.themes.push_back(ThemeCatalogEntry{.path = file.path, .definition = std::move(definition)});
+        const ThemeCatalogOrigin origin = definition.id.starts_with(L"builtin/") ? ThemeCatalogOrigin::BuiltIn : ThemeCatalogOrigin::File;
+        outCatalog.themes.push_back(ThemeCatalogEntry{.path = file.path, .definition = std::move(definition), .origin = origin});
     }
 
     std::sort(outCatalog.themes.begin(),

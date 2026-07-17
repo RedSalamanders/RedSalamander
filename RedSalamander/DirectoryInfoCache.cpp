@@ -21,6 +21,32 @@ constexpr uint64_t kMaxDefaultCacheSize = 4ull * kGiB;
 constexpr uint32_t kMaxWatchersHardCap = 1024u;
 constexpr uint32_t kMruWatchedHardCap  = 256u;
 
+class StopTokenDirectoryEnumerationCallback final : public IFileSystemDirectoryEnumerationCallback
+{
+public:
+    explicit StopTokenDirectoryEnumerationCallback(std::stop_token stopToken) noexcept : _stopToken(stopToken)
+    {
+    }
+
+    HRESULT STDMETHODCALLTYPE DirectoryEnumerationProgress(uint64_t, uint64_t, void*) noexcept override
+    {
+        return _stopToken.stop_requested() ? HRESULT_FROM_WIN32(ERROR_CANCELLED) : S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE DirectoryEnumerationShouldCancel(BOOL* cancel, void*) noexcept override
+    {
+        if (! cancel)
+        {
+            return E_POINTER;
+        }
+        *cancel = _stopToken.stop_requested() ? TRUE : FALSE;
+        return S_OK;
+    }
+
+private:
+    std::stop_token _stopToken;
+};
+
 std::wstring NormalizePath(std::wstring_view path, bool isFilePlugin) noexcept;
 
 [[nodiscard]] bool EqualsNoCase(std::wstring_view left, std::wstring_view right) noexcept
@@ -1675,7 +1701,20 @@ HRESULT DirectoryInfoCache::EnsureLoaded(const std::shared_ptr<Entry>& entry, Bo
     Debug::Perf::Scope perf(L"DirectoryInfoCache.ReadDirectoryInfo");
     perf.SetDetail(entry->key.path);
 
-    const HRESULT hr = fileSystem ? fileSystem->ReadDirectoryInfo(entry->key.path.c_str(), info.put()) : E_POINTER;
+    HRESULT hr = E_POINTER;
+    if (fileSystem)
+    {
+        wil::com_ptr<IFileSystemCancellableDirectoryEnumeration> cancellableEnumeration;
+        if (stopToken.stop_possible() && fileSystem.try_query_to(cancellableEnumeration.put()) && cancellableEnumeration)
+        {
+            StopTokenDirectoryEnumerationCallback callback(stopToken);
+            hr = cancellableEnumeration->ReadDirectoryInfoCancellable(entry->key.path.c_str(), &callback, nullptr, info.put());
+        }
+        else
+        {
+            hr = fileSystem->ReadDirectoryInfo(entry->key.path.c_str(), info.put());
+        }
+    }
     perf.SetHr(hr);
 
     uint64_t entryBytes = 0;

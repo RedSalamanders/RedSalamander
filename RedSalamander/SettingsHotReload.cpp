@@ -315,11 +315,24 @@ void WatchSettingsDirectoryThread(HWND targetWindow,
     }
 }
 
+enum class SettingsSaveShutdownState : uint8_t
+{
+    Running,
+    FinalSavePending,
+    FinalSaveQueued,
+    ShuttingDown,
+};
+
+[[nodiscard]] bool IsProcessShutdownStarted(const std::atomic<SettingsSaveShutdownState>& state) noexcept
+{
+    return state.load(std::memory_order_acquire) != SettingsSaveShutdownState::Running;
+}
+
 [[nodiscard]] HRESULT SavePreparedSettingsAndSchema(std::wstring_view appId,
                                                     Common::Settings::Settings& settings,
                                                     std::span<const PluginConfigurationSchemaSource> pluginSchemas,
                                                     bool writeSchema,
-                                                    const std::atomic_bool& processShutdownStarted,
+                                                    const std::atomic<SettingsSaveShutdownState>& shutdownState,
                                                     bool allowDuringProcessShutdown) noexcept
 {
     if (appId.empty())
@@ -331,7 +344,7 @@ void WatchSettingsDirectoryThread(HWND targetWindow,
         return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
     }
 
-    const bool shutdownAtStart = processShutdownStarted.load(std::memory_order_acquire);
+    const bool shutdownAtStart = IsProcessShutdownStarted(shutdownState);
     if (shutdownAtStart && ! allowDuringProcessShutdown)
     {
         return HRESULT_FROM_WIN32(ERROR_SHUTDOWN_IN_PROGRESS);
@@ -341,30 +354,31 @@ void WatchSettingsDirectoryThread(HWND targetWindow,
     bool internalSaveCompleted           = false;
     const auto endInternalSave = wil::scope_exit([&]() noexcept
     {
-        if (! internalSaveCompleted && ! processShutdownStarted.load(std::memory_order_acquire))
+        if (! internalSaveCompleted && ! IsProcessShutdownStarted(shutdownState))
         {
             CompleteInternalSave(appId, internalSave, nullptr);
         }
     });
 
-    const Common::Settings::Settings settingsToSave = SettingsSave::PrepareForSave(settings);
+    Common::Settings::Settings settingsToSave = SettingsSave::PrepareForSave(settings);
     Common::Settings::SettingsFileStamp writtenStamp{};
     const HRESULT saveHr = Common::Settings::SaveSettingsValuesOnlyWithStamp(appId, settingsToSave, writtenStamp);
     if (FAILED(saveHr))
     {
         return saveHr;
     }
+    settings.persistence.expectedFileStamp = writtenStamp;
 
     // Publish the identity of the exact atomic replacement and end suppression before schema I/O.
     // A later external replacement therefore has a different stamp and cannot be mislabeled as ours.
-    if (internalSave.active && ! processShutdownStarted.load(std::memory_order_acquire))
+    if (internalSave.active && ! IsProcessShutdownStarted(shutdownState))
     {
         CompleteInternalSave(appId, internalSave, &writtenStamp);
         internalSaveCompleted = true;
     }
 
 #ifdef ENABLE_TESTS
-    const DWORD postWriteDelayMs = processShutdownStarted.load(std::memory_order_acquire)
+    const DWORD postWriteDelayMs = IsProcessShutdownStarted(shutdownState)
                                        ? 0u
                                        : g_debugSettingsSavePostWriteDelayMs.load(std::memory_order_acquire);
     if (postWriteDelayMs != 0u)
@@ -373,10 +387,10 @@ void WatchSettingsDirectoryThread(HWND targetWindow,
     }
 #endif
 
-    if (writeSchema && (! processShutdownStarted.load(std::memory_order_acquire) || allowDuringProcessShutdown))
+    if (writeSchema && (! IsProcessShutdownStarted(shutdownState) || allowDuringProcessShutdown))
     {
         const HRESULT schemaHr = SaveAggregatedSettingsSchema(appId, pluginSchemas);
-        if (FAILED(schemaHr) && ! processShutdownStarted.load(std::memory_order_acquire))
+        if (FAILED(schemaHr) && ! IsProcessShutdownStarted(shutdownState))
         {
             Debug::Error(L"SettingsHotReload: SaveAggregatedSettingsSchema failed (hr=0x{:08X})", static_cast<unsigned long>(schemaHr));
         }
@@ -390,6 +404,12 @@ constexpr DWORD kSettingsSaveShutdownFlushTimeoutMs = 5000u;
 class SerializedSettingsSaveCoordinator final
 {
 public:
+    struct SynchronousSaveOptions final
+    {
+        bool writeSchema          = true;
+        bool beginProcessShutdown = false;
+    };
+
     struct Completion final
     {
         Completion()                             = default;
@@ -402,6 +422,7 @@ public:
         std::condition_variable cv;
         bool done  = false;
         HRESULT hr = E_PENDING;
+        std::optional<Common::Settings::SettingsFileStamp> committedStamp;
     };
 
     struct Request final
@@ -417,6 +438,7 @@ public:
         bool writeSchema    = true;
         bool asynchronous   = false;
         bool allowDuringProcessShutdown = false;
+        bool processFinalSave            = false;
     };
 
     SerializedSettingsSaveCoordinator() = default;
@@ -453,7 +475,7 @@ public:
         }
 
         std::unique_lock submissionLock(_submissionMutex);
-        if (_processShutdownStarted.load(std::memory_order_acquire))
+        if (_shutdownState.load(std::memory_order_acquire) != SettingsSaveShutdownState::Running)
         {
             return HRESULT_FROM_WIN32(ERROR_SHUTDOWN_IN_PROGRESS);
         }
@@ -485,10 +507,10 @@ public:
     }
 
     HRESULT SaveSynchronously(std::wstring_view appId,
-                              const Common::Settings::Settings& settings,
+                              Common::Settings::Settings& settings,
                               std::span<const PluginConfigurationSchemaSource> pluginSchemas,
                               DWORD timeoutMs,
-                              bool beginProcessShutdown)
+                              const SynchronousSaveOptions options)
     {
         if (appId.empty())
         {
@@ -499,35 +521,71 @@ public:
             return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
         }
 
-        std::unique_lock submissionLock(_submissionMutex);
-        if (_processShutdownStarted.load(std::memory_order_acquire))
+        std::shared_ptr<Completion> completion;
+        bool queued = false;
+        {
+            std::unique_lock submissionLock(_submissionMutex);
+            const SettingsSaveShutdownState shutdownState = _shutdownState.load(std::memory_order_acquire);
+            if (! options.beginProcessShutdown && shutdownState != SettingsSaveShutdownState::Running)
+            {
+                return HRESULT_FROM_WIN32(ERROR_SHUTDOWN_IN_PROGRESS);
+            }
+
+            if (options.beginProcessShutdown &&
+                (shutdownState == SettingsSaveShutdownState::FinalSaveQueued || shutdownState == SettingsSaveShutdownState::ShuttingDown))
+            {
+                completion = _finalSaveCompletion;
+            }
+            else
+            {
+                completion = std::make_shared<Completion>();
+                Request request{};
+                request.appId    = appId;
+                request.settings = settings;
+                if (options.writeSchema)
+                {
+                    request.pluginSchemas = pluginSchemas.empty()
+                                                ? CollectPluginConfigurationSchemas(request.settings)
+                                                : std::vector<PluginConfigurationSchemaSource>(pluginSchemas.begin(), pluginSchemas.end());
+                }
+                request.completion                 = completion;
+                request.readyAt                    = std::chrono::steady_clock::now();
+                request.writeSchema                = options.writeSchema;
+                request.asynchronous               = false;
+                request.allowDuringProcessShutdown = options.beginProcessShutdown;
+                request.processFinalSave            = options.beginProcessShutdown;
+
+                {
+                    std::scoped_lock lock(_mutex);
+                    request.generation = ++_lastQueuedGeneration;
+                    requestThreadId();
+                    _requests.push_back(std::move(request));
+                    if (options.beginProcessShutdown)
+                    {
+                        // The worker cannot dequeue an older request between publication of this
+                        // final request and its shutdown fence. Older requests therefore fail
+                        // closed unless one was already saving, in which case this final write
+                        // remains ordered after it and wins.
+                        _forceFlush = true;
+                        _shutdownState.store(SettingsSaveShutdownState::FinalSaveQueued, std::memory_order_release);
+                    }
+                }
+                if (options.beginProcessShutdown)
+                {
+                    _finalSaveCompletion = completion;
+                }
+                queued = true;
+            }
+        }
+
+        if (! completion)
         {
             return HRESULT_FROM_WIN32(ERROR_SHUTDOWN_IN_PROGRESS);
         }
-        auto completion = std::make_shared<Completion>();
-        Request request{};
-        request.appId            = appId;
-        request.settings         = settings;
-        request.pluginSchemas = pluginSchemas.empty() ? CollectPluginConfigurationSchemas(request.settings)
-                                                      : std::vector<PluginConfigurationSchemaSource>(pluginSchemas.begin(), pluginSchemas.end());
-        request.completion       = completion;
-        request.readyAt          = std::chrono::steady_clock::now();
-        request.writeSchema      = true;
-        request.asynchronous     = false;
-        request.allowDuringProcessShutdown = beginProcessShutdown;
-
+        if (queued)
         {
-            std::scoped_lock lock(_mutex);
-            request.generation = ++_lastQueuedGeneration;
-            requestThreadId();
-            _requests.push_back(std::move(request));
+            _cv.notify_all();
         }
-        if (beginProcessShutdown)
-        {
-            _processShutdownStarted.store(true, std::memory_order_release);
-        }
-        submissionLock.unlock();
-        _cv.notify_all();
 
         std::unique_lock completionLock(completion->mutex);
         const auto completed = [&]() noexcept { return completion->done; };
@@ -545,12 +603,21 @@ public:
         {
             return HRESULT_FROM_WIN32(ERROR_TIMEOUT);
         }
-        return completion->hr;
+        const HRESULT result = completion->hr;
+        if (SUCCEEDED(result) && completion->committedStamp.has_value())
+        {
+            settings.persistence.expectedFileStamp = completion->committedStamp;
+        }
+        return result;
     }
 
     void BeginProcessShutdown() noexcept
     {
-        _processShutdownStarted.store(true, std::memory_order_release);
+        std::scoped_lock submissionLock(_submissionMutex);
+        if (_shutdownState.load(std::memory_order_acquire) == SettingsSaveShutdownState::Running)
+        {
+            _shutdownState.store(SettingsSaveShutdownState::FinalSavePending, std::memory_order_release);
+        }
         _cv.notify_all();
     }
 
@@ -608,6 +675,26 @@ public:
 #endif
 
 private:
+    struct StampLineage final
+    {
+        std::optional<Common::Settings::SettingsFileStamp> source;
+        std::optional<Common::Settings::SettingsFileStamp> committed;
+    };
+
+    void AdvanceExpectedStampLocked(Request& request) noexcept
+    {
+        const auto lineage = _stampLineage.find(request.appId);
+        if (lineage == _stampLineage.end())
+        {
+            return;
+        }
+        const auto& expected = request.settings.persistence.expectedFileStamp;
+        if (expected == lineage->second.source || expected == lineage->second.committed)
+        {
+            request.settings.persistence.expectedFileStamp = lineage->second.committed;
+        }
+    }
+
     void requestThreadId() noexcept
     {
         _lastQueueThreadId = GetCurrentThreadId();
@@ -643,6 +730,7 @@ private:
                     continue;
                 }
 
+                AdvanceExpectedStampLocked(_requests.front());
                 request = std::move(_requests.front());
                 _requests.pop_front();
                 _saveInProgress   = true;
@@ -653,7 +741,8 @@ private:
 #endif
             }
 
-            Request& current         = request.value();
+            Request& current = request.value();
+            const std::optional<Common::Settings::SettingsFileStamp> saveExpectedStamp = current.settings.persistence.expectedFileStamp;
 #ifdef ENABLE_TESTS
             if (debugSaveDelayMs != 0)
             {
@@ -666,11 +755,11 @@ private:
                                                                  current.settings,
                                                                  current.pluginSchemas,
                                                                  current.writeSchema,
-                                                                 _processShutdownStarted,
+                                                                 _shutdownState,
                                                                  current.allowDuringProcessShutdown);
             const uint64_t saveEnd = static_cast<uint64_t>(
                 std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
-            const bool processShuttingDown = _processShutdownStarted.load(std::memory_order_acquire);
+            const bool processShuttingDown = IsProcessShutdownStarted(_shutdownState);
             if (! processShuttingDown && current.asynchronous && FAILED(saveHr))
             {
                 Debug::Error(L"SettingsHotReload: asynchronous settings save failed for '{}' ({}) hr=0x{:08X}",
@@ -692,14 +781,42 @@ private:
             {
                 {
                     std::scoped_lock completionLock(current.completion->mutex);
-                    current.completion->hr   = saveHr;
+                    current.completion->hr = saveHr;
+                    if (SUCCEEDED(saveHr))
+                    {
+                        current.completion->committedStamp = current.settings.persistence.expectedFileStamp;
+                    }
                     current.completion->done = true;
                 }
                 current.completion->cv.notify_all();
             }
 
+            if (current.processFinalSave)
+            {
+                std::scoped_lock submissionLock(_submissionMutex);
+                _shutdownState.store(SettingsSaveShutdownState::ShuttingDown, std::memory_order_release);
+            }
+
             {
                 std::scoped_lock lock(_mutex);
+                if (SUCCEEDED(saveHr))
+                {
+                    auto lineage = _stampLineage.find(current.appId);
+                    if (lineage == _stampLineage.end())
+                    {
+                        _stampLineage.emplace(current.appId,
+                                              StampLineage{.source = saveExpectedStamp,
+                                                           .committed = current.settings.persistence.expectedFileStamp});
+                    }
+                    else
+                    {
+                        if (saveExpectedStamp != lineage->second.source && saveExpectedStamp != lineage->second.committed)
+                        {
+                            lineage->second.source = saveExpectedStamp;
+                        }
+                        lineage->second.committed = current.settings.persistence.expectedFileStamp;
+                    }
+                }
                 _lastCompletedGeneration = current.generation;
                 _saveInProgress          = false;
             }
@@ -713,6 +830,7 @@ private:
     std::mutex _submissionMutex;
     std::condition_variable _cv;
     std::deque<Request> _requests;
+    std::unordered_map<std::wstring, StampLineage> _stampLineage;
     uint64_t _lastQueuedGeneration    = 0;
     uint64_t _lastCompletedGeneration = 0;
     uint64_t _totalCoalescedCount      = 0;
@@ -720,7 +838,8 @@ private:
     DWORD _lastSaveThreadId            = 0;
     bool _saveInProgress               = false;
     bool _forceFlush                   = false;
-    std::atomic_bool _processShutdownStarted{false};
+    std::atomic<SettingsSaveShutdownState> _shutdownState{SettingsSaveShutdownState::Running};
+    std::shared_ptr<Completion> _finalSaveCompletion;
 #ifdef ENABLE_TESTS
     DWORD _debugSaveDelayMs = 0;
 #endif
@@ -1018,7 +1137,8 @@ HRESULT SaveSettingsAndSchema(std::wstring_view appId, Common::Settings::Setting
 {
     try
     {
-        return GetSettingsSaveCoordinator().SaveSynchronously(appId, settings, {}, INFINITE, false);
+        return GetSettingsSaveCoordinator().SaveSynchronously(
+            appId, settings, {}, INFINITE, {.writeSchema = true, .beginProcessShutdown = false});
     }
     catch (const std::bad_alloc&)
     {
@@ -1038,7 +1158,8 @@ HRESULT SaveSettingsAndSchema(std::wstring_view appId,
 {
     try
     {
-        return GetSettingsSaveCoordinator().SaveSynchronously(appId, settings, pluginSchemas, INFINITE, false);
+        return GetSettingsSaveCoordinator().SaveSynchronously(
+            appId, settings, pluginSchemas, INFINITE, {.writeSchema = true, .beginProcessShutdown = false});
     }
     catch (const std::bad_alloc&)
     {
@@ -1048,6 +1169,31 @@ HRESULT SaveSettingsAndSchema(std::wstring_view appId,
     {
         // noexcept persistence boundary: report the failed serialized submission and return an HRESULT.
         Debug::Error(L"SettingsHotReload: failed to queue serialized settings/schema save for '{}'", appId);
+        return E_FAIL;
+    }
+}
+
+HRESULT SaveSettingsForSessionEnd(std::wstring_view appId,
+                                  const Common::Settings::Settings& settings,
+                                  const DWORD timeoutMs) noexcept
+{
+    try
+    {
+        // The regular synchronous API returns the committed file stamp through its mutable
+        // snapshot. Session end has already captured an immutable snapshot, so keep that
+        // caller-owned state unchanged while the coordinator owns this final copy.
+        Common::Settings::Settings sessionEndSettings = settings;
+        return GetSettingsSaveCoordinator().SaveSynchronously(
+            appId, sessionEndSettings, {}, timeoutMs, {.writeSchema = false, .beginProcessShutdown = true});
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::terminate();
+    }
+    catch (const std::exception&)
+    {
+        // noexcept session-end boundary: the caller must remain bounded even if submission setup fails.
+        Debug::Error(L"SettingsHotReload: failed to queue the final session-end settings save for '{}'", appId);
         return E_FAIL;
     }
 }
@@ -1066,7 +1212,8 @@ HRESULT SaveSettingsAndSchemaForProcessShutdown(std::wstring_view appId,
 {
     try
     {
-        return GetSettingsSaveCoordinator().SaveSynchronously(appId, settings, pluginSchemas, timeoutMs, true);
+        return GetSettingsSaveCoordinator().SaveSynchronously(
+            appId, settings, pluginSchemas, timeoutMs, {.writeSchema = true, .beginProcessShutdown = true});
     }
     catch (const std::bad_alloc&)
     {
@@ -1098,6 +1245,7 @@ HRESULT ReplaceBlockedSettingsAndSchema(std::wstring_view appId,
 
     settings.persistence.savePermission      = Common::Settings::SettingsSavePermission::Automatic;
     settings.persistence.sourceSchemaVersion = settings.schemaVersion;
+    settings.persistence.expectedFileStamp.reset();
     return SaveSettingsAndSchema(appId, settings);
 }
 

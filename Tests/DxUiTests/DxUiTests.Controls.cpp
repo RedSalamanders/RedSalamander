@@ -822,6 +822,31 @@ void TestToggleMouseActivationCanReplaceRootSafely()
     Require(host.GetRoot() != nullptr, "toggle callback can replace the host root safely");
 }
 
+void TestMenuBarActivationCanReplaceRootSafely()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    auto root     = std::make_unique<Panel>();
+    auto* menuBar = root->AddChild<MenuBar>();
+    menuBar->SetBounds(D2D1::RectF(0.0f, 0.0f, 220.0f, 32.0f));
+    menuBar->SetItems({MenuBarItem{.text = L"File", .mnemonic = L'F', .enabled = true}});
+
+    bool callbackInvoked = false;
+    menuBar->SetOnOpenItem([&](size_t, POINT, bool)
+    {
+        callbackInvoked = true;
+        host.SetRoot(std::make_unique<Panel>());
+    });
+
+    host.SetRoot(std::move(root));
+    const bool activated = menuBar->ActivateItem(host, 0u, false);
+
+    Require(activated, "MenuBar reports the item activation that replaced its host root");
+    Require(callbackInvoked, "MenuBar open callback runs before replacing the host root");
+    Require(host.GetRoot() != nullptr, "MenuBar callback can replace the host root without post-callback access");
+}
+
 void TestColorSwatchStoresConfiguredArgbAndEmptyState()
 {
     using namespace RedSalamander::DxUi;
@@ -1312,6 +1337,7 @@ void RunControlTests()
     TestTabControlBodyDragReleaseOverCloseButtonDoesNotCloseTab();
     TestToggleMouseActivationOnlyFiresToggledCallbackWithUpdatedState();
     TestToggleMouseActivationCanReplaceRootSafely();
+    TestMenuBarActivationCanReplaceRootSafely();
     TestColorSwatchStoresConfiguredArgbAndEmptyState();
     TestTagPickerWrapsBadgesInsideInputFrame();
     TestTagPickerSuggestionsTrackSelectedBadges();

@@ -52,7 +52,7 @@ namespace
 
 FileSystemS3::FileSystemS3(FileSystemS3Mode mode, IHost* host) : _mode(mode)
 {
-    FsS3::AwsSdkLifetime::AddRef();
+    _awsRuntimeStatus = FsS3::AwsSdkLifetime::Acquire();
 
     switch (_mode)
     {
@@ -89,7 +89,10 @@ FileSystemS3::~FileSystemS3()
         std::lock_guard lock(_stateMutex);
         _s3ClientsByCtxKey.clear();
     }
-    FsS3::AwsSdkLifetime::Release();
+    if (SUCCEEDED(_awsRuntimeStatus))
+    {
+        FsS3::AwsSdkLifetime::Release();
+    }
 }
 
 HRESULT STDMETHODCALLTYPE FileSystemS3::QueryInterface(REFIID riid, void** ppvObject) noexcept

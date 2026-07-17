@@ -85,6 +85,11 @@ DestroyWindow(_hWnd.get());
 
 When posting heap payloads to a window, prefer the `PostMessagePayload(...)` / `TakeMessagePayload<T>(lParam)` helpers (see `Common/Helpers.h`) to avoid leak-on-failure and standardize ownership transfer.
 
+A nonzero `lParam` is an opaque registry token, not the payload address. Never cast or adopt it directly. Always
+check the result of `TakeMessagePayload<T>` and ignore a null result from a nonzero token, which denotes a stale,
+drained, unregistered, or type-mismatched token. Zero is reserved for a payload-less fallback only when that message
+explicitly defines one.
+
 ```cpp
 // Sender
 // (Declare your message ID in `Common/WindowMessages.h` as `WndMsg::k...`)
@@ -95,7 +100,7 @@ static_cast<void>(PostMessagePayload(hwnd, WndMsg::kMyPayloadMessage, 0, std::mo
 case WndMsg::kMyPayloadMessage:
 {
     auto payload = TakeMessagePayload<MyPayload>(lParam);
-    if (! payload) { return 0; }
+    if (! payload) { return 0; } // Stale/drained tokens are intentionally ignored.
     // ... use payload ...
     return 0;
 }
@@ -106,7 +111,8 @@ case WndMsg::kMyPayloadMessage:
 If the target `HWND` can be destroyed while payload messages are still queued, Windows may discard those messages without delivering them. To prevent leaks:
 
 - Call `InitPostedPayloadWindow(hwnd)` during window creation (`WM_NCCREATE`/`WM_CREATE`) for windows that receive payload messages.
-- Call `DrainPostedPayloadsForWindow(hwnd)` in `WM_NCDESTROY`.
+- Call `DrainPostedPayloadsForWindow(hwnd)` in `WM_NCDESTROY`; it closes posting, invalidates the registered
+  tokens, and deletes their storage. A stale queued token may remain, but `TakeMessagePayload<T>` rejects it.
 - Always use `TakeMessagePayload<T>(lParam)` in the receiver so the registry can unregister; do not manually wrap `lParam` into a `std::unique_ptr`.
 
 ## OnNotify Pattern

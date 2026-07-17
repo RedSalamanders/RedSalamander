@@ -1,3 +1,84 @@
+#include "ChangeCase.h"
+#include "FolderWindow.FileSystem.Private.h"
+#include "ConnectionManagerWindow.h"
+#include "ConnectionSecrets.h"
+#include "DxUi/DxUi.h"
+#include "DxUiThemePalette.h"
+#include "FileActionLauncher.h"
+#include "FileActionResolver.h"
+#include "FolderWindowInternal.h"
+#include "Helpers.h"
+#include "HostServices.h"
+#include "LocalFileTransaction.h"
+#include "MaskSyntax.h"
+#include "NavigationLocation.h"
+#include "PathUtils.h"
+#include "SettingsStore.h"
+#include "ViewerPluginManager.h"
+#include "Win32CallbackHelpers.h"
+#include "WindowMessages.h"
+#include "WindowSizing.h"
+#ifdef ENABLE_TESTS
+#include "SelfTestCommon.h"
+#endif
+#include "UiMetrics.h"
+#include "UnicodeClipboard.h"
+
+#include <algorithm>
+#include <array>
+#include <atomic>
+#include <chrono>
+#include <cstddef>
+#include <cstdlib>
+#include <cstring>
+#include <cwctype>
+#include <fstream>
+#include <limits>
+#include <map>
+#include <span>
+#include <string>
+#include <system_error>
+#include <unordered_set>
+#include <utility>
+#include <vector>
+
+#include <commdlg.h>
+#include <lm.h>
+#include <oleauto.h>
+#include <shellapi.h>
+#include <shlwapi.h>
+#include <shobjidl.h>
+#include <winnetwk.h>
+
+#ifndef INITGUID
+#define INITGUID
+#define REDSALAMANDER_UNDEF_7ZIP_INITGUID
+#endif
+#include <7zip/CPP/7zip/Archive/IArchive.h>
+#include <7zip/CPP/7zip/IPassword.h>
+#ifdef REDSALAMANDER_UNDEF_7ZIP_INITGUID
+#undef INITGUID
+#undef REDSALAMANDER_UNDEF_7ZIP_INITGUID
+#endif
+
+#pragma comment(lib, "Comdlg32.lib")
+#pragma comment(lib, "Netapi32.lib")
+#pragma comment(lib, "OleAut32.lib")
+#pragma comment(lib, "Shlwapi.lib")
+
+#pragma warning(push)
+#pragma warning(disable : 6297 28182)
+#include <yyjson.h>
+#pragma warning(pop)
+
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
+#include <wil/resource.h>
+#pragma warning(pop)
+
+using namespace FolderWindowFileSystemInternal;
+using OrdinalString::EqualsNoCase;
+
 namespace
 {
 [[nodiscard]] std::wstring BuildCreateDirectorySuggestedName(std::wstring_view baseName, unsigned int suffix)
@@ -2247,7 +2328,88 @@ using MakeFileListSettings = Common::Settings::MakeFileListSettings;
 
 #ifdef ENABLE_TESTS
 std::optional<MakeFileListSettings> g_makeFileListAutomation;
+std::atomic_uint32_t g_makeFileListWorkerDelayMs{0u};
+std::atomic_bool g_makeFileListWorkerActive{false};
 #endif
+
+struct MakeFileListTaskPayload final
+{
+    FolderWindow::InformationalTaskUpdate update{};
+};
+
+struct MakeFileListCompletedPayload final
+{
+    FolderWindow::Pane pane = FolderWindow::Pane::Left;
+    uint64_t taskId         = 0u;
+    std::wstring title;
+    MakeFileListSettings options{};
+    std::filesystem::path currentFolder;
+    std::wstring clipboardText;
+    std::wstring outputTarget;
+    uint64_t entryCount      = 0u;
+    uint64_t collectFailures = 0u;
+    uint64_t outputBytes     = 0u;
+    uint64_t outputElapsedUs = 0u;
+    uint64_t totalElapsedUs  = 0u;
+    HRESULT hr               = S_OK;
+};
+
+struct MakeFileListProgressState final
+{
+    HWND hwnd = nullptr;
+    std::wstring title;
+    uint64_t taskId          = 0u;
+    ULONGLONG lastPostedTick = 0u;
+
+    bool collecting = false;
+    bool rendering  = false;
+    bool writing    = false;
+    std::filesystem::path currentPath;
+    uint64_t scannedFolders  = 0u;
+    uint64_t scannedEntries  = 0u;
+    uint64_t totalEntries    = 0u;
+    uint64_t renderedEntries = 0u;
+
+    void PostTaskUpdate(bool finished, HRESULT hr, std::wstring doneSummary = {}) noexcept
+    {
+        if (! hwnd || IsWindow(hwnd) == FALSE || taskId == 0u)
+        {
+            return;
+        }
+
+        FolderWindow::InformationalTaskUpdate info{};
+        info.kind                            = FolderWindow::InformationalTaskUpdate::Kind::MakeFileList;
+        info.taskId                          = taskId;
+        info.title                           = title;
+        info.makeFileListCollecting          = ! finished && collecting;
+        info.makeFileListRendering           = ! finished && rendering;
+        info.makeFileListWriting             = ! finished && writing;
+        info.makeFileListCurrentPath         = currentPath;
+        info.makeFileListScannedFolders      = scannedFolders;
+        info.makeFileListScannedEntries      = scannedEntries;
+        info.makeFileListTotalEntries        = totalEntries;
+        info.makeFileListRenderedEntries     = renderedEntries;
+        info.finished                        = finished;
+        info.resultHr                        = hr;
+        info.doneSummary                     = std::move(doneSummary);
+
+        auto payload    = std::make_unique<MakeFileListTaskPayload>();
+        payload->update = std::move(info);
+        static_cast<void>(PostMessagePayload(hwnd, WndMsg::kMakeFileListTaskUpdate, 0, std::move(payload)));
+    }
+
+    void MaybePostTaskUpdate() noexcept
+    {
+        const ULONGLONG nowTick = GetTickCount64();
+        if (lastPostedTick != 0u && nowTick >= lastPostedTick && (nowTick - lastPostedTick) < 100ull)
+        {
+            return;
+        }
+
+        lastPostedTick = nowTick;
+        PostTaskUpdate(false, S_OK);
+    }
+};
 
 struct MakeFileListEntry final
 {
@@ -2397,18 +2559,26 @@ struct MakeFileListEntry final
     return result;
 }
 
-[[nodiscard]] bool TryReadMakeFileListEntry(const std::filesystem::path& path, bool includeDirectories, MakeFileListEntry& out) noexcept
+enum class MakeFileListEntryReadResult : uint8_t
+{
+    Added,
+    Skipped,
+    Failed,
+};
+
+[[nodiscard]] MakeFileListEntryReadResult TryReadMakeFileListEntry(
+    const std::filesystem::path& path, bool includeDirectories, MakeFileListEntry& out) noexcept
 {
     WIN32_FILE_ATTRIBUTE_DATA data{};
     if (GetFileAttributesExW(path.c_str(), GetFileExInfoStandard, &data) == FALSE)
     {
-        return false;
+        return MakeFileListEntryReadResult::Failed;
     }
 
     const bool isDirectory = (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0u;
     if (isDirectory && ! includeDirectories)
     {
-        return false;
+        return MakeFileListEntryReadResult::Skipped;
     }
 
     out               = {};
@@ -2432,27 +2602,54 @@ struct MakeFileListEntry final
         out.name = out.fullPath;
     }
 
-    return true;
+    return MakeFileListEntryReadResult::Added;
 }
 
-void AddMakeFileListPath(const std::filesystem::path& path, bool includeDirectories, std::vector<MakeFileListEntry>& entries, uint64_t& failures) noexcept
+[[nodiscard]] HRESULT AddMakeFileListPath(const std::filesystem::path& path,
+                                          bool includeDirectories,
+                                          const std::stop_token& stopToken,
+                                          MakeFileListProgressState& progress,
+                                          std::vector<MakeFileListEntry>& entries,
+                                          uint64_t& failures) noexcept
 {
-    MakeFileListEntry entry{};
-    if (TryReadMakeFileListEntry(path, includeDirectories, entry))
+    if (stopToken.stop_requested())
     {
-        entries.push_back(std::move(entry));
-        return;
+        return HRESULT_FROM_WIN32(ERROR_CANCELLED);
     }
 
-    std::error_code ec;
-    if (std::filesystem::exists(path, ec))
+    progress.currentPath = path;
+    ++progress.scannedEntries;
+
+    MakeFileListEntry entry{};
+    const MakeFileListEntryReadResult readResult = TryReadMakeFileListEntry(path, includeDirectories, entry);
+    if (readResult == MakeFileListEntryReadResult::Added)
     {
-        ++failures;
+        if (entry.isDirectory)
+        {
+            ++progress.scannedFolders;
+        }
+        entries.push_back(std::move(entry));
     }
+    else if (readResult == MakeFileListEntryReadResult::Failed)
+    {
+        std::error_code ec;
+        if (std::filesystem::exists(path, ec) || ec)
+        {
+            ++failures;
+        }
+    }
+
+    progress.MaybePostTaskUpdate();
+    return S_OK;
 }
 
-void CollectMakeFileListDirectoryContents(
-    const std::filesystem::path& root, bool recursive, bool includeDirectories, std::vector<MakeFileListEntry>& entries, uint64_t& failures) noexcept
+[[nodiscard]] HRESULT CollectMakeFileListDirectoryContents(const std::filesystem::path& root,
+                                                           bool recursive,
+                                                           bool includeDirectories,
+                                                           const std::stop_token& stopToken,
+                                                           MakeFileListProgressState& progress,
+                                                           std::vector<MakeFileListEntry>& entries,
+                                                           uint64_t& failures) noexcept
 {
     constexpr std::filesystem::directory_options options = std::filesystem::directory_options::skip_permission_denied;
     std::error_code ec;
@@ -2463,8 +2660,16 @@ void CollectMakeFileListDirectoryContents(
         const std::filesystem::recursive_directory_iterator end;
         while (! ec && it != end)
         {
+            if (stopToken.stop_requested())
+            {
+                return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+            }
+
             const std::filesystem::path path = it->path();
-            AddMakeFileListPath(path, includeDirectories, entries, failures);
+            if (const HRESULT hr = AddMakeFileListPath(path, includeDirectories, stopToken, progress, entries, failures); FAILED(hr))
+            {
+                return hr;
+            }
             it.increment(ec);
         }
     }
@@ -2474,8 +2679,16 @@ void CollectMakeFileListDirectoryContents(
         const std::filesystem::directory_iterator end;
         while (! ec && it != end)
         {
+            if (stopToken.stop_requested())
+            {
+                return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+            }
+
             const std::filesystem::path path = it->path();
-            AddMakeFileListPath(path, includeDirectories, entries, failures);
+            if (const HRESULT hr = AddMakeFileListPath(path, includeDirectories, stopToken, progress, entries, failures); FAILED(hr))
+            {
+                return hr;
+            }
             it.increment(ec);
         }
     }
@@ -2484,33 +2697,56 @@ void CollectMakeFileListDirectoryContents(
     {
         ++failures;
     }
+    return stopToken.stop_requested() ? HRESULT_FROM_WIN32(ERROR_CANCELLED) : S_OK;
 }
 
-[[nodiscard]] std::vector<MakeFileListEntry> CollectMakeFileListEntries(const std::filesystem::path& currentFolder,
-                                                                        const std::vector<std::filesystem::path>& selectedPaths,
-                                                                        const MakeFileListSettings& options,
-                                                                        uint64_t& failures) noexcept
+[[nodiscard]] HRESULT CollectMakeFileListEntries(const std::filesystem::path& currentFolder,
+                                                 const std::vector<std::filesystem::path>& selectedPaths,
+                                                 const MakeFileListSettings& options,
+                                                 const std::stop_token& stopToken,
+                                                 MakeFileListProgressState& progress,
+                                                 uint64_t& failures,
+                                                 std::vector<MakeFileListEntry>& entries) noexcept
 {
     failures = 0u;
-    std::vector<MakeFileListEntry> entries;
+    entries.clear();
+    progress.currentPath = currentFolder;
 
     if (options.sourceMode == Common::Settings::MakeFileListSourceMode::CurrentFolder)
     {
-        CollectMakeFileListDirectoryContents(currentFolder, options.recursive, options.includeDirectories, entries, failures);
+        if (const HRESULT hr = CollectMakeFileListDirectoryContents(
+                currentFolder, options.recursive, options.includeDirectories, stopToken, progress, entries, failures);
+            FAILED(hr))
+        {
+            return hr;
+        }
     }
     else
     {
         entries.reserve(selectedPaths.size());
         for (const std::filesystem::path& path : selectedPaths)
         {
-            AddMakeFileListPath(path, options.includeDirectories, entries, failures);
+            if (const HRESULT hr = AddMakeFileListPath(path, options.includeDirectories, stopToken, progress, entries, failures); FAILED(hr))
+            {
+                return hr;
+            }
 
             std::error_code ec;
             if (options.recursive && std::filesystem::is_directory(path, ec))
             {
-                CollectMakeFileListDirectoryContents(path, true, options.includeDirectories, entries, failures);
+                if (const HRESULT hr =
+                        CollectMakeFileListDirectoryContents(path, true, options.includeDirectories, stopToken, progress, entries, failures);
+                    FAILED(hr))
+                {
+                    return hr;
+                }
             }
         }
+    }
+
+    if (stopToken.stop_requested())
+    {
+        return HRESULT_FROM_WIN32(ERROR_CANCELLED);
     }
 
     std::sort(entries.begin(),
@@ -2527,7 +2763,8 @@ void CollectMakeFileListDirectoryContents(
         return compare == CSTR_LESS_THAN;
     });
 
-    return entries;
+    progress.totalEntries = static_cast<uint64_t>(entries.size());
+    return S_OK;
 }
 
 [[nodiscard]] HRESULT AddMakeFileListJsonString(yyjson_mut_doc* doc, yyjson_mut_val* obj, const char* key, std::wstring_view value) noexcept
@@ -2615,7 +2852,11 @@ void CollectMakeFileListDirectoryContents(
     return S_OK;
 }
 
-[[nodiscard]] HRESULT RenderMakeFileListJson(const std::vector<MakeFileListEntry>& entries, const MakeFileListSettings& options, std::string& outUtf8) noexcept
+[[nodiscard]] HRESULT RenderMakeFileListJson(const std::vector<MakeFileListEntry>& entries,
+                                             const MakeFileListSettings& options,
+                                             const std::stop_token& stopToken,
+                                             MakeFileListProgressState& progress,
+                                             std::string& outUtf8) noexcept
 {
     outUtf8.clear();
 
@@ -2646,10 +2887,21 @@ void CollectMakeFileListDirectoryContents(
 
     for (const MakeFileListEntry& entry : entries)
     {
+        if (stopToken.stop_requested())
+        {
+            return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        }
         if (const HRESULT hr = AddMakeFileListJsonEntry(doc, array, entry, options); FAILED(hr))
         {
             return hr;
         }
+        ++progress.renderedEntries;
+        progress.MaybePostTaskUpdate();
+    }
+
+    if (stopToken.stop_requested())
+    {
+        return HRESULT_FROM_WIN32(ERROR_CANCELLED);
     }
 
     yyjson_write_err writeErr{};
@@ -2758,102 +3010,123 @@ void AppendMakeFileListCsvRow(std::wstring& output, const std::vector<std::wstri
     return fields;
 }
 
-[[nodiscard]] std::wstring RenderMakeFileListCsvWide(const std::vector<MakeFileListEntry>& entries, const MakeFileListSettings& options)
+[[nodiscard]] HRESULT RenderMakeFileListCsvWide(const std::vector<MakeFileListEntry>& entries,
+                                                const MakeFileListSettings& options,
+                                                const std::stop_token& stopToken,
+                                                MakeFileListProgressState& progress,
+                                                std::wstring& output) noexcept
 {
-    std::wstring output;
+    output.clear();
     output.reserve(entries.size() * 96u);
     AppendMakeFileListCsvRow(output, MakeFileListCsvHeader(options));
     for (const MakeFileListEntry& entry : entries)
     {
+        if (stopToken.stop_requested())
+        {
+            return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        }
         AppendMakeFileListCsvRow(output, MakeFileListCsvFields(entry, options));
+        ++progress.renderedEntries;
+        progress.MaybePostTaskUpdate();
     }
-    return output;
+    return S_OK;
 }
 
-[[nodiscard]] std::wstring RenderMakeFileListTextWide(const std::vector<MakeFileListEntry>& entries, const MakeFileListSettings& options)
+[[nodiscard]] HRESULT RenderMakeFileListTextWide(const std::vector<MakeFileListEntry>& entries,
+                                                 const MakeFileListSettings& options,
+                                                 const std::stop_token& stopToken,
+                                                 MakeFileListProgressState& progress,
+                                                 std::wstring& output) noexcept
 {
     const std::wstring_view macro = options.textMacro.empty() ? std::wstring_view(L"{fullPath}") : std::wstring_view(options.textMacro);
 
-    std::wstring output;
+    output.clear();
     output.reserve(entries.size() * (macro.size() + 32u));
     for (const MakeFileListEntry& entry : entries)
     {
+        if (stopToken.stop_requested())
+        {
+            return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        }
         output.append(ExpandMakeFileListTextMacro(macro, entry));
         output.append(L"\r\n");
+        ++progress.renderedEntries;
+        progress.MaybePostTaskUpdate();
     }
-    return output;
+    return S_OK;
 }
 
 [[nodiscard]] HRESULT RenderMakeFileListOutput(const std::vector<MakeFileListEntry>& entries,
                                                const MakeFileListSettings& options,
+                                               const std::stop_token& stopToken,
+                                               MakeFileListProgressState& progress,
                                                std::string& outUtf8,
                                                std::wstring& outClipboardText) noexcept
 {
     outUtf8.clear();
     outClipboardText.clear();
+    progress.renderedEntries = 0u;
+
+    if (stopToken.stop_requested())
+    {
+        return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+    }
 
     if (options.format == Common::Settings::MakeFileListFormat::Json)
     {
-        if (const HRESULT hr = RenderMakeFileListJson(entries, options, outUtf8); FAILED(hr))
+        if (const HRESULT hr = RenderMakeFileListJson(entries, options, stopToken, progress, outUtf8); FAILED(hr))
         {
             return hr;
         }
         outClipboardText = Utf16FromUtf8ForMakeFileList(outUtf8);
+        if (stopToken.stop_requested())
+        {
+            return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        }
         return (! outUtf8.empty() && outClipboardText.empty()) ? HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION) : S_OK;
     }
 
-    outClipboardText = options.format == Common::Settings::MakeFileListFormat::Csv ? RenderMakeFileListCsvWide(entries, options)
-                                                                                   : RenderMakeFileListTextWide(entries, options);
+    const HRESULT renderHr = options.format == Common::Settings::MakeFileListFormat::Csv
+                                 ? RenderMakeFileListCsvWide(entries, options, stopToken, progress, outClipboardText)
+                                 : RenderMakeFileListTextWide(entries, options, stopToken, progress, outClipboardText);
+    if (FAILED(renderHr))
+    {
+        return renderHr;
+    }
     outUtf8          = Utf8FromUtf16ForMakeFileList(outClipboardText);
+    if (stopToken.stop_requested())
+    {
+        return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+    }
     return (! outClipboardText.empty() && outUtf8.empty()) ? HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION) : S_OK;
 }
 
-[[nodiscard]] HRESULT WriteMakeFileListUtf8File(const std::filesystem::path& path, std::string_view bytes) noexcept
+[[nodiscard]] HRESULT WriteMakeFileListUtf8File(
+    const std::filesystem::path& path, std::string_view bytes, const std::stop_token& stopToken) noexcept
 {
-    if (path.empty())
+    if (stopToken.stop_requested())
     {
-        return HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
+        return HRESULT_FROM_WIN32(ERROR_CANCELLED);
     }
 
-    const std::filesystem::path parent = path.parent_path();
-    if (! parent.empty())
+    Common::Files::LocalFileTransaction transaction;
+    HRESULT hr = Common::Files::LocalFileTransaction::Create(
+        path, Common::Files::ExistingTargetPolicy::Replace, true, transaction);
+    if (FAILED(hr))
     {
-        std::error_code ec;
-        std::filesystem::create_directories(parent, ec);
-        if (ec)
-        {
-            return HRESULT_FROM_WIN32(static_cast<DWORD>(ec.value()));
-        }
+        return hr;
     }
 
-#pragma warning(push)
-#pragma warning(disable : 4625 4626) // WIL unique_hfile copy operations are intentionally deleted.
-    wil::unique_hfile file(CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
-#pragma warning(pop)
-    if (! file)
+    hr = transaction.Write(bytes);
+    if (FAILED(hr))
     {
-        return HRESULT_FROM_WIN32(GetLastError());
+        return hr;
     }
-
-    const char* cursor = bytes.data();
-    size_t remaining   = bytes.size();
-    while (remaining > 0u)
+    if (stopToken.stop_requested())
     {
-        const DWORD chunk = static_cast<DWORD>((std::min)(remaining, static_cast<size_t>((std::numeric_limits<DWORD>::max)())));
-        DWORD written     = 0u;
-        if (WriteFile(file.get(), cursor, chunk, &written, nullptr) == FALSE)
-        {
-            return HRESULT_FROM_WIN32(GetLastError());
-        }
-        if (written == 0u || written > chunk)
-        {
-            return HRESULT_FROM_WIN32(ERROR_WRITE_FAULT);
-        }
-        cursor += written;
-        remaining -= written;
+        return HRESULT_FROM_WIN32(ERROR_CANCELLED);
     }
-
-    return S_OK;
+    return transaction.Commit(static_cast<uint64_t>(bytes.size()));
 }
 
 [[nodiscard]] const wchar_t* MakeFileListFormatDetail(Common::Settings::MakeFileListFormat format) noexcept
@@ -2865,6 +3138,75 @@ void AppendMakeFileListCsvRow(std::wstring& output, const std::vector<std::wstri
         case Common::Settings::MakeFileListFormat::Text: return L"text";
     }
     return L"text";
+}
+
+[[nodiscard]] const wchar_t* MakeFileListDefaultExtension(Common::Settings::MakeFileListFormat format) noexcept
+{
+    switch (format)
+    {
+        case Common::Settings::MakeFileListFormat::Json: return L"json";
+        case Common::Settings::MakeFileListFormat::Csv: return L"csv";
+        case Common::Settings::MakeFileListFormat::Text: return L"txt";
+    }
+    return L"txt";
+}
+
+[[nodiscard]] DWORD MakeFileListFilterIndex(Common::Settings::MakeFileListFormat format) noexcept
+{
+    switch (format)
+    {
+        case Common::Settings::MakeFileListFormat::Text: return 1u;
+        case Common::Settings::MakeFileListFormat::Csv: return 2u;
+        case Common::Settings::MakeFileListFormat::Json: return 3u;
+    }
+    return 1u;
+}
+
+[[nodiscard]] std::optional<std::filesystem::path> PromptForMakeFileListOutputFile(HWND owner,
+                                                                                  const std::filesystem::path& currentFolder,
+                                                                                  const MakeFileListSettings& options) noexcept
+{
+    constexpr size_t kFileBufferChars = 32768u;
+    std::vector<wchar_t> fileBuffer(kFileBufferChars, L'\0');
+
+    std::filesystem::path suggested = options.outputFile;
+    if (suggested.empty())
+    {
+        suggested = currentFolder / std::format(L"file-list.{}", MakeFileListDefaultExtension(options.format));
+    }
+    else if (suggested.is_relative())
+    {
+        suggested = currentFolder / suggested;
+    }
+
+    const std::wstring suggestedText = suggested.wstring();
+    if (suggestedText.size() >= fileBuffer.size())
+    {
+        return std::nullopt;
+    }
+    std::copy(suggestedText.begin(), suggestedText.end(), fileBuffer.begin());
+
+    const std::wstring filter     = LoadStringResource(nullptr, IDS_MAKE_FILE_LIST_FILE_FILTER);
+    const std::wstring initialDir = currentFolder.wstring();
+
+    OPENFILENAMEW ofn{};
+    ofn.lStructSize     = sizeof(ofn);
+    ofn.hwndOwner       = owner;
+    ofn.lpstrFilter     = filter.c_str();
+    ofn.nFilterIndex    = MakeFileListFilterIndex(options.format);
+    ofn.lpstrFile       = fileBuffer.data();
+    ofn.nMaxFile        = static_cast<DWORD>(fileBuffer.size());
+    ofn.lpstrInitialDir = initialDir.empty() ? nullptr : initialDir.c_str();
+    ofn.lpstrDefExt     = MakeFileListDefaultExtension(options.format);
+    ofn.Flags           = OFN_NOCHANGEDIR | OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST;
+
+    if (GetSaveFileNameW(&ofn) == FALSE)
+    {
+        return std::nullopt;
+    }
+
+    std::filesystem::path selected(fileBuffer.data());
+    return selected.empty() ? std::nullopt : std::optional<std::filesystem::path>{std::move(selected)};
 }
 
 void ShowMakeFileListOverlay(
@@ -3736,10 +4078,17 @@ struct ArchiveUnpackerDefinition final
     bool storedZip = false;
 };
 
+enum class ArchiveExistingTargetPolicy : uint8_t
+{
+    Skip,
+    Replace,
+};
+
 struct ArchiveUnpackPromptResult final
 {
     std::filesystem::path destinationPath;
     ArchiveUnpackerDefinition unpacker;
+    ArchiveExistingTargetPolicy conflictPolicy = ArchiveExistingTargetPolicy::Skip;
     bool deleteArchive = false;
     std::wstring maskText;
 };
@@ -3776,6 +4125,7 @@ enum class ArchiveUnpackPromptDebugCommand : uintptr_t
     GetSnapshot = 1u,
     SetDestinationPath,
     SetMask,
+    SetConflictPolicy,
     SetDeleteAfter,
     Confirm,
     Cancel,
@@ -4419,6 +4769,53 @@ struct ArchiveUnpackPromptTextPayload final
         result.replace_extension(L"." + extension);
     }
     return result;
+}
+
+[[nodiscard]] std::vector<RedSalamander::DxUi::ComboBox::Item> BuildArchiveConflictPolicyComboItems()
+{
+    return {
+        {LoadStringResource(nullptr, IDS_ARCHIVE_UNPACK_CONFLICT_SKIP), L"skip"},
+        {LoadStringResource(nullptr, IDS_ARCHIVE_UNPACK_CONFLICT_REPLACE), L"replace"},
+    };
+}
+
+[[nodiscard]] HRESULT ValidateArchiveOutputOutsideSelectedSources(const std::vector<std::filesystem::path>& selectedPaths,
+                                                                  const std::filesystem::path& archivePath) noexcept
+{
+    std::error_code ec;
+    const std::filesystem::path normalizedArchive = std::filesystem::absolute(archivePath, ec).lexically_normal();
+    if (ec || normalizedArchive.empty())
+    {
+        return ec ? HRESULT_FROM_WIN32(static_cast<DWORD>(ec.value())) : HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
+    }
+
+    for (const std::filesystem::path& selectedPath : selectedPaths)
+    {
+        ec.clear();
+        const std::filesystem::path normalizedSource = std::filesystem::absolute(selectedPath, ec).lexically_normal();
+        if (ec || normalizedSource.empty())
+        {
+            return ec ? HRESULT_FROM_WIN32(static_cast<DWORD>(ec.value())) : HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
+        }
+
+        const DWORD attributes = GetFileAttributesW(selectedPath.c_str());
+        if (attributes == INVALID_FILE_ATTRIBUTES)
+        {
+            return HRESULT_FROM_WIN32(GetLastError());
+        }
+
+        const std::wstring_view sourceText  = normalizedSource.native();
+        const std::wstring_view archiveText = normalizedArchive.native();
+        const bool samePath                 = Common::Paths::NormalizedWindowsPathEqualsNoCase(sourceText, archiveText);
+        const bool sourceIsDirectory        = (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0u;
+        if (samePath ||
+            (sourceIsDirectory && Common::Paths::IsSameOrDescendantNormalizedWindowsPath(sourceText, archiveText)))
+        {
+            return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+        }
+    }
+
+    return S_OK;
 }
 
 [[nodiscard]] std::wstring ShortDisplayNameForArchiveSelection(const std::vector<std::filesystem::path>& selectedPaths)
@@ -5165,7 +5562,7 @@ public:
         const DWORD exStyle = WS_EX_DLGMODALFRAME;
         const UINT dpi      = _ownerWindow && IsWindow(_ownerWindow) != FALSE ? GetDpiForWindow(_ownerWindow) : GetDpiForSystem();
 
-        RECT bounds{0, 0, ScalePanePromptForDpi(dpi, 520), ScalePanePromptForDpi(dpi, _maskHelpVisible ? 500 : 386)};
+        RECT bounds{0, 0, ScalePanePromptForDpi(dpi, 520), ScalePanePromptForDpi(dpi, _maskHelpVisible ? 562 : 448)};
         if (AdjustWindowRectExForDpi(&bounds, style, FALSE, exStyle, dpi) == FALSE)
         {
             return std::nullopt;
@@ -5415,6 +5812,16 @@ private:
         _unpackerCombo->SetSelectedIndex(0u);
         _unpackerCombo->SetOnSubmitted([this] { Confirm(); });
 
+        _conflictPolicyLabel = _root->AddChild<Label>(LoadStringResource(nullptr, IDS_ARCHIVE_UNPACK_CONFLICT_LABEL));
+        _conflictPolicyLabel->SetAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+
+        _conflictPolicyCombo = _root->AddChild<ComboBox>();
+        _conflictPolicyCombo->SetVariant(ComboBoxVariant::Window);
+        _conflictPolicyCombo->SetEditable(false);
+        _conflictPolicyCombo->SetItems(BuildArchiveConflictPolicyComboItems());
+        _conflictPolicyCombo->SetSelectedIndex(0u);
+        _conflictPolicyCombo->SetOnSubmitted([this] { Confirm(); });
+
         _deleteAfterCheckbox = _root->AddChild<Checkbox>(LoadStringResource(nullptr, IDS_ARCHIVE_UNPACK_DELETE_AFTER));
         _deleteAfterCheckbox->SetChecked(false);
 
@@ -5526,7 +5933,7 @@ private:
         const UINT dpi                = GetDpiForWindow(_hWnd.get());
         const int currentClientHeight = std::max(0l, clientRect.bottom - clientRect.top);
         const int nonClientHeight     = std::max<int>(0, static_cast<int>((windowRect.bottom - windowRect.top) - currentClientHeight));
-        const int targetClientHeight  = ScalePanePromptForDpi(dpi, _maskHelpVisible ? 500 : 386);
+        const int targetClientHeight  = ScalePanePromptForDpi(dpi, _maskHelpVisible ? 562 : 448);
         const int targetWindowHeight  = targetClientHeight + nonClientHeight;
 
         SetWindowPos(_hWnd.get(), nullptr, 0, 0, windowRect.right - windowRect.left, targetWindowHeight, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
@@ -5579,6 +5986,18 @@ private:
         if (_unpackerCombo)
         {
             _unpackerCombo->SetBounds(D2D1::RectF(left, y, right, y + kComboHeightDip));
+        }
+        y += kComboHeightDip + (kGapDip * 2.0f);
+
+        if (_conflictPolicyLabel)
+        {
+            _conflictPolicyLabel->SetBounds(D2D1::RectF(left, y, right, y + kLabelHeightDip));
+        }
+        y += kLabelHeightDip + 2.0f;
+
+        if (_conflictPolicyCombo)
+        {
+            _conflictPolicyCombo->SetBounds(D2D1::RectF(left, y, right, y + kComboHeightDip));
         }
         y += kComboHeightDip + kGapDip;
 
@@ -5647,6 +6066,9 @@ private:
     {
         ArchiveUnpackPromptResult result{};
         result.unpacker      = SelectedUnpacker();
+        result.conflictPolicy =
+            _conflictPolicyCombo && _conflictPolicyCombo->GetSelectedIndex().value_or(0u) == 1u ? ArchiveExistingTargetPolicy::Replace
+                                                                                                 : ArchiveExistingTargetPolicy::Skip;
         result.deleteArchive = _deleteAfterCheckbox && _deleteAfterCheckbox->IsChecked();
         result.destinationPath =
             std::filesystem::path(StringUtils::TrimWhitespaceCopy(_destinationCombo ? std::wstring(_destinationCombo->GetText()) : std::wstring{}));
@@ -5702,6 +6124,8 @@ private:
                 snapshot->unpackerExtension                       = selectedUnpacker.extensionNoDot;
                 snapshot->unpackerCount                           = _unpackers.size();
                 snapshot->selectedUnpackerIndex                   = SelectedUnpackerIndex();
+                snapshot->conflictPolicyIndex = _conflictPolicyCombo ? _conflictPolicyCombo->GetSelectedIndex().value_or(0u) : 0u;
+                snapshot->replaceExistingFiles = snapshot->conflictPolicyIndex == 1u;
                 snapshot->deleteAfterUnpacking                    = _deleteAfterCheckbox && _deleteAfterCheckbox->IsChecked();
                 snapshot->maskText                                = _maskField ? std::wstring(_maskField->GetText()) : std::wstring{};
                 snapshot->maskHelpVisible                         = _maskHelpVisible;
@@ -5729,6 +6153,12 @@ private:
                 SetMaskText(payload->text);
                 return TRUE;
             }
+            case ArchiveUnpackPromptDebugCommand::SetConflictPolicy:
+                if (_conflictPolicyCombo)
+                {
+                    _conflictPolicyCombo->SetSelectedIndex(lParam != 0 ? 1u : 0u);
+                }
+                return TRUE;
             case ArchiveUnpackPromptDebugCommand::SetDeleteAfter:
                 if (_deleteAfterCheckbox)
                 {
@@ -5775,6 +6205,8 @@ private:
     RedSalamander::DxUi::ComboBox* _destinationCombo    = nullptr;
     RedSalamander::DxUi::Label* _unpackerLabel          = nullptr;
     RedSalamander::DxUi::ComboBox* _unpackerCombo       = nullptr;
+    RedSalamander::DxUi::Label* _conflictPolicyLabel    = nullptr;
+    RedSalamander::DxUi::ComboBox* _conflictPolicyCombo = nullptr;
     RedSalamander::DxUi::Checkbox* _deleteAfterCheckbox = nullptr;
     RedSalamander::DxUi::Label* _maskLabel              = nullptr;
     RedSalamander::DxUi::TextField* _maskField          = nullptr;
@@ -5868,6 +6300,7 @@ struct ArchiveOperationResult final
     std::filesystem::path destinationPath;
     uint64_t entryCount     = 0u;
     uint64_t bytesProcessed = 0u;
+    uint64_t skippedConflictCount = 0u;
     std::vector<std::wstring> entries;
 };
 
@@ -5920,6 +6353,50 @@ void AppendLe32(std::vector<std::byte>& bytes, uint32_t value)
 {
     const DWORD error = GetLastError();
     return HRESULT_FROM_WIN32(error == ERROR_SUCCESS ? ERROR_GEN_FAILURE : error);
+}
+
+enum class ArchiveTargetDecision : uint8_t
+{
+    Extract,
+    Skip,
+};
+
+[[nodiscard]] Common::Files::ExistingTargetPolicy LocalFilePolicyForArchive(ArchiveExistingTargetPolicy policy) noexcept
+{
+    return policy == ArchiveExistingTargetPolicy::Replace ? Common::Files::ExistingTargetPolicy::Replace
+                                                           : Common::Files::ExistingTargetPolicy::FailIfExists;
+}
+
+[[nodiscard]] bool IsArchiveTargetExistsFailure(HRESULT hr) noexcept
+{
+    return hr == HRESULT_FROM_WIN32(ERROR_FILE_EXISTS) || hr == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+}
+
+[[nodiscard]] HRESULT ClassifyArchiveTarget(const std::filesystem::path& targetPath,
+                                            bool directory,
+                                            ArchiveExistingTargetPolicy policy,
+                                            ArchiveTargetDecision& outDecision) noexcept
+{
+    outDecision = ArchiveTargetDecision::Extract;
+    const DWORD attributes = GetFileAttributesW(targetPath.c_str());
+    if (attributes == INVALID_FILE_ATTRIBUTES)
+    {
+        const DWORD error = GetLastError();
+        if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND)
+        {
+            return S_OK;
+        }
+        return HRESULT_FROM_WIN32(error == ERROR_SUCCESS ? ERROR_GEN_FAILURE : error);
+    }
+
+    if (policy == ArchiveExistingTargetPolicy::Skip)
+    {
+        outDecision = ArchiveTargetDecision::Skip;
+        return S_OK;
+    }
+
+    const bool existingIsDirectory = (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0u;
+    return existingIsDirectory == directory ? S_OK : HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
 }
 
 [[nodiscard]] const std::array<uint32_t, 256>& ArchiveCrc32Table() noexcept
@@ -6141,28 +6618,6 @@ void AppendLe32(std::vector<std::byte>& bytes, uint32_t value)
         }
     }
     return true;
-}
-
-[[nodiscard]] HRESULT MoveFileExWithTransientRetry(const std::filesystem::path& source, const std::filesystem::path& target, DWORD flags) noexcept
-{
-    constexpr int kAttempts = 5;
-    for (int attempt = 0; attempt < kAttempts; ++attempt)
-    {
-        if (MoveFileExW(source.c_str(), target.c_str(), flags) != FALSE)
-        {
-            return S_OK;
-        }
-
-        const DWORD lastError = GetLastError();
-        if ((lastError != ERROR_SHARING_VIOLATION && lastError != ERROR_LOCK_VIOLATION) || attempt + 1 == kAttempts)
-        {
-            return HRESULT_FROM_WIN32(lastError);
-        }
-
-        Sleep(static_cast<DWORD>(20u * static_cast<unsigned>(attempt + 1)));
-    }
-
-    return HRESULT_FROM_WIN32(ERROR_SHARING_VIOLATION);
 }
 
 [[nodiscard]] bool IsArchiveEntryNameSafe(std::wstring_view entryName, bool& outDirectory, std::filesystem::path& outRelativePath) noexcept
@@ -7534,46 +7989,21 @@ private:
     return S_OK;
 }
 
-[[nodiscard]] HRESULT ExtractStoredZipFileEntry(
-    HANDLE archiveFile, const ZipParsedEntry& entry, uint64_t dataOffset, const std::filesystem::path& targetPath, bool overwrite, uint32_t& outCrc32) noexcept
+[[nodiscard]] HRESULT ExtractStoredZipFileEntry(HANDLE archiveFile,
+                                                const ZipParsedEntry& entry,
+                                                uint64_t dataOffset,
+                                                const std::filesystem::path& targetPath,
+                                                ArchiveExistingTargetPolicy conflictPolicy,
+                                                uint32_t& outCrc32) noexcept
 {
     outCrc32 = 0u;
-    std::error_code ec;
-    if (! overwrite && std::filesystem::exists(targetPath, ec))
+    Common::Files::LocalFileTransaction transaction;
+    HRESULT transactionHr = Common::Files::LocalFileTransaction::Create(
+        targetPath, LocalFilePolicyForArchive(conflictPolicy), true, transaction);
+    if (FAILED(transactionHr))
     {
-        return HRESULT_FROM_WIN32(ERROR_FILE_EXISTS);
+        return conflictPolicy == ArchiveExistingTargetPolicy::Skip && IsArchiveTargetExistsFailure(transactionHr) ? S_FALSE : transactionHr;
     }
-    if (ec)
-    {
-        return HResultFromErrorCode(ec);
-    }
-
-    const std::filesystem::path parent = targetPath.parent_path();
-    if (! parent.empty())
-    {
-        std::filesystem::create_directories(parent, ec);
-        if (ec)
-        {
-            return HResultFromErrorCode(ec);
-        }
-    }
-
-    const std::filesystem::path tempPath(targetPath.wstring() + std::format(L".$rs-extracting-{:08X}", GetCurrentProcessId()));
-#pragma warning(push)
-#pragma warning(disable : 4625 4626) // WIL unique_hfile copy operations are intentionally deleted.
-    wil::unique_hfile outputFile(
-        CreateFileW(tempPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, nullptr));
-#pragma warning(pop)
-    if (! outputFile)
-    {
-        return HResultFromLastError();
-    }
-
-    auto deleteTemp = wil::scope_exit([&]
-    {
-        outputFile.reset();
-        DeleteFileW(tempPath.c_str());
-    });
 
     std::array<std::byte, 64u * 1024u> buffer{};
     uint32_t crc        = 0xFFFFFFFFu;
@@ -7587,7 +8017,7 @@ private:
             return hr;
         }
         crc = ArchiveCrc32Update(crc, buffer.data(), chunk);
-        if (const HRESULT hr = WriteArchiveBytes(outputFile.get(), buffer.data(), chunk); FAILED(hr))
+        if (const HRESULT hr = transaction.Write(std::span<const std::byte>(buffer.data(), chunk)); FAILED(hr))
         {
             return hr;
         }
@@ -7601,14 +8031,11 @@ private:
         return HRESULT_FROM_WIN32(ERROR_CRC);
     }
 
-    outputFile.reset();
-    const DWORD moveFlags = overwrite ? (MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) : MOVEFILE_WRITE_THROUGH;
-    if (const HRESULT moveHr = MoveFileExWithTransientRetry(tempPath, targetPath, moveFlags); FAILED(moveHr))
+    transactionHr = transaction.Commit(entry.uncompressedSize);
+    if (FAILED(transactionHr))
     {
-        return moveHr;
+        return conflictPolicy == ArchiveExistingTargetPolicy::Skip && IsArchiveTargetExistsFailure(transactionHr) ? S_FALSE : transactionHr;
     }
-
-    deleteTemp.release();
     return S_OK;
 }
 
@@ -7823,7 +8250,9 @@ private:
 class SevenZipExtractFileOutStream final : public ISequentialOutStream
 {
 public:
-    static HRESULT Create(const std::filesystem::path& targetPath, bool overwrite, wil::com_ptr<SevenZipExtractFileOutStream>& out) noexcept
+    static HRESULT Create(const std::filesystem::path& targetPath,
+                          ArchiveExistingTargetPolicy conflictPolicy,
+                          wil::com_ptr<SevenZipExtractFileOutStream>& out) noexcept
     {
         out.reset();
         if (targetPath.empty())
@@ -7831,38 +8260,15 @@ public:
             return HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
         }
 
-        std::error_code ec;
-        if (! overwrite && std::filesystem::exists(targetPath, ec))
+        Common::Files::LocalFileTransaction transaction;
+        const HRESULT createHr = Common::Files::LocalFileTransaction::Create(
+            targetPath, LocalFilePolicyForArchive(conflictPolicy), true, transaction);
+        if (FAILED(createHr))
         {
-            return HRESULT_FROM_WIN32(ERROR_FILE_EXISTS);
-        }
-        if (ec)
-        {
-            return HResultFromErrorCode(ec);
+            return createHr;
         }
 
-        const std::filesystem::path parent = targetPath.parent_path();
-        if (! parent.empty())
-        {
-            std::filesystem::create_directories(parent, ec);
-            if (ec)
-            {
-                return HResultFromErrorCode(ec);
-            }
-        }
-
-        const std::filesystem::path tempPath(targetPath.wstring() + std::format(L".$rs-extracting-{:08X}", GetCurrentProcessId()));
-#pragma warning(push)
-#pragma warning(disable : 4625 4626) // WIL unique_hfile copy operations are intentionally deleted.
-        wil::unique_hfile file(
-            CreateFileW(tempPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, nullptr));
-#pragma warning(pop)
-        if (! file)
-        {
-            return HResultFromLastError();
-        }
-
-        auto* impl = new (std::nothrow) SevenZipExtractFileOutStream(std::move(file), targetPath, tempPath, overwrite);
+        auto* impl = new (std::nothrow) SevenZipExtractFileOutStream(std::move(transaction));
         if (! impl)
         {
             return E_OUTOFMEMORY;
@@ -7874,15 +8280,7 @@ public:
 
     HRESULT Commit() noexcept
     {
-        _file.reset();
-        const DWORD moveFlags = _overwrite ? (MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) : MOVEFILE_WRITE_THROUGH;
-        if (const HRESULT moveHr = MoveFileExWithTransientRetry(_tempPath, _targetPath, moveFlags); FAILED(moveHr))
-        {
-            return moveHr;
-        }
-
-        _committed = true;
-        return S_OK;
+        return _transaction.Commit(_bytesWritten);
     }
 
     [[nodiscard]] uint64_t BytesWritten() const noexcept
@@ -7946,45 +8344,26 @@ public:
             return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
         }
 
-        DWORD bytesWritten = 0u;
-        if (WriteFile(_file.get(), data, size, &bytesWritten, nullptr) == FALSE)
+        const HRESULT writeHr = _transaction.Write(data, size);
+        if (FAILED(writeHr))
         {
-            return HResultFromLastError();
-        }
-        if (bytesWritten == 0u)
-        {
-            return HRESULT_FROM_WIN32(ERROR_WRITE_FAULT);
+            return writeHr;
         }
 
-        *processedSize = static_cast<UInt32>(bytesWritten);
-        _bytesWritten += static_cast<uint64_t>(bytesWritten);
+        *processedSize = size;
+        _bytesWritten += static_cast<uint64_t>(size);
         return S_OK;
     }
 
 private:
-    SevenZipExtractFileOutStream(wil::unique_hfile file, std::filesystem::path targetPath, std::filesystem::path tempPath, bool overwrite) noexcept
-        : _file(std::move(file)),
-          _targetPath(std::move(targetPath)),
-          _tempPath(std::move(tempPath)),
-          _overwrite(overwrite)
+    explicit SevenZipExtractFileOutStream(Common::Files::LocalFileTransaction transaction) noexcept : _transaction(std::move(transaction))
     {
     }
 
-    ~SevenZipExtractFileOutStream() noexcept
-    {
-        _file.reset();
-        if (! _committed && ! _tempPath.empty())
-        {
-            DeleteFileW(_tempPath.c_str());
-        }
-    }
+    ~SevenZipExtractFileOutStream() noexcept = default;
 
     std::atomic_ulong _refCount{1u};
-    wil::unique_hfile _file;
-    std::filesystem::path _targetPath;
-    std::filesystem::path _tempPath;
-    bool _overwrite        = true;
-    bool _committed        = false;
+    Common::Files::LocalFileTransaction _transaction;
     uint64_t _bytesWritten = 0u;
 };
 
@@ -8009,9 +8388,11 @@ private:
 class SevenZipExtractCallback final : public IArchiveExtractCallback, public ICryptoGetTextPassword, public ICryptoGetTextPassword2
 {
 public:
-    SevenZipExtractCallback(const std::vector<SevenZipExtractEntry>& entries, bool overwrite, ArchiveOperationResult& result) noexcept
+    SevenZipExtractCallback(const std::vector<SevenZipExtractEntry>& entries,
+                            ArchiveExistingTargetPolicy conflictPolicy,
+                            ArchiveOperationResult& result) noexcept
         : _entries(entries),
-          _overwrite(overwrite),
+          _conflictPolicy(conflictPolicy),
           _result(result)
     {
     }
@@ -8113,9 +8494,15 @@ public:
         }
 
         wil::com_ptr<SevenZipExtractFileOutStream> stream;
-        const HRESULT hr = SevenZipExtractFileOutStream::Create(entry->targetPath, _overwrite, stream);
+        const HRESULT hr = SevenZipExtractFileOutStream::Create(entry->targetPath, _conflictPolicy, stream);
         if (FAILED(hr))
         {
+            if (_conflictPolicy == ArchiveExistingTargetPolicy::Skip && IsArchiveTargetExistsFailure(hr))
+            {
+                ++_result.skippedConflictCount;
+                _activeEntry = nullptr;
+                return S_OK;
+            }
             _resultHr = hr;
             return hr;
         }
@@ -8213,7 +8600,7 @@ private:
 
     std::atomic_ulong _refCount{1u};
     const std::vector<SevenZipExtractEntry>& _entries;
-    bool _overwrite = true;
+    ArchiveExistingTargetPolicy _conflictPolicy = ArchiveExistingTargetPolicy::Skip;
     ArchiveOperationResult& _result;
     HRESULT _resultHr                        = S_OK;
     const SevenZipExtractEntry* _activeEntry = nullptr;
@@ -8431,7 +8818,7 @@ private:
 
 [[nodiscard]] ArchiveOperationResult ExtractSevenZipArchive(const std::filesystem::path& archivePath,
                                                             const std::filesystem::path& destinationPath,
-                                                            bool overwrite,
+                                                            ArchiveExistingTargetPolicy conflictPolicy,
                                                             std::wstring_view maskText)
 {
     ArchiveOperationResult result{};
@@ -8499,6 +8886,29 @@ private:
         return result;
     }
 
+    std::vector<SevenZipExtractEntry> plannedEntries;
+    plannedEntries.reserve(entries.size());
+    for (SevenZipExtractEntry& entry : entries)
+    {
+        ArchiveTargetDecision decision = ArchiveTargetDecision::Extract;
+        result.hr = ClassifyArchiveTarget(entry.targetPath, entry.directory, conflictPolicy, decision);
+        if (FAILED(result.hr))
+        {
+            return result;
+        }
+        if (decision == ArchiveTargetDecision::Skip)
+        {
+            ++result.skippedConflictCount;
+            continue;
+        }
+        plannedEntries.push_back(std::move(entry));
+    }
+    entries = std::move(plannedEntries);
+    if (entries.empty())
+    {
+        return result;
+    }
+
     std::vector<UInt32> indices;
     indices.reserve(entries.size());
     for (const SevenZipExtractEntry& entry : entries)
@@ -8506,7 +8916,7 @@ private:
         indices.push_back(entry.archiveIndex);
     }
 
-    auto* callbackImpl = new (std::nothrow) SevenZipExtractCallback(entries, overwrite, result);
+    auto* callbackImpl = new (std::nothrow) SevenZipExtractCallback(entries, conflictPolicy, result);
     if (! callbackImpl)
     {
         result.hr = E_OUTOFMEMORY;
@@ -8525,7 +8935,7 @@ private:
 
 [[nodiscard]] ArchiveOperationResult ExtractStoredZipArchive(const std::filesystem::path& archivePath,
                                                              const std::filesystem::path& destinationPath,
-                                                             bool overwrite,
+                                                             ArchiveExistingTargetPolicy conflictPolicy,
                                                              std::wstring_view maskText)
 {
     ArchiveOperationResult result{};
@@ -8595,6 +9005,8 @@ private:
 
     const bool maskMatchesAll           = ArchiveUnpackMaskMatchesAll(maskText);
     const MaskSyntax::WildcardMask mask = maskMatchesAll ? MaskSyntax::WildcardMask{} : MaskSyntax::ParseWildcardMask(maskText);
+    std::vector<const ZipParsedEntry*> plannedEntries;
+    plannedEntries.reserve(entries.size());
     for (const ZipParsedEntry& entry : entries)
     {
         if (! ShouldExtractZipEntryForMask(entry, mask, maskMatchesAll))
@@ -8608,6 +9020,24 @@ private:
             result.hr = HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
             return result;
         }
+        ArchiveTargetDecision decision = ArchiveTargetDecision::Extract;
+        result.hr = ClassifyArchiveTarget(targetPath, entry.directory, conflictPolicy, decision);
+        if (FAILED(result.hr))
+        {
+            return result;
+        }
+        if (decision == ArchiveTargetDecision::Skip)
+        {
+            ++result.skippedConflictCount;
+            continue;
+        }
+        plannedEntries.push_back(&entry);
+    }
+
+    for (const ZipParsedEntry* entryPointer : plannedEntries)
+    {
+        const ZipParsedEntry& entry            = *entryPointer;
+        const std::filesystem::path targetPath = destinationPath / entry.relativePath;
         if (entry.directory)
         {
             std::filesystem::create_directories(targetPath, ec);
@@ -8627,7 +9057,13 @@ private:
             }
 
             uint32_t crc32 = 0u;
-            result.hr      = ExtractStoredZipFileEntry(archiveFile.get(), entry, dataOffset, targetPath, overwrite, crc32);
+            result.hr      = ExtractStoredZipFileEntry(archiveFile.get(), entry, dataOffset, targetPath, conflictPolicy, crc32);
+            if (result.hr == S_FALSE)
+            {
+                ++result.skippedConflictCount;
+                result.hr = S_OK;
+                continue;
+            }
             if (FAILED(result.hr))
             {
                 return result;
@@ -8773,38 +9209,6 @@ void RefreshFolderViewIfPathMatches(FolderView& folderView, const std::filesyste
     return SUCCEEDED(hrPrompt) && promptResult == HOST_PROMPT_RESULT_OK;
 }
 
-[[nodiscard]] HRESULT DeletePackedSources(const std::vector<std::filesystem::path>& selectedPaths) noexcept
-{
-    for (const std::filesystem::path& path : selectedPaths)
-    {
-        std::error_code ec;
-        const std::filesystem::file_status status = std::filesystem::symlink_status(path, ec);
-        if (ec)
-        {
-            return HResultFromErrorCode(ec);
-        }
-        if (! std::filesystem::exists(status))
-        {
-            continue;
-        }
-
-        if (std::filesystem::is_directory(status))
-        {
-            std::filesystem::remove_all(path, ec);
-        }
-        else
-        {
-            static_cast<void>(std::filesystem::remove(path, ec));
-        }
-        if (ec)
-        {
-            return HResultFromErrorCode(ec);
-        }
-    }
-
-    return S_OK;
-}
-
 [[nodiscard]] HRESULT DeleteUnpackedArchives(const std::vector<std::filesystem::path>& archivePaths) noexcept
 {
     for (const std::filesystem::path& path : archivePaths)
@@ -8852,6 +9256,124 @@ void RefreshFolderViewIfPathMatches(FolderView& folderView, const std::filesyste
 }
 
 } // namespace
+
+LRESULT FolderWindow::OnMakeFileListTaskUpdate(LPARAM lp) noexcept
+{
+    auto payload = TakeMessagePayload<MakeFileListTaskPayload>(lp);
+    if (! payload)
+    {
+        return 0;
+    }
+
+    return static_cast<LRESULT>(CreateOrUpdateInformationalTask(payload->update));
+}
+
+void FolderWindow::RequestMakeFileListCancellation(const Pane pane) noexcept
+{
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    if (! state.makeFileListThread.joinable())
+    {
+        return;
+    }
+
+    state.makeFileListThread.request_stop();
+    if (CancelSynchronousIo(state.makeFileListThread.native_handle()) == FALSE)
+    {
+        const DWORD error = GetLastError();
+        if (error != ERROR_NOT_FOUND)
+        {
+            Debug::Warning(L"Make File List: CancelSynchronousIo failed (gle=0x{:08X})", error);
+        }
+    }
+}
+
+LRESULT FolderWindow::OnMakeFileListCompleted(LPARAM lp) noexcept
+{
+    auto payload = TakeMessagePayload<MakeFileListCompletedPayload>(lp);
+    if (! payload)
+    {
+        return 0;
+    }
+
+    PaneState& state = payload->pane == Pane::Left ? _leftPane : _rightPane;
+    if (state.makeFileListThread.joinable())
+    {
+        state.makeFileListThread = {};
+    }
+
+    HRESULT hr                 = payload->hr;
+    const HRESULT cancelledHr  = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+    const auto outputStartedAt = std::chrono::steady_clock::now();
+    if (SUCCEEDED(hr) && payload->options.outputTarget == Common::Settings::MakeFileListOutputTarget::Clipboard)
+    {
+        hr = Common::Clipboard::TrySetUnicodeText(GetClipboardOwnerWindow(_hWnd.get()), payload->clipboardText) ? S_OK
+                                                                                                    : HRESULT_FROM_WIN32(ERROR_CLIPBOARD_NOT_OPEN);
+    }
+
+    Debug::Perf::Emit(L"makeFileList.output_us",
+                      payload->options.outputTarget == Common::Settings::MakeFileListOutputTarget::File ? L"file" : L"clipboard",
+                      payload->options.outputTarget == Common::Settings::MakeFileListOutputTarget::File ? payload->outputElapsedUs
+                                                                                                         : Debug::Perf::ElapsedUs(outputStartedAt),
+                      payload->outputBytes,
+                      payload->entryCount,
+                      hr);
+
+    InformationalTaskUpdate finalTask{};
+    finalTask.kind                        = InformationalTaskUpdate::Kind::MakeFileList;
+    finalTask.taskId                      = payload->taskId;
+    finalTask.title                       = payload->title;
+    finalTask.makeFileListCurrentPath     = payload->currentFolder;
+    finalTask.makeFileListScannedEntries  = payload->entryCount;
+    finalTask.makeFileListTotalEntries    = payload->entryCount;
+    finalTask.makeFileListRenderedEntries = payload->entryCount;
+    finalTask.finished                    = true;
+    finalTask.resultHr                    = hr;
+
+    if (hr == cancelledHr || hr == E_ABORT)
+    {
+        finalTask.doneSummary = LoadStringResource(nullptr, IDS_OVERLAY_MSG_ENUMERATION_CANCELED);
+        static_cast<void>(CreateOrUpdateInformationalTask(finalTask));
+        ShowMakeFileListOverlay(*this, payload->pane, FolderView::OverlaySeverity::Information, finalTask.doneSummary, hr);
+    }
+    else if (FAILED(hr))
+    {
+        finalTask.doneSummary = FormatStringResource(nullptr,
+                                                     IDS_FMT_MAKE_FILE_LIST_FAILED,
+                                                     payload->options.outputTarget == Common::Settings::MakeFileListOutputTarget::File
+                                                         ? payload->options.outputFile.wstring()
+                                                         : payload->currentFolder.wstring(),
+                                                     static_cast<unsigned long>(static_cast<uint32_t>(hr)));
+        static_cast<void>(CreateOrUpdateInformationalTask(finalTask));
+
+        const std::wstring message = payload->options.outputTarget == Common::Settings::MakeFileListOutputTarget::File
+                                         ? finalTask.doneSummary
+                                         : LoadStringResource(nullptr, IDS_MSG_SELECTION_SAVE_CLIPBOARD_FAILED);
+        ShowMakeFileListOverlay(*this, payload->pane, FolderView::OverlaySeverity::Error, message, hr);
+    }
+    else
+    {
+        if (_settings)
+        {
+            _settings->makeFileList = payload->options;
+        }
+
+        finalTask.doneSummary = FormatStringResource(nullptr,
+                                                     IDS_FMT_MAKE_FILE_LIST_COMPLETED,
+                                                     MakeFileListFormatDetail(payload->options.format),
+                                                     static_cast<unsigned long long>(payload->entryCount),
+                                                     payload->outputTarget);
+        static_cast<void>(CreateOrUpdateInformationalTask(finalTask));
+        ShowMakeFileListOverlay(*this, payload->pane, FolderView::OverlaySeverity::Information, finalTask.doneSummary, S_OK);
+    }
+
+    Debug::Perf::Emit(L"makeFileList.total_us",
+                      MakeFileListFormatDetail(payload->options.format),
+                      payload->totalElapsedUs,
+                      payload->entryCount,
+                      payload->collectFailures,
+                      FAILED(hr) ? hr : (payload->collectFailures == 0u ? S_OK : S_FALSE));
+    return 0;
+}
 
 LRESULT FolderWindow::OnChangeAttributesTaskUpdate(LPARAM lp) noexcept
 {
@@ -9744,6 +10266,17 @@ void DebugSetMakeFileListAutomation(const Common::Settings::MakeFileListSettings
 void DebugClearMakeFileListAutomation() noexcept
 {
     g_makeFileListAutomation.reset();
+    g_makeFileListWorkerDelayMs.store(0u, std::memory_order_release);
+}
+
+void DebugSetMakeFileListWorkerDelay(uint32_t delayMs) noexcept
+{
+    g_makeFileListWorkerDelayMs.store(delayMs, std::memory_order_release);
+}
+
+bool DebugIsMakeFileListWorkerActive() noexcept
+{
+    return g_makeFileListWorkerActive.load(std::memory_order_acquire);
 }
 
 HWND GetChangeAttributesOptionsPromptHandle() noexcept
@@ -9969,6 +10502,14 @@ bool DebugSetArchiveUnpackPromptMask(std::wstring_view mask) noexcept
     ArchiveUnpackPromptTextPayload payload{};
     payload.text.assign(mask);
     return SendMessageW(hwnd, message, static_cast<WPARAM>(ArchiveUnpackPromptDebugCommand::SetMask), reinterpret_cast<LPARAM>(&payload)) != FALSE;
+}
+
+bool DebugSetArchiveUnpackPromptReplaceExisting(bool replaceExisting) noexcept
+{
+    const HWND hwnd    = GetArchiveUnpackPromptHandle();
+    const UINT message = GetArchiveUnpackPromptDebugMessage();
+    return hwnd && message != 0u &&
+           SendMessageW(hwnd, message, static_cast<WPARAM>(ArchiveUnpackPromptDebugCommand::SetConflictPolicy), replaceExisting ? 1 : 0) != FALSE;
 }
 
 bool DebugSetArchiveUnpackPromptDeleteAfter(bool deleteAfterUnpacking) noexcept
@@ -11014,6 +11555,12 @@ bool FolderWindow::DebugFocusNavigationViewRegion(Pane pane, NavigationView::Foc
     return state.navigationView.DebugFocusRegion(region);
 }
 
+bool FolderWindow::DebugPostCurrentNavigationEditSuggestResult(Pane pane)
+{
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    return state.navigationView.DebugPostCurrentEditSuggestResultForSelfTest();
+}
+
 bool FolderWindow::DebugFocusItemByDisplayName(Pane pane, std::wstring_view displayName) noexcept
 {
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
@@ -11198,7 +11745,7 @@ void FolderWindow::CommandSelectionSave(Pane pane)
         ownerWindow = _hWnd.get();
     }
 
-    if (! SetClipboardUnicodeText(ownerWindow, clipboardText))
+    if (! Common::Clipboard::TrySetUnicodeText(ownerWindow, clipboardText))
     {
         std::wstring title   = LoadStringResource(nullptr, IDS_CAPTION_WARNING);
         std::wstring message = LoadStringResource(nullptr, IDS_MSG_SELECTION_SAVE_CLIPBOARD_FAILED);
@@ -11286,7 +11833,7 @@ void FolderWindow::CopySelectionText(Pane pane, CopySelectionTextMode mode, UINT
     clipboardText.append(L"\r\n");
 
     const HWND ownerWindow = GetClipboardOwnerWindow(_hWnd.get());
-    if (! SetClipboardUnicodeText(ownerWindow, clipboardText))
+    if (! Common::Clipboard::TrySetUnicodeText(ownerWindow, clipboardText))
     {
         std::wstring title   = LoadStringResource(nullptr, IDS_CAPTION_WARNING);
         std::wstring message = LoadStringResource(nullptr, IDS_MSG_SELECTION_SAVE_CLIPBOARD_FAILED);
@@ -11339,6 +11886,18 @@ void FolderWindow::CommandMakeFileList(Pane pane)
     SetActivePane(pane);
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
 
+    if (state.makeFileListThread.joinable())
+    {
+        RequestMakeFileListCancellation(pane);
+        ShowMakeFileListOverlay(*this,
+                                pane,
+                                FolderView::OverlaySeverity::Information,
+                                LoadStringResource(nullptr, IDS_MSG_MAKE_FILE_LIST_CANCELLATION_REQUESTED),
+                                S_FALSE);
+        Debug::Perf::Emit(L"makeFileList.command_return_us", L"cancel-requested", Debug::Perf::ElapsedUs(totalStartedAt), 0u, 0u, S_FALSE);
+        return;
+    }
+
     const std::optional<std::filesystem::path> currentFolder = state.folderView.GetFolderPath();
     if (! state.fileSystem || ! currentFolder.has_value() || currentFolder->empty() || ! IsFilePluginShortId(state.pluginShortId))
     {
@@ -11348,21 +11907,24 @@ void FolderWindow::CommandMakeFileList(Pane pane)
         return;
     }
 
+    HWND ownerWindow = _hWnd ? GetAncestor(_hWnd.get(), GA_ROOT) : nullptr;
+    if (! ownerWindow)
+    {
+        ownerWindow = _hWnd.get();
+    }
+
     MakeFileListSettings options = _settings && _settings->makeFileList.has_value() ? _settings->makeFileList.value() : MakeFileListSettings{};
     std::optional<MakeFileListSettings> requestedOptions;
+    bool automated = false;
 #ifdef ENABLE_TESTS
     if (g_makeFileListAutomation.has_value())
     {
         requestedOptions = g_makeFileListAutomation.value();
+        automated        = true;
     }
     else
 #endif
     {
-        HWND ownerWindow = _hWnd ? GetAncestor(_hWnd.get(), GA_ROOT) : nullptr;
-        if (! ownerWindow)
-        {
-            ownerWindow = _hWnd.get();
-        }
         requestedOptions = PromptForMakeFileListOptions(ownerWindow, _theme, options);
     }
 
@@ -11386,6 +11948,17 @@ void FolderWindow::CommandMakeFileList(Pane pane)
         }
     }
 
+    if (options.outputTarget == Common::Settings::MakeFileListOutputTarget::File && ! automated)
+    {
+        const std::optional<std::filesystem::path> outputFile = PromptForMakeFileListOutputFile(ownerWindow, currentFolder.value(), options);
+        if (! outputFile.has_value())
+        {
+            Debug::Perf::Emit(L"makeFileList.total_us", L"save-cancelled", Debug::Perf::ElapsedUs(totalStartedAt), 0u, 0u, S_FALSE);
+            return;
+        }
+        options.outputFile = outputFile.value();
+    }
+
     if (options.outputTarget == Common::Settings::MakeFileListOutputTarget::File && options.outputFile.empty())
     {
         ShowMakeFileListOverlay(*this,
@@ -11398,88 +11971,131 @@ void FolderWindow::CommandMakeFileList(Pane pane)
         return;
     }
 
-    const auto collectStartedAt                  = std::chrono::steady_clock::now();
-    uint64_t collectFailures                     = 0u;
-    const std::vector<MakeFileListEntry> entries = CollectMakeFileListEntries(currentFolder.value(), selectedPaths, options, collectFailures);
-    Debug::Perf::Emit(L"makeFileList.collect_us",
-                      MakeFileListFormatDetail(options.format),
-                      Debug::Perf::ElapsedUs(collectStartedAt),
-                      static_cast<uint64_t>(entries.size()),
-                      collectFailures,
-                      collectFailures == 0u ? S_OK : S_FALSE);
+    InformationalTaskUpdate task{};
+    task.kind                        = InformationalTaskUpdate::Kind::MakeFileList;
+    task.title                       = LoadStringResource(nullptr, IDS_CMD_MAKE_FILE_LIST);
+    task.makeFileListCurrentPath     = currentFolder.value();
+    task.makeFileListCollecting      = true;
+    const uint64_t taskId            = CreateOrUpdateInformationalTask(task);
+    const HWND ownerHwnd             = _hWnd.get();
+    const std::filesystem::path root = currentFolder.value();
+    const std::wstring title         = task.title;
 
-    std::string outputUtf8;
-    std::wstring clipboardText;
-    const auto renderStartedAt = std::chrono::steady_clock::now();
-    HRESULT hr                 = RenderMakeFileListOutput(entries, options, outputUtf8, clipboardText);
-    Debug::Perf::Emit(L"makeFileList.generate_us",
-                      MakeFileListFormatDetail(options.format),
-                      Debug::Perf::ElapsedUs(renderStartedAt),
-                      static_cast<uint64_t>(entries.size()),
-                      static_cast<uint64_t>(outputUtf8.size()),
-                      hr);
-    if (FAILED(hr))
+#ifdef ENABLE_TESTS
+    g_makeFileListWorkerActive.store(true, std::memory_order_release);
+#endif
+    state.makeFileListThread = std::jthread(
+        [ownerHwnd, pane, root, selectedPaths = std::move(selectedPaths), options, title, taskId, totalStartedAt](std::stop_token stopToken) noexcept
     {
-        ShowMakeFileListOverlay(
-            *this,
-            pane,
-            FolderView::OverlaySeverity::Error,
-            FormatStringResource(nullptr, IDS_FMT_MAKE_FILE_LIST_FAILED, currentFolder->wstring(), static_cast<unsigned long>(static_cast<uint32_t>(hr))),
-            hr);
-        Debug::Perf::Emit(L"makeFileList.total_us", MakeFileListFormatDetail(options.format), Debug::Perf::ElapsedUs(totalStartedAt), entries.size(), 0u, hr);
-        return;
-    }
+#ifdef ENABLE_TESTS
+        const auto clearWorkerActive = wil::scope_exit([] { g_makeFileListWorkerActive.store(false, std::memory_order_release); });
+        const uint32_t delayMs = g_makeFileListWorkerDelayMs.exchange(0u, std::memory_order_acq_rel);
+        uint32_t waitedMs      = 0u;
+        while (waitedMs < delayMs && ! stopToken.stop_requested())
+        {
+            const uint32_t sliceMs = (std::min)(10u, delayMs - waitedMs);
+            Sleep(sliceMs);
+            waitedMs += sliceMs;
+        }
+#endif
 
-    const auto outputStartedAt = std::chrono::steady_clock::now();
-    std::wstring outputTarget;
-    if (options.outputTarget == Common::Settings::MakeFileListOutputTarget::File)
-    {
-        hr           = WriteMakeFileListUtf8File(options.outputFile, outputUtf8);
-        outputTarget = options.outputFile.wstring();
-    }
-    else
-    {
-        hr           = SetClipboardUnicodeText(GetClipboardOwnerWindow(_hWnd.get()), clipboardText) ? S_OK : HRESULT_FROM_WIN32(ERROR_CLIPBOARD_NOT_OPEN);
-        outputTarget = LoadStringResource(nullptr, IDS_MSG_MAKE_FILE_LIST_TARGET_CLIPBOARD);
-    }
+        MakeFileListProgressState progress{};
+        progress.hwnd        = ownerHwnd;
+        progress.title       = title;
+        progress.taskId      = taskId;
+        progress.collecting  = true;
+        progress.currentPath = root;
+        progress.PostTaskUpdate(false, S_OK);
 
-    Debug::Perf::Emit(L"makeFileList.output_us",
-                      options.outputTarget == Common::Settings::MakeFileListOutputTarget::File ? L"file" : L"clipboard",
-                      Debug::Perf::ElapsedUs(outputStartedAt),
-                      static_cast<uint64_t>(outputUtf8.size()),
-                      static_cast<uint64_t>(entries.size()),
-                      hr);
-    if (FAILED(hr))
-    {
-        const UINT messageId =
-            options.outputTarget == Common::Settings::MakeFileListOutputTarget::File ? IDS_FMT_MAKE_FILE_LIST_FAILED : IDS_MSG_SELECTION_SAVE_CLIPBOARD_FAILED;
-        std::wstring message =
-            options.outputTarget == Common::Settings::MakeFileListOutputTarget::File
-                ? FormatStringResource(nullptr, messageId, options.outputFile.wstring(), static_cast<unsigned long>(static_cast<uint32_t>(hr)))
-                : LoadStringResource(nullptr, messageId);
-        ShowMakeFileListOverlay(*this, pane, FolderView::OverlaySeverity::Error, std::move(message), hr);
-        Debug::Perf::Emit(L"makeFileList.total_us", MakeFileListFormatDetail(options.format), Debug::Perf::ElapsedUs(totalStartedAt), entries.size(), 0u, hr);
-        return;
-    }
+        uint64_t collectFailures = 0u;
+        std::vector<MakeFileListEntry> entries;
+        const auto collectStartedAt = std::chrono::steady_clock::now();
+        HRESULT operationHr = CollectMakeFileListEntries(root, selectedPaths, options, stopToken, progress, collectFailures, entries);
+        if (operationHr == HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED) && stopToken.stop_requested())
+        {
+            operationHr = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        }
+        Debug::Perf::Emit(L"makeFileList.collect_us",
+                          MakeFileListFormatDetail(options.format),
+                          Debug::Perf::ElapsedUs(collectStartedAt),
+                          static_cast<uint64_t>(entries.size()),
+                          collectFailures,
+                          operationHr);
 
-    if (_settings)
-    {
-        _settings->makeFileList = options;
-    }
+        progress.collecting   = false;
+        progress.rendering    = SUCCEEDED(operationHr);
+        progress.totalEntries = static_cast<uint64_t>(entries.size());
+        progress.MaybePostTaskUpdate();
 
-    ShowMakeFileListOverlay(
-        *this,
-        pane,
-        FolderView::OverlaySeverity::Information,
-        FormatStringResource(
-            nullptr, IDS_FMT_MAKE_FILE_LIST_COMPLETED, MakeFileListFormatDetail(options.format), static_cast<unsigned long long>(entries.size()), outputTarget),
-        S_OK);
-    Debug::Perf::Emit(L"makeFileList.total_us",
-                      MakeFileListFormatDetail(options.format),
-                      Debug::Perf::ElapsedUs(totalStartedAt),
-                      static_cast<uint64_t>(entries.size()),
-                      collectFailures,
-                      collectFailures == 0u ? S_OK : S_FALSE);
+        std::string outputUtf8;
+        std::wstring clipboardText;
+        if (SUCCEEDED(operationHr))
+        {
+            const auto renderStartedAt = std::chrono::steady_clock::now();
+            operationHr = RenderMakeFileListOutput(entries, options, stopToken, progress, outputUtf8, clipboardText);
+            if (operationHr == HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED) && stopToken.stop_requested())
+            {
+                operationHr = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+            }
+            Debug::Perf::Emit(L"makeFileList.generate_us",
+                              MakeFileListFormatDetail(options.format),
+                              Debug::Perf::ElapsedUs(renderStartedAt),
+                              static_cast<uint64_t>(entries.size()),
+                              static_cast<uint64_t>(outputUtf8.size()),
+                              operationHr);
+        }
+
+        progress.rendering = false;
+        progress.writing   = SUCCEEDED(operationHr);
+        progress.MaybePostTaskUpdate();
+
+        uint64_t outputElapsedUs = 0u;
+        std::wstring outputTarget;
+        if (SUCCEEDED(operationHr))
+        {
+            if (stopToken.stop_requested())
+            {
+                operationHr = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+            }
+            else if (options.outputTarget == Common::Settings::MakeFileListOutputTarget::File)
+            {
+                const auto outputStartedAt = std::chrono::steady_clock::now();
+                operationHr                = WriteMakeFileListUtf8File(options.outputFile, outputUtf8, stopToken);
+                if (operationHr == HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED) && stopToken.stop_requested())
+                {
+                    operationHr = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+                }
+                outputElapsedUs            = Debug::Perf::ElapsedUs(outputStartedAt);
+                outputTarget               = options.outputFile.wstring();
+            }
+            else
+            {
+                outputTarget = LoadStringResource(nullptr, IDS_MSG_MAKE_FILE_LIST_TARGET_CLIPBOARD);
+            }
+        }
+        progress.writing = false;
+
+        if (ownerHwnd && IsWindow(ownerHwnd) != FALSE)
+        {
+            auto completed             = std::make_unique<MakeFileListCompletedPayload>();
+            completed->pane            = pane;
+            completed->taskId          = taskId;
+            completed->title           = title;
+            completed->options         = options;
+            completed->currentFolder   = root;
+            completed->clipboardText   = std::move(clipboardText);
+            completed->outputTarget    = std::move(outputTarget);
+            completed->entryCount      = static_cast<uint64_t>(entries.size());
+            completed->collectFailures = collectFailures;
+            completed->outputBytes     = static_cast<uint64_t>(outputUtf8.size());
+            completed->outputElapsedUs = outputElapsedUs;
+            completed->totalElapsedUs  = Debug::Perf::ElapsedUs(totalStartedAt);
+            completed->hr              = operationHr;
+            static_cast<void>(PostMessagePayload(ownerHwnd, WndMsg::kMakeFileListCompleted, 0, std::move(completed)));
+        }
+    });
+
+    Debug::Perf::Emit(L"makeFileList.command_return_us", MakeFileListFormatDetail(options.format), Debug::Perf::ElapsedUs(totalStartedAt), taskId, 0u, S_OK);
 }
 
 void FolderWindow::CommandPack(Pane pane)
@@ -11502,6 +12118,7 @@ void FolderWindow::CommandPack(Pane pane)
         debugResult.destinationPath    = operationResult.destinationPath;
         debugResult.entryCount         = operationResult.entryCount;
         debugResult.bytesProcessed     = operationResult.bytesProcessed;
+        debugResult.skippedConflictCount = operationResult.skippedConflictCount;
         debugResult.entries            = operationResult.entries;
         _debugLastArchiveCommandResult = std::move(debugResult);
     };
@@ -11597,6 +12214,23 @@ void FolderWindow::CommandPack(Pane pane)
         archivePath->replace_extension(L".zip");
     }
 
+    if (const HRESULT safetyHr = ValidateArchiveOutputOutsideSelectedSources(selectedPaths, archivePath.value()); FAILED(safetyHr))
+    {
+        result.archivePath = archivePath.value();
+        result.hr          = safetyHr;
+#ifdef ENABLE_TESTS
+        recordDebugResult(result);
+#endif
+        ShowArchiveOverlay(*this,
+                           pane,
+                           IDS_CMD_PACK,
+                           FolderView::OverlaySeverity::Warning,
+                           LoadStringResource(nullptr, IDS_MSG_ARCHIVE_OUTPUT_INSIDE_SOURCE),
+                           result.hr);
+        Debug::Perf::Emit(L"archive.pack_us", L"unsafe-output", Debug::Perf::ElapsedUs(startedAt), 0u, 0u, result.hr);
+        return;
+    }
+
     if (deleteSourcesAfterPack)
     {
         HWND ownerWindow = _hWnd ? GetAncestor(_hWnd.get(), GA_ROOT) : nullptr;
@@ -11638,7 +12272,11 @@ void FolderWindow::CommandPack(Pane pane)
 
     if (deleteSourcesAfterPack)
     {
-        const HRESULT deleteHr = DeletePackedSources(selectedPaths);
+        FolderView::FileOperationRequest deleteRequest{};
+        deleteRequest.operation   = FILESYSTEM_DELETE;
+        deleteRequest.sourcePaths = selectedPaths;
+        deleteRequest.flags       = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
+        const HRESULT deleteHr    = StartFileOperationFromFolderView(pane, std::move(deleteRequest));
         if (FAILED(deleteHr))
         {
             ShowArchiveOverlay(
@@ -11683,6 +12321,7 @@ void FolderWindow::CommandUnpack(Pane pane)
         debugResult.destinationPath    = operationResult.destinationPath;
         debugResult.entryCount         = operationResult.entryCount;
         debugResult.bytesProcessed     = operationResult.bytesProcessed;
+        debugResult.skippedConflictCount = operationResult.skippedConflictCount;
         debugResult.entries            = operationResult.entries;
         _debugLastArchiveCommandResult = std::move(debugResult);
     };
@@ -11718,12 +12357,12 @@ void FolderWindow::CommandUnpack(Pane pane)
     ArchiveUnpackerDefinition selectedUnpacker = BuildStoredZipUnpackerDefinition();
     bool deleteArchiveAfterUnpack              = false;
     std::wstring maskText                      = L"*.*";
-    bool overwrite                             = true;
+    ArchiveExistingTargetPolicy conflictPolicy = ArchiveExistingTargetPolicy::Skip;
 #ifdef ENABLE_TESTS
     if (debugOptions.has_value())
     {
         destinationPath  = debugOptions->destinationPath;
-        overwrite        = debugOptions->overwrite;
+        conflictPolicy   = debugOptions->overwrite ? ArchiveExistingTargetPolicy::Replace : ArchiveExistingTargetPolicy::Skip;
         selectedUnpacker = BuildStoredZipUnpackerDefinition();
     }
     else
@@ -11742,6 +12381,7 @@ void FolderWindow::CommandUnpack(Pane pane)
             selectedUnpacker         = unpackPromptResult->unpacker;
             deleteArchiveAfterUnpack = unpackPromptResult->deleteArchive;
             maskText                 = unpackPromptResult->maskText;
+            conflictPolicy           = unpackPromptResult->conflictPolicy;
         }
     }
 
@@ -11807,10 +12447,10 @@ void FolderWindow::CommandUnpack(Pane pane)
     result.destinationPath = destinationPath.value();
     for (const std::filesystem::path& archivePath : selectedPaths)
     {
-        ArchiveOperationResult currentResult = ExtractStoredZipArchive(archivePath, destinationPath.value(), overwrite, maskText);
+        ArchiveOperationResult currentResult = ExtractStoredZipArchive(archivePath, destinationPath.value(), conflictPolicy, maskText);
         if (currentResult.hr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) && PathMatchSpecW(archivePath.c_str(), L"*.zip"))
         {
-            currentResult = ExtractSevenZipArchive(archivePath, destinationPath.value(), overwrite, maskText);
+            currentResult = ExtractSevenZipArchive(archivePath, destinationPath.value(), conflictPolicy, maskText);
         }
         if (FAILED(currentResult.hr))
         {
@@ -11819,6 +12459,7 @@ void FolderWindow::CommandUnpack(Pane pane)
             result.destinationPath                        = destinationPath.value();
             result.entryCount += currentResult.entryCount;
             result.bytesProcessed += currentResult.bytesProcessed;
+            result.skippedConflictCount += currentResult.skippedConflictCount;
             result.entries.insert(result.entries.end(), currentResult.entries.begin(), currentResult.entries.end());
 #ifdef ENABLE_TESTS
             recordDebugResult(result);
@@ -11839,6 +12480,7 @@ void FolderWindow::CommandUnpack(Pane pane)
         }
         result.entryCount += currentResult.entryCount;
         result.bytesProcessed += currentResult.bytesProcessed;
+        result.skippedConflictCount += currentResult.skippedConflictCount;
         result.entries.insert(result.entries.end(), currentResult.entries.begin(), currentResult.entries.end());
     }
 

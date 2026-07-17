@@ -1,8 +1,14 @@
 # Google Drive Filesystem Plugin Plan
 
-Last updated: 2026-07-02
+Last updated: 2026-07-17
 
 Status: WIP - read-only directory-listing milestone landed; file IO, write operations, and remote validation remain.
+
+> **2026-07-17 Observatory Track 10 hardening:** the shipped read-only core now has a 16 MiB response cap,
+> hard request/logical-operation deadlines, bounded `429`/`5xx` retry, single-flight token refresh, bounded
+> continuation paging, case-sensitive opaque identity, and reversible literal `[id:...]` names. Deterministic
+> exported plugin selftests cover these contracts without credentials. This does not advance the still-open PKCE,
+> download, mutation, shortcut, or remote-validation milestones.
 
 > **2026-07-02 folder review:** ~1/3 done (enumeration, drive info, `[id:...]` duplicate-name suffixes, token refresh — landed 123ce33a6). Everything mutating/streaming still stubbed: capabilities JSON reports read/write/copy/move/delete/rename ALL false; Copy/Move/Delete/Rename entry points return `ERROR_NOT_SUPPORTED` (`FileSystemGoogleDrive.cpp:1247-1323`). No Drive feature commit since 2026-04-25. Next action = Phase 2 remainder: interactive OAuth PKCE sign-in + read-stream/download support (without in-product sign-in nothing else is usable).
 
@@ -17,7 +23,9 @@ Remaining closeout checklist:
 - [x] Directory enumeration and drive-info milestone are documented in `Specs/FileSystem/FileSystem_GoogleDrive.md`.
 - [ ] Implement or explicitly defer file download/read streams, including native Google Docs export behavior.
 - [ ] Implement or explicitly defer upload/overwrite/create-directory/rename/move/delete/server-side copy.
-- [ ] Finish shortcut and duplicate-name path semantics for the host's segment-based virtual filesystem contract.
+- [x] Finish duplicate-name display/path identity for the shipped enumeration surface, including case-distinct IDs
+  and literal suffix-like names (Observatory Track 10, 2026-07-17).
+- [ ] Finish shortcut resolution semantics for the host's segment-based virtual filesystem contract.
 - [ ] Add deterministic local selftests plus gated remote Drive validation and archive the evidence.
 
 ## Goal
@@ -432,10 +440,10 @@ Document at minimum:
 
 ### Phase 4: Hard cases
 
-- duplicate-name disambiguation
+- [x] duplicate-name disambiguation for enumeration/path resolution
 - shortcuts
 - native Google docs export behavior
-- retry / rate-limit hardening
+- [x] retry / rate-limit, response-cap, paging, deadline, and single-flight refresh hardening
 
 ### Phase 5: Self-tests and spec completion
 

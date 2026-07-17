@@ -699,6 +699,7 @@ Clicking the `"..."` segment opens a lightweight popup window that displays the 
 
 **Popup dismissal**
 - Click outside, `Esc`, or focus loss closes the popup.
+- Focus transfer into a top-level popup menu directly owned by the full-path popup is still inside the popup interaction. `WM_ACTIVATE/WA_INACTIVE` must not close the full-path popup when the activating HWND is the popup itself, one of its child windows, or a directly owned top-level menu window; normal unrelated activation still dismisses it.
 
 **Popup edit mode**
 - The popup can enter edit mode (F4 / Ctrl+L / Alt+D, or double-click whitespace) to type/paste a path.
@@ -906,6 +907,9 @@ Segment[0] › Segment[1] › Segment[2] › Segment[3]
 - Clicking **separator N** shows siblings of **segment[N+1]** (the segment to the right)
 - To get siblings, use `segment[N+1].fullPath.parent_path()`
 - Example: Clicking separator 0 (after `"C:"`) uses segment[1] (`"C:\\Users"`), parent path is `"C:\\"`, shows folders in root
+- Enumeration retains at most `99` actionable sibling rows and must keep the current segment in that bounded set.
+  When more siblings exist, the popup adds a localized search/navigate row instead of materializing an unbounded
+  menu; that row opens the existing address/full-path editor so the user can type the destination.
 
 **Implementation:**
 ```cpp
@@ -1198,6 +1202,9 @@ C:\Users\Username\Documents\Projects\RedSalamander
     - Connection Manager routing (`nav:`, `nav://`, `@conn:`) + connection-name suggestions (with resolved preview like `sftp://user@host:22`).
   - Filtering: matches folders whose names **contain** the typed text (case-insensitive), not just prefix matches
   - The typed substring is highlighted inside each suggestion item to show why it matched.
+  - An asynchronous result is accepted only when its request generation, edit-session generation, and exact query
+    text still match the active editor. Escape/dismissal, suggestion application, programmatic text replacement,
+    and edit exit invalidate the prior generation, so an in-flight result cannot reopen a dismissed popup.
   - Selecting a suggestion (mouse click or `Enter` when a suggestion is selected) updates the edit text to the chosen folder and appends the suggestion’s directory separator (typically `\` for Windows paths and `/` for plugin paths), and **stays in edit mode** so the next level can be suggested immediately.
   - Popup UI (modernized to match Settings combobox dropdown):
     - rounded border, row height aligned to the navigation bar height (minimum `40 DIP`),

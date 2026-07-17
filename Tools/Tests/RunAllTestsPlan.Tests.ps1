@@ -577,35 +577,51 @@ Describe 'Run-AllTests plan helper' {
         $deadRunId = '20260706T110000Z-1234-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
         $liveRunId = '20260706T111000Z-5678-cccccccccccccccccccccccccccccccc'
         $allowedRunId = '20260706T112000Z-9012-dddddddddddddddddddddddddddddddd'
+        $deadFallbackRunId = 'viewer-pe-2468-12345678'
+        $liveFallbackRunId = 'redconfigure-1357-87654321'
+        $reusedPidFallbackRunId = 'viewer-sqlite-5678-11223344'
         $manualRunId = 'manual-run'
         try {
-            foreach ($runId in @($currentRunId, $deadRunId, $liveRunId, $allowedRunId, $manualRunId)) {
+            foreach ($runId in @($currentRunId, $deadRunId, $liveRunId, $allowedRunId, $deadFallbackRunId, $liveFallbackRunId, $reusedPidFallbackRunId, $manualRunId)) {
                 New-Item -ItemType Directory -Path (Join-Path $runsRoot $runId) -Force | Out-Null
             }
             Set-Content -LiteralPath (Join-Path (Join-Path $runsRoot $deadRunId) 'artifact.txt') -Value 'stale' -Encoding UTF8
+            (Get-Item -LiteralPath (Join-Path $runsRoot $reusedPidFallbackRunId)).CreationTimeUtc = (Get-Date).ToUniversalTime().AddDays(-2)
+            $liveProcessStartTimesUtc = @{
+                1357 = (Get-Date).ToUniversalTime().AddHours(-1)
+                5678 = (Get-Date).ToUniversalTime().AddDays(-1)
+            }
 
             $targets = @(Resolve-RSTestSandboxStaleRunTargets `
                     -TestRoot $testRoot `
                     -RunId $currentRunId `
                     -AllowedRunIds @($allowedRunId) `
-                    -LiveProcessIds @(4000, 5678, 9012))
+                    -LiveProcessIds @(1357, 4000, 5678, 9012) `
+                    -LiveProcessStartTimesUtc $liveProcessStartTimesUtc)
 
-            Assert-RSEqual -Actual @($targets).Count -Expected 1 -Message 'Only parseable dead-PID sibling run dirs should be selected.'
-            Assert-RSEqual -Actual $targets[0].RunId -Expected $deadRunId -Message 'The dead process run should be selected for cleanup.'
-            Assert-RSEqual -Actual $targets[0].ProcessId -Expected 1234 -Message 'The run-id parser should expose the owning PID.'
-            Assert-RSEqual -Actual $targets[0].Category -Expected 'stale-test-run-dir' -Message 'Cleanup targets should be categorized for reporting.'
+            Assert-RSEqual -Actual @($targets).Count -Expected 3 -Message 'Dead-owner and PID-reused runner/harness-fallback sibling run dirs should be selected.'
+            Assert-RSEqual -Actual @($targets | Where-Object { $_.RunId -eq $deadRunId }).Count -Expected 1 -Message 'The dead runner-owned process run should be selected for cleanup.'
+            Assert-RSEqual -Actual @($targets | Where-Object { $_.RunId -eq $deadFallbackRunId }).Count -Expected 1 -Message 'The dead direct-harness fallback run should be selected for cleanup.'
+            Assert-RSEqual -Actual @($targets | Where-Object { $_.RunId -eq $reusedPidFallbackRunId }).Count -Expected 1 -Message 'An older fallback run must not be protected by an unrelated process that reused its PID.'
+            Assert-RSEqual -Actual ($targets | Where-Object { $_.RunId -eq $deadRunId } | Select-Object -First 1).ProcessId -Expected 1234 -Message 'The runner-id parser should expose the owning PID.'
+            Assert-RSEqual -Actual ($targets | Where-Object { $_.RunId -eq $deadFallbackRunId } | Select-Object -First 1).ProcessId -Expected 2468 -Message 'The fallback-id parser should expose the owning PID.'
+            Assert-RSEqual -Actual @($targets | Where-Object { $_.Category -ne 'stale-test-run-dir' }).Count -Expected 0 -Message 'Cleanup targets should be categorized for reporting.'
 
             $cleanupResults = @(Remove-RSTestSandboxStaleRunDirectories `
                     -TestRoot $testRoot `
                     -RunId $currentRunId `
                     -AllowedRunIds @($allowedRunId) `
-                    -LiveProcessIds @(4000, 5678, 9012))
+                    -LiveProcessIds @(1357, 4000, 5678, 9012) `
+                    -LiveProcessStartTimesUtc $liveProcessStartTimesUtc)
 
-            Assert-RSEqual -Actual @($cleanupResults).Count -Expected 1 -Message 'Only the dead sibling run should be removed.'
-            Assert-RSEqual -Actual $cleanupResults[0].Status -Expected 'Removed' -Message 'Successful stale run cleanup should report Removed.'
+            Assert-RSEqual -Actual @($cleanupResults).Count -Expected 3 -Message 'Dead runner, dead direct-harness, and PID-reused siblings should be removed.'
+            Assert-RSEqual -Actual @($cleanupResults | Where-Object { $_.Status -ne 'Removed' }).Count -Expected 0 -Message 'Successful stale run cleanup should report Removed.'
             Assert-RSEqual -Actual (Test-Path -LiteralPath (Join-Path $runsRoot $deadRunId)) -Expected $false -Message 'Dead-PID stale run directory should be removed.'
+            Assert-RSEqual -Actual (Test-Path -LiteralPath (Join-Path $runsRoot $deadFallbackRunId)) -Expected $false -Message 'Dead-PID direct-harness fallback run directory should be removed.'
+            Assert-RSEqual -Actual (Test-Path -LiteralPath (Join-Path $runsRoot $reusedPidFallbackRunId)) -Expected $false -Message 'PID-reused direct-harness fallback run directory should be removed.'
             Assert-RSEqual -Actual (Test-Path -LiteralPath (Join-Path $runsRoot $currentRunId)) -Expected $true -Message 'Current run directory must never be removed.'
             Assert-RSEqual -Actual (Test-Path -LiteralPath (Join-Path $runsRoot $liveRunId)) -Expected $true -Message 'Live-PID sibling run directory must not be removed.'
+            Assert-RSEqual -Actual (Test-Path -LiteralPath (Join-Path $runsRoot $liveFallbackRunId)) -Expected $true -Message 'Live-PID direct-harness fallback run directory must not be removed.'
             Assert-RSEqual -Actual (Test-Path -LiteralPath (Join-Path $runsRoot $allowedRunId)) -Expected $true -Message 'Explicitly allowed sibling run directory must not be removed.'
             Assert-RSEqual -Actual (Test-Path -LiteralPath (Join-Path $runsRoot $manualRunId)) -Expected $true -Message 'Unparseable manual run directory must not be removed by the dead-PID sweeper.'
         } finally {

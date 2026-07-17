@@ -849,8 +849,26 @@ LRESULT ViewerSqlite::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcep
             return 0;
         case WM_NCACTIVATE: ApplyTitleBarTheme(wp != FALSE); return DefWindowProcW(hwnd, msg, wp, lp);
         case WM_CLOSE: static_cast<void>(Close()); return 0;
-        case kAsyncOpenCompleteMessage: OnAsyncOpenComplete(TakeMessagePayload<AsyncOpenResult>(lp), static_cast<uint64_t>(wp)); return 0;
-        case kAsyncQueryCompleteMessage: OnAsyncQueryComplete(TakeMessagePayload<AsyncQueryResult>(lp), static_cast<uint64_t>(wp)); return 0;
+        case kAsyncOpenCompleteMessage:
+        {
+            auto result = TakeMessagePayload<AsyncOpenResult>(lp);
+            if (lp != 0 && ! result)
+            {
+                return 0;
+            }
+            OnAsyncOpenComplete(std::move(result), static_cast<uint64_t>(wp));
+            return 0;
+        }
+        case kAsyncQueryCompleteMessage:
+        {
+            auto result = TakeMessagePayload<AsyncQueryResult>(lp);
+            if (lp != 0 && ! result)
+            {
+                return 0;
+            }
+            OnAsyncQueryComplete(std::move(result), static_cast<uint64_t>(wp));
+            return 0;
+        }
         case WM_NCDESTROY:
         {
             static_cast<void>(DrainPostedPayloadsForWindow(hwnd));

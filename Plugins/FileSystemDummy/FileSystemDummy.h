@@ -357,6 +357,8 @@ private:
     std::unique_ptr<DummyNode> CloneNode(const DummyNode& source);
     HRESULT CreateDirectoryClone(
         const DummyNode& sourceDirectory, DummyNode& destinationParent, std::wstring_view destinationName, FileSystemFlags flags, DummyNode** outDirectory);
+    HRESULT ValidateDirectoryMerge(DummyNode& sourceDirectory, DummyNode& destinationDirectory, FileSystemFlags flags);
+    HRESULT ValidateDeleteNode(DummyNode& target, FileSystemFlags flags);
     HRESULT MergeCopyDirectory(DummyNode& sourceDirectory, DummyNode& destinationDirectory, FileSystemFlags flags, uint64_t* outBytes);
     HRESULT MergeMoveDirectory(DummyNode& sourceDirectory, DummyNode& destinationDirectory, FileSystemFlags flags, uint64_t* outBytes);
     HRESULT CopyNode(DummyNode& source, DummyNode& destinationParent, std::wstring_view destinationName, FileSystemFlags flags, uint64_t* outBytes);

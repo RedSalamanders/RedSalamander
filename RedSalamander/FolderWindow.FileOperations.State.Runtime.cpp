@@ -1,3 +1,15 @@
+#include "FolderWindow.FileOperations.State.Private.h"
+
+#include "HostServices.h"
+#include "NavigationLocation.h"
+#include "SessionState.h"
+#include "SettingsHotReload.h"
+
+#include <algorithm>
+#include <limits>
+
+using namespace FolderWindowFileOperationsStateInternal;
+
 bool IsAutoDismissableFileOperationCompletion(HRESULT resultHr, unsigned long warningCount, unsigned long errorCount) noexcept
 {
     // Recorded issues must stay reachable: even a cancelled task keeps its card when it already
@@ -89,7 +101,9 @@ HRESULT FolderWindow::FileOperationState::StartOperation(FileSystemOperation ope
                                                          wil::com_ptr<IFileSystem> destinationFileSystem,
                                                          uint64_t* taskIdOut,
                                                          std::vector<FolderWindow::ResolvedFileOperationItem> resolvedItems,
-                                                         std::wstring confirmationMessage)
+                                                         std::wstring confirmationMessage,
+                                                         std::wstring sourcePluginIdOverride,
+                                                         std::wstring sourcePluginShortIdOverride)
 {
     if (taskIdOut)
     {
@@ -141,8 +155,11 @@ HRESULT FolderWindow::FileOperationState::StartOperation(FileSystemOperation ope
         return S_FALSE;
     }
 
-    const std::wstring& sourcePluginId      = sourcePane == FolderWindow::Pane::Left ? _owner._leftPane.pluginId : _owner._rightPane.pluginId;
-    const std::wstring& sourcePluginShortId = sourcePane == FolderWindow::Pane::Left ? _owner._leftPane.pluginShortId : _owner._rightPane.pluginShortId;
+    const std::wstring& paneSourcePluginId      = sourcePane == FolderWindow::Pane::Left ? _owner._leftPane.pluginId : _owner._rightPane.pluginId;
+    const std::wstring& paneSourcePluginShortId = sourcePane == FolderWindow::Pane::Left ? _owner._leftPane.pluginShortId : _owner._rightPane.pluginShortId;
+    const std::wstring sourcePluginId = sourcePluginIdOverride.empty() ? paneSourcePluginId : std::move(sourcePluginIdOverride);
+    const std::wstring sourcePluginShortId =
+        sourcePluginShortIdOverride.empty() ? paneSourcePluginShortId : std::move(sourcePluginShortIdOverride);
     std::wstring destinationPluginId;
     std::wstring destinationPluginShortId;
     std::wstring destinationInstanceContext;

@@ -34,6 +34,8 @@ LRESULT CALLBACK FolderWindowDxHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARA
 #ifdef ENABLE_TESTS
 void DebugSetMakeFileListAutomation(const Common::Settings::MakeFileListSettings& options) noexcept;
 void DebugClearMakeFileListAutomation() noexcept;
+void DebugSetMakeFileListWorkerDelay(uint32_t delayMs) noexcept;
+[[nodiscard]] bool DebugIsMakeFileListWorkerActive() noexcept;
 
 struct ChangeAttributesOptionsPromptDebugSnapshot
 {
@@ -135,6 +137,8 @@ struct ArchiveUnpackPromptDebugSnapshot
     std::wstring unpackerExtension;
     size_t unpackerCount         = 0u;
     size_t selectedUnpackerIndex = 0u;
+    size_t conflictPolicyIndex   = 0u;
+    bool replaceExistingFiles    = false;
     bool deleteAfterUnpacking    = false;
     std::wstring maskText;
     bool maskHelpVisible           = false;
@@ -145,6 +149,7 @@ struct ArchiveUnpackPromptDebugSnapshot
 [[nodiscard]] bool DebugGetArchiveUnpackPromptSnapshot(ArchiveUnpackPromptDebugSnapshot& out) noexcept;
 [[nodiscard]] bool DebugSetArchiveUnpackPromptDestinationPath(std::wstring_view path) noexcept;
 [[nodiscard]] bool DebugSetArchiveUnpackPromptMask(std::wstring_view mask) noexcept;
+[[nodiscard]] bool DebugSetArchiveUnpackPromptReplaceExisting(bool replaceExisting) noexcept;
 [[nodiscard]] bool DebugSetArchiveUnpackPromptDeleteAfter(bool deleteAfterUnpacking) noexcept;
 [[nodiscard]] bool DebugConfirmArchiveUnpackPrompt() noexcept;
 [[nodiscard]] bool DebugCancelArchiveUnpackPrompt() noexcept;
@@ -687,6 +692,7 @@ public:
             CompareDirectories,
             ChangeCase,
             ChangeAttributes,
+            MakeFileList,
         };
 
         Kind kind       = Kind::CompareDirectories;
@@ -743,6 +749,16 @@ public:
         uint64_t changeAttributesScannedEntries = 0;
         uint64_t changeAttributesPlannedItems   = 0;
         uint64_t changeAttributesCompletedItems = 0;
+
+        // Make File List payload (Kind::MakeFileList)
+        bool makeFileListCollecting = false;
+        bool makeFileListRendering  = false;
+        bool makeFileListWriting    = false;
+        std::filesystem::path makeFileListCurrentPath;
+        uint64_t makeFileListScannedFolders  = 0;
+        uint64_t makeFileListScannedEntries  = 0;
+        uint64_t makeFileListTotalEntries    = 0;
+        uint64_t makeFileListRenderedEntries = 0;
 
         bool finished    = false;
         HRESULT resultHr = S_OK;
@@ -1007,6 +1023,7 @@ public:
         std::filesystem::path destinationPath;
         uint64_t entryCount     = 0u;
         uint64_t bytesProcessed = 0u;
+        uint64_t skippedConflictCount = 0u;
         std::vector<std::wstring> entries;
     };
 
@@ -1094,6 +1111,7 @@ public:
     [[nodiscard]] HWND DebugGetNavigationViewHwnd(Pane pane) const noexcept;
     [[nodiscard]] bool DebugGetNavigationViewSnapshot(Pane pane, NavigationViewDebugSnapshot& out) const noexcept;
     [[nodiscard]] bool DebugFocusNavigationViewRegion(Pane pane, NavigationView::FocusRegion region) noexcept;
+    [[nodiscard]] bool DebugPostCurrentNavigationEditSuggestResult(Pane pane);
     [[nodiscard]] bool DebugFocusItemByDisplayName(Pane pane, std::wstring_view displayName) noexcept;
     [[nodiscard]] bool DebugGetIncrementalSearchSnapshot(Pane pane, FolderView::IncrementalSearchDebugSnapshot& out) const noexcept;
     struct CommandLineDebugSnapshot
@@ -1215,6 +1233,9 @@ private:
     LRESULT OnChangeCaseCompleted(LPARAM lp) noexcept;
     LRESULT OnChangeAttributesTaskUpdate(LPARAM lp) noexcept;
     LRESULT OnChangeAttributesCompleted(LPARAM lp) noexcept;
+    LRESULT OnMakeFileListTaskUpdate(LPARAM lp) noexcept;
+    LRESULT OnMakeFileListCompleted(LPARAM lp) noexcept;
+    void RequestMakeFileListCancellation(Pane pane) noexcept;
     // File operations (internal implementation in FolderWindow.FileOperations.cpp)
     void EnsureFileOperations();
     HRESULT StartFileOperationFromFolderView(Pane pane, FolderView::FileOperationRequest request) noexcept;
@@ -1582,6 +1603,7 @@ private:
 
         std::jthread changeCaseThread;
         std::jthread changeAttributesThread;
+        std::jthread makeFileListThread;
         bool selectionFolderBytesPending = false;
         bool selectionFolderBytesValid   = false;
         uint64_t selectionFolderBytes    = 0;
@@ -1674,6 +1696,7 @@ private:
     };
     std::vector<FileOperationCompletedSubscription> _fileOperationCompletedCallbacks;
     uint64_t _nextFileOperationCompletedCallbackToken = 1;
+    std::unordered_map<uint64_t, std::function<void(HRESULT)>> _fileOperationRequestCompletionCallbacks;
 
     std::unique_ptr<FileOperationState, FileOperationStateDeleter> _fileOperations;
 #ifdef ENABLE_TESTS

@@ -12,6 +12,69 @@ function Get-RSText {
     return Get-Content -LiteralPath (Join-Path $repoRoot $Path) -Raw
 }
 
+Describe 'IMAP UIDVALIDITY and single-message delete source contracts' {
+    BeforeAll {
+        $imapSource = Get-RSText -Path 'Plugins\FileSystemCurl\FileSystemCurl.Imap.cpp'
+        $helpersHeader = Get-RSText -Path 'Plugins\FileSystemCurl\FileSystemCurl.ImapHelpers.h'
+        $helpersSource = Get-RSText -Path 'Plugins\FileSystemCurl\FileSystemCurl.ImapHelpers.cpp'
+    }
+
+    It 'never issues mailbox-wide EXPUNGE and requires UIDPLUS before the mark-expunge-rollback state machine' {
+        $imapSource | Should Not Match '(?s)CurlPerformImapCustomRequest\([^;]{0,500},\s*"EXPUNGE"\s*,'
+        $imapSource | Should Match 'ImapFetchCapabilities\(conn, capabilities\)'
+        $imapSource | Should Match 'ExecuteImapSingleMessageDelete\(capabilities\.uidPlus'
+        $imapSource | Should Match 'ImapDeleteCommand::UidExpunge'
+        $imapSource | Should Match 'ImapDeleteCommand::RemoveDeletedFlag'
+        $helpersSource | Should Match 'if \(! uidPlusAvailable\)[\s\S]{0,120}ERROR_NOT_SUPPORTED'
+        $helpersSource | Should Match 'rollbackHr\s*=\s*executor\(context, ImapDeleteCommand::RemoveDeletedFlag'
+    }
+
+    It 'carries UIDVALIDITY in listed identity and revalidates it before message fetch or delete' {
+        $helpersHeader | Should Match 'struct ImapMessageIdentity[\s\S]*?uidValidity[\s\S]*?uid'
+        $imapSource | Should Match 'BuildImapMessageLeafName\(meta\.subject, meta\.from, uidValidity, uid\)'
+        $imapSource | Should Match 'TryParseImapMessageIdentityFromLeafName\(leaf, identity\)'
+        ([regex]::Matches($imapSource, 'ImapValidateMessageUidValidity\(conn, mailboxPath, delimiter, identity\.uidValidity\)')).Count | Should BeGreaterThan 2
+        $helpersSource | Should Match 'ERROR_REVISION_MISMATCH'
+
+        $listing = [regex]::Match(
+            $imapSource,
+            '(?s)HRESULT\s+ImapReadDirectoryEntries\(.*?(?=HRESULT\s+ReadDirectoryEntries\()').Value
+        $listing.Length | Should BeGreaterThan 0
+        ([regex]::Matches($listing, 'ImapFetchMailboxStatus\(')).Count | Should Be 1
+        $listing.IndexOf('ImapFetchMailboxStatus(') | Should BeLessThan $listing.IndexOf('ImapListMessageUids(')
+    }
+}
+
+Describe 'Microsoft Drive credential-boundary source contracts' {
+    BeforeAll {
+        $source = Get-RSText -Path 'Plugins\FileSystemMicrosoftDrive\FileSystemMicrosoftDrive.cpp'
+    }
+
+    It 'validates Graph and preauthenticated upload targets before credential-bound dispatch' {
+        $source | Should Match 'struct ValidatedGraphApiUrl'
+        $source | Should Match 'struct ValidatedPreauthenticatedUploadUrl'
+        $source | Should Match 'ValidateGraphApiUrl\(rawUrl, graphUrl\)'
+        $source | Should Match 'ValidatePreauthenticatedUploadUrl\(rawUploadUrl, uploadUrlOut\)'
+        $source | Should Match 'SendPreauthenticatedUploadRequest'
+        $source | Should Match 'WINHTTP_DISABLE_REDIRECTS'
+        $source | Should Match 'Common::Paging::WideContinuationGuard pager'
+        $source | Should Match 'pager\.BeginContinuation\(nextUrl'
+        $source | Should Match 'foreign Graph continuation should fail before a second request'
+        $source | Should Match 'repeated Graph continuation should fail before a third request'
+    }
+
+    It 'keeps bearer values and opaque query values out of diagnostics and serialized header blocks' {
+        $source | Should Match 'DescribeHttpRequestTarget'
+        $source | Should Match 'SecureClear\(authorizationHeader\)'
+        $source | Should Match 'WinHttpAddRequestHeaders'
+        $source | Should Not Match 'headerBlock\.append\(L"Authorization:'
+        $source | Should Not Match 'headers=''\{\}'''
+        $source | Should Not Match 'url=''\{\}'''
+        $source | Should Match 'captured diagnostics must not contain the bearer sentinel'
+        $source | Should Match 'captured diagnostics must not contain Graph or upload-session query sentinels'
+    }
+}
+
 function Get-RSTestSourceContractFiles {
     $extensions = @('.cpp', '.h', '.hpp', '.ps1')
     $roots = @(
@@ -372,7 +435,7 @@ Describe 'Test harness source contracts' {
     }
 
     It 'captures viewer payload fields before moving the payload into PostMessagePayload' {
-        $viewerSources = Get-ChildItem -LiteralPath (Join-Path $repoRoot 'Plugins') -Recurse -File -Include 'Viewer*.cpp'
+        $viewerSources = Get-ChildItem -LiteralPath (Join-Path $repoRoot 'Plugins') -Recurse -File -Filter 'Viewer*.cpp'
         $unsafeSiblingArgumentPattern = [regex]::new(
             'PostMessagePayload\([^;]{0,500}(?<payload>[A-Za-z_][A-Za-z0-9_]*)->[A-Za-z_][A-Za-z0-9_]*[^;]{0,500}std::move\(\k<payload>\)',
             [System.Text.RegularExpressions.RegexOptions]::Singleline)
@@ -2727,7 +2790,7 @@ Specs\TestRuns\local_scratch
 
     It 'keeps Riptide low-risk hardening invariants wired' {
         $fileOps = Get-RSText -Path 'Plugins\FileSystem\FileSystem.FileOps.cpp'
-        $runtime = Get-RSText -Path 'RedSalamander\FolderWindow.FileOperations.State.Runtime.Part.cpp'
+        $runtime = Get-RSText -Path 'RedSalamander\FolderWindow.FileOperations.State.Runtime.cpp'
         $bridge = Get-RSText -Path 'RedSalamander\FolderWindow.FileOperations.State.cpp'
         $storage = Get-RSText -Path 'Plugins\FileSystem\FileSystem.cpp'
         $popup = Get-RSText -Path 'RedSalamander\FolderWindow.FileOperations.Popup.cpp'
@@ -2769,7 +2832,7 @@ Specs\TestRuns\local_scratch
 
     It 'keeps Floodgate data-safety invariants wired' {
         $bridge = Get-RSText -Path 'RedSalamander\FolderWindow.FileOperations.State.cpp'
-        $bridgeQueue = Get-RSText -Path 'RedSalamander\FolderWindow.FileOperations.State.Queue.Part.cpp'
+        $bridgeQueue = Get-RSText -Path 'RedSalamander\FolderWindow.FileOperations.State.Queue.cpp'
         $sevenZip = Get-RSText -Path 'Plugins\FileSystem7z\FileSystem7z.cpp'
         $fileOpsSelfTest = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.cpp'
         $fairstreamSelfTest = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.Fairstream.cpp'
@@ -2779,13 +2842,13 @@ Specs\TestRuns\local_scratch
         $microsoftDrive = Get-RSText -Path 'Plugins\FileSystemMicrosoftDrive\FileSystemMicrosoftDrive.cpp'
         $directoryOps = Get-RSText -Path 'Plugins\FileSystem\FileSystem.DirectoryOps.cpp'
         $watch = Get-RSText -Path 'Plugins\FileSystem\FileSystem.Watch.cpp'
-        $fileOpsDiagnostics = Get-RSText -Path 'RedSalamander\FolderWindow.FileOperations.State.Diagnostics.Part.cpp'
+        $fileOpsDiagnostics = Get-RSText -Path 'RedSalamander\FolderWindow.FileOperations.State.Diagnostics.cpp'
         $issuesPane = Get-RSText -Path 'RedSalamander\FolderWindow.FileOperations.IssuesPane.cpp'
         $localIndex = Get-RSText -Path 'Common\LocalSearchIndexCore.cpp'
         $folderView = Get-RSText -Path 'RedSalamander\FolderView.cpp'
         $folderViewEnumeration = Get-RSText -Path 'RedSalamander\FolderView.Enumeration.cpp'
         $folderViewInteraction = Get-RSText -Path 'RedSalamander\FolderView.Interaction.cpp'
-        $navigationCommands = Get-RSText -Path 'RedSalamander\FolderWindow.FileSystem.Navigation.Part.cpp'
+        $navigationCommands = Get-RSText -Path 'RedSalamander\FolderWindow.FileSystem.Navigation.cpp'
         $mainWindow = Get-RSText -Path 'RedSalamander\RedSalamander.cpp'
 
         $s3 | Should Match 'FindAncestorObjectConflict'
@@ -3062,5 +3125,479 @@ Specs\TestRuns\local_scratch
         $deploymentTest | Should Match 'Start-RSContainedProcess[\s\S]*?-DelegateArtifactOperation'
         $deploymentTest | Should Match 'Close-RSContainedProcess -Process \$process'
         $deploymentTest | Should Match 'Enter-RSArtifactOperationLock[\s\S]*?AfterAll[\s\S]*?Exit-RSArtifactOperationLock'
+    }
+
+    It 'keeps IronLedger FolderView data-integrity guards wired' {
+        $dragDrop = Get-RSText -Path 'RedSalamander\FolderView.DragDrop.cpp'
+        $fileOps = Get-RSText -Path 'RedSalamander\FolderView.FileOps.cpp'
+        $interaction = Get-RSText -Path 'RedSalamander\FolderView.Interaction.cpp'
+        $menus = Get-RSText -Path 'RedSalamander\FolderView.Menus.cpp'
+        $enumeration = Get-RSText -Path 'RedSalamander\FolderView.Enumeration.cpp'
+        $rendering = Get-RSText -Path 'RedSalamander\FolderView.Rendering.cpp'
+        $folderWindowFileOps = Get-RSText -Path 'RedSalamander\FolderWindow.FileOperations.cpp'
+
+        $dragDrop | Should Match 'ScreenToClient\(_owner\.GetHWND\(\),\s*&clientPoint\)'
+        $dragDrop | Should Match '!\s*IsCurrentFolderEnumerated\(\)[\s\S]{0,120}DRAGDROP_S_CANCEL'
+        $dragDrop | Should Match 'HitTest\(clientPoint\)[\s\S]{0,240}GetItemFullPath'
+        $dragDrop | Should Match 'header->pathCount\s*>\s*kMaxDropPathCount'
+        $dragDrop | Should Match 'GlobalSize\(medium\.hGlobal\)[\s\S]{0,700}dropFiles->pFiles\s*>\s*bytesAvailable'
+        $dragDrop | Should Match 'DragQueryFileW\(drop,\s*0xFFFFFFFFu'
+        $dragDrop | Should Match 'IsSameOrDescendantPath\(normalizedSource\.native\(\),\s*normalizedDestination\.native\(\)\)'
+        $dragDrop | Should Match 'effect\s*==\s*DROPEFFECT_MOVE\s*&&\s*!\s*internalDrop[\s\S]{0,360}reportedEffect\s*=\s*DROPEFFECT_COPY'
+        $dragDrop | Should Match '\*performedEffect\s*=\s*reportedEffect'
+
+        $fileOps | Should Match 'totalChars\s*>\s*\(\(std::numeric_limits<size_t>::max\)\(\)\s*-\s*sizeof\(DROPFILES\)\)\s*/\s*sizeof\(wchar_t\)'
+        $fileOps | Should Match 'fileCount\s*>\s*kMaxClipboardDropPaths'
+        $fileOps | Should Match '!\s*IsCurrentFolderEnumerated\(\)'
+        $fileOps | Should Match 'request\.completionCallback[\s\S]{0,420}InvalidateMoveClipboardAfterVerifiedCompletion'
+
+        $interaction | Should Match '!\s*_items\[\*hit\]\.selected[\s\S]{0,100}SelectSingle\(\*hit\)'
+        $interaction | Should Match 'ClearSelection\(\);[\s\S]{0,180}_drag\.dragging\s*=\s*false[\s\S]{0,180}_focusedIndex\s*=\s*static_cast<size_t>\(-1\)'
+        $menus | Should Match 'targetSnapshot\s*=\s*GetSelectedOrFocusedDisplayNames\(\)'
+        $menus | Should Match 'targetBoundCommand[\s\S]{0,700}snapshotStillMatches\(\)'
+
+        $enumeration | Should Match 'kEnumerationReserveCeiling[\s\S]{0,520}clampedCount'
+        $enumeration | Should Match 'focusedName\.empty\(\)\s*&&\s*fallbackFocusIndex\s*!=\s*invalidIndex'
+        $enumeration | Should Match 'OnCommandMessage\(pending\.commandId\)'
+        $rendering | Should Match '_hoveredIndex\s*<\s*_items\.size\(\)[\s\S]{0,100}_items\[_hoveredIndex\]'
+
+        $folderWindowFileOps | Should Match '!\s*request\.sourceContextSpecified[\s\S]{0,900}FindPluginById\(L"builtin/file-system"\)'
+        $folderWindowFileOps | Should Match '_fileOperationRequestCompletionCallbacks\.insert_or_assign'
+        $folderWindowFileOps | Should Match '!\s*dest\.folderView\.IsCurrentFolderEnumerated\(\)[\s\S]{0,220}destinationUnsettled'
+        $folderWindowFileOps | Should Match 'destinationUnsettled\s*\?\s*IDS_MSG_PANE_OP_DESTINATION_LOADING'
+    }
+
+    It 'keeps Observatory Track 5 pack-and-delete output safety wired' {
+        $commands = Get-RSText -Path 'RedSalamander\FolderWindow.FileSystem.Commands.cpp'
+        $paths = Get-RSText -Path 'Common\PathUtils.h'
+
+        $paths | Should Match 'NormalizedWindowsPathEqualsNoCase'
+        $paths | Should Match 'IsSameOrDescendantNormalizedWindowsPath'
+        $commands | Should Match 'ValidateArchiveOutputOutsideSelectedSources\(selectedPaths,\s*archivePath\.value\(\)\)'
+        $commands | Should Match 'sourceIsDirectory[\s\S]{0,220}IsSameOrDescendantNormalizedWindowsPath'
+        $commands | Should Match 'IDS_MSG_ARCHIVE_OUTPUT_INSIDE_SOURCE'
+        $commands | Should Match 'if\s*\(FAILED\(result\.hr\)\)[\s\S]{0,1600}if\s*\(deleteSourcesAfterPack\)'
+        $commands | Should Match 'deleteRequest\.operation\s*=\s*FILESYSTEM_DELETE[\s\S]{0,320}StartFileOperationFromFolderView\(pane,\s*std::move\(deleteRequest\)\)'
+        $commands | Should Not Match 'DeletePackedSources\('
+    }
+
+    It 'keeps Observatory Track 5 local outputs transactional' {
+        $transaction = Get-RSText -Path 'Common\LocalFileTransaction.h'
+        $commands = Get-RSText -Path 'RedSalamander\FolderWindow.FileSystem.Commands.cpp'
+        $monitor = Get-RSText -Path 'RedSalamanderMonitor\Document.cpp'
+
+        $transaction | Should Match 'CreateUniqueSiblingFile\(normalizedTarget\.native\(\)'
+        $transaction | Should Match 'Common::HandleIo::WriteAll'
+        $transaction | Should Match 'FlushFileBuffers\(_file\.get\(\)\)'
+        $transaction | Should Match 'MoveFileExW\(_temporaryPath\.c_str\(\),\s*_targetPath\.c_str\(\),\s*moveFlags\)'
+        $transaction | Should Match '~LocalFileTransaction\(\)\s+noexcept[\s\S]{0,80}Abort\(\);'
+        $transaction | Should Match '!\s*_committed\s*&&\s*!\s*_temporaryPath\.empty\(\)[\s\S]{0,120}DeleteFileW'
+        $transaction | Should Match '#ifdef ENABLE_TESTS[\s\S]{0,900}FailNextLocalFileTransactionWrite'
+        $transaction | Should Match 'FailNextLocalFileTransactionFlush'
+
+        $commands | Should Match 'WriteMakeFileListUtf8File[\s\S]{0,500}LocalFileTransaction::Create'
+        $commands | Should Match 'transaction\.Commit\(static_cast<uint64_t>\(bytes\.size\(\)\)\)'
+        $commands | Should Not Match 'WriteMakeFileListUtf8File[\s\S]{0,900}CREATE_ALWAYS'
+
+        $monitor | Should Match 'SaveTextToFile[\s\S]{0,420}LocalFileTransaction::Create'
+        $monitor | Should Match 'TryUtf8FromUtf16Strict'
+        $monitor | Should Match 'transaction\.Commit\(expectedBytes\)'
+        $monitor | Should Not Match 'SaveTextToFile[\s\S]{0,1200}std::ofstream'
+
+        $monitorTest = Get-RSText -Path 'Tests\MonitorTest\MonitorTest.cpp'
+        $monitorTest | Should Match 'RunLocalFileTransactionFaultSelfTest'
+        $monitorTest | Should Match 'FailNextLocalFileTransactionWrite\(diskFull\)'
+        $monitorTest | Should Match 'FailNextLocalFileTransactionFlush\(flushFault\)'
+        $monitorTest | Should Match 'Commit\(replacement\.size\(\) \+ 1u\)'
+    }
+
+    It 'keeps Observatory Track 5 Make File List responsive, cancellable, and explicit about its destination' {
+        $commands = Get-RSText -Path 'RedSalamander\FolderWindow.FileSystem.Commands.cpp'
+        $folderWindow = Get-RSText -Path 'RedSalamander\FolderWindow.h'
+        $messages = Get-RSText -Path 'Common\WindowMessages.h'
+        $selftest = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Settings.cpp'
+
+        $commands | Should Match 'PromptForMakeFileListOutputFile[\s\S]{0,1800}GetSaveFileNameW'
+        $commands | Should Match 'OFN_OVERWRITEPROMPT\s*\|\s*OFN_PATHMUSTEXIST'
+        $commands | Should Match 'state\.makeFileListThread\s*=\s*std::jthread'
+        $commands | Should Match 'CollectMakeFileListEntries[\s\S]{0,600}const std::stop_token& stopToken'
+        $commands | Should Match 'RenderMakeFileListOutput[\s\S]{0,420}const std::stop_token& stopToken'
+        $commands | Should Match 'WriteMakeFileListUtf8File[\s\S]{0,850}stopToken\.stop_requested\(\)[\s\S]{0,280}transaction\.Commit'
+        $commands | Should Match 'state\.makeFileListThread\.request_stop\(\)'
+        $commands | Should Match 'PostMessagePayload\(ownerHwnd,\s*WndMsg::kMakeFileListCompleted'
+        $commands | Should Match 'OnMakeFileListCompleted[\s\S]{0,900}Common::Clipboard::TrySetUnicodeText'
+        $folderWindow | Should Match 'std::jthread makeFileListThread'
+        $messages | Should Match 'kMakeFileListTaskUpdate[\s\S]{0,120}kMakeFileListCompleted'
+
+        $selftest | Should Match 'bulkFileCount\s*=\s*1024u'
+        $selftest | Should Match 'DebugSetMakeFileListWorkerDelay\(500u\)'
+        $selftest | Should Match 'Cancelled Make File List must not publish an output file'
+        $selftest | Should Match 'Make File List command should return promptly'
+    }
+
+    It 'keeps Observatory Track 5 archive extraction conflicts explicit and transactional' {
+        $commands = Get-RSText -Path 'RedSalamander\FolderWindow.FileSystem.Commands.cpp'
+        $settingsSelftest = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Settings.cpp'
+        $dialogSelftest = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Dialogs.cpp'
+
+        $commands | Should Match 'enum class ArchiveExistingTargetPolicy[\s\S]{0,160}Skip,[\s\S]{0,80}Replace'
+        $commands | Should Match 'BuildArchiveConflictPolicyComboItems[\s\S]{0,260}IDS_ARCHIVE_UNPACK_CONFLICT_SKIP[\s\S]{0,180}IDS_ARCHIVE_UNPACK_CONFLICT_REPLACE'
+        $commands | Should Match '_conflictPolicyCombo->SetSelectedIndex\(0u\)'
+        $commands | Should Match 'ClassifyArchiveTarget[\s\S]{0,900}ArchiveTargetDecision::Skip'
+        $commands | Should Match 'ExtractStoredZipFileEntry[\s\S]{0,900}LocalFileTransaction::Create'
+        $commands | Should Match 'SevenZipExtractFileOutStream[\s\S]{0,1400}LocalFileTransaction::Create'
+        $commands | Should Match 'skippedConflictCount'
+
+        $settingsSelftest | Should Match 'Unpack skip-existing policy should preserve existing destination file'
+        $settingsSelftest | Should Match 'Unpack replace-existing policy should publish the archive content'
+        $dialogSelftest | Should Match 'default to skipping existing files'
+        $dialogSelftest | Should Match 'DebugSetArchiveUnpackPromptReplaceExisting\(true\)'
+    }
+
+    It 'keeps Observatory Track 6 Monitor ownership and bounded-pipeline guards wired' {
+        $clipboard = Get-RSText -Path 'Common\UnicodeClipboard.h'
+        $colorView = Get-RSText -Path 'RedSalamanderMonitor\ColorTextView.cpp'
+        $document = Get-RSText -Path 'RedSalamanderMonitor\Document.h'
+        $listener = Get-RSText -Path 'RedSalamanderMonitor\EtwListener.cpp'
+        $reader = Get-RSText -Path 'RedSalamanderMonitor\MonitorFileReader.cpp'
+        $monitorTest = Get-RSText -Path 'Tests\MonitorTest\MonitorTest.cpp'
+
+        $clipboard | Should Match 'wil::unique_hglobal storage\(GlobalAlloc\(GMEM_MOVEABLE,\s*bytes\)\)'
+        $clipboard | Should Match 'SetClipboardData\(CF_UNICODETEXT,\s*storage\.get\(\)\)[\s\S]{0,180}storage\.release\(\)'
+        $clipboard | Should Not Match 'Win32UnicodeClipboardApi|TrySetUnicodeTextWithApi|HGLOBAL storage\s*=\s*api\.'
+
+        $colorView | Should Match '_etwEventQueue\.size\(\)\s*>=\s*maxQueuedEvents[\s\S]{0,160}_etwEventQueue\.pop_front\(\)'
+        $colorView | Should Match 'EnforceRetentionLimits\(_maxRetainedLines,\s*_maxRetainedTextBytes\)'
+        $colorView | Should Match 'monitor\.etw\.queue_high_water_mark'
+        $colorView | Should Match 'monitor\.etw\.dropped_count'
+        $colorView | Should Match 'monitor\.search\.match_update_us'
+        $document | Should Not Match 'const\s+std::(?:vector|deque)<Line>\s*&\s*Lines\('
+
+        $listener | Should Match 'logfile\.Context\s*=\s*callbackState\.get\(\)'
+        $listener | Should Match 'TRACEHANDLE stableTraceHandle\s*=\s*traceHandle[\s\S]{0,120}ProcessTrace\(&stableTraceHandle'
+        $listener | Should Match 'WaitForSingleObject\(workerHandle,\s*shutdownTimeoutMs\)'
+        $listener | Should Match '_workerThread\.detach\(\)'
+        $listener | Should Not Match 's_instance|ProcessTrace\(&_traceHandle'
+
+        $reader | Should Match 'GetFileSizeEx[\s\S]{0,700}ERROR_FILE_TOO_LARGE[\s\S]{0,700}bytes\.reserve'
+        $reader | Should Match 'stopToken\.stop_requested\(\)'
+        $reader | Should Match 'TryUtf16FromUtf8Strict'
+        $monitorTest | Should Match 'RunEtwConsumerShutdownSelfTest'
+        $monitorTest | Should Match 'kDetachedHandle[\s\S]{0,1800}20u'
+        $monitorTest | Should Match 'sparse-over-2gib\.txt'
+        $monitorTest | Should Match 'RunUnicodeClipboardContractSelfTest'
+    }
+
+    It 'keeps Observatory Track 7 settings commits conflict-aware and recoverable' {
+        $header = Get-RSText -Path 'Common\SettingsStore.h'
+        $store = Get-RSText -Path 'Common\Common\SettingsStore.cpp'
+        $transaction = Get-RSText -Path 'Common\LocalFileTransaction.h'
+        $hotReload = Get-RSText -Path 'RedSalamander\SettingsHotReload.cpp'
+        $preferences = Get-RSText -Path 'RedSalamander\Preferences.Dialog.cpp'
+        $resource = Get-RSText -Path 'RedSalamander\RedSalamander.rc'
+        $tests = Get-RSText -Path 'Tests\SettingsSchemaTests\SettingsSchemaTests.cpp'
+
+        $header | Should Match 'SettingsPersistenceState[\s\S]{0,700}std::optional<SettingsFileStamp> expectedFileStamp'
+        $header | Should Match 'SaveSettings\(std::wstring_view appId,\s*Settings& settings\)'
+        $store | Should Match 'LocalFileTransaction::Create\(path[\s\S]{0,1200}SettingsCommitLock::Acquire'
+        $store | Should Match 'currentStamp\s*!=\s*\*expectedStamp[\s\S]{0,160}ERROR_REVISION_MISMATCH'
+        $store | Should Match 'settings\.persistence\.expectedFileStamp\s*=\s*committedStamp'
+        $store | Should Not Match 'tmpPath\s*\+=\s*L"\.tmp"'
+        $transaction | Should Match 'Commit\(std::optional<uint64_t> expectedSize\s*=\s*std::nullopt,\s*BY_HANDLE_FILE_INFORMATION\* committedFileInformation'
+
+        $store | Should Match 'value\s*>\s*\(std::numeric_limits<uint32_t>::max\)\(\)'
+        $store | Should Match 'TryUtf8FromUtf16Strict[\s\S]{0,240}ERROR_NO_UNICODE_TRANSLATION'
+        $store | Should Match 'sourcePreserved[\s\S]{0,1000}SettingsSavePermission::ExplicitReplacementRequired'
+        $store | Should Match 'std::filesystem::exists\(candidate,\s*ec\)'
+
+        $hotReload | Should Match 'struct StampLineage[\s\S]{0,700}expected\s*==\s*lineage->second\.source\s*\|\|\s*expected\s*==\s*lineage->second\.committed'
+        $preferences | Should Match 'struct PreferencesSaveResult[\s\S]{0,180}bool mainSaved[\s\S]{0,100}bool monitorSaved'
+        $preferences | Should Match 'if\s*\(saveResult\.monitorSaved\)[\s\S]{0,180}monitorBaselineSettings\s*=\s*state\.workingMonitorSettings'
+        $preferences | Should Match 'IDS_FMT_PREFS_MONITOR_SAVE_FAILED_AFTER_MAIN'
+        $resource | Should Match 'IDS_FMT_PREFS_MONITOR_SAVE_FAILED_AFTER_MAIN[\s\S]{0,500}\{0\}[\s\S]{0,220}\{1:08X\}'
+
+        $tests | Should Match '--settings-store-cas-child'
+        $tests | Should Match 'ERROR_REVISION_MISMATCH'
+        $tests | Should Match 'ERROR_NO_UNICODE_TRANSLATION'
+        $tests | Should Match 'values above UINT32_MAX are rejected instead of truncated'
+        $tests | Should Match 'failed backup leaves defaults save-blocked'
+    }
+
+    It 'keeps Observatory Track 8 connection identity and authorization boundaries wired' {
+        $settingsHeader = Get-RSText -Path 'Common\SettingsStore.h'
+        $settingsStore = Get-RSText -Path 'Common\Common\SettingsStore.cpp'
+        $secretsHeader = Get-RSText -Path 'RedSalamander\ConnectionSecrets.h'
+        $secrets = Get-RSText -Path 'RedSalamander\ConnectionSecrets.cpp'
+        $manager = Get-RSText -Path 'RedSalamander\ConnectionManagerWindow.cpp'
+        $hostServices = Get-RSText -Path 'RedSalamander\HostServices.cpp'
+        $app = Get-RSText -Path 'RedSalamander\RedSalamander.cpp'
+        $settingsTests = Get-RSText -Path 'Tests\SettingsSchemaTests\SettingsSchemaTests.cpp'
+        $connectionTests = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Connections.cpp'
+
+        $settingsHeader | Should Match 'CreateConnectionProfileId'
+        $settingsHeader | Should Match 'NormalizeConnectionProfileId'
+        $settingsHeader | Should Match 'ConnectionProfileIdMigration'
+        $settingsStore | Should Match 'normalizedIdCounts\[canonicalId\]\s*==\s*1u'
+        $settingsStore | Should Match 'profile\.savePassword\s*=\s*false'
+        $settingsStore | Should Match 'ValidateConnectionProfileIds\(settings\.connections\.value\(\)\)'
+        $manager | Should Match 'ValidateConnectionProfileIds\(connSettings\)'
+        $secrets | Should Match 'NormalizeConnectionProfileId\(connectionId,\s*canonicalId\)'
+
+        $secretsHeader | Should Match 'enum class SecretAccessPurpose[\s\S]{0,120}Interactive[\s\S]{0,80}Background'
+        $secrets | Should Match 'SecretAccessAuthorizationKey[\s\S]{0,260}SecretKind kind[\s\S]{0,120}SecretAccessPurpose purpose'
+        $manager | Should Match 'SecretAccessPurpose::Interactive'
+        $manager | Should Not Match 'HasSecretAccessAuthorization'
+        $hostServices | Should Match 'SecretAccessPurpose::Background'
+        $hostServices | Should Match 'ClearAllSecretAccessAuthorizations\(\)'
+        $app | Should Match 'WTSRegisterSessionNotification'
+        $app | Should Match 'WM_WTSSESSION_CHANGE'
+        $app | Should Match 'HostClearConnectionSessionState\(\)'
+
+        $settingsTests | Should Match 'strict reload rejects case-colliding IDs'
+        $settingsTests | Should Match 'ambiguous saved-secret references are cleared instead of copied or aliased'
+        $connectionTests | Should Match 'connection_secret_authorization_scopes'
+        $connectionTests | Should Match 'unsigned tick wrap'
+        $connectionTests | Should Match 'background continuation grant'
+    }
+
+    It 'keeps Observatory Track 9 DxUi identity, reentrancy, and text-input guards wired' {
+        $controls = Get-RSText -Path 'Common\DxUi\DxUi.Controls.cpp'
+        $accessibility = Get-RSText -Path 'Common\DxUi\DxUi.Accessibility.cpp'
+        $nativeMenu = Get-RSText -Path 'Common\DxUi\DxUiNativeMenuInterop.h'
+        $nativeTextInput = Get-RSText -Path 'Common\DxUi\DxUi.NativeTextInput.cpp'
+        $textInput = Get-RSText -Path 'Common\DxUi\DxUi.TextInput.cpp'
+        $tree = Get-RSText -Path 'Common\DxUi\DxUi.Tree.cpp'
+        $navigationPopup = Get-RSText -Path 'RedSalamander\NavigationView.FullPathPopup.cpp'
+        $controlTests = Get-RSText -Path 'Tests\DxUiTests\DxUiTests.Controls.cpp'
+        $menuTests = Get-RSText -Path 'Tests\DxUiTests\DxUiTests.Menu.cpp'
+        $treeTests = Get-RSText -Path 'Tests\DxUiTests\DxUiTests.Tree.cpp'
+        $textFieldTests = Get-RSText -Path 'Tests\DxUiTests\DxUiTests.TextField.cpp'
+        $nativeTextInputTests = Get-RSText -Path 'Tests\DxUiTests\DxUiTests.NativeTextInput.cpp'
+        $accessibilityTests = Get-RSText -Path 'Tests\DxUiTests\DxUiTests.Accessibility.cpp'
+        $commandTests = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp'
+
+        $controls | Should Match 'const auto openItem\s*=\s*_onOpenItem;[\s\S]{0,120}RequestInvalidate\(\);[\s\S]{0,80}openItem\('
+
+        $nativeMenu | Should Match 'SyncMenuModelInternal\(bool invokeRefresh\)[\s\S]{0,500}menuBarLifetime\.expired\(\)'
+        $nativeMenu | Should Match 'ContextMenu::Show\(ownerWindow[\s\S]{0,320}menuBarLifetime\.expired\(\)\s*\|\|\s*_menuBar\s*!=\s*menuBar'
+        $nativeMenu | Should Match 'message\s*!=\s*WM_NCDESTROY\s*&&\s*hadMenuBar\s*&&\s*menuBarLifetime\.expired\(\)'
+
+        $tree | Should Match 'OnTreeSelectionChanged\(item\.id\);[\s\S]{0,120}selfLifetime\.expired\(\)'
+        $tree | Should Match 'FindVisibleItemById\(hitItem\.id\)'
+        $tree | Should Match 'FindVisibleItemById\(item\.id\)\.has_value\(\)'
+
+        $accessibility | Should Match 'SetTreeItemRuntimeId\([\s\S]{0,500}itemId\s*&\s*0xFFFFFFFFull[\s\S]{0,200}itemId\s*>>\s*32u'
+        $accessibility | Should Match 'ResolveTreeVisibleIndex[\s\S]{0,500}FindVisibleItemById\(_treeItemId\)'
+        $accessibility | Should Match 'UIA_E_ELEMENTNOTAVAILABLE'
+        $accessibility | Should Match 'ExpandToEnclosingUnit\(TextUnit unit\)[\s\S]{0,4200}GetEnclosingTextRangeCharacterSpan[\s\S]{0,800}GetEnclosingTextRangeWordSpan[\s\S]{0,1200}TryGetEnclosingTextRangeVisualLineSpan'
+
+        $nativeTextInput | Should Match '_nativeTextInputImeComposing[\s\S]{0,500}ImportTextInputState\(\*this,\s*_nativeTextInputImeBaseState\.value\(\),\s*false\)[\s\S]{0,500}DeactivateNativeTextInputTsf\(\)'
+        $textInput | Should Match 'ReplaceSelectionAndNotify[\s\S]{0,1200}SyncTextInput\(this\)[\s\S]{0,160}RefreshAccessibilitySnapshot\(\)[\s\S]{0,160}RequestInvalidate\(\)[\s\S]{0,100}NotifyChanged\(\)'
+        $textInput | Should Match 'bool TextField::NotifyChanged\(\)[\s\S]{0,700}selfLifetime[\s\S]{0,200}onTextChanged\(textSnapshot\)[\s\S]{0,200}selfLifetime\.expired\(\)'
+        $textInput | Should Match 'ControlTextIndexToDisplayTextIndex'
+        $textInput | Should Match 'DisplayTextIndexToControlTextIndex'
+        $textInput | Should Match 'ControlTextRangeToDisplayTextRange'
+        $textInput | Should Match 'dxui\.textinput\.masked_index_map_rebuild_us'
+
+        $navigationPopup | Should Match 'GetWindow\(activatingWindow,\s*GW_OWNER\)\s*==\s*popupHwnd'
+        $controlTests | Should Match 'TestMenuBarActivationCanReplaceRootSafely'
+        $menuTests | Should Match 'TestNativeMenuBarNestedPopupCanDestroyHostSafely'
+        $treeTests | Should Match 'TestTreeExpanderReResolvesStableItemAfterSelectionReorder'
+        $treeTests | Should Match 'TestTreeSelectionDelegateCanReplaceRootSafely'
+        $textFieldTests | Should Match 'TestTextFieldReplaceSelectionSynchronizesBeforeTerminalNotification'
+        $textFieldTests | Should Match 'TestMaskedTextFieldGeometryMapsUtf16SourceToDisplayElements'
+        $nativeTextInputTests | Should Match 'native ime window deactivation restores the pre-composition text'
+        $nativeTextInputTests | Should Match 'native ime app deactivation restores the pre-composition text'
+        $accessibilityTests | Should Match 'TestAccessibilityTreeItemProviderKeepsStableIdentityAcrossReorder'
+        $accessibilityTests | Should Match 'removed retained tree-item provider reports element-not-available'
+        $accessibilityTests | Should Match 'character expansion keeps the complete ZWJ emoji cluster'
+        $accessibilityTests | Should Match 'cross-thread TextRange line expansion normalizes to the visual line'
+        $commandTests | Should Match 'cmd_pane_navigationView_full_path_popup_owned_window_activation'
+    }
+
+    It 'keeps Observatory Track 10 cloud paging, upload acknowledgement, commit, and identity guards wired' {
+        $pager = Get-RSText -Path 'Common\PaginationGuard.h'
+        $microsoft = Get-RSText -Path 'Plugins\FileSystemMicrosoftDrive\FileSystemMicrosoftDrive.cpp'
+        $google = Get-RSText -Path 'Plugins\FileSystemGoogleDrive\FileSystemGoogleDrive.cpp'
+        $googleHeader = Get-RSText -Path 'Plugins\FileSystemGoogleDrive\FileSystemGoogleDrive.h'
+        $s3Directory = Get-RSText -Path 'Plugins\FileSystemS3\FileSystemS3.Directory.cpp'
+        $s3DirectoryOps = Get-RSText -Path 'Plugins\FileSystemS3\FileSystemS3.DirectoryOps.cpp'
+        $s3 = Get-RSText -Path 'Plugins\FileSystemS3\FileSystemS3.S3.cpp'
+        $s3Table = Get-RSText -Path 'Plugins\FileSystemS3\FileSystemS3.S3Table.cpp'
+        $themeTests = Get-RSText -Path 'Tests\DxUiTests\DxUiTests.Theme.cpp'
+        $pluginTests = Get-RSText -Path 'Tests\PluginContractTests\PluginContractTests.cpp'
+
+        $pager | Should Match 'class ContinuationGuard final'
+        $pager | Should Match 'maxPages'
+        $pager | Should Match 'maxItems'
+        $pager | Should Match 'maxBytes'
+        $pager | Should Match 'deadlineTickMs'
+        $pager | Should Match 'cancellationProbe'
+        $pager | Should Match '_seenTokens\.emplace'
+        $themeTests | Should Match 'TestCloudPaginationGuardBoundsProgressAndCancellation'
+
+        $microsoft | Should Match 'ParseNextExpectedUploadOffset'
+        ([regex]::Matches($microsoft, 'ParseNextExpectedUploadOffset\(uploadResponse\.body')).Count | Should Be 2
+        $microsoft | Should Match 'Graph item DELETE is recursive and this provider has no atomic'
+        $microsoft | Should Match 'MoveCommitResult'
+        $microsoft | Should Match 'move committed but overwrite-backup cleanup remains pending'
+        $microsoft | Should Match 'RunDebugMergeNeverRecursivelyDeletesSourceFolderSelfTest'
+        $microsoft | Should Match 'RunDebugCommittedMoveCleanupFailureIsWarningSelfTest'
+
+        $google | Should Match 'CURLOPT_TIMEOUT_MS'
+        $google | Should Match 'kMaxJsonResponseBytes'
+        $google | Should Match 'kMaxAuthorizedRetries'
+        $google | Should Match '_tokenRefreshesInFlight\.contains'
+        $google | Should Match 'MakeExposedItemName'
+        $google | Should Match 'same \[id:AbC\] \[id:literal\]'
+        $googleHeader | Should Match 'std::condition_variable _tokenCv'
+        $pluginTests | Should Match 'RedSalamanderGoogleDriveDebugSelfTests'
+
+        $s3Directory | Should Match 'Common::Paging::Utf8ContinuationGuard pager'
+        $s3DirectoryOps | Should Match 'Common::Paging::Utf8ContinuationGuard pager'
+        $s3 | Should Match 'Common::Paging::Utf8ContinuationGuard pager'
+        ([regex]::Matches($s3Table, 'Common::Paging::Utf8ContinuationGuard pager')).Count | Should Be 2
+        $s3Directory | Should Match 'RunDebugPaginationGuardSelfTest'
+    }
+
+    It 'keeps Observatory Track 11 S3 transfer, cleanup, and unload contracts wired' {
+        $shared = Get-RSText -Path 'Plugins\FileSystemS3\FileSystemS3.Shared.cpp'
+        $factory = Get-RSText -Path 'Plugins\FileSystemS3\Factory.cpp'
+        $directory = Get-RSText -Path 'Plugins\FileSystemS3\FileSystemS3.Directory.cpp'
+        $directoryOps = Get-RSText -Path 'Plugins\FileSystemS3\FileSystemS3.DirectoryOps.cpp'
+        $io = Get-RSText -Path 'Plugins\FileSystemS3\FileSystemS3.IO.cpp'
+        $s3 = Get-RSText -Path 'Plugins\FileSystemS3\FileSystemS3.S3.cpp'
+        $pluginTests = Get-RSText -Path 'Tests\PluginContractTests\PluginContractTests.cpp'
+
+        $shared | Should Match 'State::Initializing'
+        $shared | Should Match '_refCount\s*=\s*1u'
+        $shared | Should Match 'RunDebugAwsSdkLifetimeContractSelfTest'
+        $factory | Should Match 'SchedulePendingMultipartAbortCleanup'
+        $factory | Should Match 'CanUnloadPendingMultipartAbortCleanup[\s\S]{0,180}AwsSdkLifetime::CanUnloadNow'
+        $s3 | Should Match 'ValidateS3UploadReadResult\(sizeBytes,\s*body->GetConsumedBytes\(\)'
+        $io | Should Match 'class PendingMultipartAbortQueue final'
+        $io | Should Match 'TransferModulePinToCallbackReturn'
+        $io | Should Match 'failed destructor abort should be retried asynchronously'
+        $directoryOps | Should Match 'RunDebugDirectorySizeCallbackContractSelfTest'
+        $directory | Should Match 'RunDebugRecursiveDeleteConvergenceSelfTest'
+        $directory | Should Match 'RunDebugCommittedCleanupDebtSelfTest'
+        $pluginTests | Should Match 'TestS3RuntimeUnloadContract'
+    }
+
+    It 'keeps Observatory Track 12 plugin configuration, secret, runtime, and cancellation contracts wired' {
+        $jsonHelpers = Get-RSText -Path 'Common\YyjsonHelpers.h'
+        $curlRuntime = Get-RSText -Path 'Common\CurlProcessRuntime.h'
+        $fileSystemContract = Get-RSText -Path 'Common\PlugInterfaces\FileSystem.h'
+        $directoryCache = Get-RSText -Path 'RedSalamander\DirectoryInfoCache.cpp'
+        $sevenZipHeader = Get-RSText -Path 'Plugins\FileSystem7z\FileSystem7z.h'
+        $sevenZip = Get-RSText -Path 'Plugins\FileSystem7z\FileSystem7z.cpp'
+        $curlFactory = Get-RSText -Path 'Plugins\FileSystemCurl\Factory.cpp'
+        $googleFactory = Get-RSText -Path 'Plugins\FileSystemGoogleDrive\Factory.cpp'
+        $pluginTests = Get-RSText -Path 'Tests\PluginContractTests\PluginContractTests.cpp'
+
+        $jsonHelpers | Should Match 'ParseObjectDocument'
+        $jsonHelpers | Should Match 'WriteObjectWithoutMembers'
+        $pluginTests | Should Match 'malformed configuration preserves live state'
+        $pluginTests | Should Match 'wrong-root configuration preserves live state'
+        $pluginTests | Should Match 'legacy configuration secrets are imported but not persisted'
+
+        $curlRuntime | Should Match 'class ProcessLease final'
+        $curlRuntime | Should Match 'final participant performs curl_global_cleanup outside loader lock'
+        $curlFactory | Should Match 'RedSalamanderPluginShutdown'
+        $curlFactory | Should Match 'RedSalamanderPluginCanUnloadNow'
+        $googleFactory | Should Match 'RedSalamanderPluginShutdown'
+        $googleFactory | Should Match 'RedSalamanderPluginCanUnloadNow'
+        $pluginTests | Should Match 'TestCrossPluginCurlRuntimeUnloadContract'
+        $pluginTests | Should Match 'still creates a libcurl easy handle after peer unload'
+
+        $fileSystemContract | Should Match 'IFileSystemCancellableDirectoryEnumeration'
+        $directoryCache | Should Match 'StopTokenDirectoryEnumerationCallback'
+        $directoryCache | Should Match 'ReadDirectoryInfoCancellable'
+        $sevenZipHeader | Should Match 'std::atomic<uint64_t> _indexGeneration'
+        $sevenZip | Should Match 'RunDebugArchiveIndexCancellationSelfTest'
+        $sevenZip | Should Match "kMaxIndexItems\s*=\s*1'000'000u"
+        $sevenZip | Should Match 'kMaxIndexTextBytes\s*=\s*128u\s*\*\s*1024u\s*\*\s*1024u'
+    }
+
+    It 'keeps Observatory Track 13 local and Dummy provider mutations fail-before-change' {
+        $local = Get-RSText -Path 'Plugins\FileSystem\FileSystem.cpp'
+        $localPath = Get-RSText -Path 'Plugins\FileSystem\FileSystem.Path.cpp'
+        $dummy = Get-RSText -Path 'Plugins\FileSystemDummy\FileSystemDummy.cpp'
+        $pluginTests = Get-RSText -Path 'Tests\PluginContractTests\PluginContractTests.cpp'
+
+        $local | Should Match 'allowReplaceReadOnly\s*&&\s*!\s*allowOverwrite[\s\S]{0,100}return E_INVALIDARG'
+        $local | Should Not Match 'SetFileAttributesW\(filePath\.c_str\(\),\s*attributes\s*&\s*~FILE_ATTRIBUTE_READONLY\)'
+        $localPath | Should Match 'for \(unsigned int attempt = 0u; attempt < 8u; \+\+attempt\)'
+        $localPath | Should Match 'written < absolute\.size\(\)'
+        $localPath | Should Match 'required\s*=\s*written'
+        $localPath | Should Match 'kMaximumAbsolutePathChars'
+
+        $dummy | Should Match 'ValidateDirectoryMerge\(sourceDirectory,\s*destinationDirectory,\s*flags\)'
+        $dummy | Should Match 'ValidateDeleteNode\(target,\s*flags\)'
+        $dummy | Should Match 'Lazy descendants can contain READONLY nodes'
+        $pluginTests | Should Match 'local writer rejects replace-readonly without overwrite and preserves destination attributes'
+        $pluginTests | Should Match 'dummy directory copy preflights a late collision without partial destination mutation'
+        $pluginTests | Should Match 'dummy directory move preflights a late collision without partial source or destination mutation'
+        $pluginTests | Should Match 'dummy recursive delete applies read-only policy to descendants before mutation'
+    }
+
+    It 'keeps Observatory Track 14 final-save, stale-suggestion, and bounded-menu contracts wired' {
+        $settings = Get-RSText -Path 'RedSalamander\SettingsHotReload.cpp'
+        $settingsTests = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Settings.cpp'
+        $navigationHeader = Get-RSText -Path 'RedSalamander\NavigationView.h'
+        $navigationEdit = Get-RSText -Path 'RedSalamander\NavigationView.Edit.cpp'
+        $navigationMenus = Get-RSText -Path 'RedSalamander\NavigationView.Menus.cpp'
+        $navigationTests = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp'
+        $menu = Get-RSText -Path 'Common\DxUi\DxUi.Menu.cpp'
+        $menuTests = Get-RSText -Path 'Tests\DxUiTests\DxUiTests.Menu.cpp'
+
+        $settings | Should Match 'enum class SettingsSaveShutdownState[\s\S]{0,220}Running[\s\S]{0,100}FinalSavePending[\s\S]{0,100}FinalSaveQueued[\s\S]{0,100}ShuttingDown'
+        $settings | Should Match 'BeginProcessShutdown\(\)[\s\S]{0,180}_submissionMutex[\s\S]{0,220}FinalSavePending'
+        $settings | Should Match '_finalSaveCompletion\s*=\s*completion[\s\S]{0,140}FinalSaveQueued'
+        $settings | Should Not Match '_processShutdownStarted'
+        $settingsTests | Should Match 'SettingsSaveChildMode::FinalSaveOrdering'
+        $settingsTests | Should Match 'Process finalization should admit exactly one settings snapshot'
+
+        $navigationHeader | Should Match 'struct EditSuggestResultsPayload[\s\S]{0,260}requestId[\s\S]{0,100}editSessionId[\s\S]{0,180}queryText'
+        $navigationEdit | Should Match 'owned->requestId\s*!=\s*_editSuggestRequestId\.load[\s\S]{0,180}owned->editSessionId\s*!=\s*_editSuggestEditSessionId[\s\S]{0,120}owned->queryText\s*!=\s*_pathEdit->field->GetText'
+        $navigationEdit | Should Match 'ApplyEditSuggestIndex[\s\S]{0,1200}_editSuggestRequestId\.fetch_add'
+        $navigationTests | Should Match 'DebugPostCurrentNavigationEditSuggestResult'
+        $navigationMenus | Should Match 'kMaxSiblingItems\s*=\s*static_cast<size_t>\(ID_SIBLING_SEARCH\s*-\s*ID_SIBLING_BASE\)'
+        $navigationHeader | Should Match 'ID_SIBLING_SEARCH\s*=\s*699'
+
+        $menu | Should Match 'std::vector<float> itemOffsetsDip'
+        ([regex]::Matches($menu, 'std::upper_bound\(popup(?:\.|->)itemOffsetsDip')).Count | Should BeGreaterThan 1
+        $menu | Should Match 'dxui\.menu\.popup\.visible_rows'
+        $menuTests | Should Match 'TestLargeMenuPaintsOnlyVisibleRowsWithCachedOffsets'
+        $menuTests | Should Match 'kItemCount\s*=\s*4096u'
+        $menuTests | Should Match 'lastPaintedItemCount\s*<=\s*32u'
+    }
+
+    It 'keeps production translation units independently compiled' {
+        $productionRoots = @(
+            'Common',
+            'Plugins',
+            'RedConfigure',
+            'RedLauncher',
+            'RedSalamander',
+            'RedSalamanderMonitor',
+            'RedSalamanderSearchService'
+        )
+        $implementationIncludePattern = '(?m)^\s*#\s*include\s*"[^"\r\n]+\.cpp"'
+        $violations = @(
+            foreach ($root in $productionRoots) {
+                Get-ChildItem -LiteralPath (Join-Path $repoRoot $root) -Recurse -File |
+                    Where-Object { $_.Extension -in @('.cpp', '.h', '.hpp') } |
+                    Where-Object { $_.FullName -notmatch '[\\/]SelfTest[\\/]' } |
+                    ForEach-Object {
+                        $source = Get-Content -LiteralPath $_.FullName -Raw
+                        if ($source -match $implementationIncludePattern) {
+                            [System.IO.Path]::GetRelativePath($repoRoot, $_.FullName)
+                        }
+                    }
+            }
+        )
+
+        $violations.Count | Should Be 0
     }
 }

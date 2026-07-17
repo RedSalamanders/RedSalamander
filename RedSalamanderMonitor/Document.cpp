@@ -1,9 +1,17 @@
 #include "Document.h"
 #include "Helpers.h"
+#include "LocalFileTransaction.h"
+#include "StringConversion.h"
 
 #include <algorithm>
 #include <array>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
 #include <format>
+#include <limits>
+#include <optional>
+#include <span>
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -168,16 +176,8 @@ void Document::OnLineLengthChanged(size_t index, [[maybe_unused]] size_t oldLen,
 
 void Document::ReserveForAdditionalLines(size_t additionalLineCount)
 {
-    if (additionalLineCount == 0)
-        return;
-
-    const size_t currentSize = _lines.size();
-    const size_t desiredSize = currentSize + additionalLineCount;
-    if (_lines.capacity() >= desiredSize)
-        return;
-
-    const size_t grownCapacity = _lines.capacity() + (_lines.capacity() / 2u) + 100u;
-    _lines.reserve(std::max(desiredSize, grownCapacity));
+    // std::deque keeps stable O(1) oldest-first eviction without moving every retained line.
+    static_cast<void>(additionalLineCount);
 }
 
 void Document::EnsureTotalLengthValid() const
@@ -201,6 +201,7 @@ void Document::SetText(const std::wstring& text)
     std::unique_lock lock(_rwMutex); // Write operation
     _lines.clear();
     _visibleLines.clear(); // Clear visible lines when replacing all text
+    _retainedTextBytes = 0u;
     size_t start = 0;
     size_t end   = 0;
     while (end != std::wstring::npos)
@@ -212,6 +213,7 @@ void Document::SetText(const std::wstring& text)
         else
             line.text = text.substr(start, end - start);
         StripCarriageReturns(line.text);
+        _retainedTextBytes += static_cast<uint64_t>(line.text.size()) * sizeof(wchar_t);
         line.newlineCount       = static_cast<UINT32>(std::count(line.text.begin(), line.text.end(), L'\n'));
         line.cachedDisplayValid = false;
         _lines.push_back(std::move(line));
@@ -227,15 +229,6 @@ void Document::AppendText(const std::wstring& more)
     std::unique_lock lock(_rwMutex); // Write operation
     if (more.empty())
         return;
-
-    // Optimization - Reserve vector capacity proactively to reduce reallocations
-    const size_t currentSize     = _lines.size();
-    const size_t currentCapacity = _lines.capacity();
-    if (currentCapacity - currentSize < 100)
-    {
-        const size_t newCapacity = currentCapacity + (currentCapacity / 2) + 100;
-        _lines.reserve(newCapacity);
-    }
 
     if (_lines.empty())
         _lines.push_back(Line{});
@@ -283,6 +276,7 @@ void Document::AppendText(const std::wstring& more)
         }
     }
     appendSegment(segmentStart, length);
+    _retainedTextBytes += static_cast<uint64_t>(totalCharsAppended) * sizeof(wchar_t);
 
     if (_totalLengthValid)
     {
@@ -358,6 +352,7 @@ void Document::AppendInfoLineUnsafe(std::wstring text, const Debug::InfoParam& i
     line.cachedDisplayValid = false;
     line.hasMeta            = true;
     line.meta               = info;
+    _retainedTextBytes += static_cast<uint64_t>(line.text.size()) * sizeof(wchar_t);
 
 #ifdef _DEBUG
     if (line.newlineCount > 0)
@@ -422,19 +417,58 @@ void Document::Clear()
     std::unique_lock lock(_rwMutex); // Write operation
     _lines.clear();
     _visibleLines.clear(); // Clear visible lines when document is cleared
+    _retainedTextBytes = 0u;
     InvalidateCaches();
+}
+
+Document::RetentionResult Document::EnforceRetentionLimits(size_t maxLines, uint64_t maxTextBytes)
+{
+    std::unique_lock lock(_rwMutex);
+    RetentionResult result;
+    maxLines     = std::max<size_t>(1u, maxLines);
+    maxTextBytes = std::max<uint64_t>(sizeof(wchar_t), maxTextBytes);
+
+    while (! _lines.empty() && (_lines.size() > maxLines || _retainedTextBytes > maxTextBytes))
+    {
+        const Line& line         = _lines.front();
+        const uint64_t textBytes = static_cast<uint64_t>(line.text.size()) * sizeof(wchar_t);
+        result.textBytesEvicted += textBytes;
+        result.characterPositionsEvicted += static_cast<uint64_t>(PrefixLength(line)) + line.text.size() + 1u;
+        if (IsLineVisibleUnsafe(0u))
+        {
+            result.displayRowsEvicted += static_cast<uint64_t>(line.newlineCount) + 1u;
+        }
+        _retainedTextBytes = textBytes > _retainedTextBytes ? 0u : _retainedTextBytes - textBytes;
+        _lines.pop_front();
+        ++result.linesEvicted;
+    }
+
+    if (result.linesEvicted == 0u)
+    {
+        return result;
+    }
+
+    _totalLengthValid  = false;
+    _offsetsValid      = false;
+    _lineOffsets.clear();
+    _maxLineCharsValid = false;
+    _maxLineChars      = 0u;
+    _maxLineIndex      = 0u;
+    RebuildVisibleLines();
+    MarkAllDirtyUnsafe();
+    return result;
 }
 
 size_t Document::TotalLength() const
 {
-    std::shared_lock lock(_rwMutex); // Read operation
+    std::unique_lock lock(_rwMutex); // May refresh cached aggregate state.
     EnsureTotalLengthValid();
     return _cachedTotalLength;
 }
 
 size_t Document::LongestLineChars() const
 {
-    std::shared_lock lock(_rwMutex); // Read operation
+    std::unique_lock lock(_rwMutex); // May refresh cached aggregate state.
     if (! _maxLineCharsValid)
     {
         _maxLineChars = 0;
@@ -451,6 +485,12 @@ size_t Document::LongestLineChars() const
         _maxLineCharsValid = true;
     }
     return _maxLineChars;
+}
+
+uint64_t Document::RetainedTextBytes() const
+{
+    std::shared_lock lock(_rwMutex);
+    return _retainedTextBytes;
 }
 
 size_t Document::VisibleLineCount() const
@@ -566,39 +606,33 @@ bool Document::IsLineVisible(size_t sourceIndex) const
     return IsLineVisibleUnsafe(sourceIndex);
 }
 
-const Line& Document::GetVisibleLine(size_t visibleIndex) const
+Line Document::GetVisibleLine(size_t visibleIndex) const
 {
     std::shared_lock lock(_rwMutex);
-    static const Line emptyLine{};
 
     if (visibleIndex >= _visibleLines.size())
-        return emptyLine;
+        return {};
 
     const size_t sourceIndex = _visibleLines[visibleIndex].sourceIndex;
     if (sourceIndex >= _lines.size())
-        return emptyLine;
+        return {};
 
     return _lines[sourceIndex];
 }
 
-const Line& Document::GetSourceLine(size_t sourceIndex) const
+Line Document::GetSourceLine(size_t sourceIndex) const
 {
     std::shared_lock lock(_rwMutex);
-    static const Line emptyLine{};
 
     if (sourceIndex >= _lines.size())
-        return emptyLine;
+        return {};
 
     return _lines[sourceIndex];
 }
 
-const std::vector<Line>& Document::Lines() const
+std::vector<VisibleLine> Document::VisibleLines() const
 {
-    return _lines;
-}
-
-const std::vector<VisibleLine>& Document::VisibleLines() const
-{
+    std::shared_lock lock(_rwMutex);
     return _visibleLines;
 }
 
@@ -709,7 +743,7 @@ UINT32 Document::DisplayRowForSource(size_t sourceIndex) const
 
 UINT32 Document::GetLineStartOffset(size_t sourceIndex) const
 {
-    std::shared_lock lock(_rwMutex);
+    std::unique_lock lock(_rwMutex);
 
     if (sourceIndex >= _lines.size())
         return 0;
@@ -750,21 +784,20 @@ std::pair<size_t, UINT32> Document::GetLineAndOffsetUnsafe(UINT32 position) cons
 
 std::pair<size_t, UINT32> Document::GetLineAndOffset(UINT32 position) const
 {
-    std::shared_lock lock(_rwMutex);
+    std::unique_lock lock(_rwMutex);
     return GetLineAndOffsetUnsafe(position);
 }
 
-const std::wstring& Document::GetDisplayTextRef(size_t visibleIndex) const
+std::wstring Document::GetDisplayText(size_t visibleIndex) const
 {
-    std::shared_lock lock(_rwMutex);
-    static const std::wstring emptyString{};
+    std::unique_lock lock(_rwMutex);
 
     if (visibleIndex >= _visibleLines.size())
-        return emptyString;
+        return {};
 
     const size_t sourceIndex = _visibleLines[visibleIndex].sourceIndex;
     if (sourceIndex >= _lines.size())
-        return emptyString;
+        return {};
 
     auto& line = _lines[sourceIndex];
     if (! line.cachedDisplayValid)
@@ -780,12 +813,11 @@ const std::wstring& Document::GetDisplayTextRef(size_t visibleIndex) const
     return line.cachedDisplay;
 }
 
-const std::wstring& Document::GetDisplayTextRefAll(size_t sourceIndex) const
+std::wstring Document::GetDisplayTextAll(size_t sourceIndex) const
 {
-    std::shared_lock lock(_rwMutex);
-    static const std::wstring emptyString{};
+    std::unique_lock lock(_rwMutex);
     if (sourceIndex >= _lines.size())
-        return emptyString;
+        return {};
 
     auto& line = _lines[sourceIndex];
     if (! line.cachedDisplayValid)
@@ -804,7 +836,7 @@ const std::wstring& Document::GetDisplayTextRefAll(size_t sourceIndex) const
 Document::DisplayTextBatch Document::GetDisplayTextBatch(size_t firstVisible, size_t lastVisible) const
 {
     DisplayTextBatch batch;
-    batch.lock = std::shared_lock(_rwMutex);
+    batch.lock = std::unique_lock(_rwMutex);
     batch.texts.reserve(lastVisible >= firstVisible ? (lastVisible - firstVisible + 1) : 0);
 
     for (size_t visIdx = firstVisible; visIdx <= lastVisible && visIdx < _visibleLines.size(); ++visIdx)
@@ -834,7 +866,7 @@ Document::DisplayTextBatch Document::GetDisplayTextBatch(size_t firstVisible, si
 Document::DisplayTextBatch Document::GetDisplayTextBatchAll(size_t firstAll, size_t lastAll) const
 {
     DisplayTextBatch batch;
-    batch.lock = std::shared_lock(_rwMutex);
+    batch.lock = std::unique_lock(_rwMutex);
     batch.texts.reserve(lastAll >= firstAll ? (lastAll - firstAll + 1) : 0);
 
     for (size_t i = firstAll; i <= lastAll && i < _lines.size(); ++i)
@@ -859,7 +891,7 @@ Document::DisplayTextBatch Document::GetDisplayTextBatchAll(size_t firstAll, siz
 Document::FilteredTailResult Document::BuildFilteredTailText(size_t firstAll, size_t lastAll) const
 {
     FilteredTailResult result;
-    std::shared_lock lock(_rwMutex); // Single lock for entire operation
+    std::unique_lock lock(_rwMutex); // Cache population and snapshot construction share one exclusive scope.
 
     if (firstAll >= _lines.size())
         return result;
@@ -901,30 +933,43 @@ Document::FilteredTailResult Document::BuildFilteredTailText(size_t firstAll, si
 
 bool Document::SaveTextToFile(const std::wstring& path) const
 {
-    std::shared_lock lock(_rwMutex); // Read operation
-    std::ofstream file(path, std::ios::binary);
-    if (! file)
+    Common::Files::LocalFileTransaction transaction;
+    if (FAILED(Common::Files::LocalFileTransaction::Create(
+            std::filesystem::path(path), Common::Files::ExistingTargetPolicy::Replace, false, transaction)))
+    {
         return false;
-    // Write BOM for UTF-8
-    const unsigned char bom[] = {0xEF, 0xBB, 0xBF};
-    file.write(reinterpret_cast<const char*>(bom), sizeof(bom));
+    }
+
+    constexpr std::array<std::byte, 3u> bom = {{std::byte{0xEFu}, std::byte{0xBBu}, std::byte{0xBFu}}};
+    if (FAILED(transaction.Write(std::span<const std::byte>(bom))))
+    {
+        return false;
+    }
+
+    uint64_t expectedBytes = bom.size();
+    std::shared_lock lock(_rwMutex);
 
     for (size_t i = 0; i < _lines.size(); ++i)
     {
-        const std::string utf8 = Common::Strings::Utf8FromUtf16ReplacingInvalid(_lines[i].text);
-        if (utf8.empty() && ! _lines[i].text.empty())
+        const std::optional<std::string> utf8 = Common::Strings::TryUtf8FromUtf16Strict(_lines[i].text);
+        if (! utf8.has_value() || utf8->size() > (std::numeric_limits<uint64_t>::max)() - expectedBytes - 1u)
         {
-            continue;
+            return false;
         }
-        file.write(utf8.data(), static_cast<std::streamsize>(utf8.size()));
-        file.put('\n');
+        if (FAILED(transaction.Write(std::string_view(utf8.value()))) || FAILED(transaction.Write(std::string_view("\n", 1u))))
+        {
+            return false;
+        }
+        expectedBytes += static_cast<uint64_t>(utf8->size()) + 1u;
     }
-    return file.good();
+
+    lock.unlock();
+    return SUCCEEDED(transaction.Commit(expectedBytes));
 }
 
 std::wstring Document::GetTextRange(UINT32 start, UINT32 length) const
 {
-    std::shared_lock lock(_rwMutex);
+    std::unique_lock lock(_rwMutex);
     if (length == 0)
         return L"";
 

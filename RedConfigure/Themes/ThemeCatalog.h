@@ -9,6 +9,7 @@
 #include "SettingsStore.h"
 #include "Workspace/WorkspaceDiscovery.h"
 
+#include <cstdint>
 #include <filesystem>
 #include <span>
 #include <string>
@@ -16,10 +17,18 @@
 
 namespace RedConfigure::Themes
 {
+enum class ThemeCatalogOrigin : uint8_t
+{
+    BuiltIn,
+    File,
+    User,
+};
+
 struct ThemeCatalogEntry
 {
     std::filesystem::path path;
     Common::Settings::ThemeDefinition definition;
+    ThemeCatalogOrigin origin = ThemeCatalogOrigin::File;
 };
 
 struct ThemeCatalog

@@ -1176,26 +1176,31 @@ HRESULT RedConfigureSession::ImportTheme(const std::filesystem::path& path)
     return S_OK;
 }
 
-bool RedConfigureSession::DuplicateActiveTheme(std::wstring_view newId, std::wstring_view newName)
+DuplicateThemeResult RedConfigureSession::DuplicateActiveTheme(std::wstring_view newId, std::wstring_view newName)
 {
-    if (! Common::Settings::IsValidUserThemeId(newId) || newName.empty() || newName.size() > 64u)
+    if (! Common::Settings::IsValidUserThemeId(newId))
     {
-        return false;
+        return DuplicateThemeResult::InvalidId;
+    }
+    if (newName.empty() || newName.size() > 64u)
+    {
+        return DuplicateThemeResult::InvalidName;
     }
     if (std::ranges::any_of(_themeCatalog.themes, [newId](const auto& entry) { return CompareTextIgnoreCase(entry.definition.id, newId) == 0; }))
     {
-        return false;
+        return DuplicateThemeResult::Collision;
     }
     RecordUndoSnapshot();
     Common::Settings::ThemeDefinition duplicate = _themePreview.GetTheme();
     duplicate.id = newId;
     duplicate.name = newName;
     const fs::path path = _workspace.root / L"RedConfigureOutput" / (SanitizePathPart(std::wstring(newId)) + L".theme.json5");
-    _themeCatalog.themes.push_back(Themes::ThemeCatalogEntry{.path = path, .definition = duplicate});
+    _themeCatalog.themes.push_back(
+        Themes::ThemeCatalogEntry{.path = path, .definition = duplicate, .origin = Themes::ThemeCatalogOrigin::User});
     _activeThemeIndex = _themeCatalog.themes.size() - 1u;
     _themePreview.SetTheme(duplicate);
     _loadedThemeBaseline = duplicate;
-    return true;
+    return DuplicateThemeResult::Created;
 }
 
 bool RedConfigureSession::ResetActiveTheme()
@@ -1217,31 +1222,79 @@ bool RedConfigureSession::IsThemeDirty() const noexcept
               _themePreview.GetTheme().colors == _loadedThemeBaseline.colors);
 }
 
-bool RedConfigureSession::ApplyLocalizationBatch(const Workflow::LocalizationBatchPreview& preview)
+Workflow::BatchApprovalResult RedConfigureSession::ApplyLocalizationBatch(const Workflow::LocalizationBatchPreview& preview)
 {
-    if (preview.changes.empty())
+    if (preview.result != Workflow::BatchApprovalResult::Ready)
     {
-        return false;
+        return preview.result == Workflow::BatchApprovalResult::NoChanges ? Workflow::BatchApprovalResult::NoChanges
+                                                                          : Workflow::BatchApprovalResult::Invalid;
     }
-    RecordUndoSnapshot();
+
+    struct TargetLocation
+    {
+        size_t rowIndex  = 0u;
+        size_t cellIndex = 0u;
+    };
+    std::vector<TargetLocation> targets;
+    targets.reserve(preview.changes.size());
     for (const Workflow::LocalizationBatchChange& change : preview.changes)
     {
-        if (change.rowIndex >= _localizationReviewRows.size())
+        std::optional<size_t> matchingRow;
+        for (size_t rowIndex = 0u; rowIndex < _localizationReviewRows.size(); ++rowIndex)
         {
-            continue;
+            const LocalizationReviewRow& row = _localizationReviewRows[rowIndex];
+            if (row.ownerName == change.ownerName && row.id == change.resourceId)
+            {
+                if (matchingRow.has_value()) return Workflow::BatchApprovalResult::Stale;
+                matchingRow = rowIndex;
+            }
         }
-        LocalizationReviewRow& row = _localizationReviewRows[change.rowIndex];
-        LocalizationTargetCell* cell = FindReviewTargetCell(row, change.cultureName);
-        if (! cell)
+        if (! matchingRow.has_value()) return Workflow::BatchApprovalResult::Stale;
+
+        const LocalizationReviewRow& row = _localizationReviewRows[matchingRow.value()];
+        std::optional<size_t> matchingCell;
+        for (size_t cellIndex = 0u; cellIndex < row.targets.size(); ++cellIndex)
         {
-            continue;
+            if (CompareTextIgnoreCase(row.targets[cellIndex].cultureName, change.cultureName) == 0)
+            {
+                if (matchingCell.has_value()) return Workflow::BatchApprovalResult::Stale;
+                matchingCell = cellIndex;
+            }
         }
-        cell->targetText = change.after;
-        cell->validation = Localization::ValidatePlaceholders(row.sourceText, cell->targetText);
-        cell->dirty      = true;
-        cell->reviewed   = preview.request.kind == Workflow::LocalizationBatchKind::MarkReviewed || cell->reviewed;
+        if (! matchingCell.has_value()) return Workflow::BatchApprovalResult::Stale;
+        const LocalizationTargetCell& cell = row.targets[matchingCell.value()];
+        if (cell.targetText != change.before || cell.reviewed != change.beforeReviewed)
+        {
+            return Workflow::BatchApprovalResult::Stale;
+        }
+        targets.push_back({.rowIndex = matchingRow.value(), .cellIndex = matchingCell.value()});
     }
-    return true;
+
+    RecordUndoSnapshot();
+    for (size_t changeIndex = 0u; changeIndex < preview.changes.size(); ++changeIndex)
+    {
+        const Workflow::LocalizationBatchChange& change = preview.changes[changeIndex];
+        LocalizationReviewRow& row = _localizationReviewRows[targets[changeIndex].rowIndex];
+        LocalizationTargetCell& cell = row.targets[targets[changeIndex].cellIndex];
+        cell.targetText = change.after;
+        cell.validation = Localization::ValidatePlaceholders(row.sourceText, cell.targetText);
+        cell.dirty      = true;
+        cell.reviewed   = change.afterReviewed;
+    }
+    return Workflow::BatchApprovalResult::Applied;
+}
+
+Workflow::BatchApprovalResult RedConfigureSession::ApplyThemeMassChange(const Workflow::ThemeMassPreview& preview)
+{
+    Themes::ThemePreviewModel candidate = _themePreview;
+    const Workflow::BatchApprovalResult result = Workflow::ApplyThemeMassChange(candidate, preview);
+    if (result != Workflow::BatchApprovalResult::Applied)
+    {
+        return result;
+    }
+    RecordUndoSnapshot();
+    _themePreview.SetTheme(candidate.GetTheme());
+    return Workflow::BatchApprovalResult::Applied;
 }
 
 bool RedConfigureSession::ApplyClipboardMatrix(size_t startRow, size_t startCultureIndex, std::wstring_view clipboardText)

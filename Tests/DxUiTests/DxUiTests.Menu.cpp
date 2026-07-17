@@ -3455,6 +3455,117 @@ void TestNativeMenuBarRestoresFocusAfterMenuDismiss()
     Require(WaitForFocusedWindow(focusedChild.get()), "dismissing the native menu bar popup restores focus to the previously focused child control");
 }
 
+constexpr UINT kDestroyNativeMenuBarHostMessage    = WM_APP + 0x53Eu;
+constexpr UINT_PTR kDestroyNativeMenuBarSubclassId = 0x53Eu;
+
+struct DestroyNativeMenuBarHostState final
+{
+    DestroyNativeMenuBarHostState()                                                   = default;
+    DestroyNativeMenuBarHostState(const DestroyNativeMenuBarHostState&)                = delete;
+    DestroyNativeMenuBarHostState(DestroyNativeMenuBarHostState&&)                     = delete;
+    DestroyNativeMenuBarHostState& operator=(const DestroyNativeMenuBarHostState&)     = delete;
+    DestroyNativeMenuBarHostState& operator=(DestroyNativeMenuBarHostState&&)          = delete;
+
+    std::unique_ptr<RedSalamander::DxUi::NativeMenuBarHost>* menuBarHost = nullptr;
+    std::atomic_bool destroyed = false;
+};
+
+LRESULT CALLBACK DestroyNativeMenuBarHostSubclassProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam, UINT_PTR, DWORD_PTR refData) noexcept
+{
+    if (message == kDestroyNativeMenuBarHostMessage)
+    {
+        auto* const state = reinterpret_cast<DestroyNativeMenuBarHostState*>(refData);
+        if (state && state->menuBarHost)
+        {
+            state->menuBarHost->reset();
+            state->destroyed.store(true, std::memory_order_release);
+        }
+        return 0;
+    }
+
+    return DefSubclassProc(hwnd, message, wParam, lParam);
+}
+
+void TestNativeMenuBarNestedPopupCanDestroyHostSafely()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow ownerWindow;
+    SetWindowPos(ownerWindow.Hwnd(), nullptr, 120, 120, 360, 240, SWP_NOZORDER);
+    ShowWindow(ownerWindow.Hwnd(), SW_SHOW);
+    ownerWindow.PumpMessages();
+    if (! TryActivateDxUiTestWindow(ownerWindow.Hwnd()))
+    {
+        SkipDxUiTest("DxUi native menu destruction proof requires an interactive desktop");
+        return;
+    }
+
+    wil::unique_hmenu menu{CreateMenu()};
+    Require(menu != nullptr, "native menu destruction proof creates a top-level menu");
+    wil::unique_hmenu filePopup{CreatePopupMenu()};
+    Require(filePopup != nullptr, "native menu destruction proof creates a popup menu");
+    Require(AppendMenuW(filePopup.get(), MF_STRING, 3901u, L"&Open") != FALSE, "native menu destruction proof populates the popup");
+    Require(AppendMenuW(menu.get(), MF_POPUP, reinterpret_cast<UINT_PTR>(filePopup.get()), L"&File") != FALSE,
+            "native menu destruction proof attaches the popup to the menu bar");
+    static_cast<void>(filePopup.release());
+
+    auto menuBarHost = std::make_unique<NativeMenuBarHost>();
+    Require(menuBarHost->Attach(GetModuleHandleW(nullptr), ownerWindow.Hwnd(), menu.get()), "native menu destruction proof attaches the menu bar host");
+    ownerWindow.PumpMessages();
+
+    DestroyNativeMenuBarHostState destroyState;
+    destroyState.menuBarHost = &menuBarHost;
+    Require(SetWindowSubclass(ownerWindow.Hwnd(), DestroyNativeMenuBarHostSubclassProc, kDestroyNativeMenuBarSubclassId,
+                              reinterpret_cast<DWORD_PTR>(&destroyState)) != FALSE,
+            "native menu destruction proof subclasses the owner window");
+    const auto removeSubclass = wil::scope_exit([&]() noexcept
+    {
+        static_cast<void>(RemoveWindowSubclass(ownerWindow.Hwnd(), DestroyNativeMenuBarHostSubclassProc, kDestroyNativeMenuBarSubclassId));
+    });
+
+    std::string driverFailure;
+    std::thread driver([&]
+    {
+        const auto dismissPopup = wil::scope_exit([&]() noexcept { DismissOwnedContextMenuPopupChain(ownerWindow.Hwnd()); });
+        const HWND popupHwnd = WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), L"Open");
+        if (! popupHwnd)
+        {
+            driverFailure = "native menu popup opens before destroying its menu-bar host";
+            return;
+        }
+
+        if (PostMessageW(ownerWindow.Hwnd(), kDestroyNativeMenuBarHostMessage, 0, 0) == FALSE)
+        {
+            driverFailure = "native menu destruction request posts to the owner";
+            return;
+        }
+
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(1500);
+        while (! destroyState.destroyed.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < deadline)
+        {
+            Sleep(5);
+        }
+        if (! destroyState.destroyed.load(std::memory_order_acquire))
+        {
+            driverFailure = "native menu-bar host is destroyed inside the nested popup loop";
+            return;
+        }
+
+        if (IsWindow(popupHwnd) != FALSE)
+        {
+            SendMessageW(popupHwnd, WM_KEYDOWN, VK_ESCAPE, 0);
+        }
+    });
+
+    const bool activated = menuBarHost->ActivateMnemonic(L'F');
+    driver.join();
+
+    Require(driverFailure.empty(), driverFailure.c_str());
+    Require(activated, "native menu activation returns after its host is destroyed inside the popup loop");
+    Require(destroyState.destroyed.load(std::memory_order_acquire) && ! menuBarHost,
+            "native menu nested-loop proof destroys the menu-bar host without a stale post-loop dereference");
+}
+
 void TestMenuInfoRowsDoNotDismissOnClick()
 {
     using namespace RedSalamander::DxUi;
@@ -5174,6 +5285,95 @@ void TestContextMenuShowAsyncKeepsOwnerPaintableWhileOpen()
     Require(WaitForWindowDestroyed(popupHwnd), "async context menu closes after item click");
 }
 
+void TestLargeMenuPaintsOnlyVisibleRowsWithCachedOffsets()
+{
+    using namespace RedSalamander::DxUi;
+
+    constexpr size_t kItemCount = 4096u;
+    std::vector<MenuFlyoutItem> items;
+    items.reserve(kItemCount);
+    for (size_t i = 0; i < kItemCount; ++i)
+    {
+        items.push_back(MenuFlyoutItem{.text = std::format(L"Folder {:04}", i), .commandId = static_cast<int>(80'000u + i)});
+    }
+
+    AttachedHostWindow ownerWindow;
+    SetWindowPos(ownerWindow.Hwnd(), nullptr, 180, 180, 420, 300, SWP_NOZORDER | SWP_NOACTIVATE);
+    ShowWindow(ownerWindow.Hwnd(), SW_SHOWNOACTIVATE);
+    ownerWindow.PumpMessages();
+
+    ContextMenuSessionCallbacks callbacks{};
+    callbacks.maxRootHeightDip        = 240.0f;
+    callbacks.focusFirstNavigableItem = true;
+
+    bool callbackInvoked = false;
+    const POINT menuPoint = ClientScreenPointForTest(ownerWindow.Hwnd(), 64, 48, "large context menu anchor maps to screen coordinates");
+    const auto openStarted = std::chrono::steady_clock::now();
+    const bool shown = ContextMenu::ShowAsync(ownerWindow.Hwnd(),
+                                              menuPoint,
+                                              items,
+                                              ownerWindow.Host().GetTheme(),
+                                              [&](std::optional<int>) noexcept { callbackInvoked = true; },
+                                              callbacks);
+    const uint64_t openToFirstPaintUs = Debug::Perf::ElapsedUs(openStarted);
+    Require(shown, "large async context menu opens");
+    Require(openToFirstPaintUs < 5'000'000u, "large context menu open-to-first-paint remains bounded");
+
+    const HWND popupHwnd = WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), L"Folder 0000");
+    Require(popupHwnd != nullptr, "large context menu popup window appears");
+
+    ContextMenuPopupDebugState initialState{};
+    Require(WaitForContextMenuPopupState(popupHwnd,
+                                         [](const ContextMenuPopupDebugState& state) noexcept
+    { return state.renderCount > 0u && state.lastPaintedItemCount > 0u; },
+                                         initialState),
+            "large context menu completes its first visible-row paint");
+    Require(initialState.hasScrollbar, "large context menu uses a bounded viewport");
+    Require(initialState.itemTexts.size() == kItemCount, "large context menu retains the immutable command model");
+    Require(initialState.lastPaintedItemCount <= 32u, "large context menu first paint touches only viewport rows");
+
+    const auto endStarted = std::chrono::steady_clock::now();
+    SendMessageW(popupHwnd, WM_KEYDOWN, VK_END, 0);
+    ownerWindow.PumpMessages();
+    ContextMenuPopupDebugState endState{};
+    Require(WaitForContextMenuPopupState(popupHwnd,
+                                         [](const ContextMenuPopupDebugState& state) noexcept
+    { return state.keyboardIndex == std::optional<size_t>{kItemCount - 1u} && state.scrollOffsetDip > 0.0f; },
+                                         endState),
+            "large context menu resolves the last row through cached offsets");
+    const uint64_t endToVisibleUs = Debug::Perf::ElapsedUs(endStarted);
+    Require(endToVisibleUs < 1'000'000u, "large context menu End-to-visible latency remains bounded");
+    Require(endState.lastPaintedItemCount <= 32u, "large context menu scrolled paint remains limited to viewport rows");
+
+    D2D1_RECT_F lastRowRect{};
+    Require(WaitForContextMenuPopupItemRect(popupHwnd, kItemCount - 1u, lastRowRect), "large context menu exposes last-row geometry");
+    Require(lastRowRect.bottom > endState.viewportRectDip.top && lastRowRect.top < endState.viewportRectDip.bottom,
+            "large context menu keeps the keyboard-selected last row inside the viewport");
+
+    Debug::Perf::Emit(L"dxui.menu.selftest.large_open_to_first_paint_us",
+                      L"4096-items",
+                      openToFirstPaintUs,
+                      static_cast<uint64_t>(kItemCount),
+                      static_cast<uint64_t>(initialState.lastPaintedItemCount),
+                      S_OK);
+    Debug::Perf::Emit(L"dxui.menu.selftest.large_end_to_visible_us",
+                      L"4096-items",
+                      endToVisibleUs,
+                      static_cast<uint64_t>(kItemCount),
+                      static_cast<uint64_t>(endState.lastPaintedItemCount),
+                      S_OK);
+
+    PostMessageW(popupHwnd, WM_KEYDOWN, VK_ESCAPE, 0);
+    const auto closeDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (! callbackInvoked && std::chrono::steady_clock::now() < closeDeadline)
+    {
+        ownerWindow.PumpMessages();
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    Require(callbackInvoked, "large context menu closes through Escape");
+    Require(WaitForWindowDestroyed(popupHwnd), "large context menu popup is destroyed after Escape");
+}
+
 void TestContextMenuShowAsyncSubmenuCloseKeepsSessionAlive()
 {
     using namespace RedSalamander::DxUi;
@@ -5488,6 +5688,7 @@ void RunMenuTests()
     runTest("TestContextMenuModalLoopDismissesWhenRootPopupDisappearsBeforeWaiting", TestContextMenuModalLoopDismissesWhenRootPopupDisappearsBeforeWaiting);
     runTest("TestContextMenuDebugStateProbeBoundsWedgedWindowThread", TestContextMenuDebugStateProbeBoundsWedgedWindowThread);
     runTest("TestContextMenuShowAsyncKeepsOwnerPaintableWhileOpen", TestContextMenuShowAsyncKeepsOwnerPaintableWhileOpen);
+    runTest("TestLargeMenuPaintsOnlyVisibleRowsWithCachedOffsets", TestLargeMenuPaintsOnlyVisibleRowsWithCachedOffsets);
     runTest("TestContextMenuShowAsyncSubmenuCloseKeepsSessionAlive", TestContextMenuShowAsyncSubmenuCloseKeepsSessionAlive);
     runTest("TestMenuGraphicalSliderSupportsClickDragAndAnimation", TestMenuGraphicalSliderSupportsClickDragAndAnimation);
     runTest("TestMenuMnemonicHonorsExplicitAmpersandLabels", TestMenuMnemonicHonorsExplicitAmpersandLabels);
@@ -5514,6 +5715,7 @@ void RunMenuTests()
     runTest("TestMenuKeyboardAltExitsMenuLoop", TestMenuKeyboardAltExitsMenuLoop);
     runTest("TestMenuKeyboardLeftArrowMatchesWindowsMenuLoop", TestMenuKeyboardLeftArrowMatchesWindowsMenuLoop);
     runTest("TestNativeMenuBarRestoresFocusAfterMenuDismiss", TestNativeMenuBarRestoresFocusAfterMenuDismiss);
+    runTest("TestNativeMenuBarNestedPopupCanDestroyHostSafely", TestNativeMenuBarNestedPopupCanDestroyHostSafely);
     runTest("TestMenuInfoRowsDoNotDismissOnClick", TestMenuInfoRowsDoNotDismissOnClick);
     runTest("TestMenuPopupPositionClampsAcrossDpiMatrix", TestMenuPopupPositionClampsAcrossDpiMatrix);
     runTest("TestMenuPopupPositionSupportsRightAlignedRootAnchors", TestMenuPopupPositionSupportsRightAlignedRootAnchors);

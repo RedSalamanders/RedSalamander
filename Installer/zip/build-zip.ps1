@@ -22,6 +22,8 @@ $ErrorActionPreference = 'Stop'
 $RepoRoot = Split-Path -Parent $PSScriptRoot | Split-Path -Parent
 $VersioningScript = Join-Path $RepoRoot "Tools\Versioning.ps1"
 $VcRuntimeScript = Join-Path $PSScriptRoot "VcRuntime.ps1"
+$RuntimeDependencyModule = Join-Path $RepoRoot "Tools\RuntimeDependencies.psm1"
+$PortablePackageSmokeModule = Join-Path $RepoRoot "Tools\PortablePackageSmoke.psm1"
 $BuildOutputDir = Join-Path $RepoRoot ".build\$Platform\$Configuration"
 $PackageOutputDir = Join-Path $RepoRoot ".build\AppPackages"
 $TempDir = Join-Path $env:TEMP "RedSalamanderZip_$([Guid]::NewGuid())"
@@ -34,8 +36,18 @@ if (-not (Test-Path $VcRuntimeScript)) {
     throw "VC runtime helper script not found: $VcRuntimeScript"
 }
 
+if (-not (Test-Path $RuntimeDependencyModule)) {
+    throw "Runtime dependency helper not found: $RuntimeDependencyModule"
+}
+
+if (-not (Test-Path $PortablePackageSmokeModule)) {
+    throw "Portable package smoke helper not found: $PortablePackageSmokeModule"
+}
+
 . $VersioningScript
 . $VcRuntimeScript
+Import-Module $RuntimeDependencyModule -Force
+Import-Module $PortablePackageSmokeModule -Force
 $VersionContext = if ($BuildNumber -gt 0) {
     Get-RSVersionContext -RepoRoot $RepoRoot -Configuration $Configuration -Platform $Platform -BuildNumber $BuildNumber
 } else {
@@ -58,6 +70,8 @@ Write-Host "  Output: $ZipPath" -ForegroundColor Gray
 if (-not (Test-Path $BuildOutputDir)) {
     throw "Build output directory not found: $BuildOutputDir. Run build.ps1 first."
 }
+
+$null = Assert-RSRuntimeDependenciesInOutput -RepoRoot $RepoRoot -BuildOutputDir $BuildOutputDir -Configuration $Configuration -Platform $Platform
 
 # Create temp directory
 New-Item -ItemType Directory -Path $TempDir -Force | Out-Null
@@ -177,6 +191,20 @@ https://github.com/RedSalamanders/RedSalamander
     # Create ZIP archive
     Write-Host "Compressing files..." -ForegroundColor Cyan
     Compress-Archive -Path "$TempDir\*" -DestinationPath $ZipPath -Force
+
+    $HostCanExecutePackage = $Platform -eq 'x64' -or $env:PROCESSOR_ARCHITECTURE -eq 'ARM64'
+    $SmokeResult = Test-RSPortablePackage `
+        -RepoRoot $RepoRoot `
+        -ZipPath $ZipPath `
+        -BuildOutputDir $BuildOutputDir `
+        -Configuration $Configuration `
+        -Platform $Platform `
+        -SkipExecution:(-not $HostCanExecutePackage)
+    if ($SmokeResult.ExecutionSkipped) {
+        Write-Host "  Portable package dependency closure validated; $Platform execution skipped on this host." -ForegroundColor Yellow
+    } else {
+        Write-Host "  Portable package app startup and all built-in plugin contracts passed." -ForegroundColor Gray
+    }
 
     Write-Host "✓ Portable ZIP created successfully!" -ForegroundColor Green
     Write-Host "  $ZipPath" -ForegroundColor Gray

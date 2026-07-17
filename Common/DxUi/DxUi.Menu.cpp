@@ -1249,8 +1249,6 @@ static constexpr DWORD kMenuDebugStateDispatchTimeoutMs = 1000u;
 #endif
 
 struct MenuController; // forward
-[[nodiscard]] D2D1_RECT_F GetItemRect(
-    const MenuFlyoutItem* items, size_t count, size_t targetIndex, float menuWidthDip, float itemHeightDip, float headerHeightDip) noexcept;
 [[nodiscard]] bool ProcessMenuPopupMessage(MenuController& controller, HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 void FinalizeAsyncMenuController(MenuController& controller) noexcept;
 void DestroyMenuPopupWindow(MenuPopup& popup) noexcept;
@@ -1282,6 +1280,7 @@ struct MenuPopup
     HWND hwnd = nullptr;
     WindowHost host;
     std::vector<MenuFlyoutItem> ownedItems;
+    std::vector<float> itemOffsetsDip;
     const MenuFlyoutItem* items = nullptr;
     size_t itemCount            = 0;
     MenuController* controller  = nullptr;
@@ -1318,6 +1317,7 @@ struct MenuPopup
     bool sliderAnimationActive           = false;
     bool sliderAnimationInitialized      = false;
     uint64_t sliderDragTargetChangeCount = 0u;
+    size_t lastPaintedItemCount           = 0u;
     std::chrono::steady_clock::time_point sliderInteractionStartedAt{};
 
     UINT_PTR hoverTimerId                = 0;
@@ -1385,6 +1385,41 @@ struct MenuPopup
         return NeedsScrollbar() ? menuWidthDip - kScrollbarThicknessDip : menuWidthDip;
     }
 
+    void RebuildItemOffsets()
+    {
+        const ThemePalette& theme   = host.GetTheme();
+        const float itemHeightDip   = ResolveMenuItemHeightDip(theme);
+        const float headerHeightDip = ResolveMenuHeaderHeightDip(theme);
+
+        itemOffsetsDip.clear();
+        itemOffsetsDip.reserve(itemCount + 1u);
+        float offset = kMenuPaddingTopDip;
+        itemOffsetsDip.push_back(offset);
+        for (size_t i = 0; i < itemCount; ++i)
+        {
+            switch (items[i].kind)
+            {
+                case MenuItemKind::Separator: offset += kSeparatorHeightDip; break;
+                case MenuItemKind::Header: offset += headerHeightDip; break;
+                case MenuItemKind::Slider: offset += kSliderItemHeightDip; break;
+                case MenuItemKind::Standard:
+                case MenuItemKind::Toggle:
+                case MenuItemKind::Radio:
+                case MenuItemKind::Info: offset += itemHeightDip; break;
+            }
+            itemOffsetsDip.push_back(offset);
+        }
+    }
+
+    [[nodiscard]] D2D1_RECT_F GetItemRect(size_t index, float widthDip) const noexcept
+    {
+        if (index >= itemCount || itemOffsetsDip.size() != itemCount + 1u)
+        {
+            return D2D1::RectF();
+        }
+        return D2D1::RectF(kMenuBorderDip, itemOffsetsDip[index], widthDip - kMenuBorderDip, itemOffsetsDip[index + 1u]);
+    }
+
     [[nodiscard]] RECT GetInteractiveScreenRect() const noexcept
     {
         RECT windowRect{};
@@ -1414,10 +1449,7 @@ struct MenuPopup
 
     void EnsureItemVisible(size_t index) noexcept
     {
-        const ThemePalette& theme   = host.GetTheme();
-        const float itemHeightDip   = ResolveMenuItemHeightDip(theme);
-        const float headerHeightDip = ResolveMenuHeaderHeightDip(theme);
-        const D2D1_RECT_F itemRect  = GetItemRect(items, itemCount, index, GetContentWidthDip(), itemHeightDip, headerHeightDip);
+        const D2D1_RECT_F itemRect = GetItemRect(index, GetContentWidthDip());
         if (itemRect.bottom <= itemRect.top || ! NeedsScrollbar())
         {
             return;
@@ -2448,38 +2480,9 @@ void EnsureMenuWindowClass(HINSTANCE hInstance)
     return D2D1::SizeF(width, totalHeight);
 }
 
-// ---------------------------------------------------------------------------
-// Get item rect for a given index (in menu-local DIP coordinates)
-// ---------------------------------------------------------------------------
-
-[[nodiscard]] D2D1_RECT_F GetItemRect(
-    const MenuFlyoutItem* items, size_t count, size_t targetIndex, float menuWidthDip, float itemHeightDip, float headerHeightDip) noexcept
-{
-    float y = kMenuPaddingTopDip;
-    for (size_t i = 0; i < count; ++i)
-    {
-        float h = itemHeightDip;
-        if (items[i].kind == MenuItemKind::Separator)
-            h = kSeparatorHeightDip;
-        else if (items[i].kind == MenuItemKind::Header)
-            h = headerHeightDip;
-        else if (items[i].kind == MenuItemKind::Slider)
-            h = kSliderItemHeightDip;
-        if (i == targetIndex)
-        {
-            return D2D1::RectF(kMenuBorderDip, y, menuWidthDip - kMenuBorderDip, y + h);
-        }
-        y += h;
-    }
-    return D2D1::RectF(0, 0, 0, 0);
-}
-
 [[nodiscard]] D2D1_RECT_F GetVisibleItemRect(const MenuPopup& popup, size_t targetIndex) noexcept
 {
-    const ThemePalette& theme   = popup.host.GetTheme();
-    const float itemHeightDip   = ResolveMenuItemHeightDip(theme);
-    const float headerHeightDip = ResolveMenuHeaderHeightDip(theme);
-    D2D1_RECT_F rect            = GetItemRect(popup.items, popup.itemCount, targetIndex, popup.GetContentWidthDip(), itemHeightDip, headerHeightDip);
+    D2D1_RECT_F rect = popup.GetItemRect(targetIndex, popup.GetContentWidthDip());
     rect.left += popup.shadowMargins.leftDip;
     rect.right += popup.shadowMargins.leftDip;
     rect.top += popup.shadowMargins.topDip;
@@ -2571,32 +2574,6 @@ void EnsureMenuWindowClass(HINSTANCE hInstance)
 // Hit-test: find item index under a DIP point (menu-local)
 // ---------------------------------------------------------------------------
 
-[[nodiscard]] std::optional<size_t> HitTestMenuItem(
-    const MenuFlyoutItem* items, size_t count, float menuWidthDip, float itemHeightDip, float headerHeightDip, D2D1_POINT_2F pointDip) noexcept
-{
-    float y = kMenuPaddingTopDip;
-    for (size_t i = 0; i < count; ++i)
-    {
-        float h = itemHeightDip;
-        if (items[i].kind == MenuItemKind::Separator)
-            h = kSeparatorHeightDip;
-        else if (items[i].kind == MenuItemKind::Header)
-            h = headerHeightDip;
-        else if (items[i].kind == MenuItemKind::Slider)
-            h = kSliderItemHeightDip;
-        if (pointDip.y >= y && pointDip.y < y + h && pointDip.x >= 0.0f && pointDip.x < menuWidthDip)
-        {
-            if (items[i].kind != MenuItemKind::Separator && items[i].kind != MenuItemKind::Header && items[i].kind != MenuItemKind::Info)
-            {
-                return i;
-            }
-            return std::nullopt; // Over a non-interactive item
-        }
-        y += h;
-    }
-    return std::nullopt;
-}
-
 [[nodiscard]] std::optional<size_t> HitTestMenuItem(const MenuPopup& popup, D2D1_POINT_2F pointDip) noexcept
 {
     if (! PointInRect(popup.GetViewportRect(), pointDip))
@@ -2604,15 +2581,20 @@ void EnsureMenuWindowClass(HINSTANCE hInstance)
         return std::nullopt;
     }
 
-    const ThemePalette& theme   = popup.host.GetTheme();
-    const float itemHeightDip   = ResolveMenuItemHeightDip(theme);
-    const float headerHeightDip = ResolveMenuHeaderHeightDip(theme);
-    return HitTestMenuItem(popup.items,
-                           popup.itemCount,
-                           popup.GetContentWidthDip(),
-                           itemHeightDip,
-                           headerHeightDip,
-                           D2D1::Point2F(pointDip.x, pointDip.y + popup.scrollOffsetDip));
+    const float contentY = pointDip.y + popup.scrollOffsetDip - popup.shadowMargins.topDip;
+    if (pointDip.x < popup.shadowMargins.leftDip || pointDip.x >= popup.shadowMargins.leftDip + popup.GetContentWidthDip() ||
+        popup.itemOffsetsDip.size() != popup.itemCount + 1u)
+    {
+        return std::nullopt;
+    }
+
+    const auto upper = std::upper_bound(popup.itemOffsetsDip.begin(), popup.itemOffsetsDip.end(), contentY);
+    if (upper == popup.itemOffsetsDip.begin() || upper == popup.itemOffsetsDip.end())
+    {
+        return std::nullopt;
+    }
+    const size_t index = static_cast<size_t>(std::distance(popup.itemOffsetsDip.begin(), upper) - 1);
+    return popup.IsNavigableItem(index) ? std::optional<size_t>{index} : std::nullopt;
 }
 
 // ---------------------------------------------------------------------------
@@ -2644,7 +2626,6 @@ public:
         const auto& style             = popup->controller->style;
         const auto& theme             = popup->controller->theme;
         const float itemHeightDip     = ResolveMenuItemHeightDip(theme);
-        const float headerHeightDip   = ResolveMenuHeaderHeightDip(theme);
         const float contentWidth      = popup->GetContentWidthDip();
         const D2D1_RECT_F surfaceRect = popup->GetSurfaceRect();
         const float surfaceLeft       = surfaceRect.left;
@@ -2658,23 +2639,41 @@ public:
         dc->PushAxisAlignedClip(viewportRect, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
 
         // Items
-        float y = kMenuPaddingTopDip;
-        for (size_t i = 0; i < popup->itemCount; ++i)
+        size_t firstVisibleItem = 0u;
+        if (popup->itemOffsetsDip.size() == popup->itemCount + 1u)
+        {
+            const auto upper = std::upper_bound(popup->itemOffsetsDip.begin(), popup->itemOffsetsDip.end(), popup->scrollOffsetDip);
+            if (upper != popup->itemOffsetsDip.begin())
+            {
+                firstVisibleItem = static_cast<size_t>(std::distance(popup->itemOffsetsDip.begin(), upper) - 1);
+                firstVisibleItem = (std::min)(firstVisibleItem, popup->itemCount);
+            }
+        }
+
+        size_t paintedItemCount = 0u;
+        for (size_t i = firstVisibleItem; i < popup->itemCount; ++i)
         {
             const auto& item = popup->items[i];
-            float itemHeight = itemHeightDip;
-            if (item.kind == MenuItemKind::Separator)
-                itemHeight = kSeparatorHeightDip;
-            else if (item.kind == MenuItemKind::Header)
-                itemHeight = headerHeightDip;
-            else if (item.kind == MenuItemKind::Slider)
-                itemHeight = kSliderItemHeightDip;
+            const float y = popup->itemOffsetsDip.size() == popup->itemCount + 1u ? popup->itemOffsetsDip[i] : kMenuPaddingTopDip;
+            const float itemHeight = popup->itemOffsetsDip.size() == popup->itemCount + 1u
+                                         ? popup->itemOffsetsDip[i + 1u] - y
+                                         : itemHeightDip;
 
             const D2D1_RECT_F itemRect        = D2D1::RectF(kMenuBorderDip, y, contentWidth - kMenuBorderDip, y + itemHeight);
             const D2D1_RECT_F visibleItemRect = D2D1::RectF(surfaceLeft + itemRect.left,
                                                             surfaceTop + itemRect.top - popup->scrollOffsetDip,
                                                             surfaceLeft + itemRect.right,
                                                             surfaceTop + itemRect.bottom - popup->scrollOffsetDip);
+
+            if (visibleItemRect.top >= viewportRect.bottom)
+            {
+                break;
+            }
+            if (visibleItemRect.bottom <= viewportRect.top)
+            {
+                continue;
+            }
+            ++paintedItemCount;
 
             if (item.kind == MenuItemKind::Separator)
             {
@@ -2687,7 +2686,6 @@ public:
                 {
                     dc->DrawLine(D2D1::Point2F(lineLeft, lineY), D2D1::Point2F(lineRight, lineY), brush, 1.0f);
                 }
-                y += itemHeight;
                 continue;
             }
 
@@ -2700,7 +2698,6 @@ public:
                     D2D1::RectF(layout.textRectDip.left, layout.textRectDip.top, surfaceLeft + contentWidth - kAccelRightPaddingDip, layout.textRectDip.bottom);
                 DrawCenteredText(
                     host, label.displayText, textRect, FontRole::Small, style.headerText, DWRITE_TEXT_ALIGNMENT_LEADING, DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
-                y += itemHeight;
                 continue;
             }
 
@@ -2806,7 +2803,6 @@ public:
                     }
                 }
 
-                y += itemHeight;
                 continue;
             }
 
@@ -2835,7 +2831,6 @@ public:
                                      DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
                 }
 
-                y += itemHeight;
                 continue;
             }
 
@@ -2930,7 +2925,12 @@ public:
                                  DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
             }
 
-            y += itemHeight;
+        }
+
+        popup->lastPaintedItemCount = paintedItemCount;
+        if (Debug::Perf::IsCaptureEnabled())
+        {
+            Debug::Perf::EmitValue(L"dxui.menu.popup.visible_rows", static_cast<uint64_t>(paintedItemCount));
         }
 
         dc->PopAxisAlignedClip();
@@ -3228,6 +3228,7 @@ void RelayoutMenuPopupForDpi(MenuPopup& popup, UINT dpi, const RECT* suggestedWi
 
     bool hostDpiHandled = false;
     static_cast<void>(popup.host.HandleMessage(popup.hwnd, WM_DPICHANGED, MAKEWPARAM(static_cast<WORD>(dpi), static_cast<WORD>(dpi)), 0, hostDpiHandled));
+    popup.RebuildItemOffsets();
 
     POINT surfaceTopLeft{popup.surfaceRectPx.left, popup.surfaceRectPx.top};
     if (suggestedWindowRect)
@@ -3373,6 +3374,7 @@ bool CreateMenuPopupWindow(MenuController& controller,
         return false;
     }
     popup->host.SetTheme(controller.theme);
+    popup->RebuildItemOffsets();
     // Popup menus stay fully app-rendered even on the transparent composition host.
     // Applying a DWM system backdrop here pulls in OS palette colors that do not match
     // custom RedSalamander themes, so the popup HWND intentionally stays backdrop-free.
@@ -5621,7 +5623,8 @@ bool TryGetMenuPopupState(const MenuPopup& popup, ContextMenuPopupDebugState& ou
             outState.sliderStopVisualExtentsDip.emplace_back();
         }
     }
-    outState.renderCount = popup.host.DebugGetRenderCount();
+    outState.renderCount          = popup.host.DebugGetRenderCount();
+    outState.lastPaintedItemCount = popup.lastPaintedItemCount;
     if (popup.controller)
     {
         outState.rootPointerSwitchCount         = popup.controller->rootPointerSwitchCount;
