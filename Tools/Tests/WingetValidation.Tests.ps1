@@ -144,6 +144,21 @@ Describe 'Winget release workflow' {
 
         ($enableIndex -lt $installMatch.Index) | Should Be $true
     }
+
+    It 'submits a detailed checklist-aligned pull request after validation and install testing' {
+        $workflow | Should Match ([regex]::Escape('$pullRequestTitle = "Update: RedSalamanders.RedSalamander to $version"'))
+        $workflow | Should Match 'repo:microsoft/winget-pkgs is:pr is:open in:title RedSalamander \$version'
+        $workflow | Should Match 'wingetcreate submit[\s\S]{0,260}--prtitle \$pullRequestTitle'
+        $workflow | Should Match ([regex]::Escape("'https://github\.com/microsoft/winget-pkgs/pull/(?<number>\d+)'"))
+        $workflow | Should Match 'Invoke-RestMethod\s+`[\s\S]{0,220}-Method Patch'
+        $workflow | Should Match '## 🧪 Automated validation'
+        $workflow | Should Match 'winget validate --manifest winget-manifest'
+        $workflow | Should Match 'winget install --manifest winget-manifest'
+        $workflow | Should Match 'winget list --exact --id RedSalamanders\.RedSalamander'
+        $workflow | Should Match 'Manifest conforms to the \[1\.12 schema\]'
+        $workflow | Should Match '\$pullRequest\.body -notmatch \[regex\]::Escape'
+        $workflow | Should Match 'pull_request_url=\$\(\$pullRequest\.html_url\)'
+    }
 }
 
 Describe 'Winget manifest template' {
