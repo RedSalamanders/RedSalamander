@@ -180,6 +180,13 @@ Describe 'Pinned build-tool and CI identity' {
         $ci | Should Match 'git checkout --detach \$toolCommit'
         $ci | Should Match '\$actualToolCommit -ne \$toolCommit'
         $ci | Should Not Match 'vcpkg(?:\.exe)?\s+integrate\s+install'
+        $ci | Should Match '\$env:ForceImportBeforeCppTargets\s*=\s*\$vcpkgProps'
+        $ci | Should Match '\$env:ForceImportAfterCppTargets\s*=\s*\$vcpkgTargets'
+        $ci | Should Match '\$env:VcpkgManifestInstall\s*=\s*"false"'
+        $ci | Should Match '\$env:VCPkgLocalAppDataDisabled\s*=\s*"true"'
+        $ci | Should Match 'vcpkg\\scripts\\buildsystems\\msbuild'
+        $ci.IndexOf('$env:ForceImportBeforeCppTargets') | Should BeLessThan $ci.IndexOf('& $buildScript @buildArgs')
+        $ci.IndexOf('$env:ForceImportAfterCppTargets') | Should BeLessThan $ci.IndexOf('& $buildScript @buildArgs')
     }
 
     It 'keeps ARM64 compilation and critical contract suites in the PR gate' {
