@@ -83,17 +83,25 @@ case WM_APP_WORK:
 
 ### `HWND` Teardown and Posted Payloads
 
-If an `HWND` can be destroyed while payload messages are still queued, Windows may discard those messages without delivering them. To prevent payload leaks (and to keep the `PostMessagePayload` registry consistent):
+If an `HWND` can be destroyed while payload messages are still queued, Windows may discard those messages without
+delivering them. `PostMessagePayload` places an opaque registry token—not a payload address—in nonzero `lParam`.
+The registry owns the payload until a receiver takes it or teardown drains it:
 
 - Call `InitPostedPayloadWindow(hwnd)` during create (`WM_NCCREATE`/`WM_CREATE`).
-- Call `DrainPostedPayloadsForWindow(hwnd)` in `WM_NCDESTROY`.
-- Always receive with `TakeMessagePayload<T>(lParam)` (not a manual `unique_ptr` wrap).
+- Call `DrainPostedPayloadsForWindow(hwnd)` in `WM_NCDESTROY`; it fences new posts, invalidates all tokens for the
+  window, and deletes their storage exactly once.
+- Always receive with `TakeMessagePayload<T>(lParam)` (not a cast or manual `unique_ptr` wrap). A null result from a
+  nonzero token means stale, drained, unregistered, or type-mismatched input and must be ignored before
+  message-specific work.
+- A stale queued token may survive numeric `HWND` reuse, but it can never reacquire or delete payload storage.
+- Reserve `lParam == 0` only for a payload-less fallback explicitly defined by that message.
 
 ### UI-host cross-thread checklist
 
 For every UI-host change that posts work across threads, review and cover:
 
-- Payload ownership: every heap payload is posted with `PostMessagePayload(...)` and received with `TakeMessagePayload<T>(lParam)`.
+- Payload ownership: every heap payload is posted with `PostMessagePayload(...)`, received with
+  `TakeMessagePayload<T>(lParam)`, and ignored when a nonzero token no longer resolves.
 - UI-thread boundary: UI state is mutated only from the owning UI thread or explicitly marshaled there.
 - Cancellation path: producers stop or observe cancellation before teardown begins.
 - Teardown drain: receiving windows initialize/drain the posted-payload registry.
