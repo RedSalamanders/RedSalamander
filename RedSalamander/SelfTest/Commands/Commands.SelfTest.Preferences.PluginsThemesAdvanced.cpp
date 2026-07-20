@@ -61,7 +61,8 @@ namespace
         return DebugGetPreferencesDialogSnapshot(outSnapshot) && predicate(outSnapshot);
     };
 
-    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Plugins deferred-search test.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                  L"Failed to focus the Preferences category host for Plugins deferred-search test.");
     state.Require(DebugSelectPreferencesCategory(kPrefCategoryPlugins), L"Failed to select the Preferences Plugins category for Plugins deferred-search test.");
     PumpPendingMessages();
 
@@ -516,7 +517,8 @@ namespace
             return false;
         }
 
-        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Plugins tab-traversal validation.");
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                      L"Failed to focus the Preferences category host for Plugins tab-traversal validation.");
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryPlugins),
                       L"Failed to select the Preferences Plugins category for Plugins tab-traversal validation.");
         PumpPendingMessages();
@@ -2130,7 +2132,8 @@ namespace
         return DebugGetPreferencesDialogSnapshot(outSnapshot) && predicate(outSnapshot);
     };
 
-    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Themes deferred-search test.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                  L"Failed to focus the Preferences category host for Themes deferred-search test.");
     state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes), L"Failed to select the Preferences Themes category for Themes deferred-search test.");
     PumpPendingMessages();
 
@@ -3090,7 +3093,8 @@ namespace
             return false;
         }
 
-        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Themes clear interaction test.");
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                      L"Failed to focus the Preferences category host for Themes clear interaction test.");
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
                       L"Failed to select the Preferences Themes category for Themes clear interaction test.");
         PumpPendingMessages();
@@ -3376,7 +3380,8 @@ namespace
             return false;
         }
 
-        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Themes set interaction test.");
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                      L"Failed to focus the Preferences category host for Themes set interaction test.");
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
                       L"Failed to select the Preferences Themes category for Themes set interaction test.");
         PumpPendingMessages();
@@ -4446,7 +4451,8 @@ namespace
             return false;
         }
 
-        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Advanced navigation.");
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                      L"Failed to focus the Preferences category host for Advanced navigation.");
         PumpPendingMessages();
 
         SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_END, 0);
@@ -4642,7 +4648,8 @@ namespace
             return false;
         }
 
-        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Advanced live interaction test.");
+        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                      L"Failed to focus the Preferences category host for Advanced live interaction test.");
         PumpPendingMessages();
 
         SendMessageW(treeHost, WM_KEYDOWN, VK_END, 0);
@@ -5204,7 +5211,8 @@ namespace
             return false;
         }
 
-        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Advanced tab-traversal validation.");
+        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                      L"Failed to focus the Preferences category host for Advanced tab-traversal validation.");
         PumpPendingMessages();
 
         SendMessageW(treeHost, WM_KEYDOWN, VK_END, 0);
@@ -5489,7 +5497,8 @@ namespace
         return pagePatternStats;
     };
 
-    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Advanced round-trip test.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                  L"Failed to focus the Preferences category host for Advanced round-trip test.");
     PumpPendingMessages();
 
     SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_END, 0);
@@ -5645,7 +5654,8 @@ namespace
         return false;
     }
 
-    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Editors/Mouse navigation.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                  L"Failed to focus the Preferences category host for Editors/Mouse navigation.");
     PumpPendingMessages();
 
     const auto waitForSnapshot = [&](const auto& predicate, PreferencesDebugSnapshot& outSnapshot) noexcept
@@ -5890,7 +5900,8 @@ namespace
                           std::format(L"Preferences {} page still exposes visible legacy statics after returning from General during {}.", pageLabel, context));
         };
 
-        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), std::format(L"Failed to focus the Preferences category host during {}.", context));
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                      std::format(L"Failed to focus the Preferences category host during {}.", context));
         PumpPendingMessages();
 
         verifyNoteRoundTrip(kPrefCategoryEditors, IDS_PREFS_CAT_EDITORS, IDS_PREFS_CAT_EDITORS_DESC, L"Editors");

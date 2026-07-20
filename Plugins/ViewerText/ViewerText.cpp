@@ -1,9 +1,9 @@
 #include "ViewerText.h"
 
-#include "ViewerText.SafetyHelpers.h"
-#include "ViewerText.ThemeHelpers.h"
 #include "HandleIo.h"
 #include "PathUtils.h"
+#include "ViewerText.SafetyHelpers.h"
+#include "ViewerText.ThemeHelpers.h"
 
 #include <algorithm>
 #include <array>
@@ -2082,8 +2082,7 @@ bool EnsureReferencedDiffLinesLoaded(ResolvedDiffTextFile& file, uint32_t lineNu
         const size_t previousSize = file.pendingBytes.size();
         file.pendingBytes.resize(previousSize + wantSize);
 
-        const HRESULT readHr = ViewerTextSafety::ReadExactly(
-            file.reader.get(), std::span<uint8_t>(file.pendingBytes.data() + previousSize, wantSize));
+        const HRESULT readHr = ViewerTextSafety::ReadExactly(file.reader.get(), std::span<uint8_t>(file.pendingBytes.data() + previousSize, wantSize));
         if (FAILED(readHr))
         {
             file.available        = false;
@@ -3589,9 +3588,7 @@ HRESULT WriteAllHandle(HANDLE file, const void* data, size_t size) noexcept
     return Common::HandleIo::WriteAll(file, data, size);
 }
 
-HRESULT CreateSiblingSaveTemp(const std::filesystem::path& destinationPath,
-                               std::filesystem::path& tempPath,
-                               wil::unique_handle& tempFile) noexcept
+HRESULT CreateSiblingSaveTemp(const std::filesystem::path& destinationPath, std::filesystem::path& tempPath, wil::unique_handle& tempFile) noexcept
 {
     if (destinationPath.empty() || destinationPath.filename().empty() || destinationPath.parent_path().empty())
     {
@@ -3600,9 +3597,9 @@ HRESULT CreateSiblingSaveTemp(const std::filesystem::path& destinationPath,
 
     std::wstring tempPathText;
     const Common::Paths::UniqueSiblingFileOptions options{.prefix             = L".redsalamander-viewertext-save-",
-                                                           .suffix             = L".tmp",
-                                                           .flagsAndAttributes = FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN,
-                                                           .maximumAttempts   = 128u};
+                                                          .suffix             = L".tmp",
+                                                          .flagsAndAttributes = FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN,
+                                                          .maximumAttempts    = 128u};
     const HRESULT hr = Common::Paths::CreateUniqueSiblingFile(destinationPath.native(), options, tempPathText, tempFile);
     if (SUCCEEDED(hr))
     {
@@ -4300,7 +4297,7 @@ LRESULT ViewerText::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
             snapshot->renderCount                      = (_viewMode == ViewMode::Hex) ? _debugHexRenderCount : _debugTextRenderCount;
             snapshot->isLoading                        = _isLoading;
             snapshot->asyncOpenTerminalCount           = _debugAsyncOpenTerminalCount;
-            snapshot->asyncOpenLastTerminalHr           = _debugAsyncOpenLastTerminalHr;
+            snapshot->asyncOpenLastTerminalHr          = _debugAsyncOpenLastTerminalHr;
             snapshot->textStreamActive                 = _textStreamActive;
             snapshot->textStreamStartOffset            = _textStreamStartOffset;
             snapshot->textStreamEndOffset              = _textStreamEndOffset;
@@ -4400,8 +4397,7 @@ LRESULT ViewerText::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
                 {
                     if (_textSparseWrapActive)
                     {
-                        RebuildSparseTextViewportLayouts(
-                            _hEdit.get(), std::clamp<size_t>(std::max<size_t>(1u, _debugTextVisibleRowCount), 1u, 4096u));
+                        RebuildSparseTextViewportLayouts(_hEdit.get(), std::clamp<size_t>(std::max<size_t>(1u, _debugTextVisibleRowCount), 1u, 4096u));
                     }
                     const uint64_t topVisual = std::min<uint64_t>(_textTopVisualLine, TextVisualLineCount() - 1u);
                     TextVisualLineLayoutEntry topLayout{};
@@ -4434,12 +4430,10 @@ LRESULT ViewerText::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
                         }
                     }
 
-                    const size_t visibleLayoutCount = _textSparseWrapActive
-                                                          ? std::min<size_t>(std::max<size_t>(1u, _debugTextVisibleRowCount),
-                                                                             _textSparseViewportLayouts.size())
-                                                          : static_cast<size_t>(std::min<uint64_t>(
-                                                                TextVisualLineCount() - topVisual,
-                                                                std::max<size_t>(1u, _debugTextVisibleRowCount)));
+                    const size_t visibleLayoutCount =
+                        _textSparseWrapActive
+                            ? std::min<size_t>(std::max<size_t>(1u, _debugTextVisibleRowCount), _textSparseViewportLayouts.size())
+                            : static_cast<size_t>(std::min<uint64_t>(TextVisualLineCount() - topVisual, std::max<size_t>(1u, _debugTextVisibleRowCount)));
                     for (size_t row = 0u; row < visibleLayoutCount; ++row)
                     {
                         TextVisualLineLayoutEntry layout{};
@@ -4496,24 +4490,12 @@ LRESULT ViewerText::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
             {
                 switch (request->asyncStreamFault)
                 {
-                    case WndMsg::ViewerTextDebugAsyncStreamFault::None:
-                        _debugNextAsyncTextStreamFault = AsyncTextStreamFault::None;
-                        break;
-                    case WndMsg::ViewerTextDebugAsyncStreamFault::Allocation:
-                        _debugNextAsyncTextStreamFault = AsyncTextStreamFault::Allocation;
-                        break;
-                    case WndMsg::ViewerTextDebugAsyncStreamFault::Submit:
-                        _debugNextAsyncTextStreamFault = AsyncTextStreamFault::Submit;
-                        break;
-                    case WndMsg::ViewerTextDebugAsyncStreamFault::Worker:
-                        _debugNextAsyncTextStreamFault = AsyncTextStreamFault::Worker;
-                        break;
-                    case WndMsg::ViewerTextDebugAsyncStreamFault::PayloadPost:
-                        _debugNextAsyncTextStreamFault = AsyncTextStreamFault::PayloadPost;
-                        break;
-                    default:
-                        request->result = E_INVALIDARG;
-                        return TRUE;
+                    case WndMsg::ViewerTextDebugAsyncStreamFault::None: _debugNextAsyncTextStreamFault = AsyncTextStreamFault::None; break;
+                    case WndMsg::ViewerTextDebugAsyncStreamFault::Allocation: _debugNextAsyncTextStreamFault = AsyncTextStreamFault::Allocation; break;
+                    case WndMsg::ViewerTextDebugAsyncStreamFault::Submit: _debugNextAsyncTextStreamFault = AsyncTextStreamFault::Submit; break;
+                    case WndMsg::ViewerTextDebugAsyncStreamFault::Worker: _debugNextAsyncTextStreamFault = AsyncTextStreamFault::Worker; break;
+                    case WndMsg::ViewerTextDebugAsyncStreamFault::PayloadPost: _debugNextAsyncTextStreamFault = AsyncTextStreamFault::PayloadPost; break;
+                    default: request->result = E_INVALIDARG; return TRUE;
                 }
                 request->result = S_OK;
                 return TRUE;
@@ -4521,15 +4503,14 @@ LRESULT ViewerText::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
 
             if (request->operation == WndMsg::ViewerTextDebugGeometryOperation::ProbeWrappedCoverage)
             {
-                if (! _hEdit || ! EnsureTextViewDirect2D(_hEdit.get()) || ! _textSparseWrapActive ||
-                    request->logicalLine >= _textSparseVisualLines.size())
+                if (! _hEdit || ! EnsureTextViewDirect2D(_hEdit.get()) || ! _textSparseWrapActive || request->logicalLine >= _textSparseVisualLines.size())
                 {
                     request->result = E_INVALIDARG;
                     return FALSE;
                 }
 
                 const uint32_t savedTop = _textTopVisualLine;
-                auto restoreViewport = wil::scope_exit([&]() noexcept
+                auto restoreViewport    = wil::scope_exit([&]() noexcept
                 {
                     _textTopVisualLine = savedTop;
                     _textSparseViewportLayouts.clear();
@@ -4541,8 +4522,7 @@ LRESULT ViewerText::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
                 });
 
                 const SparseTextVisualLineSummary& summary = _textSparseVisualLines[request->logicalLine];
-                _textTopVisualLine = static_cast<uint32_t>(
-                    std::min<uint64_t>(summary.firstVisualLine, std::numeric_limits<uint32_t>::max()));
+                _textTopVisualLine = static_cast<uint32_t>(std::min<uint64_t>(summary.firstVisualLine, std::numeric_limits<uint32_t>::max()));
                 _textSparseViewportLayouts.clear();
                 _textSparseViewportAnchors.clear();
                 _textSparseViewportCheckpoints.clear();
@@ -4550,16 +4530,16 @@ LRESULT ViewerText::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
                 _textSparseViewportComplete      = false;
                 RebuildSparseTextViewportLayouts(_hEdit.get(), 128u);
 
-                request->wrappedSegmentCount  = 0u;
-                request->wrappedCoveredStart  = summary.lineStartIndex;
-                request->wrappedCoveredEnd    = summary.lineStartIndex;
+                request->wrappedSegmentCount       = 0u;
+                request->wrappedCoveredStart       = summary.lineStartIndex;
+                request->wrappedCoveredEnd         = summary.lineStartIndex;
                 request->wrappedSecondSegmentStart = summary.lineStartIndex;
                 request->wrappedSecondSegmentEnd   = summary.lineStartIndex;
-                request->wrappedWidthDip      = _textWrapWidthDip;
-                request->wrappedLineHeightDip = _textLineHeightDip;
-                request->wrappedHasGapOrOverlap = false;
-                bool everySegmentFits = true;
-                size_t cursor          = summary.lineStartIndex;
+                request->wrappedWidthDip           = _textWrapWidthDip;
+                request->wrappedLineHeightDip      = _textLineHeightDip;
+                request->wrappedHasGapOrOverlap    = false;
+                bool everySegmentFits              = true;
+                size_t cursor                      = summary.lineStartIndex;
                 for (const TextVisualLineLayoutEntry& segment : _textSparseViewportLayouts)
                 {
                     if (segment.logicalLine != summary.logicalLine)
@@ -4573,13 +4553,11 @@ LRESULT ViewerText::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
                         break;
                     }
 
-                    IDWriteTextLayout* segmentLayout =
-                        GetTextSegmentLayout(segment.segmentStartIndex, segment.segmentEndIndex, _textWrapWidthDip);
+                    IDWriteTextLayout* segmentLayout = GetTextSegmentLayout(segment.segmentStartIndex, segment.segmentEndIndex, _textWrapWidthDip);
                     DWRITE_TEXT_METRICS metrics{};
                     const size_t minimumClusterEnd = NextTextPosition(segment.segmentStartIndex);
                     if (! segmentLayout || FAILED(segmentLayout->GetMetrics(&metrics)) ||
-                        (metrics.widthIncludingTrailingWhitespace > _textWrapWidthDip + 0.25f &&
-                         segment.segmentEndIndex > minimumClusterEnd))
+                        (metrics.widthIncludingTrailingWhitespace > _textWrapWidthDip + 0.25f && segment.segmentEndIndex > minimumClusterEnd))
                     {
                         everySegmentFits = false;
                     }
@@ -4620,10 +4598,7 @@ LRESULT ViewerText::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
                 return FALSE;
             }
 
-            const auto hitCaret = [&](size_t localPosition,
-                                      float& positionX,
-                                      float& positionY,
-                                      DWRITE_HIT_TEST_METRICS& metrics) noexcept -> HRESULT
+            const auto hitCaret = [&](size_t localPosition, float& positionX, float& positionY, DWRITE_HIT_TEST_METRICS& metrics) noexcept -> HRESULT
             {
                 const size_t length = segmentEnd - segmentStart;
                 positionX           = 0.0f;
@@ -4633,21 +4608,17 @@ LRESULT ViewerText::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
                 {
                     return S_OK;
                 }
-                localPosition = std::min(localPosition, length);
+                localPosition    = std::min(localPosition, length);
                 const bool atEnd = localPosition == length;
-                return layout->HitTestTextPosition(static_cast<UINT32>(atEnd ? (length - 1u) : localPosition),
-                                                   atEnd ? TRUE : FALSE,
-                                                   &positionX,
-                                                   &positionY,
-                                                   &metrics);
+                return layout->HitTestTextPosition(
+                    static_cast<UINT32>(atEnd ? (length - 1u) : localPosition), atEnd ? TRUE : FALSE, &positionX, &positionY, &metrics);
             };
 
             request->normalizedTextPosition = NormalizeTextPosition(request->textPosition);
             request->previousTextPosition   = PreviousTextPosition(request->normalizedTextPosition);
             request->nextTextPosition       = NextTextPosition(request->normalizedTextPosition);
-            const size_t localPosition = std::min<size_t>(request->normalizedTextPosition -
-                                                              std::min(request->normalizedTextPosition, segmentStart),
-                                                          segmentEnd - segmentStart);
+            const size_t localPosition =
+                std::min<size_t>(request->normalizedTextPosition - std::min(request->normalizedTextPosition, segmentStart), segmentEnd - segmentStart);
             float ignoredY = 0.0f;
             DWRITE_HIT_TEST_METRICS caretMetrics{};
             request->result = hitCaret(localPosition, request->caretX, ignoredY, caretMetrics);
@@ -4664,19 +4635,18 @@ LRESULT ViewerText::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
             {
                 return FALSE;
             }
-            request->hitTextPosition = NormalizeTextPosition(
-                std::min(segmentEnd, segmentStart + static_cast<size_t>(hitMetrics.textPosition) +
-                                         (trailing != FALSE ? static_cast<size_t>(hitMetrics.length) : 0u)));
+            request->hitTextPosition = NormalizeTextPosition(std::min(
+                segmentEnd, segmentStart + static_cast<size_t>(hitMetrics.textPosition) + (trailing != FALSE ? static_cast<size_t>(hitMetrics.length) : 0u)));
 
             const size_t rangeStart = NormalizeTextPosition(std::clamp(request->rangeStart, segmentStart, segmentEnd));
             const size_t rangeEnd   = NormalizeTextPosition(std::clamp(request->rangeEnd, rangeStart, segmentEnd));
-            float rangeStartY = 0.0f;
-            float rangeEndY   = 0.0f;
+            float rangeStartY       = 0.0f;
+            float rangeEndY         = 0.0f;
             DWRITE_HIT_TEST_METRICS rangeStartMetrics{};
             DWRITE_HIT_TEST_METRICS rangeEndMetrics{};
             const HRESULT rangeStartHr = hitCaret(rangeStart - segmentStart, request->rangeLeft, rangeStartY, rangeStartMetrics);
             const HRESULT rangeEndHr   = hitCaret(rangeEnd - segmentStart, request->rangeRight, rangeEndY, rangeEndMetrics);
-            request->result = FAILED(rangeStartHr) ? rangeStartHr : rangeEndHr;
+            request->result            = FAILED(rangeStartHr) ? rangeStartHr : rangeEndHr;
             return SUCCEEDED(request->result) ? TRUE : FALSE;
         }
         case WndMsg::kViewerTextDebugSaveAs:
@@ -4697,13 +4667,11 @@ LRESULT ViewerText::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
                 case WndMsg::ViewerTextDebugSaveFault::Write: injectedFault = SaveAsFault::Write; break;
                 case WndMsg::ViewerTextDebugSaveFault::Flush: injectedFault = SaveAsFault::Flush; break;
                 case WndMsg::ViewerTextDebugSaveFault::Commit: injectedFault = SaveAsFault::Commit; break;
-                default:
-                    request->result = E_INVALIDARG;
-                    return TRUE;
+                default: request->result = E_INVALIDARG; return TRUE;
             }
 
             const bool previousLoading = _isLoading;
-            auto restoreLoading         = wil::scope_exit([&]() noexcept { _isLoading = previousLoading; });
+            auto restoreLoading        = wil::scope_exit([&]() noexcept { _isLoading = previousLoading; });
             if (request->simulateLoading)
             {
                 _isLoading = true;
@@ -4779,7 +4747,7 @@ LRESULT ViewerText::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
 
             const std::optional<uint64_t> previousAnchor = _hexSelectionAnchorOffset;
             const std::optional<uint64_t> previousActive = _hexSelectedOffset;
-            auto restoreSelection = wil::scope_exit([&]() noexcept
+            auto restoreSelection                        = wil::scope_exit([&]() noexcept
             {
                 _hexSelectionAnchorOffset = previousAnchor;
                 _hexSelectedOffset        = previousActive;
@@ -4861,18 +4829,14 @@ LRESULT ViewerText::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
             OnAsyncOpenComplete(std::move(result));
             return 0;
         }
-        case kAsyncOpenFailureMessage:
-            OnAsyncOpenFailure(static_cast<uint64_t>(wp), static_cast<HRESULT>(lp));
-            return 0;
+        case kAsyncOpenFailureMessage: OnAsyncOpenFailure(static_cast<uint64_t>(wp), static_cast<HRESULT>(lp)); return 0;
         case kAsyncTextStreamCompleteMessage:
         {
             auto result = TakeMessagePayload<AsyncTextStreamResult>(lp);
             OnAsyncTextStreamComplete(std::move(result));
             return 0;
         }
-        case kAsyncTextStreamFailureMessage:
-            OnAsyncTextStreamFailure(static_cast<uint64_t>(wp), _windowIdentity, static_cast<HRESULT>(lp));
-            return 0;
+        case kAsyncTextStreamFailureMessage: OnAsyncTextStreamFailure(static_cast<uint64_t>(wp), _windowIdentity, static_cast<HRESULT>(lp)); return 0;
         case WM_PAINT: OnPaint(); return 0;
         case WM_ERASEBKGND: return _allowEraseBkgnd ? DefWindowProcW(hwnd, msg, wp, lp) : 1;
         case WM_CLOSE: CommandExit(hwnd); return 0;
@@ -4911,8 +4875,7 @@ LRESULT ViewerText::OnNcDestroy(HWND hwnd, WPARAM wp, LPARAM lp) noexcept
 LRESULT ViewerText::HandleFileComboHostMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, bool& handled) noexcept
 {
     const bool popupWasOpen      = _fileComboControl && _fileComboControl->DebugIsPopupOpen();
-    const bool preExpandForPopup =
-        ! popupWasOpen && _fileComboControl && RedSalamander::ViewerFileComboHost::MessageMayOpenWindowComboPopup(msg, wp);
+    const bool preExpandForPopup = ! popupWasOpen && _fileComboControl && RedSalamander::ViewerFileComboHost::MessageMayOpenWindowComboPopup(msg, wp);
     if (preExpandForPopup)
     {
         _fileComboHostPreExpandPopup = true;
@@ -4974,7 +4937,7 @@ void ViewerText::FocusMainSurfaceFromFileCombo(HWND hwnd) noexcept
 
 void ViewerText::OnCreate(HWND hwnd)
 {
-    _windowIdentity = s_nextWindowIdentity.fetch_add(1u, std::memory_order_relaxed) + 1u;
+    _windowIdentity          = s_nextWindowIdentity.fetch_add(1u, std::memory_order_relaxed) + 1u;
     _allowEraseBkgnd         = true;
     _allowEraseBkgndTextView = true;
     _allowEraseBkgndHexView  = true;
@@ -5117,9 +5080,9 @@ void ViewerText::OnCreate(HWND hwnd)
 
 void ViewerText::OnDestroy()
 {
-    _windowIdentity = 0u;
+    _windowIdentity                 = 0u;
     _activeAsyncTextStreamRequestId = _asyncTextStreamRequestId.fetch_add(1u, std::memory_order_relaxed) + 1u;
-    _textStreamLoadPending = false;
+    _textStreamLoadPending          = false;
     EndLoadingUi();
     DiscardDirect2D();
     DiscardTextViewDirect2D();
@@ -5131,11 +5094,8 @@ void ViewerText::OnDestroy()
     NotifyViewerClosed();
 }
 
-void ViewerText::StartAsyncOpen(HWND hwnd,
-                                const std::filesystem::path& path,
-                                bool updateOtherFiles,
-                                UINT displayEncodingMenuSelection,
-                                AsyncOpenFault injectedFault) noexcept
+void ViewerText::StartAsyncOpen(
+    HWND hwnd, const std::filesystem::path& path, bool updateOtherFiles, UINT displayEncodingMenuSelection, AsyncOpenFault injectedFault) noexcept
 {
     if (! hwnd)
     {
@@ -5271,31 +5231,29 @@ void ViewerText::StartAsyncOpen(HWND hwnd,
     ctx->moduleKeepAlive = AcquireModuleReferenceFromAddress(&kViewerTextModuleAnchor);
     if (! ctx->moduleKeepAlive)
     {
-        const DWORD lastError = GetLastError();
+        const DWORD lastError  = GetLastError();
         const HRESULT moduleHr = HRESULT_FROM_WIN32(lastError != 0u ? lastError : ERROR_MOD_NOT_FOUND);
-        Debug::Error(L"ViewerText: Failed to pin the plugin module for async open of '{}' (hr=0x{:08X}).",
-                     path.c_str(),
-                     static_cast<unsigned long>(moduleHr));
+        Debug::Error(L"ViewerText: Failed to pin the plugin module for async open of '{}' (hr=0x{:08X}).", path.c_str(), static_cast<unsigned long>(moduleHr));
         OnAsyncOpenFailure(requestId, moduleHr);
         return;
     }
 
     ctx->result = std::move(result);
-    ctx->work            = [this,
-                            hwnd,
-                            requestId,
-                            fileSystem = std::move(fileSystem),
-                            path,
-                            pathChanged,
-                            desiredViewMode,
-                            displayEncodingMenuSelection,
-                            previousDisplayEncodingSelection,
-                            textBufferMiB,
-                            hexBufferMiB,
-                            diffDefaultLayout,
-                            diffAutoOpenMode,
-                            canShowHex,
-                            injectedFault](std::unique_ptr<AsyncOpenResult> result) mutable
+    ctx->work   = [this,
+                   hwnd,
+                   requestId,
+                   fileSystem = std::move(fileSystem),
+                   path,
+                   pathChanged,
+                   desiredViewMode,
+                   displayEncodingMenuSelection,
+                   previousDisplayEncodingSelection,
+                   textBufferMiB,
+                   hexBufferMiB,
+                   diffDefaultLayout,
+                   diffAutoOpenMode,
+                   canShowHex,
+                   injectedFault](std::unique_ptr<AsyncOpenResult> result) mutable
     {
         auto releaseSelf = wil::scope_exit([&] { Release(); });
 
@@ -5342,9 +5300,8 @@ void ViewerText::StartAsyncOpen(HWND hwnd,
         });
 
         wil::com_ptr<IFileSystemIO> fileIo;
-        const HRESULT fileIoHr = injectedFault == AsyncOpenFault::FileSystemIo
-                                     ? E_NOINTERFACE
-                                     : fileSystem->QueryInterface(__uuidof(IFileSystemIO), fileIo.put_void());
+        const HRESULT fileIoHr =
+            injectedFault == AsyncOpenFault::FileSystemIo ? E_NOINTERFACE : fileSystem->QueryInterface(__uuidof(IFileSystemIO), fileIo.put_void());
         if (FAILED(fileIoHr) || ! fileIo)
         {
             Debug::Error(L"ViewerText: Active filesystem does not implement IFileSystemIO (hr=0x{:08X}).", static_cast<unsigned long>(fileIoHr));
@@ -5352,9 +5309,8 @@ void ViewerText::StartAsyncOpen(HWND hwnd,
             return;
         }
 
-        const HRESULT openReaderHr = injectedFault == AsyncOpenFault::OpenReader
-                                         ? HRESULT_FROM_WIN32(ERROR_OPEN_FAILED)
-                                         : fileIo->CreateFileReader(path.c_str(), result->fileReader.put());
+        const HRESULT openReaderHr = injectedFault == AsyncOpenFault::OpenReader ? HRESULT_FROM_WIN32(ERROR_OPEN_FAILED)
+                                                                                 : fileIo->CreateFileReader(path.c_str(), result->fileReader.put());
         if (FAILED(openReaderHr) || ! result->fileReader)
         {
             Debug::Error(L"ViewerText: Failed to create file reader for '{}' (hr=0x{:08X}).", path.c_str(), static_cast<unsigned long>(openReaderHr));
@@ -5466,7 +5422,7 @@ void ViewerText::StartAsyncOpen(HWND hwnd,
                     size_t probeRead = 0u;
 
                     const unsigned long probeWant = static_cast<unsigned long>(std::min<uint64_t>(detectedFileSize, probe.size()));
-                    const HRESULT probeSeekHr      = ViewerTextSafety::SeekExact(result->fileReader.get(), 0u);
+                    const HRESULT probeSeekHr     = ViewerTextSafety::SeekExact(result->fileReader.get(), 0u);
                     if (FAILED(probeSeekHr))
                     {
                         result->hr = probeSeekHr;
@@ -5530,9 +5486,8 @@ void ViewerText::StartAsyncOpen(HWND hwnd,
         {
             const size_t nextWantBytes = static_cast<size_t>(std::min<uint64_t>(bytesToRead, static_cast<uint64_t>(std::numeric_limits<size_t>::max())));
 
-            const HRESULT seekBytesHr = injectedFault == AsyncOpenFault::DataSeek
-                                            ? E_FAIL
-                                            : ViewerTextSafety::SeekExact(result->fileReader.get(), clampedStart);
+            const HRESULT seekBytesHr =
+                injectedFault == AsyncOpenFault::DataSeek ? E_FAIL : ViewerTextSafety::SeekExact(result->fileReader.get(), clampedStart);
             if (FAILED(seekBytesHr))
             {
                 Debug::Error(L"ViewerText: Seek to data start offset failed (0x{:016X}) for '{}' (hr=0x{:08X}).",
@@ -5712,7 +5667,7 @@ void ViewerText::StartAsyncOpen(HWND hwnd,
                 const int requiredWide = MultiByteToWideChar(displayCodePage, 0, reinterpret_cast<LPCCH>(bytes.data()), srcLen, nullptr, 0);
                 if (requiredWide <= 0)
                 {
-                    const DWORD lastError   = GetLastError();
+                    const DWORD lastError  = GetLastError();
                     const HRESULT decodeHr = HRESULT_FROM_WIN32(lastError != 0u ? lastError : ERROR_INVALID_DATA);
                     Debug::Error(L"ViewerText: MultiByteToWideChar failed to calculate required buffer size for '{}' (cp={}, hr=0x{:08X}).",
                                  path.c_str(),
@@ -5727,7 +5682,7 @@ void ViewerText::StartAsyncOpen(HWND hwnd,
                     MultiByteToWideChar(displayCodePage, 0, reinterpret_cast<LPCCH>(bytes.data()), srcLen, result->textBuffer.data(), requiredWide);
                 if (written <= 0)
                 {
-                    const DWORD lastError   = GetLastError();
+                    const DWORD lastError  = GetLastError();
                     const HRESULT decodeHr = HRESULT_FROM_WIN32(lastError != 0u ? lastError : ERROR_INVALID_DATA);
                     Debug::Error(L"ViewerText: MultiByteToWideChar failed to convert data for '{}' (cp={}, hr=0x{:08X}).",
                                  path.c_str(),
@@ -5900,8 +5855,7 @@ void ViewerText::StartAsyncOpen(HWND hwnd,
                     {
                         const unsigned long want = static_cast<unsigned long>(std::min<size_t>(256 * 1024, result->hexBytes.size() - offset));
                         unsigned long readHex    = 0;
-                        const HRESULT readHexHr =
-                            ViewerTextSafety::ReadBounded(result->fileReader.get(), result->hexBytes.data() + offset, want, readHex);
+                        const HRESULT readHexHr  = ViewerTextSafety::ReadBounded(result->fileReader.get(), result->hexBytes.data() + offset, want, readHex);
                         if (FAILED(readHexHr))
                         {
                             Debug::Warning(
@@ -5957,8 +5911,7 @@ void ViewerText::StartAsyncOpen(HWND hwnd,
                     else
                     {
                         size_t readHex          = 0u;
-                        const HRESULT readHexHr =
-                            ViewerTextSafety::ReadUpTo(result->fileReader.get(), std::span<uint8_t>(result->hexCache), readHex);
+                        const HRESULT readHexHr = ViewerTextSafety::ReadUpTo(result->fileReader.get(), std::span<uint8_t>(result->hexCache), readHex);
                         if (FAILED(readHexHr))
                         {
                             Debug::Warning(
@@ -5985,8 +5938,9 @@ void ViewerText::StartAsyncOpen(HWND hwnd,
     };
 
     AddRef();
-    const BOOL queued = injectedFault == AsyncOpenFault::Submit ? FALSE : TrySubmitThreadpoolCallback(
-        [](PTP_CALLBACK_INSTANCE instance, void* context) noexcept
+    const BOOL queued = injectedFault == AsyncOpenFault::Submit ? FALSE
+                                                                : TrySubmitThreadpoolCallback(
+                                                                      [](PTP_CALLBACK_INSTANCE instance, void* context) noexcept
     {
         std::unique_ptr<AsyncOpenWorkItem> ctx(static_cast<AsyncOpenWorkItem*>(context));
         if (! ctx)
@@ -6003,8 +5957,8 @@ void ViewerText::StartAsyncOpen(HWND hwnd,
             ctx->work(std::move(ctx->result));
         }
     },
-        ctx.get(),
-        nullptr);
+                                                                      ctx.get(),
+                                                                      nullptr);
 
     if (queued == 0)
     {
@@ -6496,22 +6450,16 @@ void ViewerText::Layout(HWND hwnd) noexcept
 
     const UINT dpi                  = GetDpiForWindow(hwnd);
     const bool showStandaloneHeader = ! _embeddedMode;
-    const int baseHeaderHeight = showStandaloneHeader ? Common::WindowSizing::DipToPixelRounded(dpi, kHeaderHeightDip) : 0;
-    const int statusHeight     = Common::WindowSizing::DipToPixelRounded(dpi, kStatusHeightDip);
-    const int accentHeight = std::max(
-        1L, Common::WindowSizing::DipToPixelRounded(dpi, RedSalamander::ViewerFileComboHost::kStandaloneComboAccentHeightDip));
-    const int accentGap = std::max(
-        1L, Common::WindowSizing::DipToPixelRounded(dpi, RedSalamander::ViewerFileComboHost::kStandaloneComboAccentGapDip));
-    const int minPadding = Common::WindowSizing::DipToPixelRounded(dpi, RedSalamander::ViewerFileComboHost::kStandaloneComboChromePaddingDip);
-    const int minChromeHeight =
-        showStandaloneHeader ? Common::WindowSizing::DipToPixelRounded(dpi, 22) + accentHeight + accentGap + 2 * minPadding : 0;
+    const int baseHeaderHeight      = showStandaloneHeader ? Common::WindowSizing::DipToPixelRounded(dpi, kHeaderHeightDip) : 0;
+    const int statusHeight          = Common::WindowSizing::DipToPixelRounded(dpi, kStatusHeightDip);
+    const int accentHeight    = std::max(1L, Common::WindowSizing::DipToPixelRounded(dpi, RedSalamander::ViewerFileComboHost::kStandaloneComboAccentHeightDip));
+    const int accentGap       = std::max(1L, Common::WindowSizing::DipToPixelRounded(dpi, RedSalamander::ViewerFileComboHost::kStandaloneComboAccentGapDip));
+    const int minPadding      = Common::WindowSizing::DipToPixelRounded(dpi, RedSalamander::ViewerFileComboHost::kStandaloneComboChromePaddingDip);
+    const int minChromeHeight = showStandaloneHeader ? Common::WindowSizing::DipToPixelRounded(dpi, 22) + accentHeight + accentGap + 2 * minPadding : 0;
 
-    const bool showCombo         = (showStandaloneHeader && _hFileComboHost && ActiveFileComboEntryCount() > 1u);
-    const int desiredComboHeight = showCombo ? std::max(
-                                                   1L,
-                                                   Common::WindowSizing::DipToPixelRounded(
-                                                       dpi, RedSalamander::ViewerFileComboHost::kStandaloneComboHeightDip))
-                                             : 0;
+    const bool showCombo = (showStandaloneHeader && _hFileComboHost && ActiveFileComboEntryCount() > 1u);
+    const int desiredComboHeight =
+        showCombo ? std::max(1L, Common::WindowSizing::DipToPixelRounded(dpi, RedSalamander::ViewerFileComboHost::kStandaloneComboHeightDip)) : 0;
 
     int headerHeight = baseHeaderHeight;
     headerHeight     = std::max(headerHeight, minChromeHeight);
@@ -6586,10 +6534,9 @@ void ViewerText::Layout(HWND hwnd) noexcept
                 }
 
                 const bool expandPopupHost = _fileComboHostPreExpandPopup || (_fileComboControl && _fileComboControl->DebugIsPopupOpen());
-                const int popupExtraHeight = expandPopupHost ? RedSalamander::ViewerFileComboHost::ComputeStandaloneComboPopupHeightPx(
-                                                                  ActiveFileComboEntryCount(), dpi)
-                                                             : 0;
-                const int hostHeight       = std::max(comboH, comboH + popupExtraHeight);
+                const int popupExtraHeight =
+                    expandPopupHost ? RedSalamander::ViewerFileComboHost::ComputeStandaloneComboPopupHeightPx(ActiveFileComboEntryCount(), dpi) : 0;
+                const int hostHeight = std::max(comboH, comboH + popupExtraHeight);
                 SetWindowPos(_hFileComboHost.get(), HWND_TOP, comboX, comboY, comboW, hostHeight, SWP_NOACTIVATE);
                 if (_fileComboControl)
                 {
@@ -7984,13 +7931,13 @@ void ViewerText::ApplyCurrentTextPresentation(HWND hwnd, bool preserveViewport) 
     _textSparseVisualLines.clear();
     _textSparseVisualLineCount = 0u;
     _textSparseWrapActive      = false;
-    _textTopVisualLine   = preserveViewport ? savedTopVisualLine : 0u;
-    _textLeftColumn      = preserveViewport ? savedLeftColumn : 0u;
-    _textCaretIndex      = preserveViewport ? std::min(savedCaretIndex, _textBuffer.size()) : 0u;
-    _textSelAnchor       = preserveViewport ? std::min(savedSelAnchor, _textBuffer.size()) : 0u;
-    _textSelActive       = preserveViewport ? std::min(savedSelActive, _textBuffer.size()) : 0u;
-    _textPreferredColumn = preserveViewport ? savedPreferredColumn : 0u;
-    _textSelecting       = preserveViewport ? savedSelecting : false;
+    _textTopVisualLine         = preserveViewport ? savedTopVisualLine : 0u;
+    _textLeftColumn            = preserveViewport ? savedLeftColumn : 0u;
+    _textCaretIndex            = preserveViewport ? std::min(savedCaretIndex, _textBuffer.size()) : 0u;
+    _textSelAnchor             = preserveViewport ? std::min(savedSelAnchor, _textBuffer.size()) : 0u;
+    _textSelActive             = preserveViewport ? std::min(savedSelActive, _textBuffer.size()) : 0u;
+    _textPreferredColumn       = preserveViewport ? savedPreferredColumn : 0u;
+    _textSelecting             = preserveViewport ? savedSelecting : false;
     _searchMatchStarts.clear();
 
     const HWND textWindow = hwnd ? hwnd : _hEdit.get();
@@ -8566,9 +8513,7 @@ void ViewerText::CommandOpen(HWND hwnd)
     static_cast<void>(OpenPath(hwnd, path.value(), true));
 }
 
-HRESULT ViewerText::SaveAsToPath(const std::filesystem::path& destinationPath,
-                                 UINT encodingSelection,
-                                 SaveAsFault injectedFault) noexcept
+HRESULT ViewerText::SaveAsToPath(const std::filesystem::path& destinationPath, UINT encodingSelection, SaveAsFault injectedFault) noexcept
 {
     if (_currentPath.empty() || destinationPath.empty())
     {
@@ -8730,13 +8675,12 @@ HRESULT ViewerText::SaveAsToPath(const std::filesystem::path& destinationPath,
             return E_FAIL;
         }
 
-        bool injectedWritePending = injectedFault == SaveAsFault::Write;
+        bool injectedWritePending  = injectedFault == SaveAsFault::Write;
         uint64_t copiedSourceBytes = 0u;
         for (;;)
         {
             unsigned long read   = 0u;
-            const HRESULT readHr = ViewerTextSafety::ReadBounded(
-                sourceReader.get(), buffer.data(), static_cast<unsigned long>(buffer.size()), read);
+            const HRESULT readHr = ViewerTextSafety::ReadBounded(sourceReader.get(), buffer.data(), static_cast<unsigned long>(buffer.size()), read);
             if (FAILED(readHr))
             {
                 return readHr;
@@ -8782,35 +8726,32 @@ HRESULT ViewerText::SaveAsToPath(const std::filesystem::path& destinationPath,
             return E_FAIL;
         }
 
-        const auto writeBytes = [&](const void* data, size_t size) noexcept
-        {
-            return WriteAllHandle(tempFile.get(), data, size);
-        };
+        const auto writeBytes = [&](const void* data, size_t size) noexcept { return WriteAllHandle(tempFile.get(), data, size); };
 
         if (saveEncoding.kind == SaveEncoding::Kind::CodePage && saveEncoding.writeBom && saveEncoding.codePage == CP_UTF8)
         {
             static constexpr uint8_t kBom[] = {0xEFu, 0xBBu, 0xBFu};
-            writeHr                          = writeBytes(kBom, sizeof(kBom));
+            writeHr                         = writeBytes(kBom, sizeof(kBom));
         }
         else if (saveEncoding.kind == SaveEncoding::Kind::Utf16LE)
         {
             static constexpr uint8_t kBom[] = {0xFFu, 0xFEu};
-            writeHr                          = writeBytes(kBom, sizeof(kBom));
+            writeHr                         = writeBytes(kBom, sizeof(kBom));
         }
         else if (saveEncoding.kind == SaveEncoding::Kind::Utf16BE)
         {
             static constexpr uint8_t kBom[] = {0xFEu, 0xFFu};
-            writeHr                          = writeBytes(kBom, sizeof(kBom));
+            writeHr                         = writeBytes(kBom, sizeof(kBom));
         }
         else if (saveEncoding.kind == SaveEncoding::Kind::Utf32LE)
         {
             static constexpr uint8_t kBom[] = {0xFFu, 0xFEu, 0x00u, 0x00u};
-            writeHr                          = writeBytes(kBom, sizeof(kBom));
+            writeHr                         = writeBytes(kBom, sizeof(kBom));
         }
         else if (saveEncoding.kind == SaveEncoding::Kind::Utf32BE)
         {
             static constexpr uint8_t kBom[] = {0x00u, 0x00u, 0xFEu, 0xFFu};
-            writeHr                          = writeBytes(kBom, sizeof(kBom));
+            writeHr                         = writeBytes(kBom, sizeof(kBom));
         }
         if (FAILED(writeHr))
         {
@@ -8863,7 +8804,7 @@ HRESULT ViewerText::SaveAsToPath(const std::filesystem::path& destinationPath,
                     cookie.byteScratch.reserve(count * 4u);
                     for (size_t i = 0u; i < count; ++i)
                     {
-                        const wchar_t ch = data[i];
+                        const wchar_t ch   = data[i];
                         uint32_t codePoint = 0u;
                         if (IsHighSurrogate(ch))
                         {
@@ -8912,8 +8853,7 @@ HRESULT ViewerText::SaveAsToPath(const std::filesystem::path& destinationPath,
                 }
 
                 const int sourceLength = static_cast<int>(count);
-                const int required =
-                    WideCharToMultiByte(cookie.encoding.codePage, 0, data, sourceLength, nullptr, 0, nullptr, nullptr);
+                const int required     = WideCharToMultiByte(cookie.encoding.codePage, 0, data, sourceLength, nullptr, 0, nullptr, nullptr);
                 if (required <= 0)
                 {
                     const DWORD error = GetLastError();
@@ -8921,14 +8861,8 @@ HRESULT ViewerText::SaveAsToPath(const std::filesystem::path& destinationPath,
                 }
 
                 cookie.byteScratch.resize(static_cast<size_t>(required));
-                const int converted = WideCharToMultiByte(cookie.encoding.codePage,
-                                                          0,
-                                                          data,
-                                                          sourceLength,
-                                                          reinterpret_cast<LPSTR>(cookie.byteScratch.data()),
-                                                          required,
-                                                          nullptr,
-                                                          nullptr);
+                const int converted = WideCharToMultiByte(
+                    cookie.encoding.codePage, 0, data, sourceLength, reinterpret_cast<LPSTR>(cookie.byteScratch.data()), required, nullptr, nullptr);
                 if (converted <= 0)
                 {
                     const DWORD error = GetLastError();
@@ -9407,8 +9341,7 @@ void ViewerText::CommandGoToBottom(HWND hwnd, bool extendSelection) noexcept
     RECT client{};
     GetClientRect(_hEdit.get(), &client);
     const UINT dpi        = GetDpiForWindow(_hEdit.get());
-    const float heightDip = std::max(
-        1.0f, Common::WindowSizing::PixelToDip(static_cast<float>(client.bottom - client.top), static_cast<float>(dpi)));
+    const float heightDip = std::max(1.0f, Common::WindowSizing::PixelToDip(static_cast<float>(client.bottom - client.top), static_cast<float>(dpi)));
     const float marginDip = 6.0f;
     const float lineH     = (_textLineHeightDip > 0.0f) ? _textLineHeightDip : 14.0f;
     const float usableDip = std::max(0.0f, heightDip - 2.0f * marginDip);
@@ -9586,8 +9519,7 @@ std::wstring ViewerText::BuildStatusText()
             RECT client{};
             GetClientRect(_hHex.get(), &client);
             const UINT dpi        = GetDpiForWindow(_hHex.get());
-            const float heightDip = std::max(
-                1.0f, Common::WindowSizing::PixelToDip(static_cast<float>(client.bottom - client.top), static_cast<float>(dpi)));
+            const float heightDip = std::max(1.0f, Common::WindowSizing::PixelToDip(static_cast<float>(client.bottom - client.top), static_cast<float>(dpi)));
             const float marginDip = 6.0f;
             const float lineH     = (_hexLineHeightDip > 0.0f) ? _hexLineHeightDip : 14.0f;
             const float headerH   = lineH;
@@ -9619,8 +9551,7 @@ std::wstring ViewerText::BuildStatusText()
         RECT client{};
         GetClientRect(_hEdit.get(), &client);
         const UINT dpi        = GetDpiForWindow(_hEdit.get());
-        const float heightDip = std::max(
-            1.0f, Common::WindowSizing::PixelToDip(static_cast<float>(client.bottom - client.top), static_cast<float>(dpi)));
+        const float heightDip = std::max(1.0f, Common::WindowSizing::PixelToDip(static_cast<float>(client.bottom - client.top), static_cast<float>(dpi)));
         const float marginDip = 6.0f;
         const float usableDip = std::max(0.0f, heightDip - 2.0f * marginDip);
         const float lineH     = (_textLineHeightDip > 0.0f) ? _textLineHeightDip : 14.0f;

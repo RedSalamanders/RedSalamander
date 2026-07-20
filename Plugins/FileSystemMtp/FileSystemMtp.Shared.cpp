@@ -18,10 +18,7 @@ namespace
 class MemoryBackendFileReader final : public IMtpBackendFileReader
 {
 public:
-    MemoryBackendFileReader(std::vector<std::byte> bytes,
-                            uint32_t readDelayMs,
-                            std::shared_ptr<void> readContext,
-                            MemoryBackendReadObserver observer) noexcept
+    MemoryBackendFileReader(std::vector<std::byte> bytes, uint32_t readDelayMs, std::shared_ptr<void> readContext, MemoryBackendReadObserver observer) noexcept
         : _bytes(std::move(bytes)),
           _readDelayMs(readDelayMs),
           _readContext(std::move(readContext)),

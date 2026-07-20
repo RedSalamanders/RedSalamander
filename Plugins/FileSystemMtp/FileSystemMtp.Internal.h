@@ -63,8 +63,8 @@ public:
     IMtpBackendFileReader(const IMtpBackendFileReader&)            = delete;
     IMtpBackendFileReader& operator=(const IMtpBackendFileReader&) = delete;
 
-    virtual HRESULT GetSize(uint64_t& sizeBytes) noexcept                                                        = 0;
-    virtual HRESULT Seek(__int64 offset, unsigned long origin, uint64_t& newPosition) noexcept                  = 0;
+    virtual HRESULT GetSize(uint64_t& sizeBytes) noexcept                                                              = 0;
+    virtual HRESULT Seek(__int64 offset, unsigned long origin, uint64_t& newPosition) noexcept                         = 0;
     virtual HRESULT Read(std::span<std::byte> buffer, unsigned long requestedBytes, unsigned long& bytesRead) noexcept = 0;
 
 protected:
@@ -84,7 +84,7 @@ public:
     virtual HRESULT GetAttributes(std::wstring_view path, unsigned long& attributes) noexcept                                 = 0;
     virtual HRESULT GetBasicInformation(std::wstring_view path, FileSystemBasicInformation& info) noexcept                    = 0;
     virtual HRESULT GetFileSize(std::wstring_view path, uint64_t& sizeBytes) noexcept                                         = 0;
-    virtual HRESULT CreateFileReader(std::wstring_view path, std::shared_ptr<IMtpBackendFileReader>& reader) noexcept        = 0;
+    virtual HRESULT CreateFileReader(std::wstring_view path, std::shared_ptr<IMtpBackendFileReader>& reader) noexcept         = 0;
     virtual HRESULT ReadFile(std::wstring_view path, std::vector<std::byte>& bytes) noexcept                                  = 0;
     virtual HRESULT WriteFile(std::wstring_view path, std::span<const std::byte> bytes, bool allowOverwrite) noexcept         = 0;
     virtual HRESULT CreateDirectory(std::wstring_view path) noexcept                                                          = 0;
@@ -106,8 +106,8 @@ class MtpBackendCommandQueue;
 using MemoryBackendReadObserver = void (*)(void* context, uint64_t bytesRead) noexcept;
 
 [[nodiscard]] std::shared_ptr<IMtpBackendFileReader> CreateMemoryBackendFileReader(std::vector<std::byte> bytes,
-                                                                                   uint32_t readDelayMs = 0,
-                                                                                   std::shared_ptr<void> readContext = {},
+                                                                                   uint32_t readDelayMs               = 0,
+                                                                                   std::shared_ptr<void> readContext  = {},
                                                                                    MemoryBackendReadObserver observer = nullptr);
 
 enum class MtpBackendCommandKind : uint8_t

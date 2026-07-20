@@ -502,7 +502,7 @@ void TestMenuBarCachesItemLayoutRectsAndWidths()
     Require(hitTestBlock.find("const MenuBarLayoutCache& layout") != std::string::npos, "MenuBar hit testing reuses cached layout");
     Require(hitTestBlock.find("GetItemRect(host, index)") == std::string::npos, "MenuBar hit testing no longer asks each item to rebuild preceding geometry");
 
-    const std::string paintBlock = requireSourceBlock("void MenuBar::Paint", "bool MenuBar::OnMouseMove", "MenuBar paint block is found");
+    const std::string paintBlock           = requireSourceBlock("void MenuBar::Paint", "bool MenuBar::OnMouseMove", "MenuBar paint block is found");
     const std::string normalizedPaintBlock = RemoveAsciiWhitespace(paintBlock);
     Require(normalizedPaintBlock.find("constMenuBarLayoutCache&layout=EnsureMenuBarLayoutCache(host)") != std::string::npos,
             "MenuBar paint reuses cached layout");
@@ -742,15 +742,9 @@ void TestTabControlBodyDragReleaseOverCloseButtonDoesNotCloseTab()
         closeRequestedIndex = index;
         return false;
     });
-    tabs->SetOnTabClosed([&](size_t)
-    {
-        ++closedCount;
-    });
+    tabs->SetOnTabClosed([&](size_t) { ++closedCount; });
 
-    const auto centerOf = [](const D2D1_RECT_F& rect) noexcept
-    {
-        return D2D1::Point2F((rect.left + rect.right) * 0.5f, (rect.top + rect.bottom) * 0.5f);
-    };
+    const auto centerOf = [](const D2D1_RECT_F& rect) noexcept { return D2D1::Point2F((rect.left + rect.right) * 0.5f, (rect.top + rect.bottom) * 0.5f); };
 
     const D2D1_RECT_F firstTabRect   = tabs->DebugGetTabRect(0u);
     const D2D1_RECT_F thirdCloseRect = tabs->DebugGetCloseButtonRect(2u);

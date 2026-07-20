@@ -141,7 +141,7 @@ void FolderView::UpdatePendingRefreshToPaintResult(uint64_t generation, uint64_t
         return;
     }
 
-    _pendingRefreshToPaintMetric->value0 = itemCount;
+    _pendingRefreshToPaintMetric->value0      = itemCount;
     _pendingRefreshToPaintMetric->resultReady = true;
 }
 
@@ -610,7 +610,7 @@ void FolderView::SetFileSystem(const wil::com_ptr<IFileSystem>& fileSystem)
     _displayedFolder.reset();
     _focusMemory.clear();
     _focusMemoryRootKey.clear();
-    _fileSystemMetadata = nullptr;
+    _fileSystemMetadata         = nullptr;
     _localShellBackedFileSystem = false;
     if (_fileSystem)
     {
@@ -633,9 +633,9 @@ void FolderView::SetFileSystem(const wil::com_ptr<IFileSystem>& fileSystem)
 
     if (_currentFolder && _fileSystem && _hWnd)
     {
-        const std::wstring currentFolderText = _currentFolder->wstring();
-        const bool currentLooksWindows       = NavigationLocation::LooksLikeWindowsAbsolutePath(currentFolderText);
-        const bool currentLooksPluginPath    = ! currentFolderText.empty() && (currentFolderText.front() == L'/' || currentFolderText.front() == L'\\');
+        const std::wstring currentFolderText  = _currentFolder->wstring();
+        const bool currentLooksWindows        = NavigationLocation::LooksLikeWindowsAbsolutePath(currentFolderText);
+        const bool currentLooksPluginPath     = ! currentFolderText.empty() && (currentFolderText.front() == L'/' || currentFolderText.front() == L'\\');
         const std::wstring_view pluginShortId = fileSystemPluginShortId;
         const bool isFilePlugin               = _localShellBackedFileSystem;
 
@@ -742,9 +742,9 @@ LRESULT FolderView::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         case WndMsg::kFolderViewDirectoryCacheDirty: OnDirectoryCacheDirty(); return 0;
         case WM_DESTROY: OnDestroy(); return 0;
         case WM_NCDESTROY:
-            _pasteShortcutInFlight = false;
+            _pasteShortcutInFlight        = false;
             _activePasteShortcutRequestId = 0u;
-            _pasteShortcutStartedAt = {};
+            _pasteShortcutStartedAt       = {};
             _pendingPasteShortcutRequests.clear();
             static_cast<void>(DrainPostedPayloadsForWindow(hwnd));
             break;
@@ -1123,18 +1123,18 @@ bool FolderView::DebugWarmRenderingForSelfTest() noexcept
 FolderView::RenderingDebugSnapshot FolderView::DebugGetRenderingSnapshot() const noexcept
 {
     return RenderingDebugSnapshot{
-        .dpi                                = _dpi,
-        .clientSizePx                       = _clientSize,
-        .hasD2DTarget                       = _d2dTarget != nullptr,
-        .swapChainResizePending             = _swapChainResizePending,
-        .forceFullRenderOnNextPaint       = _forceFullRenderOnNextPaint,
-        .lastRenderWasFullClient          = _debugLastRenderWasFullClient,
-        .dpiChangeCount                   = _debugDpiChangeCount,
-        .fullClientRenderCount            = _debugFullClientRenderCount,
-        .deviceLossRecoveryCount            = _debugDeviceLossRecoveryCount,
-        .deviceLossDiscardedResourcesCount  = _debugDeviceLossDiscardedResourcesCount,
+        .dpi                               = _dpi,
+        .clientSizePx                      = _clientSize,
+        .hasD2DTarget                      = _d2dTarget != nullptr,
+        .swapChainResizePending            = _swapChainResizePending,
+        .forceFullRenderOnNextPaint        = _forceFullRenderOnNextPaint,
+        .lastRenderWasFullClient           = _debugLastRenderWasFullClient,
+        .dpiChangeCount                    = _debugDpiChangeCount,
+        .fullClientRenderCount             = _debugFullClientRenderCount,
+        .deviceLossRecoveryCount           = _debugDeviceLossRecoveryCount,
+        .deviceLossDiscardedResourcesCount = _debugDeviceLossDiscardedResourcesCount,
         .drawItemTransientBrushCreateCount = _debugDrawItemTransientBrushCreateCount.load(std::memory_order_acquire),
-        .lastRenderInvalidRectPx            = _debugLastRenderInvalidRectPx,
+        .lastRenderInvalidRectPx           = _debugLastRenderInvalidRectPx,
     };
 }
 

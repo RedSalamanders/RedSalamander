@@ -27,13 +27,13 @@ namespace
 {
 constexpr wchar_t kFileOperationsPopupClassName[] = L"RedSalamander.FileOperationsPopup";
 
-constexpr UINT_PTR kFileOperationsPopupTimerId                     = 1;
-constexpr UINT kFileOperationsPopupTimerIntervalMs                 = 100;
-constexpr ULONGLONG kRateSampleBucketMs                            = 100ull;
-constexpr UINT kFileOperationsPopupDeferredSpeedLimitPromptMessage = WM_APP + 0x71;
-constexpr wchar_t kFileOperationsSpeedLimitPromptClassName[]       = L"RedSalamander.FileOperations.SpeedLimitPrompt";
+constexpr UINT_PTR kFileOperationsPopupTimerId                      = 1;
+constexpr UINT kFileOperationsPopupTimerIntervalMs                  = 100;
+constexpr ULONGLONG kRateSampleBucketMs                             = 100ull;
+constexpr UINT kFileOperationsPopupDeferredSpeedLimitPromptMessage  = WM_APP + 0x71;
+constexpr wchar_t kFileOperationsSpeedLimitPromptClassName[]        = L"RedSalamander.FileOperations.SpeedLimitPrompt";
 constexpr UINT kFileOperationsSpeedLimitPromptDeferredActionMessage = WM_APP + 0x74;
-constexpr std::wstring_view kEllipsisText                          = L"\u2026";
+constexpr std::wstring_view kEllipsisText                           = L"\u2026";
 constexpr float kFileOperationsPopupFooterHeightDip                 = 88.0f;
 constexpr int kFileOperationsPopupMinClientHeightDip                = 320;
 constexpr int kFileOperationsPopupFooterOnlyMinClientHeightDip      = 96;
@@ -42,10 +42,10 @@ constexpr uint32_t kCompletedOverflowActionExportIssues             = 2u;
 constexpr uint32_t kCompletedOverflowActionFailedItems              = 3u;
 constexpr uint32_t kCompletedOverflowActionOpenDestination          = 4u;
 constexpr uint32_t kCompletedOverflowActionRevealDestination        = 5u;
-constexpr uint32_t kFooterPauseResumeAllPauseAction                  = 1u;
-constexpr uint32_t kFooterPauseResumeAllResumeAction                 = 2u;
-constexpr uint32_t kFooterQueueModeQueueAction                       = 1u;
-constexpr uint32_t kFooterQueueModeParallelAction                    = 2u;
+constexpr uint32_t kFooterPauseResumeAllPauseAction                 = 1u;
+constexpr uint32_t kFooterPauseResumeAllResumeAction                = 2u;
+constexpr uint32_t kFooterQueueModeQueueAction                      = 1u;
+constexpr uint32_t kFooterQueueModeParallelAction                   = 2u;
 constexpr ULONGLONG kTaskbarListRetryDelayMs                        = 1000ull;
 
 enum class PopupDisplayRowKind : uint8_t
@@ -137,8 +137,8 @@ float PixelsToDips(float px, UINT dpi) noexcept
 
 [[nodiscard]] bool RectsNearEqual(const RECT& lhs, const RECT& rhs, int tolerancePx = 1) noexcept
 {
-    return std::abs(lhs.left - rhs.left) <= tolerancePx && std::abs(lhs.top - rhs.top) <= tolerancePx &&
-           std::abs(lhs.right - rhs.right) <= tolerancePx && std::abs(lhs.bottom - rhs.bottom) <= tolerancePx;
+    return std::abs(lhs.left - rhs.left) <= tolerancePx && std::abs(lhs.top - rhs.top) <= tolerancePx && std::abs(lhs.right - rhs.right) <= tolerancePx &&
+           std::abs(lhs.bottom - rhs.bottom) <= tolerancePx;
 }
 
 [[nodiscard]] LONG LerpLong(LONG from, LONG to, float fraction) noexcept
@@ -312,8 +312,7 @@ struct CompletedTaskRevealLocation
     std::wstring leaf;
 };
 
-[[nodiscard]] std::optional<CompletedTaskRevealLocation> ResolveCompletedTaskRevealLocation(
-    const FileOperationsPopupInternal::TaskSnapshot& task) noexcept
+[[nodiscard]] std::optional<CompletedTaskRevealLocation> ResolveCompletedTaskRevealLocation(const FileOperationsPopupInternal::TaskSnapshot& task) noexcept
 {
     if (! CompletedTaskCanUseDestinationActions(task) || task.currentDestinationPath.empty())
     {
@@ -327,10 +326,9 @@ struct CompletedTaskRevealLocation
         return std::nullopt;
     }
 
-    const bool isRootSeparator = separator == 0u ||
-                                 (separator == 2u && destinationPath.size() > 2u && destinationPath[1] == L':' &&
-                                  (destinationPath[2] == L'\\' || destinationPath[2] == L'/'));
-    const size_t folderLength = separator + (isRootSeparator ? 1u : 0u);
+    const bool isRootSeparator = separator == 0u || (separator == 2u && destinationPath.size() > 2u && destinationPath[1] == L':' &&
+                                                     (destinationPath[2] == L'\\' || destinationPath[2] == L'/'));
+    const size_t folderLength  = separator + (isRootSeparator ? 1u : 0u);
     std::wstring folder(destinationPath.substr(0, folderLength));
     std::wstring leaf(destinationPath.substr(separator + 1u));
 
@@ -344,8 +342,7 @@ struct CompletedTaskRevealLocation
 
 [[nodiscard]] bool CompletedTaskHasOverflowActions(const FileOperationsPopupInternal::TaskSnapshot& task) noexcept
 {
-    return task.warningCount > 0 || task.errorCount > 0 || CompletedTaskCanUseDestinationActions(task) ||
-           ResolveCompletedTaskRevealLocation(task).has_value();
+    return task.warningCount > 0 || task.errorCount > 0 || CompletedTaskCanUseDestinationActions(task) || ResolveCompletedTaskRevealLocation(task).has_value();
 }
 
 [[nodiscard]] std::wstring FormatFileTimeLocalCompact(__int64 fileTime) noexcept
@@ -609,7 +606,7 @@ std::wstring FormatDurationHms(uint64_t seconds)
     return std::format(L"{:02d}:{:02d}", minutes, secs);
 }
 
-using TaskStatusKind = FileOperationsPopupInternal::TaskSnapshot::StatusKind;
+using TaskStatusKind        = FileOperationsPopupInternal::TaskSnapshot::StatusKind;
 using PopupStatusVisualTone = FileOperationsPopupInternal::PopupStatusVisualTone;
 
 [[nodiscard]] double ClampFiniteNonNegative(double value) noexcept;
@@ -656,23 +653,23 @@ using PopupStatusVisualTone = FileOperationsPopupInternal::PopupStatusVisualTone
 
 struct GlobalFileOperationsStatusSummary
 {
-    uint32_t running       = 0;
-    uint32_t waiting       = 0;
-    uint32_t needAttention = 0;
-    uint32_t activeRunning = 0;
-    uint32_t paused        = 0;
-    uint32_t pauseEligibleRunning = 0;
-    uint32_t pauseEligiblePaused  = 0;
-    uint64_t completedBytes = 0;
-    uint64_t totalBytes     = 0;
-    uint64_t completedItems = 0;
-    uint64_t totalItems     = 0;
-    bool hasUnknownActiveProgress = false;
+    uint32_t running                   = 0;
+    uint32_t waiting                   = 0;
+    uint32_t needAttention             = 0;
+    uint32_t activeRunning             = 0;
+    uint32_t paused                    = 0;
+    uint32_t pauseEligibleRunning      = 0;
+    uint32_t pauseEligiblePaused       = 0;
+    uint64_t completedBytes            = 0;
+    uint64_t totalBytes                = 0;
+    uint64_t completedItems            = 0;
+    uint64_t totalItems                = 0;
+    bool hasUnknownActiveProgress      = false;
     bool hasUnknownActiveTransferBytes = false;
-    bool hasActiveTaskbarProgress = false;
-    double displayedBytesPerSec   = 0.0;
-    bool hasAggregateEta          = false;
-    double aggregateEtaSeconds    = 0.0;
+    bool hasActiveTaskbarProgress      = false;
+    double displayedBytesPerSec        = 0.0;
+    bool hasAggregateEta               = false;
+    double aggregateEtaSeconds         = 0.0;
 };
 
 struct GlobalTaskbarProgressModel
@@ -948,10 +945,10 @@ void EnsureFinishedTaskDiagnosticAffordance(FileOperationsPopupInternal::TaskSna
     const std::unordered_map<uint64_t, FileOperationsPopupInternal::RateHistory>* rates = nullptr) noexcept
 {
     GlobalFileOperationsStatusSummary summary{};
-    double aggregateBytesPerSec = 0.0;
-    double etaBytesPerSec       = 0.0;
+    double aggregateBytesPerSec    = 0.0;
+    double etaBytesPerSec          = 0.0;
     double aggregateRemainingBytes = 0.0;
-    bool etaInputsComplete = true;
+    bool etaInputsComplete         = true;
     for (const auto& task : snapshot)
     {
         if (task.kind != FileOperationsPopupInternal::TaskSnapshot::Kind::FileOperation)
@@ -1131,13 +1128,13 @@ void EnsureFinishedTaskDiagnosticAffordance(FileOperationsPopupInternal::TaskSna
     }
 
     const uint64_t roundedBytesPerSecond = SaturatingRoundNonNegativeToUint64(summary.displayedBytesPerSec);
-    const std::wstring speedText = FormatBytesCompact(roundedBytesPerSecond);
+    const std::wstring speedText         = FormatBytesCompact(roundedBytesPerSecond);
     if (! summary.hasAggregateEta || summary.aggregateEtaSeconds <= 0.0)
     {
         return FormatStringResource(nullptr, IDS_FMT_FILEOPS_GLOBAL_STATUS_WITH_SPEED, statusText, speedText);
     }
 
-    const uint64_t seconds = SaturatingCeilNonNegativeToUint64(summary.aggregateEtaSeconds);
+    const uint64_t seconds     = SaturatingCeilNonNegativeToUint64(summary.aggregateEtaSeconds);
     const std::wstring etaText = FormatStringResource(nullptr, IDS_FMT_FILEOPS_ETA, FormatDurationHms(seconds));
     return FormatStringResource(nullptr, IDS_FMT_FILEOPS_GLOBAL_STATUS_WITH_ETA_SPEED, statusText, etaText, speedText);
 }
@@ -1509,8 +1506,7 @@ private:
 
         const std::wstring text = _field ? std::wstring(_field->GetText()) : std::wstring{};
         uint64_t parsed         = 0;
-        if (! Common::Parsing::TryParseBinaryThroughputText(
-                text, Common::Parsing::ThroughputBoundaryWhitespacePolicy::AsciiWhitespace, parsed))
+        if (! Common::Parsing::TryParseBinaryThroughputText(text, Common::Parsing::ThroughputBoundaryWhitespacePolicy::AsciiWhitespace, parsed))
         {
             ShowValidation(IDS_MSG_FILEOP_SPEED_LIMIT_INVALID);
             _dxHost.SetFocusControl(_field);
@@ -1593,12 +1589,8 @@ private:
                 _dxHost.Invalidate();
                 return TRUE;
             }
-            case DebugCommand::Confirm:
-                RequestDeferredAction(DeferredAction::Confirm);
-                return TRUE;
-            case DebugCommand::Cancel:
-                RequestDeferredAction(DeferredAction::Cancel);
-                return TRUE;
+            case DebugCommand::Confirm: RequestDeferredAction(DeferredAction::Confirm); return TRUE;
+            case DebugCommand::Cancel: RequestDeferredAction(DeferredAction::Cancel); return TRUE;
         }
 
         return FALSE;
@@ -1640,9 +1632,7 @@ private:
         {
             case WM_CREATE: return OnCreate(hwnd) ? 0 : -1;
             case WM_SIZE: Layout(); return 0;
-            case kFileOperationsSpeedLimitPromptDeferredActionMessage:
-                RunDeferredAction(static_cast<DeferredAction>(wParam));
-                return 0;
+            case kFileOperationsSpeedLimitPromptDeferredActionMessage: RunDeferredAction(static_cast<DeferredAction>(wParam)); return 0;
             case WM_DPICHANGED:
             {
                 if (const auto* suggested = reinterpret_cast<const RECT*>(lParam))
@@ -1661,9 +1651,7 @@ private:
             }
             case WM_NCACTIVATE: ApplyTitleBarTheme(hwnd, _theme, wParam != FALSE); return DefWindowProcW(hwnd, message, wParam, lParam);
             case WM_ERASEBKGND: return 1;
-            case WM_CLOSE:
-                RequestDeferredAction(DeferredAction::Cancel);
-                return 0;
+            case WM_CLOSE: RequestDeferredAction(DeferredAction::Cancel); return 0;
 #ifdef ENABLE_TESTS
             case kFileOperationsSpeedLimitPromptDebugMessage: return OnDebugCommand(static_cast<DebugCommand>(wParam), lParam);
 #endif
@@ -2084,7 +2072,7 @@ void AccumulateStreamHueWeights(FileOperationsPopupInternal::RateHistory& histor
         return smoothedRate;
     }
 
-    const double decayMs = static_cast<double>(silenceMs - kRateSilenceHoldMs);
+    const double decayMs     = static_cast<double>(silenceMs - kRateSilenceHoldMs);
     const double decayedRate = smoothedRate * std::exp(-decayMs / kRateSilenceDecayMs);
     return decayedRate >= 1.0 ? decayedRate : 0.0;
 }
@@ -2114,8 +2102,8 @@ void AccumulateStreamHueWeights(FileOperationsPopupInternal::RateHistory& histor
         return 0.0;
     }
 
-    const size_t newestIndex = (history.writeIndex + FileOperationsPopupInternal::RateHistory::kMaxSamples - 1u) %
-                               FileOperationsPopupInternal::RateHistory::kMaxSamples;
+    const size_t newestIndex =
+        (history.writeIndex + FileOperationsPopupInternal::RateHistory::kMaxSamples - 1u) % FileOperationsPopupInternal::RateHistory::kMaxSamples;
     return ClampFiniteNonNegative(history.samples[newestIndex]);
 }
 
@@ -2440,7 +2428,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::AutoCollapseComplete
         {
             _collapsedTasks[task.taskId] = true;
             _compactExpandedTasks.erase(task.taskId);
-            addedCollapse                = true;
+            addedCollapse = true;
         }
     }
 
@@ -3097,26 +3085,25 @@ std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
 
         {
             std::scoped_lock lock(task->_conflictArbiter.mutex);
-            snap.conflict.active            = task->_conflictArbiter.prompt.active;
-            snap.conflict.bucket            = static_cast<uint8_t>(task->_conflictArbiter.prompt.bucket);
-            snap.conflict.status            = task->_conflictArbiter.prompt.status;
-            snap.conflict.sourcePath        = task->_conflictArbiter.prompt.sourcePath;
-            snap.conflict.destinationPath   = task->_conflictArbiter.prompt.destinationPath;
-            snap.conflict.sourceMetadata.available      = task->_conflictArbiter.prompt.sourceMetadata.available;
-            snap.conflict.sourceMetadata.isDirectory    = task->_conflictArbiter.prompt.sourceMetadata.isDirectory;
-            snap.conflict.sourceMetadata.sizeKnown      = task->_conflictArbiter.prompt.sourceMetadata.sizeKnown;
-            snap.conflict.sourceMetadata.sizeBytes      = task->_conflictArbiter.prompt.sourceMetadata.sizeBytes;
-            snap.conflict.sourceMetadata.lastWriteTime  = task->_conflictArbiter.prompt.sourceMetadata.lastWriteTime;
-            snap.conflict.sourceMetadata.attributes     = task->_conflictArbiter.prompt.sourceMetadata.attributes;
-            snap.conflict.destinationMetadata.available = task->_conflictArbiter.prompt.destinationMetadata.available;
-            snap.conflict.destinationMetadata.isDirectory =
-                task->_conflictArbiter.prompt.destinationMetadata.isDirectory;
+            snap.conflict.active                            = task->_conflictArbiter.prompt.active;
+            snap.conflict.bucket                            = static_cast<uint8_t>(task->_conflictArbiter.prompt.bucket);
+            snap.conflict.status                            = task->_conflictArbiter.prompt.status;
+            snap.conflict.sourcePath                        = task->_conflictArbiter.prompt.sourcePath;
+            snap.conflict.destinationPath                   = task->_conflictArbiter.prompt.destinationPath;
+            snap.conflict.sourceMetadata.available          = task->_conflictArbiter.prompt.sourceMetadata.available;
+            snap.conflict.sourceMetadata.isDirectory        = task->_conflictArbiter.prompt.sourceMetadata.isDirectory;
+            snap.conflict.sourceMetadata.sizeKnown          = task->_conflictArbiter.prompt.sourceMetadata.sizeKnown;
+            snap.conflict.sourceMetadata.sizeBytes          = task->_conflictArbiter.prompt.sourceMetadata.sizeBytes;
+            snap.conflict.sourceMetadata.lastWriteTime      = task->_conflictArbiter.prompt.sourceMetadata.lastWriteTime;
+            snap.conflict.sourceMetadata.attributes         = task->_conflictArbiter.prompt.sourceMetadata.attributes;
+            snap.conflict.destinationMetadata.available     = task->_conflictArbiter.prompt.destinationMetadata.available;
+            snap.conflict.destinationMetadata.isDirectory   = task->_conflictArbiter.prompt.destinationMetadata.isDirectory;
             snap.conflict.destinationMetadata.sizeKnown     = task->_conflictArbiter.prompt.destinationMetadata.sizeKnown;
             snap.conflict.destinationMetadata.sizeBytes     = task->_conflictArbiter.prompt.destinationMetadata.sizeBytes;
             snap.conflict.destinationMetadata.lastWriteTime = task->_conflictArbiter.prompt.destinationMetadata.lastWriteTime;
             snap.conflict.destinationMetadata.attributes    = task->_conflictArbiter.prompt.destinationMetadata.attributes;
-            snap.conflict.applyToAllChecked = task->_conflictArbiter.prompt.applyToAllChecked;
-            snap.conflict.retryFailed       = task->_conflictArbiter.prompt.retryFailed;
+            snap.conflict.applyToAllChecked                 = task->_conflictArbiter.prompt.applyToAllChecked;
+            snap.conflict.retryFailed                       = task->_conflictArbiter.prompt.retryFailed;
 
             snap.conflict.actionCount = std::min(task->_conflictArbiter.prompt.actionCount, snap.conflict.actions.size());
             for (size_t i = 0; i < snap.conflict.actionCount; ++i)
@@ -3125,18 +3112,18 @@ std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
             }
         }
 
-        snap.started            = task->HasStarted();
-        snap.paused             = task->IsPaused();
-        snap.waitingForOthers   = task->IsWaitingForOthers();
-        snap.waitingInQueue     = task->IsWaitingInQueue();
-        snap.queuePaused        = task->IsQueuePaused();
-        snap.plannedItems       = task->GetPlannedItemCount();
-        snap.destinationFolder  = task->GetDestinationFolder();
-        snap.destinationPane    = task->GetDestinationPane();
-        snap.destinationPluginId       = task->_destinationPluginId;
-        snap.destinationPluginShortId  = task->_destinationPluginShortId;
+        snap.started                    = task->HasStarted();
+        snap.paused                     = task->IsPaused();
+        snap.waitingForOthers           = task->IsWaitingForOthers();
+        snap.waitingInQueue             = task->IsWaitingInQueue();
+        snap.queuePaused                = task->IsQueuePaused();
+        snap.plannedItems               = task->GetPlannedItemCount();
+        snap.destinationFolder          = task->GetDestinationFolder();
+        snap.destinationPane            = task->GetDestinationPane();
+        snap.destinationPluginId        = task->_destinationPluginId;
+        snap.destinationPluginShortId   = task->_destinationPluginShortId;
         snap.destinationInstanceContext = task->_destinationInstanceContext;
-        snap.operationStartTick = task->_operationStartTick.load(std::memory_order_acquire);
+        snap.operationStartTick         = task->_operationStartTick.load(std::memory_order_acquire);
 
         // A task whose thread already completed renders its final status immediately instead of
         // flashing "Running" until the completed-summary row replaces this live row.
@@ -3555,40 +3542,39 @@ void FileOperationsPopupInternal::FileOperationsPopupState::LayoutChrome(float w
     const float footerTop = std::max(0.0f, height - footerH);
     _listViewportRect     = D2D1::RectF(0.0f, 0.0f, width, footerTop);
 
-    const float footerMargin = DipsToPixels(10.0f, _dpi);
-    const float footerGap    = DipsToPixels(8.0f, _dpi);
-    const float progressH    = DipsToPixels(6.0f, _dpi);
-    const float progressY    = footerTop + DipsToPixels(8.0f, _dpi);
-    _footerAggregateProgressRect =
-        D2D1::RectF(footerMargin, progressY, std::max(footerMargin, width - footerMargin), std::min(height, progressY + progressH));
+    const float footerMargin     = DipsToPixels(10.0f, _dpi);
+    const float footerGap        = DipsToPixels(8.0f, _dpi);
+    const float progressH        = DipsToPixels(6.0f, _dpi);
+    const float progressY        = footerTop + DipsToPixels(8.0f, _dpi);
+    _footerAggregateProgressRect = D2D1::RectF(footerMargin, progressY, std::max(footerMargin, width - footerMargin), std::min(height, progressY + progressH));
 
-    const float summaryY   = footerTop + DipsToPixels(18.0f, _dpi);
-    const float summaryH   = DipsToPixels(20.0f, _dpi);
-    _footerSummaryRect     = D2D1::RectF(footerMargin, summaryY, std::max(footerMargin, width - footerMargin), summaryY + summaryH);
+    const float summaryY = footerTop + DipsToPixels(18.0f, _dpi);
+    const float summaryH = DipsToPixels(20.0f, _dpi);
+    _footerSummaryRect   = D2D1::RectF(footerMargin, summaryY, std::max(footerMargin, width - footerMargin), summaryY + summaryH);
 
     const float footerBtnH = DipsToPixels(28.0f, _dpi);
     const float footerBtnY = footerTop + DipsToPixels(48.0f, _dpi);
     const float rightEdge  = std::max(footerMargin, width - footerMargin);
 
-    const float cancelW       = width >= DipsToPixels(560.0f, _dpi) ? DipsToPixels(112.0f, _dpi) : DipsToPixels(72.0f, _dpi);
-    const float pauseResumeW  = showPauseResumeAll ? cancelW : 0.0f;
-    const float detailsW      = footerBtnH;
-    const float densityW      = width >= DipsToPixels(500.0f, _dpi) ? DipsToPixels(84.0f, _dpi) : footerBtnH;
-    const float minQueueW     = DipsToPixels(144.0f, _dpi);
-    const float idealQueueW   = DipsToPixels(324.0f, _dpi);
-    const float idealAutoW = width >= DipsToPixels(680.0f, _dpi) ? DipsToPixels(210.0f, _dpi)
-                                                                 : (width >= DipsToPixels(360.0f, _dpi) ? DipsToPixels(150.0f, _dpi) : DipsToPixels(0.0f, _dpi));
-    const float minAutoW   = DipsToPixels(48.0f, _dpi);
+    const float cancelW      = width >= DipsToPixels(560.0f, _dpi) ? DipsToPixels(112.0f, _dpi) : DipsToPixels(72.0f, _dpi);
+    const float pauseResumeW = showPauseResumeAll ? cancelW : 0.0f;
+    const float detailsW     = footerBtnH;
+    const float densityW     = width >= DipsToPixels(500.0f, _dpi) ? DipsToPixels(84.0f, _dpi) : footerBtnH;
+    const float minQueueW    = DipsToPixels(144.0f, _dpi);
+    const float idealQueueW  = DipsToPixels(324.0f, _dpi);
+    const float idealAutoW   = width >= DipsToPixels(680.0f, _dpi)
+                                   ? DipsToPixels(210.0f, _dpi)
+                                   : (width >= DipsToPixels(360.0f, _dpi) ? DipsToPixels(150.0f, _dpi) : DipsToPixels(0.0f, _dpi));
+    const float minAutoW     = DipsToPixels(48.0f, _dpi);
 
-    float cursor = footerMargin;
-    _footerCancelAllRect = D2D1::RectF(cursor, footerBtnY, std::min(rightEdge, cursor + cancelW), footerBtnY + footerBtnH);
-    cursor               = _footerCancelAllRect.right + footerGap;
-    _footerPauseResumeAllRect =
-        pauseResumeW > 0.0f ? D2D1::RectF(cursor, footerBtnY, std::min(rightEdge, cursor + pauseResumeW), footerBtnY + footerBtnH)
-                            : D2D1::RectF(cursor, footerBtnY, cursor, footerBtnY + footerBtnH);
-    cursor = pauseResumeW > 0.0f ? (_footerPauseResumeAllRect.right + footerGap) : cursor;
+    float cursor              = footerMargin;
+    _footerCancelAllRect      = D2D1::RectF(cursor, footerBtnY, std::min(rightEdge, cursor + cancelW), footerBtnY + footerBtnH);
+    cursor                    = _footerCancelAllRect.right + footerGap;
+    _footerPauseResumeAllRect = pauseResumeW > 0.0f ? D2D1::RectF(cursor, footerBtnY, std::min(rightEdge, cursor + pauseResumeW), footerBtnY + footerBtnH)
+                                                    : D2D1::RectF(cursor, footerBtnY, cursor, footerBtnY + footerBtnH);
+    cursor                    = pauseResumeW > 0.0f ? (_footerPauseResumeAllRect.right + footerGap) : cursor;
 
-    const float detailsLeft = std::max(footerMargin, rightEdge - detailsW);
+    const float detailsLeft  = std::max(footerMargin, rightEdge - detailsW);
     _footerDetailsToggleRect = D2D1::RectF(detailsLeft, footerBtnY, rightEdge, footerBtnY + footerBtnH);
 
     const float densityLeft = std::max(cursor, detailsLeft - footerGap - densityW);
@@ -3608,10 +3594,9 @@ void FileOperationsPopupInternal::FileOperationsPopupState::LayoutChrome(float w
     cursor                 = autoW > 0.0f ? (_footerAutoDismissRect.right + footerGap) : cursor;
     available              = std::max(0.0f, rightCursor - cursor);
 
-    const float queueW = std::min(idealQueueW, available);
-    _footerQueueModeRect =
-        queueW >= minQueueW ? D2D1::RectF(cursor, footerBtnY, cursor + queueW, footerBtnY + footerBtnH)
-                            : D2D1::RectF(cursor, footerBtnY, cursor, footerBtnY + footerBtnH);
+    const float queueW   = std::min(idealQueueW, available);
+    _footerQueueModeRect = queueW >= minQueueW ? D2D1::RectF(cursor, footerBtnY, cursor + queueW, footerBtnY + footerBtnH)
+                                               : D2D1::RectF(cursor, footerBtnY, cursor, footerBtnY + footerBtnH);
 }
 
 void FileOperationsPopupInternal::FileOperationsPopupState::UpdateScrollBar(HWND hwnd, float viewH, float contentH) noexcept
@@ -3742,8 +3727,8 @@ void FileOperationsPopupInternal::FileOperationsPopupState::AutoResizeWindow(
     const RECT targetRect{windowRc.left, newTop, windowRc.right, newBottom};
     if (RectsNearEqual(windowRc, targetRect))
     {
-        _autoResizePending       = false;
-        _autoResizeAnimating     = false;
+        _autoResizePending        = false;
+        _autoResizeAnimating      = false;
         _footerOnlyRestorePending = false;
         if (! footerOnly)
         {
@@ -3754,9 +3739,9 @@ void FileOperationsPopupInternal::FileOperationsPopupState::AutoResizeWindow(
 
     if (_footerOnlyRestorePending && ! footerOnly)
     {
-        _footerOnlyRestorePending  = false;
-        _autoResizePending         = false;
-        _autoResizeAnimating       = false;
+        _footerOnlyRestorePending = false;
+        _autoResizePending        = false;
+        _autoResizeAnimating      = false;
         _maxAutoSizedWindowHeight = std::max(_maxAutoSizedWindowHeight, static_cast<int>(windowRc.bottom - windowRc.top));
         return;
     }
@@ -3786,9 +3771,9 @@ void FileOperationsPopupInternal::FileOperationsPopupState::AutoResizeWindow(
     {
         if (! _autoResizePending || ! RectsNearEqual(_autoResizePendingTargetRect, targetRect))
         {
-            _autoResizePending          = true;
+            _autoResizePending           = true;
             _autoResizePendingTargetRect = targetRect;
-            _autoResizePendingDueTick   = nowTick + kResizeDebounceMs;
+            _autoResizePendingDueTick    = nowTick + kResizeDebounceMs;
             return;
         }
 
@@ -3811,15 +3796,9 @@ void FileOperationsPopupInternal::FileOperationsPopupState::AutoResizeWindow(
     }
 
     const float fraction = EaseFileOperationsUiMotionFraction(nowTick - _autoResizeAnimationStartTick, kResizeEaseMs);
-    const RECT nextRect  = fraction >= 1.0f ? _autoResizeAnimationTargetRect : LerpRect(_autoResizeAnimationStartRect, _autoResizeAnimationTargetRect, fraction);
+    const RECT nextRect = fraction >= 1.0f ? _autoResizeAnimationTargetRect : LerpRect(_autoResizeAnimationStartRect, _autoResizeAnimationTargetRect, fraction);
 
-    SetWindowPos(hwnd,
-                 nullptr,
-                 nextRect.left,
-                 nextRect.top,
-                 nextRect.right - nextRect.left,
-                 nextRect.bottom - nextRect.top,
-                 SWP_NOZORDER | SWP_NOACTIVATE);
+    SetWindowPos(hwnd, nullptr, nextRect.left, nextRect.top, nextRect.right - nextRect.left, nextRect.bottom - nextRect.top, SWP_NOZORDER | SWP_NOACTIVATE);
 
     if (fraction >= 1.0f)
     {
@@ -3864,8 +3843,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DrawButton(const Pop
     DrawDxUiButtonChrome(button, format, text, RedSalamander::DxUi::ButtonVariant::Standard);
 }
 
-void FileOperationsPopupInternal::FileOperationsPopupState::DrawFooterQueueModeControl(
-    const PopupButton& button, bool queueMode, bool reducedMotion) noexcept
+void FileOperationsPopupInternal::FileOperationsPopupState::DrawFooterQueueModeControl(const PopupButton& button, bool queueMode, bool reducedMotion) noexcept
 {
     _footerQueueSegmentRect    = {};
     _footerParallelSegmentRect = {};
@@ -3882,11 +3860,9 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DrawFooterQueueModeC
     _target->FillRoundedRectangle(D2D1::RoundedRect(button.bounds, radius, radius), _buttonBgBrush.get());
     _target->DrawRoundedRectangle(D2D1::RoundedRect(button.bounds, radius, radius), _borderBrush.get(), pressed ? 1.6f : (hovered ? 1.3f : 1.0f));
 
-    const float padX = DipsToPixels(8.0f, _dpi);
-    D2D1_RECT_F inner = D2D1::RectF(button.bounds.left + padX,
-                                    button.bounds.top + DipsToPixels(4.0f, _dpi),
-                                    button.bounds.right - padX,
-                                    button.bounds.bottom - DipsToPixels(4.0f, _dpi));
+    const float padX  = DipsToPixels(8.0f, _dpi);
+    D2D1_RECT_F inner = D2D1::RectF(
+        button.bounds.left + padX, button.bounds.top + DipsToPixels(4.0f, _dpi), button.bounds.right - padX, button.bounds.bottom - DipsToPixels(4.0f, _dpi));
     if (inner.right <= inner.left || inner.bottom <= inner.top)
     {
         return;
@@ -3900,12 +3876,8 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DrawFooterQueueModeC
     const float innerW = inner.right - inner.left;
     if (innerW < DipsToPixels(112.0f, _dpi) || ! _dwriteFactory)
     {
-        _target->DrawTextW(selectedText.data(),
-                           static_cast<UINT32>(selectedText.size()),
-                           _buttonSmallFormat.get(),
-                           inner,
-                           _textBrush.get(),
-                           D2D1_DRAW_TEXT_OPTIONS_CLIP);
+        _target->DrawTextW(
+            selectedText.data(), static_cast<UINT32>(selectedText.size()), _buttonSmallFormat.get(), inner, _textBrush.get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
         return;
     }
 
@@ -3917,12 +3889,8 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DrawFooterQueueModeC
         const D2D1_RECT_F labelRc = D2D1::RectF(inner.left, inner.top, inner.left + labelW, inner.bottom);
         if (_subTextBrush)
         {
-            _target->DrawTextW(labelText.data(),
-                               static_cast<UINT32>(labelText.size()),
-                               _smallFormat.get(),
-                               labelRc,
-                               _subTextBrush.get(),
-                               D2D1_DRAW_TEXT_OPTIONS_CLIP);
+            _target->DrawTextW(
+                labelText.data(), static_cast<UINT32>(labelText.size()), _smallFormat.get(), labelRc, _subTextBrush.get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
         }
         segmentLeft = labelRc.right + DipsToPixels(8.0f, _dpi);
     }
@@ -3936,8 +3904,8 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DrawFooterQueueModeC
     const float midX           = (segmentRc.left + segmentRc.right) * 0.5f;
     const D2D1_RECT_F queueRc  = D2D1::RectF(segmentRc.left, segmentRc.top, midX, segmentRc.bottom);
     const D2D1_RECT_F paraRc   = D2D1::RectF(midX, segmentRc.top, segmentRc.right, segmentRc.bottom);
-    _footerQueueSegmentRect     = queueRc;
-    _footerParallelSegmentRect  = paraRc;
+    _footerQueueSegmentRect    = queueRc;
+    _footerParallelSegmentRect = paraRc;
     ID2D1Brush* selectedBrush  = _textBrush ? _textBrush.get() : (_subTextBrush ? _subTextBrush.get() : nullptr);
     ID2D1Brush* secondaryBrush = _subTextBrush ? _subTextBrush.get() : (_textBrush ? _textBrush.get() : nullptr);
 
@@ -3951,7 +3919,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DrawFooterQueueModeC
     }
     else
     {
-        const ULONGLONG elapsed = nowTick >= _footerQueueModeAnimationLastTick ? (nowTick - _footerQueueModeAnimationLastTick) : 0ull;
+        const ULONGLONG elapsed           = nowTick >= _footerQueueModeAnimationLastTick ? (nowTick - _footerQueueModeAnimationLastTick) : 0ull;
         _footerQueueModeAnimationLastTick = nowTick;
 
         const float alpha = std::max(0.10f, EaseFileOperationsUiMotionFraction(std::min<ULONGLONG>(elapsed, 180ull), 180ull));
@@ -3962,10 +3930,12 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DrawFooterQueueModeC
         }
     }
 
-    const float segmentW = segmentRc.right - segmentRc.left;
-    const float thumbW   = segmentW * 0.5f;
-    const D2D1_RECT_F thumbRc =
-        D2D1::RectF(segmentRc.left + thumbW * _footerQueueModeAnimationPosition, segmentRc.top, segmentRc.left + thumbW * (_footerQueueModeAnimationPosition + 1.0f), segmentRc.bottom);
+    const float segmentW      = segmentRc.right - segmentRc.left;
+    const float thumbW        = segmentW * 0.5f;
+    const D2D1_RECT_F thumbRc = D2D1::RectF(segmentRc.left + thumbW * _footerQueueModeAnimationPosition,
+                                            segmentRc.top,
+                                            segmentRc.left + thumbW * (_footerQueueModeAnimationPosition + 1.0f),
+                                            segmentRc.bottom);
 
     if (_graphDynamicBrush && folderWindow)
     {
@@ -3987,8 +3957,12 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DrawFooterQueueModeC
 
     if (selectedBrush)
     {
-        _target->DrawTextW(
-            queueText.data(), static_cast<UINT32>(queueText.size()), _buttonSmallFormat.get(), queueRc, queueMode ? selectedBrush : secondaryBrush, D2D1_DRAW_TEXT_OPTIONS_CLIP);
+        _target->DrawTextW(queueText.data(),
+                           static_cast<UINT32>(queueText.size()),
+                           _buttonSmallFormat.get(),
+                           queueRc,
+                           queueMode ? selectedBrush : secondaryBrush,
+                           D2D1_DRAW_TEXT_OPTIONS_CLIP);
         _target->DrawTextW(parallelText.data(),
                            static_cast<UINT32>(parallelText.size()),
                            _buttonSmallFormat.get(),
@@ -4014,18 +3988,19 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DrawFooterAutoDismis
     _target->FillRoundedRectangle(D2D1::RoundedRect(button.bounds, radius, radius), _buttonBgBrush.get());
     _target->DrawRoundedRectangle(D2D1::RoundedRect(button.bounds, radius, radius), _borderBrush.get(), pressed ? 1.6f : (hovered ? 1.3f : 1.0f));
 
-    const float buttonW = button.bounds.right - button.bounds.left;
-    const float padX    = DipsToPixels(8.0f, _dpi);
-    const float boxSize = DipsToPixels(14.0f, _dpi);
-    const float gap     = DipsToPixels(7.0f, _dpi);
-    const float boxTop  = button.bounds.top + ((button.bounds.bottom - button.bounds.top - boxSize) * 0.5f);
+    const float buttonW           = button.bounds.right - button.bounds.left;
+    const float padX              = DipsToPixels(8.0f, _dpi);
+    const float boxSize           = DipsToPixels(14.0f, _dpi);
+    const float gap               = DipsToPixels(7.0f, _dpi);
+    const float boxTop            = button.bounds.top + ((button.bounds.bottom - button.bounds.top - boxSize) * 0.5f);
     const std::wstring_view label = enabled ? std::wstring_view(_footerAutoDismissOnText) : std::wstring_view(_footerAutoDismissOffText);
     const float textAvailableW    = std::max(0.0f, buttonW - padX * 2.0f - boxSize - gap);
-    const float labelW = MeasureTextWidth(_dwriteFactory.get(), _smallFormat.get(), label, DipsToPixels(4096.0f, _dpi), button.bounds.bottom - button.bounds.top);
-    const bool showLabel = labelW > 0.0f && labelW <= textAvailableW;
+    const float labelW =
+        MeasureTextWidth(_dwriteFactory.get(), _smallFormat.get(), label, DipsToPixels(4096.0f, _dpi), button.bounds.bottom - button.bounds.top);
+    const bool showLabel           = labelW > 0.0f && labelW <= textAvailableW;
     _footerAutoDismissLabelVisible = showLabel;
-    const float boxLeft  = showLabel ? button.bounds.left + padX : button.bounds.left + (buttonW - boxSize) * 0.5f;
-    const D2D1_RECT_F boxRc = D2D1::RectF(boxLeft, boxTop, boxLeft + boxSize, boxTop + boxSize);
+    const float boxLeft            = showLabel ? button.bounds.left + padX : button.bounds.left + (buttonW - boxSize) * 0.5f;
+    const D2D1_RECT_F boxRc        = D2D1::RectF(boxLeft, boxTop, boxLeft + boxSize, boxTop + boxSize);
     DrawCheckboxBox(boxRc, enabled);
 
     if (! showLabel)
@@ -4033,8 +4008,8 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DrawFooterAutoDismis
         return;
     }
 
-    const D2D1_RECT_F textRc =
-        D2D1::RectF(boxRc.right + gap, button.bounds.top + DipsToPixels(4.0f, _dpi), button.bounds.right - padX, button.bounds.bottom - DipsToPixels(4.0f, _dpi));
+    const D2D1_RECT_F textRc = D2D1::RectF(
+        boxRc.right + gap, button.bounds.top + DipsToPixels(4.0f, _dpi), button.bounds.right - padX, button.bounds.bottom - DipsToPixels(4.0f, _dpi));
     ID2D1Brush* textBrush = enabled && _textBrush ? _textBrush.get() : (_subTextBrush ? _subTextBrush.get() : _textBrush.get());
     if (textBrush && textRc.right > textRc.left)
     {
@@ -4189,7 +4164,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DrawBandwidthGraph(c
         return ColorFromHSV(hue, saturation, value, alpha);
     };
 
-    showAnimation            = showAnimation && ! reducedMotion;
+    showAnimation = showAnimation && ! reducedMotion;
 
     // Draw animation for pre-calculation phase
     if (showAnimation && _graphDynamicBrush)
@@ -4325,8 +4300,8 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DrawBandwidthGraph(c
 
         if (! reducedMotion && count >= 2u && history.lastDisplaySampleTick != 0 && tick >= history.lastDisplaySampleTick)
         {
-            const size_t newest  = count - 1u;
-            points[newest].y = EaseGraphLatestPointYForDisplay(points[newest - 1u].y, points[newest].y, tick - history.lastDisplaySampleTick);
+            const size_t newest = count - 1u;
+            points[newest].y    = EaseGraphLatestPointYForDisplay(points[newest - 1u].y, points[newest].y, tick - history.lastDisplaySampleTick);
         }
 
         // In normal themes the bands engage only once the history actually carries multiple
@@ -4498,7 +4473,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DrawBandwidthGraph(c
         _target->DrawLine(D2D1::Point2F(rect.left, y), D2D1::Point2F(rect.right, y), _graphLimitBrush.get(), 1.0f);
 
         const uint64_t roundedBytesPerSecond = SaturatingRoundNonNegativeToUint64(currentBandwidthBytesPerSecond);
-        currentBandwidthText = FormatStringResource(nullptr, IDS_FMT_FILEOP_SPEED_BYTES, FormatBytesCompact(roundedBytesPerSecond));
+        currentBandwidthText                 = FormatStringResource(nullptr, IDS_FMT_FILEOP_SPEED_BYTES, FormatBytesCompact(roundedBytesPerSecond));
     }
 
     if (canDrawSamples && rainbowMode)
@@ -4532,19 +4507,28 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DrawBandwidthGraph(c
 
     if (! currentBandwidthText.empty() && _smallFormat && _textBrush)
     {
-        const float inset = DipsToPixels(6.0f, _dpi);
+        const float inset  = DipsToPixels(6.0f, _dpi);
         const float labelH = DipsToPixels(18.0f, _dpi);
-        const D2D1_RECT_F labelRc = D2D1::RectF(rect.left + inset, rect.top + DipsToPixels(3.0f, _dpi), rect.right - inset, rect.top + DipsToPixels(3.0f, _dpi) + labelH);
+        const D2D1_RECT_F labelRc =
+            D2D1::RectF(rect.left + inset, rect.top + DipsToPixels(3.0f, _dpi), rect.right - inset, rect.top + DipsToPixels(3.0f, _dpi) + labelH);
         if (_graphTextShadowBrush)
         {
             const float shadowOffset = DipsToPixels(1.0f, _dpi);
             const D2D1_RECT_F shadowRc =
                 D2D1::RectF(labelRc.left + shadowOffset, labelRc.top + shadowOffset, labelRc.right + shadowOffset, labelRc.bottom + shadowOffset);
-            _target->DrawTextW(
-                currentBandwidthText.data(), static_cast<UINT32>(currentBandwidthText.size()), _smallFormat.get(), shadowRc, _graphTextShadowBrush.get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+            _target->DrawTextW(currentBandwidthText.data(),
+                               static_cast<UINT32>(currentBandwidthText.size()),
+                               _smallFormat.get(),
+                               shadowRc,
+                               _graphTextShadowBrush.get(),
+                               D2D1_DRAW_TEXT_OPTIONS_CLIP);
         }
-        _target->DrawTextW(
-            currentBandwidthText.data(), static_cast<UINT32>(currentBandwidthText.size()), _smallFormat.get(), labelRc, _textBrush.get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+        _target->DrawTextW(currentBandwidthText.data(),
+                           static_cast<UINT32>(currentBandwidthText.size()),
+                           _smallFormat.get(),
+                           labelRc,
+                           _textBrush.get(),
+                           D2D1_DRAW_TEXT_OPTIONS_CLIP);
     }
 
     if (! overlayText.empty() && _graphOverlayFormat && _textBrush)
@@ -4605,12 +4589,12 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
     CleanupCollapsedTasks(snapshot);
     AutoCollapseCompletedTasks(snapshot);
     UpdateCaptionStatus(hwnd, snapshot);
-    const bool footerOnly = fileOps ? fileOps->GetPopupFooterOnly() : false;
-    const bool compactDensity = fileOps ? fileOps->GetPopupCompactDensity() : false;
+    const bool footerOnly                           = fileOps ? fileOps->GetPopupFooterOnly() : false;
+    const bool compactDensity                       = fileOps ? fileOps->GetPopupCompactDensity() : false;
     GlobalFileOperationsStatusSummary globalSummary = BuildGlobalStatusSummary(snapshot, &_rates);
-    const bool showPauseResumeAll = HasFooterPauseResumeAllControl(globalSummary);
-    const uint32_t completedGroupCount = CountCompletedGroupTasks(snapshot);
-    const bool showCompletedGroup = ShouldShowCompletedGroup(completedGroupCount);
+    const bool showPauseResumeAll                   = HasFooterPauseResumeAllControl(globalSummary);
+    const uint32_t completedGroupCount              = CountCompletedGroupTasks(snapshot);
+    const bool showCompletedGroup                   = ShouldShowCompletedGroup(completedGroupCount);
 
     std::vector<PopupDisplayRow> displayRows;
     if (! footerOnly)
@@ -4854,14 +4838,12 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
             {
                 const bool determinate = HasDeterminateGlobalAggregateProgress(globalSummary);
                 const D2D1_RECT_F fill =
-                    determinate
-                        ? D2D1::RectF(_footerAggregateProgressRect.left,
-                                      _footerAggregateProgressRect.top,
-                                      _footerAggregateProgressRect.left +
-                                          (_footerAggregateProgressRect.right - _footerAggregateProgressRect.left) *
-                                              GlobalAggregateProgressFraction(globalSummary),
-                                      _footerAggregateProgressRect.bottom)
-                        : ComputeIndeterminateBarFill(_footerAggregateProgressRect, renderTick, reducedMotion);
+                    determinate ? D2D1::RectF(_footerAggregateProgressRect.left,
+                                              _footerAggregateProgressRect.top,
+                                              _footerAggregateProgressRect.left + (_footerAggregateProgressRect.right - _footerAggregateProgressRect.left) *
+                                                                                      GlobalAggregateProgressFraction(globalSummary),
+                                              _footerAggregateProgressRect.bottom)
+                                : ComputeIndeterminateBarFill(_footerAggregateProgressRect, renderTick, reducedMotion);
                 if (fill.right > fill.left && fill.bottom > fill.top)
                 {
                     const float radius = ClampCornerRadius(fill, DipsToPixels(3.0f, _dpi));
@@ -5023,18 +5005,22 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
 
                 if (row.kind == PopupDisplayRowKind::CompletedGroup)
                 {
-                    const float chevronSize = DipsToPixels(18.0f, _dpi);
-                    const float chevronTop  = cardRect.top + (taskCardH - chevronSize) * 0.5f;
+                    const float chevronSize     = DipsToPixels(18.0f, _dpi);
+                    const float chevronTop      = cardRect.top + (taskCardH - chevronSize) * 0.5f;
                     const D2D1_RECT_F chevronRc = D2D1::RectF(textX, chevronTop, textX + chevronSize, chevronTop + chevronSize);
                     DrawCollapseChevron(chevronRc, ! _completedGroupExpanded);
 
                     const float clearW = std::min(DipsToPixels(128.0f, _dpi), std::max(0.0f, (contentRight - textX) * 0.34f));
                     PopupButton clearBtn{};
-                    clearBtn.bounds   = D2D1::RectF(std::max(textX, contentRight - clearW), cardRect.top + DipsToPixels(7.0f, _dpi), contentRight, cardRect.bottom - DipsToPixels(7.0f, _dpi));
+                    clearBtn.bounds   = D2D1::RectF(std::max(textX, contentRight - clearW),
+                                                    cardRect.top + DipsToPixels(7.0f, _dpi),
+                                                    contentRight,
+                                                    cardRect.bottom - DipsToPixels(7.0f, _dpi));
                     clearBtn.hit.kind = PopupHitTest::Kind::CompletedGroupClear;
 
                     PopupButton groupToggle{};
-                    groupToggle.bounds   = D2D1::RectF(cardRect.left, cardRect.top, std::max(cardRect.left, clearBtn.bounds.left - DipsToPixels(8.0f, _dpi)), cardRect.bottom);
+                    groupToggle.bounds =
+                        D2D1::RectF(cardRect.left, cardRect.top, std::max(cardRect.left, clearBtn.bounds.left - DipsToPixels(8.0f, _dpi)), cardRect.bottom);
                     groupToggle.hit.kind = PopupHitTest::Kind::CompletedGroupToggle;
                     if (groupToggle.bounds.right > groupToggle.bounds.left && groupToggle.bounds.bottom > groupToggle.bounds.top)
                     {
@@ -5049,18 +5035,15 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
 
                     const std::wstring groupText =
                         FormatStringResource(nullptr, IDS_FMT_FILEOPS_COMPLETED_GROUP, static_cast<unsigned long>(completedGroupCount));
-                    const float textLeft = chevronRc.right + DipsToPixels(8.0f, _dpi);
+                    const float textLeft  = chevronRc.right + DipsToPixels(8.0f, _dpi);
                     const float textRight = std::max(textLeft, clearBtn.bounds.left - DipsToPixels(8.0f, _dpi));
-                    const D2D1_RECT_F textRc = D2D1::RectF(textLeft, cardRect.top + DipsToPixels(10.0f, _dpi), textRight, cardRect.bottom - DipsToPixels(8.0f, _dpi));
+                    const D2D1_RECT_F textRc =
+                        D2D1::RectF(textLeft, cardRect.top + DipsToPixels(10.0f, _dpi), textRight, cardRect.bottom - DipsToPixels(8.0f, _dpi));
                     IDWriteTextFormat* groupFormat = _headerFormat ? _headerFormat.get() : (_bodyFormat ? _bodyFormat.get() : nullptr);
                     if (groupFormat && _textBrush)
                     {
-                        _target->DrawTextW(groupText.data(),
-                                           static_cast<UINT32>(groupText.size()),
-                                           groupFormat,
-                                           textRc,
-                                           _textBrush.get(),
-                                           D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                        _target->DrawTextW(
+                            groupText.data(), static_cast<UINT32>(groupText.size()), groupFormat, textRc, _textBrush.get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
                     }
 
                     const float gapAfter = (rowIndex + 1u < rowCount) ? cardGap : 0.0f;
@@ -5068,7 +5051,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                     continue;
                 }
 
-                const TaskSnapshot& task = snapshot[row.taskIndex];
+                const TaskSnapshot& task   = snapshot[row.taskIndex];
                 const bool isCollapsedTask = IsTaskCollapsedForDisplay(task.taskId, compactDensity);
 
                 if (task.kind == TaskSnapshot::Kind::Informational)
@@ -5386,8 +5369,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                         if (_smallFormat && _textBrush &&
                             (info.makeFileListCollecting || info.makeFileListScannedFolders > 0u || info.makeFileListScannedEntries > 0u))
                         {
-                            const std::wstring scanPath =
-                                info.makeFileListCurrentPath.empty() ? std::wstring(L".") : info.makeFileListCurrentPath.native();
+                            const std::wstring scanPath = info.makeFileListCurrentPath.empty() ? std::wstring(L".") : info.makeFileListCurrentPath.native();
                             const std::wstring scanText = FormatStringResource(
                                 nullptr, IDS_FMT_COMPARE_SCAN_STATUS, scanPath, info.makeFileListScannedFolders, info.makeFileListScannedEntries);
                             const D2D1_RECT_F scanRc = D2D1::RectF(textX, textY, contentRight, textY + lineH);
@@ -5400,16 +5382,12 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                             textY += lineH;
                         }
 
-                        if (_smallFormat && _subTextBrush &&
-                            (info.makeFileListRendering || info.makeFileListWriting || info.makeFileListTotalEntries > 0u))
+                        if (_smallFormat && _subTextBrush && (info.makeFileListRendering || info.makeFileListWriting || info.makeFileListTotalEntries > 0u))
                         {
                             const std::wstring countsText =
                                 info.makeFileListTotalEntries > 0u
-                                    ? FormatEmbeddedStringResource(nullptr,
-                                                                   IDS_FMT_FILEOPS_OP_COUNTS,
-                                                                   info.title,
-                                                                   info.makeFileListRenderedEntries,
-                                                                   info.makeFileListTotalEntries)
+                                    ? FormatEmbeddedStringResource(
+                                          nullptr, IDS_FMT_FILEOPS_OP_COUNTS, info.title, info.makeFileListRenderedEntries, info.makeFileListTotalEntries)
                                     : FormatEmbeddedStringResource(
                                           nullptr, IDS_FMT_FILEOPS_OP_COUNTS_UNKNOWN_TOTAL, info.title, info.makeFileListRenderedEntries);
                             const D2D1_RECT_F countsRc = D2D1::RectF(textX, textY, contentRight, textY + lineH);
@@ -5671,9 +5649,9 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                             {
                                 hasTotal = info.makeFileListRendering && info.makeFileListTotalEntries > 0u &&
                                            info.makeFileListRenderedEntries <= info.makeFileListTotalEntries;
-                                frac = hasTotal ? Clamp01(static_cast<float>(static_cast<double>(info.makeFileListRenderedEntries) /
-                                                                            static_cast<double>(info.makeFileListTotalEntries)))
-                                                : 0.0f;
+                                frac     = hasTotal ? Clamp01(static_cast<float>(static_cast<double>(info.makeFileListRenderedEntries) /
+                                                                                 static_cast<double>(info.makeFileListTotalEntries)))
+                                                    : 0.0f;
                             }
 
                             const D2D1_RECT_F fill = hasTotal ? D2D1::RectF(barRc.left, barRc.top, barRc.left + (barRc.right - barRc.left) * frac, barRc.bottom)
@@ -5737,8 +5715,8 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                 const std::wstring opText = LoadStringResource(nullptr, opTextId);
                 const ULONGLONG nowTick   = renderTick;
 
-                const TaskStatusKind taskStatus = task.statusKind != TaskStatusKind::None ? task.statusKind : ResolveTaskStatusKind(task);
-                const std::wstring headerText   = BuildTaskHeaderText(task, opText, nowTick);
+                const TaskStatusKind taskStatus        = task.statusKind != TaskStatusKind::None ? task.statusKind : ResolveTaskStatusKind(task);
+                const std::wstring headerText          = BuildTaskHeaderText(task, opText, nowTick);
                 const PopupStatusVisualTone statusTone = StatusVisualToneForTaskStatus(taskStatus);
                 if (statusTone != PopupStatusVisualTone::None && _graphDynamicBrush)
                 {
@@ -5746,12 +5724,11 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                     stripeColor.a            = 1.0f;
                     _graphDynamicBrush->SetColor(stripeColor);
 
-                    const float stripeW = DipsToPixels(3.0f, _dpi);
-                    const D2D1_RECT_F stripeRc =
-                        D2D1::RectF(cardRect.left + DipsToPixels(1.0f, _dpi),
-                                    cardRect.top + DipsToPixels(1.0f, _dpi),
-                                    cardRect.left + DipsToPixels(1.0f, _dpi) + stripeW,
-                                    cardRect.bottom - DipsToPixels(1.0f, _dpi));
+                    const float stripeW        = DipsToPixels(3.0f, _dpi);
+                    const D2D1_RECT_F stripeRc = D2D1::RectF(cardRect.left + DipsToPixels(1.0f, _dpi),
+                                                             cardRect.top + DipsToPixels(1.0f, _dpi),
+                                                             cardRect.left + DipsToPixels(1.0f, _dpi) + stripeW,
+                                                             cardRect.bottom - DipsToPixels(1.0f, _dpi));
                     _target->FillRectangle(stripeRc, _graphDynamicBrush.get());
                 }
 
@@ -5849,9 +5826,9 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                         const float chipW = std::clamp(textW + chipHPad * 2.0f, DipsToPixels(44.0f, _dpi), chipMaxW);
                         if (chipW + chipGap < availableW)
                         {
-                            D2D1::ColorF chipColor = StatusVisualColorForTone(appTheme, statusTone);
-                            chipColor.a            = appTheme.highContrast ? 0.28f : 0.14f;
-                            const float chipTop     = headerTop + (lineH - chipH) * 0.5f;
+                            D2D1::ColorF chipColor   = StatusVisualColorForTone(appTheme, statusTone);
+                            chipColor.a              = appTheme.highContrast ? 0.28f : 0.14f;
+                            const float chipTop      = headerTop + (lineH - chipH) * 0.5f;
                             const D2D1_RECT_F chipRc = D2D1::RectF(headerLeft, chipTop, headerLeft + chipW, chipTop + chipH);
                             const float chipRadius   = ClampCornerRadius(chipRc, DipsToPixels(5.0f, _dpi));
 
@@ -5889,12 +5866,12 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                         const float meterLeft  = meterRight - compactMeterW;
                         headerTextRight        = std::max(headerLeft, meterLeft - progressGap);
 
-                        const float fraction       = ComputeFileOperationsTaskCompleteFractionForDisplay(task);
-                        const uint32_t percent     = static_cast<uint32_t>(std::lround(Clamp01(fraction) * 100.0f));
-                        const float barH           = DipsToPixels(6.0f, _dpi);
-                        const float barTop         = headerTop + (lineH - barH) * 0.5f;
-                        const D2D1_RECT_F barRc    = D2D1::RectF(meterLeft, barTop, meterLeft + barW, barTop + barH);
-                        const float trackRadius    = ClampCornerRadius(barRc, DipsToPixels(2.0f, _dpi));
+                        const float fraction    = ComputeFileOperationsTaskCompleteFractionForDisplay(task);
+                        const uint32_t percent  = static_cast<uint32_t>(std::lround(Clamp01(fraction) * 100.0f));
+                        const float barH        = DipsToPixels(6.0f, _dpi);
+                        const float barTop      = headerTop + (lineH - barH) * 0.5f;
+                        const D2D1_RECT_F barRc = D2D1::RectF(meterLeft, barTop, meterLeft + barW, barTop + barH);
+                        const float trackRadius = ClampCornerRadius(barRc, DipsToPixels(2.0f, _dpi));
                         _target->FillRoundedRectangle(D2D1::RoundedRect(barRc, trackRadius, trackRadius), _progressBgBrush.get());
 
                         const D2D1_RECT_F fillRc =
@@ -5906,8 +5883,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                         }
 
                         const std::wstring percentText = FormatStringResource(nullptr, IDS_FMT_FILEOPS_COMPACT_PERCENT, percent);
-                        const D2D1_RECT_F percentRc =
-                            D2D1::RectF(barRc.right + DipsToPixels(6.0f, _dpi), headerTop, meterRight, headerBottom);
+                        const D2D1_RECT_F percentRc    = D2D1::RectF(barRc.right + DipsToPixels(6.0f, _dpi), headerTop, meterRight, headerBottom);
                         _target->DrawTextW(percentText.data(),
                                            static_cast<UINT32>(percentText.size()),
                                            _smallFormat.get(),
@@ -6496,9 +6472,8 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                         message.data(), static_cast<UINT32>(message.size()), _bodyFormat.get(), msgRc, _textBrush.get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
                     yPrompt += lineH;
 
-                    const auto drawConflictPathLine = [&](std::wstring_view label,
-                                                          std::wstring_view path,
-                                                          const TaskSnapshot::ConflictPromptSnapshot::ItemMetadata& metadata) noexcept
+                    const auto drawConflictPathLine =
+                        [&](std::wstring_view label, std::wstring_view path, const TaskSnapshot::ConflictPromptSnapshot::ItemMetadata& metadata) noexcept
                     {
                         if (label.empty() || path.empty() || ! _dwriteFactory)
                         {
@@ -6552,7 +6527,8 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                     else
                     {
                         drawConflictPathLine(LoadStringResource(nullptr, IDS_FILEOPS_LABEL_FROM), task.conflict.sourcePath, task.conflict.sourceMetadata);
-                        drawConflictPathLine(LoadStringResource(nullptr, IDS_FILEOPS_LABEL_TO), task.conflict.destinationPath, task.conflict.destinationMetadata);
+                        drawConflictPathLine(
+                            LoadStringResource(nullptr, IDS_FILEOPS_LABEL_TO), task.conflict.destinationPath, task.conflict.destinationMetadata);
                     }
                 };
 
@@ -6687,18 +6663,18 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                         hasItemBytes ? Clamp01(static_cast<float>(static_cast<double>(task.itemCompletedBytes) / static_cast<double>(task.itemTotalBytes)))
                                      : 0.0f;
 
-                    float totalFrac = 0.0f;
+                    float totalFrac          = 0.0f;
                     bool hasDeterminateTotal = false;
                     if (task.totalBytes > 0 && task.completedBytes <= task.totalBytes)
                     {
-                        totalFrac            = Clamp01(static_cast<float>(static_cast<double>(task.completedBytes) / static_cast<double>(task.totalBytes)));
+                        totalFrac           = Clamp01(static_cast<float>(static_cast<double>(task.completedBytes) / static_cast<double>(task.totalBytes)));
                         hasDeterminateTotal = true;
                     }
                     else if (task.totalItems > 0)
                     {
-                        const double denom = static_cast<double>(task.totalItems);
-                        const double numer = static_cast<double>(std::min(task.completedItems, task.totalItems)) + static_cast<double>(itemFrac);
-                        totalFrac          = Clamp01(static_cast<float>(numer / denom));
+                        const double denom  = static_cast<double>(task.totalItems);
+                        const double numer  = static_cast<double>(std::min(task.completedItems, task.totalItems)) + static_cast<double>(itemFrac);
+                        totalFrac           = Clamp01(static_cast<float>(numer / denom));
                         hasDeterminateTotal = true;
                     }
 
@@ -6706,7 +6682,8 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                     {
                         const D2D1_RECT_F fill =
                             hasDeterminateTotal
-                                ? D2D1::RectF(totalBarRc.left, totalBarRc.top, totalBarRc.left + (totalBarRc.right - totalBarRc.left) * totalFrac, totalBarRc.bottom)
+                                ? D2D1::RectF(
+                                      totalBarRc.left, totalBarRc.top, totalBarRc.left + (totalBarRc.right - totalBarRc.left) * totalFrac, totalBarRc.bottom)
                                 : ComputeIndeterminateBarFill(totalBarRc, nowTick, reducedMotion);
                         const float radius = ClampCornerRadius(fill, DipsToPixels(2.0f, _dpi));
                         _target->FillRoundedRectangle(D2D1::RoundedRect(fill, radius, radius), _progressGlobalBrush.get());
@@ -6792,7 +6769,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                         // During copy/move pre-calculation, keep the transfer controls available before bytes start moving.
                         else if (task.preCalcInProgress)
                         {
-                            const bool showStartNow = ! task.started && (task.waitingForOthers || task.waitingInQueue);
+                            const bool showStartNow     = ! task.started && (task.waitingForOthers || task.waitingInQueue);
                             const std::wstring skipText = LoadStringResource(nullptr, IDS_FILEOPS_BTN_SKIP);
                             if (showStartNow && showCopyMoveControls && ! speedLimitText.empty())
                             {
@@ -7233,7 +7210,7 @@ bool FileOperationsPopupInternal::FileOperationsPopupState::EnsureTaskbarList() 
         return scheduleRetry();
     }
 
-    _taskbarList = std::move(taskbar);
+    _taskbarList               = std::move(taskbar);
     _taskbarListRetryAfterTick = 0;
     return true;
 }
@@ -7241,7 +7218,7 @@ bool FileOperationsPopupInternal::FileOperationsPopupState::EnsureTaskbarList() 
 void FileOperationsPopupInternal::FileOperationsPopupState::UpdateTaskbarProgress(HWND hwnd) noexcept
 {
     const GlobalFileOperationsStatusSummary summary = BuildGlobalStatusSummary(BuildSnapshot());
-    const GlobalTaskbarProgressModel model            = BuildGlobalTaskbarProgressModel(summary);
+    const GlobalTaskbarProgressModel model          = BuildGlobalTaskbarProgressModel(summary);
     ApplyTaskbarProgress(hwnd, model.state, model.completed, model.total);
 }
 
@@ -8113,9 +8090,8 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowCompletedOverflo
         }
 
         const UINT chosen = static_cast<UINT>(chosenOpt.value());
-        if (chosen == kCompletedOverflowActionShowLog || chosen == kCompletedOverflowActionExportIssues ||
-            chosen == kCompletedOverflowActionFailedItems || chosen == kCompletedOverflowActionOpenDestination ||
-            chosen == kCompletedOverflowActionRevealDestination)
+        if (chosen == kCompletedOverflowActionShowLog || chosen == kCompletedOverflowActionExportIssues || chosen == kCompletedOverflowActionFailedItems ||
+            chosen == kCompletedOverflowActionOpenDestination || chosen == kCompletedOverflowActionRevealDestination)
         {
             static_cast<void>(SubmitCompletedOverflowAction(hwnd, taskId, chosen, true));
         }
@@ -8711,7 +8687,7 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnActivatedHit(HW
 
     if (hit.kind == PopupHitTest::Kind::CompletedGroupToggle)
     {
-        _completedGroupExpanded = ! _completedGroupExpanded;
+        _completedGroupExpanded     = ! _completedGroupExpanded;
         _maxAutoSizedWindowHeight   = 0;
         _lastAutoSizedContentHeight = -1.0f;
         Invalidate(hwnd);
@@ -8996,67 +8972,67 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotR
 
     const auto rectHasArea = [](const D2D1_RECT_F& rc) noexcept { return rc.right > rc.left && rc.bottom > rc.top; };
 
-    const std::vector<TaskSnapshot> taskSnapshot = BuildSnapshot();
-    GlobalFileOperationsStatusSummary globalSummary = BuildGlobalStatusSummary(taskSnapshot, &_rates);
+    const std::vector<TaskSnapshot> taskSnapshot     = BuildSnapshot();
+    GlobalFileOperationsStatusSummary globalSummary  = BuildGlobalStatusSummary(taskSnapshot, &_rates);
     const GlobalTaskbarProgressModel taskbarProgress = BuildGlobalTaskbarProgressModel(globalSummary);
     const AppTheme appTheme                          = folderWindow ? folderWindow->GetTheme() : AppTheme{};
     const bool highContrast                          = appTheme.highContrast;
-    const bool reducedMotion                          = IsReducedMotionEnabled();
-    const uint32_t completedGroupCount                = CountCompletedGroupTasks(taskSnapshot);
-    const bool completedGroupVisible                  = ShouldShowCompletedGroup(completedGroupCount);
-    result.globalRunningCount                             = globalSummary.running;
-    result.globalWaitingCount                             = globalSummary.waiting;
-    result.globalNeedAttentionCount                       = globalSummary.needAttention;
-    result.globalSummaryText                              = FormatGlobalStatusSummaryText(globalSummary);
-    result.globalSummaryVisible                           = ! taskSnapshot.empty() && rectHasArea(_footerSummaryRect);
-    result.footerPauseResumeAllVisible                    = rectHasArea(_footerPauseResumeAllRect) && HasFooterPauseResumeAllControl(globalSummary);
-    result.footerPauseResumeAllPauses                     = FooterPauseResumeAllShouldPause(globalSummary);
-    result.footerQueueModeSegmentedVisible                = rectHasArea(_footerQueueModeRect);
-    result.footerQueueModeIsParallel                      = fileOps ? ! fileOps->GetQueueNewTasks() : false;
-    result.footerQueueSegmentRect                         = _footerQueueSegmentRect;
-    result.footerParallelSegmentRect                      = _footerParallelSegmentRect;
-    result.footerSummaryRect                              = _footerSummaryRect;
+    const bool reducedMotion                         = IsReducedMotionEnabled();
+    const uint32_t completedGroupCount               = CountCompletedGroupTasks(taskSnapshot);
+    const bool completedGroupVisible                 = ShouldShowCompletedGroup(completedGroupCount);
+    result.globalRunningCount                        = globalSummary.running;
+    result.globalWaitingCount                        = globalSummary.waiting;
+    result.globalNeedAttentionCount                  = globalSummary.needAttention;
+    result.globalSummaryText                         = FormatGlobalStatusSummaryText(globalSummary);
+    result.globalSummaryVisible                      = ! taskSnapshot.empty() && rectHasArea(_footerSummaryRect);
+    result.footerPauseResumeAllVisible               = rectHasArea(_footerPauseResumeAllRect) && HasFooterPauseResumeAllControl(globalSummary);
+    result.footerPauseResumeAllPauses                = FooterPauseResumeAllShouldPause(globalSummary);
+    result.footerQueueModeSegmentedVisible           = rectHasArea(_footerQueueModeRect);
+    result.footerQueueModeIsParallel                 = fileOps ? ! fileOps->GetQueueNewTasks() : false;
+    result.footerQueueSegmentRect                    = _footerQueueSegmentRect;
+    result.footerParallelSegmentRect                 = _footerParallelSegmentRect;
+    result.footerSummaryRect                         = _footerSummaryRect;
     if (rectHasArea(_footerQueueSegmentRect))
     {
-        const float hitX       = (_footerQueueSegmentRect.left + _footerQueueSegmentRect.right) * 0.5f;
-        const float hitY       = (_footerQueueSegmentRect.top + _footerQueueSegmentRect.bottom) * 0.5f;
-        const PopupHitTest hit = HitTest(hitX, hitY);
+        const float hitX                  = (_footerQueueSegmentRect.left + _footerQueueSegmentRect.right) * 0.5f;
+        const float hitY                  = (_footerQueueSegmentRect.top + _footerQueueSegmentRect.bottom) * 0.5f;
+        const PopupHitTest hit            = HitTest(hitX, hitY);
         result.footerQueueHitTargetActive = hit.kind == PopupHitTest::Kind::FooterQueueMode && hit.data == kFooterQueueModeQueueAction;
     }
     if (rectHasArea(_footerParallelSegmentRect))
     {
-        const float hitX       = (_footerParallelSegmentRect.left + _footerParallelSegmentRect.right) * 0.5f;
-        const float hitY       = (_footerParallelSegmentRect.top + _footerParallelSegmentRect.bottom) * 0.5f;
-        const PopupHitTest hit = HitTest(hitX, hitY);
+        const float hitX                     = (_footerParallelSegmentRect.left + _footerParallelSegmentRect.right) * 0.5f;
+        const float hitY                     = (_footerParallelSegmentRect.top + _footerParallelSegmentRect.bottom) * 0.5f;
+        const PopupHitTest hit               = HitTest(hitX, hitY);
         result.footerParallelHitTargetActive = hit.kind == PopupHitTest::Kind::FooterQueueMode && hit.data == kFooterQueueModeParallelAction;
     }
-    result.footerAutoDismissVisible                       = rectHasArea(_footerAutoDismissRect);
-    result.footerAutoDismissLabelVisible                  = _footerAutoDismissLabelVisible;
-    result.footerAutoDismissEnabled                       = fileOps ? fileOps->GetAutoDismissSuccess() : false;
-    result.footerDensityToggleVisible                     = rectHasArea(_footerDensityRect);
+    result.footerAutoDismissVisible      = rectHasArea(_footerAutoDismissRect);
+    result.footerAutoDismissLabelVisible = _footerAutoDismissLabelVisible;
+    result.footerAutoDismissEnabled      = fileOps ? fileOps->GetAutoDismissSuccess() : false;
+    result.footerDensityToggleVisible    = rectHasArea(_footerDensityRect);
     if (result.footerDensityToggleVisible)
     {
-        const float hitX                  = (_footerDensityRect.left + _footerDensityRect.right) * 0.5f;
-        const float hitY                  = (_footerDensityRect.top + _footerDensityRect.bottom) * 0.5f;
+        const float hitX                    = (_footerDensityRect.left + _footerDensityRect.right) * 0.5f;
+        const float hitY                    = (_footerDensityRect.top + _footerDensityRect.bottom) * 0.5f;
         result.footerDensityHitTargetActive = HitTest(hitX, hitY).kind == PopupHitTest::Kind::FooterDensity;
     }
-    result.popupCompactDensity                            = fileOps ? fileOps->GetPopupCompactDensity() : false;
-    result.footerAggregateProgressVisible                 = HasGlobalAggregateProgress(globalSummary);
-    result.footerAggregateProgressDeterminate             = HasDeterminateGlobalAggregateProgress(globalSummary);
-    result.footerAggregateCompletedBytes                  = globalSummary.completedBytes;
-    result.footerAggregateTotalBytes                      = globalSummary.totalBytes;
-    result.footerAggregateCompletedItems                  = globalSummary.completedItems;
-    result.footerAggregateTotalItems                      = globalSummary.totalItems;
-    result.footerAggregateBytesPerSecond                  = globalSummary.displayedBytesPerSec;
-    result.footerAggregateEtaVisible                      = globalSummary.hasAggregateEta;
-    result.footerAggregateEtaSeconds = globalSummary.hasAggregateEta ? SaturatingCeilNonNegativeToUint64(globalSummary.aggregateEtaSeconds) : 0ull;
-    result.taskbarProgressState                           = taskbarProgress.state;
-    result.taskbarProgressCompleted                       = taskbarProgress.completed;
-    result.taskbarProgressTotal                           = taskbarProgress.total;
-    result.taskbarUpdateCount                             = _taskbarUpdateCount;
-    result.taskbarButtonReady                             = _taskbarButtonReady;
-    result.taskbarListAvailable                           = static_cast<bool>(_taskbarList);
-    result.taskbarListAttemptCount                        = _taskbarListAttemptCount;
+    result.popupCompactDensity                = fileOps ? fileOps->GetPopupCompactDensity() : false;
+    result.footerAggregateProgressVisible     = HasGlobalAggregateProgress(globalSummary);
+    result.footerAggregateProgressDeterminate = HasDeterminateGlobalAggregateProgress(globalSummary);
+    result.footerAggregateCompletedBytes      = globalSummary.completedBytes;
+    result.footerAggregateTotalBytes          = globalSummary.totalBytes;
+    result.footerAggregateCompletedItems      = globalSummary.completedItems;
+    result.footerAggregateTotalItems          = globalSummary.totalItems;
+    result.footerAggregateBytesPerSecond      = globalSummary.displayedBytesPerSec;
+    result.footerAggregateEtaVisible          = globalSummary.hasAggregateEta;
+    result.footerAggregateEtaSeconds          = globalSummary.hasAggregateEta ? SaturatingCeilNonNegativeToUint64(globalSummary.aggregateEtaSeconds) : 0ull;
+    result.taskbarProgressState               = taskbarProgress.state;
+    result.taskbarProgressCompleted           = taskbarProgress.completed;
+    result.taskbarProgressTotal               = taskbarProgress.total;
+    result.taskbarUpdateCount                 = _taskbarUpdateCount;
+    result.taskbarButtonReady                 = _taskbarButtonReady;
+    result.taskbarListAvailable               = static_cast<bool>(_taskbarList);
+    result.taskbarListAttemptCount            = _taskbarListAttemptCount;
     if (_taskbarListRetryAfterTick != 0)
     {
         const ULONGLONG nowTick = GetTickCount64();
@@ -9066,11 +9042,11 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotR
             result.taskbarListRetryDelayMs = static_cast<uint64_t>(_taskbarListRetryAfterTick - nowTick);
         }
     }
-    result.footerOnly                                     = fileOps ? fileOps->GetPopupFooterOnly() : false;
-    result.footerDetailsToggleVisible                     = rectHasArea(_footerDetailsToggleRect);
+    result.footerOnly                 = fileOps ? fileOps->GetPopupFooterOnly() : false;
+    result.footerDetailsToggleVisible = rectHasArea(_footerDetailsToggleRect);
     result.footerDetailsToggleRightAligned =
         result.footerDetailsToggleVisible && _footerDetailsToggleRect.right >= static_cast<float>(_clientSize.cx) - DipsToPixels(12.0f, _dpi);
-    result.highContrastEnabled          = highContrast;
+    result.highContrastEnabled             = highContrast;
     result.reducedMotionEnabled            = reducedMotion;
     result.autoResizeAnimationEnabled      = ! reducedMotion;
     result.footerQueueModeAnimationEnabled = result.footerQueueModeSegmentedVisible && ! reducedMotion;
@@ -9109,24 +9085,25 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotR
         result.taskStatusActiveStateCount = SurfacedTaskStatusCount(status);
         bool graphShowAnimation           = false;
         static_cast<void>(GraphOverlayTextForStatus(*taskIt, status, graphShowAnimation));
-        result.graphStatusAnimationEnabled = graphShowAnimation && ! reducedMotion;
-        result.conflictStackedPathRows    = taskIt->conflict.active;
+        result.graphStatusAnimationEnabled        = graphShowAnimation && ! reducedMotion;
+        result.conflictStackedPathRows            = taskIt->conflict.active;
         result.conflictSourceMetadataVisible      = taskIt->conflict.active && taskIt->conflict.sourceMetadata.available;
         result.conflictDestinationMetadataVisible = taskIt->conflict.active && taskIt->conflict.destinationMetadata.available;
         result.conflictMetadataSizeCompareVisible =
             taskIt->conflict.active && taskIt->conflict.sourceMetadata.sizeKnown && taskIt->conflict.destinationMetadata.sizeKnown;
-        result.conflictMetadataDateCompareVisible = taskIt->conflict.active && taskIt->conflict.sourceMetadata.lastWriteTime > 0 &&
-                                                    taskIt->conflict.destinationMetadata.lastWriteTime > 0;
+        result.conflictMetadataDateCompareVisible =
+            taskIt->conflict.active && taskIt->conflict.sourceMetadata.lastWriteTime > 0 && taskIt->conflict.destinationMetadata.lastWriteTime > 0;
         result.taskDuplicateUnderGraphItemBarVisible = false;
-        const PopupStatusVisualTone statusTone        = StatusVisualToneForTaskStatus(status);
-        const std::wstring statusChipText             = StatusChipTextForTask(*taskIt, status, GetTickCount64());
-        result.taskStatusVisualTone                   = static_cast<uint32_t>(statusTone);
-        result.taskStatusVisualColorRef               = ColorToCOLORREF(StatusVisualColorForTone(appTheme, statusTone));
-        result.taskStatusStripeVisible                = statusTone != PopupStatusVisualTone::None;
-        result.taskStatusChipVisible                  = result.taskStatusStripeVisible && ! statusChipText.empty();
-        result.taskStatusGlyphSignalVisible           = StatusIsOk(status) || StatusIsWarning(status) || StatusIsError(status);
-        result.taskStatusTextSignalVisible            = ! statusChipText.empty() || ! StatusTextForTask(*taskIt, status, GetTickCount64()).empty();
-        result.taskStatusColorBlindSafeEncoding       = statusTone == PopupStatusVisualTone::None || result.taskStatusGlyphSignalVisible || result.taskStatusTextSignalVisible;
+        const PopupStatusVisualTone statusTone       = StatusVisualToneForTaskStatus(status);
+        const std::wstring statusChipText            = StatusChipTextForTask(*taskIt, status, GetTickCount64());
+        result.taskStatusVisualTone                  = static_cast<uint32_t>(statusTone);
+        result.taskStatusVisualColorRef              = ColorToCOLORREF(StatusVisualColorForTone(appTheme, statusTone));
+        result.taskStatusStripeVisible               = statusTone != PopupStatusVisualTone::None;
+        result.taskStatusChipVisible                 = result.taskStatusStripeVisible && ! statusChipText.empty();
+        result.taskStatusGlyphSignalVisible          = StatusIsOk(status) || StatusIsWarning(status) || StatusIsError(status);
+        result.taskStatusTextSignalVisible           = ! statusChipText.empty() || ! StatusTextForTask(*taskIt, status, GetTickCount64()).empty();
+        result.taskStatusColorBlindSafeEncoding =
+            statusTone == PopupStatusVisualTone::None || result.taskStatusGlyphSignalVisible || result.taskStatusTextSignalVisible;
         result.completedFailedItemsActionVisible       = taskIt->finished && (taskIt->warningCount > 0 || taskIt->errorCount > 0);
         result.completedOpenDestinationActionVisible   = CompletedTaskCanUseDestinationActions(*taskIt);
         result.completedRevealDestinationActionVisible = ResolveCompletedTaskRevealLocation(*taskIt).has_value();
@@ -9134,10 +9111,10 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotR
         result.taskCollapsed                           = IsTaskCollapsed(taskIt->taskId);
         result.taskCompactRow                          = IsTaskCollapsedForDisplay(taskIt->taskId, result.popupCompactDensity);
         result.taskAutoCollapsedOnCompletion           = taskIt->finished && result.taskCollapsed;
-        result.taskCompactProgressVisible =
-            result.taskCompactRow && taskIt->kind == TaskSnapshot::Kind::FileOperation && TaskHasKnownCompactProgress(*taskIt);
+        result.taskCompactProgressVisible = result.taskCompactRow && taskIt->kind == TaskSnapshot::Kind::FileOperation && TaskHasKnownCompactProgress(*taskIt);
         if (! taskIt->finished && ! taskIt->conflict.active &&
-            (taskIt->preCalcInProgress || taskIt->operation == FILESYSTEM_COPY || taskIt->operation == FILESYSTEM_MOVE || taskIt->operation == FILESYSTEM_DELETE))
+            (taskIt->preCalcInProgress || taskIt->operation == FILESYSTEM_COPY || taskIt->operation == FILESYSTEM_MOVE ||
+             taskIt->operation == FILESYSTEM_DELETE))
         {
             result.taskUnderGraphProgressBarCount = 1u;
         }
@@ -9190,12 +9167,8 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotR
             case PopupHitTest::Kind::FooterQueueMode:
             case PopupHitTest::Kind::FooterDensity:
             case PopupHitTest::Kind::FooterToggleDetails: ++result.footerVisibleButtonCount; break;
-            case PopupHitTest::Kind::CompletedGroupToggle:
-                result.completedGroupToggleVisible = true;
-                break;
-            case PopupHitTest::Kind::CompletedGroupClear:
-                result.completedGroupClearVisible = true;
-                break;
+            case PopupHitTest::Kind::CompletedGroupToggle: result.completedGroupToggleVisible = true; break;
+            case PopupHitTest::Kind::CompletedGroupClear: result.completedGroupClearVisible = true; break;
             case PopupHitTest::Kind::TaskConflictToggleApplyToAll:
                 if (result.found && button.hit.taskId == result.taskId)
                 {
@@ -9376,9 +9349,9 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::WndProc(HWND hwnd
     const UINT taskbarButtonCreatedMessage = FileOperationsTaskbarButtonCreatedMessage();
     if (taskbarButtonCreatedMessage != 0 && msg == taskbarButtonCreatedMessage)
     {
-        _taskbarButtonReady          = true;
-        _taskbarListRetryAfterTick   = 0;
-        _taskbarListAttemptCount     = 0u;
+        _taskbarButtonReady        = true;
+        _taskbarListRetryAfterTick = 0;
+        _taskbarListAttemptCount   = 0u;
         _taskbarList.reset();
         Invalidate(hwnd);
         return 0;

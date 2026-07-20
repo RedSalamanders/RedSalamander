@@ -16,14 +16,16 @@
 
 namespace
 {
-constexpr std::wstring_view kFallbackPreviewViewerId = L"builtin/viewer-text";
+constexpr std::wstring_view kFallbackPreviewViewerId   = L"builtin/viewer-text";
 constexpr wchar_t kPreviewPreOpenChildMarkerProperty[] = L"RedSalamander.FolderWindow.PreviewPreOpenChild";
 constexpr wchar_t kPreviewViewerInstanceProperty[]     = L"RedSalamander.FolderWindow.PreviewViewerInstance";
 
 class PreviewChildOpenAttempt final
 {
 public:
-    explicit PreviewChildOpenAttempt(HWND parent) noexcept : _parent(parent) {}
+    explicit PreviewChildOpenAttempt(HWND parent) noexcept : _parent(parent)
+    {
+    }
 
     PreviewChildOpenAttempt(const PreviewChildOpenAttempt&)            = delete;
     PreviewChildOpenAttempt(PreviewChildOpenAttempt&&)                 = delete;
@@ -489,8 +491,7 @@ void FolderWindow::HideAndClearPreviewEmbeddedHwnd(PaneState& host, ViewerInstan
     if (IsOwnedPreviewEmbeddedHwnd(host, &instance, hwnd))
     {
         ShowWindow(hwnd, SW_HIDE);
-        if (GetParent(hwnd) == host.hPreviewContent.get() &&
-            GetPropW(hwnd, kPreviewViewerInstanceProperty) == reinterpret_cast<HANDLE>(&instance))
+        if (GetParent(hwnd) == host.hPreviewContent.get() && GetPropW(hwnd, kPreviewViewerInstanceProperty) == reinterpret_cast<HANDLE>(&instance))
         {
             static_cast<void>(RemovePropW(hwnd, kPreviewViewerInstanceProperty));
         }
@@ -801,7 +802,7 @@ void FolderWindow::ClosePreviewViewer(Pane hostPane) noexcept
         HideAndClearPreviewEmbeddedHwnd(host, *previewInstance);
     }
 
-    host.previewViewerInstance      = nullptr;
+    host.previewViewerInstance = nullptr;
     host.previewViewerPluginId.clear();
 
     if (! previewInstance)
@@ -1031,27 +1032,26 @@ bool FolderWindow::OpenPreviewFocusedPathWithViewer(Pane sourcePane, Pane hostPa
                     static_cast<void>(RemovePropW(oldRoot, kPreviewViewerInstanceProperty));
                 }
             }
-            if (SUCCEEDED(openHr) &&
-                (reopenFault == PreviewEmbeddedChildFaultForTest::CreateAdditionalNewChildOnReopen ||
-                 reopenFault == PreviewEmbeddedChildFaultForTest::ReplaceEmbeddedChildOnReopen))
+            if (SUCCEEDED(openHr) && (reopenFault == PreviewEmbeddedChildFaultForTest::CreateAdditionalNewChildOnReopen ||
+                                      reopenFault == PreviewEmbeddedChildFaultForTest::ReplaceEmbeddedChildOnReopen))
             {
                 debugReopenChild.reset(CreateWindowExW(0,
-                                                        L"STATIC",
-                                                        nullptr,
-                                                        WS_CHILD | WS_VISIBLE | SS_BLACKRECT,
-                                                        0,
-                                                        0,
-                                                        1,
-                                                        1,
-                                                        hostState.hPreviewContent.get(),
-                                                        nullptr,
-                                                        GetModuleHandleW(nullptr),
-                                                        nullptr));
+                                                       L"STATIC",
+                                                       nullptr,
+                                                       WS_CHILD | WS_VISIBLE | SS_BLACKRECT,
+                                                       0,
+                                                       0,
+                                                       1,
+                                                       1,
+                                                       hostState.hPreviewContent.get(),
+                                                       nullptr,
+                                                       GetModuleHandleW(nullptr),
+                                                       nullptr));
             }
 #endif
 
             const std::vector<HWND> createdPreviewChildren = reopenAttempt.CollectNewDirectChildren();
-            const bool retainedOwnedRoot = IsOwnedPreviewEmbeddedHwnd(hostState, instance, instance->embeddedHwnd);
+            const bool retainedOwnedRoot                   = IsOwnedPreviewEmbeddedHwnd(hostState, instance, instance->embeddedHwnd);
             if (SUCCEEDED(openHr) && retainedOwnedRoot && createdPreviewChildren.empty())
             {
                 SetPreviewPlaceholder(hostPane, {});
@@ -1077,22 +1077,21 @@ bool FolderWindow::OpenPreviewFocusedPathWithViewer(Pane sourcePane, Pane hostPa
                 openHr = E_UNEXPECTED;
             }
 
-            Debug::Warning(
-                L"FolderWindow::OpenPreviewFocusedPathWithViewer: preview viewer '{}' failed to refresh '{}' (hr=0x{:08X}, retainedOwnedRoot={}, newDirectChildren={}, hiddenNewChildren={}); reopening.",
-                pluginIdStorage,
-                hostState.previewedPath.wstring(),
-                static_cast<unsigned long>(openHr),
-                retainedOwnedRoot,
-                createdPreviewChildren.size(),
-                hiddenRejectedChildCount);
+            Debug::Warning(L"FolderWindow::OpenPreviewFocusedPathWithViewer: preview viewer '{}' failed to refresh '{}' (hr=0x{:08X}, retainedOwnedRoot={}, "
+                           L"newDirectChildren={}, hiddenNewChildren={}); reopening.",
+                           pluginIdStorage,
+                           hostState.previewedPath.wstring(),
+                           static_cast<unsigned long>(openHr),
+                           retainedOwnedRoot,
+                           createdPreviewChildren.size(),
+                           hiddenRejectedChildCount);
         }
         else
         {
             openHr = markerHr;
-            Debug::Error(
-                L"FolderWindow::OpenPreviewFocusedPathWithViewer: failed to mark existing preview children before refreshing '{}' (hr=0x{:08X}).",
-                pluginIdStorage,
-                static_cast<unsigned long>(markerHr));
+            Debug::Error(L"FolderWindow::OpenPreviewFocusedPathWithViewer: failed to mark existing preview children before refreshing '{}' (hr=0x{:08X}).",
+                         pluginIdStorage,
+                         static_cast<unsigned long>(markerHr));
         }
 
         previewPerf.SetHr(openHr);
@@ -1143,17 +1142,17 @@ bool FolderWindow::OpenPreviewFocusedPathWithViewer(Pane sourcePane, Pane hostPa
     if (childFault == PreviewEmbeddedChildFaultForTest::CreateAdditionalNewChild)
     {
         debugAdditionalPreviewChild.reset(CreateWindowExW(0,
-                                                           L"STATIC",
-                                                           nullptr,
-                                                           WS_CHILD | WS_VISIBLE | SS_BLACKRECT,
-                                                           0,
-                                                           0,
-                                                           1,
-                                                           1,
-                                                           hostState.hPreviewContent.get(),
-                                                           nullptr,
-                                                           GetModuleHandleW(nullptr),
-                                                           nullptr));
+                                                          L"STATIC",
+                                                          nullptr,
+                                                          WS_CHILD | WS_VISIBLE | SS_BLACKRECT,
+                                                          0,
+                                                          0,
+                                                          1,
+                                                          1,
+                                                          hostState.hPreviewContent.get(),
+                                                          nullptr,
+                                                          GetModuleHandleW(nullptr),
+                                                          nullptr));
     }
 #endif
 
@@ -1185,10 +1184,11 @@ bool FolderWindow::OpenPreviewFocusedPathWithViewer(Pane sourcePane, Pane hostPa
         _debugPreviewLastOpenRejectedChildCardinality = true;
         _debugPreviewLastReopenRejectedChildSet       = false;
 #endif
-        Debug::Error(L"FolderWindow::OpenPreviewFocusedPathWithViewer: preview viewer '{}' created {} direct embedded children; exactly one is required (hidden={}).",
-                     pluginIdStorage,
-                     detectedPreviewChildCount,
-                     hiddenRejectedChildCount);
+        Debug::Error(
+            L"FolderWindow::OpenPreviewFocusedPathWithViewer: preview viewer '{}' created {} direct embedded children; exactly one is required (hidden={}).",
+            pluginIdStorage,
+            detectedPreviewChildCount,
+            hiddenRejectedChildCount);
         previewPerf.SetHr(E_UNEXPECTED);
         ClosePreviewViewer(hostPane);
         return false;

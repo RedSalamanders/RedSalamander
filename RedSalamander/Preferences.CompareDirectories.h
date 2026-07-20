@@ -53,9 +53,9 @@ private:
     RedSalamander::DxUi::WindowHost* _pageHostDx = nullptr;
     RedSalamander::DxUi::Panel* _pageContentRoot = nullptr;
     std::unique_ptr<DxState> _dxState;
-    PreferencesDialogState* _state       = nullptr;
-    bool _syncingDxContentWorkersCombo   = false;
-    bool _syncingDxIgnoreFilesEdit       = false;
-    bool _syncingDxIgnoreDirectoriesEdit = false;
+    PreferencesDialogState* _state                = nullptr;
+    bool _syncingDxContentWorkersCombo            = false;
+    bool _syncingDxIgnoreFilesEdit                = false;
+    bool _syncingDxIgnoreDirectoriesEdit          = false;
     DeferredFocusTarget _deferredFocusAfterLayout = DeferredFocusTarget::None;
 };

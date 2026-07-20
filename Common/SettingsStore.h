@@ -193,10 +193,10 @@ struct MonitorFilterState
 
 struct MonitorRetentionSettings
 {
-    uint32_t maxQueuedEvents       = 4'096u;
-    uint32_t maxRetainedLines      = 100'000u;
-    uint64_t maxRetainedTextBytes  = 64u * 1024u * 1024u;
-    uint32_t maxSearchMatches      = 100'000u;
+    uint32_t maxQueuedEvents      = 4'096u;
+    uint32_t maxRetainedLines     = 100'000u;
+    uint64_t maxRetainedTextBytes = 64u * 1024u * 1024u;
+    uint32_t maxSearchMatches     = 100'000u;
 };
 
 struct MonitorSettings
@@ -940,9 +940,7 @@ COMMON_API HRESULT SaveSettingsValuesOnly(std::wstring_view appId, Settings& set
 // Saves only the settings JSON and returns the identity of the exact flushed temporary file moved
 // into place. Callers that watch the settings directory use this to distinguish their own atomic
 // replacement from a later external replacement without re-statting the path.
-COMMON_API HRESULT SaveSettingsValuesOnlyWithStamp(std::wstring_view appId,
-                                                   Settings& settings,
-                                                   SettingsFileStamp& writtenStamp) noexcept;
+COMMON_API HRESULT SaveSettingsValuesOnlyWithStamp(std::wstring_view appId, Settings& settings, SettingsFileStamp& writtenStamp) noexcept;
 
 // Saves a JSON Schema file alongside the settings file (UTF-8 JSON, no BOM).
 // Path: `<AppId>.settings.schema.json` in the same directory as `GetSettingsPath(appId)`.

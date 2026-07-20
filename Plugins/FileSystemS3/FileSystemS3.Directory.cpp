@@ -7,7 +7,6 @@
 #include <aws/s3-crt/model/ListObjectsV2Request.h>
 #include <aws/s3-crt/model/ObjectIdentifier.h>
 
-
 #include <algorithm>
 #include <filesystem>
 #include <format>
@@ -16,7 +15,6 @@
 #include <span>
 #include <unordered_map>
 #include <unordered_set>
-
 
 namespace FsS3 = FileSystemS3Internal;
 
@@ -779,7 +777,7 @@ private:
     req.SetPrefix(Aws::String(prefix.data(), prefix.size()));
     req.SetMaxKeys(static_cast<int>(std::min<unsigned long>(source.bucketCtx.maxKeys, 1000u)));
 
-    const auto client = FsS3::GetS3Client(fs, source.bucketCtx);
+    const auto client               = FsS3::GetS3Client(fs, source.bucketCtx);
     const uint64_t pagingDurationMs = std::clamp<uint64_t>(static_cast<uint64_t>(source.bucketCtx.requestTimeoutMs) * 10u, 60'000u, 600'000u);
     Common::Paging::Utf8ContinuationGuard pager(Common::Paging::Limits{
         .deadlineTickMs = Common::Paging::DeadlineFromNow(GetTickCount64(), pagingDurationMs),
@@ -789,7 +787,7 @@ private:
     while (true)
     {
         const HRESULT pageBoundaryHr = firstPage ? pager.BeginFirstPage(GetTickCount64()) : pager.BeginContinuation(continuationToken, GetTickCount64());
-        firstPage = false;
+        firstPage                    = false;
         if (FAILED(pageBoundaryHr))
         {
             return pageBoundaryHr;
@@ -805,7 +803,7 @@ private:
         }
 
         const auto& result = outcome.GetResult();
-        size_t pageBytes = 0u;
+        size_t pageBytes   = 0u;
         for (const auto& object : result.GetContents())
         {
             pageBytes += (std::min)(object.GetKey().size(), (std::numeric_limits<size_t>::max)() - pageBytes);
@@ -818,11 +816,8 @@ private:
 
         const bool isTruncated       = result.GetIsTruncated();
         const Aws::String& nextToken = result.GetNextContinuationToken();
-        const HRESULT pageHr = pager.CompletePage(result.GetContents().size(),
-                                                  pageBytes,
-                                                  isTruncated,
-                                                  std::string_view(nextToken.c_str(), nextToken.size()),
-                                                  GetTickCount64());
+        const HRESULT pageHr =
+            pager.CompletePage(result.GetContents().size(), pageBytes, isTruncated, std::string_view(nextToken.c_str(), nextToken.size()), GetTickCount64());
         if (FAILED(pageHr))
         {
             return pageHr;
@@ -1302,11 +1297,8 @@ void RunDebugHiddenSiblingKeyEntropySelfTest(unsigned int& passed, unsigned int&
     return S_OK;
 }
 
-[[nodiscard]] HRESULT DeleteResolvedPath(FileSystemS3& fs,
-                                         const ResolvedS3Path& path,
-                                         const ResolvedS3Probe& probe,
-                                         FileSystemFlags flags,
-                                         const std::function<HRESULT()>& checkCancel) noexcept
+[[nodiscard]] HRESULT DeleteResolvedPath(
+    FileSystemS3& fs, const ResolvedS3Path& path, const ResolvedS3Probe& probe, FileSystemFlags flags, const std::function<HRESULT()>& checkCancel) noexcept
 {
     if (path.isRoot || path.isBucketRoot)
     {
@@ -1329,7 +1321,7 @@ void RunDebugHiddenSiblingKeyEntropySelfTest(unsigned int& passed, unsigned int&
     }
 
     constexpr size_t kMaxRecursiveDeletePasses = 64u;
-    const uint64_t deleteDeadline = Common::Paging::DeadlineFromNow(
+    const uint64_t deleteDeadline              = Common::Paging::DeadlineFromNow(
         GetTickCount64(), std::clamp<uint64_t>(static_cast<uint64_t>(path.bucketCtx.requestTimeoutMs) * 10u, 60'000u, 600'000u));
     const std::string prefix = MakeDirectoryPrefix(path.key);
 
@@ -1446,7 +1438,7 @@ void RunDebugHiddenSiblingKeyEntropySelfTest(unsigned int& passed, unsigned int&
                                         const std::function<HRESULT(uint64_t, uint64_t)>& reportBytes,
                                         uint64_t& outTotalBytes,
                                         const TransferIssueReporter& reportIssue = {},
-                                        S3TransferCommitResult* commitResult = nullptr) noexcept
+                                        S3TransferCommitResult* commitResult     = nullptr) noexcept
 {
     outTotalBytes = 0;
     if (commitResult != nullptr)
@@ -2048,10 +2040,8 @@ void RunDebugPaginationGuardSelfTest(unsigned int& passed, unsigned int& failed)
     {
         hr = repeated.BeginContinuation("same", GetTickCount64());
     }
-    DebugCheck(hr == HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
-               L"S3 pagination guard rejects a repeated continuation before another provider request",
-               passed,
-               failed);
+    DebugCheck(
+        hr == HRESULT_FROM_WIN32(ERROR_INVALID_DATA), L"S3 pagination guard rejects a repeated continuation before another provider request", passed, failed);
 
     Common::Paging::Utf8ContinuationGuard empty(limits);
     hr = empty.BeginFirstPage(GetTickCount64());
@@ -2059,10 +2049,7 @@ void RunDebugPaginationGuardSelfTest(unsigned int& passed, unsigned int& failed)
     {
         hr = empty.CompletePage(0u, 0u, true, {}, GetTickCount64());
     }
-    DebugCheck(hr == HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
-               L"S3 pagination guard rejects truncation with an empty continuation token",
-               passed,
-               failed);
+    DebugCheck(hr == HRESULT_FROM_WIN32(ERROR_INVALID_DATA), L"S3 pagination guard rejects truncation with an empty continuation token", passed, failed);
 }
 
 void RunDebugRecursiveDeleteConvergenceSelfTest(unsigned int& passed, unsigned int& failed)

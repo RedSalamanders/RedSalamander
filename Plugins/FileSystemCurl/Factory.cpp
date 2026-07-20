@@ -22,8 +22,8 @@
 #include "FileSystemCurlResources.h"
 #include "Helpers.h"
 
-#include "FileSystemCurl.h"
 #include "FileSystemCurl.Internal.h"
+#include "FileSystemCurl.h"
 
 #include "PlugInterfaces/FactoryImpl.h"
 

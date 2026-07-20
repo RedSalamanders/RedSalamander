@@ -3200,36 +3200,36 @@ private:
 
     struct WorkerResult
     {
-        bool sawDialog                        = false;
-        bool ownedByMainWindow                = false;
-        bool capturedBaselineSnapshot         = false;
-        bool capturedFinalSnapshot            = false;
-        bool sawReopenedDialog                = false;
-        bool reopenedOwnedByMainWindow        = false;
-        bool capturedReopenedSnapshot         = false;
-        bool browseButtonAvailable            = false;
-        bool sawBrowseButton                  = false;
-        bool browseCancelPreservedVisibleEdit = false;
-        bool browseUpdatedVisibleEdit         = false;
-        bool browseRestoredAfterCancel        = false;
-        bool mutatedEdit                      = false;
-        bool restoredEdit                     = false;
-        bool toggleLabelChangeExpected        = false;
-        bool restoredToggle                   = false;
-        bool toggleLabelChanged               = false;
-        bool toggleLabelRestored              = false;
-        bool reopenedEditRestored             = false;
+        bool sawDialog                         = false;
+        bool ownedByMainWindow                 = false;
+        bool capturedBaselineSnapshot          = false;
+        bool capturedFinalSnapshot             = false;
+        bool sawReopenedDialog                 = false;
+        bool reopenedOwnedByMainWindow         = false;
+        bool capturedReopenedSnapshot          = false;
+        bool browseButtonAvailable             = false;
+        bool sawBrowseButton                   = false;
+        bool browseCancelPreservedVisibleEdit  = false;
+        bool browseUpdatedVisibleEdit          = false;
+        bool browseRestoredAfterCancel         = false;
+        bool mutatedEdit                       = false;
+        bool restoredEdit                      = false;
+        bool toggleLabelChangeExpected         = false;
+        bool restoredToggle                    = false;
+        bool toggleLabelChanged                = false;
+        bool toggleLabelRestored               = false;
+        bool reopenedEditRestored              = false;
         bool reopenedToggleLabelChangeExpected = false;
-        bool reopenedToggleRestored           = false;
-        bool reopenedBrowseRoundTrip          = false;
-        bool reopenedEditRoundTrip            = false;
-        bool reopenedToggleRoundTrip          = false;
-        bool reopenedToggleLabelRestored      = false;
-        bool reopenedToggleLabelRoundTrip     = false;
-        bool invokedCancel                    = false;
-        bool closedAfterCancel                = false;
-        bool invokedOk                        = false;
-        bool closedAfterInvoke                = false;
+        bool reopenedToggleRestored            = false;
+        bool reopenedBrowseRoundTrip           = false;
+        bool reopenedEditRoundTrip             = false;
+        bool reopenedToggleRoundTrip           = false;
+        bool reopenedToggleLabelRestored       = false;
+        bool reopenedToggleLabelRoundTrip      = false;
+        bool invokedCancel                     = false;
+        bool closedAfterCancel                 = false;
+        bool invokedOk                         = false;
+        bool closedAfterInvoke                 = false;
         std::wstring blockedStep;
         std::wstring editDiagnostics;
         PluginConfigurationDialogDebugSnapshot baselineSnapshot{};
@@ -3237,12 +3237,12 @@ private:
         PluginConfigurationDialogDebugSnapshot reopenedSnapshot{};
     } workerResult{};
 
-    std::atomic<bool> workerDone = false;
+    std::atomic<bool> workerDone             = false;
     std::atomic<bool> readyForReopenedDialog = false;
     std::jthread worker([&](std::stop_token) noexcept
     {
         const auto markWorkerDone = wil::scope_exit([&]() noexcept { workerDone.store(true, std::memory_order_release); });
-        const auto traceStep = [&](std::wstring_view step) noexcept
+        const auto traceStep      = [&](std::wstring_view step) noexcept
         {
             workerResult.blockedStep.assign(step);
             SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, std::format(L"plugin-config live: {}", step));
@@ -3395,9 +3395,7 @@ private:
             return SetWindowRootOrDescendantValue(focusedHost, UIA_EditControlTypeId, value);
         };
         const auto isStateLabelToggleName = [](std::wstring_view name) noexcept
-        {
-            return name == L"True" || name == L"False" || name == L"On" || name == L"Off";
-        };
+        { return name == L"True" || name == L"False" || name == L"On" || name == L"Off"; };
 
         const std::wstring browseButtonText = LoadStringResource(nullptr, IDS_PREFS_PLUGINS_DETAILS_CONFIG_BROWSE_ELLIPSIS);
         if (! browseButtonText.empty())
@@ -3606,18 +3604,16 @@ private:
                 ? toggleHost
                 : dialog;
         const auto collectToggleState = [&]() noexcept -> std::optional<UiaTogglePatternState>
-        {
-            return toggleTarget == dialog ? CollectVisibleDescendantTogglePatternState(dialog) : CollectWindowRootOrDescendantTogglePatternState(toggleTarget);
-        };
+        { return toggleTarget == dialog ? CollectVisibleDescendantTogglePatternState(dialog) : CollectWindowRootOrDescendantTogglePatternState(toggleTarget); };
 
         const auto initialToggleState = collectToggleState();
         if (initialToggleState.has_value() && ! initialToggleState->name.empty())
         {
             traceStep(L"toggle phase begin");
-            toggleName                           = initialToggleState->name;
-            initialToggleValue                   = initialToggleState->toggleState;
+            toggleName                             = initialToggleState->name;
+            initialToggleValue                     = initialToggleState->toggleState;
             workerResult.toggleLabelChangeExpected = isStateLabelToggleName(toggleName);
-            const ToggleState flippedToggleValue = (*initialToggleValue == ToggleState_On) ? ToggleState_Off : ToggleState_On;
+            const ToggleState flippedToggleValue   = (*initialToggleValue == ToggleState_On) ? ToggleState_Off : ToggleState_On;
 
             if (ToggleVisibleDescendantByName(toggleTarget, toggleName))
             {
@@ -3641,16 +3637,16 @@ private:
 
                 if (waitForToggleState(flippedToggleValue))
                 {
-                    const auto flippedToggleState = collectToggleState();
+                    const auto flippedToggleState   = collectToggleState();
                     workerResult.toggleLabelChanged = flippedToggleState.has_value() && ! flippedToggleState->name.empty() &&
                                                       (! workerResult.toggleLabelChangeExpected || flippedToggleState->name != toggleName);
                     if (flippedToggleState.has_value() && ! flippedToggleState->name.empty() &&
                         ToggleVisibleDescendantByName(toggleTarget, flippedToggleState->name))
                     {
-                        workerResult.restoredToggle      = waitForToggleState(*initialToggleValue);
-                        const auto restoredToggleState   = collectToggleState();
-                        workerResult.toggleLabelRestored = restoredToggleState.has_value() &&
-                                                           (! workerResult.toggleLabelChangeExpected || restoredToggleState->name == toggleName);
+                        workerResult.restoredToggle    = waitForToggleState(*initialToggleValue);
+                        const auto restoredToggleState = collectToggleState();
+                        workerResult.toggleLabelRestored =
+                            restoredToggleState.has_value() && (! workerResult.toggleLabelChangeExpected || restoredToggleState->name == toggleName);
                     }
                 }
             }
@@ -3783,11 +3779,10 @@ private:
             traceStep(L"reopened toggle phase begin");
             HWND reopenedToggleHost = nullptr;
             RECT reopenedToggleRect{};
-            const HWND reopenedToggleTarget =
-                DebugGetPluginConfigurationDialogFirstVisibleToggleHostAndClientRect(reopenedToggleHost, reopenedToggleRect) && reopenedToggleHost &&
-                        IsWindow(reopenedToggleHost) != FALSE
-                    ? reopenedToggleHost
-                    : reopenedDialog;
+            const HWND reopenedToggleTarget = DebugGetPluginConfigurationDialogFirstVisibleToggleHostAndClientRect(reopenedToggleHost, reopenedToggleRect) &&
+                                                      reopenedToggleHost && IsWindow(reopenedToggleHost) != FALSE
+                                                  ? reopenedToggleHost
+                                                  : reopenedDialog;
             const auto collectReopenedToggleState = [&]() noexcept -> std::optional<UiaTogglePatternState>
             {
                 return reopenedToggleTarget == reopenedDialog ? CollectVisibleDescendantTogglePatternState(reopenedDialog)
@@ -3810,12 +3805,12 @@ private:
                 const auto toggleState = collectReopenedToggleState();
                 return toggleState.has_value() && toggleState->toggleState == expectedState;
             };
-            workerResult.reopenedToggleRestored      = waitForReopenedToggleState(*initialToggleValue);
-            const auto reopenedBaselineToggleState   = collectReopenedToggleState();
+            workerResult.reopenedToggleRestored    = waitForReopenedToggleState(*initialToggleValue);
+            const auto reopenedBaselineToggleState = collectReopenedToggleState();
             workerResult.reopenedToggleLabelChangeExpected =
                 reopenedBaselineToggleState.has_value() && isStateLabelToggleName(reopenedBaselineToggleState->name);
-            workerResult.reopenedToggleLabelRestored =
-                reopenedBaselineToggleState.has_value() && (! workerResult.reopenedToggleLabelChangeExpected || reopenedBaselineToggleState->name == toggleName);
+            workerResult.reopenedToggleLabelRestored = reopenedBaselineToggleState.has_value() &&
+                                                       (! workerResult.reopenedToggleLabelChangeExpected || reopenedBaselineToggleState->name == toggleName);
 
             const ToggleState flippedToggleValue = (*initialToggleValue == ToggleState_On) ? ToggleState_Off : ToggleState_On;
             if (workerResult.reopenedToggleRestored && reopenedBaselineToggleState.has_value() && ! reopenedBaselineToggleState->name.empty() &&
@@ -3873,8 +3868,8 @@ private:
 
         if (readyForReopenedDialog.load(std::memory_order_acquire))
         {
-            okHr =
-                EditPluginConfigurationDialog(mainWindow, PluginType::FileSystem, kBuiltinS3FileSystemId, entry->name, baselineSettings, workingSettings, theme);
+            okHr = EditPluginConfigurationDialog(
+                mainWindow, PluginType::FileSystem, kBuiltinS3FileSystemId, entry->name, baselineSettings, workingSettings, theme);
         }
     }
     worker.join();

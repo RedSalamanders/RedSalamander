@@ -75,10 +75,10 @@ public:
 
     struct RetentionResult
     {
-        size_t linesEvicted                 = 0u;
-        uint64_t textBytesEvicted           = 0u;
+        size_t linesEvicted                = 0u;
+        uint64_t textBytesEvicted          = 0u;
         uint64_t characterPositionsEvicted = 0u;
-        uint64_t displayRowsEvicted         = 0u;
+        uint64_t displayRowsEvicted        = 0u;
     };
     [[nodiscard]] RetentionResult EnforceRetentionLimits(size_t maxLines, uint64_t maxTextBytes);
 
@@ -101,9 +101,9 @@ public:
     bool IsLineVisible(size_t sourceIndex) const;
 
     // Line access methods
-    Line GetVisibleLine(size_t visibleIndex) const;              // Locked snapshot by visible index
-    Line GetSourceLine(size_t sourceIndex) const;                 // Locked snapshot by source index
-    std::vector<VisibleLine> VisibleLines() const;                // Locked visibility snapshot
+    Line GetVisibleLine(size_t visibleIndex) const; // Locked snapshot by visible index
+    Line GetSourceLine(size_t sourceIndex) const;   // Locked snapshot by source index
+    std::vector<VisibleLine> VisibleLines() const;  // Locked visibility snapshot
 
     // Display row mapping (VisibleLine architecture)
     UINT32 DisplayRowForVisible(size_t visibleIndex) const;

@@ -680,8 +680,8 @@ void FolderWindow::LayoutEmbeddedPreviewViewer(Pane hostPane) noexcept
 
     RECT client{};
     GetClientRect(host.hPreviewContent.get(), &client);
-    const int width  = std::max(0L, client.right - client.left);
-    const int height = std::max(0L, client.bottom - client.top);
+    const int width          = std::max(0L, client.right - client.left);
+    const int height         = std::max(0L, client.bottom - client.top);
     ViewerInstance* instance = host.previewViewerInstance;
     const HWND viewerHwnd    = instance ? instance->embeddedHwnd : nullptr;
     if (! IsOwnedPreviewEmbeddedHwnd(host, instance, viewerHwnd))

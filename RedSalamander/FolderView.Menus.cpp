@@ -380,8 +380,8 @@ void FolderView::OnContextMenu(POINT screenPt)
     }
     if (result.has_value())
     {
-        const UINT commandId = static_cast<UINT>(result.value());
-        const bool targetBoundCommand = commandId == CmdDelete || commandId == CmdMove || commandId == CmdRename || commandId == CmdCopy;
+        const UINT commandId            = static_cast<UINT>(result.value());
+        const bool targetBoundCommand   = commandId == CmdDelete || commandId == CmdMove || commandId == CmdRename || commandId == CmdCopy;
         const auto snapshotStillMatches = [&]() noexcept
         {
             const std::vector<std::wstring> currentTargets = GetSelectedOrFocusedDisplayNames();
@@ -389,10 +389,9 @@ void FolderView::OnContextMenu(POINT screenPt)
             {
                 return false;
             }
-            return std::ranges::all_of(targetSnapshot, [&](const std::wstring& expected) noexcept
-            {
-                return std::ranges::any_of(currentTargets, [&](const std::wstring& current) noexcept
-                { return OrdinalString::EqualsNoCase(expected, current); });
+            return std::ranges::all_of(targetSnapshot, [&](const std::wstring& expected) noexcept {
+                return std::ranges::any_of(currentTargets,
+                                           [&](const std::wstring& current) noexcept { return OrdinalString::EqualsNoCase(expected, current); });
             });
         };
         if (! targetBoundCommand || snapshotStillMatches())

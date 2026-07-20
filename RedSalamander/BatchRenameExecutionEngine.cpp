@@ -165,13 +165,10 @@ private:
     // cycle/swap of an already-long-named file could never be vacated (RenameItem would fail
     // ERROR_INVALID_NAME and strand the whole cycle). The GUID alone guarantees uniqueness; the name
     // prefix is only a readability aid, so truncating it is safe.
-    constexpr size_t kMaxTempLeafLength    = 255u;
-    const std::wstring sourceName = sourcePath.filename().native();
-    return Common::Paths::BuildUniqueSiblingName(std::wstring_view(sourceName),
-                                                  std::wstring_view(L".rsren-"),
-                                                  std::wstring_view{},
-                                                  kMaxTempLeafLength,
-                                                  tempLeaf);
+    constexpr size_t kMaxTempLeafLength = 255u;
+    const std::wstring sourceName       = sourcePath.filename().native();
+    return Common::Paths::BuildUniqueSiblingName(
+        std::wstring_view(sourceName), std::wstring_view(L".rsren-"), std::wstring_view{}, kMaxTempLeafLength, tempLeaf);
 }
 
 void FinalizeUndoEntryCurrentPaths(const FileSystemPathIdentity& pathIdentity,
@@ -204,9 +201,7 @@ size_t PathDepthKey(const std::filesystem::path& path) noexcept
     return depth;
 }
 
-std::filesystem::path JoinFolderAndLeaf(const FileSystemPathIdentity& pathIdentity,
-                                        const std::filesystem::path& folder,
-                                        const std::wstring_view leaf) noexcept
+std::filesystem::path JoinFolderAndLeaf(const FileSystemPathIdentity& pathIdentity, const std::filesystem::path& folder, const std::wstring_view leaf) noexcept
 {
     return std::filesystem::path(JoinFileSystemPath(pathIdentity, folder.native(), leaf));
 }

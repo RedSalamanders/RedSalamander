@@ -62,21 +62,15 @@ HRESULT SaveSettingsAndSchema(std::wstring_view appId,
                               std::span<const PluginConfigurationSchemaSource> pluginSchemas) noexcept;
 // Serializes a final settings-only snapshot with earlier saves, rejects later submissions,
 // and waits only for the caller-supplied session-end deadline.
-HRESULT SaveSettingsForSessionEnd(std::wstring_view appId,
-                                  const Common::Settings::Settings& settings,
-                                  DWORD timeoutMs) noexcept;
-HRESULT SaveSettingsAndSchemaForProcessShutdown(std::wstring_view appId,
-                                                Common::Settings::Settings& settings,
-                                                DWORD timeoutMs) noexcept;
+HRESULT SaveSettingsForSessionEnd(std::wstring_view appId, const Common::Settings::Settings& settings, DWORD timeoutMs) noexcept;
+HRESULT SaveSettingsAndSchemaForProcessShutdown(std::wstring_view appId, Common::Settings::Settings& settings, DWORD timeoutMs) noexcept;
 HRESULT SaveSettingsAndSchemaForProcessShutdown(std::wstring_view appId,
                                                 Common::Settings::Settings& settings,
                                                 std::span<const PluginConfigurationSchemaSource> pluginSchemas,
                                                 DWORD timeoutMs) noexcept;
 // Explicit replacement entry point for a settings file written by a newer schema. Callers must
 // obtain user approval before invoking it. The save block is cleared only after the source backup succeeds.
-HRESULT ReplaceBlockedSettingsAndSchema(std::wstring_view appId,
-                                        Common::Settings::Settings& settings,
-                                        std::filesystem::path& backupPath) noexcept;
+HRESULT ReplaceBlockedSettingsAndSchema(std::wstring_view appId, Common::Settings::Settings& settings, std::filesystem::path& backupPath) noexcept;
 HRESULT QueueSettingsSave(std::wstring_view appId,
                           const Common::Settings::Settings& settings,
                           std::wstring_view telemetryMetric,

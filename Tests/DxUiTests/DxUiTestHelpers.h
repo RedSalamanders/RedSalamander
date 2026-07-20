@@ -3,8 +3,8 @@
 #include "DxUi/DxUi.Internal.h"
 #include "DxUi/DxUi.h"
 #include "Helpers.h"
-#include "WindowMessages.h"
 #include "TestSupport/TestSupport.h"
+#include "WindowMessages.h"
 
 #include <UIAutomation.h>
 #include <imm.h>

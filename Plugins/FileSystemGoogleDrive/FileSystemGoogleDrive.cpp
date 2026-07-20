@@ -3,8 +3,8 @@
 #include <algorithm>
 #include <array>
 #include <barrier>
-#include <charconv>
 #include <cctype>
+#include <charconv>
 #include <condition_variable>
 #include <cstring>
 #include <format>
@@ -79,11 +79,11 @@ constexpr char kFilesEndpoint[]  = "https://www.googleapis.com/drive/v3/files";
 constexpr char kAboutEndpoint[]  = "https://www.googleapis.com/drive/v3/about";
 constexpr char kDrivesEndpoint[] = "https://www.googleapis.com/drive/v3/drives/";
 
-constexpr char kFolderMimeType[]   = "application/vnd.google-apps.folder";
-constexpr char kShortcutMimeType[] = "application/vnd.google-apps.shortcut";
-constexpr size_t kMaxJsonResponseBytes = 16u * 1024u * 1024u;
+constexpr char kFolderMimeType[]             = "application/vnd.google-apps.folder";
+constexpr char kShortcutMimeType[]           = "application/vnd.google-apps.shortcut";
+constexpr size_t kMaxJsonResponseBytes       = 16u * 1024u * 1024u;
 constexpr unsigned int kMaxAuthorizedRetries = 3u;
-constexpr uint64_t kMaxRetryDelayMs = 5'000u;
+constexpr uint64_t kMaxRetryDelayMs          = 5'000u;
 
 constexpr char kSchemaJson[] = R"json(
 {
@@ -298,22 +298,19 @@ public:
 
 [[nodiscard]] std::optional<std::wstring> TryGetJsonString(yyjson_val* root, const char* key) noexcept
 {
-    const Common::Json::MemberResult<std::string_view> value =
-        Common::Json::GetStringMember(root, key, Common::Json::MemberRequirement::Optional);
+    const Common::Json::MemberResult<std::string_view> value = Common::Json::GetStringMember(root, key, Common::Json::MemberRequirement::Optional);
     return value.HasValue() ? std::optional<std::wstring>{Utf16FromUtf8(value.value)} : std::nullopt;
 }
 
 [[nodiscard]] std::optional<std::string> TryGetJsonUtf8String(yyjson_val* root, const char* key) noexcept
 {
-    const Common::Json::MemberResult<std::string_view> value =
-        Common::Json::GetStringMember(root, key, Common::Json::MemberRequirement::Optional);
+    const Common::Json::MemberResult<std::string_view> value = Common::Json::GetStringMember(root, key, Common::Json::MemberRequirement::Optional);
     return value.HasValue() ? std::optional<std::string>{value.value} : std::nullopt;
 }
 
 [[nodiscard]] std::optional<bool> TryGetJsonBool(yyjson_val* root, const char* key) noexcept
 {
-    const Common::Json::MemberResult<bool> value =
-        Common::Json::GetBoolMember(root, key, Common::Json::MemberRequirement::Optional);
+    const Common::Json::MemberResult<bool> value = Common::Json::GetBoolMember(root, key, Common::Json::MemberRequirement::Optional);
     return value.HasValue() ? std::optional<bool>{value.value} : std::nullopt;
 }
 
@@ -329,8 +326,8 @@ public:
 
 [[nodiscard]] std::optional<uint64_t> TryGetJsonUInt64Flexible(yyjson_val* root, const char* key) noexcept
 {
-    const Common::Json::MemberResult<uint64_t> value = Common::Json::GetUInt64Member(
-        root, key, Common::Json::MemberRequirement::Optional, Common::Json::NumericStringPolicy::Allow);
+    const Common::Json::MemberResult<uint64_t> value =
+        Common::Json::GetUInt64Member(root, key, Common::Json::MemberRequirement::Optional, Common::Json::NumericStringPolicy::Allow);
     return value.HasValue() ? std::optional<uint64_t>{value.value} : std::nullopt;
 }
 
@@ -428,9 +425,8 @@ size_t CurlCaptureResponseHeader(char* data, size_t size, size_t nmemb, void* us
     std::string_view line(data, bytes);
     constexpr std::string_view kRetryAfter = "Retry-After:";
     if (line.size() < kRetryAfter.size() || ! std::equal(kRetryAfter.begin(), kRetryAfter.end(), line.begin(), [](char left, char right) noexcept {
-            return static_cast<char>(std::tolower(static_cast<unsigned char>(left))) ==
-                   static_cast<char>(std::tolower(static_cast<unsigned char>(right)));
-        }))
+        return static_cast<char>(std::tolower(static_cast<unsigned char>(left))) == static_cast<char>(std::tolower(static_cast<unsigned char>(right)));
+    }))
     {
         return bytes;
     }
@@ -880,9 +876,9 @@ struct FileSystemGoogleDrive::ResolvedConnection
     {
         SecureWipe::SecureClear(refreshToken);
     }
-    ResolvedConnection(const ResolvedConnection&)            = delete;
-    ResolvedConnection& operator=(const ResolvedConnection&) = delete;
-    ResolvedConnection(ResolvedConnection&&) noexcept        = default;
+    ResolvedConnection(const ResolvedConnection&)                = delete;
+    ResolvedConnection& operator=(const ResolvedConnection&)     = delete;
+    ResolvedConnection(ResolvedConnection&&) noexcept            = default;
     ResolvedConnection& operator=(ResolvedConnection&&) noexcept = default;
 
     std::wstring connectionName;
@@ -1435,7 +1431,7 @@ HRESULT FileSystemGoogleDrive::SetConfigurationImpl(const char* configurationJso
 
     if (configurationJsonUtf8 && configurationJsonUtf8[0] != '\0')
     {
-        configuration = configurationJsonUtf8;
+        configuration                       = configurationJsonUtf8;
         Common::Json::ObjectDocument parsed = Common::Json::ParseObjectDocument(configuration, YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM);
         if (! parsed)
         {
@@ -1701,7 +1697,7 @@ HRESULT FileSystemGoogleDrive::GetAccessToken(const ResolvedConnection& connecti
         }
 
         const uint64_t now = GetTickCount64();
-        const auto it = _accessTokensByConnectionKey.find(connection.connectionKey);
+        const auto it      = _accessTokensByConnectionKey.find(connection.connectionKey);
         if (it != _accessTokensByConnectionKey.end() && ! it->second.token.empty() && it->second.expiresAtTickMs > now + 30'000ull)
         {
             accessToken = it->second.token;
@@ -1721,8 +1717,9 @@ HRESULT FileSystemGoogleDrive::GetAccessToken(const ResolvedConnection& connecti
         _tokenRefreshesInFlight.emplace(connection.connectionKey);
     }
 
-    bool refreshCompleted = false;
-    const auto releaseRefresh = wil::scope_exit([&]() noexcept {
+    bool refreshCompleted     = false;
+    const auto releaseRefresh = wil::scope_exit([&]() noexcept
+    {
         if (refreshCompleted)
         {
             return;
@@ -1736,10 +1733,11 @@ HRESULT FileSystemGoogleDrive::GetAccessToken(const ResolvedConnection& connecti
     });
 
     AccessTokenCacheEntry refreshedEntry{};
-    const HRESULT refreshHr = [&]() -> HRESULT {
-        std::string clientIdUtf8     = Utf8FromUtf16(connection.clientId);
-        std::string refreshTokenUtf8 = Utf8FromUtf16(connection.refreshToken);
-    const auto clearConvertedSecrets = wil::scope_exit([&]() noexcept { SecureWipe::SecureClear(refreshTokenUtf8); });
+    const HRESULT refreshHr = [&]() -> HRESULT
+    {
+        std::string clientIdUtf8         = Utf8FromUtf16(connection.clientId);
+        std::string refreshTokenUtf8     = Utf8FromUtf16(connection.refreshToken);
+        const auto clearConvertedSecrets = wil::scope_exit([&]() noexcept { SecureWipe::SecureClear(refreshTokenUtf8); });
         if (clientIdUtf8.empty() || refreshTokenUtf8.empty())
         {
             return HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION);
@@ -1751,7 +1749,7 @@ HRESULT FileSystemGoogleDrive::GetAccessToken(const ResolvedConnection& connecti
         body.append(UrlEncodeUtf8(clientIdUtf8));
         body.append("&grant_type=refresh_token&refresh_token=");
         body.append(UrlEncodeUtf8(refreshTokenUtf8));
-    const auto clearRequestBody = wil::scope_exit([&]() noexcept { SecureWipe::SecureClear(body); });
+        const auto clearRequestBody = wil::scope_exit([&]() noexcept { SecureWipe::SecureClear(body); });
 
         const std::vector<std::string> headers = {
             "Content-Type: application/x-www-form-urlencoded",
@@ -1759,7 +1757,7 @@ HRESULT FileSystemGoogleDrive::GetAccessToken(const ResolvedConnection& connecti
         };
 
         HttpResponse response{};
-    const auto clearResponseBody = wil::scope_exit([&]() noexcept { SecureWipe::SecureClear(response.body); });
+        const auto clearResponseBody = wil::scope_exit([&]() noexcept { SecureWipe::SecureClear(response.body); });
         HRESULT hr = PerformHttpRequest("POST", kTokenEndpoint, headers, body, connection.connectTimeoutMs, connection.requestTimeoutMs, response);
         if (FAILED(hr))
         {
@@ -1792,9 +1790,9 @@ HRESULT FileSystemGoogleDrive::GetAccessToken(const ResolvedConnection& connecti
         {
             expiresIn = value.value();
         }
-        const uint64_t validSeconds = expiresIn > 60u ? (std::min)(expiresIn - 60u, (std::numeric_limits<uint64_t>::max)() / 1000u) : 30u;
-        const uint64_t validForMs = validSeconds * 1000u;
-        refreshedEntry.token = token.value();
+        const uint64_t validSeconds    = expiresIn > 60u ? (std::min)(expiresIn - 60u, (std::numeric_limits<uint64_t>::max)() / 1000u) : 30u;
+        const uint64_t validForMs      = validSeconds * 1000u;
+        refreshedEntry.token           = token.value();
         refreshedEntry.expiresAtTickMs = Common::Paging::DeadlineFromNow(GetTickCount64(), validForMs);
         return S_OK;
     }();
@@ -1871,9 +1869,9 @@ HRESULT FileSystemGoogleDrive::PerformAuthorizedJsonGet(const ResolvedConnection
         {
             return HRESULT_FROM_WIN32(ERROR_TIMEOUT);
         }
-        const uint64_t remainingMs = deadlineTickMs - requestStartTickMs;
+        const uint64_t remainingMs      = deadlineTickMs - requestStartTickMs;
         const uint32_t requestTimeoutMs = static_cast<uint32_t>((std::min<uint64_t>)(remainingMs, (std::numeric_limits<uint32_t>::max)()));
-        hr = PerformHttpRequest("GET", url, headers, {}, connection.connectTimeoutMs, requestTimeoutMs, response);
+        hr                              = PerformHttpRequest("GET", url, headers, {}, connection.connectTimeoutMs, requestTimeoutMs, response);
         if (FAILED(hr))
         {
             return hr;
@@ -1942,7 +1940,7 @@ HRESULT FileSystemGoogleDrive::ListChildren(const ResolvedConnection& connection
     do
     {
         const HRESULT pageBoundaryHr = firstPage ? pager.BeginFirstPage(GetTickCount64()) : pager.BeginContinuation(pageToken, GetTickCount64());
-        firstPage = false;
+        firstPage                    = false;
         if (FAILED(pageBoundaryHr))
         {
             return pageBoundaryHr;
@@ -1996,9 +1994,9 @@ HRESULT FileSystemGoogleDrive::ListChildren(const ResolvedConnection& connection
             pageToken = nextPage.value();
         }
 
-        yyjson_val* files = yyjson_obj_get(root, "files");
+        yyjson_val* files      = yyjson_obj_get(root, "files");
         const size_t pageItems = files && yyjson_is_arr(files) ? yyjson_arr_size(files) : 0u;
-        const HRESULT pageHr = pager.CompletePage(pageItems, body.size(), ! pageToken.empty(), pageToken, GetTickCount64());
+        const HRESULT pageHr   = pager.CompletePage(pageItems, body.size(), ! pageToken.empty(), pageToken, GetTickCount64());
         if (FAILED(pageHr))
         {
             return pageHr;
@@ -2117,7 +2115,7 @@ HRESULT FileSystemGoogleDrive::ResolveItemByPath(const ResolvedConnection& conne
 
         for (GoogleItem& child : children)
         {
-            const auto count = exactNameCounts.find(child.name);
+            const auto count               = exactNameCounts.find(child.name);
             const std::wstring exposedName = MakeExposedItemName(child.name, child.id, count == exactNameCounts.end() ? 0u : count->second);
             if (exposedName != segment)
             {
@@ -2415,7 +2413,7 @@ enum class GoogleDriveDebugHttpMode
 
 struct GoogleDriveDebugHttpContext final
 {
-    GoogleDriveDebugHttpContext() = default;
+    GoogleDriveDebugHttpContext()                                              = default;
     GoogleDriveDebugHttpContext(const GoogleDriveDebugHttpContext&)            = delete;
     GoogleDriveDebugHttpContext& operator=(const GoogleDriveDebugHttpContext&) = delete;
     GoogleDriveDebugHttpContext(GoogleDriveDebugHttpContext&&)                 = delete;
@@ -2424,10 +2422,10 @@ struct GoogleDriveDebugHttpContext final
     std::mutex mutex;
     std::condition_variable cv;
     GoogleDriveDebugHttpMode mode = GoogleDriveDebugHttpMode::Normal;
-    unsigned int tokenRequests = 0u;
-    unsigned int dataRequests  = 0u;
-    bool tokenRequestEntered   = false;
-    bool releaseTokenRequest   = true;
+    unsigned int tokenRequests    = 0u;
+    unsigned int dataRequests     = 0u;
+    bool tokenRequestEntered      = false;
+    bool releaseTokenRequest      = true;
 };
 
 [[nodiscard]] HRESULT GoogleDriveDebugHttpHook(void* cookie,
@@ -2484,7 +2482,8 @@ struct GoogleDriveDebugHttpContext final
             return S_OK;
         case GoogleDriveDebugHttpMode::IdentityItems:
             response.statusCode = 200;
-            response.body = R"json({"files":[{"id":"AbC","name":"same","mimeType":"application/octet-stream"},{"id":"abc","name":"same","mimeType":"application/octet-stream"},{"id":"literal","name":"same [id:AbC]","mimeType":"application/octet-stream"},{"id":"upper","name":"Case","mimeType":"application/octet-stream"},{"id":"lower","name":"case","mimeType":"application/octet-stream"}]})json";
+            response.body =
+                R"json({"files":[{"id":"AbC","name":"same","mimeType":"application/octet-stream"},{"id":"abc","name":"same","mimeType":"application/octet-stream"},{"id":"literal","name":"same [id:AbC]","mimeType":"application/octet-stream"},{"id":"upper","name":"Case","mimeType":"application/octet-stream"},{"id":"lower","name":"case","mimeType":"application/octet-stream"}]})json";
             return S_OK;
         case GoogleDriveDebugHttpMode::OversizedBody:
             response.statusCode = 200;
@@ -2511,8 +2510,7 @@ HRESULT FileSystemGoogleDrive::RunDebugSelfTests(unsigned int* passed, unsigned 
 
     try
     {
-        check(MakeExposedItemName(L"same", L"AbC", 2u) == L"same [id:AbC]" &&
-                  MakeExposedItemName(L"same", L"abc", 2u) == L"same [id:abc]",
+        check(MakeExposedItemName(L"same", L"AbC", 2u) == L"same [id:AbC]" && MakeExposedItemName(L"same", L"abc", 2u) == L"same [id:abc]",
               L"case-distinct opaque IDs remain distinct in duplicate-name display paths",
               *passed,
               *failed);
@@ -2537,12 +2535,12 @@ HRESULT FileSystemGoogleDrive::RunDebugSelfTests(unsigned int* passed, unsigned 
 
         FileSystemGoogleDrive fs(nullptr);
         ResolvedConnection connection{};
-        connection.connectionName  = L"debug";
-        connection.connectionKey   = L"debug|client";
-        connection.clientId        = L"client";
-        connection.refreshToken    = L"refresh";
+        connection.connectionName   = L"debug";
+        connection.connectionKey    = L"debug|client";
+        connection.clientId         = L"client";
+        connection.refreshToken     = L"refresh";
         connection.requestTimeoutMs = 5'000u;
-        connection.pageSize        = 200u;
+        connection.pageSize         = 200u;
 
         GoogleDriveDebugHttpContext context{};
         context.releaseTokenRequest = false;
@@ -2555,7 +2553,8 @@ HRESULT FileSystemGoogleDrive::RunDebugSelfTests(unsigned int* passed, unsigned 
         workers.reserve(workerCount);
         for (size_t index = 0u; index < workerCount; ++index)
         {
-            workers.emplace_back([&, index]() {
+            workers.emplace_back([&, index]()
+            {
                 start.arrive_and_wait();
                 results[index] = fs.GetAccessToken(connection, tokens[index]);
             });
@@ -2573,10 +2572,7 @@ HRESULT FileSystemGoogleDrive::RunDebugSelfTests(unsigned int* passed, unsigned 
         }
         const bool allSharedOneToken = std::ranges::all_of(results, [](HRESULT hr) noexcept { return hr == S_OK; }) &&
                                        std::ranges::all_of(tokens, [](const std::wstring& token) noexcept { return token == L"debug-access-token"; });
-        check(allSharedOneToken && context.tokenRequests == 1u,
-              L"concurrent callers share one access-token refresh request",
-              *passed,
-              *failed);
+        check(allSharedOneToken && context.tokenRequests == 1u, L"concurrent callers share one access-token refresh request", *passed, *failed);
 
         {
             std::lock_guard lock(context.mutex);
@@ -2621,16 +2617,16 @@ HRESULT FileSystemGoogleDrive::RunDebugSelfTests(unsigned int* passed, unsigned 
             context.dataRequests = 0u;
         }
         GoogleItem item{};
-        const HRESULT upperIdHr = fs.ResolveItemByPath(connection, L"/same [id:AbC]", item);
-        const bool upperId = upperIdHr == S_OK && item.id == L"AbC";
-        const HRESULT lowerIdHr = fs.ResolveItemByPath(connection, L"/same [id:abc]", item);
-        const bool lowerId = lowerIdHr == S_OK && item.id == L"abc";
-        const HRESULT literalHr = fs.ResolveItemByPath(connection, L"/same [id:AbC] [id:literal]", item);
-        const bool literal = literalHr == S_OK && item.id == L"literal";
+        const HRESULT upperIdHr   = fs.ResolveItemByPath(connection, L"/same [id:AbC]", item);
+        const bool upperId        = upperIdHr == S_OK && item.id == L"AbC";
+        const HRESULT lowerIdHr   = fs.ResolveItemByPath(connection, L"/same [id:abc]", item);
+        const bool lowerId        = lowerIdHr == S_OK && item.id == L"abc";
+        const HRESULT literalHr   = fs.ResolveItemByPath(connection, L"/same [id:AbC] [id:literal]", item);
+        const bool literal        = literalHr == S_OK && item.id == L"literal";
         const HRESULT upperNameHr = fs.ResolveItemByPath(connection, L"/Case", item);
-        const bool upperName = upperNameHr == S_OK && item.id == L"upper";
+        const bool upperName      = upperNameHr == S_OK && item.id == L"upper";
         const HRESULT lowerNameHr = fs.ResolveItemByPath(connection, L"/case", item);
-        const bool lowerName = lowerNameHr == S_OK && item.id == L"lower";
+        const bool lowerName      = lowerNameHr == S_OK && item.id == L"lower";
         check(upperId && lowerId && literal && upperName && lowerName,
               L"enumeration identity round-trips literal decorations, case-distinct IDs, and case-distinct names",
               *passed,

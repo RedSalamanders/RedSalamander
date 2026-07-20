@@ -45,7 +45,7 @@ void FolderWindow::FileOperationState::QueueSettingsSave(std::wstring_view conte
     }
 
     const uint64_t enqueueStartUs = PerfNowUs();
-    const HRESULT queueHr = SettingsHotReload::QueueSettingsSave(kFileOpsAppId, *_owner._settings, L"FileOps.Settings.SaveUs", context);
+    const HRESULT queueHr         = SettingsHotReload::QueueSettingsSave(kFileOpsAppId, *_owner._settings, L"FileOps.Settings.SaveUs", context);
     if (Debug::Perf::IsCaptureEnabled())
     {
         Debug::Perf::Emit(L"FileOps.Settings.EnqueueUs", context, PerfElapsedUs(enqueueStartUs), SUCCEEDED(queueHr) ? 1u : 0u, 0u, queueHr);
@@ -157,16 +157,14 @@ HRESULT FolderWindow::FileOperationState::StartOperation(FileSystemOperation ope
 
     const std::wstring& paneSourcePluginId      = sourcePane == FolderWindow::Pane::Left ? _owner._leftPane.pluginId : _owner._rightPane.pluginId;
     const std::wstring& paneSourcePluginShortId = sourcePane == FolderWindow::Pane::Left ? _owner._leftPane.pluginShortId : _owner._rightPane.pluginShortId;
-    const std::wstring sourcePluginId = sourcePluginIdOverride.empty() ? paneSourcePluginId : std::move(sourcePluginIdOverride);
-    const std::wstring sourcePluginShortId =
-        sourcePluginShortIdOverride.empty() ? paneSourcePluginShortId : std::move(sourcePluginShortIdOverride);
+    const std::wstring sourcePluginId           = sourcePluginIdOverride.empty() ? paneSourcePluginId : std::move(sourcePluginIdOverride);
+    const std::wstring sourcePluginShortId      = sourcePluginShortIdOverride.empty() ? paneSourcePluginShortId : std::move(sourcePluginShortIdOverride);
     std::wstring destinationPluginId;
     std::wstring destinationPluginShortId;
     std::wstring destinationInstanceContext;
     if (destinationPane.has_value())
     {
-        const FolderWindow::PaneState& destinationState =
-            destinationPane.value() == FolderWindow::Pane::Left ? _owner._leftPane : _owner._rightPane;
+        const FolderWindow::PaneState& destinationState = destinationPane.value() == FolderWindow::Pane::Left ? _owner._leftPane : _owner._rightPane;
         if (! destinationFileSystem || destinationFileSystem.get() == destinationState.fileSystem.get())
         {
             destinationPluginId        = destinationState.pluginId;
@@ -195,13 +193,13 @@ HRESULT FolderWindow::FileOperationState::StartOperation(FileSystemOperation ope
                                            deleteBypassesRecycleBin;
     const unsigned int preCalcMaxWorkers = GetPreCalcMaxWorkersFromSettings(_owner._settings);
     const bool enablePreCalc             = allowPreCalcForOperation && ! useResolvedItems && GetPreCalcEnabledFromSettings(_owner._settings);
-    const bool suppressPreCalcForHighMetadataCrossFs =
-        enablePreCalc && destinationFileSystem && (operation == FILESYSTEM_COPY || operation == FILESYSTEM_MOVE) &&
-        HasHighMetadataCostTransferHint(*fileSystem, sourcePaths, operation, FILESYSTEM_TRANSFER_SOURCE_READ);
-    const bool supportsBandwidthLimit    = operation == FILESYSTEM_COPY || operation == FILESYSTEM_MOVE;
-    const uint64_t taskDesiredSpeedLimit = (supportsBandwidthLimit && initialSpeedLimitBytesPerSecond == 0)
-                                               ? GetDefaultBandwidthLimitBytesPerSecondFromSettings(_owner._settings)
-                                               : initialSpeedLimitBytesPerSecond;
+    const bool suppressPreCalcForHighMetadataCrossFs = enablePreCalc && destinationFileSystem &&
+                                                       (operation == FILESYSTEM_COPY || operation == FILESYSTEM_MOVE) &&
+                                                       HasHighMetadataCostTransferHint(*fileSystem, sourcePaths, operation, FILESYSTEM_TRANSFER_SOURCE_READ);
+    const bool supportsBandwidthLimit                = operation == FILESYSTEM_COPY || operation == FILESYSTEM_MOVE;
+    const uint64_t taskDesiredSpeedLimit             = (supportsBandwidthLimit && initialSpeedLimitBytesPerSecond == 0)
+                                                           ? GetDefaultBandwidthLimitBytesPerSecondFromSettings(_owner._settings)
+                                                           : initialSpeedLimitBytesPerSecond;
 
     std::vector<DWORD> sourcePathAttributesHint;
 
@@ -744,26 +742,26 @@ HRESULT FolderWindow::FileOperationState::StartOperation(FileSystemOperation ope
     auto task = std::make_unique<Task>(*this);
     {
         std::scoped_lock lock(_mutex);
-        task->_taskId                   = _nextTaskId++;
-        task->_operation                = operation;
-        task->_executionMode            = executionMode;
-        task->_sourcePane               = sourcePane;
-        task->_destinationPane          = destinationPane;
-        task->_sourcePluginId           = sourcePluginId;
-        task->_destinationPluginId      = std::move(destinationPluginId);
-        task->_destinationPluginShortId = std::move(destinationPluginShortId);
-        task->_destinationInstanceContext = std::move(destinationInstanceContext);
-        task->_fileSystem               = fileSystem;
-        task->_destinationFileSystem    = std::move(destinationFileSystem);
-        task->_sourcePaths              = std::move(sourcePaths);
-        task->_sourcePathAttributesHint = std::move(sourcePathAttributesHint);
-        task->_destinationFolder        = std::move(destinationFolder);
-        task->_flags                    = flags;
-        task->_enablePreCalc            = enablePreCalc && ! suppressPreCalcForHighMetadataCrossFs;
+        task->_taskId                                  = _nextTaskId++;
+        task->_operation                               = operation;
+        task->_executionMode                           = executionMode;
+        task->_sourcePane                              = sourcePane;
+        task->_destinationPane                         = destinationPane;
+        task->_sourcePluginId                          = sourcePluginId;
+        task->_destinationPluginId                     = std::move(destinationPluginId);
+        task->_destinationPluginShortId                = std::move(destinationPluginShortId);
+        task->_destinationInstanceContext              = std::move(destinationInstanceContext);
+        task->_fileSystem                              = fileSystem;
+        task->_destinationFileSystem                   = std::move(destinationFileSystem);
+        task->_sourcePaths                             = std::move(sourcePaths);
+        task->_sourcePathAttributesHint                = std::move(sourcePathAttributesHint);
+        task->_destinationFolder                       = std::move(destinationFolder);
+        task->_flags                                   = flags;
+        task->_enablePreCalc                           = enablePreCalc && ! suppressPreCalcForHighMetadataCrossFs;
         task->_preCalcSuppressedForHighMetadataCrossFs = suppressPreCalcForHighMetadataCrossFs;
-        task->_resolvedItems            = std::move(resolvedItems);
-        task->_preCalcMaxWorkers        = preCalcMaxWorkers;
-        task->_crossFsBridgeBufferBytes = GetCrossFsBridgeBufferBytesFromSettings(_owner._settings);
+        task->_resolvedItems                           = std::move(resolvedItems);
+        task->_preCalcMaxWorkers                       = preCalcMaxWorkers;
+        task->_crossFsBridgeBufferBytes                = GetCrossFsBridgeBufferBytesFromSettings(_owner._settings);
         task->_waitForOthers.store(waitForOthers, std::memory_order_release);
         task->_desiredSpeedLimitBytesPerSecond.store(taskDesiredSpeedLimit, std::memory_order_release);
         // Mark as waiting in queue immediately if queuing, so UI shows "Waiting..." right away

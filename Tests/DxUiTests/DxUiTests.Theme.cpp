@@ -28,14 +28,11 @@ void TestSharedColorRefArgbAndTruncatingBlendGoldenValues()
 {
     using namespace Common::Colors;
 
-    Require(ColorRefFromArgb(0x7F123456u) == RGB(0x12, 0x34, 0x56),
-            "ARGB-to-COLORREF conversion drops alpha and preserves RGB byte order");
+    Require(ColorRefFromArgb(0x7F123456u) == RGB(0x12, 0x34, 0x56), "ARGB-to-COLORREF conversion drops alpha and preserves RGB byte order");
     Require(BlendColorRefTruncate(RGB(10, 20, 30), RGB(110, 220, 230), 128u) == RGB(60, 120, 130),
             "COLORREF blend preserves the existing truncating 8-bit channel policy");
-    Require(BlendColorRefTruncate(RGB(1, 2, 3), RGB(200, 201, 202), 0u) == RGB(1, 2, 3),
-            "COLORREF blend alpha zero preserves the under color");
-    Require(BlendColorRefTruncate(RGB(1, 2, 3), RGB(200, 201, 202), 255u) == RGB(200, 201, 202),
-            "COLORREF blend alpha 255 selects the over color");
+    Require(BlendColorRefTruncate(RGB(1, 2, 3), RGB(200, 201, 202), 0u) == RGB(1, 2, 3), "COLORREF blend alpha zero preserves the under color");
+    Require(BlendColorRefTruncate(RGB(1, 2, 3), RGB(200, 201, 202), 255u) == RGB(200, 201, 202), "COLORREF blend alpha 255 selects the over color");
     Require(BlendColorRefWeightedTruncate(RGB(10, 20, 30), RGB(110, 220, 230), 1, 2) == RGB(60, 120, 130),
             "weighted COLORREF blend preserves the existing arbitrary-denominator truncation policy");
     Require(BlendColorRefWeightedTruncate(RGB(10, 20, 30), RGB(110, 220, 230), -1, 10) == RGB(10, 20, 30),
@@ -53,22 +50,17 @@ void TestStableVisualHash32Utf16V1GoldenValuesAndNamedEncodingPolicy()
     Require(StableVisualHash32Utf16V1(L"") == 0x811C9DC5u, "visual hash v1 preserves the FNV-1a empty seed");
     Require(StableVisualHash32Utf16V1(L"abc") == 0x1A47E90Bu, "visual hash v1 preserves the ASCII golden value");
     Require(StableVisualHash32Utf16V1(L"\u00E9") == 0x6C0B6C44u, "visual hash v1 hashes a non-ASCII UTF-16 code unit as one value");
-    Require(StableVisualHash32Utf16V1(L"\U0001F600") == 0xCB31C4B8u,
-            "visual hash v1 hashes an astral character as its two UTF-16 surrogate code units");
+    Require(StableVisualHash32Utf16V1(L"\U0001F600") == 0xCB31C4B8u, "visual hash v1 hashes an astral character as its two UTF-16 surrogate code units");
 }
 
 void TestHsvColorRefNegativeHuePoliciesRemainExplicitAndDistinct()
 {
     using namespace Common::Colors;
 
-    Require(ColorRefFromHsvClampedNegativeHueToZero(-60.0f, 1.0f, 1.0f) == RGB(255, 0, 0),
-            "majority viewer HSV policy clamps negative hue to red");
-    Require(ColorRefFromHsvWrappedHue(-60.0f, 1.0f, 1.0f) == RGB(255, 0, 255),
-            "ViewerWeb HSV policy wraps negative hue to magenta");
-    Require(ColorRefFromHsvClampedNegativeHueToZero(120.0f, 2.0f, 2.0f) == RGB(0, 255, 0),
-            "majority viewer HSV policy clamps saturation and value");
-    Require(ColorRefFromHsvClampedNegativeHueToZero(240.0f, 1.0f, 1.0f) == RGB(0, 0, 255),
-            "majority viewer HSV policy preserves primary blue");
+    Require(ColorRefFromHsvClampedNegativeHueToZero(-60.0f, 1.0f, 1.0f) == RGB(255, 0, 0), "majority viewer HSV policy clamps negative hue to red");
+    Require(ColorRefFromHsvWrappedHue(-60.0f, 1.0f, 1.0f) == RGB(255, 0, 255), "ViewerWeb HSV policy wraps negative hue to magenta");
+    Require(ColorRefFromHsvClampedNegativeHueToZero(120.0f, 2.0f, 2.0f) == RGB(0, 255, 0), "majority viewer HSV policy clamps saturation and value");
+    Require(ColorRefFromHsvClampedNegativeHueToZero(240.0f, 1.0f, 1.0f) == RGB(0, 0, 255), "majority viewer HSV policy preserves primary blue");
 }
 
 void TestSharedLuminanceMathSeparatesLinearizedAndEncodedPolicies()
@@ -78,8 +70,7 @@ void TestSharedLuminanceMathSeparatesLinearizedAndEncodedPolicies()
     Require(std::abs(RelativeLuminanceFromArgb(0xFF000000u)) < 0.0000001, "relative luminance maps black to zero");
     Require(std::abs(RelativeLuminanceFromArgb(0xFFFFFFFFu) - 1.0) < 0.0000001, "relative luminance maps white to one");
     Require(std::abs(RelativeLuminanceFromArgb(0xFFFF0000u) - 0.2126) < 0.0000001, "relative luminance preserves the linear red coefficient");
-    Require(std::abs(RelativeLuminanceFromColorRef(RGB(128, 128, 128)) - 0.2158605001) < 0.0000001,
-            "relative luminance linearizes an encoded mid-gray");
+    Require(std::abs(RelativeLuminanceFromColorRef(RGB(128, 128, 128)) - 0.2158605001) < 0.0000001, "relative luminance linearizes an encoded mid-gray");
     Require(std::abs(WeightedSrgbLuminanceWithoutLinearization(0.5, 0.5, 0.5) - 0.5) < 0.0000001,
             "encoded-channel luminance remains a separately named threshold policy");
     Require(std::abs(ContrastRatioFromRelativeLuminance(1.0, 0.0) - 21.0) < 0.0000001,
@@ -94,8 +85,7 @@ void TestD2dBlendClampsInterpolationAmount()
     const D2D1_COLOR_F to   = D2D1::ColorF(0.8f, 0.7f, 0.6f, 0.5f);
     RequireColorNear(BlendColor(from, to, -1.0f), from, "D2D blend clamps negative interpolation to the source color");
     RequireColorNear(BlendColor(from, to, 2.0f), to, "D2D blend clamps interpolation above one to the destination color");
-    RequireColorNear(BlendColor(from, to, 0.5f), D2D1::ColorF(0.45f, 0.45f, 0.45f, 0.45f),
-                     "D2D blend interpolates all four channels");
+    RequireColorNear(BlendColor(from, to, 0.5f), D2D1::ColorF(0.45f, 0.45f, 0.45f, 0.45f), "D2D blend interpolates all four channels");
 }
 
 void TestWindowSizingDpiRoundingAndPopupGeometryGoldenValues()
@@ -107,17 +97,14 @@ void TestWindowSizingDpiRoundingAndPopupGeometryGoldenValues()
     Require(DipToPixelRounded(144u, 8) == 12, "integer DIP conversion scales values at 144 DPI");
     Require(DipToPixelRounded(192u, 8) == 16, "integer DIP conversion scales values at 192 DPI");
     Require(DipToPixelRounded(120u, -8) == -10, "integer DIP conversion preserves negative coordinates");
-    Require(DipToPixelRounded(0.5f, 96u) == 1 && DipToPixelRounded(-0.5f, 96u) == -1,
-            "fractional DIP conversion rounds half away from zero");
+    Require(DipToPixelRounded(0.5f, 96u) == 1 && DipToPixelRounded(-0.5f, 96u) == -1, "fractional DIP conversion rounds half away from zero");
     Require(DipToPixelRounded((std::numeric_limits<float>::max)(), 192u) == (std::numeric_limits<int>::max)(),
             "fractional DIP conversion saturates positive overflow");
     Require(std::abs(PixelToDip(15.0f, 144.0f) - 10.0f) < 0.0001f, "pixel-to-DIP conversion preserves fractional monitor scaling");
     Require(std::abs(PixelToDip(15.0f, 0.0f) - 15.0f) < 0.0001f, "pixel-to-DIP conversion treats zero DPI as 96 DPI");
 
-    Require(ComputeBoundedListPopupHeightPx(0u, 8u, 24, 10, 96u) == 34,
-            "bounded popup height keeps one visible row for an empty list host");
-    Require(ComputeBoundedListPopupHeightPx(100u, 8u, 24, 10, 192u) == 404,
-            "bounded popup height caps visible rows before DPI scaling");
+    Require(ComputeBoundedListPopupHeightPx(0u, 8u, 24, 10, 96u) == 34, "bounded popup height keeps one visible row for an empty list host");
+    Require(ComputeBoundedListPopupHeightPx(100u, 8u, 24, 10, 192u) == 404, "bounded popup height caps visible rows before DPI scaling");
 
     const RECT work{-50, -40, 250, 160};
     const RECT clamped = ClampRectOriginToBounds(RECT{-200, -100, -100, 0}, work);
@@ -155,10 +142,8 @@ void TestViewerFileComboPopupInputAndHeightGoldenValues()
     Require(! MessageMayOpenWindowComboPopup(WM_KEYDOWN, VK_ESCAPE) && ! MessageMayOpenWindowComboPopup(WM_KEYUP, VK_F4) &&
                 ! MessageMayOpenWindowComboPopup(WM_RBUTTONDOWN, 0u),
             "file combo rejects close keys, key-up, and secondary-button messages");
-    Require(ComputeStandaloneComboPopupHeightPx(0u, 96u) == 34,
-            "standalone file combo keeps one row plus chrome for an empty list");
-    Require(ComputeStandaloneComboPopupHeightPx(100u, 192u) == 404,
-            "standalone file combo caps its popup at eight visible rows before DPI scaling");
+    Require(ComputeStandaloneComboPopupHeightPx(0u, 96u) == 34, "standalone file combo keeps one row plus chrome for an empty list");
+    Require(ComputeStandaloneComboPopupHeightPx(100u, 192u) == 404, "standalone file combo caps its popup at eight visible rows before DPI scaling");
 }
 
 void TestViewerTitleBarThemeGoldenValues()
@@ -172,29 +157,26 @@ void TestViewerTitleBarThemeGoldenValues()
     theme.backgroundArgb = 0xFF101820u;
     theme.accentArgb     = 0xFF336699u;
 
-    const COLORREF accent = ResolveViewerThemeAccent(theme, L"title-golden");
+    const COLORREF accent           = ResolveViewerThemeAccent(theme, L"title-golden");
     const TitleBarAttributes active = ResolveTitleBarAttributes(theme, true, L"title-golden");
     Require(active.useDarkMode == TRUE && active.borderColor == accent && active.captionColor == accent,
             "rainbow viewer title bar applies its deterministic accent while active");
-    const uint32_t luma = (static_cast<uint32_t>(GetRValue(accent)) * 299u + static_cast<uint32_t>(GetGValue(accent)) * 587u +
-                           static_cast<uint32_t>(GetBValue(accent)) * 114u) /
-                          1000u;
-    Require(active.textColor == (luma < 128u ? RGB(255, 255, 255) : RGB(0, 0, 0)),
-            "rainbow viewer title bar preserves the integer contrast threshold");
+    const uint32_t luma =
+        (static_cast<uint32_t>(GetRValue(accent)) * 299u + static_cast<uint32_t>(GetGValue(accent)) * 587u + static_cast<uint32_t>(GetBValue(accent)) * 114u) /
+        1000u;
+    Require(active.textColor == (luma < 128u ? RGB(255, 255, 255) : RGB(0, 0, 0)), "rainbow viewer title bar preserves the integer contrast threshold");
 
     const TitleBarAttributes inactive = ResolveTitleBarAttributes(theme, false, L"title-golden");
-    const COLORREF expectedInactive =
-        Common::Colors::BlendColorRefTruncate(accent, Common::Colors::ColorRefFromArgb(theme.backgroundArgb), 223u);
+    const COLORREF expectedInactive   = Common::Colors::BlendColorRefTruncate(accent, Common::Colors::ColorRefFromArgb(theme.backgroundArgb), 223u);
     Require(inactive.captionColor == expectedInactive && inactive.borderColor == expectedInactive,
             "inactive rainbow viewer title bar preserves the 223/255 background blend");
 
-    theme.rainbowMode = FALSE;
+    theme.rainbowMode              = FALSE;
     const TitleBarAttributes plain = ResolveTitleBarAttributes(theme, true, L"ignored");
-    Require(plain.useDarkMode == TRUE && plain.captionColor == kDwmColorDefault && plain.borderColor == kDwmColorDefault &&
-                plain.textColor == kDwmColorDefault,
+    Require(plain.useDarkMode == TRUE && plain.captionColor == kDwmColorDefault && plain.borderColor == kDwmColorDefault && plain.textColor == kDwmColorDefault,
             "non-rainbow viewer title bar resets custom DWM colors while retaining dark mode");
 
-    theme.highContrast = TRUE;
+    theme.highContrast                    = TRUE;
     const TitleBarAttributes highContrast = ResolveTitleBarAttributes(theme, true, L"ignored");
     Require(highContrast.useDarkMode == FALSE && highContrast.captionColor == kDwmColorDefault,
             "high-contrast viewer title bar delegates all colors and dark-mode policy to the system");
@@ -214,14 +196,10 @@ void TestModifierCompositionCoversEveryCombination()
                                                    (combination & 0x20u) != 0u,
                                                    (combination & 0x40u) != 0u,
                                                    (combination & 0x80u) != 0u);
-        const UINT expected = ((combination & 0x01u) != 0u ? MK_SHIFT : 0u) |
-                              ((combination & 0x02u) != 0u ? MK_CONTROL : 0u) |
-                              ((combination & 0x04u) != 0u ? kModifierAlt : 0u) |
-                              ((combination & 0x08u) != 0u ? MK_LBUTTON : 0u) |
-                              ((combination & 0x10u) != 0u ? MK_RBUTTON : 0u) |
-                              ((combination & 0x20u) != 0u ? MK_MBUTTON : 0u) |
-                              ((combination & 0x40u) != 0u ? MK_XBUTTON1 : 0u) |
-                              ((combination & 0x80u) != 0u ? MK_XBUTTON2 : 0u);
+        const UINT expected  = ((combination & 0x01u) != 0u ? MK_SHIFT : 0u) | ((combination & 0x02u) != 0u ? MK_CONTROL : 0u) |
+                               ((combination & 0x04u) != 0u ? kModifierAlt : 0u) | ((combination & 0x08u) != 0u ? MK_LBUTTON : 0u) |
+                               ((combination & 0x10u) != 0u ? MK_RBUTTON : 0u) | ((combination & 0x20u) != 0u ? MK_MBUTTON : 0u) |
+                               ((combination & 0x40u) != 0u ? MK_XBUTTON1 : 0u) | ((combination & 0x80u) != 0u ? MK_XBUTTON2 : 0u);
         Require(modifiers == expected, "modifier composition preserves every key/button combination");
         Require(ModifiersContainShift(modifiers) == ((combination & 0x01u) != 0u), "shift modifier decoding matches composition");
         Require(ModifiersContainCtrl(modifiers) == ((combination & 0x02u) != 0u), "control modifier decoding matches composition");
@@ -241,8 +219,8 @@ void TestUtfConversionPoliciesRemainExplicitAndPreserveEmbeddedNulls()
 
     const std::string utf8WithNull{"A\0\xF0\x9F\x98\x80", 6u};
     const std::optional<std::wstring> utf16WithNull = TryUtf16FromUtf8Strict(utf8WithNull);
-    Require(utf16WithNull.has_value() && utf16WithNull.value().size() == 4u && utf16WithNull.value()[0] == L'A' &&
-                utf16WithNull.value()[1] == L'\0' && utf16WithNull.value()[2] == L'\xD83D' && utf16WithNull.value()[3] == L'\xDE00',
+    Require(utf16WithNull.has_value() && utf16WithNull.value().size() == 4u && utf16WithNull.value()[0] == L'A' && utf16WithNull.value()[1] == L'\0' &&
+                utf16WithNull.value()[2] == L'\xD83D' && utf16WithNull.value()[3] == L'\xDE00',
             "strict UTF-8 conversion preserves embedded NUL and supplementary characters");
     const std::optional<std::string> roundTrip = TryUtf8FromUtf16Strict(utf16WithNull.value());
     Require(roundTrip.has_value() && roundTrip.value() == utf8WithNull, "strict UTF conversion round-trips embedded NUL and supplementary characters");
@@ -262,12 +240,9 @@ void TestOrdinalTrimAndEnvironmentPoliciesRemainExplicit()
     Require(StringUtils::TrimWhitespace(L" \t\r\nvalue\u2003") == L"value", "shared whitespace trim preserves the existing iswspace character set");
     Require(StringUtils::TrimWhitespace(L"\u00A0value\u00A0") == L"value", "shared whitespace trim handles non-breaking-space boundaries");
 
-    constexpr wchar_t kVariable[] = L"REDSALAMANDER_LIGHTHOUSE_ENV_POLICY_TEST";
+    constexpr wchar_t kVariable[]              = L"REDSALAMANDER_LIGHTHOUSE_ENV_POLICY_TEST";
     const std::optional<std::wstring> previous = EnvironmentVariables::Read(kVariable);
-    const auto restore = wil::scope_exit([&]
-    {
-        static_cast<void>(SetEnvironmentVariableW(kVariable, previous.has_value() ? previous->c_str() : nullptr));
-    });
+    const auto restore = wil::scope_exit([&] { static_cast<void>(SetEnvironmentVariableW(kVariable, previous.has_value() ? previous->c_str() : nullptr)); });
 
     static_cast<void>(SetEnvironmentVariableW(kVariable, nullptr));
     Require(! EnvironmentVariables::Read(kVariable).has_value(), "environment reads distinguish a missing variable");
@@ -296,25 +271,21 @@ void TestWindowsPathClassesKeepDriveRelativeAndFullyAbsolutePoliciesDistinct()
             "UNC classification accepts slash variants without treating them as drive paths");
     Require(ClassifyWindowsPath(L"\\\\?\\C:\\leaf") == ExtendedDriveAbsolute && ClassifyWindowsPath(L"//?/C:/leaf") == ExtendedDriveAbsolute,
             "extended drive paths remain a named class");
-    Require(ClassifyWindowsPath(L"\\\\?\\UNC\\server\\share\\leaf") == ExtendedUnc,
-            "extended UNC paths remain distinct from ordinary UNC paths");
+    Require(ClassifyWindowsPath(L"\\\\?\\UNC\\server\\share\\leaf") == ExtendedUnc, "extended UNC paths remain distinct from ordinary UNC paths");
     Require(ClassifyWindowsPath(L"\\\\?\\Volume{guid}\\leaf") == ExtendedOther,
             "non-drive extended namespaces are not silently treated as fully absolute filesystem paths");
     Require(ClassifyWindowsPath(L"\\\\.\\PhysicalDrive0") == Device, "device namespace paths remain explicitly classified");
 
     Require(Common::Paths::IsDriveQualifiedWindowsPath(L"C:") && ! Common::Paths::IsDriveAbsoluteWindowsPath(L"C:"),
             "drive-qualified and drive-absolute predicates remain separate");
-    Require(Common::Paths::IsFullyAbsoluteWindowsPath(L"C:\\leaf") &&
-                Common::Paths::IsFullyAbsoluteWindowsPath(L"\\\\server\\share") &&
+    Require(Common::Paths::IsFullyAbsoluteWindowsPath(L"C:\\leaf") && Common::Paths::IsFullyAbsoluteWindowsPath(L"\\\\server\\share") &&
                 Common::Paths::IsFullyAbsoluteWindowsPath(L"\\\\?\\UNC\\server\\share\\leaf"),
             "fully absolute policy accepts rooted drives and complete UNC server/share roots");
     Require(! Common::Paths::IsFullyAbsoluteWindowsPath(L"C:leaf") && ! Common::Paths::IsFullyAbsoluteWindowsPath(L"\\\\server") &&
                 ! Common::Paths::IsFullyAbsoluteWindowsPath(L"\\\\.\\PhysicalDrive0"),
             "fully absolute policy rejects drive-relative, incomplete UNC, and device paths");
-    Require(ClassifyWindowsPath(L"C:\\dir\\..\\CON. ") == DriveAbsolute,
-            "classification remains normalization-free and does not weaken leaf validation");
-    Require(Common::Paths::ToExtendedWin32Path(L"C:\\leaf") == LR"(\\?\C:\leaf)",
-            "normalization-free extended conversion prefixes drive-absolute paths");
+    Require(ClassifyWindowsPath(L"C:\\dir\\..\\CON. ") == DriveAbsolute, "classification remains normalization-free and does not weaken leaf validation");
+    Require(Common::Paths::ToExtendedWin32Path(L"C:\\leaf") == LR"(\\?\C:\leaf)", "normalization-free extended conversion prefixes drive-absolute paths");
     Require(Common::Paths::ToExtendedWin32Path(L"\\\\server\\share\\leaf") == LR"(\\?\UNC\server\share\leaf)",
             "normalization-free extended conversion prefixes UNC paths");
     Require(Common::Paths::ToExtendedWin32Path(L"C:leaf") == L"C:leaf" &&
@@ -337,24 +308,18 @@ void TestBinaryThroughputGrammarPreservesBoundaryPoliciesAndRoundTrips()
             "throughput parsing accepts fractional values, ASCII boundary whitespace, and the per-second suffix");
     Require(TryParseBinaryThroughputText(L"1,5 mIB/S", ascii, parsed) && parsed == 1572864u,
             "throughput parsing accepts the locale-independent comma decimal and case-insensitive binary alias");
-    Require(TryParseBinaryThroughputText(L".5", ascii, parsed) && parsed == 512u,
-            "bare fractional throughput values default to KiB/s");
-    Require(TryParseBinaryThroughputText(L"0.0005 KiB", ascii, parsed) && parsed == 1u,
-            "fractional throughput rounds to the nearest whole byte");
-    Require(TryParseBinaryThroughputText(L"2 b", ascii, parsed) && parsed == 2u &&
-                TryParseBinaryThroughputText(L"2 K", ascii, parsed) && parsed == 2048u &&
-                TryParseBinaryThroughputText(L"2 MB", ascii, parsed) && parsed == 2097152u &&
-                TryParseBinaryThroughputText(L"2 g", ascii, parsed) && parsed == 2147483648u &&
-                TryParseBinaryThroughputText(L"2 TiB", ascii, parsed) && parsed == 2199023255552u &&
+    Require(TryParseBinaryThroughputText(L".5", ascii, parsed) && parsed == 512u, "bare fractional throughput values default to KiB/s");
+    Require(TryParseBinaryThroughputText(L"0.0005 KiB", ascii, parsed) && parsed == 1u, "fractional throughput rounds to the nearest whole byte");
+    Require(TryParseBinaryThroughputText(L"2 b", ascii, parsed) && parsed == 2u && TryParseBinaryThroughputText(L"2 K", ascii, parsed) && parsed == 2048u &&
+                TryParseBinaryThroughputText(L"2 MB", ascii, parsed) && parsed == 2097152u && TryParseBinaryThroughputText(L"2 g", ascii, parsed) &&
+                parsed == 2147483648u && TryParseBinaryThroughputText(L"2 TiB", ascii, parsed) && parsed == 2199023255552u &&
                 TryParseBinaryThroughputText(L"2 p", ascii, parsed) && parsed == 2251799813685248u,
             "throughput parsing preserves every established byte-through-PiB alias");
-    Require(TryParseBinaryThroughputText(L"999999999999999999999999999 PiB", ascii, parsed) &&
-                parsed == (std::numeric_limits<uint64_t>::max)(),
+    Require(TryParseBinaryThroughputText(L"999999999999999999999999999 PiB", ascii, parsed) && parsed == (std::numeric_limits<uint64_t>::max)(),
             "throughput parsing saturates positive overflow");
 
     parsed = 99u;
-    Require(! TryParseBinaryThroughputText(L"1 XB", ascii, parsed) && parsed == 0u,
-            "unknown throughput units fail and clear the output");
+    Require(! TryParseBinaryThroughputText(L"1 XB", ascii, parsed) && parsed == 0u, "unknown throughput units fail and clear the output");
     Require(! TryParseBinaryThroughputText(L"1.2.3 MiB", ascii, parsed), "multiple decimal separators remain invalid");
     Require(! TryParseBinaryThroughputText(L"-1 MiB", ascii, parsed), "signed throughput values remain invalid");
 
@@ -363,11 +328,9 @@ void TestBinaryThroughputGrammarPreservesBoundaryPoliciesAndRoundTrips()
     controlWrapped.push_back(static_cast<wchar_t>(0x001F));
     Require(TryParseBinaryThroughputText(controlWrapped, c0, parsed) && parsed == 1048576u,
             "Preferences preserves its historical C0-through-space boundary trimming");
-    Require(! TryParseBinaryThroughputText(controlWrapped, ascii, parsed),
-            "the popup preserves its narrower six-character ASCII whitespace boundary");
+    Require(! TryParseBinaryThroughputText(controlWrapped, ascii, parsed), "the popup preserves its narrower six-character ASCII whitespace boundary");
 
-    constexpr std::array<uint64_t, 7u> roundTripValues{{
-        0u, 1u, 1024u, 1048576u, 1073741824u, 1048577u, (std::numeric_limits<uint64_t>::max)()}};
+    constexpr std::array<uint64_t, 7u> roundTripValues{{0u, 1u, 1024u, 1048576u, 1073741824u, 1048577u, (std::numeric_limits<uint64_t>::max)()}};
     for (const uint64_t value : roundTripValues)
     {
         const std::wstring formatted = FormatBinaryThroughputText(value);
@@ -383,24 +346,21 @@ void TestCompactFileMetadataFormattingPreservesTimeAndAttributePolicies()
     using Common::FileMetadata::NormalizedMetadata;
 
     const auto empty = FormatDisplayFields({}, DisplayProfile::CompactDetails);
-    Require(empty.localTime.empty() && empty.attributes == L"-",
-            "missing time and zero attributes preserve the compact empty/dash representation");
+    Require(empty.localTime.empty() && empty.attributes == L"-", "missing time and zero attributes preserve the compact empty/dash representation");
 
-    const auto attributes = FormatDisplayFields(
-        {.fileAttributes = FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM | FILE_ATTRIBUTE_ARCHIVE |
-                           FILE_ATTRIBUTE_COMPRESSED | FILE_ATTRIBUTE_ENCRYPTED | FILE_ATTRIBUTE_TEMPORARY | FILE_ATTRIBUTE_OFFLINE |
-                           FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_SPARSE_FILE},
-        DisplayProfile::CompactDetails);
-    Require(attributes.attributes == L"RHSACETOP",
-            "compact metadata preserves RHSACETOP ordering and intentionally omits directory and sparse flags");
-    const auto sparseCompressed = FormatDisplayFields(
-        {.fileAttributes = FILE_ATTRIBUTE_SPARSE_FILE | FILE_ATTRIBUTE_COMPRESSED}, DisplayProfile::CompactDetails);
+    const auto attributes =
+        FormatDisplayFields({.fileAttributes = FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM | FILE_ATTRIBUTE_ARCHIVE |
+                                               FILE_ATTRIBUTE_COMPRESSED | FILE_ATTRIBUTE_ENCRYPTED | FILE_ATTRIBUTE_TEMPORARY | FILE_ATTRIBUTE_OFFLINE |
+                                               FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_SPARSE_FILE},
+                            DisplayProfile::CompactDetails);
+    Require(attributes.attributes == L"RHSACETOP", "compact metadata preserves RHSACETOP ordering and intentionally omits directory and sparse flags");
+    const auto sparseCompressed =
+        FormatDisplayFields({.fileAttributes = FILE_ATTRIBUTE_SPARSE_FILE | FILE_ATTRIBUTE_COMPRESSED}, DisplayProfile::CompactDetails);
     Require(sparseCompressed.attributes == L"C", "compressed remains visible while sparse remains outside the compact attribute profile");
 
     Require(FormatDisplayFields({.lastWriteTime100nsSince1601 = -1}, DisplayProfile::CompactDetails).localTime.empty(),
             "negative metadata times remain unknown");
-    Require(FormatDisplayFields({.lastWriteTime100nsSince1601 = (std::numeric_limits<int64_t>::max)()}, DisplayProfile::CompactDetails)
-                .localTime.empty(),
+    Require(FormatDisplayFields({.lastWriteTime100nsSince1601 = (std::numeric_limits<int64_t>::max)()}, DisplayProfile::CompactDetails).localTime.empty(),
             "invalid metadata times fail closed to an empty display field");
 
     SYSTEMTIME utc{};
@@ -439,8 +399,7 @@ void TestCompactFileMetadataFormattingPreservesTimeAndAttributePolicies()
     Require(SystemTimeToFileTime(&preUnixUtc, &preUnixFileTime) != FALSE, "metadata test creates a valid pre-Unix-epoch FILETIME");
     ticks.LowPart  = preUnixFileTime.dwLowDateTime;
     ticks.HighPart = preUnixFileTime.dwHighDateTime;
-    Require(! FormatDisplayFields({.lastWriteTime100nsSince1601 = static_cast<int64_t>(ticks.QuadPart)}, DisplayProfile::CompactDetails)
-                   .localTime.empty(),
+    Require(! FormatDisplayFields({.lastWriteTime100nsSince1601 = static_cast<int64_t>(ticks.QuadPart)}, DisplayProfile::CompactDetails).localTime.empty(),
             "valid pre-Unix-epoch Windows times remain displayable");
 
     Require(FormatBytesCompact(0u) == L"0 B", "the existing shared size formatter preserves exact zero-size display");
@@ -452,8 +411,7 @@ void TestPercentEncodingAndHandleIoPoliciesCoverForwardProgressAndAtomicSiblings
 
     Require(Common::Uri::PercentEncodeBytes("AZaz09-._~") == "AZaz09-._~", "RFC3986 unreserved bytes remain literal");
     Require(Common::Uri::PercentEncodeBytes(" /?#%") == "%20%2F%3F%23%25", "reserved and unsafe bytes use uppercase percent escapes");
-    Require(Common::Uri::PercentEncodeBytes("a/b c", SlashPolicy::Preserve) == "a/b%20c",
-            "slash preservation is an explicit protocol policy");
+    Require(Common::Uri::PercentEncodeBytes("a/b c", SlashPolicy::Preserve) == "a/b%20c", "slash preservation is an explicit protocol policy");
     Require(Common::Uri::PercentEncodeBytes(std::string_view("\xC3\xA9", 2u)) == "%C3%A9", "UTF-8 is encoded byte-by-byte");
     std::wstring encodedWide;
     Require(Common::Uri::TryPercentEncodeUtf8ToWide(L"\U0001F600/x", SlashPolicy::Preserve, encodedWide) && encodedWide == L"%F0%9F%98%80/x",
@@ -464,8 +422,10 @@ void TestPercentEncodingAndHandleIoPoliciesCoverForwardProgressAndAtomicSiblings
 
     const std::array<std::byte, 5u> payload{};
     unsigned int partialCalls = 0u;
-    const HRESULT partialHr    = Common::HandleIo::Detail::TransferAll<const std::byte>(
-        payload, ERROR_WRITE_FAULT, [&partialCalls](const std::byte* data, DWORD requested, DWORD& transferred) noexcept
+    const HRESULT partialHr =
+        Common::HandleIo::Detail::TransferAll<const std::byte>(payload,
+                                                               ERROR_WRITE_FAULT,
+                                                               [&partialCalls](const std::byte* data, DWORD requested, DWORD& transferred) noexcept
     {
         static_cast<void>(data);
         ++partialCalls;
@@ -473,8 +433,10 @@ void TestPercentEncodingAndHandleIoPoliciesCoverForwardProgressAndAtomicSiblings
         return S_OK;
     });
     Require(partialHr == S_OK && partialCalls == 3u, "total transfer retries partial forward progress until the buffer is complete");
-    const HRESULT zeroProgressHr = Common::HandleIo::Detail::TransferAll<const std::byte>(
-        payload, ERROR_WRITE_FAULT, [](const std::byte* data, DWORD requested, DWORD& transferred) noexcept
+    const HRESULT zeroProgressHr =
+        Common::HandleIo::Detail::TransferAll<const std::byte>(payload,
+                                                               ERROR_WRITE_FAULT,
+                                                               [](const std::byte* data, DWORD requested, DWORD& transferred) noexcept
     {
         static_cast<void>(data);
         static_cast<void>(requested);
@@ -482,8 +444,9 @@ void TestPercentEncodingAndHandleIoPoliciesCoverForwardProgressAndAtomicSiblings
         return S_OK;
     });
     Require(zeroProgressHr == HRESULT_FROM_WIN32(ERROR_WRITE_FAULT), "successful zero-byte writes fail instead of spinning forever");
-    const HRESULT errorHr = Common::HandleIo::Detail::TransferAll<const std::byte>(
-        payload, ERROR_WRITE_FAULT, [](const std::byte* data, DWORD requested, DWORD& transferred) noexcept
+    const HRESULT errorHr = Common::HandleIo::Detail::TransferAll<const std::byte>(payload,
+                                                                                   ERROR_WRITE_FAULT,
+                                                                                   [](const std::byte* data, DWORD requested, DWORD& transferred) noexcept
     {
         static_cast<void>(data);
         static_cast<void>(requested);
@@ -525,8 +488,7 @@ void TestPercentEncodingAndHandleIoPoliciesCoverForwardProgressAndAtomicSiblings
             "bounded handle size rejects oversized files at the domain boundary");
     Require(Common::HandleIo::Rewind(firstFile.get()) == S_OK, "shared handle rewind restores the beginning position");
     std::array<std::byte, bytes.size()> readBack{};
-    Require(Common::HandleIo::ReadExact(firstFile.get(), readBack) == S_OK && readBack == bytes,
-            "shared exact reader returns the entire payload after rewind");
+    Require(Common::HandleIo::ReadExact(firstFile.get(), readBack) == S_OK && readBack == bytes, "shared exact reader returns the entire payload after rewind");
 
     std::wstring stalePath = L"stale";
     wil::unique_hfile staleFile;
@@ -540,24 +502,22 @@ void TestCloudPaginationGuardBoundsProgressAndCancellation()
     using Common::Paging::Limits;
     using Common::Paging::Utf8ContinuationGuard;
 
-    bool cancel = false;
-    const auto cancellationProbe = [](void* cookie) noexcept -> HRESULT {
-        return *static_cast<const bool*>(cookie) ? HRESULT_FROM_WIN32(ERROR_CANCELLED) : S_OK;
-    };
+    bool cancel                  = false;
+    const auto cancellationProbe = [](void* cookie) noexcept -> HRESULT
+    { return *static_cast<const bool*>(cookie) ? HRESULT_FROM_WIN32(ERROR_CANCELLED) : S_OK; };
 
     Limits limits{
-        .maxPages = 2u,
-        .maxItems = 3u,
-        .maxBytes = 12u,
-        .maxTokenChars = 8u,
-        .deadlineTickMs = 110u,
-        .cancellationProbe = cancellationProbe,
+        .maxPages           = 2u,
+        .maxItems           = 3u,
+        .maxBytes           = 12u,
+        .maxTokenChars      = 8u,
+        .deadlineTickMs     = 110u,
+        .cancellationProbe  = cancellationProbe,
         .cancellationCookie = &cancel,
     };
     Utf8ContinuationGuard guard(limits);
     Require(guard.BeginFirstPage(100u) == S_OK, "pagination guard admits the bounded first page");
-    Require(guard.CompletePage(2u, 5u, true, "next", 101u) == S_OK,
-            "pagination guard records page items/bytes and a non-empty continuation");
+    Require(guard.CompletePage(2u, 5u, true, "next", 101u) == S_OK, "pagination guard records page items/bytes and a non-empty continuation");
     Require(guard.BeginContinuation("next", 102u) == S_OK, "pagination guard admits a new continuation once");
     Require(guard.CompletePage(1u, 7u, false, {}, 103u) == S_OK && guard.PageCount() == 2u && guard.ItemCount() == 3u && guard.ByteCount() == 12u,
             "pagination guard preserves exact bounded totals");
@@ -569,12 +529,11 @@ void TestCloudPaginationGuardBoundsProgressAndCancellation()
             "pagination guard rejects a repeated continuation before another request");
 
     Utf8ContinuationGuard empty(limits);
-    Require(empty.BeginFirstPage(100u) == S_OK &&
-                empty.CompletePage(0u, 0u, true, {}, 101u) == HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
+    Require(empty.BeginFirstPage(100u) == S_OK && empty.CompletePage(0u, 0u, true, {}, 101u) == HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
             "pagination guard rejects an empty token when the provider says another page exists");
 
-    Limits tiny = limits;
-    tiny.maxPages = 1u;
+    Limits tiny         = limits;
+    tiny.maxPages       = 1u;
     tiny.deadlineTickMs = 0u;
     Utf8ContinuationGuard pageCap(tiny);
     Require(pageCap.BeginFirstPage(100u) == S_OK && pageCap.CompletePage(0u, 0u, true, "next", 101u) == S_OK &&
@@ -584,8 +543,8 @@ void TestCloudPaginationGuardBoundsProgressAndCancellation()
     Utf8ContinuationGuard deadline(limits);
     Require(deadline.BeginFirstPage(110u) == HRESULT_FROM_WIN32(ERROR_TIMEOUT), "pagination guard enforces the operation deadline");
 
-    cancel = true;
-    Limits cancelledLimits = limits;
+    cancel                         = true;
+    Limits cancelledLimits         = limits;
     cancelledLimits.deadlineTickMs = 0u;
     Utf8ContinuationGuard cancelled(cancelledLimits);
     Require(cancelled.BeginFirstPage(100u) == HRESULT_FROM_WIN32(ERROR_CANCELLED), "pagination guard propagates cancellation at request boundaries");
@@ -595,7 +554,8 @@ void TestYyjsonMemberPoliciesDistinguishPresenceTypeRangeAndCoercion()
 {
     using namespace Common::Json;
 
-    std::string json = R"json({"text":"value","nullValue":null,"wrong":true,"signed":-7,"unsigned":9,"tooLarge":18446744073709551615,"numericString":"42","unknownFuture":{"x":1}})json";
+    std::string json =
+        R"json({"text":"value","nullValue":null,"wrong":true,"signed":-7,"unsigned":9,"tooLarge":18446744073709551615,"numericString":"42","unknownFuture":{"x":1}})json";
     UniqueDocument document{yyjson_read(json.data(), json.size(), 0)};
     Require(document != nullptr, "shared yyjson ownership accepts a valid document");
     const yyjson_val* root = yyjson_doc_get_root(document.get());
@@ -606,40 +566,29 @@ void TestYyjsonMemberPoliciesDistinguishPresenceTypeRangeAndCoercion()
             "optional member access distinguishes a missing optional member");
     Require(GetStringMember(root, "missing", MemberRequirement::Required).status == MemberStatus::MissingRequired,
             "required member access distinguishes a missing required member");
-    Require(GetStringMember(root, "nullValue", MemberRequirement::Optional).status == MemberStatus::Null,
-            "member access distinguishes JSON null from missing");
+    Require(GetStringMember(root, "nullValue", MemberRequirement::Optional).status == MemberStatus::Null, "member access distinguishes JSON null from missing");
     Require(GetStringMember(root, "wrong", MemberRequirement::Required).status == MemberStatus::WrongType,
             "strict string member access rejects the wrong JSON type");
 
     const auto signedValue = GetInt64Member(root, "signed", MemberRequirement::Required);
     Require(signedValue.HasValue() && signedValue.value == -7, "strict signed member access accepts a signed integer");
-    Require(GetInt64Member(root, "tooLarge", MemberRequirement::Required).status == MemberStatus::OutOfRange,
-            "signed member access reports unsigned overflow");
+    Require(GetInt64Member(root, "tooLarge", MemberRequirement::Required).status == MemberStatus::OutOfRange, "signed member access reports unsigned overflow");
     Require(GetInt64Member(root, "numericString", MemberRequirement::Required).status == MemberStatus::WrongType,
             "strict integer access rejects numeric strings");
     const auto coerced = GetInt64Member(root, "numericString", MemberRequirement::Required, NumericStringPolicy::Allow);
     Require(coerced.HasValue() && coerced.value == 42, "numeric-string coercion occurs only when requested at the call site");
     Require(GetUInt64Member(root, "signed", MemberRequirement::Required).status == MemberStatus::OutOfRange,
             "unsigned member access reports negative values as out of range");
-    Require(GetUInt64Member(root,
-                            "unsigned",
-                            MemberRequirement::Required,
-                            NumericStringPolicy::Reject,
-                            UnsignedIntegerPolicy::RequireUnsignedStorage)
-                    .HasValue(),
-            "unsigned-storage member access accepts a JSON unsigned integer");
-    Require(GetUInt64Member(root,
-                            "signed",
-                            MemberRequirement::Required,
-                            NumericStringPolicy::Reject,
-                            UnsignedIntegerPolicy::RequireUnsignedStorage)
-                .status == MemberStatus::WrongType,
+    Require(
+        GetUInt64Member(root, "unsigned", MemberRequirement::Required, NumericStringPolicy::Reject, UnsignedIntegerPolicy::RequireUnsignedStorage).HasValue(),
+        "unsigned-storage member access accepts a JSON unsigned integer");
+    Require(GetUInt64Member(root, "signed", MemberRequirement::Required, NumericStringPolicy::Reject, UnsignedIntegerPolicy::RequireUnsignedStorage).status ==
+                MemberStatus::WrongType,
             "unsigned-storage member access rejects signed storage even before range conversion");
     Require(GetBoolMember(root, "wrong", MemberRequirement::Required).HasValue(), "strict bool member access accepts only a JSON boolean");
     Require(GetBoolMember(root, "unsigned", MemberRequirement::Required).status == MemberStatus::WrongType,
             "strict bool member access rejects integer coercion by default");
-    const auto coercedBool =
-        GetBoolMember(root, "unsigned", MemberRequirement::Required, BooleanIntegerPolicy::AllowZeroAndNonzero);
+    const auto coercedBool = GetBoolMember(root, "unsigned", MemberRequirement::Required, BooleanIntegerPolicy::AllowZeroAndNonzero);
     Require(coercedBool.HasValue() && coercedBool.value, "integer-to-bool coercion occurs only when requested at the call site");
 }
 
@@ -3021,7 +2970,7 @@ void TestAppThemeDxPaletteRefreshesAccentVariantsAfterAssigningAccent()
 
 void TestFolderContentDxPalettePreservesItsNamedProfile()
 {
-    const AppTheme theme = ResolveAppTheme(ThemeMode::Rainbow, L"folder-content-palette-golden");
+    const AppTheme theme                            = ResolveAppTheme(ThemeMode::Rainbow, L"folder-content-palette-golden");
     const RedSalamander::DxUi::ThemePalette palette = MakeFolderContentDxPalette(theme);
 
     Require(palette.dark == theme.dark && palette.highContrast == theme.highContrast && palette.rainbowMode == theme.menu.rainbowMode,
@@ -3039,8 +2988,7 @@ void TestFolderContentDxPalettePreservesItsNamedProfile()
 void TestAppThemeSelectionResolutionIsSharedAndDeterministic()
 {
     Require(ThemeModeFromThemeId(L"builtin/light") == ThemeMode::Light && ThemeModeFromThemeId(L"builtin/dark") == ThemeMode::Dark &&
-                ThemeModeFromThemeId(L"builtin/rainbow") == ThemeMode::Rainbow &&
-                ThemeModeFromThemeId(L"builtin/highContrast") == ThemeMode::HighContrast &&
+                ThemeModeFromThemeId(L"builtin/rainbow") == ThemeMode::Rainbow && ThemeModeFromThemeId(L"builtin/highContrast") == ThemeMode::HighContrast &&
                 ThemeModeFromThemeId(L"user/unknown") == ThemeMode::System,
             "theme-id mapping keeps the built-in identifiers and system fallback stable");
 
@@ -3061,8 +3009,7 @@ void TestAppThemeSelectionResolutionIsSharedAndDeterministic()
                      D2D1::ColorF(0x40 / 255.0f, 0x20 / 255.0f, 0x10 / 255.0f, 0x80 / 255.0f),
                      "custom theme selection preserves ARGB accent channels and alpha");
     Require(resolved.theme.windowBackground == RGB(0x11, 0x22, 0x33), "custom theme selection applies the window background override");
-    Require(resolved.theme.navigationView.gdiBackground == RGB(0x20, 0x30, 0x40) &&
-                resolved.theme.navigationView.gdiBorder == RGB(0x20, 0x30, 0x40) &&
+    Require(resolved.theme.navigationView.gdiBackground == RGB(0x20, 0x30, 0x40) && resolved.theme.navigationView.gdiBorder == RGB(0x20, 0x30, 0x40) &&
                 resolved.theme.navigationView.gdiBorderPen == RGB(0x50, 0x60, 0x70),
             "custom theme selection keeps navigation GDI colors synchronized with resolved D2D overrides");
     RequireColorNear(resolved.theme.fileOperations.progressTotal,
@@ -3070,10 +3017,10 @@ void TestAppThemeSelectionResolutionIsSharedAndDeterministic()
                      "custom theme selection derives file-operation colors from the effective navigation theme");
 
     Common::Settings::ThemeDefinition invalid = custom;
-    invalid.id                                 = L"user/dxui-selection-invalid";
+    invalid.id                                = L"user/dxui-selection-invalid";
     Common::Settings::ThemeColorSource missingReference;
-    missingReference.kind       = Common::Settings::ThemeColorSourceKind::Reference;
-    missingReference.references = {L"missing.semantic.color"};
+    missingReference.kind         = Common::Settings::ThemeColorSourceKind::Reference;
+    missingReference.references   = {L"missing.semantic.color"};
     invalid.colors[L"app.accent"] = std::move(missingReference);
 
     const AppThemeSelectionResolution rejected = ResolveAppThemeSelection(invalid.id, &invalid, L"shared-theme-resolution-test");
@@ -3098,7 +3045,7 @@ void TestViewerThemeAccentPressedUsesBaseThemePolarity()
     viewerTheme.darkBase                = FALSE;
 
     const ThemePalette palette = MakeThemePaletteFromViewerTheme(viewerTheme);
-    const auto luminance = [](const D2D1_COLOR_F& color) noexcept { return (0.2126f * color.r) + (0.7152f * color.g) + (0.0722f * color.b); };
+    const auto luminance       = [](const D2D1_COLOR_F& color) noexcept { return (0.2126f * color.r) + (0.7152f * color.g) + (0.0722f * color.b); };
 
     Require(palette.dark, "viewer theme can request dark UI mode with a light base theme");
     Require(luminance(palette.accentPressed) < luminance(palette.accent),

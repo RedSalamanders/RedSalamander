@@ -103,11 +103,8 @@ struct ProviderEntryView final
     return true;
 }
 
-[[nodiscard]] constexpr ValidationError ValidateProviderBufferContract(const FileInfo* buffer,
-                                                                        uint64_t usedBytes,
-                                                                        uint64_t allocatedBytes,
-                                                                        uint64_t advertisedCount,
-                                                                        const ResourcePolicy& policy) noexcept
+[[nodiscard]] constexpr ValidationError ValidateProviderBufferContract(
+    const FileInfo* buffer, uint64_t usedBytes, uint64_t allocatedBytes, uint64_t advertisedCount, const ResourcePolicy& policy) noexcept
 {
     if (usedBytes > allocatedBytes)
     {
@@ -133,9 +130,9 @@ struct ProviderEntryView final
 }
 
 [[nodiscard]] inline ValidationError ValidateProviderEntry(std::span<const std::byte> buffer,
-                                                            size_t offset,
-                                                            const ResourcePolicy& policy,
-                                                            ProviderEntryView& out) noexcept
+                                                           size_t offset,
+                                                           const ResourcePolicy& policy,
+                                                           ProviderEntryView& out) noexcept
 {
     out = {};
     if (buffer.data() == nullptr)
@@ -147,7 +144,7 @@ struct ProviderEntryView final
         return ValidationError::TruncatedHeader;
     }
 
-    const size_t remaining = buffer.size() - offset;
+    const size_t remaining   = buffer.size() - offset;
     const size_t headerBytes = offsetof(FileInfo, FileName);
     if (remaining < headerBytes)
     {
@@ -210,21 +207,18 @@ struct ProviderEntryView final
     return ValidationError::None;
 }
 
-[[nodiscard]] inline ValidationError ValidateProviderTerminalExtent(std::span<const std::byte> buffer,
-                                                                     size_t offset,
-                                                                     const ProviderEntryView& entry) noexcept
+[[nodiscard]] inline ValidationError ValidateProviderTerminalExtent(std::span<const std::byte> buffer, size_t offset, const ProviderEntryView& entry) noexcept
 {
     if (entry.entry == nullptr || ! entry.isLast || offset > buffer.size())
     {
         return ValidationError::TruncatedHeader;
     }
 
-    size_t requiredBytes = 0u;
+    size_t requiredBytes      = 0u;
     size_t nulTerminatedBytes = 0u;
     size_t maximumRecordBytes = 0u;
     if (! TryAddSize(offsetof(FileInfo, FileName), static_cast<size_t>(entry.entry->FileNameSize), requiredBytes) ||
-        ! TryAddSize(requiredBytes, sizeof(wchar_t), nulTerminatedBytes) ||
-        ! TryAlignUp(nulTerminatedBytes, alignof(FileInfo), maximumRecordBytes))
+        ! TryAddSize(requiredBytes, sizeof(wchar_t), nulTerminatedBytes) || ! TryAlignUp(nulTerminatedBytes, alignof(FileInfo), maximumRecordBytes))
     {
         return ValidationError::InvalidNextOffset;
     }

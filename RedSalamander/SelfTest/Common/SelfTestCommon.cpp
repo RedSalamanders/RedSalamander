@@ -223,8 +223,7 @@ const char* CaseStatusName(SelfTestCaseResult::Status status) noexcept
         return false;
     }
 
-    return std::ranges::all_of(value, [](const wchar_t ch) noexcept
-    {
+    return std::ranges::all_of(value, [](const wchar_t ch) noexcept {
         return (ch >= L'0' && ch <= L'9') || (ch >= L'A' && ch <= L'Z') || (ch >= L'a' && ch <= L'z') || ch == L'-' || ch == L'_';
     });
 }
@@ -342,12 +341,8 @@ const char* CaseStatusName(SelfTestCaseResult::Status status) noexcept
     std::filesystem::create_directories(sandboxRoot, ec);
     if (ec)
     {
-        AppendSelfTestTrace(std::format(L"{}: suite={} case={} create failed path='{}' error={}",
-                                        traceKind,
-                                        suiteSegment,
-                                        caseSegment,
-                                        sandboxRoot.wstring(),
-                                        ec.value()));
+        AppendSelfTestTrace(
+            std::format(L"{}: suite={} case={} create failed path='{}' error={}", traceKind, suiteSegment, caseSegment, sandboxRoot.wstring(), ec.value()));
         return {};
     }
 
@@ -1335,8 +1330,7 @@ std::optional<uint64_t> ExtractJsonUInt(std::string_view json, std::string_view 
                 return std::nullopt;
             }
             ++valueStart;
-            while (valueStart < json.size() &&
-                   (json[valueStart] == ' ' || json[valueStart] == '\t' || json[valueStart] == '\r' || json[valueStart] == '\n'))
+            while (valueStart < json.size() && (json[valueStart] == ' ' || json[valueStart] == '\t' || json[valueStart] == '\r' || json[valueStart] == '\n'))
             {
                 ++valueStart;
             }
@@ -1373,7 +1367,7 @@ HRESULT LoadMtpPluginSelfTestExport(std::string_view exportName, wil::unique_hmo
         return E_INVALIDARG;
     }
 
-    FileSystemPluginManager& pluginManager                  = FileSystemPluginManager::GetInstance();
+    FileSystemPluginManager& pluginManager               = FileSystemPluginManager::GetInstance();
     const FileSystemPluginManager::PluginEntry* mtpEntry = nullptr;
     for (const FileSystemPluginManager::PluginEntry& entry : pluginManager.GetPlugins())
     {
@@ -1720,8 +1714,8 @@ void TriggerSelfTestCaseCrashInjection(SelfTestSuite suite, std::wstring_view na
 
 void RecalculateSuiteSummary(SelfTestSuiteResult& suite) noexcept
 {
-    suite.passed = 0;
-    suite.failed = 0;
+    suite.passed  = 0;
+    suite.failed  = 0;
     suite.skipped = 0;
     suite.failureMessage.clear();
 
@@ -1782,11 +1776,11 @@ void AppendCaseResult(
     SelfTestSuiteResult& suite, std::wstring_view name, SelfTestCaseResult::Status status, std::wstring_view reason, uint64_t durationMs) noexcept
 {
     SelfTestCaseResult result{};
-    result.name       = std::wstring(name);
-    result.status     = status;
-    result.durationMs = durationMs;
+    result.name        = std::wstring(name);
+    result.status      = status;
+    result.durationMs  = durationMs;
     result.repeatIndex = 1u;
-    result.reason     = std::wstring(reason);
+    result.reason      = std::wstring(reason);
     AppendCaseResult(suite, std::move(result));
 }
 
@@ -1803,7 +1797,7 @@ void MarkInFlightSelfTestCaseCrashed(SelfTestRunResult& runResult, std::wstring_
         return;
     }
 
-    const auto now = std::chrono::steady_clock::now();
+    const auto now      = std::chrono::steady_clock::now();
     uint64_t durationMs = 0;
     if (now >= crashedCase->startedAt)
     {
@@ -1811,9 +1805,8 @@ void MarkInFlightSelfTestCaseCrashed(SelfTestRunResult& runResult, std::wstring_
     }
 
     SelfTestSuiteResult* targetSuite = nullptr;
-    const auto existingSuite = std::find_if(runResult.suites.begin(),
-                                            runResult.suites.end(),
-                                            [&](const SelfTestSuiteResult& item) noexcept { return item.suite == crashedCase->suite; });
+    const auto existingSuite         = std::find_if(
+        runResult.suites.begin(), runResult.suites.end(), [&](const SelfTestSuiteResult& item) noexcept { return item.suite == crashedCase->suite; });
     if (existingSuite != runResult.suites.end())
     {
         targetSuite = std::addressof(*existingSuite);
@@ -1826,24 +1819,23 @@ void MarkInFlightSelfTestCaseCrashed(SelfTestRunResult& runResult, std::wstring_
         targetSuite = std::addressof(runResult.suites.back());
     }
 
-    const auto existingCase = std::find_if(targetSuite->cases.begin(),
-                                           targetSuite->cases.end(),
-                                           [&](const SelfTestCaseResult& item) noexcept { return item.name == crashedCase->name; });
+    const auto existingCase = std::find_if(
+        targetSuite->cases.begin(), targetSuite->cases.end(), [&](const SelfTestCaseResult& item) noexcept { return item.name == crashedCase->name; });
     if (existingCase != targetSuite->cases.end())
     {
-        existingCase->status = SelfTestCaseResult::Status::crashed;
+        existingCase->status     = SelfTestCaseResult::Status::crashed;
         existingCase->durationMs = durationMs;
-        existingCase->reason = std::wstring(reason.empty() ? std::wstring_view(L"case crashed") : reason);
+        existingCase->reason     = std::wstring(reason.empty() ? std::wstring_view(L"case crashed") : reason);
         RecalculateSuiteSummary(*targetSuite);
         FlushSuiteJsonAfterCase(*targetSuite);
     }
     else
     {
         SelfTestCaseResult result{};
-        result.name = crashedCase->name;
-        result.status = SelfTestCaseResult::Status::crashed;
+        result.name       = crashedCase->name;
+        result.status     = SelfTestCaseResult::Status::crashed;
         result.durationMs = durationMs;
-        result.reason = std::wstring(reason.empty() ? std::wstring_view(L"case crashed") : reason);
+        result.reason     = std::wstring(reason.empty() ? std::wstring_view(L"case crashed") : reason);
         AppendCaseResult(*targetSuite, std::move(result));
     }
 

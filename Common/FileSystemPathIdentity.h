@@ -40,9 +40,7 @@ struct FileSystemPathIdentity final
 [[nodiscard]] bool EquivalentComponent(const FileSystemPathIdentity& identity, std::wstring_view lhs, std::wstring_view rhs) noexcept;
 [[nodiscard]] bool EquivalentPath(const FileSystemPathIdentity& identity, std::wstring_view lhs, std::wstring_view rhs) noexcept;
 [[nodiscard]] std::wstring JoinFileSystemPath(const FileSystemPathIdentity& identity, std::wstring_view folder, std::wstring_view leaf);
-[[nodiscard]] bool IsStrictDescendantPath(const FileSystemPathIdentity& identity,
-                                          std::wstring_view prefix,
-                                          std::wstring_view candidate) noexcept;
+[[nodiscard]] bool IsStrictDescendantPath(const FileSystemPathIdentity& identity, std::wstring_view prefix, std::wstring_view candidate) noexcept;
 [[nodiscard]] std::wstring ReplaceFileSystemPathPrefix(const FileSystemPathIdentity& identity,
                                                        std::wstring_view candidate,
                                                        std::wstring_view oldPrefix,

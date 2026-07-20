@@ -98,8 +98,8 @@ static uint64_t g_lastMessageCount               = 0;   // Track message rate fo
 
 namespace
 {
-using RedSalamander::DxUi::Button;
 using RedSalamander::DxUi::BlendColor;
+using RedSalamander::DxUi::Button;
 using RedSalamander::DxUi::ColorFromArgb;
 using RedSalamander::DxUi::Label;
 using RedSalamander::DxUi::StatusStrip;
@@ -120,8 +120,8 @@ constexpr std::wstring_view kMonitorEtwBurstLatencyMode   = L"latency";
 constexpr std::wstring_view kMonitorAreaName              = L"Monitor";
 constexpr std::wstring_view kMonitorScenarioName          = L"monitor.chrome.dxui_toolbar_statusstrip";
 constexpr UINT kMsgRunMonitorChromeSelfTest               = WM_APP + 0x61C;
-constexpr UINT kMsgMonitorFileOpenProgress                 = WM_APP + 0x61D;
-constexpr UINT kMsgMonitorFileOpenCompleted                = WM_APP + 0x61E;
+constexpr UINT kMsgMonitorFileOpenProgress                = WM_APP + 0x61D;
+constexpr UINT kMsgMonitorFileOpenCompleted               = WM_APP + 0x61E;
 
 #if defined(_DEBUG)
 constexpr std::wstring_view kMonitorBuildFlavor = L"Debug";
@@ -1633,19 +1633,32 @@ void ApplyMonitorThemeOverrides(ColorTextView::Theme& theme, const std::unordere
         { return static_cast<uint32_t>(std::clamp(std::lround(std::clamp(value, 0.0f, 1.0f) * 255.0f), 0l, 255l)); };
         return (channel(color.a) << 24u) | (channel(color.r) << 16u) | (channel(color.g) << 8u) | channel(color.b);
     };
-    if (key == L"monitor.textView.bg") return argb(theme.bg);
-    if (key == L"monitor.textView.fg") return argb(theme.fg);
-    if (key == L"monitor.textView.caret") return argb(theme.caret);
-    if (key == L"monitor.textView.selection") return argb(theme.selection);
-    if (key == L"monitor.textView.searchHighlight") return argb(theme.searchHighlight);
-    if (key == L"monitor.textView.gutterBg") return argb(theme.gutterBg);
-    if (key == L"monitor.textView.gutterFg") return argb(theme.gutterFg);
-    if (key == L"monitor.textView.metaText") return argb(theme.metaText);
-    if (key == L"monitor.textView.metaError") return argb(theme.metaError);
-    if (key == L"monitor.textView.metaWarning") return argb(theme.metaWarning);
-    if (key == L"monitor.textView.metaInfo") return argb(theme.metaInfo);
-    if (key == L"monitor.textView.metaPerf") return argb(theme.metaPerf);
-    if (key == L"monitor.textView.metaDebug") return argb(theme.metaDebug);
+    if (key == L"monitor.textView.bg")
+        return argb(theme.bg);
+    if (key == L"monitor.textView.fg")
+        return argb(theme.fg);
+    if (key == L"monitor.textView.caret")
+        return argb(theme.caret);
+    if (key == L"monitor.textView.selection")
+        return argb(theme.selection);
+    if (key == L"monitor.textView.searchHighlight")
+        return argb(theme.searchHighlight);
+    if (key == L"monitor.textView.gutterBg")
+        return argb(theme.gutterBg);
+    if (key == L"monitor.textView.gutterFg")
+        return argb(theme.gutterFg);
+    if (key == L"monitor.textView.metaText")
+        return argb(theme.metaText);
+    if (key == L"monitor.textView.metaError")
+        return argb(theme.metaError);
+    if (key == L"monitor.textView.metaWarning")
+        return argb(theme.metaWarning);
+    if (key == L"monitor.textView.metaInfo")
+        return argb(theme.metaInfo);
+    if (key == L"monitor.textView.metaPerf")
+        return argb(theme.metaPerf);
+    if (key == L"monitor.textView.metaDebug")
+        return argb(theme.metaDebug);
     return std::nullopt;
 }
 
@@ -1767,10 +1780,10 @@ MonitorResolvedTheme ResolveMonitorTheme() noexcept
 
     if (custom)
     {
-        auto context = Common::Settings::MakeSystemThemeResolutionContext(resolved.dark);
-        context.highContrast = resolved.highContrast;
+        auto context                            = Common::Settings::MakeSystemThemeResolutionContext(resolved.dark);
+        context.highContrast                    = resolved.highContrast;
         const ColorTextView::Theme baseTextView = resolved.textView;
-        context.baseColor = [baseTextView](std::wstring_view key) { return FindMonitorThemeColorArgb(baseTextView, key); };
+        context.baseColor                       = [baseTextView](std::wstring_view key) { return FindMonitorThemeColorArgb(baseTextView, key); };
         if (SUCCEEDED(Common::Settings::ResolveThemeDefinition(*custom, context, resolvedOverrides)))
         {
             overrides = &resolvedOverrides.colors;
@@ -1815,9 +1828,9 @@ MonitorResolvedTheme ResolveMonitorTheme() noexcept
     palette.subduedText           = theme.textView.metaText;
     palette.disabledText          = BlendColor(theme.textView.bg, theme.textView.metaText, 0.48f);
     palette.selectionFill         = palette.accent;
-    palette.selectionText = Common::Colors::WeightedSrgbLuminanceWithoutLinearization(palette.accent.r, palette.accent.g, palette.accent.b) < 0.56
-                                ? D2D1::ColorF(D2D1::ColorF::White)
-                                : D2D1::ColorF(D2D1::ColorF::Black);
+    palette.selectionText         = Common::Colors::WeightedSrgbLuminanceWithoutLinearization(palette.accent.r, palette.accent.g, palette.accent.b) < 0.56
+                                        ? D2D1::ColorF(D2D1::ColorF::White)
+                                        : D2D1::ColorF(D2D1::ColorF::Black);
     palette.selectionInactiveFill = D2D1::ColorF(palette.accent.r, palette.accent.g, palette.accent.b, theme.highContrast ? 1.0f : 0.55f);
     palette.focusStroke           = theme.textView.metaInfo;
     palette.hoverFill             = D2D1::ColorF(palette.accent.r, palette.accent.g, palette.accent.b, theme.dark ? 0.16f : 0.10f);
@@ -2544,8 +2557,7 @@ bool DoFileOpen(HWND owner)
     if (! GetOpenFileNameW(&ofn))
         return false;
 
-    const Common::Settings::MonitorRetentionSettings retention =
-        g_settings.monitor.value_or(Common::Settings::MonitorSettings{}).retention;
+    const Common::Settings::MonitorRetentionSettings retention = g_settings.monitor.value_or(Common::Settings::MonitorSettings{}).retention;
     const RedSalamanderMonitor::MonitorFileReadLimits limits{
         .maxBytes = retention.maxRetainedTextBytes,
         .maxLines = retention.maxRetainedLines,
@@ -2555,27 +2567,27 @@ bool DoFileOpen(HWND owner)
     g_monitorFileOpenActive.store(true, std::memory_order_release);
     g_monitorFileOpenThread = std::jthread([owner, path, limits, generation](std::stop_token stopToken)
     {
-        const auto started = std::chrono::steady_clock::now();
+        const auto started       = std::chrono::steady_clock::now();
         uint64_t lastPostedBytes = 0u;
-        RedSalamanderMonitor::MonitorFileReadResult result = RedSalamanderMonitor::ReadMonitorTextFile(
-            path,
-            stopToken,
-            limits,
-            [owner, generation, &lastPostedBytes](uint64_t bytesRead, uint64_t totalBytes)
+        RedSalamanderMonitor::MonitorFileReadResult result =
+            RedSalamanderMonitor::ReadMonitorTextFile(path,
+                                                      stopToken,
+                                                      limits,
+                                                      [owner, generation, &lastPostedBytes](uint64_t bytesRead, uint64_t totalBytes)
+        {
+            constexpr uint64_t kProgressStepBytes = 1u * 1024u * 1024u;
+            if (bytesRead != totalBytes && bytesRead - lastPostedBytes < kProgressStepBytes)
             {
-                constexpr uint64_t kProgressStepBytes = 1u * 1024u * 1024u;
-                if (bytesRead != totalBytes && bytesRead - lastPostedBytes < kProgressStepBytes)
-                {
-                    return;
-                }
-                lastPostedBytes = bytesRead;
-                auto progress = std::make_unique<MonitorFileOpenProgress>(MonitorFileOpenProgress{
-                    .generation = generation,
-                    .bytesRead  = bytesRead,
-                    .totalBytes = totalBytes,
-                });
-                static_cast<void>(PostMessagePayload(owner, kMsgMonitorFileOpenProgress, 0, std::move(progress)));
+                return;
+            }
+            lastPostedBytes = bytesRead;
+            auto progress   = std::make_unique<MonitorFileOpenProgress>(MonitorFileOpenProgress{
+                .generation = generation,
+                .bytesRead  = bytesRead,
+                .totalBytes = totalBytes,
             });
+            static_cast<void>(PostMessagePayload(owner, kMsgMonitorFileOpenProgress, 0, std::move(progress)));
+        });
 
         auto completion = std::make_unique<MonitorFileOpenCompletion>(MonitorFileOpenCompletion{
             .result     = std::move(result),
@@ -2593,8 +2605,7 @@ LRESULT OnMonitorFileOpenProgress(LPARAM lParam)
     auto progress = TakeMessagePayload<MonitorFileOpenProgress>(lParam);
     if (progress && progress->generation == g_monitorFileOpenGeneration && g_statusStrip)
     {
-        g_statusStrip->SetSectionText(
-            4u, FormatStringResource(g_hInstance, IDS_STATUS_OPEN_PROGRESS_FMT, progress->bytesRead, progress->totalBytes));
+        g_statusStrip->SetSectionText(4u, FormatStringResource(g_hInstance, IDS_STATUS_OPEN_PROGRESS_FMT, progress->bytesRead, progress->totalBytes));
     }
     return 0;
 }
@@ -2776,8 +2787,7 @@ void UpdateStatusBar()
     const std::wstring autoText    = LoadStringResource(g_hInstance, isAutoScrollEnabled ? IDS_STATUS_AUTOSCROLL_ON : IDS_STATUS_AUTOSCROLL_OFF);
     const std::wstring visibleText = FormatStringResource(g_hInstance, IDS_STATUS_VISIBLE_FMT, visibleLines);
     const std::wstring totalText   = FormatStringResource(g_hInstance, IDS_STATUS_TOTAL_FMT, totalLines);
-    const std::wstring etwText =
-        FormatStringResource(g_hInstance, IDS_STATUS_ETW_RECEIVED_FMT, etwReceived, g_colorView.GetDroppedEventCount());
+    const std::wstring etwText     = FormatStringResource(g_hInstance, IDS_STATUS_ETW_RECEIVED_FMT, etwReceived, g_colorView.GetDroppedEventCount());
 
     g_statusStrip->SetSectionText(0u, autoText);
     g_statusStrip->SetSectionText(1u, filterText);
@@ -2910,10 +2920,10 @@ LRESULT RunMonitorChromeSelfTest(HWND hWnd)
 
     const uint64_t droppedBeforeOverload = g_colorView.GetDroppedEventCount();
     g_colorView.SetRetentionLimits(ColorTextView::RetentionLimits{
-        .maxQueuedEvents       = 32u,
-        .maxRetainedLines      = 24u,
-        .maxRetainedTextBytes  = 1u * 1024u * 1024u,
-        .maxSearchMatches      = 1'000u,
+        .maxQueuedEvents      = 32u,
+        .maxRetainedLines     = 24u,
+        .maxRetainedTextBytes = 1u * 1024u * 1024u,
+        .maxSearchMatches     = 1'000u,
     });
     for (size_t i = 0u; i < 80u; ++i)
     {
@@ -2937,20 +2947,17 @@ LRESULT RunMonitorChromeSelfTest(HWND hWnd)
         }
     }
     const uint64_t overloadDropped = g_colorView.GetDroppedEventCount() - droppedBeforeOverload;
-    passed &= require(L"etw overload stays bounded",
-                      g_colorView.DebugGetQueuedEventCount() == 0u && g_colorView.GetTotalLineCount() == 24u && overloadDropped == 56u,
-                      std::format(L"queued={} retained={} dropped={}",
-                                  g_colorView.DebugGetQueuedEventCount(),
-                                  g_colorView.GetTotalLineCount(),
-                                  overloadDropped));
+    passed &=
+        require(L"etw overload stays bounded",
+                g_colorView.DebugGetQueuedEventCount() == 0u && g_colorView.GetTotalLineCount() == 24u && overloadDropped == 56u,
+                std::format(L"queued={} retained={} dropped={}", g_colorView.DebugGetQueuedEventCount(), g_colorView.GetTotalLineCount(), overloadDropped));
     g_colorView.ClearText();
-    const Common::Settings::MonitorRetentionSettings configuredRetention =
-        g_settings.monitor.value_or(Common::Settings::MonitorSettings{}).retention;
+    const Common::Settings::MonitorRetentionSettings configuredRetention = g_settings.monitor.value_or(Common::Settings::MonitorSettings{}).retention;
     g_colorView.SetRetentionLimits(ColorTextView::RetentionLimits{
-        .maxQueuedEvents       = configuredRetention.maxQueuedEvents,
-        .maxRetainedLines      = configuredRetention.maxRetainedLines,
-        .maxRetainedTextBytes  = configuredRetention.maxRetainedTextBytes,
-        .maxSearchMatches      = configuredRetention.maxSearchMatches,
+        .maxQueuedEvents      = configuredRetention.maxQueuedEvents,
+        .maxRetainedLines     = configuredRetention.maxRetainedLines,
+        .maxRetainedTextBytes = configuredRetention.maxRetainedTextBytes,
+        .maxSearchMatches     = configuredRetention.maxSearchMatches,
     });
 
     if (passed)
@@ -3762,13 +3769,12 @@ LRESULT OnCreateMainWindow(HWND hWnd)
     g_colorView.EnableLineNumbers(g_lineNumbersVisible);
     g_colorView.SetAutoScroll(g_autoScrollEnabled);
     g_colorView.SetFilterMask(g_filterMask);
-    const Common::Settings::MonitorRetentionSettings retention =
-        g_settings.monitor.value_or(Common::Settings::MonitorSettings{}).retention;
+    const Common::Settings::MonitorRetentionSettings retention = g_settings.monitor.value_or(Common::Settings::MonitorSettings{}).retention;
     g_colorView.SetRetentionLimits(ColorTextView::RetentionLimits{
-        .maxQueuedEvents       = retention.maxQueuedEvents,
-        .maxRetainedLines      = retention.maxRetainedLines,
-        .maxRetainedTextBytes  = retention.maxRetainedTextBytes,
-        .maxSearchMatches      = retention.maxSearchMatches,
+        .maxQueuedEvents      = retention.maxQueuedEvents,
+        .maxRetainedLines     = retention.maxRetainedLines,
+        .maxRetainedTextBytes = retention.maxRetainedTextBytes,
+        .maxSearchMatches     = retention.maxSearchMatches,
     });
     ApplyMonitorTheme();
 
@@ -4217,9 +4223,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         case WM_COMMAND: return OnCommandMainWindow(hWnd, LOWORD(wParam), HIWORD(wParam), reinterpret_cast<HWND>(lParam));
         case WM_PAINT: return OnPaintMainWindow(hWnd);
         case WM_DESTROY: return OnDestroyMainWindow(hWnd);
-        case WM_NCDESTROY:
-            static_cast<void>(DrainPostedPayloadsForWindow(hWnd));
-            return DefWindowProc(hWnd, message, wParam, lParam);
+        case WM_NCDESTROY: static_cast<void>(DrainPostedPayloadsForWindow(hWnd)); return DefWindowProc(hWnd, message, wParam, lParam);
         default: return DefWindowProc(hWnd, message, wParam, lParam);
     }
 }

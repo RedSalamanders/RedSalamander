@@ -273,7 +273,7 @@ void FileSystemS3::EmitSyntheticWatchNotification(std::wstring_view watchedPath,
 
 void FileSystemS3::NotifySyntheticPathCreated(std::wstring_view fullPath) noexcept
 {
-    const std::wstring normalized          = FsS3::NormalizePluginPath(fullPath);
+    const std::wstring normalized = FsS3::NormalizePluginPath(fullPath);
     {
         std::lock_guard lock(_stateMutex);
         _writableDirectoryValidationTicks.erase(normalized);
@@ -309,7 +309,7 @@ void FileSystemS3::NotifySyntheticPathCreated(std::wstring_view fullPath) noexce
 void FileSystemS3::RememberWritableDirectoryValidation(std::wstring_view fullPath) noexcept
 {
     constexpr size_t kMaxCachedDirectories = 4096u;
-    const std::wstring normalized = FsS3::NormalizePluginPath(fullPath);
+    const std::wstring normalized          = FsS3::NormalizePluginPath(fullPath);
     std::lock_guard lock(_stateMutex);
     if (_writableDirectoryValidationTicks.size() >= kMaxCachedDirectories)
     {
@@ -321,8 +321,8 @@ void FileSystemS3::RememberWritableDirectoryValidation(std::wstring_view fullPat
 bool FileSystemS3::HasFreshWritableDirectoryValidation(std::wstring_view fullPath) noexcept
 {
     constexpr ULONGLONG kValidationLifetimeMs = 60'000ull;
-    const std::wstring normalized = FsS3::NormalizePluginPath(fullPath);
-    const ULONGLONG nowTick = GetTickCount64();
+    const std::wstring normalized             = FsS3::NormalizePluginPath(fullPath);
+    const ULONGLONG nowTick                   = GetTickCount64();
     std::lock_guard lock(_stateMutex);
     const auto found = _writableDirectoryValidationTicks.find(normalized);
     if (found == _writableDirectoryValidationTicks.end())

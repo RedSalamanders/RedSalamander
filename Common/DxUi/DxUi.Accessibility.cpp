@@ -14,8 +14,8 @@
 #include <optional>
 #include <span>
 #include <string>
-#include <utility>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include <UIAutomation.h>
@@ -27,19 +27,19 @@ namespace RedSalamander::DxUi
 {
 namespace
 {
-constexpr PCWSTR kWindowHostPropName                       = L"RedSalamander.DxUi.WindowHost";
-constexpr uint32_t kAccessibilityMaxDepth                  = 16u;
-constexpr UINT kWindowHostAccessibilityActionMessage       = WM_APP + 0x6A;
+constexpr PCWSTR kWindowHostPropName                 = L"RedSalamander.DxUi.WindowHost";
+constexpr uint32_t kAccessibilityMaxDepth            = 16u;
+constexpr UINT kWindowHostAccessibilityActionMessage = WM_APP + 0x6A;
 #if defined(ENABLE_TESTS)
 constexpr UINT kWindowHostAccessibilityCreateProviderMessage = WM_APP + 0x6B;
 #endif
-constexpr DWORD kAccessibilityUiActionDispatchTimeoutMs    = 5000u;
-constexpr LONG kAccessibilityRuntimeIdTreeItem             = 1'001;
-constexpr LONG kAccessibilityRuntimeIdGridRow              = 1'002;
-constexpr LONG kAccessibilityRuntimeIdGridCell             = 1'003;
-constexpr LONG kAccessibilityRuntimeIdGridHeader           = 1'004;
-constexpr LONG kAccessibilityRuntimeIdPasswordRevealButton = 1'005;
-constexpr size_t kAccessibilityMaxRuntimeIdValueCount      = kAccessibilityMaxDepth + 6u;
+constexpr DWORD kAccessibilityUiActionDispatchTimeoutMs             = 5000u;
+constexpr LONG kAccessibilityRuntimeIdTreeItem                      = 1'001;
+constexpr LONG kAccessibilityRuntimeIdGridRow                       = 1'002;
+constexpr LONG kAccessibilityRuntimeIdGridCell                      = 1'003;
+constexpr LONG kAccessibilityRuntimeIdGridHeader                    = 1'004;
+constexpr LONG kAccessibilityRuntimeIdPasswordRevealButton          = 1'005;
+constexpr size_t kAccessibilityMaxRuntimeIdValueCount               = kAccessibilityMaxDepth + 6u;
 constexpr size_t kAccessibilityMaxMaterializedOffscreenSelectedRows = 256u;
 
 class AccessibilityProvider;
@@ -75,23 +75,23 @@ struct AccessibilityUiActionRequest
     size_t textRangeEnd                        = 0u;
     TextPatternRangeEndpoint textRangeEndpoint = TextPatternRangeEndpoint_Start;
     UiaPoint textRangePoint{};
-    int textRangeMoveCount                       = 0;
-    int textRangeMoved                           = 0;
-    size_t textRangeResultStart                  = 0u;
-    size_t textRangeResultEnd                    = 0u;
-    size_t textRangeTextLength                   = 0u;
+    int textRangeMoveCount      = 0;
+    int textRangeMoved          = 0;
+    size_t textRangeResultStart = 0u;
+    size_t textRangeResultEnd   = 0u;
+    size_t textRangeTextLength  = 0u;
     std::vector<D2D1_RECT_F> textRangeBoundsDip;
-    float textRangeDipToPixelScale               = 1.0f;
-    HRESULT result                               = static_cast<HRESULT>(UIA_E_NOTSUPPORTED);
+    float textRangeDipToPixelScale = 1.0f;
+    HRESULT result                 = static_cast<HRESULT>(UIA_E_NOTSUPPORTED);
 };
 
 struct AccessibilityUiActionDispatch
 {
-    AccessibilityUiActionDispatch()                                                 = default;
-    AccessibilityUiActionDispatch(const AccessibilityUiActionDispatch&)             = delete;
-    AccessibilityUiActionDispatch& operator=(const AccessibilityUiActionDispatch&)  = delete;
-    AccessibilityUiActionDispatch(AccessibilityUiActionDispatch&&)                  = delete;
-    AccessibilityUiActionDispatch& operator=(AccessibilityUiActionDispatch&&)       = delete;
+    AccessibilityUiActionDispatch()                                                = default;
+    AccessibilityUiActionDispatch(const AccessibilityUiActionDispatch&)            = delete;
+    AccessibilityUiActionDispatch& operator=(const AccessibilityUiActionDispatch&) = delete;
+    AccessibilityUiActionDispatch(AccessibilityUiActionDispatch&&)                 = delete;
+    AccessibilityUiActionDispatch& operator=(AccessibilityUiActionDispatch&&)      = delete;
 
     AccessibilityUiActionRequest request;
     wil::com_ptr_nothrow<IRawElementProviderSimple> providerKeepAlive;
@@ -109,7 +109,7 @@ struct AccessibilityUiActionDispatch
 
 struct AccessibilityUiActionPayload
 {
-    AccessibilityUiActionPayload()                                              = default;
+    AccessibilityUiActionPayload()                                               = default;
     AccessibilityUiActionPayload(const AccessibilityUiActionPayload&)            = delete;
     AccessibilityUiActionPayload& operator=(const AccessibilityUiActionPayload&) = delete;
     AccessibilityUiActionPayload(AccessibilityUiActionPayload&&)                 = delete;
@@ -205,7 +205,6 @@ void MaybeStallTakenAccessibilityUiActionHandlerForTest() noexcept
 {
     return kAccessibilityUiActionDispatchTimeoutMs;
 }
-
 
 [[nodiscard]] constexpr size_t AccessibilityOffscreenSelectedRowMaterializationLimit() noexcept
 {
@@ -401,13 +400,13 @@ struct AccessibilityGridCellSnapshotRecord
 
 struct AccessibilitySnapshot
 {
-    HWND hwnd              = nullptr;
-    DWORD buildThreadId    = 0u;
-    DWORD windowThreadId   = 0u;
-    bool alive             = false;
-    bool hasRetainedRoot   = false;
+    HWND hwnd                     = nullptr;
+    DWORD buildThreadId           = 0u;
+    DWORD windowThreadId          = 0u;
+    bool alive                    = false;
+    bool hasRetainedRoot          = false;
     bool hasCollapsedSemanticRoot = false;
-    float pixelsToDipScale = 1.0f;
+    float pixelsToDipScale        = 1.0f;
     std::wstring windowName;
     std::optional<AccessibilityFocusedFragmentSnapshot> focusedFragment;
     std::vector<AccessibilityPointHitSnapshot> pointHitRecords;
@@ -444,11 +443,8 @@ struct AccessibilitySnapshot
 [[nodiscard]] double GetGridCellRangeValue(const GridCellData& cellData) noexcept;
 [[nodiscard]] bool FindAccessibilityPathForTarget(const Control* current, const ControlPath& basePath, const Control* target, ControlPath& outPath) noexcept;
 void AppendAccessibilitySnapshotPointHits(WindowHost& host, const Control* current, const ControlPath& basePath, AccessibilitySnapshot& snapshot);
-void AppendAccessibilitySnapshotPointHits(WindowHost& host,
-                                          const Control* current,
-                                          const ControlPath& basePath,
-                                          AccessibilitySnapshot& snapshot,
-                                          const AccessibilityPointHitBuildContext& context);
+void AppendAccessibilitySnapshotPointHits(
+    WindowHost& host, const Control* current, const ControlPath& basePath, AccessibilitySnapshot& snapshot, const AccessibilityPointHitBuildContext& context);
 void AppendAccessibilitySnapshotNavigation(
     WindowHost& host, const Control* root, const Control* current, const ControlPath& basePath, AccessibilitySnapshot& snapshot);
 [[nodiscard]] const AccessibilityPointHitSnapshot* FindSnapshotPointHit(const AccessibilitySnapshot& snapshot, D2D1_POINT_2F pointDip) noexcept;
@@ -560,9 +556,8 @@ void PublishWindowHostAccessibilitySnapshot(WindowHostAccessibilityTarget& targe
     if (root)
     {
         ControlPath collapsedRootPath{};
-        snapshot->hasCollapsedSemanticRoot =
-            TryResolveSingleSemanticRootControlPath(root, collapsedRootPath) && snapshot->semanticControlOrder.size() == 1u &&
-            AreControlPathsEqual(snapshot->semanticControlOrder.front(), collapsedRootPath);
+        snapshot->hasCollapsedSemanticRoot = TryResolveSingleSemanticRootControlPath(root, collapsedRootPath) && snapshot->semanticControlOrder.size() == 1u &&
+                                             AreControlPathsEqual(snapshot->semanticControlOrder.front(), collapsedRootPath);
     }
     AppendAccessibilitySnapshotPointHits(host, root, ControlPath{}, *snapshot);
 
@@ -864,8 +859,7 @@ template <typename TControl> [[nodiscard]] TControl* ResolveControlAtPath(TContr
     return intersection;
 }
 
-[[nodiscard]] std::optional<D2D1_RECT_F> ApplyAccessibilityPointHitContext(const D2D1_RECT_F& rect,
-                                                                           const AccessibilityPointHitBuildContext& context) noexcept
+[[nodiscard]] std::optional<D2D1_RECT_F> ApplyAccessibilityPointHitContext(const D2D1_RECT_F& rect, const AccessibilityPointHitBuildContext& context) noexcept
 {
     const D2D1_RECT_F translated = TranslateAccessibilityRect(rect, context.translationDip);
     if (! IsNonEmptyAccessibilityRect(translated))
@@ -992,8 +986,7 @@ void AppendGridAccessibilityPointHits(const Grid& grid,
         {
             if (const std::optional<D2D1_RECT_F> cellRect = grid.GetVisibleCellRect(rowIndex.value(), columnIndex))
             {
-                AppendTransformedAccessibilityPointHit(
-                    snapshot, AccessibilityFragmentKind::GridCell, path, cellRect.value(), context, 0u, rowId, columnIndex);
+                AppendTransformedAccessibilityPointHit(snapshot, AccessibilityFragmentKind::GridCell, path, cellRect.value(), context, 0u, rowId, columnIndex);
             }
         }
 
@@ -1010,11 +1003,8 @@ void AppendAccessibilitySnapshotPointHits(WindowHost& host, const Control* curre
     AppendAccessibilityPointHit(snapshot, AccessibilityFragmentKind::Root, ControlPath{}, host.GetClientBoundsDip());
 }
 
-void AppendAccessibilitySnapshotPointHits(WindowHost& host,
-                                          const Control* current,
-                                          const ControlPath& basePath,
-                                          AccessibilitySnapshot& snapshot,
-                                          const AccessibilityPointHitBuildContext& context)
+void AppendAccessibilitySnapshotPointHits(
+    WindowHost& host, const Control* current, const ControlPath& basePath, AccessibilitySnapshot& snapshot, const AccessibilityPointHitBuildContext& context)
 {
     if (! current || ! current->IsVisible())
     {
@@ -1258,13 +1248,13 @@ void AppendAccessibilitySnapshotNavigation(
         }
         else if (const auto* grid = dynamic_cast<const Grid*>(current))
         {
-            const bool captureGridSnapshotPerf = Debug::Perf::IsCaptureEnabled();
-            const auto gridSnapshotStartedAt   = std::chrono::steady_clock::now();
+            const bool captureGridSnapshotPerf   = Debug::Perf::IsCaptureEnabled();
+            const auto gridSnapshotStartedAt     = std::chrono::steady_clock::now();
             size_t materializedOffscreenRowCount = 0u;
-            record.isGrid                = true;
-            record.gridCanSelectMultiple = grid->GetSelectionMode() != GridSelectionMode::Single;
-            record.gridIsEnabled         = grid->IsEnabled();
-            record.gridHasFocus          = grid->HasFocus();
+            record.isGrid                        = true;
+            record.gridCanSelectMultiple         = grid->GetSelectionMode() != GridSelectionMode::Single;
+            record.gridIsEnabled                 = grid->IsEnabled();
+            record.gridHasFocus                  = grid->HasFocus();
             if (const auto* model = grid->GetModel())
             {
                 record.gridRowCount    = model->GetRowCount();
@@ -1354,14 +1344,10 @@ void AppendAccessibilitySnapshotNavigation(
                     if (selectedRowIndex)
                     {
                         record.selectedGridRowIds.push_back(rowId);
-                        if (! visibleRowIds.contains(rowId) &&
-                            materializedOffscreenRowCount < AccessibilityOffscreenSelectedRowMaterializationLimit())
+                        if (! visibleRowIds.contains(rowId) && materializedOffscreenRowCount < AccessibilityOffscreenSelectedRowMaterializationLimit())
                         {
                             ++materializedOffscreenRowCount;
-                            AccessibilityGridRowSnapshotRecord rowRecord{
-                                .rowIndex              = selectedRowIndex.value(),
-                                .rowId                 = rowId,
-                                .gridRowOffscreen      = true};
+                            AccessibilityGridRowSnapshotRecord rowRecord{.rowIndex = selectedRowIndex.value(), .rowId = rowId, .gridRowOffscreen = true};
                             for (size_t columnIndex = 0u; columnIndex < record.gridColumnCount; ++columnIndex)
                             {
                                 GridCellData cellData{};
@@ -1514,7 +1500,7 @@ const AccessibilityGridRowSnapshotRecord* FindSnapshotGridRowRecord(const Access
 }
 
 const AccessibilityTreeItemSnapshotRecord* FindSnapshotTreeItemRecordByVisibleIndex(const AccessibilityControlNavigationSnapshot& record,
-                                                                                     size_t treeVisibleIndex) noexcept
+                                                                                    size_t treeVisibleIndex) noexcept
 {
     if (! record.isTree || treeVisibleIndex >= record.treeItems.size())
     {
@@ -1571,8 +1557,7 @@ bool SnapshotTreeItemIsSelected(const AccessibilityControlNavigationSnapshot& re
         return false;
     }
 
-    const AccessibilityTreeItemSnapshotRecord* selected =
-        FindSnapshotTreeItemRecordByVisibleIndex(record, record.selectedTreeVisibleIndex.value());
+    const AccessibilityTreeItemSnapshotRecord* selected = FindSnapshotTreeItemRecordByVisibleIndex(record, record.selectedTreeVisibleIndex.value());
     return selected && selected->itemId == itemId;
 }
 
@@ -2749,9 +2734,9 @@ struct TextRangeSpanMoveResult
 }
 
 [[nodiscard]] std::optional<TextRangeSpan> TryGetEnclosingTextRangeVisualLineSpan(const WindowHost& host,
-                                                                                   const Control& control,
-                                                                                   std::wstring_view text,
-                                                                                   size_t position) noexcept
+                                                                                  const Control& control,
+                                                                                  std::wstring_view text,
+                                                                                  size_t position) noexcept
 {
     const std::optional<std::vector<TextRangeSpan>> spans = TryResolveTextRangeVisualLineSpans(host, control, text);
     if (! spans || spans->empty())
@@ -3696,9 +3681,9 @@ private:
     std::shared_ptr<const AccessibilitySnapshot> _snapshot;
     ControlPath _path{};
     AccessibilityFragmentKind _kind = AccessibilityFragmentKind::Root;
-    uint64_t _treeItemId    = 0u;
-    uint64_t _gridRowId     = 0u;
-    size_t _gridColumnIndex = 0u;
+    uint64_t _treeItemId            = 0u;
+    uint64_t _gridRowId             = 0u;
+    size_t _gridColumnIndex         = 0u;
 };
 
 HRESULT AccessibilityTextRangeProvider::QueryInterface(REFIID riid, void** ppvObject) noexcept
@@ -3799,7 +3784,7 @@ HRESULT AccessibilityTextRangeProvider::CompareEndpoints(TextPatternRangeEndpoin
 
 HRESULT AccessibilityTextRangeProvider::ExpandToEnclosingUnit(TextUnit unit) noexcept
 {
-    const auto startedAt = std::chrono::steady_clock::now();
+    const auto startedAt   = std::chrono::steady_clock::now();
     TextUnit supportedUnit = unit;
     switch (unit)
     {
@@ -3867,21 +3852,21 @@ HRESULT AccessibilityTextRangeProvider::ExpandToEnclosingUnit(TextUnit unit) noe
     }
     else
     {
-        const TextRangeSpan range = ClampCurrentRange(text.size());
+        const TextRangeSpan range    = ClampCurrentRange(text.size());
         WindowHost* const host       = ResolveHost();
         const Control* const control = ResolveControl();
-        expandedRange = (host && control)
-                            ? TryGetEnclosingTextRangeVisualLineSpan(*host, *control, text, range.start)
-                                  .value_or(GetTextRangeLineSpanAtPosition(text, range.start))
-                            : GetTextRangeLineSpanAtPosition(text, range.start);
+        expandedRange =
+            (host && control)
+                ? TryGetEnclosingTextRangeVisualLineSpan(*host, *control, text, range.start).value_or(GetTextRangeLineSpanAtPosition(text, range.start))
+                : GetTextRangeLineSpanAtPosition(text, range.start);
     }
 
-    _rangeStart = expandedRange.start;
-    _rangeEnd   = expandedRange.end;
+    _rangeStart           = expandedRange.start;
+    _rangeEnd             = expandedRange.end;
     const wchar_t* detail = supportedUnit == TextUnit_Character ? L"expand-character"
                             : supportedUnit == TextUnit_Word    ? L"expand-word"
                             : supportedUnit == TextUnit_Line    ? L"expand-line"
-                                                               : L"expand-document";
+                                                                : L"expand-document";
     Debug::Perf::Emit(L"dxui.uia.text_range_us", detail, Debug::Perf::ElapsedUs(startedAt), _rangeEnd - _rangeStart, text.size(), S_OK);
     return S_OK;
 }
@@ -4318,8 +4303,7 @@ HRESULT AccessibilityTextRangeProvider::ExecuteSelectOnWindowThread() noexcept
     return UIA_E_NOTSUPPORTED;
 }
 
-HRESULT AccessibilityTextRangeProvider::ExecuteExpandToVisualLineOnWindowThread(
-    size_t start, size_t end, size_t& outStart, size_t& outEnd) noexcept
+HRESULT AccessibilityTextRangeProvider::ExecuteExpandToVisualLineOnWindowThread(size_t start, size_t end, size_t& outStart, size_t& outEnd) noexcept
 {
     const std::scoped_lock accessibilityLock(GetAccessibilityTargetMutex());
 
@@ -4328,9 +4312,9 @@ HRESULT AccessibilityTextRangeProvider::ExecuteExpandToVisualLineOnWindowThread(
     const std::wstring text      = control ? (_textOverride ? _textOverride.value() : GetControlAccessibleTextRangeText(control)) : ResolveText();
     const TextRangeSpan range    = ClampTextRangeSpan(start, end, text.size());
     const TextRangeSpan expandedRange =
-        (host && control) ? TryGetEnclosingTextRangeVisualLineSpan(*host, *control, text, range.start)
-                                .value_or(GetTextRangeLineSpanAtPosition(text, range.start))
-                          : GetTextRangeLineSpanAtPosition(text, range.start);
+        (host && control)
+            ? TryGetEnclosingTextRangeVisualLineSpan(*host, *control, text, range.start).value_or(GetTextRangeLineSpanAtPosition(text, range.start))
+            : GetTextRangeLineSpanAtPosition(text, range.start);
 
     outStart = expandedRange.start;
     outEnd   = expandedRange.end;
@@ -4529,8 +4513,7 @@ HRESULT AccessibilityTextRangeProvider::DispatchActionToWindowThread(Accessibili
     return DispatchAccessibilityUiActionToWindowThread(_hwnd, request);
 }
 
-HRESULT AccessibilityTextRangeProvider::DispatchVisualLineExpansionToWindowThread(
-    size_t start, size_t end, size_t& outStart, size_t& outEnd) noexcept
+HRESULT AccessibilityTextRangeProvider::DispatchVisualLineExpansionToWindowThread(size_t start, size_t end, size_t& outStart, size_t& outEnd) noexcept
 {
     AccessibilityUiActionRequest request{};
     request.textRangeProvider    = this;
@@ -4694,7 +4677,7 @@ AccessibilityPatternQueryResult AccessibilityProvider::QueryPattern(Accessibilit
         const AccessibilityControlNavigationSnapshot* record =
             (snapshot && snapshot->alive && snapshot->hasRetainedRoot) ? FindControlNavigationRecord(*snapshot, _path) : nullptr;
         return (record && SnapshotContainsTreeItem(*record, _treeItemId)) ? makeResult(static_cast<ISelectionItemProvider*>(this))
-                                                                                : AccessibilityPatternQueryResult{};
+                                                                          : AccessibilityPatternQueryResult{};
     }
 
     if (_kind == AccessibilityFragmentKind::TreeItem && patternKind == AccessibilityPatternKind::ExpandCollapse)
@@ -5374,7 +5357,7 @@ HRESULT AccessibilityProvider::get_BoundingRectangle(UiaRect* outRect) noexcept
     if (_kind == AccessibilityFragmentKind::TreeItem)
     {
         const AccessibilityControlNavigationSnapshot* record = FindControlNavigationRecord(*snapshot, _path);
-        const AccessibilityTreeItemSnapshotRecord* item = record ? FindSnapshotTreeItemRecord(*record, _treeItemId) : nullptr;
+        const AccessibilityTreeItemSnapshotRecord* item      = record ? FindSnapshotTreeItemRecord(*record, _treeItemId) : nullptr;
         if (! item)
         {
             return UIA_E_ELEMENTNOTAVAILABLE;
@@ -5475,7 +5458,7 @@ HRESULT AccessibilityProvider::ElementProviderFromPoint(double x, double y, IRaw
         case AccessibilityFragmentKind::TreeItem:
         {
             const AccessibilityControlNavigationSnapshot* record = FindControlNavigationRecord(*snapshot, hit->path);
-            const AccessibilityTreeItemSnapshotRecord* item = record ? FindSnapshotTreeItemRecordByVisibleIndex(*record, hit->treeVisibleIndex) : nullptr;
+            const AccessibilityTreeItemSnapshotRecord* item      = record ? FindSnapshotTreeItemRecordByVisibleIndex(*record, hit->treeVisibleIndex) : nullptr;
             if (! item)
             {
                 return UIA_E_ELEMENTNOTAVAILABLE;
@@ -6735,7 +6718,7 @@ Grid* AccessibilityProvider::ResolveMutableGridControl() const noexcept
 
 bool AccessibilityProvider::ResolveTreeVisibleIndex(size_t& outVisibleIndex) const noexcept
 {
-    const Tree* tree = ResolveTreeControl();
+    const Tree* tree  = ResolveTreeControl();
     const auto* model = tree ? tree->GetModel() : nullptr;
     if (! tree || ! model)
     {
@@ -6754,8 +6737,8 @@ bool AccessibilityProvider::ResolveTreeVisibleIndex(size_t& outVisibleIndex) con
 
 bool AccessibilityProvider::ResolveTreeItemData(TreeItemData& outItem) const noexcept
 {
-    const Tree* tree = ResolveTreeControl();
-    const auto* model = tree ? tree->GetModel() : nullptr;
+    const Tree* tree    = ResolveTreeControl();
+    const auto* model   = tree ? tree->GetModel() : nullptr;
     size_t visibleIndex = 0u;
     if (! model || ! ResolveTreeVisibleIndex(visibleIndex))
     {
@@ -7090,7 +7073,7 @@ HRESULT AccessibilityProvider::ExecuteSelectOnWindowThread() noexcept
 
     if (_kind == AccessibilityFragmentKind::TreeItem)
     {
-        Tree* tree = ResolveMutableTreeControl();
+        Tree* tree          = ResolveMutableTreeControl();
         size_t visibleIndex = 0u;
         if (! tree || ! ResolveTreeVisibleIndex(visibleIndex) || ! tree->RequestSelectVisibleItem(visibleIndex))
         {
@@ -7606,8 +7589,7 @@ bool TryHandleWindowHostAccessibilityMessage(HWND hwnd, UINT msg, WPARAM wp, LPA
 #endif
 
     AccessibilityUiActionDispatch::State expected = AccessibilityUiActionDispatch::State::Pending;
-    if (! dispatch->state.compare_exchange_strong(
-            expected, AccessibilityUiActionDispatch::State::Taken, std::memory_order_acq_rel, std::memory_order_acquire))
+    if (! dispatch->state.compare_exchange_strong(expected, AccessibilityUiActionDispatch::State::Taken, std::memory_order_acq_rel, std::memory_order_acquire))
     {
         return true;
     }
@@ -7685,10 +7667,7 @@ IRawElementProviderFragmentRoot* CreateWindowHostAccessibilityProvider(HWND hwnd
         // This test-only factory must resolve the live host on its owning thread. SendMessageW is
         // synchronous, so the handler cannot outlive this output slot.
         IRawElementProviderFragmentRoot* provider = nullptr;
-        static_cast<void>(SendMessageW(hwnd,
-                                       kWindowHostAccessibilityCreateProviderMessage,
-                                       0,
-                                       reinterpret_cast<LPARAM>(&provider)));
+        static_cast<void>(SendMessageW(hwnd, kWindowHostAccessibilityCreateProviderMessage, 0, reinterpret_cast<LPARAM>(&provider)));
         return provider;
     }
 

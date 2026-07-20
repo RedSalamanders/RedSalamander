@@ -621,12 +621,12 @@ case SelfTestState::Step::Phase10_PermanentDelete:
     }
 
     // A non-root enumeration failure is partial evidence, not a reason to discard later sibling totals.
-    constexpr std::wstring_view kDirectorySizeFailChildPathEnv = L"REDSALAMANDER_DIRECTORY_SIZE_FAIL_CHILD_PATH";
+    constexpr std::wstring_view kDirectorySizeFailChildPathEnv  = L"REDSALAMANDER_DIRECTORY_SIZE_FAIL_CHILD_PATH";
     constexpr std::wstring_view kDirectorySizeFailChildFiredEnv = L"REDSALAMANDER_DIRECTORY_SIZE_FAIL_CHILD_FIRED";
-    const std::filesystem::path partialSizeRoot = state.tempRoot / L"directory-size-partial";
-    const std::filesystem::path deniedChild = partialSizeRoot / L"denied-child";
-    const std::filesystem::path readableSibling = partialSizeRoot / L"readable-sibling";
-    auto clearDirectorySizeHook = wil::scope_exit([&]() noexcept
+    const std::filesystem::path partialSizeRoot                 = state.tempRoot / L"directory-size-partial";
+    const std::filesystem::path deniedChild                     = partialSizeRoot / L"denied-child";
+    const std::filesystem::path readableSibling                 = partialSizeRoot / L"readable-sibling";
+    auto clearDirectorySizeHook                                 = wil::scope_exit([&]() noexcept
     {
         static_cast<void>(::SetEnvironmentVariableW(kDirectorySizeFailChildPathEnv.data(), nullptr));
         static_cast<void>(::SetEnvironmentVariableW(kDirectorySizeFailChildFiredEnv.data(), nullptr));
@@ -644,8 +644,7 @@ case SelfTestState::Step::Phase10_PermanentDelete:
 
     FileSystemDirectorySizeResult partialSizeResult{};
     partialSizeResult.sizeBytes = sizeof(FileSystemDirectorySizeResult);
-    const HRESULT partialSizeHr =
-        localDirOps->GetDirectorySize(partialSizeRoot.c_str(), FILESYSTEM_FLAG_RECURSIVE, nullptr, nullptr, &partialSizeResult);
+    const HRESULT partialSizeHr = localDirOps->GetDirectorySize(partialSizeRoot.c_str(), FILESYSTEM_FLAG_RECURSIVE, nullptr, nullptr, &partialSizeResult);
     if (partialSizeHr != HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) || partialSizeResult.status != HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) ||
         partialSizeResult.totalBytes != 222u || partialSizeResult.fileCount != 1u || GetEnvVarTrimmed(kDirectorySizeFailChildFiredEnv) != L"1")
     {

@@ -908,8 +908,7 @@ namespace
 std::wstring BuildSingleItemSummaryText(const FolderView::SelectionStats::SelectedItemDetails& details, std::wstring_view directorySizeText)
 {
     const auto fields = Common::FileMetadata::FormatDisplayFields(
-        {.lastWriteTime100nsSince1601 = details.lastWriteTime, .fileAttributes = details.fileAttributes},
-        Common::FileMetadata::DisplayProfile::CompactDetails);
+        {.lastWriteTime100nsSince1601 = details.lastWriteTime, .fileAttributes = details.fileAttributes}, Common::FileMetadata::DisplayProfile::CompactDetails);
 
     if (details.isDirectory)
     {
@@ -921,8 +920,7 @@ std::wstring BuildSingleItemSummaryText(const FolderView::SelectionStats::Select
 
         if (! fields.localTime.empty())
         {
-            return FormatEmbeddedStringResource(
-                nullptr, IDS_FMT_STATUS_SELECTED_SINGLE_DIR_TIME_ATTRS, sizeText, fields.localTime, fields.attributes);
+            return FormatEmbeddedStringResource(nullptr, IDS_FMT_STATUS_SELECTED_SINGLE_DIR_TIME_ATTRS, sizeText, fields.localTime, fields.attributes);
         }
         return FormatEmbeddedStringResource(nullptr, IDS_FMT_STATUS_SELECTED_SINGLE_DIR_ATTRS, sizeText, fields.attributes);
     }
@@ -930,8 +928,7 @@ std::wstring BuildSingleItemSummaryText(const FolderView::SelectionStats::Select
     const std::wstring sizeText = FormatBytesCompact(details.sizeBytes);
     if (! fields.localTime.empty())
     {
-        return FormatEmbeddedStringResource(
-            nullptr, IDS_FMT_STATUS_SELECTED_SINGLE_FILE_SIZE_TIME_ATTRS, sizeText, fields.localTime, fields.attributes);
+        return FormatEmbeddedStringResource(nullptr, IDS_FMT_STATUS_SELECTED_SINGLE_FILE_SIZE_TIME_ATTRS, sizeText, fields.localTime, fields.attributes);
     }
     return FormatEmbeddedStringResource(nullptr, IDS_FMT_STATUS_SELECTED_SINGLE_FILE_SIZE_ATTRS, sizeText, fields.attributes);
 }

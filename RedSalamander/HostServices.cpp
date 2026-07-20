@@ -42,8 +42,7 @@ std::atomic<FolderWindow*> g_hostFolderWindow{nullptr};
 std::atomic<std::atomic<HWND>*> g_hostFolderWindowHwnd{nullptr};
 std::atomic<Common::Settings::Settings*> g_hostSettings{nullptr};
 
-template<typename T>
-[[nodiscard]] T& RequireHostDependency(const std::atomic<T*>& dependency) noexcept
+template <typename T> [[nodiscard]] T& RequireHostDependency(const std::atomic<T*>& dependency) noexcept
 {
     T* value = dependency.load(std::memory_order_acquire);
     if (! value)
@@ -2527,9 +2526,7 @@ HostServices& GetHostServicesImpl() noexcept
     return instance;
 }
 
-void ConfigureHostServices(FolderWindow& folderWindow,
-                           std::atomic<HWND>& folderWindowHwnd,
-                           Common::Settings::Settings& settings) noexcept
+void ConfigureHostServices(FolderWindow& folderWindow, std::atomic<HWND>& folderWindowHwnd, Common::Settings::Settings& settings) noexcept
 {
     g_hostFolderWindow.store(&folderWindow, std::memory_order_release);
     g_hostFolderWindowHwnd.store(&folderWindowHwnd, std::memory_order_release);

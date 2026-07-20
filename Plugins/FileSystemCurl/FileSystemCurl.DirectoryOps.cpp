@@ -1275,8 +1275,7 @@ void RunDebugCurlStreamingReaderContractSelfTests(unsigned int& passed, unsigned
     check(SUCCEEDED(reader->Read(output.data(), static_cast<unsigned long>(output.size()), &bytesRead)) && bytesRead == output.size(),
           L"reader should fill the advertised 1 MiB request when data is available");
 
-    constexpr std::array<std::byte, 7> tail{{
-        std::byte{1}, std::byte{2}, std::byte{3}, std::byte{4}, std::byte{5}, std::byte{6}, std::byte{7}}};
+    constexpr std::array<std::byte, 7> tail{{std::byte{1}, std::byte{2}, std::byte{3}, std::byte{4}, std::byte{5}, std::byte{6}, std::byte{7}}};
     check(SUCCEEDED(reader->DebugPrimeForSelfTest(tail, true)), L"EOF-tail test buffer should initialize");
 
     std::array<std::byte, 16> tailOutput{};
@@ -1423,8 +1422,8 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CreateFileReader(const wchar_t* path, 
         {
             if (! entry.sizeKnown)
             {
-                uint64_t probedSize = 0;
-                bool probedSizeKnown = false;
+                uint64_t probedSize   = 0;
+                bool probedSizeKnown  = false;
                 const HRESULT probeHr = CurlProbeRemoteFileSize(resolved.connection, resolved.remotePath, probedSize, probedSizeKnown);
                 if (SUCCEEDED(probeHr) && probedSizeKnown)
                 {

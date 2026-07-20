@@ -4248,7 +4248,7 @@ HRESULT FileSystemDummy::ValidateDeleteNode(DummyNode& target, FileSystemFlags f
         return S_OK;
     }
 
-    const bool recursive = HasFlag(flags, FILESYSTEM_FLAG_RECURSIVE);
+    const bool recursive   = HasFlag(flags, FILESYSTEM_FLAG_RECURSIVE);
     const bool hasChildren = target.childrenGenerated ? ! target.children.empty() : target.plannedChildCount > 0;
     if (! recursive)
     {

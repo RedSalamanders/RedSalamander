@@ -24,12 +24,12 @@
 #pragma warning(pop)
 
 #include "FileSystemMtp.Internal.h"
+#include "PackedFileInfoBuffer.h"
 #include "PlugInterfaces/DriveInfo.h"
 #include "PlugInterfaces/FileSystem.h"
 #include "PlugInterfaces/Host.h"
 #include "PlugInterfaces/Informations.h"
 #include "PlugInterfaces/NavigationMenu.h"
-#include "PackedFileInfoBuffer.h"
 
 class FilesInformationMtp final : public IFilesInformation
 {
@@ -237,9 +237,9 @@ private:
     [[nodiscard]] HRESULT CreateBackendWorkerLocked() noexcept;
     [[nodiscard]] std::wstring OverwriteJournalIdentityForPath(std::wstring_view normalizedPath) const noexcept;
     HRESULT RunBackendCommand(std::function<HRESULT(FileSystemMtpInternal::IMtpBackend&)> command,
-                              std::wstring recoveryDeviceIdentity = {},
+                              std::wstring recoveryDeviceIdentity               = {},
                               FileSystemMtpInternal::MtpBackendCommandKind kind = FileSystemMtpInternal::MtpBackendCommandKind::ReadOnly,
-                              uint64_t requiredBackendGeneration = 0u) noexcept;
+                              uint64_t requiredBackendGeneration                = 0u) noexcept;
     HRESULT CompleteSingleItem(FileSystemOperation operationType,
                                unsigned long itemIndex,
                                const wchar_t* sourcePath,

@@ -2488,7 +2488,7 @@ struct PreferencesSaveResult final
     }
 
     state.workingSettings = SettingsSave::PrepareForSave(merged);
-    result.mainSaved       = true;
+    result.mainSaved      = true;
 
     result.hr = SaveMonitorSettingsFromDialog(dlg, state);
     if (FAILED(result.hr))
@@ -2745,8 +2745,8 @@ void CommitAndApply(HWND dlg, PreferencesDialogState& state) noexcept
 
     const bool pluginsChanged = ! AreEquivalentPluginsSettings(state.baselineSettings.plugins, state.workingSettings.plugins);
 
-    *state.settings               = state.workingSettings;
-    state.baselineSettings        = state.workingSettings;
+    *state.settings        = state.workingSettings;
+    state.baselineSettings = state.workingSettings;
     if (saveResult.monitorSaved)
     {
         state.monitorBaselineSettings = state.workingMonitorSettings;
@@ -3894,8 +3894,7 @@ void UpdatePageText(HWND dlg, PreferencesDialogState& state, PrefCategory catego
     state.updatingPageText = true;
     const auto clearGuard  = wil::scope_exit([&]() noexcept { state.updatingPageText = false; });
 
-    const bool restoreCategoryTreeFocus =
-        state.categoryTreeWindow && IsWindow(state.categoryTreeWindow) != FALSE && GetFocus() == state.categoryTreeWindow;
+    const bool restoreCategoryTreeFocus = state.categoryTreeWindow && IsWindow(state.categoryTreeWindow) != FALSE && GetFocus() == state.categoryTreeWindow;
 
     const PrefCategory previousCategory = state.currentCategory;
     const bool categoryChanged          = previousCategory != category;
@@ -4872,9 +4871,12 @@ INT_PTR OnInitDialog(HWND dlg, PreferencesDialogState* state)
     state->backgroundBrush.reset(CreateSolidBrush(state->theme.windowBackground));
     state->cardBackgroundColor = UiMetrics::GetControlSurfaceColor(state->theme);
 
-    state->inputBackgroundColor         = UiMetrics::BlendColorRefWeightedTruncate(state->cardBackgroundColor, state->theme.windowBackground, state->theme.dark ? 50 : 30, 255);
-    state->inputFocusedBackgroundColor  = UiMetrics::BlendColorRefWeightedTruncate(state->inputBackgroundColor, state->theme.menu.text, state->theme.dark ? 20 : 16, 255);
-    state->inputDisabledBackgroundColor = UiMetrics::BlendColorRefWeightedTruncate(state->theme.windowBackground, state->inputBackgroundColor, state->theme.dark ? 70 : 40, 255);
+    state->inputBackgroundColor =
+        UiMetrics::BlendColorRefWeightedTruncate(state->cardBackgroundColor, state->theme.windowBackground, state->theme.dark ? 50 : 30, 255);
+    state->inputFocusedBackgroundColor =
+        UiMetrics::BlendColorRefWeightedTruncate(state->inputBackgroundColor, state->theme.menu.text, state->theme.dark ? 20 : 16, 255);
+    state->inputDisabledBackgroundColor =
+        UiMetrics::BlendColorRefWeightedTruncate(state->theme.windowBackground, state->inputBackgroundColor, state->theme.dark ? 70 : 40, 255);
     state->cardBrush.reset();
     state->inputBrush.reset();
     state->inputFocusedBrush.reset();
@@ -5757,15 +5759,15 @@ bool PreferencesDialog::DebugGetSnapshot(::PreferencesDebugSnapshot& out) noexce
             }
         }
     }
-    const HWND nativeFocus         = GetFocus();
-    out.categoryTreeFocused        = state->categoryTreeWindow && nativeFocus == state->categoryTreeWindow;
-    out.nativeFocusWindow          = reinterpret_cast<UINT_PTR>(nativeFocus);
-    out.nativeFocusControlId       = nativeFocus ? GetDlgCtrlID(nativeFocus) : 0;
-    out.nativeFocusWithinPageHost  = nativeFocus && state->pageHostWindow &&
-                                    (nativeFocus == state->pageHostWindow || IsChild(state->pageHostWindow, nativeFocus) != FALSE);
-    out.activeWindow               = reinterpret_cast<UINT_PTR>(GetActiveWindow());
-    const HWND foregroundWindow    = GetForegroundWindow();
-    out.foregroundWindow           = reinterpret_cast<UINT_PTR>(foregroundWindow);
+    const HWND nativeFocus   = GetFocus();
+    out.categoryTreeFocused  = state->categoryTreeWindow && nativeFocus == state->categoryTreeWindow;
+    out.nativeFocusWindow    = reinterpret_cast<UINT_PTR>(nativeFocus);
+    out.nativeFocusControlId = nativeFocus ? GetDlgCtrlID(nativeFocus) : 0;
+    out.nativeFocusWithinPageHost =
+        nativeFocus && state->pageHostWindow && (nativeFocus == state->pageHostWindow || IsChild(state->pageHostWindow, nativeFocus) != FALSE);
+    out.activeWindow            = reinterpret_cast<UINT_PTR>(GetActiveWindow());
+    const HWND foregroundWindow = GetForegroundWindow();
+    out.foregroundWindow        = reinterpret_cast<UINT_PTR>(foregroundWindow);
     if (foregroundWindow)
     {
         DWORD foregroundProcessId = 0u;
@@ -6092,32 +6094,32 @@ bool PreferencesDialog::DebugGetSnapshot(::PreferencesDebugSnapshot& out) noexce
             }
             out.currentPageRenderedDxHostCount = out.currentPageDxHostRenderCountTotal != 0u ? 1u : 0u;
         }
-        out.pluginsExpanded                             = hostState._categoryTreeModel.IsPluginsExpanded();
-        out.pluginsTreeChildCount                       = hostState._categoryTreeModel.GetPluginItemCount();
-        out.themesListRowCount                          = hostState._themesPane.DebugListRowCount();
-        const auto themesListMetrics                    = hostState._themesPane.DebugListVisibleWorkMetrics();
-        out.themesListVisibleRowCount                   = static_cast<size_t>(themesListMetrics.visibleRowCount);
-        out.themesListVisibleColumnCount                = static_cast<size_t>(themesListMetrics.visibleColumnCount);
-        out.themesListVisibleCellCount                  = static_cast<size_t>(themesListMetrics.visibleCellCount);
-        out.themesListHasVerticalScrollbar              = themesListMetrics.hasVerticalScrollbar;
-        out.themesListVerticalScrollDip                 = themesListMetrics.verticalScrollDip;
-        out.themesListRenderCount                       = hostState._themesPane.DebugListRenderCount();
-        out.themesListResizeCount                       = hostState._themesPane.DebugListResizeCount();
-        out.themesListResizeFailureCount                = hostState._themesPane.DebugListResizeFailureCount();
-        out.themesSearchText                            = state->themesSearchText;
-        out.themesSelectedThemeIdText                   = state->workingSettings.theme.currentThemeId;
-        out.themesSelectedColorKeyText                  = state->themesSelectedColorKey;
-        out.themesColorText                             = state->themesColorText;
-        out.themesSelectedColorOverrideActive           = false;
-        out.generalFocusTarget                          = hostState._generalPane.DebugGetFocusTarget();
-        out.generalUsesDxUiTypographyContext            = hostState._generalPane.DebugUsesDxUiTypographyContext();
-        out.generalUsesDxUiTypographyMetrics            = hostState._generalPane.DebugUsesDxUiTypographyMetrics();
-        out.panesFocusTarget                            = hostState._panesPane.DebugGetFocusTarget();
-        out.panesUsesDxUiTypographyContext              = hostState._panesPane.DebugUsesDxUiTypographyContext();
-        out.panesUsesDxUiTypographyMetrics              = hostState._panesPane.DebugUsesDxUiTypographyMetrics();
-        out.viewersUsesDxUiTypographyContext            = hostState._viewersPane.DebugUsesDxUiTypographyContext();
-        out.viewersUsesDxUiTypographyMetrics            = hostState._viewersPane.DebugUsesDxUiTypographyMetrics();
-        out.hotPathsFocusTarget                         = hostState._hotPathsPane.DebugGetFocusTarget();
+        out.pluginsExpanded                   = hostState._categoryTreeModel.IsPluginsExpanded();
+        out.pluginsTreeChildCount             = hostState._categoryTreeModel.GetPluginItemCount();
+        out.themesListRowCount                = hostState._themesPane.DebugListRowCount();
+        const auto themesListMetrics          = hostState._themesPane.DebugListVisibleWorkMetrics();
+        out.themesListVisibleRowCount         = static_cast<size_t>(themesListMetrics.visibleRowCount);
+        out.themesListVisibleColumnCount      = static_cast<size_t>(themesListMetrics.visibleColumnCount);
+        out.themesListVisibleCellCount        = static_cast<size_t>(themesListMetrics.visibleCellCount);
+        out.themesListHasVerticalScrollbar    = themesListMetrics.hasVerticalScrollbar;
+        out.themesListVerticalScrollDip       = themesListMetrics.verticalScrollDip;
+        out.themesListRenderCount             = hostState._themesPane.DebugListRenderCount();
+        out.themesListResizeCount             = hostState._themesPane.DebugListResizeCount();
+        out.themesListResizeFailureCount      = hostState._themesPane.DebugListResizeFailureCount();
+        out.themesSearchText                  = state->themesSearchText;
+        out.themesSelectedThemeIdText         = state->workingSettings.theme.currentThemeId;
+        out.themesSelectedColorKeyText        = state->themesSelectedColorKey;
+        out.themesColorText                   = state->themesColorText;
+        out.themesSelectedColorOverrideActive = false;
+        out.generalFocusTarget                = hostState._generalPane.DebugGetFocusTarget();
+        out.generalUsesDxUiTypographyContext  = hostState._generalPane.DebugUsesDxUiTypographyContext();
+        out.generalUsesDxUiTypographyMetrics  = hostState._generalPane.DebugUsesDxUiTypographyMetrics();
+        out.panesFocusTarget                  = hostState._panesPane.DebugGetFocusTarget();
+        out.panesUsesDxUiTypographyContext    = hostState._panesPane.DebugUsesDxUiTypographyContext();
+        out.panesUsesDxUiTypographyMetrics    = hostState._panesPane.DebugUsesDxUiTypographyMetrics();
+        out.viewersUsesDxUiTypographyContext  = hostState._viewersPane.DebugUsesDxUiTypographyContext();
+        out.viewersUsesDxUiTypographyMetrics  = hostState._viewersPane.DebugUsesDxUiTypographyMetrics();
+        out.hotPathsFocusTarget               = hostState._hotPathsPane.DebugGetFocusTarget();
         hostState._hotPathsPane.DebugPopulateSnapshot(out);
         out.advancedFocusTarget                         = hostState._advancedPane.DebugGetFocusTarget();
         out.monitorFocusTarget                          = hostState._monitorPane.DebugGetFocusTarget();
@@ -6337,9 +6339,8 @@ bool PreferencesDialog::DebugSelectCategory(const PrefCategory category) noexcep
             return false;
         }
 
-        state->initialCategory = category;
-        const uint64_t targetItemId =
-            PreferencesDialogHost::PreferencesCategoryTreeModel::EncodeCategoryNodeId(category);
+        state->initialCategory        = category;
+        const uint64_t targetItemId   = PreferencesDialogHost::PreferencesCategoryTreeModel::EncodeCategoryNodeId(category);
         const size_t visibleItemCount = hostState._categoryTreeModel.GetVisibleItemCount();
         for (size_t visibleIndex = 0u; visibleIndex < visibleItemCount; ++visibleIndex)
         {
@@ -6472,7 +6473,7 @@ bool PreferencesDialog::DebugSendCategoryTreeKey(const UINT virtualKey) noexcept
         return false;
     }
 
-    const UINT scanCode = MapVirtualKeyW(virtualKey, MAPVK_VK_TO_VSC_EX);
+    const UINT scanCode  = MapVirtualKeyW(virtualKey, MAPVK_VK_TO_VSC_EX);
     LPARAM keyDownLParam = static_cast<LPARAM>(1u | ((scanCode & 0xFFu) << 16u));
     if ((scanCode & 0xFF00u) != 0u)
     {

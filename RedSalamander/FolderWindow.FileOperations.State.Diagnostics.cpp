@@ -403,11 +403,8 @@ void FolderWindow::FileOperationState::SaveIssuesPaneViewState(std::wstring_view
 
 namespace
 {
-[[nodiscard]] bool TryGetFileOperationsWindowPlacement(const Common::Settings::Settings* settings,
-                                                       std::wstring_view windowId,
-                                                       RECT& outRect,
-                                                       bool& outMaximized,
-                                                       UINT currentDpi) noexcept
+[[nodiscard]] bool TryGetFileOperationsWindowPlacement(
+    const Common::Settings::Settings* settings, std::wstring_view windowId, RECT& outRect, bool& outMaximized, UINT currentDpi) noexcept
 {
     outRect      = RECT{};
     outMaximized = false;

@@ -385,8 +385,8 @@ void FolderView::OnCommandMessage(UINT commandId)
 void FolderView::OnMouseWheel(int delta, bool horizontal)
 {
     const float horizontalBefore = _horizontalOffset;
-    const float maxHorizontal = std::max(0.0f, _contentWidth - DipFromPx(_clientSize.cx));
-    const int wheelClicks     = horizontal ? (delta / WHEEL_DELTA) : (-delta / WHEEL_DELTA);
+    const float maxHorizontal    = std::max(0.0f, _contentWidth - DipFromPx(_clientSize.cx));
+    const int wheelClicks        = horizontal ? (delta / WHEEL_DELTA) : (-delta / WHEEL_DELTA);
     for (int click = 0; click < std::abs(wheelClicks); ++click)
     {
         _horizontalOffset = wheelClicks > 0 ? FolderViewColumnLayout::ResolveNextScrollStop(_horizontalOffset, maxHorizontal, _columnLayout)

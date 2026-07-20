@@ -1119,8 +1119,8 @@ SelfTest::RunCase(options,
         session->RequestScanForFolder(std::filesystem::path(L"keep"));
         state.Require(StartScanAndWaitForIdle(session, std::chrono::milliseconds{SelfTest::ScaleTimeout(60'000)}),
                       L"pending budget: scan did not become idle within timeout.");
-        const bool drainedPendingSubdirs =
-            DrainPendingSubdirUpdatesUntilQuiet(session, std::chrono::milliseconds{static_cast<std::chrono::milliseconds::rep>(SelfTest::ScaleTimeout(10'000))});
+        const bool drainedPendingSubdirs = DrainPendingSubdirUpdatesUntilQuiet(
+            session, std::chrono::milliseconds{static_cast<std::chrono::milliseconds::rep>(SelfTest::ScaleTimeout(10'000))});
         if (! drainedPendingSubdirs)
         {
             const CompareDirectoriesPerfStats pendingStats = session->GetPerfStats();

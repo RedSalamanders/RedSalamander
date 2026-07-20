@@ -44,21 +44,21 @@ extern HINSTANCE g_hInstance;
 
 namespace Typography = RedSalamander::DxUi::Typography;
 
+using RedSalamander::DxUi::ColorFromArgb;
 using RedSalamander::DxUi::ComboBox;
 using RedSalamander::DxUi::ComboBoxVariant;
-using RedSalamander::DxUi::ColorFromArgb;
 using RedSalamander::DxUi::MakeDefaultThemePalette;
 using RedSalamander::DxUi::MakeThemePaletteFromViewerTheme;
 
 namespace
 {
 constexpr UINT kAsyncParseCompleteMessage             = WndMsg::kViewerPeAsyncParseComplete;
-constexpr UINT_PTR kAsyncParseFallbackTimerId          = 0x5045u;
-constexpr UINT kAsyncParseFallbackPollMs               = 100u;
+constexpr UINT_PTR kAsyncParseFallbackTimerId         = 0x5045u;
+constexpr UINT kAsyncParseFallbackPollMs              = 100u;
 constexpr uint64_t kMaxPeFileBytes                    = 256ull * 1024ull * 1024ull;
 constexpr wchar_t kFileComboHostOriginalWndProcProp[] = L"RS.ViewerPE.FileComboHostOriginalWndProc";
 constexpr wchar_t kFileComboHostStateProp[]           = L"RS.ViewerPE.FileComboHostState";
-constexpr char kViewerPeModuleAnchor                   = 0;
+constexpr char kViewerPeModuleAnchor                  = 0;
 std::atomic_uint64_t g_nextViewerPeWindowIdentity{1u};
 
 enum class AsyncParseInjectedFault : unsigned int
@@ -347,12 +347,12 @@ struct ViewerPE::AsyncParseScheduler final
 
     struct WorkerContext final
     {
-        WorkerContext()                                   = default;
+        WorkerContext()                                    = default;
         WorkerContext(const WorkerContext&)                = delete;
         WorkerContext(WorkerContext&&) noexcept            = default;
         WorkerContext& operator=(const WorkerContext&)     = delete;
         WorkerContext& operator=(WorkerContext&&) noexcept = default;
-        ~WorkerContext()                                  = default;
+        ~WorkerContext()                                   = default;
 
         std::shared_ptr<AsyncParseScheduler> scheduler;
         wil::unique_hmodule moduleKeepAlive;
@@ -554,7 +554,7 @@ LRESULT CALLBACK ViewerPE::WndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
         const auto* cs = reinterpret_cast<const CREATESTRUCTW*>(lp);
         if (cs && cs->lpCreateParams)
         {
-            auto* self = static_cast<ViewerPE*>(cs->lpCreateParams);
+            auto* self            = static_cast<ViewerPE*>(cs->lpCreateParams);
             self->_windowIdentity = g_nextViewerPeWindowIdentity.fetch_add(1u, std::memory_order_relaxed);
             SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self));
             InitPostedPayloadWindow(hwnd);
@@ -679,8 +679,7 @@ LRESULT ViewerPE::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
 LRESULT ViewerPE::HandleFileComboHostMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, bool& handled) noexcept
 {
     const bool popupWasOpen      = _fileComboControl && _fileComboControl->DebugIsPopupOpen();
-    const bool preExpandForPopup =
-        ! popupWasOpen && _fileComboControl && RedSalamander::ViewerFileComboHost::MessageMayOpenWindowComboPopup(msg, wp);
+    const bool preExpandForPopup = ! popupWasOpen && _fileComboControl && RedSalamander::ViewerFileComboHost::MessageMayOpenWindowComboPopup(msg, wp);
     if (preExpandForPopup)
     {
         _fileComboHostPreExpandPopup = true;
@@ -1134,8 +1133,8 @@ void ViewerPE::Layout(HWND hwnd) noexcept
     const UINT dpi            = GetDpiForWindow(hwnd);
     const int menuBarHeightPx = _menuBarHost.GetHwnd() ? _menuBarHost.GetVisibleHeightPx() : 0;
     const bool showCombo      = (! _embeddedMode && _otherFiles.size() > 1);
-    const int outerPaddingPx = Common::WindowSizing::DipToPixelRounded(kOuterPaddingDip, dpi);
-    const int innerPaddingPx = Common::WindowSizing::DipToPixelRounded(kInnerPaddingDip, dpi);
+    const int outerPaddingPx  = Common::WindowSizing::DipToPixelRounded(kOuterPaddingDip, dpi);
+    const int innerPaddingPx  = Common::WindowSizing::DipToPixelRounded(kInnerPaddingDip, dpi);
 
     const int cardLeft  = outerPaddingPx;
     const int cardTop   = menuBarHeightPx + outerPaddingPx;
@@ -1159,15 +1158,13 @@ void ViewerPE::Layout(HWND hwnd) noexcept
     float newHeaderHeightDip = 0.0f;
     if (showCombo)
     {
-        const int comboHeight = std::max(1L, Common::WindowSizing::DipToPixelRounded(dpi, RedSalamander::ViewerFileComboHost::kStandaloneComboHeightDip));
+        const int comboHeight      = std::max(1L, Common::WindowSizing::DipToPixelRounded(dpi, RedSalamander::ViewerFileComboHost::kStandaloneComboHeightDip));
         const int comboX           = contentLeft;
         const int comboW           = std::max(1, contentRight - contentLeft);
         const int comboY           = cardTop + innerPaddingPx;
         const bool expandPopupHost = _fileComboHostPreExpandPopup || (_fileComboControl && _fileComboControl->DebugIsPopupOpen());
-        const int hostHeight = comboHeight +
-                               (expandPopupHost ? RedSalamander::ViewerFileComboHost::ComputeStandaloneComboPopupHeightPx(
-                                                      _otherFiles.size(), dpi)
-                                                : 0);
+        const int hostHeight =
+            comboHeight + (expandPopupHost ? RedSalamander::ViewerFileComboHost::ComputeStandaloneComboPopupHeightPx(_otherFiles.size(), dpi) : 0);
 
         SetWindowPos(_hFileComboHost.get(), HWND_TOP, comboX, comboY, comboW, hostHeight, SWP_NOACTIVATE);
         if (_fileComboControl)
@@ -1544,13 +1541,13 @@ void ViewerPE::EnsureDeviceResources(HWND /*hwnd*/) noexcept
         }
     }
 
-    const bool themed           = _hasTheme && ! _theme.highContrast;
-    const COLORREF bg           = themed ? ColorRefFromArgb(_theme.backgroundArgb) : GetSysColor(COLOR_WINDOW);
-    const COLORREF fg           = themed ? ColorRefFromArgb(_theme.textArgb) : GetSysColor(COLOR_WINDOWTEXT);
-    const COLORREF accent       = themed ? ResolveAccentColor(_theme, L"content") : GetSysColor(COLOR_HIGHLIGHT);
-    const COLORREF cardBg       = themed ? BlendColorRefTruncate(bg, fg, themed && _theme.darkMode ? 24u : 18u) : GetSysColor(COLOR_WINDOW);
-    const COLORREF cardBorder   = themed ? BlendColorRefTruncate(cardBg, accent, 92u) : GetSysColor(COLOR_WINDOWFRAME);
-    const D2D1_COLOR_F bgColor  = themed ? ColorFromArgb(_theme.backgroundArgb) : ColorFFromColorRef(bg);
+    const bool themed            = _hasTheme && ! _theme.highContrast;
+    const COLORREF bg            = themed ? ColorRefFromArgb(_theme.backgroundArgb) : GetSysColor(COLOR_WINDOW);
+    const COLORREF fg            = themed ? ColorRefFromArgb(_theme.textArgb) : GetSysColor(COLOR_WINDOWTEXT);
+    const COLORREF accent        = themed ? ResolveAccentColor(_theme, L"content") : GetSysColor(COLOR_HIGHLIGHT);
+    const COLORREF cardBg        = themed ? BlendColorRefTruncate(bg, fg, themed && _theme.darkMode ? 24u : 18u) : GetSysColor(COLOR_WINDOW);
+    const COLORREF cardBorder    = themed ? BlendColorRefTruncate(cardBg, accent, 92u) : GetSysColor(COLOR_WINDOWFRAME);
+    const D2D1_COLOR_F bgColor   = themed ? ColorFromArgb(_theme.backgroundArgb) : ColorFFromColorRef(bg);
     const D2D1_COLOR_F textColor = themed ? ColorFromArgb(_theme.textArgb) : ColorFFromColorRef(fg);
 
     if (! _bgBrush)
@@ -1783,20 +1780,20 @@ void ViewerPE::CancelAsyncParse() noexcept
 
 void ViewerPE::StartAsyncParse(HWND hwnd, wil::com_ptr<IFileSystem> fileSystem, std::wstring path) noexcept
 {
-    const uint64_t requestId     = _parseRequestId.fetch_add(1u, std::memory_order_acq_rel) + 1u;
-    const uint64_t windowIdentity = _windowIdentity;
+    const uint64_t requestId                             = _parseRequestId.fetch_add(1u, std::memory_order_acq_rel) + 1u;
+    const uint64_t windowIdentity                        = _windowIdentity;
     const std::shared_ptr<AsyncParseScheduler> scheduler = _parseScheduler;
 #ifdef ENABLE_TESTS
     const auto injectedFault = static_cast<AsyncParseInjectedFault>(std::exchange(_debugNextAsyncFault, 0u));
 #else
     constexpr auto injectedFault = AsyncParseInjectedFault::None;
 #endif
-    _titleText               = std::filesystem::path(path).filename().wstring();
+    _titleText = std::filesystem::path(path).filename().wstring();
 
     _subtitleText = LoadStringResource(g_hInstance, IDS_VIEWERPE_STATUS_LOADING);
     _bodyText.clear();
     _markdownText.clear();
-    _isLoading = true;
+    _isLoading   = true;
     _lastParseHr = E_PENDING;
     _textLayout.reset();
     _scrollDip = 0.0f;
@@ -1842,7 +1839,7 @@ void ViewerPE::StartAsyncParse(HWND hwnd, wil::com_ptr<IFileSystem> fileSystem, 
                                  injectedFault,
 #endif
                                  fileSystem = std::move(fileSystem),
-                                 path = std::move(path)]() noexcept
+                                 path       = std::move(path)]() noexcept
     {
         Debug::Perf::Scope parseScope(L"viewer.pe.parse");
         parseScope.SetDetail(L"threadpool-latest-wins");
@@ -1870,9 +1867,8 @@ void ViewerPE::StartAsyncParse(HWND hwnd, wil::com_ptr<IFileSystem> fileSystem, 
                 return;
             }
 
-            auto result = injectedFault == AsyncParseInjectedFault::ResultAllocation
-                              ? std::unique_ptr<AsyncParseResult>{}
-                              : std::unique_ptr<AsyncParseResult>(new (std::nothrow) AsyncParseResult());
+            auto result = injectedFault == AsyncParseInjectedFault::ResultAllocation ? std::unique_ptr<AsyncParseResult>{}
+                                                                                     : std::unique_ptr<AsyncParseResult>(new (std::nothrow) AsyncParseResult());
             if (! result)
             {
                 if (! cancelled())
@@ -1891,8 +1887,8 @@ void ViewerPE::StartAsyncParse(HWND hwnd, wil::com_ptr<IFileSystem> fileSystem, 
             result->subtitle       = std::move(subtitle);
             result->body           = std::move(body);
             result->markdown       = std::move(markdown);
-            const bool posted = injectedFault != AsyncParseInjectedFault::PayloadPost &&
-                                PostMessagePayload(hwnd, kAsyncParseCompleteMessage, 0, std::move(result));
+            const bool posted =
+                injectedFault != AsyncParseInjectedFault::PayloadPost && PostMessagePayload(hwnd, kAsyncParseCompleteMessage, 0, std::move(result));
             if (! posted && ! cancelled())
             {
                 const DWORD error = injectedFault == AsyncParseInjectedFault::PayloadPost ? ERROR_NOT_ENOUGH_MEMORY : GetLastError();
@@ -1928,11 +1924,7 @@ void ViewerPE::StartAsyncParse(HWND hwnd, wil::com_ptr<IFileSystem> fileSystem, 
         parseScope.SetValue1(sizeBytes);
         if (FAILED(hr) || sizeBytes == 0)
         {
-            postResult(FAILED(hr) ? hr : HRESULT_FROM_WIN32(ERROR_HANDLE_EOF),
-                       {},
-                       {},
-                       LoadStringResource(g_hInstance, IDS_VIEWERPE_ERROR_OPEN_FAILED),
-                       {});
+            postResult(FAILED(hr) ? hr : HRESULT_FROM_WIN32(ERROR_HANDLE_EOF), {}, {}, LoadStringResource(g_hInstance, IDS_VIEWERPE_ERROR_OPEN_FAILED), {});
             return;
         }
 
@@ -1947,11 +1939,7 @@ void ViewerPE::StartAsyncParse(HWND hwnd, wil::com_ptr<IFileSystem> fileSystem, 
         hr                = reader->Seek(0, FILE_BEGIN, &position);
         if (FAILED(hr) || position != 0u)
         {
-            postResult(FAILED(hr) ? hr : HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
-                       {},
-                       {},
-                       LoadStringResource(g_hInstance, IDS_VIEWERPE_ERROR_READ_FAILED),
-                       {});
+            postResult(FAILED(hr) ? hr : HRESULT_FROM_WIN32(ERROR_INVALID_DATA), {}, {}, LoadStringResource(g_hInstance, IDS_VIEWERPE_ERROR_READ_FAILED), {});
             return;
         }
 
@@ -2000,16 +1988,12 @@ void ViewerPE::StartAsyncParse(HWND hwnd, wil::com_ptr<IFileSystem> fileSystem, 
             return;
         }
 
-        std::uint8_t trailingByte = 0u;
+        std::uint8_t trailingByte  = 0u;
         unsigned long trailingRead = 0u;
-        hr = reader->Read(&trailingByte, 1u, &trailingRead);
+        hr                         = reader->Read(&trailingByte, 1u, &trailingRead);
         if (FAILED(hr) || trailingRead > 1u || trailingRead != 0u)
         {
-            postResult(FAILED(hr) ? hr : HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
-                       {},
-                       {},
-                       LoadStringResource(g_hInstance, IDS_VIEWERPE_ERROR_READ_FAILED),
-                       {});
+            postResult(FAILED(hr) ? hr : HRESULT_FROM_WIN32(ERROR_INVALID_DATA), {}, {}, LoadStringResource(g_hInstance, IDS_VIEWERPE_ERROR_READ_FAILED), {});
             return;
         }
 
@@ -2071,20 +2055,20 @@ void ViewerPE::StartAsyncParse(HWND hwnd, wil::com_ptr<IFileSystem> fileSystem, 
 
         std::wstring body;
         const std::wstring unknownValue = LoadStringResource(g_hInstance, IDS_VIEWERPE_REPORT_VALUE_UNKNOWN);
-        body = FormatStringResource(g_hInstance,
-                                    IDS_VIEWERPE_REPORT_SUMMARY_FORMAT,
-                                    path,
-                                    sizeBytes,
-                                    FormatBytesCompact(sizeBytes),
-                                    kindName,
-                                    machine.empty() ? unknownValue : machine,
-                                    subsystem.empty() ? unknownValue : subsystem,
-                                    static_cast<std::uint32_t>(fileHeader.TimeDateStamp),
-                                    fileHeader.Characteristics,
-                                    imageBase,
-                                    entryPointText,
-                                    dos.e_magic,
-                                    dos.e_lfanew);
+        body                            = FormatStringResource(g_hInstance,
+                                                               IDS_VIEWERPE_REPORT_SUMMARY_FORMAT,
+                                                               path,
+                                                               sizeBytes,
+                                                               FormatBytesCompact(sizeBytes),
+                                                               kindName,
+                                                               machine.empty() ? unknownValue : machine,
+                                                               subsystem.empty() ? unknownValue : subsystem,
+                                                               static_cast<std::uint32_t>(fileHeader.TimeDateStamp),
+                                                               fileHeader.Characteristics,
+                                                               imageBase,
+                                                               entryPointText,
+                                                               dos.e_magic,
+                                                               dos.e_lfanew);
 
         body += LoadStringResource(g_hInstance, IDS_VIEWERPE_REPORT_SECTION_COLUMNS);
         body += L'\n';
@@ -2153,9 +2137,7 @@ void ViewerPE::StartAsyncParse(HWND hwnd, wil::com_ptr<IFileSystem> fileSystem, 
         { safeAppend(FormatStringResource(g_hInstance, resourceId, std::forward<Args>(args)...)); };
 
         const auto safeAppendField = [&]<typename... Args>(UINT formatResourceId, UINT labelResourceId, Args&&... args) noexcept
-        {
-            safeAppendResourceFormat(formatResourceId, LoadStringResource(g_hInstance, labelResourceId), std::forward<Args>(args)...);
-        };
+        { safeAppendResourceFormat(formatResourceId, LoadStringResource(g_hInstance, labelResourceId), std::forward<Args>(args)...); };
 
         const auto safeAppendBlankLine = [&]() noexcept { safeAppend(L"\n"); };
 
@@ -2167,9 +2149,7 @@ void ViewerPE::StartAsyncParse(HWND hwnd, wil::com_ptr<IFileSystem> fileSystem, 
         safeAppendResourceFormat(IDS_VIEWERPE_REPORT_RICH_VALID_FORMAT, pe->peHeader.rich.isValid ? yesText : noText);
         if (pe->peHeader.rich.isPresent)
         {
-            safeAppendField(IDS_VIEWERPE_REPORT_FIELD_HEX8_FORMAT,
-                            IDS_VIEWERPE_REPORT_FIELD_DECRYPTION_KEY,
-                            pe->peHeader.rich.DecryptionKey);
+            safeAppendField(IDS_VIEWERPE_REPORT_FIELD_HEX8_FORMAT, IDS_VIEWERPE_REPORT_FIELD_DECRYPTION_KEY, pe->peHeader.rich.DecryptionKey);
             safeAppendField(IDS_VIEWERPE_REPORT_FIELD_HEX8_FORMAT, IDS_VIEWERPE_REPORT_FIELD_CHECKSUM, pe->peHeader.rich.Checksum);
             safeAppendField(IDS_VIEWERPE_REPORT_FIELD_DEC_FORMAT, IDS_VIEWERPE_REPORT_FIELD_ENTRIES, pe->peHeader.rich.Entries.size());
 
@@ -2212,12 +2192,8 @@ void ViewerPE::StartAsyncParse(HWND hwnd, wil::com_ptr<IFileSystem> fileSystem, 
         safeAppendBlankLine();
         safeAppendResourceLine(IDS_VIEWERPE_REPORT_FILE_HEADER);
         safeAppendField(IDS_VIEWERPE_REPORT_FIELD_DEC_FORMAT, IDS_VIEWERPE_REPORT_FIELD_NUMBER_OF_SECTIONS, fileHeader.NumberOfSections);
-        safeAppendField(IDS_VIEWERPE_REPORT_FIELD_DEC_FORMAT,
-                        IDS_VIEWERPE_REPORT_FIELD_SIZE_OF_OPTIONAL_HEADER,
-                        fileHeader.SizeOfOptionalHeader);
-        safeAppendField(IDS_VIEWERPE_REPORT_FIELD_HEX8_FORMAT,
-                        IDS_VIEWERPE_REPORT_FIELD_POINTER_TO_SYMBOL_TABLE,
-                        fileHeader.PointerToSymbolTable);
+        safeAppendField(IDS_VIEWERPE_REPORT_FIELD_DEC_FORMAT, IDS_VIEWERPE_REPORT_FIELD_SIZE_OF_OPTIONAL_HEADER, fileHeader.SizeOfOptionalHeader);
+        safeAppendField(IDS_VIEWERPE_REPORT_FIELD_HEX8_FORMAT, IDS_VIEWERPE_REPORT_FIELD_POINTER_TO_SYMBOL_TABLE, fileHeader.PointerToSymbolTable);
         safeAppendField(IDS_VIEWERPE_REPORT_FIELD_DEC_FORMAT, IDS_VIEWERPE_REPORT_FIELD_NUMBER_OF_SYMBOLS, fileHeader.NumberOfSymbols);
 
         safeAppendBlankLine();
@@ -2225,76 +2201,56 @@ void ViewerPE::StartAsyncParse(HWND hwnd, wil::com_ptr<IFileSystem> fileSystem, 
         if (is64)
         {
             safeAppendField(IDS_VIEWERPE_REPORT_FIELD_HEX4_FORMAT, IDS_VIEWERPE_REPORT_FIELD_MAGIC, opt64.Magic);
-            safeAppendField(IDS_VIEWERPE_REPORT_FIELD_VERSION_FORMAT,
-                            IDS_VIEWERPE_REPORT_FIELD_LINKER_VERSION,
-                            opt64.MajorLinkerVersion,
-                            opt64.MinorLinkerVersion);
+            safeAppendField(
+                IDS_VIEWERPE_REPORT_FIELD_VERSION_FORMAT, IDS_VIEWERPE_REPORT_FIELD_LINKER_VERSION, opt64.MajorLinkerVersion, opt64.MinorLinkerVersion);
             safeAppendField(IDS_VIEWERPE_REPORT_FIELD_HEX8_FORMAT, IDS_VIEWERPE_REPORT_FIELD_SIZE_OF_IMAGE, opt64.SizeOfImage);
             safeAppendField(IDS_VIEWERPE_REPORT_FIELD_HEX8_FORMAT, IDS_VIEWERPE_REPORT_FIELD_SIZE_OF_HEADERS, opt64.SizeOfHeaders);
             safeAppendField(IDS_VIEWERPE_REPORT_FIELD_HEX8_FORMAT, IDS_VIEWERPE_REPORT_FIELD_CHECKSUM, opt64.CheckSum);
-            safeAppendField(IDS_VIEWERPE_REPORT_FIELD_HEX4_FORMAT,
-                            IDS_VIEWERPE_REPORT_FIELD_DLL_CHARACTERISTICS,
-                            opt64.DllCharacteristics);
+            safeAppendField(IDS_VIEWERPE_REPORT_FIELD_HEX4_FORMAT, IDS_VIEWERPE_REPORT_FIELD_DLL_CHARACTERISTICS, opt64.DllCharacteristics);
             safeAppendField(IDS_VIEWERPE_REPORT_FIELD_HEX8_FORMAT, IDS_VIEWERPE_REPORT_FIELD_SECTION_ALIGNMENT, opt64.SectionAlignment);
             safeAppendField(IDS_VIEWERPE_REPORT_FIELD_HEX8_FORMAT, IDS_VIEWERPE_REPORT_FIELD_FILE_ALIGNMENT, opt64.FileAlignment);
             safeAppendField(IDS_VIEWERPE_REPORT_FIELD_VERSION_FORMAT,
                             IDS_VIEWERPE_REPORT_FIELD_OS_VERSION,
                             opt64.MajorOperatingSystemVersion,
                             opt64.MinorOperatingSystemVersion);
-            safeAppendField(IDS_VIEWERPE_REPORT_FIELD_VERSION_FORMAT,
-                            IDS_VIEWERPE_REPORT_FIELD_IMAGE_VERSION,
-                            opt64.MajorImageVersion,
-                            opt64.MinorImageVersion);
+            safeAppendField(
+                IDS_VIEWERPE_REPORT_FIELD_VERSION_FORMAT, IDS_VIEWERPE_REPORT_FIELD_IMAGE_VERSION, opt64.MajorImageVersion, opt64.MinorImageVersion);
             safeAppendField(IDS_VIEWERPE_REPORT_FIELD_VERSION_FORMAT,
                             IDS_VIEWERPE_REPORT_FIELD_SUBSYSTEM_VERSION,
                             opt64.MajorSubsystemVersion,
                             opt64.MinorSubsystemVersion);
-            safeAppendField(IDS_VIEWERPE_REPORT_FIELD_HEX16_FORMAT,
-                            IDS_VIEWERPE_REPORT_FIELD_SIZE_OF_STACK_RESERVE,
-                            opt64.SizeOfStackReserve);
+            safeAppendField(IDS_VIEWERPE_REPORT_FIELD_HEX16_FORMAT, IDS_VIEWERPE_REPORT_FIELD_SIZE_OF_STACK_RESERVE, opt64.SizeOfStackReserve);
             safeAppendField(IDS_VIEWERPE_REPORT_FIELD_HEX16_FORMAT, IDS_VIEWERPE_REPORT_FIELD_SIZE_OF_STACK_COMMIT, opt64.SizeOfStackCommit);
             safeAppendField(IDS_VIEWERPE_REPORT_FIELD_HEX16_FORMAT, IDS_VIEWERPE_REPORT_FIELD_SIZE_OF_HEAP_RESERVE, opt64.SizeOfHeapReserve);
             safeAppendField(IDS_VIEWERPE_REPORT_FIELD_HEX16_FORMAT, IDS_VIEWERPE_REPORT_FIELD_SIZE_OF_HEAP_COMMIT, opt64.SizeOfHeapCommit);
-            safeAppendField(IDS_VIEWERPE_REPORT_FIELD_DEC_FORMAT,
-                            IDS_VIEWERPE_REPORT_FIELD_NUMBER_OF_RVA_AND_SIZES,
-                            opt64.NumberOfRvaAndSizes);
+            safeAppendField(IDS_VIEWERPE_REPORT_FIELD_DEC_FORMAT, IDS_VIEWERPE_REPORT_FIELD_NUMBER_OF_RVA_AND_SIZES, opt64.NumberOfRvaAndSizes);
         }
         else
         {
             safeAppendField(IDS_VIEWERPE_REPORT_FIELD_HEX4_FORMAT, IDS_VIEWERPE_REPORT_FIELD_MAGIC, opt32.Magic);
-            safeAppendField(IDS_VIEWERPE_REPORT_FIELD_VERSION_FORMAT,
-                            IDS_VIEWERPE_REPORT_FIELD_LINKER_VERSION,
-                            opt32.MajorLinkerVersion,
-                            opt32.MinorLinkerVersion);
+            safeAppendField(
+                IDS_VIEWERPE_REPORT_FIELD_VERSION_FORMAT, IDS_VIEWERPE_REPORT_FIELD_LINKER_VERSION, opt32.MajorLinkerVersion, opt32.MinorLinkerVersion);
             safeAppendField(IDS_VIEWERPE_REPORT_FIELD_HEX8_FORMAT, IDS_VIEWERPE_REPORT_FIELD_SIZE_OF_IMAGE, opt32.SizeOfImage);
             safeAppendField(IDS_VIEWERPE_REPORT_FIELD_HEX8_FORMAT, IDS_VIEWERPE_REPORT_FIELD_SIZE_OF_HEADERS, opt32.SizeOfHeaders);
             safeAppendField(IDS_VIEWERPE_REPORT_FIELD_HEX8_FORMAT, IDS_VIEWERPE_REPORT_FIELD_CHECKSUM, opt32.CheckSum);
-            safeAppendField(IDS_VIEWERPE_REPORT_FIELD_HEX4_FORMAT,
-                            IDS_VIEWERPE_REPORT_FIELD_DLL_CHARACTERISTICS,
-                            opt32.DllCharacteristics);
+            safeAppendField(IDS_VIEWERPE_REPORT_FIELD_HEX4_FORMAT, IDS_VIEWERPE_REPORT_FIELD_DLL_CHARACTERISTICS, opt32.DllCharacteristics);
             safeAppendField(IDS_VIEWERPE_REPORT_FIELD_HEX8_FORMAT, IDS_VIEWERPE_REPORT_FIELD_SECTION_ALIGNMENT, opt32.SectionAlignment);
             safeAppendField(IDS_VIEWERPE_REPORT_FIELD_HEX8_FORMAT, IDS_VIEWERPE_REPORT_FIELD_FILE_ALIGNMENT, opt32.FileAlignment);
             safeAppendField(IDS_VIEWERPE_REPORT_FIELD_VERSION_FORMAT,
                             IDS_VIEWERPE_REPORT_FIELD_OS_VERSION,
                             opt32.MajorOperatingSystemVersion,
                             opt32.MinorOperatingSystemVersion);
-            safeAppendField(IDS_VIEWERPE_REPORT_FIELD_VERSION_FORMAT,
-                            IDS_VIEWERPE_REPORT_FIELD_IMAGE_VERSION,
-                            opt32.MajorImageVersion,
-                            opt32.MinorImageVersion);
+            safeAppendField(
+                IDS_VIEWERPE_REPORT_FIELD_VERSION_FORMAT, IDS_VIEWERPE_REPORT_FIELD_IMAGE_VERSION, opt32.MajorImageVersion, opt32.MinorImageVersion);
             safeAppendField(IDS_VIEWERPE_REPORT_FIELD_VERSION_FORMAT,
                             IDS_VIEWERPE_REPORT_FIELD_SUBSYSTEM_VERSION,
                             opt32.MajorSubsystemVersion,
                             opt32.MinorSubsystemVersion);
-            safeAppendField(IDS_VIEWERPE_REPORT_FIELD_HEX8_FORMAT,
-                            IDS_VIEWERPE_REPORT_FIELD_SIZE_OF_STACK_RESERVE,
-                            opt32.SizeOfStackReserve);
+            safeAppendField(IDS_VIEWERPE_REPORT_FIELD_HEX8_FORMAT, IDS_VIEWERPE_REPORT_FIELD_SIZE_OF_STACK_RESERVE, opt32.SizeOfStackReserve);
             safeAppendField(IDS_VIEWERPE_REPORT_FIELD_HEX8_FORMAT, IDS_VIEWERPE_REPORT_FIELD_SIZE_OF_STACK_COMMIT, opt32.SizeOfStackCommit);
             safeAppendField(IDS_VIEWERPE_REPORT_FIELD_HEX8_FORMAT, IDS_VIEWERPE_REPORT_FIELD_SIZE_OF_HEAP_RESERVE, opt32.SizeOfHeapReserve);
             safeAppendField(IDS_VIEWERPE_REPORT_FIELD_HEX8_FORMAT, IDS_VIEWERPE_REPORT_FIELD_SIZE_OF_HEAP_COMMIT, opt32.SizeOfHeapCommit);
-            safeAppendField(IDS_VIEWERPE_REPORT_FIELD_DEC_FORMAT,
-                            IDS_VIEWERPE_REPORT_FIELD_NUMBER_OF_RVA_AND_SIZES,
-                            opt32.NumberOfRvaAndSizes);
+            safeAppendField(IDS_VIEWERPE_REPORT_FIELD_DEC_FORMAT, IDS_VIEWERPE_REPORT_FIELD_NUMBER_OF_RVA_AND_SIZES, opt32.NumberOfRvaAndSizes);
         }
 
         safeAppendBlankLine();
@@ -2826,7 +2782,7 @@ void ViewerPE::StartAsyncParse(HWND hwnd, wil::com_ptr<IFileSystem> fileSystem, 
         postResult(S_OK, std::move(title), std::move(subtitle), std::move(body), std::move(markdown));
     };
 
-    bool queueWorker    = false;
+    bool queueWorker     = false;
     bool replacedPending = false;
     {
         std::scoped_lock lock(scheduler->mutex);
@@ -2840,7 +2796,9 @@ void ViewerPE::StartAsyncParse(HWND hwnd, wil::com_ptr<IFileSystem> fileSystem, 
     }
 
     Debug::Perf::Emit(L"viewer.pe.queue",
-                      queueWorker ? L"worker-start" : replacedPending ? L"pending-replaced" : L"pending",
+                      queueWorker       ? L"worker-start"
+                      : replacedPending ? L"pending-replaced"
+                                        : L"pending",
                       0u,
                       1u,
                       replacedPending ? 1u : 0u,
@@ -2918,9 +2876,9 @@ void ViewerPE::CompleteAsyncParseFailure(HRESULT hr) noexcept
     }
 
     _subtitleText.clear();
-    _bodyText     = LoadStringResource(g_hInstance, IDS_VIEWERPE_ERROR_OPEN_FAILED);
+    _bodyText = LoadStringResource(g_hInstance, IDS_VIEWERPE_ERROR_OPEN_FAILED);
     _markdownText.clear();
-    _isLoading = false;
+    _isLoading   = false;
     _lastParseHr = hr;
     _textLayout.reset();
     _scrollDip = 0.0f;

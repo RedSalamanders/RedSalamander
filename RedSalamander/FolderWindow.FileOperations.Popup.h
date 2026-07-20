@@ -336,15 +336,15 @@ struct PopupLayoutDebugSnapshot
     std::wstring globalSummaryText;
 
     // Graph hue fairness (Fairstream 4D): aggregated over the task's live rate-history buckets.
-    uint32_t graphMultiHueBucketCount  = 0u;
-    uint32_t graphSingleHueBucketCount = 0u;
-    uint32_t graphDistinctHueCount     = 0u;
-    double graphMinHueShare            = 0.0; // per-hue share of summed multi-hue bucket weight
-    double graphMaxHueShare            = 0.0;
-    uint32_t graphDebugAccumulateCalls = 0u;
-    uint32_t graphDebugLastPending     = 0u;
-    uint32_t graphDebugMaxStreams      = 0u;
-    bool graphCurrentBandwidthLineVisible = false;
+    uint32_t graphMultiHueBucketCount          = 0u;
+    uint32_t graphSingleHueBucketCount         = 0u;
+    uint32_t graphDistinctHueCount             = 0u;
+    double graphMinHueShare                    = 0.0; // per-hue share of summed multi-hue bucket weight
+    double graphMaxHueShare                    = 0.0;
+    uint32_t graphDebugAccumulateCalls         = 0u;
+    uint32_t graphDebugLastPending             = 0u;
+    uint32_t graphDebugMaxStreams              = 0u;
+    bool graphCurrentBandwidthLineVisible      = false;
     double graphCurrentBandwidthBytesPerSecond = 0.0;
 };
 
@@ -630,10 +630,10 @@ private:
     RECT _autoResizePendingTargetRect{};
     RECT _autoResizeAnimationStartRect{};
     RECT _autoResizeAnimationTargetRect{};
-    ULONGLONG _autoResizePendingDueTick      = 0;
-    ULONGLONG _autoResizeAnimationStartTick  = 0;
-    bool _footerQueueModeAnimationInitialized = false;
-    float _footerQueueModeAnimationPosition   = 0.0f;
+    ULONGLONG _autoResizePendingDueTick         = 0;
+    ULONGLONG _autoResizeAnimationStartTick     = 0;
+    bool _footerQueueModeAnimationInitialized   = false;
+    float _footerQueueModeAnimationPosition     = 0.0f;
     ULONGLONG _footerQueueModeAnimationLastTick = 0;
 
     wil::com_ptr<ID2D1Factory> _d2dFactory;
@@ -676,12 +676,12 @@ private:
     wil::com_ptr<ID2D1SolidColorBrush> _buttonChromeBrush;
     wil::com_ptr<ID2D1SolidColorBrush> _captionGlyphBrush;
     wil::com_ptr<ITaskbarList3> _taskbarList;
-    D2D1::ColorF _graphFillBaseColor = D2D1::ColorF(D2D1::ColorF::Black);
-    UINT _captionGlyphDpi            = 0;
+    D2D1::ColorF _graphFillBaseColor     = D2D1::ColorF(D2D1::ColorF::Black);
+    UINT _captionGlyphDpi                = 0;
     ULONGLONG _taskbarListRetryAfterTick = 0;
     uint32_t _taskbarListAttemptCount    = 0u;
-    bool _taskbarButtonReady          = false;
-    uint64_t _taskbarUpdateCount      = 0;
+    bool _taskbarButtonReady             = false;
+    uint64_t _taskbarUpdateCount         = 0;
 
     int _mouseWheelRemainder = 0;
 };
@@ -714,7 +714,7 @@ struct FileOperationsSpeedLimitPromptDebugSnapshot
 [[nodiscard]] bool DebugBuildFileOperationsPopupGlobalSummarySnapshot(const std::vector<FileOperationsPopupInternal::TaskSnapshot>& tasks,
                                                                       FileOperationsPopupInternal::PopupLayoutDebugSnapshot& out,
                                                                       double displayedBytesPerSecOverride = -1.0,
-                                                                      double aggregateEtaSecondsOverride = -1.0) noexcept;
+                                                                      double aggregateEtaSecondsOverride  = -1.0) noexcept;
 void DebugFailNextFileOperationsTaskbarListAttempts(unsigned int attempts) noexcept;
 [[nodiscard]] bool DebugBuildFileOperationsGraphFairColorWeightSnapshot(FileOperationsPopupInternal::GraphHueWeightDebugSnapshot& out) noexcept;
 [[nodiscard]] bool DebugBuildFileOperationsGraphFairnessHistorySnapshot(FileOperationsPopupInternal::PopupLayoutDebugSnapshot& out) noexcept;

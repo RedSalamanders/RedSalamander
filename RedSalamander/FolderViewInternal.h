@@ -364,8 +364,8 @@ std::wstring PadLeftToWidth(std::wstring_view text, size_t width)
 
 std::wstring BuildDetailsText(bool isDirectory, uint64_t sizeBytes, int64_t lastWriteTime, DWORD fileAttributes, size_t sizeSlotChars)
 {
-    const auto fields = Common::FileMetadata::FormatDisplayFields(
-        {.lastWriteTime100nsSince1601 = lastWriteTime, .fileAttributes = fileAttributes}, Common::FileMetadata::DisplayProfile::CompactDetails);
+    const auto fields = Common::FileMetadata::FormatDisplayFields({.lastWriteTime100nsSince1601 = lastWriteTime, .fileAttributes = fileAttributes},
+                                                                  Common::FileMetadata::DisplayProfile::CompactDetails);
 
     if (isDirectory)
     {
@@ -1105,7 +1105,7 @@ HRESULT QueryShellShortcutExactPathExists(const std::filesystem::path& linkPath,
 
 HRESULT VerifyShellShortcutExactPath(const std::filesystem::path& linkPath) noexcept
 {
-    bool exists = false;
+    bool exists      = false;
     const HRESULT hr = QueryShellShortcutExactPathExists(linkPath, exists);
     if (FAILED(hr))
     {
@@ -1327,13 +1327,12 @@ private:
 class FolderViewDataObject final : public IDataObject
 {
 public:
-    FolderViewDataObject(
-        std::vector<std::filesystem::path> paths,
-        std::wstring pluginId,
-        std::wstring instanceContext,
-        DWORD preferredEffect,
-        bool includeHDrop,
-        bool includeInternalFormat = true)
+    FolderViewDataObject(std::vector<std::filesystem::path> paths,
+                         std::wstring pluginId,
+                         std::wstring instanceContext,
+                         DWORD preferredEffect,
+                         bool includeHDrop,
+                         bool includeInternalFormat = true)
         : _refCount(1),
           _paths(std::move(paths)),
           _pluginId(std::move(pluginId)),
@@ -1722,8 +1721,8 @@ private:
     std::vector<std::filesystem::path> _paths;
     std::wstring _pluginId;
     std::wstring _instanceContext;
-    DWORD _preferredEffect = DROPEFFECT_COPY;
-    bool _includeHDrop     = false;
+    DWORD _preferredEffect      = DROPEFFECT_COPY;
+    bool _includeHDrop          = false;
     bool _includeInternalFormat = true;
 };
 

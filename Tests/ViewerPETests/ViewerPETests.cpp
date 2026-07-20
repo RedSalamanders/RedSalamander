@@ -37,16 +37,16 @@
 #include "PlugInterfaces/Host.h"
 #include "PlugInterfaces/Informations.h"
 #include "PlugInterfaces/Viewer.h"
+#include "TestSupport/TestSupport.h"
 #include "ViewerImgRaw/ViewerImgRaw.AsyncProtocol.h"
 #include "ViewerImgRaw/ViewerImgRaw.ResourcePolicy.h"
 #include "ViewerSpace/ViewerSpace.ScanPolicy.h"
-#include "ViewerText/resource.h"
 #include "ViewerText/ViewerText.SafetyHelpers.h"
+#include "ViewerText/resource.h"
 #include "ViewerWeb/JsStringEscape.h"
 #include "ViewerWeb/ViewerWebCleanupTracker.h"
 #include "ViewerWeb/ViewerWebSecurity.h"
 #include "WindowMessages.h"
-#include "TestSupport/TestSupport.h"
 
 #pragma comment(lib, "windowscodecs")
 #pragma comment(lib, "shlwapi")
@@ -198,9 +198,7 @@ void PumpPendingMessages() noexcept
 
 template <typename TPredicate> [[nodiscard]] bool PumpUntil(TPredicate&& predicate, std::chrono::milliseconds timeout) noexcept
 {
-    return RedSalamander::TestSupport::PumpMessagesUntil(
-               std::forward<TPredicate>(predicate),
-               {.timeout = timeout, .operationName = L"ViewerPE test condition"})
+    return RedSalamander::TestSupport::PumpMessagesUntil(std::forward<TPredicate>(predicate), {.timeout = timeout, .operationName = L"ViewerPE test condition"})
         .conditionMet;
 }
 
@@ -346,12 +344,9 @@ template <typename Predicate>
                                              WndMsg::ViewerTextDebugSnapshot* outSnapshot = nullptr) noexcept
 {
     std::wstring timeoutDiagnostic;
-    const bool ready = RedSalamander::TestSupport::WaitForSnapshot<WndMsg::ViewerTextDebugSnapshot>(
-        [hwnd](WndMsg::ViewerTextDebugSnapshot& snapshot) noexcept { return TryGetViewerTextDebugSnapshot(hwnd, snapshot); },
-        std::forward<Predicate>(predicate),
-        {.timeout = timeout, .operationName = L"ViewerText debug snapshot"},
-        outSnapshot,
-        &timeoutDiagnostic);
+    const bool ready = RedSalamander::TestSupport::WaitForSnapshot<WndMsg::ViewerTextDebugSnapshot>([hwnd](WndMsg::ViewerTextDebugSnapshot& snapshot) noexcept {
+        return TryGetViewerTextDebugSnapshot(hwnd, snapshot);
+    }, std::forward<Predicate>(predicate), {.timeout = timeout, .operationName = L"ViewerText debug snapshot"}, outSnapshot, &timeoutDiagnostic);
     if (! ready)
     {
         std::wcerr << timeoutDiagnostic << L'\n';
@@ -635,7 +630,7 @@ void PrintVisibleChildWindowClasses(HWND hwnd, std::wstring_view prefix) noexcep
         }
         return TRUE;
     },
-                                        0));
+                                       0));
 }
 
 void PrintChildWindowDiagnostics(HWND hwnd, std::wstring_view prefix) noexcept
@@ -1451,15 +1446,15 @@ void AppendTiffIfdEntry(std::vector<unsigned char>& bytes, uint16_t tag, uint16_
 
 [[nodiscard]] std::filesystem::path WriteOrientedRgbTiffFile(const std::filesystem::path& path, uint16_t orientation)
 {
-    constexpr uint32_t kWidth            = 2u;
-    constexpr uint32_t kHeight           = 3u;
-    constexpr uint16_t kEntryCount       = 11u;
-    constexpr uint32_t kIfdOffset        = 8u;
-    constexpr uint32_t kBitsOffset       = kIfdOffset + 2u + (static_cast<uint32_t>(kEntryCount) * 12u) + 4u;
-    constexpr uint32_t kPixelOffset      = kBitsOffset + 6u;
-    constexpr uint32_t kPixelBytes       = kWidth * kHeight * 3u;
-    constexpr uint32_t kShortType        = 3u;
-    constexpr uint32_t kLongType         = 4u;
+    constexpr uint32_t kWidth       = 2u;
+    constexpr uint32_t kHeight      = 3u;
+    constexpr uint16_t kEntryCount  = 11u;
+    constexpr uint32_t kIfdOffset   = 8u;
+    constexpr uint32_t kBitsOffset  = kIfdOffset + 2u + (static_cast<uint32_t>(kEntryCount) * 12u) + 4u;
+    constexpr uint32_t kPixelOffset = kBitsOffset + 6u;
+    constexpr uint32_t kPixelBytes  = kWidth * kHeight * 3u;
+    constexpr uint32_t kShortType   = 3u;
+    constexpr uint32_t kLongType    = 4u;
 
     std::vector<unsigned char> bytes;
     bytes.reserve(static_cast<size_t>(kPixelOffset + kPixelBytes));
@@ -1485,9 +1480,24 @@ void AppendTiffIfdEntry(std::vector<unsigned char>& bytes, uint16_t tag, uint16_
     AppendU16Le(bytes, 8u);
 
     static constexpr std::array<unsigned char, kPixelBytes> kPixels{{
-        0xFF, 0x00, 0x00, 0x00, 0xFF, 0x00,
-        0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x00,
-        0x00, 0xFF, 0xFF, 0xFF, 0x00, 0xFF,
+        0xFF,
+        0x00,
+        0x00,
+        0x00,
+        0xFF,
+        0x00,
+        0x00,
+        0x00,
+        0xFF,
+        0xFF,
+        0xFF,
+        0x00,
+        0x00,
+        0xFF,
+        0xFF,
+        0xFF,
+        0x00,
+        0xFF,
     }};
     bytes.insert(bytes.end(), kPixels.begin(), kPixels.end());
     return WriteBinaryFile(path, std::as_bytes(std::span(bytes)));
@@ -1527,12 +1537,26 @@ void AppendTiffIfdEntry(std::vector<unsigned char>& bytes, uint16_t tag, uint16_
     }
 
     std::array<BYTE, 18> pixels{{
-        0x00, 0x00, 0xFF, 0x00, 0xFF, 0x00,
-        0xFF, 0x00, 0x00, 0x00, 0xFF, 0xFF,
-        0xFF, 0xFF, 0x00, 0xFF, 0x00, 0xFF,
+        0x00,
+        0x00,
+        0xFF,
+        0x00,
+        0xFF,
+        0x00,
+        0xFF,
+        0x00,
+        0x00,
+        0x00,
+        0xFF,
+        0xFF,
+        0xFF,
+        0xFF,
+        0x00,
+        0xFF,
+        0x00,
+        0xFF,
     }};
-    if (FAILED(frame->WritePixels(3u, 6u, static_cast<UINT>(pixels.size()), pixels.data())) || FAILED(frame->Commit()) ||
-        FAILED(encoder->Commit()))
+    if (FAILED(frame->WritePixels(3u, 6u, static_cast<UINT>(pixels.size()), pixels.data())) || FAILED(frame->Commit()) || FAILED(encoder->Commit()))
     {
         return {};
     }
@@ -1540,8 +1564,10 @@ void AppendTiffIfdEntry(std::vector<unsigned char>& bytes, uint16_t tag, uint16_
     return path;
 }
 
-[[nodiscard]] std::filesystem::path WriteTinyJpegWithExifOrientation(
-    const std::filesystem::path& path, uint16_t orientationType, uint32_t orientationCount, uint16_t orientation)
+[[nodiscard]] std::filesystem::path WriteTinyJpegWithExifOrientation(const std::filesystem::path& path,
+                                                                     uint16_t orientationType,
+                                                                     uint32_t orientationCount,
+                                                                     uint16_t orientation)
 {
     std::vector<unsigned char> app1;
     app1.reserve(32u);
@@ -1635,10 +1661,10 @@ public:
 
     explicit LocalFileReader(wil::unique_handle file,
                              std::wstring pathKey,
-                              void* readCookie,
-                              RecordReadBytesFn recordReadBytes,
-                              std::optional<uint64_t> reportedSize = std::nullopt,
-                              LocalFileReaderFault fault = LocalFileReaderFault::None) noexcept
+                             void* readCookie,
+                             RecordReadBytesFn recordReadBytes,
+                             std::optional<uint64_t> reportedSize = std::nullopt,
+                             LocalFileReaderFault fault           = LocalFileReaderFault::None) noexcept
         : _file(std::move(file)),
           _pathKey(std::move(pathKey)),
           _readCookie(readCookie),
@@ -1721,7 +1747,7 @@ public:
         if (newPosition)
         {
             const uint64_t actualPosition = static_cast<uint64_t>(outPosition.QuadPart);
-            *newPosition = _fault == LocalFileReaderFault::SeekPositionMismatch ? actualPosition + 1u : actualPosition;
+            *newPosition                  = _fault == LocalFileReaderFault::SeekPositionMismatch ? actualPosition + 1u : actualPosition;
         }
         return S_OK;
     }
@@ -1909,7 +1935,9 @@ private:
 struct BlockingReadControl final
 {
     BlockingReadControl()
-        : entered(CreateEventW(nullptr, TRUE, FALSE, nullptr)), release(CreateEventW(nullptr, TRUE, FALSE, nullptr)), exited(CreateEventW(nullptr, TRUE, FALSE, nullptr))
+        : entered(CreateEventW(nullptr, TRUE, FALSE, nullptr)),
+          release(CreateEventW(nullptr, TRUE, FALSE, nullptr)),
+          exited(CreateEventW(nullptr, TRUE, FALSE, nullptr))
     {
     }
     BlockingReadControl(const BlockingReadControl&)            = delete;
@@ -1933,7 +1961,8 @@ class BlockingFileReader final : public IFileReader
 {
 public:
     BlockingFileReader(wil::com_ptr<IFileReader> inner, std::shared_ptr<BlockingReadControl> control) noexcept
-        : _inner(std::move(inner)), _control(std::move(control))
+        : _inner(std::move(inner)),
+          _control(std::move(control))
     {
     }
     BlockingFileReader(const BlockingFileReader&)            = delete;
@@ -1989,7 +2018,7 @@ public:
             return E_UNEXPECTED;
         }
 
-        const bool firstRead = ! _blocked.exchange(true, std::memory_order_acq_rel);
+        const bool firstRead  = ! _blocked.exchange(true, std::memory_order_acq_rel);
         const auto signalExit = wil::scope_exit([&]() noexcept
         {
             if (firstRead)
@@ -2000,8 +2029,7 @@ public:
         if (firstRead)
         {
             unsigned long previous = _control->maxRequestedBytes.load(std::memory_order_relaxed);
-            while (previous < bytesToRead &&
-                   ! _control->maxRequestedBytes.compare_exchange_weak(previous, bytesToRead, std::memory_order_relaxed))
+            while (previous < bytesToRead && ! _control->maxRequestedBytes.compare_exchange_weak(previous, bytesToRead, std::memory_order_relaxed))
             {
             }
 
@@ -2396,14 +2424,8 @@ public:
                 backingPath = mapping->second;
             }
         }
-        wil::unique_handle file(
-            CreateFileW(backingPath.c_str(),
-                        GENERIC_READ,
-                        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                        nullptr,
-                        OPEN_EXISTING,
-                        FILE_ATTRIBUTE_NORMAL,
-                        nullptr));
+        wil::unique_handle file(CreateFileW(
+            backingPath.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
         if (! file)
         {
             return HRESULT_FROM_WIN32(GetLastError());
@@ -2423,10 +2445,11 @@ public:
         }
         if (blockingControl)
         {
-            auto localReader = std::make_unique<LocalFileReader>(std::move(file),
-                                                                  key,
-                                                                  this,
-                                                                  [](void* cookie, std::wstring_view pathKey, size_t bytesRead) noexcept
+            auto localReader = std::make_unique<LocalFileReader>(
+                std::move(file),
+                key,
+                this,
+                [](void* cookie, std::wstring_view pathKey, size_t bytesRead) noexcept
             {
                 auto* self = static_cast<BuiltinFileSystemStub*>(cookie);
                 if (self)
@@ -2434,10 +2457,8 @@ public:
                     self->RecordReadBytes(pathKey, bytesRead);
                 }
             },
-                                                                   _reportedSizeEnabled.load(std::memory_order_relaxed)
-                                                                       ? std::optional<uint64_t>(_reportedSize.load(std::memory_order_relaxed))
-                                                                       : std::nullopt,
-                                                                   static_cast<LocalFileReaderFault>(_localReaderFault.load(std::memory_order_acquire)));
+                _reportedSizeEnabled.load(std::memory_order_relaxed) ? std::optional<uint64_t>(_reportedSize.load(std::memory_order_relaxed)) : std::nullopt,
+                static_cast<LocalFileReaderFault>(_localReaderFault.load(std::memory_order_acquire)));
             wil::com_ptr<IFileReader> inner;
             inner.attach(localReader.release());
             auto blockingReader = std::make_unique<BlockingFileReader>(std::move(inner), std::move(blockingControl));
@@ -2445,10 +2466,11 @@ public:
             return S_OK;
         }
 
-        auto localReader = std::make_unique<LocalFileReader>(std::move(file),
-                                                             key,
-                                                             this,
-                                                             [](void* cookie, std::wstring_view pathKey, size_t bytesRead) noexcept
+        auto localReader = std::make_unique<LocalFileReader>(
+            std::move(file),
+            key,
+            this,
+            [](void* cookie, std::wstring_view pathKey, size_t bytesRead) noexcept
         {
             auto* self = static_cast<BuiltinFileSystemStub*>(cookie);
             if (self)
@@ -2456,11 +2478,9 @@ public:
                 self->RecordReadBytes(pathKey, bytesRead);
             }
         },
-                                                              _reportedSizeEnabled.load(std::memory_order_relaxed)
-                                                                  ? std::optional<uint64_t>(_reportedSize.load(std::memory_order_relaxed))
-                                                                  : std::nullopt,
-                                                              static_cast<LocalFileReaderFault>(_localReaderFault.load(std::memory_order_acquire)));
-        *reader          = localReader.release();
+            _reportedSizeEnabled.load(std::memory_order_relaxed) ? std::optional<uint64_t>(_reportedSize.load(std::memory_order_relaxed)) : std::nullopt,
+            static_cast<LocalFileReaderFault>(_localReaderFault.load(std::memory_order_acquire)));
+        *reader = localReader.release();
         return S_OK;
     }
 
@@ -2554,8 +2574,8 @@ private:
     std::atomic<uint64_t> _reportedSize{0u};
     std::atomic_uint32_t _localReaderFault{static_cast<uint32_t>(LocalFileReaderFault::None)};
     DirectoryReadCallback _directoryReadCallback = nullptr;
-    void* _directoryReadContext                   = nullptr;
-    bool _useSyntheticFileSystemMetadata          = false;
+    void* _directoryReadContext                  = nullptr;
+    bool _useSyntheticFileSystemMetadata         = false;
 };
 
 [[nodiscard]] bool TestViewerPEUsesDxUiComboHostWithoutVisibleLegacyCombo() noexcept
@@ -2685,13 +2705,13 @@ private:
         return false;
     }
 
-    const std::filesystem::path buildDir    = std::filesystem::path(modulePath.data()).parent_path();
-    const std::filesystem::path pluginPath  = buildDir / L"Plugins" / L"ViewerPE.dll";
-    const std::filesystem::path activePath  = buildDir / L"RedSalamander.exe";
-    const std::filesystem::path middlePath  = buildDir / L"Plugins" / L"ViewerText.dll";
-    const std::filesystem::path latestPath  = buildDir / L"Common.dll";
-    const std::filesystem::path pluginDir   = pluginPath.parent_path();
-    const std::wstring pluginModuleName     = pluginPath.filename().wstring();
+    const std::filesystem::path buildDir   = std::filesystem::path(modulePath.data()).parent_path();
+    const std::filesystem::path pluginPath = buildDir / L"Plugins" / L"ViewerPE.dll";
+    const std::filesystem::path activePath = buildDir / L"RedSalamander.exe";
+    const std::filesystem::path middlePath = buildDir / L"Plugins" / L"ViewerText.dll";
+    const std::filesystem::path latestPath = buildDir / L"Common.dll";
+    const std::filesystem::path pluginDir  = pluginPath.parent_path();
+    const std::wstring pluginModuleName    = pluginPath.filename().wstring();
     Check(std::filesystem::exists(pluginPath) && std::filesystem::exists(activePath) && std::filesystem::exists(middlePath) &&
               std::filesystem::exists(latestPath),
           L"ViewerPE blocked-read fixtures are present",
@@ -2723,7 +2743,7 @@ private:
         return false;
     }
 
-    const FARPROC createProc = GetProcAddress(pluginModule.get(), "RedSalamanderCreate");
+    const FARPROC createProc       = GetProcAddress(pluginModule.get(), "RedSalamanderCreate");
     RedSalamanderCreateFn createFn = nullptr;
     static_assert(sizeof(createFn) == sizeof(createProc));
     std::memcpy(&createFn, &createProc, sizeof(createFn));
@@ -2765,12 +2785,11 @@ private:
     Check(PumpUntil(
               [&]() noexcept
     {
-        viewerWindow = FindNewVisibleWindowByClass(kViewerPEWindowClassName, existingWindows);
+        viewerWindow     = FindNewVisibleWindowByClass(kViewerPEWindowClassName, existingWindows);
         oversizeSnapshot = {};
-        return viewerWindow &&
-               SendMessageW(viewerWindow, WndMsg::kViewerPeDebugGetSnapshot, 0u, reinterpret_cast<LPARAM>(&oversizeSnapshot)) == TRUE &&
-               ! oversizeSnapshot.isLoading && oversizeSnapshot.requestId > 0u && oversizeSnapshot.windowIdentity > 0u &&
-               oversizeSnapshot.bodyLength > 0u && FAILED(oversizeSnapshot.parseHr);
+        return viewerWindow && SendMessageW(viewerWindow, WndMsg::kViewerPeDebugGetSnapshot, 0u, reinterpret_cast<LPARAM>(&oversizeSnapshot)) == TRUE &&
+               ! oversizeSnapshot.isLoading && oversizeSnapshot.requestId > 0u && oversizeSnapshot.windowIdentity > 0u && oversizeSnapshot.bodyLength > 0u &&
+               FAILED(oversizeSnapshot.parseHr);
     },
               5000ms),
           L"ViewerPE rejects the reported 256 MiB plus one byte source with a terminal error",
@@ -2780,15 +2799,14 @@ private:
     fileSystem.DisableReportedSize();
 
     WndMsg::ViewerPeDebugSnapshot lastTerminalSnapshot = oversizeSnapshot;
-    const auto waitForTerminalAfter = [&](uint64_t previousRequestId, bool expectFailure, std::wstring_view label) noexcept
+    const auto waitForTerminalAfter                    = [&](uint64_t previousRequestId, bool expectFailure, std::wstring_view label) noexcept
     {
         WndMsg::ViewerPeDebugSnapshot snapshot{};
         const bool terminal = PumpUntil(
             [&]() noexcept
         {
             snapshot = {};
-            return viewerWindow &&
-                   SendMessageW(viewerWindow, WndMsg::kViewerPeDebugGetSnapshot, 0u, reinterpret_cast<LPARAM>(&snapshot)) == TRUE &&
+            return viewerWindow && SendMessageW(viewerWindow, WndMsg::kViewerPeDebugGetSnapshot, 0u, reinterpret_cast<LPARAM>(&snapshot)) == TRUE &&
                    snapshot.requestId > previousRequestId && ! snapshot.isLoading && snapshot.bodyLength > 0u &&
                    (expectFailure ? FAILED(snapshot.parseHr) : SUCCEEDED(snapshot.parseHr));
         },
@@ -2891,12 +2909,9 @@ private:
         Check(SendMessageW(viewerWindow, WndMsg::kViewerPeDebugReloadWithAsyncFault, static_cast<WPARAM>(fault), 0u) == TRUE,
               std::format(L"ViewerPE arms the {} terminal-delivery fault", label),
               success);
-        static_cast<void>(waitForTerminalAfter(previousRequestId,
-                                               true,
-                                               std::format(L"ViewerPE {} failure leaves loading through the scheduler fallback", label)));
-        Check(viewerWindow && IsWindow(viewerWindow) != FALSE,
-              std::format(L"ViewerPE {} terminal fallback preserves the current window", label),
-              success);
+        static_cast<void>(
+            waitForTerminalAfter(previousRequestId, true, std::format(L"ViewerPE {} failure leaves loading through the scheduler fallback", label)));
+        Check(viewerWindow && IsWindow(viewerWindow) != FALSE, std::format(L"ViewerPE {} terminal fallback preserves the current window", label), success);
     }
 
     auto closeControl = std::make_shared<BlockingReadControl>();
@@ -3144,9 +3159,7 @@ private:
           L"ViewerWeb raw response denies network, frame, object, base, and form capabilities",
           success);
     Check(rawHeaders.find(L"script-src 'unsafe-inline'") == std::wstring_view::npos, L"ViewerWeb raw response never enables inline script", success);
-    Check(rawHeaders.find(L"charset=") == std::wstring_view::npos,
-          L"ViewerWeb raw response leaves encoding selection to BOM/meta sniffing",
-          success);
+    Check(rawHeaders.find(L"charset=") == std::wstring_view::npos, L"ViewerWeb raw response leaves encoding selection to BOM/meta sniffing", success);
 
     const std::wstring_view generatedHeaders(ViewerWebSecurity::kGeneratedDocumentResponseHeaders);
     Check(generatedHeaders.find(L"script-src 'unsafe-inline'") != std::wstring_view::npos,
@@ -3162,18 +3175,12 @@ private:
     Check(EvaluateNavigation(allowedDocument, NavigationSurface::TopLevel, false, false, allowedDocument) == NavigationAction::AllowInViewer,
           L"ViewerWeb permits only its exact active top-level document",
           success);
-    Check(EvaluateNavigation(L"https://viewer.redsalamander.invalid/web/42.html#section",
-                             NavigationSurface::TopLevel,
-                             true,
-                             false,
-                             allowedDocument) == NavigationAction::AllowInViewer,
+    Check(EvaluateNavigation(L"https://viewer.redsalamander.invalid/web/42.html#section", NavigationSurface::TopLevel, true, false, allowedDocument) ==
+              NavigationAction::AllowInViewer,
           L"ViewerWeb permits a fragment on the exact active document",
           success);
-    Check(EvaluateNavigation(L"https://viewer.redsalamander.invalid/web/42.html?escape=1",
-                             NavigationSurface::TopLevel,
-                             true,
-                             true,
-                             allowedDocument) == NavigationAction::Block,
+    Check(EvaluateNavigation(L"https://viewer.redsalamander.invalid/web/42.html?escape=1", NavigationSurface::TopLevel, true, true, allowedDocument) ==
+              NavigationAction::Block,
           L"ViewerWeb blocks query changes on the active document URL",
           success);
     Check(EvaluateNavigation(allowedDocument, NavigationSurface::Frame, true, true, allowedDocument) == NavigationAction::Block,
@@ -3203,10 +3210,7 @@ private:
           L"ViewerWeb running-byte guard accepts an exact-limit read",
           success);
     Check(! ViewerWebSecurity::TryAccumulateWithinLimit(8u, 1u, 8u, nextBytes), L"ViewerWeb running-byte guard rejects the first byte over limit", success);
-    Check(! ViewerWebSecurity::TryAccumulateWithinLimit((std::numeric_limits<uint64_t>::max)() - 1u,
-                                                        2u,
-                                                        (std::numeric_limits<uint64_t>::max)(),
-                                                        nextBytes),
+    Check(! ViewerWebSecurity::TryAccumulateWithinLimit((std::numeric_limits<uint64_t>::max)() - 1u, 2u, (std::numeric_limits<uint64_t>::max)(), nextBytes),
           L"ViewerWeb running-byte guard rejects integer overflow",
           success);
 
@@ -3244,20 +3248,22 @@ private:
 
     struct CleanupFaultState
     {
-        bool deleteSucceeds = false;
+        bool deleteSucceeds   = false;
         bool scheduleSucceeds = false;
-        size_t deleteCalls = 0u;
-        size_t scheduleCalls = 0u;
+        size_t deleteCalls    = 0u;
+        size_t scheduleCalls  = 0u;
     } cleanupState;
     const ViewerWebSecurity::StagedCleanupTracker::Operations cleanupOperations{
         .context = &cleanupState,
-        .deleteNow = [](void* context, [[maybe_unused]] std::wstring_view path) noexcept
+        .deleteNow =
+            [](void* context, [[maybe_unused]] std::wstring_view path) noexcept
     {
         auto* state = static_cast<CleanupFaultState*>(context);
         ++state->deleteCalls;
         return state->deleteSucceeds;
     },
-        .scheduleLater = [](void* context, [[maybe_unused]] std::wstring_view path) noexcept
+        .scheduleLater =
+            [](void* context, [[maybe_unused]] std::wstring_view path) noexcept
     {
         auto* state = static_cast<CleanupFaultState*>(context);
         ++state->scheduleCalls;
@@ -3272,9 +3278,8 @@ private:
           success);
     cleanupState.deleteSucceeds = true;
     cleanupTracker.Retry(cleanupOperations);
-    Check(cleanupTracker.PendingCount() == 0u && cleanupState.deleteCalls == 2u,
-          L"ViewerWeb later quiet-point retry removes the retained staged path",
-          success);
+    Check(
+        cleanupTracker.PendingCount() == 0u && cleanupState.deleteCalls == 2u, L"ViewerWeb later quiet-point retry removes the retained staged path", success);
 
     ViewerWebSecurity::DebugSnapshot snapshot{};
     Check(snapshot.route == DocumentRoute::None, L"ViewerWeb debug snapshot starts with no document route", success);
@@ -3366,10 +3371,9 @@ private:
         return false;
     }
 
-    constexpr std::string_view hostileHtml =
-        "<!doctype html><script>window.__viewerWebPwned=1</script><iframe src='file:///C:/Windows/win.ini'></iframe>"
-        "<img src='https://example.invalid/leak'><form action='https://example.invalid/post'></form>"
-        "<a target='_blank' href='data:text/html,pwn'>escape</a>";
+    constexpr std::string_view hostileHtml = "<!doctype html><script>window.__viewerWebPwned=1</script><iframe src='file:///C:/Windows/win.ini'></iframe>"
+                                             "<img src='https://example.invalid/leak'><form action='https://example.invalid/post'></form>"
+                                             "<a target='_blank' href='data:text/html,pwn'>escape</a>";
     std::vector<std::byte> hostileUtf16Bytes;
     hostileUtf16Bytes.reserve(2u + hostileHtml.size() * 2u);
     hostileUtf16Bytes.push_back(std::byte{0xFF});
@@ -3380,7 +3384,7 @@ private:
         hostileUtf16Bytes.push_back(std::byte{0x00});
     }
     const std::filesystem::path hostileBacking = WriteBinaryFile(tempDir / L"hostile-utf16-bom.bin", hostileUtf16Bytes);
-    const std::wstring hostileVirtualPath       = L"vault\\hostile.html";
+    const std::wstring hostileVirtualPath      = L"vault\\hostile.html";
 
     BuiltinFileSystemStub acceptedFileSystem;
     acceptedFileSystem.MapVirtualPath(hostileVirtualPath, hostileBacking);
@@ -3404,7 +3408,7 @@ private:
     }
 
     const std::vector<HWND> acceptedExistingWindows = CollectVisibleWindowsByClass(kViewerWebWindowClassName);
-    const wchar_t* acceptedFiles[]                   = {hostileVirtualPath.c_str()};
+    const wchar_t* acceptedFiles[]                  = {hostileVirtualPath.c_str()};
     ViewerOpenContext acceptedContext{};
     acceptedContext.fileSystem            = static_cast<IFileSystem*>(&acceptedFileSystem);
     acceptedContext.fileSystemName        = L"Virtual File System";
@@ -3427,17 +3431,15 @@ private:
 
     ViewerWebSecurity::DebugSnapshot acceptedSnapshot{};
     const bool observedPrivateOrigin = acceptedWindow && PumpUntil(
-        [&]() noexcept
+                                                             [&]() noexcept
     {
         acceptedSnapshot = {};
-        const LRESULT snapshotResult = SendMessageW(acceptedWindow,
-                                                    ViewerWebSecurity::GetDebugSnapshotMessage(),
-                                                    0u,
-                                                    reinterpret_cast<LPARAM>(&acceptedSnapshot));
+        const LRESULT snapshotResult =
+            SendMessageW(acceptedWindow, ViewerWebSecurity::GetDebugSnapshotMessage(), 0u, reinterpret_cast<LPARAM>(&acceptedSnapshot));
         return snapshotResult == TRUE && acceptedSnapshot.route == ViewerWebSecurity::DocumentRoute::RawHtmlPrivateOrigin &&
                ViewerWebSecurity::StartsWithNoCase(acceptedSnapshot.webViewSourceUrl.data(), ViewerWebSecurity::kInternalDocumentOrigin);
     },
-        12000ms);
+                                                             12000ms);
     Check(observedPrivateOrigin, L"ViewerWeb WebView2 source observes the private viewer origin", success);
     Check(acceptedSnapshot.scriptsEnabled == FALSE, L"ViewerWeb disables the actual WebView2 script setting for raw HTML", success);
     Check(acceptedSnapshot.privateOrigin != FALSE, L"ViewerWeb classifies hostile HTML as private-origin content", success);
@@ -3459,7 +3461,7 @@ private:
     }
 
     const std::filesystem::path pdfBacking = WriteTinyPdfFile(tempDir / L"viewerweb-local.pdf");
-    const auto runPdfCase = [&](bool virtualFileSystem) -> std::optional<std::filesystem::path>
+    const auto runPdfCase                  = [&](bool virtualFileSystem) -> std::optional<std::filesystem::path>
     {
         BuiltinFileSystemStub fileSystem;
         const std::wstring focusedPath = virtualFileSystem ? L"vault\\viewerweb.pdf" : pdfBacking.wstring();
@@ -3498,13 +3500,13 @@ private:
 
         ViewerWebSecurity::DebugSnapshot snapshot{};
         const bool completed = window && PumpUntil(
-            [&]() noexcept
+                                             [&]() noexcept
         {
             snapshot = {};
             static_cast<void>(SendMessageW(window, ViewerWebSecurity::GetDebugSnapshotMessage(), 0u, reinterpret_cast<LPARAM>(&snapshot)));
             return snapshot.route == ViewerWebSecurity::DocumentRoute::StagedPdf && snapshot.navigationCompleted != FALSE;
         },
-            12000ms);
+                                             12000ms);
         Check(completed, virtualFileSystem ? L"ViewerWeb virtual PDF navigation completes" : L"ViewerWeb local PDF navigation completes", success);
         Check(snapshot.navigationSucceeded != FALSE,
               virtualFileSystem ? L"ViewerWeb virtual PDF navigation succeeds" : L"ViewerWeb local PDF navigation succeeds",
@@ -3703,36 +3705,33 @@ private:
         }
     });
 
-    wil::unique_hmodule pluginModule(
-        LoadLibraryExW(pluginPath.c_str(), nullptr, LOAD_LIBRARY_SEARCH_DEFAULT_DIRS | LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR));
+    wil::unique_hmodule pluginModule(LoadLibraryExW(pluginPath.c_str(), nullptr, LOAD_LIBRARY_SEARCH_DEFAULT_DIRS | LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR));
     Check(pluginModule.is_valid(), L"ViewerWeb.dll loads for Save As data-safety validation", success);
     if (! pluginModule)
     {
         return false;
     }
 
-    const FARPROC createProc    = GetProcAddress(pluginModule.get(), "RedSalamanderCreate");
-    const FARPROC shutdownProc  = GetProcAddress(pluginModule.get(), "RedSalamanderPluginShutdown");
-    const FARPROC canUnloadProc = GetProcAddress(pluginModule.get(), "RedSalamanderPluginCanUnloadNow");
+    const FARPROC createProc       = GetProcAddress(pluginModule.get(), "RedSalamanderCreate");
+    const FARPROC shutdownProc     = GetProcAddress(pluginModule.get(), "RedSalamanderPluginShutdown");
+    const FARPROC canUnloadProc    = GetProcAddress(pluginModule.get(), "RedSalamanderPluginCanUnloadNow");
     RedSalamanderCreateFn createFn = nullptr;
-    using PluginShutdownFn = void(__stdcall*)();
-    using PluginCanUnloadFn = BOOL(__stdcall*)();
-    PluginShutdownFn shutdownFn   = nullptr;
-    PluginCanUnloadFn canUnloadFn = nullptr;
+    using PluginShutdownFn         = void(__stdcall*)();
+    using PluginCanUnloadFn        = BOOL(__stdcall*)();
+    PluginShutdownFn shutdownFn    = nullptr;
+    PluginCanUnloadFn canUnloadFn  = nullptr;
     static_assert(sizeof(createFn) == sizeof(createProc));
     static_assert(sizeof(shutdownFn) == sizeof(shutdownProc));
     static_assert(sizeof(canUnloadFn) == sizeof(canUnloadProc));
     std::memcpy(&createFn, &createProc, sizeof(createFn));
     std::memcpy(&shutdownFn, &shutdownProc, sizeof(shutdownFn));
     std::memcpy(&canUnloadFn, &canUnloadProc, sizeof(canUnloadFn));
-    Check(createFn && shutdownFn && canUnloadFn,
-          L"ViewerWeb factory and unload-gate exports are available for Save As data-safety validation",
-          success);
+    Check(createFn && shutdownFn && canUnloadFn, L"ViewerWeb factory and unload-gate exports are available for Save As data-safety validation", success);
     if (! createFn || ! shutdownFn || ! canUnloadFn)
     {
         return false;
     }
-    bool moduleShutdownPending = true;
+    bool moduleShutdownPending         = true;
     const auto shutdownModuleOnFailure = wil::scope_exit([&]() noexcept
     {
         if (moduleShutdownPending)
@@ -3749,14 +3748,13 @@ private:
         return false;
     }
 
-    constexpr std::string_view kSourceText =
-        "<!doctype html><html><body>ViewerWeb transactional Save As source</body></html>\r\n";
-    constexpr std::string_view kDestinationText = "pre-existing ViewerWeb destination bytes must survive\r\n";
-    const std::filesystem::path sourcePath      = WriteUtf8TextFile(tempDir / L"source.html", kSourceText);
-    const std::filesystem::path destinationPath = WriteUtf8TextFile(tempDir / L"destination.html", kDestinationText);
+    constexpr std::string_view kSourceText       = "<!doctype html><html><body>ViewerWeb transactional Save As source</body></html>\r\n";
+    constexpr std::string_view kDestinationText  = "pre-existing ViewerWeb destination bytes must survive\r\n";
+    const std::filesystem::path sourcePath       = WriteUtf8TextFile(tempDir / L"source.html", kSourceText);
+    const std::filesystem::path destinationPath  = WriteUtf8TextFile(tempDir / L"destination.html", kDestinationText);
     const std::filesystem::path postFallbackPath = tempDir / L"post-fallback.html";
-    const auto sourceBytes      = ReadBinaryFile(sourcePath);
-    const auto destinationBytes = ReadBinaryFile(destinationPath);
+    const auto sourceBytes                       = ReadBinaryFile(sourcePath);
+    const auto destinationBytes                  = ReadBinaryFile(destinationPath);
     Check(sourceBytes.has_value() && destinationBytes.has_value(), L"ViewerWeb Save As baseline bytes are readable", success);
     if (! sourceBytes.has_value() || ! destinationBytes.has_value())
     {
@@ -3783,8 +3781,8 @@ private:
         return false;
     }
 
-    HWND viewerWindow = nullptr;
-    const auto emergencyClose = wil::scope_exit([&]() noexcept
+    HWND viewerWindow                       = nullptr;
+    const auto emergencyClose               = wil::scope_exit([&]() noexcept
     {
         if (viewerWindow && IsWindow(viewerWindow) != FALSE)
         {
@@ -3818,12 +3816,8 @@ private:
               [&]() noexcept
     {
         loadSnapshot = {};
-        return SendMessageW(viewerWindow,
-                            ViewerWebSecurity::GetDebugSnapshotMessage(),
-                            0u,
-                            reinterpret_cast<LPARAM>(&loadSnapshot)) == TRUE &&
-               loadSnapshot.loadedSourceBytes == sourceBytes.value().size() &&
-               loadSnapshot.route == ViewerWebSecurity::DocumentRoute::RawHtmlPrivateOrigin;
+        return SendMessageW(viewerWindow, ViewerWebSecurity::GetDebugSnapshotMessage(), 0u, reinterpret_cast<LPARAM>(&loadSnapshot)) == TRUE &&
+               loadSnapshot.loadedSourceBytes == sourceBytes.value().size() && loadSnapshot.route == ViewerWebSecurity::DocumentRoute::RawHtmlPrivateOrigin;
     },
               12000ms),
           L"ViewerWeb fully consumes the source before Save As fault injection",
@@ -3832,9 +3826,7 @@ private:
     const UINT controlMessage = ViewerWebSecurity::GetDebugControlMessage();
     Check(controlMessage != 0u, L"ViewerWeb exposes the registered Save As debug-control message", success);
 
-    const auto checkBytes = [&](const std::filesystem::path& path,
-                                const std::vector<std::byte>& expected,
-                                std::wstring_view description) noexcept
+    const auto checkBytes = [&](const std::filesystem::path& path, const std::vector<std::byte>& expected, std::wstring_view description) noexcept
     {
         const auto actual = ReadBinaryFile(path);
         Check(actual.has_value() && actual.value() == expected, description, success);
@@ -3846,16 +3838,14 @@ private:
         Check(! countError && count == 0u, L"ViewerWeb Save As leaves no sibling transaction temp behind", success);
     };
     const auto resetDestination = [&]() { static_cast<void>(WriteUtf8TextFile(destinationPath, kDestinationText)); };
-    const auto invokeSave = [&](const std::filesystem::path& destination, uint32_t faultMask = 0u) noexcept -> bool
+    const auto invokeSave       = [&](const std::filesystem::path& destination, uint32_t faultMask = 0u) noexcept -> bool
     {
         const std::wstring destinationText = destination.wstring();
         ViewerWebSecurity::DebugSaveAsRequest request{};
         request.destinationPath = destinationText.c_str();
         request.faultMask       = faultMask;
-        const LRESULT handled = SendMessageW(viewerWindow,
-                                             controlMessage,
-                                             static_cast<WPARAM>(ViewerWebSecurity::DebugControlAction::SaveAsToPath),
-                                             reinterpret_cast<LPARAM>(&request));
+        const LRESULT handled   = SendMessageW(
+            viewerWindow, controlMessage, static_cast<WPARAM>(ViewerWebSecurity::DebugControlAction::SaveAsToPath), reinterpret_cast<LPARAM>(&request));
         Check(handled == TRUE && SUCCEEDED(request.submissionHr), L"ViewerWeb submits Save As work asynchronously", success);
         if (handled != TRUE || FAILED(request.submissionHr))
         {
@@ -3863,10 +3853,7 @@ private:
         }
 
         ViewerWebSecurity::DebugSnapshot activeSnapshot{};
-        const bool active = SendMessageW(viewerWindow,
-                                         ViewerWebSecurity::GetDebugSnapshotMessage(),
-                                         0u,
-                                         reinterpret_cast<LPARAM>(&activeSnapshot)) == TRUE &&
+        const bool active = SendMessageW(viewerWindow, ViewerWebSecurity::GetDebugSnapshotMessage(), 0u, reinterpret_cast<LPARAM>(&activeSnapshot)) == TRUE &&
                             activeSnapshot.saveInProgress != FALSE;
         Check(active, L"ViewerWeb reports Save As in progress before dispatching its posted completion", success);
         const bool completed = PumpUntil(
@@ -3874,10 +3861,7 @@ private:
         {
             ViewerWebSecurity::DebugSnapshot snapshot{};
             return IsWindow(viewerWindow) != FALSE &&
-                   SendMessageW(viewerWindow,
-                                ViewerWebSecurity::GetDebugSnapshotMessage(),
-                                0u,
-                                reinterpret_cast<LPARAM>(&snapshot)) == TRUE &&
+                   SendMessageW(viewerWindow, ViewerWebSecurity::GetDebugSnapshotMessage(), 0u, reinterpret_cast<LPARAM>(&snapshot)) == TRUE &&
                    snapshot.saveInProgress == FALSE;
         },
             10000ms);
@@ -3907,23 +3891,15 @@ private:
     for (const InjectedFailure& failure : injectedFailures)
     {
         resetDestination();
-        Check(invokeSave(destinationPath, failure.faultMask),
-              std::format(L"ViewerWeb injected {} failure reaches a terminal UI state", failure.name),
-              success);
-        checkBytes(destinationPath,
-                   destinationBytes.value(),
-                   std::format(L"ViewerWeb injected {} failure preserves pre-existing destination bytes", failure.name));
+        Check(invokeSave(destinationPath, failure.faultMask), std::format(L"ViewerWeb injected {} failure reaches a terminal UI state", failure.name), success);
+        checkBytes(
+            destinationPath, destinationBytes.value(), std::format(L"ViewerWeb injected {} failure preserves pre-existing destination bytes", failure.name));
         checkNoTemps();
     }
 
     resetDestination();
-    wil::unique_handle lockedDestination(CreateFileW(destinationPath.c_str(),
-                                                     GENERIC_READ,
-                                                     FILE_SHARE_READ,
-                                                     nullptr,
-                                                     OPEN_EXISTING,
-                                                     FILE_ATTRIBUTE_NORMAL,
-                                                     nullptr));
+    wil::unique_handle lockedDestination(
+        CreateFileW(destinationPath.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
     Check(lockedDestination.is_valid(), L"ViewerWeb locks the pre-existing destination against atomic replacement", success);
     Check(invokeSave(destinationPath), L"ViewerWeb locked-destination failure reaches a terminal UI state", success);
     lockedDestination.reset();
@@ -3967,22 +3943,13 @@ private:
 
     static_cast<void>(WriteUtf8TextFile(postFallbackPath, kDestinationText));
     ViewerWebSecurity::DebugSnapshot beforePostFailure{};
-    static_cast<void>(SendMessageW(viewerWindow,
-                                   ViewerWebSecurity::GetDebugSnapshotMessage(),
-                                   0u,
-                                   reinterpret_cast<LPARAM>(&beforePostFailure)));
-    Check(SendMessageW(viewerWindow,
-                       controlMessage,
-                       static_cast<WPARAM>(ViewerWebSecurity::DebugControlAction::FailNextAsyncSaveCompletionPost),
-                       0u) == TRUE,
+    static_cast<void>(SendMessageW(viewerWindow, ViewerWebSecurity::GetDebugSnapshotMessage(), 0u, reinterpret_cast<LPARAM>(&beforePostFailure)));
+    Check(SendMessageW(viewerWindow, controlMessage, static_cast<WPARAM>(ViewerWebSecurity::DebugControlAction::FailNextAsyncSaveCompletionPost), 0u) == TRUE,
           L"ViewerWeb arms the Save As completion-post failure seam",
           success);
     Check(invokeSave(postFallbackPath), L"ViewerWeb Save As completion-post failure reaches the allocation-free UI fallback", success);
     ViewerWebSecurity::DebugSnapshot afterPostFailure{};
-    static_cast<void>(SendMessageW(viewerWindow,
-                                   ViewerWebSecurity::GetDebugSnapshotMessage(),
-                                   0u,
-                                   reinterpret_cast<LPARAM>(&afterPostFailure)));
+    static_cast<void>(SendMessageW(viewerWindow, ViewerWebSecurity::GetDebugSnapshotMessage(), 0u, reinterpret_cast<LPARAM>(&afterPostFailure)));
     Check(afterPostFailure.asyncSavePostFailures == beforePostFailure.asyncSavePostFailures + 1u,
           L"ViewerWeb records exactly one forced Save As completion-post failure",
           success);
@@ -3996,34 +3963,31 @@ private:
     viewer.reset();
     shutdownFn();
     size_t unloadProbeCount = 0u;
-    Check(PumpUntil([&]() noexcept
+    Check(PumpUntil(
+              [&]() noexcept
     {
         ++unloadProbeCount;
         return canUnloadFn() == TRUE;
     },
-                    10000ms) &&
+              10000ms) &&
               unloadProbeCount >= 2u,
           L"ViewerWeb callback release epoch requires a later quiescent unload observation",
           success);
 
-    viewerWindow = nullptr;
+    viewerWindow             = nullptr;
     const HRESULT recreateHr = createFn(__uuidof(IViewer), &factoryOptions, nullptr, kViewerWebPluginId, viewer.put_void());
     Check(SUCCEEDED(recreateHr) && viewer, L"ViewerWeb recreates a viewer after the first module quiet point", success);
     const std::vector<HWND> existingBlockedWindows = CollectVisibleWindowsByClass(kViewerWebWindowClassName);
     Check(viewer && SUCCEEDED(viewer->Open(&context)), L"ViewerWeb reopens the source for blocked-provider pin validation", success);
-    Check(PumpUntil([&]() noexcept
+    Check(PumpUntil(
+              [&]() noexcept
     {
         viewerWindow = FindNewVisibleWindowByClass(kViewerWebWindowClassName, existingBlockedWindows);
         ViewerWebSecurity::DebugSnapshot snapshot{};
-        return viewerWindow &&
-               SendMessageW(viewerWindow,
-                            ViewerWebSecurity::GetDebugSnapshotMessage(),
-                            0u,
-                            reinterpret_cast<LPARAM>(&snapshot)) == TRUE &&
-               snapshot.loadedSourceBytes == sourceBytes.value().size() &&
-               snapshot.route == ViewerWebSecurity::DocumentRoute::RawHtmlPrivateOrigin;
+        return viewerWindow && SendMessageW(viewerWindow, ViewerWebSecurity::GetDebugSnapshotMessage(), 0u, reinterpret_cast<LPARAM>(&snapshot)) == TRUE &&
+               snapshot.loadedSourceBytes == sourceBytes.value().size() && snapshot.route == ViewerWebSecurity::DocumentRoute::RawHtmlPrivateOrigin;
     },
-                    12000ms),
+              12000ms),
           L"ViewerWeb recreated window reaches a loaded source before blocked Save As",
           success);
 
@@ -4043,14 +4007,10 @@ private:
     const std::wstring blockedDestinationText = destinationPath.wstring();
     ViewerWebSecurity::DebugSaveAsRequest blockedRequest{};
     blockedRequest.destinationPath = blockedDestinationText.c_str();
-    const LRESULT blockedHandled = SendMessageW(viewerWindow,
-                                                controlMessage,
-                                                static_cast<WPARAM>(ViewerWebSecurity::DebugControlAction::SaveAsToPath),
-                                                reinterpret_cast<LPARAM>(&blockedRequest));
+    const LRESULT blockedHandled   = SendMessageW(
+        viewerWindow, controlMessage, static_cast<WPARAM>(ViewerWebSecurity::DebugControlAction::SaveAsToPath), reinterpret_cast<LPARAM>(&blockedRequest));
     Check(blockedHandled == TRUE && SUCCEEDED(blockedRequest.submissionHr), L"ViewerWeb submits the blocked Save As request", success);
-    Check(PumpUntil(
-              [&]() noexcept { return WaitForSingleObject(blockingControl->entered.get(), 0u) == WAIT_OBJECT_0; },
-              8000ms),
+    Check(PumpUntil([&]() noexcept { return WaitForSingleObject(blockingControl->entered.get(), 0u) == WAIT_OBJECT_0; }, 8000ms),
           L"ViewerWeb Save As worker blocks inside the provider read",
           success);
     checkBytes(destinationPath, destinationBytes.value(), L"ViewerWeb blocked Save As leaves the destination untouched before close");
@@ -4072,9 +4032,7 @@ private:
           L"ViewerWeb Save As worker keeps its DLL mapped after the caller releases the module handle",
           success);
     static_cast<void>(SetEvent(blockingControl->release.get()));
-    Check(PumpUntil(
-              [&]() noexcept { return WaitForSingleObject(blockingControl->exited.get(), 0u) == WAIT_OBJECT_0; },
-              5000ms),
+    Check(PumpUntil([&]() noexcept { return WaitForSingleObject(blockingControl->exited.get(), 0u) == WAIT_OBJECT_0; }, 5000ms),
           L"ViewerWeb blocked Save As provider exits after release",
           success);
     fileSystem.DisableBlockingRead();
@@ -4372,15 +4330,12 @@ private:
         return false;
     }
 
-    const std::filesystem::path fallbackMenuImage = WriteTinyPngFile(tempDir / L"native-menu-fallback.png");
-    const std::filesystem::path orientedTiff     = WriteOrientedRgbTiffFile(tempDir / L"oriented-wic.tiff", 6u);
+    const std::filesystem::path fallbackMenuImage   = WriteTinyPngFile(tempDir / L"native-menu-fallback.png");
+    const std::filesystem::path orientedTiff        = WriteOrientedRgbTiffFile(tempDir / L"oriented-wic.tiff", 6u);
     const std::filesystem::path orientedDngFallback = WriteOrientedRgbTiffFile(tempDir / L"oriented-wic-fallback.dng", 6u);
-    const std::filesystem::path validExifJpeg =
-        WriteTinyJpegWithExifOrientation(tempDir / L"valid-orientation.jpg", 3u, 1u, 6u);
-    const std::filesystem::path wrongTypeExifJpeg =
-        WriteTinyJpegWithExifOrientation(tempDir / L"wrong-type-orientation.jpg", 4u, 1u, 6u);
-    const std::filesystem::path hugeCountExifJpeg =
-        WriteTinyJpegWithExifOrientation(tempDir / L"huge-count-orientation.jpg", 3u, 0x80000001u, 6u);
+    const std::filesystem::path validExifJpeg       = WriteTinyJpegWithExifOrientation(tempDir / L"valid-orientation.jpg", 3u, 1u, 6u);
+    const std::filesystem::path wrongTypeExifJpeg   = WriteTinyJpegWithExifOrientation(tempDir / L"wrong-type-orientation.jpg", 4u, 1u, 6u);
+    const std::filesystem::path hugeCountExifJpeg   = WriteTinyJpegWithExifOrientation(tempDir / L"huge-count-orientation.jpg", 3u, 0x80000001u, 6u);
 
     auto cleanupTemp = wil::scope_exit([&]() noexcept
     {
@@ -4428,13 +4383,10 @@ private:
         }
 
         const std::wstring previousFaultValue = GetEnvironmentString(kForceMenuAttachFailureEnvVar);
-        const BOOL setFaultOk = SetEnvironmentVariableW(kForceMenuAttachFailureEnvVar, forceNativeMenuFallback ? L"1" : nullptr);
+        const BOOL setFaultOk                 = SetEnvironmentVariableW(kForceMenuAttachFailureEnvVar, forceNativeMenuFallback ? L"1" : nullptr);
         Check(setFaultOk != FALSE, std::format(L"{} configures the menu attach fault seam", label), success);
         auto restoreFault = wil::scope_exit([&]() noexcept
-        {
-            static_cast<void>(SetEnvironmentVariableW(
-                kForceMenuAttachFailureEnvVar, previousFaultValue.empty() ? nullptr : previousFaultValue.c_str()));
-        });
+        { static_cast<void>(SetEnvironmentVariableW(kForceMenuAttachFailureEnvVar, previousFaultValue.empty() ? nullptr : previousFaultValue.c_str())); });
 
         BuiltinFileSystemStub fileSystem;
         const std::wstring pathText = path.wstring();
@@ -4498,9 +4450,7 @@ private:
 
         const HRESULT closeHr = viewer->Close();
         Check(SUCCEEDED(closeHr), std::format(L"{} closes", label), success);
-        Check(PumpUntil([&]() noexcept { return IsWindow(viewerWindow) == FALSE; }, 5000ms),
-              std::format(L"{} destroys its viewer window", label),
-              success);
+        Check(PumpUntil([&]() noexcept { return IsWindow(viewerWindow) == FALSE; }, 5000ms), std::format(L"{} destroys its viewer window", label), success);
         viewer.reset();
         return probe;
     };
@@ -4551,8 +4501,7 @@ private:
     using ViewerImgRawResource::ValidationError;
 
     DecodedImageLayout layout{};
-    Check(ViewerImgRawResource::ValidateDecodedImage(8000u, 6000u, ViewerImgRawResource::kProductionDecodedImagePolicy, layout) ==
-              ValidationError::None &&
+    Check(ViewerImgRawResource::ValidateDecodedImage(8000u, 6000u, ViewerImgRawResource::kProductionDecodedImagePolicy, layout) == ValidationError::None &&
               layout.pixels == 48'000'000u && layout.bgraBytes == 192'000'000u,
           L"ViewerImgRaw production policy accepts a practical 48-megapixel WIC/JPEG/RAW image",
           success);
@@ -4588,17 +4537,14 @@ private:
           success);
 
     uint64_t expectedPackedBytes = 0u;
-    Check(ViewerImgRawResource::ValidatePackedBitmap(2u, 2u, 3u, 8u, 12u, 64u, smallPolicy, layout, expectedPackedBytes) ==
-              ValidationError::None &&
+    Check(ViewerImgRawResource::ValidatePackedBitmap(2u, 2u, 3u, 8u, 12u, 64u, smallPolicy, layout, expectedPackedBytes) == ValidationError::None &&
               expectedPackedBytes == 12u,
           L"ViewerImgRaw embedded-bitmap guard accepts the exact packed source size",
           success);
-    Check(ViewerImgRawResource::ValidatePackedBitmap(2u, 2u, 3u, 8u, 11u, 64u, smallPolicy, layout, expectedPackedBytes) ==
-              ValidationError::SourceLength,
+    Check(ViewerImgRawResource::ValidatePackedBitmap(2u, 2u, 3u, 8u, 11u, 64u, smallPolicy, layout, expectedPackedBytes) == ValidationError::SourceLength,
           L"ViewerImgRaw embedded-bitmap guard rejects truncated tlength",
           success);
-    Check(ViewerImgRawResource::ValidatePackedBitmap(2u, 2u, 5u, 8u, 20u, 64u, smallPolicy, layout, expectedPackedBytes) ==
-              ValidationError::InvalidFormat,
+    Check(ViewerImgRawResource::ValidatePackedBitmap(2u, 2u, 5u, 8u, 20u, 64u, smallPolicy, layout, expectedPackedBytes) == ValidationError::InvalidFormat,
           L"ViewerImgRaw embedded-bitmap guard rejects unsupported channel counts",
           success);
 
@@ -4674,8 +4620,8 @@ private:
     const std::filesystem::path wicTwo   = WriteOrientedRgbTiffFile(tempDir / L"resource-two.tiff", 1u);
     const std::filesystem::path wicThree = WriteOrientedRgbTiffFile(tempDir / L"resource-three.tiff", 1u);
     const std::filesystem::path jpeg     = WriteTinyWicJpegFile(tempDir / L"resource-jpeg.jpg");
-    const bool fixturesReady = std::filesystem::exists(wicOne) && std::filesystem::exists(wicTwo) && std::filesystem::exists(wicThree) &&
-                               std::filesystem::exists(jpeg);
+    const bool fixturesReady =
+        std::filesystem::exists(wicOne) && std::filesystem::exists(wicTwo) && std::filesystem::exists(wicThree) && std::filesystem::exists(jpeg);
     Check(fixturesReady, L"ViewerImgRaw resource fixtures are valid files", success);
     if (! fixturesReady)
     {
@@ -4694,21 +4640,20 @@ private:
         static_cast<void>(std::filesystem::remove(jpeg, cleanupEc));
     });
 
-    constexpr wchar_t kSmallPolicyEnv[]        = L"REDSALAMANDER_VIEWERIMGRAW_FORCE_SMALL_DECODE_POLICY";
-    constexpr wchar_t kSmallBudgetEnv[]        = L"REDSALAMANDER_VIEWERIMGRAW_FORCE_SMALL_PREFETCH_BUDGET";
-    constexpr wchar_t kPausePrefetchEnv[]      = L"REDSALAMANDER_VIEWERIMGRAW_PAUSE_PREFETCH_AFTER_RESERVE";
+    constexpr wchar_t kSmallPolicyEnv[]         = L"REDSALAMANDER_VIEWERIMGRAW_FORCE_SMALL_DECODE_POLICY";
+    constexpr wchar_t kSmallBudgetEnv[]         = L"REDSALAMANDER_VIEWERIMGRAW_FORCE_SMALL_PREFETCH_BUDGET";
+    constexpr wchar_t kPausePrefetchEnv[]       = L"REDSALAMANDER_VIEWERIMGRAW_PAUSE_PREFETCH_AFTER_RESERVE";
     constexpr wchar_t kPausePrefetchCommitEnv[] = L"REDSALAMANDER_VIEWERIMGRAW_PAUSE_PREFETCH_BEFORE_COMMIT";
-    const std::wstring previousSmallPolicy = GetEnvironmentString(kSmallPolicyEnv);
-    const std::wstring previousSmallBudget = GetEnvironmentString(kSmallBudgetEnv);
-    const std::wstring previousPause       = GetEnvironmentString(kPausePrefetchEnv);
-    const std::wstring previousCommitPause = GetEnvironmentString(kPausePrefetchCommitEnv);
-    auto restoreEnvironment = wil::scope_exit([&]() noexcept
+    const std::wstring previousSmallPolicy      = GetEnvironmentString(kSmallPolicyEnv);
+    const std::wstring previousSmallBudget      = GetEnvironmentString(kSmallBudgetEnv);
+    const std::wstring previousPause            = GetEnvironmentString(kPausePrefetchEnv);
+    const std::wstring previousCommitPause      = GetEnvironmentString(kPausePrefetchCommitEnv);
+    auto restoreEnvironment                     = wil::scope_exit([&]() noexcept
     {
         static_cast<void>(SetEnvironmentVariableW(kSmallPolicyEnv, previousSmallPolicy.empty() ? nullptr : previousSmallPolicy.c_str()));
         static_cast<void>(SetEnvironmentVariableW(kSmallBudgetEnv, previousSmallBudget.empty() ? nullptr : previousSmallBudget.c_str()));
         static_cast<void>(SetEnvironmentVariableW(kPausePrefetchEnv, previousPause.empty() ? nullptr : previousPause.c_str()));
-        static_cast<void>(
-            SetEnvironmentVariableW(kPausePrefetchCommitEnv, previousCommitPause.empty() ? nullptr : previousCommitPause.c_str()));
+        static_cast<void>(SetEnvironmentVariableW(kPausePrefetchCommitEnv, previousCommitPause.empty() ? nullptr : previousCommitPause.c_str()));
     });
     static_cast<void>(SetEnvironmentVariableW(kSmallPolicyEnv, nullptr));
     static_cast<void>(SetEnvironmentVariableW(kSmallBudgetEnv, nullptr));
@@ -4772,20 +4717,24 @@ private:
 
         const HRESULT closeHr = viewer->Close();
         Check(SUCCEEDED(closeHr), std::format(L"{} closes", label), success);
-        Check(PumpUntil([&]() noexcept { return IsWindow(viewerWindow) == FALSE; }, 5000ms),
-              std::format(L"{} destroys its window", label),
-              success);
+        Check(PumpUntil([&]() noexcept { return IsWindow(viewerWindow) == FALSE; }, 5000ms), std::format(L"{} destroys its window", label), success);
     };
 
     static_cast<void>(SetEnvironmentVariableW(kSmallPolicyEnv, L"1"));
-    runViewer({wicOne.wstring()}, 0u, L"ViewerImgRaw small-policy WIC", [&](HWND window, const AlertRecordingHostStub& host) noexcept
+    runViewer({wicOne.wstring()},
+              0u,
+              L"ViewerImgRaw small-policy WIC",
+              [&](HWND window, const AlertRecordingHostStub& host) noexcept
     {
         WndMsg::ViewerImgRawDecodeDebugSnapshot snapshot{};
         const bool read = SendMessageW(window, WndMsg::kViewerImgRawDebugGetDecodeSnapshot, 0u, reinterpret_cast<LPARAM>(&snapshot)) != FALSE;
         Check(read && ! snapshot.hasImage, L"Small decoded-image policy rejects WIC before retaining BGRA", success);
         Check(host.WarningAlertCount() > 0u, L"Small decoded-image policy reports the WIC rejection", success);
     });
-    runViewer({jpeg.wstring()}, 0u, L"ViewerImgRaw small-policy JPEG", [&](HWND window, const AlertRecordingHostStub& host) noexcept
+    runViewer({jpeg.wstring()},
+              0u,
+              L"ViewerImgRaw small-policy JPEG",
+              [&](HWND window, const AlertRecordingHostStub& host) noexcept
     {
         WndMsg::ViewerImgRawDecodeDebugSnapshot snapshot{};
         const bool read = SendMessageW(window, WndMsg::kViewerImgRawDebugGetDecodeSnapshot, 0u, reinterpret_cast<LPARAM>(&snapshot)) != FALSE;
@@ -4832,7 +4781,10 @@ private:
     });
 
     static_cast<void>(SetEnvironmentVariableW(kPausePrefetchEnv, L"1"));
-    runViewer({wicOne.wstring(), wicTwo.wstring()}, 0u, L"ViewerImgRaw stale-generation prefetch cleanup", [&](HWND window, const AlertRecordingHostStub&) noexcept
+    runViewer({wicOne.wstring(), wicTwo.wstring()},
+              0u,
+              L"ViewerImgRaw stale-generation prefetch cleanup",
+              [&](HWND window, const AlertRecordingHostStub&) noexcept
     {
         WndMsg::ViewerImgRawResourceDebugSnapshot snapshot{};
         const bool reservationObserved = PumpUntil(
@@ -4858,7 +4810,10 @@ private:
     static_cast<void>(SetEnvironmentVariableW(kPausePrefetchEnv, nullptr));
 
     static_cast<void>(SetEnvironmentVariableW(kPausePrefetchCommitEnv, L"1"));
-    runViewer({wicOne.wstring(), wicTwo.wstring()}, 0u, L"ViewerImgRaw stale prefetch commit rejection", [&](HWND window, const AlertRecordingHostStub&) noexcept
+    runViewer({wicOne.wstring(), wicTwo.wstring()},
+              0u,
+              L"ViewerImgRaw stale prefetch commit rejection",
+              [&](HWND window, const AlertRecordingHostStub&) noexcept
     {
         ViewerImgRawAsyncProtocol::DebugStateSnapshot debugSnapshot{};
         const bool commitPaused = PumpUntil(
@@ -4887,17 +4842,12 @@ private:
                                 WndMsg::kViewerImgRawDebugGetResourceSnapshot,
                                 ViewerImgRawAsyncProtocol::kDebugStateSnapshotSelector,
                                 reinterpret_cast<LPARAM>(&debugSnapshot)) == TRUE &&
-                   SendMessageW(window,
-                                WndMsg::kViewerImgRawDebugGetResourceSnapshot,
-                                0u,
-                                reinterpret_cast<LPARAM>(&resourceSnapshot)) == TRUE &&
-                   ! debugSnapshot.prefetchCommitPaused && resourceSnapshot.cachedImageCount == 0u &&
-                   resourceSnapshot.inflightDecodeCount == 0u && resourceSnapshot.speculativeBytes == 0u;
+                   SendMessageW(window, WndMsg::kViewerImgRawDebugGetResourceSnapshot, 0u, reinterpret_cast<LPARAM>(&resourceSnapshot)) == TRUE &&
+                   ! debugSnapshot.prefetchCommitPaused && resourceSnapshot.cachedImageCount == 0u && resourceSnapshot.inflightDecodeCount == 0u &&
+                   resourceSnapshot.speculativeBytes == 0u;
         },
             5000ms);
-        Check(staleCommitRejected,
-              L"Generation invalidation prevents a paused prefetch from repopulating the cleared cache or retaining budget",
-              success);
+        Check(staleCommitRejected, L"Generation invalidation prevents a paused prefetch from repopulating the cleared cache or retaining budget", success);
     });
     static_cast<void>(SetEnvironmentVariableW(kPausePrefetchCommitEnv, nullptr));
     static_cast<void>(SetEnvironmentVariableW(kSmallBudgetEnv, nullptr));
@@ -4927,16 +4877,19 @@ private:
     ec.clear();
     static_cast<void>(std::filesystem::create_directories(std::filesystem::path(extendedLongDirectory), ec));
     Check(! ec, L"ViewerImgRaw creates a long-path export directory", success);
-    const std::wstring outputPath = longDirectory + L"\\exported.png";
+    const std::wstring outputPath         = longDirectory + L"\\exported.png";
     const std::wstring extendedOutputPath = toExtendedPath(outputPath);
     Check(outputPath.size() > MAX_PATH, L"ViewerImgRaw export test destination actually exceeds MAX_PATH", success);
 
-    runViewer({wicOne.wstring()}, 0u, L"ViewerImgRaw long-path export", [&](HWND window, const AlertRecordingHostStub& host) noexcept
+    runViewer({wicOne.wstring()},
+              0u,
+              L"ViewerImgRaw long-path export",
+              [&](HWND window, const AlertRecordingHostStub& host) noexcept
     {
         Check(host.WarningAlertCount() == 0u, L"Long-path export source decodes successfully", success);
         WndMsg::ViewerImgRawDebugExportRequest request{};
         request.destinationPath = outputPath.c_str();
-        const bool requested = SendMessageW(window, WndMsg::kViewerImgRawDebugExportToPath, 0u, reinterpret_cast<LPARAM>(&request)) != FALSE;
+        const bool requested    = SendMessageW(window, WndMsg::kViewerImgRawDebugExportToPath, 0u, reinterpret_cast<LPARAM>(&request)) != FALSE;
         Check(requested && request.queued, L"ViewerImgRaw queues the real long-path export", success);
 
         WIN32_FILE_ATTRIBUTE_DATA attributes{};
@@ -4983,10 +4936,10 @@ private:
         return false;
     }
 
-    const std::filesystem::path buildDir    = std::filesystem::path(modulePath.data()).parent_path();
-    const std::filesystem::path pluginPath  = buildDir / L"Plugins" / L"ViewerImgRaw.dll";
-    const std::filesystem::path pluginDir   = pluginPath.parent_path();
-    const std::wstring pluginModuleName     = pluginPath.filename().wstring();
+    const std::filesystem::path buildDir   = std::filesystem::path(modulePath.data()).parent_path();
+    const std::filesystem::path pluginPath = buildDir / L"Plugins" / L"ViewerImgRaw.dll";
+    const std::filesystem::path pluginDir  = pluginPath.parent_path();
+    const std::wstring pluginModuleName    = pluginPath.filename().wstring();
     Check(std::filesystem::exists(pluginPath), L"ViewerImgRaw.dll is present for scheduler safety", success);
     if (! std::filesystem::exists(pluginPath))
     {
@@ -5015,28 +4968,26 @@ private:
         return false;
     }
 
-    const FARPROC createProc    = GetProcAddress(pluginModule.get(), "RedSalamanderCreate");
-    const FARPROC shutdownProc  = GetProcAddress(pluginModule.get(), "RedSalamanderPluginShutdown");
-    const FARPROC canUnloadProc = GetProcAddress(pluginModule.get(), "RedSalamanderPluginCanUnloadNow");
+    const FARPROC createProc       = GetProcAddress(pluginModule.get(), "RedSalamanderCreate");
+    const FARPROC shutdownProc     = GetProcAddress(pluginModule.get(), "RedSalamanderPluginShutdown");
+    const FARPROC canUnloadProc    = GetProcAddress(pluginModule.get(), "RedSalamanderPluginCanUnloadNow");
     RedSalamanderCreateFn createFn = nullptr;
-    using PluginShutdownFn = void(__stdcall*)();
-    using PluginCanUnloadFn = BOOL(__stdcall*)();
-    PluginShutdownFn shutdownFn   = nullptr;
-    PluginCanUnloadFn canUnloadFn = nullptr;
+    using PluginShutdownFn         = void(__stdcall*)();
+    using PluginCanUnloadFn        = BOOL(__stdcall*)();
+    PluginShutdownFn shutdownFn    = nullptr;
+    PluginCanUnloadFn canUnloadFn  = nullptr;
     static_assert(sizeof(createFn) == sizeof(createProc));
     static_assert(sizeof(shutdownFn) == sizeof(shutdownProc));
     static_assert(sizeof(canUnloadFn) == sizeof(canUnloadProc));
     std::memcpy(&createFn, &createProc, sizeof(createFn));
     std::memcpy(&shutdownFn, &shutdownProc, sizeof(shutdownFn));
     std::memcpy(&canUnloadFn, &canUnloadProc, sizeof(canUnloadFn));
-    Check(createFn && shutdownFn && canUnloadFn,
-          L"ViewerImgRaw exposes factory, shutdown, and runtime unload-gate exports",
-          success);
+    Check(createFn && shutdownFn && canUnloadFn, L"ViewerImgRaw exposes factory, shutdown, and runtime unload-gate exports", success);
     if (! createFn || ! shutdownFn || ! canUnloadFn)
     {
         return false;
     }
-    bool moduleShutdownPending = true;
+    bool moduleShutdownPending         = true;
     const auto shutdownModuleOnFailure = wil::scope_exit([&]() noexcept
     {
         if (moduleShutdownPending)
@@ -5073,14 +5024,13 @@ private:
         static_cast<void>(std::filesystem::remove(latestPath, cleanupEc));
     });
 
-    constexpr wchar_t kAllocationFailureEnv[] = L"REDSALAMANDER_VIEWERIMGRAW_FORCE_OPEN_RESULT_ALLOCATION_FAILURE";
-    constexpr wchar_t kPostFailureEnv[]       = L"REDSALAMANDER_VIEWERIMGRAW_FORCE_OPEN_RESULT_POST_FAILURE";
+    constexpr wchar_t kAllocationFailureEnv[]  = L"REDSALAMANDER_VIEWERIMGRAW_FORCE_OPEN_RESULT_ALLOCATION_FAILURE";
+    constexpr wchar_t kPostFailureEnv[]        = L"REDSALAMANDER_VIEWERIMGRAW_FORCE_OPEN_RESULT_POST_FAILURE";
     const std::wstring previousAllocationValue = GetEnvironmentString(kAllocationFailureEnv);
     const std::wstring previousPostValue       = GetEnvironmentString(kPostFailureEnv);
-    const auto restoreEnvironment = wil::scope_exit([&]() noexcept
+    const auto restoreEnvironment              = wil::scope_exit([&]() noexcept
     {
-        static_cast<void>(SetEnvironmentVariableW(
-            kAllocationFailureEnv, previousAllocationValue.empty() ? nullptr : previousAllocationValue.c_str()));
+        static_cast<void>(SetEnvironmentVariableW(kAllocationFailureEnv, previousAllocationValue.empty() ? nullptr : previousAllocationValue.c_str()));
         static_cast<void>(SetEnvironmentVariableW(kPostFailureEnv, previousPostValue.empty() ? nullptr : previousPostValue.c_str()));
     });
     static_cast<void>(SetEnvironmentVariableW(kAllocationFailureEnv, nullptr));
@@ -5090,21 +5040,16 @@ private:
     {
         AlertRecordingHostStub retainedHost;
         wil::com_ptr<IViewer> retainedViewer;
-        Check(SUCCEEDED(createFn(
-                  __uuidof(IViewer), &factoryOptions, static_cast<IHost*>(&retainedHost), kViewerImgRawPluginId, retainedViewer.put_void())) &&
+        Check(SUCCEEDED(createFn(__uuidof(IViewer), &factoryOptions, static_cast<IHost*>(&retainedHost), kViewerImgRawPluginId, retainedViewer.put_void())) &&
                   retainedViewer,
               L"ViewerImgRaw creates an unopened viewer for live-instance unload gating",
               success);
         if (retainedViewer)
         {
             shutdownFn();
-            Check(canUnloadFn() == FALSE,
-                  L"ViewerImgRaw runtime unload gate remains false while an unopened COM instance is retained",
-                  success);
+            Check(canUnloadFn() == FALSE, L"ViewerImgRaw runtime unload gate remains false while an unopened COM instance is retained", success);
             retainedViewer.reset();
-            Check(canUnloadFn() == TRUE,
-                  L"ViewerImgRaw runtime unload gate becomes true after the last unopened COM instance is released",
-                  success);
+            Check(canUnloadFn() == TRUE, L"ViewerImgRaw runtime unload gate becomes true after the last unopened COM instance is released", success);
         }
     }
 
@@ -5140,42 +5085,40 @@ private:
     const auto releaseFirst = wil::scope_exit([&]() noexcept { static_cast<void>(SetEvent(firstControl->release.get())); });
 
     const std::vector<HWND> existingWindows = CollectVisibleWindowsByClass(kViewerImgRawWindowClassName);
-    context.focusedPath           = activeText.c_str();
-    context.focusedOtherFileIndex = 0u;
+    context.focusedPath                     = activeText.c_str();
+    context.focusedOtherFileIndex           = 0u;
     Check(SUCCEEDED(viewer->Open(&context)), L"ViewerImgRaw starts the first blocked decode", success);
     HWND viewerWindow = nullptr;
-    Check(PumpUntil([&]() noexcept
+    Check(PumpUntil(
+              [&]() noexcept
     {
         viewerWindow = FindNewVisibleWindowByClass(kViewerImgRawWindowClassName, existingWindows);
         return viewerWindow && WaitForSingleObject(firstControl->entered.get(), 0u) == WAIT_OBJECT_0;
     },
-                    8000ms),
+              8000ms),
           L"ViewerImgRaw first decode reaches a blocked provider Read while the window remains responsive",
           success);
 
     WndMsg::ViewerImgRawResourceDebugSnapshot blockedSnapshot{};
-    Check(viewerWindow &&
-              SendMessageW(viewerWindow, WndMsg::kViewerImgRawDebugGetResourceSnapshot, 0u, reinterpret_cast<LPARAM>(&blockedSnapshot)) == TRUE &&
+    Check(viewerWindow && SendMessageW(viewerWindow, WndMsg::kViewerImgRawDebugGetResourceSnapshot, 0u, reinterpret_cast<LPARAM>(&blockedSnapshot)) == TRUE &&
               blockedSnapshot.activeMainDecodeCount == 1u && blockedSnapshot.pendingMainDecodeCount == 0u && blockedSnapshot.loading &&
               blockedSnapshot.currentRequestId != 0u,
           L"ViewerImgRaw exposes exactly one active main decode while the provider is blocked",
           success);
 
     ViewerImgRawAsyncProtocol::DebugStateSnapshot progressBefore{};
-    Check(viewerWindow &&
-              SendMessageW(viewerWindow,
-                           WndMsg::kViewerImgRawDebugGetResourceSnapshot,
-                           ViewerImgRawAsyncProtocol::kDebugStateSnapshotSelector,
-                           reinterpret_cast<LPARAM>(&progressBefore)) == TRUE,
+    Check(viewerWindow && SendMessageW(viewerWindow,
+                                       WndMsg::kViewerImgRawDebugGetResourceSnapshot,
+                                       ViewerImgRawAsyncProtocol::kDebugStateSnapshotSelector,
+                                       reinterpret_cast<LPARAM>(&progressBefore)) == TRUE,
           L"ViewerImgRaw exposes its progress-generation debug state",
           success);
     constexpr int kCurrentProgressStage   = 1;
     constexpr int kCurrentProgressPercent = 37;
-    Check(viewerWindow &&
-              PostMessageW(viewerWindow,
-                           WndMsg::kViewerImgRawAsyncProgress,
-                           static_cast<WPARAM>(blockedSnapshot.currentRequestId),
-                           ViewerImgRawAsyncProtocol::PackProgress(kCurrentProgressStage, kCurrentProgressPercent)) != FALSE,
+    Check(viewerWindow && PostMessageW(viewerWindow,
+                                       WndMsg::kViewerImgRawAsyncProgress,
+                                       static_cast<WPARAM>(blockedSnapshot.currentRequestId),
+                                       ViewerImgRawAsyncProtocol::PackProgress(kCurrentProgressStage, kCurrentProgressPercent)) != FALSE,
           L"ViewerImgRaw accepts a queued current-generation progress probe",
           success);
     PumpPendingMessages();
@@ -5186,16 +5129,15 @@ private:
                            WndMsg::kViewerImgRawDebugGetResourceSnapshot,
                            ViewerImgRawAsyncProtocol::kDebugStateSnapshotSelector,
                            reinterpret_cast<LPARAM>(&progressCurrent)) == TRUE &&
-              progressCurrent.progressApplyCount == progressBefore.progressApplyCount + 1u &&
-              progressCurrent.progressStage == kCurrentProgressStage && progressCurrent.progressPercent == kCurrentProgressPercent,
+              progressCurrent.progressApplyCount == progressBefore.progressApplyCount + 1u && progressCurrent.progressStage == kCurrentProgressStage &&
+              progressCurrent.progressPercent == kCurrentProgressPercent,
           L"ViewerImgRaw applies progress only when the queued request generation is current",
           success);
 
-    Check(viewerWindow &&
-              PostMessageW(viewerWindow,
-                           WndMsg::kViewerImgRawAsyncProgress,
-                           static_cast<WPARAM>(blockedSnapshot.currentRequestId - 1u),
-                           ViewerImgRawAsyncProtocol::PackProgress(2, 88)) != FALSE,
+    Check(viewerWindow && PostMessageW(viewerWindow,
+                                       WndMsg::kViewerImgRawAsyncProgress,
+                                       static_cast<WPARAM>(blockedSnapshot.currentRequestId - 1u),
+                                       ViewerImgRawAsyncProtocol::PackProgress(2, 88)) != FALSE,
           L"ViewerImgRaw accepts a queued stale-generation progress probe",
           success);
     PumpPendingMessages();
@@ -5206,8 +5148,8 @@ private:
                            WndMsg::kViewerImgRawDebugGetResourceSnapshot,
                            ViewerImgRawAsyncProtocol::kDebugStateSnapshotSelector,
                            reinterpret_cast<LPARAM>(&progressStale)) == TRUE &&
-              progressStale.progressApplyCount == progressCurrent.progressApplyCount &&
-              progressStale.progressStage == progressCurrent.progressStage && progressStale.progressPercent == progressCurrent.progressPercent,
+              progressStale.progressApplyCount == progressCurrent.progressApplyCount && progressStale.progressStage == progressCurrent.progressStage &&
+              progressStale.progressPercent == progressCurrent.progressPercent,
           L"ViewerImgRaw drops queued progress from a stale request generation",
           success);
 
@@ -5219,10 +5161,8 @@ private:
     Check(SUCCEEDED(viewer->Open(&context)), L"ViewerImgRaw accepts the latest decode request", success);
 
     WndMsg::ViewerImgRawResourceDebugSnapshot pendingSnapshot{};
-    Check(viewerWindow &&
-              SendMessageW(viewerWindow, WndMsg::kViewerImgRawDebugGetResourceSnapshot, 0u, reinterpret_cast<LPARAM>(&pendingSnapshot)) == TRUE &&
-              pendingSnapshot.activeMainDecodeCount == 1u && pendingSnapshot.pendingMainDecodeCount == 1u &&
-              pendingSnapshot.replacedMainDecodeCount == 1u,
+    Check(viewerWindow && SendMessageW(viewerWindow, WndMsg::kViewerImgRawDebugGetResourceSnapshot, 0u, reinterpret_cast<LPARAM>(&pendingSnapshot)) == TRUE &&
+              pendingSnapshot.activeMainDecodeCount == 1u && pendingSnapshot.pendingMainDecodeCount == 1u && pendingSnapshot.replacedMainDecodeCount == 1u,
           L"ViewerImgRaw bounds main scheduling to one active and one replaceable pending decode",
           success);
     Check(fileSystem.GetCreateFileReaderCount(middlePath) == 0u && fileSystem.GetCreateFileReaderCount(latestPath) == 0u,
@@ -5237,17 +5177,18 @@ private:
 
     WndMsg::ViewerImgRawResourceDebugSnapshot latestResource{};
     WndMsg::ViewerImgRawDecodeDebugSnapshot latestDecode{};
-    Check(PumpUntil([&]() noexcept
+    Check(PumpUntil(
+              [&]() noexcept
     {
         latestResource = {};
         latestDecode   = {};
         return viewerWindow &&
                SendMessageW(viewerWindow, WndMsg::kViewerImgRawDebugGetResourceSnapshot, 0u, reinterpret_cast<LPARAM>(&latestResource)) == TRUE &&
                SendMessageW(viewerWindow, WndMsg::kViewerImgRawDebugGetDecodeSnapshot, 0u, reinterpret_cast<LPARAM>(&latestDecode)) == TRUE &&
-               latestResource.finalSuccessCount == 1u && latestResource.activeMainDecodeCount == 0u &&
-               latestResource.pendingMainDecodeCount == 0u && ! latestResource.loading && latestDecode.hasImage;
+               latestResource.finalSuccessCount == 1u && latestResource.activeMainDecodeCount == 0u && latestResource.pendingMainDecodeCount == 0u &&
+               ! latestResource.loading && latestDecode.hasImage;
     },
-                    10000ms),
+              10000ms),
           L"ViewerImgRaw runs the latest pending request to one successful terminal result",
           success);
     Check(fileSystem.GetCreateFileReaderCount(middlePath) == 0u && fileSystem.GetCreateFileReaderCount(latestPath) == 1u,
@@ -5261,16 +5202,15 @@ private:
     const auto waitForFailureAfter = [&](uint64_t previousFailures, unsigned int previousWarnings, std::wstring_view label) noexcept
     {
         WndMsg::ViewerImgRawResourceDebugSnapshot snapshot{};
-        const bool failed = PumpUntil([&]() noexcept
+        const bool failed = PumpUntil(
+            [&]() noexcept
         {
             snapshot = {};
-            return viewerWindow &&
-                   SendMessageW(viewerWindow, WndMsg::kViewerImgRawDebugGetResourceSnapshot, 0u, reinterpret_cast<LPARAM>(&snapshot)) == TRUE &&
+            return viewerWindow && SendMessageW(viewerWindow, WndMsg::kViewerImgRawDebugGetResourceSnapshot, 0u, reinterpret_cast<LPARAM>(&snapshot)) == TRUE &&
                    snapshot.finalFailureCount == previousFailures + 1u && ! snapshot.loading && snapshot.inflightDecodeCount == 0u &&
-                   snapshot.activeMainDecodeCount == 0u && snapshot.pendingMainDecodeCount == 0u &&
-                   host.WarningAlertCount() == previousWarnings + 1u;
+                   snapshot.activeMainDecodeCount == 0u && snapshot.pendingMainDecodeCount == 0u && host.WarningAlertCount() == previousWarnings + 1u;
         },
-                                      10000ms);
+            10000ms);
         Check(failed, label, success);
         return snapshot;
     };
@@ -5281,7 +5221,7 @@ private:
 
     auto runReaderFailure = [&](std::wstring_view requestLabel, std::wstring_view terminalLabel, auto&& arm, auto&& disarm) noexcept
     {
-        const uint64_t priorFailures = latestResource.finalFailureCount;
+        const uint64_t priorFailures     = latestResource.finalFailureCount;
         const unsigned int priorWarnings = host.WarningAlertCount();
         fileSystem.ResetCreateFileReaderCounts();
         arm();
@@ -5325,38 +5265,34 @@ private:
              std::pair{std::wstring_view(kPostFailureEnv), std::wstring_view(L"payload-post")},
          })
     {
-        const uint64_t priorFailures = latestResource.finalFailureCount;
+        const uint64_t priorFailures     = latestResource.finalFailureCount;
         const unsigned int priorWarnings = host.WarningAlertCount();
-        Check(SetEnvironmentVariableW(environmentName.data(), L"1") != FALSE,
-              std::format(L"ViewerImgRaw arms the {} terminal-delivery fault", label),
-              success);
+        Check(SetEnvironmentVariableW(environmentName.data(), L"1") != FALSE, std::format(L"ViewerImgRaw arms the {} terminal-delivery fault", label), success);
         context.focusedPath           = activeText.c_str();
         context.focusedOtherFileIndex = 0u;
         Check(SUCCEEDED(viewer->Open(&context)), std::format(L"ViewerImgRaw starts the {} fault request", label), success);
-        latestResource = waitForFailureAfter(priorFailures,
-                                             priorWarnings,
-                                             std::format(L"ViewerImgRaw {} failure exits loading through the allocation-free fallback", label));
+        latestResource = waitForFailureAfter(
+            priorFailures, priorWarnings, std::format(L"ViewerImgRaw {} failure exits loading through the allocation-free fallback", label));
         static_cast<void>(SetEnvironmentVariableW(environmentName.data(), nullptr));
-        Check(viewerWindow && IsWindow(viewerWindow) != FALSE,
-              std::format(L"ViewerImgRaw {} fallback preserves the live window", label),
-              success);
+        Check(viewerWindow && IsWindow(viewerWindow) != FALSE, std::format(L"ViewerImgRaw {} fallback preserves the live window", label), success);
     }
 
-    const uint64_t successBeforeRecovery = latestResource.finalSuccessCount;
+    const uint64_t successBeforeRecovery      = latestResource.finalSuccessCount;
     const unsigned int warningsBeforeRecovery = host.WarningAlertCount();
-    context.focusedPath           = activeText.c_str();
-    context.focusedOtherFileIndex = 0u;
+    context.focusedPath                       = activeText.c_str();
+    context.focusedOtherFileIndex             = 0u;
     Check(SUCCEEDED(viewer->Open(&context)), L"ViewerImgRaw starts a normal decode after terminal faults", success);
-    Check(PumpUntil([&]() noexcept
+    Check(PumpUntil(
+              [&]() noexcept
     {
         latestResource = {};
         latestDecode   = {};
         return SendMessageW(viewerWindow, WndMsg::kViewerImgRawDebugGetResourceSnapshot, 0u, reinterpret_cast<LPARAM>(&latestResource)) == TRUE &&
                SendMessageW(viewerWindow, WndMsg::kViewerImgRawDebugGetDecodeSnapshot, 0u, reinterpret_cast<LPARAM>(&latestDecode)) == TRUE &&
-               latestResource.finalSuccessCount == successBeforeRecovery + 1u && ! latestResource.loading &&
-               latestResource.activeMainDecodeCount == 0u && latestDecode.hasImage;
+               latestResource.finalSuccessCount == successBeforeRecovery + 1u && ! latestResource.loading && latestResource.activeMainDecodeCount == 0u &&
+               latestDecode.hasImage;
     },
-                    10000ms),
+              10000ms),
           L"ViewerImgRaw recovers with a successful decode after terminal-delivery faults",
           success);
     Check(host.WarningAlertCount() == warningsBeforeRecovery, L"ViewerImgRaw recovery adds no warning", success);
@@ -5371,11 +5307,11 @@ private:
 
     struct CloseCounter final : IViewerCallback
     {
-        CloseCounter()                                      = default;
-        CloseCounter(const CloseCounter&)                    = delete;
-        CloseCounter(CloseCounter&&)                         = delete;
-        CloseCounter& operator=(const CloseCounter&)         = delete;
-        CloseCounter& operator=(CloseCounter&&)              = delete;
+        CloseCounter()                               = default;
+        CloseCounter(const CloseCounter&)            = delete;
+        CloseCounter(CloseCounter&&)                 = delete;
+        CloseCounter& operator=(const CloseCounter&) = delete;
+        CloseCounter& operator=(CloseCounter&&)      = delete;
         HRESULT STDMETHODCALLTYPE ViewerClosed(void* cookie) noexcept override
         {
             cookieMatched.store(cookie == this, std::memory_order_release);
@@ -5412,36 +5348,31 @@ private:
 
     const wchar_t* blockedFiles[] = {activeText.c_str()};
     ViewerOpenContext blockedContext{};
-    blockedContext.fileSystem            = static_cast<IFileSystem*>(&blockedFileSystem);
-    blockedContext.fileSystemName        = L"File System";
-    blockedContext.focusedPath           = activeText.c_str();
-    blockedContext.otherFiles            = blockedFiles;
-    blockedContext.otherFileCount        = static_cast<unsigned long>(std::size(blockedFiles));
-    blockedContext.focusedOtherFileIndex = 0u;
+    blockedContext.fileSystem                      = static_cast<IFileSystem*>(&blockedFileSystem);
+    blockedContext.fileSystemName                  = L"File System";
+    blockedContext.focusedPath                     = activeText.c_str();
+    blockedContext.otherFiles                      = blockedFiles;
+    blockedContext.otherFileCount                  = static_cast<unsigned long>(std::size(blockedFiles));
+    blockedContext.focusedOtherFileIndex           = 0u;
     const std::vector<HWND> existingBlockedWindows = CollectVisibleWindowsByClass(kViewerImgRawWindowClassName);
     Check(SUCCEEDED(blockedViewer->Open(&blockedContext)), L"ViewerImgRaw opens the blocked-provider fixture", success);
     HWND blockedWindow = nullptr;
-    Check(PumpUntil([&]() noexcept
+    Check(PumpUntil(
+              [&]() noexcept
     {
         blockedWindow = FindNewVisibleWindowByClass(kViewerImgRawWindowClassName, existingBlockedWindows);
         return blockedWindow && WaitForSingleObject(closeControl->entered.get(), 0u) == WAIT_OBJECT_0;
     },
-                    8000ms),
+              8000ms),
           L"ViewerImgRaw reaches blocked Read while its window remains responsive",
           success);
 
     const auto closeStarted = std::chrono::steady_clock::now();
     const HRESULT closeHr   = blockedViewer->Close();
     const auto closeElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - closeStarted);
-    Check(SUCCEEDED(closeHr) && closeElapsed < 500ms,
-          L"ViewerImgRaw Close returns within 500 ms while the provider remains blocked",
-          success);
-    Check(! blockedWindow || IsWindow(blockedWindow) == FALSE,
-          L"ViewerImgRaw destroys its HWND before the blocked provider returns",
-          success);
-    Check(WaitForSingleObject(closeControl->exited.get(), 0u) == WAIT_TIMEOUT,
-          L"ViewerImgRaw provider remains blocked after non-waiting Close",
-          success);
+    Check(SUCCEEDED(closeHr) && closeElapsed < 500ms, L"ViewerImgRaw Close returns within 500 ms while the provider remains blocked", success);
+    Check(! blockedWindow || IsWindow(blockedWindow) == FALSE, L"ViewerImgRaw destroys its HWND before the blocked provider returns", success);
+    Check(WaitForSingleObject(closeControl->exited.get(), 0u) == WAIT_TIMEOUT, L"ViewerImgRaw provider remains blocked after non-waiting Close", success);
     Check(closeCounter.count.load(std::memory_order_acquire) == 1u && closeCounter.cookieMatched.load(std::memory_order_acquire),
           L"ViewerImgRaw reports ViewerClosed exactly once with the registered cookie",
           success);
@@ -5451,9 +5382,7 @@ private:
 
     blockedInformation.reset();
     blockedViewer.reset();
-    Check(blockedFileSystem.GetReferenceCount() > 1u,
-          L"ViewerImgRaw detached worker retains the provider and viewer lifetime",
-          success);
+    Check(blockedFileSystem.GetReferenceCount() > 1u, L"ViewerImgRaw detached worker retains the provider and viewer lifetime", success);
     shutdownFn();
     moduleShutdownPending = false;
     Check(canUnloadFn() == FALSE, L"ViewerImgRaw runtime unload gate rejects refresh while a provider Read is blocked", success);
@@ -5473,9 +5402,7 @@ private:
     Check(PumpUntil([&]() noexcept { return GetModuleHandleW(pluginModuleName.c_str()) == nullptr; }, 8000ms),
           L"ViewerImgRaw callback-return module pin unloads only after blocked work returns",
           success);
-    Check(closeCounter.count.load(std::memory_order_acquire) == 1u,
-          L"ViewerImgRaw does not report a second close after worker retirement",
-          success);
+    Check(closeCounter.count.load(std::memory_order_acquire) == 1u, L"ViewerImgRaw does not report a second close after worker retirement", success);
     return success;
 #endif
 }
@@ -5527,28 +5454,26 @@ private:
         return false;
     }
 
-    const FARPROC createProc    = GetProcAddress(pluginModule.get(), "RedSalamanderCreate");
-    const FARPROC shutdownProc  = GetProcAddress(pluginModule.get(), "RedSalamanderPluginShutdown");
-    const FARPROC canUnloadProc = GetProcAddress(pluginModule.get(), "RedSalamanderPluginCanUnloadNow");
+    const FARPROC createProc       = GetProcAddress(pluginModule.get(), "RedSalamanderCreate");
+    const FARPROC shutdownProc     = GetProcAddress(pluginModule.get(), "RedSalamanderPluginShutdown");
+    const FARPROC canUnloadProc    = GetProcAddress(pluginModule.get(), "RedSalamanderPluginCanUnloadNow");
     RedSalamanderCreateFn createFn = nullptr;
-    using PluginShutdownFn = void(__stdcall*)();
-    using PluginCanUnloadFn = BOOL(__stdcall*)();
-    PluginShutdownFn shutdownFn   = nullptr;
-    PluginCanUnloadFn canUnloadFn = nullptr;
+    using PluginShutdownFn         = void(__stdcall*)();
+    using PluginCanUnloadFn        = BOOL(__stdcall*)();
+    PluginShutdownFn shutdownFn    = nullptr;
+    PluginCanUnloadFn canUnloadFn  = nullptr;
     static_assert(sizeof(createFn) == sizeof(createProc));
     static_assert(sizeof(shutdownFn) == sizeof(shutdownProc));
     static_assert(sizeof(canUnloadFn) == sizeof(canUnloadProc));
     std::memcpy(&createFn, &createProc, sizeof(createFn));
     std::memcpy(&shutdownFn, &shutdownProc, sizeof(shutdownFn));
     std::memcpy(&canUnloadFn, &canUnloadProc, sizeof(canUnloadFn));
-    Check(createFn && shutdownFn && canUnloadFn,
-          L"ViewerImgRaw factory and quiet-point exports resolve for thumbnail sequencing",
-          success);
+    Check(createFn && shutdownFn && canUnloadFn, L"ViewerImgRaw factory and quiet-point exports resolve for thumbnail sequencing", success);
     if (! createFn || ! shutdownFn || ! canUnloadFn)
     {
         return false;
     }
-    bool moduleShutdownPending = true;
+    bool moduleShutdownPending         = true;
     const auto shutdownModuleOnFailure = wil::scope_exit([&]() noexcept
     {
         if (moduleShutdownPending)
@@ -5577,21 +5502,16 @@ private:
         static_cast<void>(std::filesystem::remove(embeddedPath, cleanupEc));
     });
 
-    constexpr wchar_t kEmbeddedPayloadEnv[] = L"REDSALAMANDER_VIEWERIMGRAW_TEST_EMBEDDED_JPEG_PAYLOAD";
+    constexpr wchar_t kEmbeddedPayloadEnv[]  = L"REDSALAMANDER_VIEWERIMGRAW_TEST_EMBEDDED_JPEG_PAYLOAD";
     const std::wstring previousEmbeddedValue = GetEnvironmentString(kEmbeddedPayloadEnv);
-    const auto restoreEnvironment = wil::scope_exit([&]() noexcept
-    {
-        static_cast<void>(SetEnvironmentVariableW(
-            kEmbeddedPayloadEnv, previousEmbeddedValue.empty() ? nullptr : previousEmbeddedValue.c_str()));
-    });
-    Check(SetEnvironmentVariableW(kEmbeddedPayloadEnv, L"1") != FALSE,
-          L"ViewerImgRaw synthetic embedded-thumbnail seam is enabled",
-          success);
+    const auto restoreEnvironment            = wil::scope_exit([&]() noexcept
+    { static_cast<void>(SetEnvironmentVariableW(kEmbeddedPayloadEnv, previousEmbeddedValue.empty() ? nullptr : previousEmbeddedValue.c_str())); });
+    Check(SetEnvironmentVariableW(kEmbeddedPayloadEnv, L"1") != FALSE, L"ViewerImgRaw synthetic embedded-thumbnail seam is enabled", success);
 
     const FactoryOptions factoryOptions{DEBUG_LEVEL_NONE};
     const std::wstring embeddedText = embeddedPath.wstring();
     const wchar_t* otherFiles[]     = {embeddedText.c_str()};
-    const auto runMode = [&](bool preferThumbnail, std::wstring_view label) noexcept
+    const auto runMode              = [&](bool preferThumbnail, std::wstring_view label) noexcept
     {
         AlertRecordingHostStub host;
         BuiltinFileSystemStub fileSystem;
@@ -5606,72 +5526,61 @@ private:
 
         wil::com_ptr<IInformations> information;
         static_cast<void>(viewer->QueryInterface(__uuidof(IInformations), information.put_void()));
-        Check(information && SUCCEEDED(information->SetConfiguration(
-                                 preferThumbnail
-                                     ? R"json({"preferThumbnail":true,"prevCache":0,"nextCache":0})json"
-                                     : R"json({"preferThumbnail":false,"prevCache":0,"nextCache":0})json")),
+        Check(information && SUCCEEDED(information->SetConfiguration(preferThumbnail ? R"json({"preferThumbnail":true,"prevCache":0,"nextCache":0})json"
+                                                                                     : R"json({"preferThumbnail":false,"prevCache":0,"nextCache":0})json")),
               std::format(L"{} accepts deterministic configuration", label),
               success);
 
         ViewerOpenContext context{};
-        context.fileSystem            = static_cast<IFileSystem*>(&fileSystem);
-        context.fileSystemName        = L"File System";
-        context.focusedPath           = embeddedText.c_str();
-        context.otherFiles            = otherFiles;
-        context.otherFileCount        = static_cast<unsigned long>(std::size(otherFiles));
-        context.focusedOtherFileIndex = 0u;
+        context.fileSystem                      = static_cast<IFileSystem*>(&fileSystem);
+        context.fileSystemName                  = L"File System";
+        context.focusedPath                     = embeddedText.c_str();
+        context.otherFiles                      = otherFiles;
+        context.otherFileCount                  = static_cast<unsigned long>(std::size(otherFiles));
+        context.focusedOtherFileIndex           = 0u;
         const std::vector<HWND> existingWindows = CollectVisibleWindowsByClass(kViewerImgRawWindowClassName);
         Check(SUCCEEDED(viewer->Open(&context)), std::format(L"{} opens the synthetic embedded payload", label), success);
 
         HWND window = nullptr;
         WndMsg::ViewerImgRawResourceDebugSnapshot resource{};
         WndMsg::ViewerImgRawDecodeDebugSnapshot decode{};
-        const bool terminal = PumpUntil([&]() noexcept
+        const bool terminal = PumpUntil(
+            [&]() noexcept
         {
-            window = FindNewVisibleWindowByClass(kViewerImgRawWindowClassName, existingWindows);
+            window   = FindNewVisibleWindowByClass(kViewerImgRawWindowClassName, existingWindows);
             resource = {};
             decode   = {};
-            if (! window ||
-                SendMessageW(window, WndMsg::kViewerImgRawDebugGetResourceSnapshot, 0u, reinterpret_cast<LPARAM>(&resource)) == FALSE ||
+            if (! window || SendMessageW(window, WndMsg::kViewerImgRawDebugGetResourceSnapshot, 0u, reinterpret_cast<LPARAM>(&resource)) == FALSE ||
                 SendMessageW(window, WndMsg::kViewerImgRawDebugGetDecodeSnapshot, 0u, reinterpret_cast<LPARAM>(&decode)) == FALSE)
             {
                 return false;
             }
-            const bool expectedSequence = preferThumbnail
-                                              ? resource.finalSuccessCount == 1u && resource.previewSuccessCount == 0u &&
-                                                    resource.lastPreviewApplyOrdinal == 0u && resource.lastFinalApplyOrdinal > 0u &&
-                                                    decode.displayingThumbnail
-                                              : resource.finalSuccessCount == 1u && resource.previewSuccessCount == 1u &&
-                                                    resource.lastPreviewApplyOrdinal > 0u &&
-                                                    resource.lastPreviewApplyOrdinal < resource.lastFinalApplyOrdinal && ! decode.displayingThumbnail;
+            const bool expectedSequence =
+                preferThumbnail ? resource.finalSuccessCount == 1u && resource.previewSuccessCount == 0u && resource.lastPreviewApplyOrdinal == 0u &&
+                                      resource.lastFinalApplyOrdinal > 0u && decode.displayingThumbnail
+                                : resource.finalSuccessCount == 1u && resource.previewSuccessCount == 1u && resource.lastPreviewApplyOrdinal > 0u &&
+                                      resource.lastPreviewApplyOrdinal < resource.lastFinalApplyOrdinal && ! decode.displayingThumbnail;
             return expectedSequence && resource.finalFailureCount == 0u && ! resource.loading && resource.activeMainDecodeCount == 0u &&
                    resource.pendingMainDecodeCount == 0u && decode.hasImage;
         },
-                                        10000ms);
+            10000ms);
         Check(terminal,
-              preferThumbnail
-                  ? L"ViewerImgRaw embedded thumbnail is a single final success with no preview"
-                  : L"ViewerImgRaw raw mode applies the embedded preview before one final full-image success",
+              preferThumbnail ? L"ViewerImgRaw embedded thumbnail is a single final success with no preview"
+                              : L"ViewerImgRaw raw mode applies the embedded preview before one final full-image success",
               success);
         Check(host.WarningAlertCount() == 0u, std::format(L"{} raises no terminal warning", label), success);
-        Check(fileSystem.GetCreateFileReaderCount(embeddedPath) == 1u,
-              std::format(L"{} reads the source exactly once", label),
-              success);
+        Check(fileSystem.GetCreateFileReaderCount(embeddedPath) == 1u, std::format(L"{} reads the source exactly once", label), success);
 
         const HRESULT closeHr = viewer->Close();
         Check(SUCCEEDED(closeHr), std::format(L"{} closes", label), success);
-        Check(! window || PumpUntil([&]() noexcept { return IsWindow(window) == FALSE; }, 5000ms),
-              std::format(L"{} destroys its window", label),
-              success);
+        Check(! window || PumpUntil([&]() noexcept { return IsWindow(window) == FALSE; }, 5000ms), std::format(L"{} destroys its window", label), success);
     };
 
     runMode(true, L"ViewerImgRaw thumbnail-mode terminal sequence");
     runMode(false, L"ViewerImgRaw raw-mode preview/final sequence");
     shutdownFn();
     moduleShutdownPending = false;
-    Check(PumpUntil([&]() noexcept { return canUnloadFn() == TRUE; }, 5000ms),
-          L"ViewerImgRaw thumbnail sequencing reaches its module quiet point",
-          success);
+    Check(PumpUntil([&]() noexcept { return canUnloadFn() == TRUE; }, 5000ms), L"ViewerImgRaw thumbnail sequencing reaches its module quiet point", success);
     const std::wstring pluginModuleName = pluginPath.filename().wstring();
     pluginModule.reset();
     Check(PumpUntil([&]() noexcept { return GetModuleHandleW(pluginModuleName.c_str()) == nullptr; }, 5000ms),
@@ -6436,7 +6345,7 @@ private:
         }
 
         const int sourceLength = static_cast<int>(size);
-        const int required = MultiByteToWideChar(codePage, 0u, reinterpret_cast<LPCCH>(bytes), sourceLength, nullptr, 0);
+        const int required     = MultiByteToWideChar(codePage, 0u, reinterpret_cast<LPCCH>(bytes), sourceLength, nullptr, 0);
         if (required <= 0)
         {
             return {};
@@ -6460,23 +6369,17 @@ private:
         for (size_t split = 0u; split <= fixture.bytes.size(); ++split)
         {
             const size_t carry = ViewerTextSafety::IncompleteDbcsTailSize(fixture.bytes.data(), split, fixture.codePage);
-            Check(carry <= 1u && carry <= split,
-                  std::format(L"ViewerText {} split {} reports a bounded DBCS carry", fixture.name, split),
-                  success);
+            Check(carry <= 1u && carry <= split, std::format(L"ViewerText {} split {} reports a bounded DBCS carry", fixture.name, split), success);
             if (split == 2u)
             {
-                Check(carry == 1u,
-                      std::format(L"ViewerText {} preserves the lead byte at its only incomplete-pair boundary", fixture.name),
-                      success);
+                Check(carry == 1u, std::format(L"ViewerText {} preserves the lead byte at its only incomplete-pair boundary", fixture.name), success);
             }
 
             const size_t prefixSize    = split - carry;
             std::wstring streamedText  = decode(fixture.codePage, fixture.bytes.data(), prefixSize);
             const size_t pendingOffset = split - carry;
             streamedText.append(decode(fixture.codePage, fixture.bytes.data() + pendingOffset, fixture.bytes.size() - pendingOffset));
-            Check(streamedText == expected,
-                  std::format(L"ViewerText {} split {} decodes identically to the unsplit fixture", fixture.name, split),
-                  success);
+            Check(streamedText == expected, std::format(L"ViewerText {} split {} decodes identically to the unsplit fixture", fixture.name, split), success);
         }
     }
 
@@ -6486,21 +6389,19 @@ private:
           L"ViewerText UTF-8 scalar decoding preserves U+1F600 instead of replacing it",
           success);
 
-    const uint64_t cap = ViewerTextSafety::kMaxHexClipboardBytes;
-    const ViewerTextSafety::HexClipboardPlan accepted =
-        ViewerTextSafety::ComputeHexClipboardPlan(cap, 0u, (std::numeric_limits<uint64_t>::max)());
+    const uint64_t cap                                = ViewerTextSafety::kMaxHexClipboardBytes;
+    const ViewerTextSafety::HexClipboardPlan accepted = ViewerTextSafety::ComputeHexClipboardPlan(cap, 0u, (std::numeric_limits<uint64_t>::max)());
     Check(accepted.hasData && ! accepted.truncated && accepted.copiedBytes == cap && accepted.rejectedBytes == 0u,
           L"ViewerText hex clipboard accepts exactly the synchronous byte cap",
           success);
 
-    const ViewerTextSafety::HexClipboardPlan firstTruncated =
-        ViewerTextSafety::ComputeHexClipboardPlan(cap + 1u, 0u, (std::numeric_limits<uint64_t>::max)());
+    const ViewerTextSafety::HexClipboardPlan firstTruncated = ViewerTextSafety::ComputeHexClipboardPlan(cap + 1u, 0u, (std::numeric_limits<uint64_t>::max)());
     Check(firstTruncated.hasData && firstTruncated.truncated && firstTruncated.copiedBytes == cap && firstTruncated.rejectedBytes == 1u,
           L"ViewerText hex clipboard truncates the first byte above the cap",
           success);
 
-    const ViewerTextSafety::HexClipboardPlan maximum = ViewerTextSafety::ComputeHexClipboardPlan(
-        (std::numeric_limits<uint64_t>::max)(), 0u, (std::numeric_limits<uint64_t>::max)());
+    const ViewerTextSafety::HexClipboardPlan maximum =
+        ViewerTextSafety::ComputeHexClipboardPlan((std::numeric_limits<uint64_t>::max)(), 0u, (std::numeric_limits<uint64_t>::max)());
     Check(maximum.hasData && maximum.truncated && maximum.copiedBytes == cap && maximum.requestedBytes == (std::numeric_limits<uint64_t>::max)() &&
               maximum.lastLine < (cap / ViewerTextSafety::kHexBytesPerLine),
           L"ViewerText hex clipboard computes a bounded plan for UINT64_MAX without arithmetic wrap",
@@ -6599,8 +6500,7 @@ private:
     AlertRecordingHostStub hostStub;
     wil::com_ptr<IViewer> viewer;
     const FactoryOptions factoryOptions{DEBUG_LEVEL_NONE};
-    const HRESULT createHr =
-        createFn(__uuidof(IViewer), &factoryOptions, static_cast<IHost*>(&hostStub), kViewerTextPluginId, viewer.put_void());
+    const HRESULT createHr = createFn(__uuidof(IViewer), &factoryOptions, static_cast<IHost*>(&hostStub), kViewerTextPluginId, viewer.put_void());
     Check(SUCCEEDED(createHr) && viewer != nullptr, L"ViewerText factory creates a viewer for terminal-contract validation", success);
     if (FAILED(createHr) || ! viewer)
     {
@@ -6609,9 +6509,7 @@ private:
 
     wil::com_ptr<IInformations> information;
     const HRESULT informationHr = viewer->QueryInterface(__uuidof(IInformations), information.put_void());
-    Check(SUCCEEDED(informationHr) && information != nullptr,
-          L"ViewerText exposes IInformations for streamed text-window validation",
-          success);
+    Check(SUCCEEDED(informationHr) && information != nullptr, L"ViewerText exposes IInformations for streamed text-window validation", success);
     if (FAILED(informationHr) || ! information)
     {
         return false;
@@ -6639,8 +6537,8 @@ private:
         return false;
     }
 
-    HWND viewerWindow     = nullptr;
-    auto emergencyCleanup = wil::scope_exit([&]() noexcept
+    HWND viewerWindow       = nullptr;
+    auto emergencyCleanup   = wil::scope_exit([&]() noexcept
     {
         if (viewerWindow && IsWindow(viewerWindow) != FALSE)
         {
@@ -6662,13 +6560,9 @@ private:
     }
 
     WndMsg::ViewerTextDebugSnapshot snapshot{};
-    const bool initialTerminal = WaitForViewerTextSnapshot(viewerWindow,
-                                                           [](const WndMsg::ViewerTextDebugSnapshot& value) noexcept
-    {
+    const bool initialTerminal = WaitForViewerTextSnapshot(viewerWindow, [](const WndMsg::ViewerTextDebugSnapshot& value) noexcept {
         return ! value.isLoading && value.asyncOpenTerminalCount >= 1u && SUCCEEDED(value.asyncOpenLastTerminalHr);
-    },
-                                                           5000ms,
-                                                           &snapshot);
+    }, 5000ms, &snapshot);
     Check(initialTerminal, L"ViewerText initial async open reaches one successful terminal result", success);
 
     const HWND textViewWindow = FindWindowExW(viewerWindow, nullptr, kViewerTextViewWindowClassName, nullptr);
@@ -6682,8 +6576,7 @@ private:
                                                            [](const WndMsg::ViewerTextDebugSnapshot& value) noexcept
         {
             return value.textSparseWrapActive && ! value.textVisualLineCountExact && value.textVisualLineCount > 65536u &&
-                   value.textMaterializedVisualLineCount == 0u &&
-                   value.textSparseLogicalSummaryCount == 2u && value.renderCount > 0u;
+                   value.textMaterializedVisualLineCount == 0u && value.textSparseLogicalSummaryCount == 2u && value.renderCount > 0u;
         },
                                                            5000ms,
                                                            &sparseSnapshot);
@@ -6696,39 +6589,35 @@ private:
             wrappedCoverage.operation   = WndMsg::ViewerTextDebugGeometryOperation::ProbeWrappedCoverage;
             wrappedCoverage.logicalLine = 0u;
             const bool wrappedCoverageProbed =
-                SendMessageW(viewerWindow,
-                             WndMsg::kViewerTextDebugSetLayoutCacheBudget,
-                             0u,
-                             reinterpret_cast<LPARAM>(&wrappedCoverage)) != FALSE &&
+                SendMessageW(viewerWindow, WndMsg::kViewerTextDebugSetLayoutCacheBudget, 0u, reinterpret_cast<LPARAM>(&wrappedCoverage)) != FALSE &&
                 SUCCEEDED(wrappedCoverage.result);
-            std::wcout << std::format(L"[INFO] ViewerText wrapped coverage: probed={} segments={} start={} end={} second=[{},{}] gap={} fit={} width={} line_height={}\n",
-                                      wrappedCoverageProbed,
-                                      wrappedCoverage.wrappedSegmentCount,
-                                      wrappedCoverage.wrappedCoveredStart,
-                                      wrappedCoverage.wrappedCoveredEnd,
-                                      wrappedCoverage.wrappedSecondSegmentStart,
-                                      wrappedCoverage.wrappedSecondSegmentEnd,
-                                      wrappedCoverage.wrappedHasGapOrOverlap,
-                                      wrappedCoverage.wrappedAllSegmentsFit,
-                                      wrappedCoverage.wrappedWidthDip,
-                                      wrappedCoverage.wrappedLineHeightDip);
+            std::wcout << std::format(
+                L"[INFO] ViewerText wrapped coverage: probed={} segments={} start={} end={} second=[{},{}] gap={} fit={} width={} line_height={}\n",
+                wrappedCoverageProbed,
+                wrappedCoverage.wrappedSegmentCount,
+                wrappedCoverage.wrappedCoveredStart,
+                wrappedCoverage.wrappedCoveredEnd,
+                wrappedCoverage.wrappedSecondSegmentStart,
+                wrappedCoverage.wrappedSecondSegmentEnd,
+                wrappedCoverage.wrappedHasGapOrOverlap,
+                wrappedCoverage.wrappedAllSegmentsFit,
+                wrappedCoverage.wrappedWidthDip,
+                wrappedCoverage.wrappedLineHeightDip);
             Check(wrappedCoverageProbed && wrappedCoverage.wrappedSegmentCount > 1u &&
-                      wrappedCoverage.wrappedCoveredEnd > wrappedCoverage.wrappedCoveredStart &&
-                      ! wrappedCoverage.wrappedHasGapOrOverlap && wrappedCoverage.wrappedAllSegmentsFit &&
-                      wrappedCoverage.wrappedWidthDip > 0.0f,
+                      wrappedCoverage.wrappedCoveredEnd > wrappedCoverage.wrappedCoveredStart && ! wrappedCoverage.wrappedHasGapOrOverlap &&
+                      wrappedCoverage.wrappedAllSegmentsFit && wrappedCoverage.wrappedWidthDip > 0.0f,
                   L"ViewerText sparse wrapping covers the mixed-width logical line with contiguous DirectWrite-fit segments",
                   success);
 
             const uint32_t initialTopColumn = sparseSnapshot.topVisibleSegmentColumnStart;
             static_cast<void>(SendMessageW(textViewWindow, WM_VSCROLL, MAKEWPARAM(SB_LINEDOWN, 0u), 0u));
             WndMsg::ViewerTextDebugSnapshot lineDownSnapshot{};
-            const bool lineDownAdvanced = TryGetViewerTextDebugSnapshot(viewerWindow, lineDownSnapshot) &&
-                                          lineDownSnapshot.topVisibleSegmentColumnStart > initialTopColumn;
+            const bool lineDownAdvanced =
+                TryGetViewerTextDebugSnapshot(viewerWindow, lineDownSnapshot) && lineDownSnapshot.topVisibleSegmentColumnStart > initialTopColumn;
             Check(lineDownAdvanced, L"ViewerText sparse line-down advances to the next DirectWrite-fit segment", success);
             static_cast<void>(SendMessageW(textViewWindow, WM_VSCROLL, MAKEWPARAM(SB_LINEUP, 0u), 0u));
             WndMsg::ViewerTextDebugSnapshot lineRoundTripSnapshot{};
-            Check(TryGetViewerTextDebugSnapshot(viewerWindow, lineRoundTripSnapshot) &&
-                      lineRoundTripSnapshot.topVisibleSegmentColumnStart == initialTopColumn,
+            Check(TryGetViewerTextDebugSnapshot(viewerWindow, lineRoundTripSnapshot) && lineRoundTripSnapshot.topVisibleSegmentColumnStart == initialTopColumn,
                   L"ViewerText sparse line-down then line-up returns to the identical segment anchor",
                   success);
 
@@ -6736,8 +6625,8 @@ private:
             const WPARAM wheelUp   = MAKEWPARAM(0u, static_cast<WORD>(static_cast<SHORT>(WHEEL_DELTA)));
             static_cast<void>(SendMessageW(textViewWindow, WM_MOUSEWHEEL, wheelDown, 0u));
             WndMsg::ViewerTextDebugSnapshot wheelDownSnapshot{};
-            const bool wheelAdvanced = TryGetViewerTextDebugSnapshot(viewerWindow, wheelDownSnapshot) &&
-                                       wheelDownSnapshot.topVisibleSegmentColumnStart > initialTopColumn;
+            const bool wheelAdvanced =
+                TryGetViewerTextDebugSnapshot(viewerWindow, wheelDownSnapshot) && wheelDownSnapshot.topVisibleSegmentColumnStart > initialTopColumn;
             Check(wheelAdvanced, L"ViewerText sparse wheel-down advances through physical wrapped rows", success);
             static_cast<void>(SendMessageW(textViewWindow, WM_MOUSEWHEEL, wheelUp, 0u));
             WndMsg::ViewerTextDebugSnapshot wheelRoundTripSnapshot{};
@@ -6746,13 +6635,11 @@ private:
                   L"ViewerText sparse wheel-down then wheel-up returns to the identical segment anchor",
                   success);
 
-            const UINT textDpi = GetDpiForWindow(textViewWindow);
+            const UINT textDpi       = GetDpiForWindow(textViewWindow);
             const auto pixelsFromDip = [textDpi](float dip) noexcept
-            {
-                return static_cast<int>(std::lround(static_cast<double>(dip) * static_cast<double>(textDpi) / 96.0));
-            };
-            const int wrappedClickX = pixelsFromDip(6.5f);
-            const int wrappedClickY = pixelsFromDip(6.0f + (std::max)(1.0f, wrappedCoverage.wrappedLineHeightDip) * 1.5f);
+            { return static_cast<int>(std::lround(static_cast<double>(dip) * static_cast<double>(textDpi) / 96.0)); };
+            const int wrappedClickX        = pixelsFromDip(6.5f);
+            const int wrappedClickY        = pixelsFromDip(6.0f + (std::max)(1.0f, wrappedCoverage.wrappedLineHeightDip) * 1.5f);
             const LPARAM wrappedClickPoint = MAKELPARAM(wrappedClickX, wrappedClickY);
             static_cast<void>(SendMessageW(textViewWindow, WM_LBUTTONDOWN, MK_LBUTTON, wrappedClickPoint));
             static_cast<void>(SendMessageW(textViewWindow, WM_LBUTTONUP, 0u, wrappedClickPoint));
@@ -6765,8 +6652,8 @@ private:
             static_cast<void>(SetFocus(textViewWindow));
             static_cast<void>(SendMessageW(textViewWindow, WM_KEYDOWN, VK_DOWN, 0u));
             WndMsg::ViewerTextDebugSnapshot keyDownSnapshot{};
-            const bool keyDownAdvanced = TryGetViewerTextDebugSnapshot(viewerWindow, keyDownSnapshot) &&
-                                         keyDownSnapshot.textCaretIndex > wrappedClickSnapshot.textCaretIndex;
+            const bool keyDownAdvanced =
+                TryGetViewerTextDebugSnapshot(viewerWindow, keyDownSnapshot) && keyDownSnapshot.textCaretIndex > wrappedClickSnapshot.textCaretIndex;
             Check(keyDownAdvanced, L"ViewerText sparse down-arrow advances through the next physical wrapped row", success);
             static_cast<void>(SendMessageW(textViewWindow, WM_KEYDOWN, VK_UP, 0u));
             WndMsg::ViewerTextDebugSnapshot keyRoundTripSnapshot{};
@@ -6781,8 +6668,8 @@ private:
                   success);
             static_cast<void>(SendMessageW(textViewWindow, WM_KEYDOWN, VK_NEXT, 0u));
             WndMsg::ViewerTextDebugSnapshot pageDownSnapshot{};
-            const bool pageDownAdvanced = TryGetViewerTextDebugSnapshot(viewerWindow, pageDownSnapshot) &&
-                                          pageDownSnapshot.textCaretIndex > keyRoundTripSnapshot.textCaretIndex;
+            const bool pageDownAdvanced =
+                TryGetViewerTextDebugSnapshot(viewerWindow, pageDownSnapshot) && pageDownSnapshot.textCaretIndex > keyRoundTripSnapshot.textCaretIndex;
             Check(pageDownAdvanced, L"ViewerText sparse Page Down advances the caret beyond one wrapped viewport", success);
             static_cast<void>(SendMessageW(textViewWindow, WM_KEYDOWN, VK_PRIOR, 0u));
             WndMsg::ViewerTextDebugSnapshot pageRoundTripSnapshot{};
@@ -6800,24 +6687,16 @@ private:
             InvalidateRect(textViewWindow, nullptr, TRUE);
             UpdateWindow(textViewWindow);
             WndMsg::ViewerTextDebugSnapshot tallViewportSnapshot{};
-            const bool tallViewportRendered = WaitForViewerTextSnapshot(viewerWindow,
-                                                                         [](const WndMsg::ViewerTextDebugSnapshot& value) noexcept
-            {
+            const bool tallViewportRendered = WaitForViewerTextSnapshot(viewerWindow, [](const WndMsg::ViewerTextDebugSnapshot& value) noexcept {
                 return value.visibleRowCount > 128u && value.textMaterializedVisualLineCount == 0u;
-            },
-                                                                         5000ms,
-                                                                         &tallViewportSnapshot);
-            Check(tallViewportRendered,
-                  L"ViewerText sparse viewport paints more than 128 physical rows without a hidden truncation cap",
-                  success);
+            }, 5000ms, &tallViewportSnapshot);
+            Check(tallViewportRendered, L"ViewerText sparse viewport paints more than 128 physical rows without a hidden truncation cap", success);
             static_cast<void>(SetWindowPos(textViewWindow, nullptr, 0, 0, 48, 200, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE));
             static_cast<void>(SendMessageW(textViewWindow, WM_VSCROLL, MAKEWPARAM(SB_TOP, 0u), 0u));
             InvalidateRect(textViewWindow, nullptr, TRUE);
             UpdateWindow(textViewWindow);
 
-            Check(sparseSnapshot.textLastPaintUs < 250000u,
-                  L"ViewerText huge-line visible paint latency stays below 250 ms",
-                  success);
+            Check(sparseSnapshot.textLastPaintUs < 250000u, L"ViewerText huge-line visible paint latency stays below 250 ms", success);
 
             SCROLLINFO sparseScroll{};
             sparseScroll.cbSize = sizeof(sparseScroll);
@@ -6849,17 +6728,16 @@ private:
                                                              [](const WndMsg::ViewerTextDebugSnapshot& value) noexcept
         {
             return ! value.textStreamLoadPending && value.textStreamAcceptedCount >= 2u && value.textStreamStaleCount >= 1u &&
-                   value.textStreamTerminalCount >= 1u && SUCCEEDED(value.textStreamLastTerminalHr) &&
-                   value.textStreamStartOffset > 0u && value.textStreamEndOffset == value.textFileSize;
+                   value.textStreamTerminalCount >= 1u && SUCCEEDED(value.textStreamLastTerminalHr) && value.textStreamStartOffset > 0u &&
+                   value.textStreamEndOffset == value.textFileSize;
         },
                                                              10000ms,
                                                              &streamSnapshot);
-        Check(streamSettled,
-              L"ViewerText rapid stream navigation rejects stale completions and accepts one identity-bound terminal window",
-              success);
+        Check(streamSettled, L"ViewerText rapid stream navigation rejects stale completions and accepts one identity-bound terminal window", success);
         if (streamSettled)
         {
-            std::wcout << std::format(L"[INFO] ViewerText stream metrics: accepted={} stale={} terminal={} worker_us={} ui_apply_us={} visual_rows={} sparse_summaries={} materialized_rows={} paint_us={}\n",
+            std::wcout << std::format(L"[INFO] ViewerText stream metrics: accepted={} stale={} terminal={} worker_us={} ui_apply_us={} visual_rows={} "
+                                      L"sparse_summaries={} materialized_rows={} paint_us={}\n",
                                       streamSnapshot.textStreamAcceptedCount,
                                       streamSnapshot.textStreamStaleCount,
                                       streamSnapshot.textStreamTerminalCount,
@@ -6869,12 +6747,8 @@ private:
                                       streamSnapshot.textSparseLogicalSummaryCount,
                                       streamSnapshot.textMaterializedVisualLineCount,
                                       streamSnapshot.textLastPaintUs);
-            Check(streamSnapshot.textStreamLastUiApplyUs < 250000u,
-                  L"ViewerText streamed navigation UI apply latency stays below 250 ms",
-                  success);
-            Check(streamSnapshot.textStreamLastElapsedUs > 0u,
-                  L"ViewerText reports worker decode/index and UI apply latency metrics",
-                  success);
+            Check(streamSnapshot.textStreamLastUiApplyUs < 250000u, L"ViewerText streamed navigation UI apply latency stays below 250 ms", success);
+            Check(streamSnapshot.textStreamLastElapsedUs > 0u, L"ViewerText reports worker decode/index and UI apply latency metrics", success);
 
             static_cast<void>(SendMessageW(textViewWindow, WM_VSCROLL, MAKEWPARAM(SB_TOP, 0u), 0u));
             for (size_t request = 0u; request < 4u; ++request)
@@ -6882,11 +6756,11 @@ private:
                 static_cast<void>(SendMessageW(textViewWindow, WM_VSCROLL, MAKEWPARAM(SB_LINEUP, 0u), 0u));
             }
             const uint64_t previousTerminalCount = streamSnapshot.textStreamTerminalCount;
-            const bool beginningRestored = WaitForViewerTextSnapshot(viewerWindow,
-                                                                     [&](const WndMsg::ViewerTextDebugSnapshot& value) noexcept
+            const bool beginningRestored         = WaitForViewerTextSnapshot(viewerWindow,
+                                                                             [&](const WndMsg::ViewerTextDebugSnapshot& value) noexcept
             {
-                return ! value.textStreamLoadPending && value.textStreamStartOffset == 0u &&
-                       value.textStreamTerminalCount > previousTerminalCount && SUCCEEDED(value.textStreamLastTerminalHr);
+                return ! value.textStreamLoadPending && value.textStreamStartOffset == 0u && value.textStreamTerminalCount > previousTerminalCount &&
+                       SUCCEEDED(value.textStreamLastTerminalHr);
             },
                                                                      10000ms);
             Check(beginningRestored, L"ViewerText streamed navigation keeps the beginning window reachable after a latest-wins end jump", success);
@@ -6894,14 +6768,9 @@ private:
             if (beginningRestored)
             {
                 WndMsg::ViewerTextDebugSnapshot settledAtBeginning{};
-                const bool allPriorRequestsSettled = WaitForViewerTextSnapshot(viewerWindow,
-                                                                                [](const WndMsg::ViewerTextDebugSnapshot& value) noexcept
-                {
-                    return ! value.textStreamLoadPending &&
-                           value.textStreamAcceptedCount == value.textStreamStaleCount + value.textStreamTerminalCount;
-                },
-                                                                                10000ms,
-                                                                                &settledAtBeginning);
+                const bool allPriorRequestsSettled = WaitForViewerTextSnapshot(viewerWindow, [](const WndMsg::ViewerTextDebugSnapshot& value) noexcept {
+                    return ! value.textStreamLoadPending && value.textStreamAcceptedCount == value.textStreamStaleCount + value.textStreamTerminalCount;
+                }, 10000ms, &settledAtBeginning);
                 Check(allPriorRequestsSettled, L"ViewerText retires every rapid navigation request before stream fault validation", success);
 
                 const auto setNextStreamFault = [&](WndMsg::ViewerTextDebugAsyncStreamFault fault) noexcept
@@ -6909,16 +6778,11 @@ private:
                     WndMsg::ViewerTextDebugGeometryRequest faultRequest{};
                     faultRequest.operation        = WndMsg::ViewerTextDebugGeometryOperation::SetAsyncStreamFault;
                     faultRequest.asyncStreamFault = fault;
-                    return SendMessageW(viewerWindow,
-                                        WndMsg::kViewerTextDebugSetLayoutCacheBudget,
-                                        0u,
-                                        reinterpret_cast<LPARAM>(&faultRequest)) != FALSE &&
+                    return SendMessageW(viewerWindow, WndMsg::kViewerTextDebugSetLayoutCacheBudget, 0u, reinterpret_cast<LPARAM>(&faultRequest)) != FALSE &&
                            SUCCEEDED(faultRequest.result);
                 };
                 const auto requestNextStreamWindow = [&]() noexcept
-                {
-                    static_cast<void>(SendMessageW(textViewWindow, WM_VSCROLL, MAKEWPARAM(SB_LINEDOWN, 0u), 0u));
-                };
+                { static_cast<void>(SendMessageW(textViewWindow, WM_VSCROLL, MAKEWPARAM(SB_LINEDOWN, 0u), 0u)); };
 
                 struct StreamFaultCase final
                 {
@@ -6938,9 +6802,7 @@ private:
                     Check(TryGetViewerTextDebugSnapshot(viewerWindow, beforeFault),
                           std::format(L"ViewerText captures metrics before the {} stream fault", faultCase.label),
                           success);
-                    Check(setNextStreamFault(faultCase.fault),
-                          std::format(L"ViewerText accepts the deterministic {} stream fault", faultCase.label),
-                          success);
+                    Check(setNextStreamFault(faultCase.fault), std::format(L"ViewerText accepts the deterministic {} stream fault", faultCase.label), success);
                     requestNextStreamWindow();
 
                     WndMsg::ViewerTextDebugSnapshot afterFault{};
@@ -6959,8 +6821,7 @@ private:
                     {
                         const uint64_t acceptedDelta = afterFault.textStreamAcceptedCount - beforeFault.textStreamAcceptedCount;
                         const uint64_t rejectedDelta = afterFault.textStreamRejectedCount - beforeFault.textStreamRejectedCount;
-                        Check(acceptedDelta == (faultCase.acceptedByWorker ? 1u : 0u) &&
-                                  rejectedDelta == (faultCase.acceptedByWorker ? 0u : 1u),
+                        Check(acceptedDelta == (faultCase.acceptedByWorker ? 1u : 0u) && rejectedDelta == (faultCase.acceptedByWorker ? 0u : 1u),
                               std::format(L"ViewerText {} stream fault updates accepted/rejected metrics exactly once", faultCase.label),
                               success);
                     }
@@ -6973,9 +6834,7 @@ private:
                     WndMsg::ViewerTextDebugSnapshot beforeStaleFailure{};
                     static_cast<void>(TryGetViewerTextDebugSnapshot(viewerWindow, beforeStaleFailure));
                     fileSystem.EnableBlockingRead(staleFailureControl);
-                    Check(setNextStreamFault(WndMsg::ViewerTextDebugAsyncStreamFault::Worker),
-                          L"ViewerText accepts a delayed worker stream fault",
-                          success);
+                    Check(setNextStreamFault(WndMsg::ViewerTextDebugAsyncStreamFault::Worker), L"ViewerText accepts a delayed worker stream fault", success);
                     requestNextStreamWindow();
                     Check(PumpUntil([&]() noexcept { return WaitForSingleObject(staleFailureControl->entered.get(), 0u) == WAIT_OBJECT_0; }, 5000ms),
                           L"ViewerText delayed stream worker reaches the blocking provider",
@@ -7049,10 +6908,7 @@ private:
             probe.rangeEnd     = geometryStart + 5u;
             probe.widthDip     = 320.0f;
             probe.hitX         = 0.0f;
-            const bool probed = SendMessageW(viewerWindow,
-                                             WndMsg::kViewerTextDebugSetLayoutCacheBudget,
-                                             0u,
-                                             reinterpret_cast<LPARAM>(&probe)) != FALSE;
+            const bool probed  = SendMessageW(viewerWindow, WndMsg::kViewerTextDebugSetLayoutCacheBudget, 0u, reinterpret_cast<LPARAM>(&probe)) != FALSE;
             Check(probed && SUCCEEDED(probe.result), std::format(L"ViewerText probes DirectWrite caret position {}", offset), success);
             caretPositions[offset] = probe.caretX;
             if (offset == 4u)
@@ -7063,27 +6919,19 @@ private:
             }
             if (offset == 3u)
             {
-                Check(probe.nextTextPosition == geometryStart + 5u,
-                      L"ViewerText right-arrow movement crosses the emoji as one caret stop",
-                      success);
+                Check(probe.nextTextPosition == geometryStart + 5u, L"ViewerText right-arrow movement crosses the emoji as one caret stop", success);
             }
             if (offset == 5u)
             {
-                Check(probe.previousTextPosition == geometryStart + 3u,
-                      L"ViewerText left-arrow movement crosses the emoji as one caret stop",
-                      success);
+                Check(probe.previousTextPosition == geometryStart + 3u, L"ViewerText left-arrow movement crosses the emoji as one caret stop", success);
             }
             if (offset == 1u)
             {
-                Check(probe.rangeLeft == probe.caretX,
-                      L"ViewerText selection/search range start shares the caret DirectWrite mapping",
-                      success);
+                Check(probe.rangeLeft == probe.caretX, L"ViewerText selection/search range start shares the caret DirectWrite mapping", success);
             }
             if (offset == 5u)
             {
-                Check(probe.rangeRight == probe.caretX,
-                      L"ViewerText selection/search range end shares the caret DirectWrite mapping",
-                      success);
+                Check(probe.rangeRight == probe.caretX, L"ViewerText selection/search range end shares the caret DirectWrite mapping", success);
             }
         }
         Check(caretPositions[0] < caretPositions[1] && caretPositions[1] < caretPositions[2] && caretPositions[2] < caretPositions[3] &&
@@ -7094,18 +6942,15 @@ private:
         for (const size_t offset : std::array<size_t, 4>{{1u, 2u, 3u, 5u}})
         {
             WndMsg::ViewerTextDebugGeometryRequest hit{};
-            hit.operation    = WndMsg::ViewerTextDebugGeometryOperation::ProbeLayout;
-            hit.segmentStart = 0u;
-            hit.segmentEnd   = geometryStart + 6u;
-            hit.textPosition = geometryStart + offset;
-            hit.rangeStart   = geometryStart;
-            hit.rangeEnd     = geometryStart + 6u;
-            hit.widthDip     = 320.0f;
-            hit.hitX         = caretPositions[offset];
-            const bool hitProbed = SendMessageW(viewerWindow,
-                                                WndMsg::kViewerTextDebugSetLayoutCacheBudget,
-                                                0u,
-                                                reinterpret_cast<LPARAM>(&hit)) != FALSE;
+            hit.operation        = WndMsg::ViewerTextDebugGeometryOperation::ProbeLayout;
+            hit.segmentStart     = 0u;
+            hit.segmentEnd       = geometryStart + 6u;
+            hit.textPosition     = geometryStart + offset;
+            hit.rangeStart       = geometryStart;
+            hit.rangeEnd         = geometryStart + 6u;
+            hit.widthDip         = 320.0f;
+            hit.hitX             = caretPositions[offset];
+            const bool hitProbed = SendMessageW(viewerWindow, WndMsg::kViewerTextDebugSetLayoutCacheBudget, 0u, reinterpret_cast<LPARAM>(&hit)) != FALSE;
             Check(hitProbed && hit.hitTextPosition != geometryStart + 4u,
                   std::format(L"ViewerText click mapping {} never splits the emoji surrogate pair", offset),
                   success);
@@ -7113,31 +6958,25 @@ private:
 
         if (textViewWindow)
         {
-            const UINT textDpi = GetDpiForWindow(textViewWindow);
+            const UINT textDpi       = GetDpiForWindow(textViewWindow);
             const auto pixelsFromDip = [textDpi](float dip) noexcept
-            {
-                return static_cast<int>(std::lround(static_cast<double>(dip) * static_cast<double>(textDpi) / 96.0));
-            };
-            const int geometryY = pixelsFromDip(12.0f);
-            const auto pointForGeometryOffset = [&](size_t offset) noexcept
-            {
-                return MAKELPARAM(pixelsFromDip(6.0f + caretPositions[offset]), geometryY);
-            };
+            { return static_cast<int>(std::lround(static_cast<double>(dip) * static_cast<double>(textDpi) / 96.0)); };
+            const int geometryY               = pixelsFromDip(12.0f);
+            const auto pointForGeometryOffset = [&](size_t offset) noexcept { return MAKELPARAM(pixelsFromDip(6.0f + caretPositions[offset]), geometryY); };
 
             const size_t clickOffset = 2u;
             const LPARAM clickPoint  = pointForGeometryOffset(clickOffset);
             static_cast<void>(SendMessageW(textViewWindow, WM_LBUTTONDOWN, MK_LBUTTON, clickPoint));
             static_cast<void>(SendMessageW(textViewWindow, WM_LBUTTONUP, 0u, clickPoint));
             WndMsg::ViewerTextDebugSnapshot productionClickSnapshot{};
-            Check(TryGetViewerTextDebugSnapshot(viewerWindow, productionClickSnapshot) &&
-                      productionClickSnapshot.textCaretIndex == geometryStart + clickOffset,
+            Check(TryGetViewerTextDebugSnapshot(viewerWindow, productionClickSnapshot) && productionClickSnapshot.textCaretIndex == geometryStart + clickOffset,
                   L"ViewerText production mouse hit-test lands on the DirectWrite-probed CJK caret boundary",
                   success);
 
             const size_t dragStartOffset = 1u;
             const size_t dragEndOffset   = 5u;
-            const LPARAM dragStartPoint = pointForGeometryOffset(dragStartOffset);
-            const LPARAM dragEndPoint   = pointForGeometryOffset(dragEndOffset);
+            const LPARAM dragStartPoint  = pointForGeometryOffset(dragStartOffset);
+            const LPARAM dragEndPoint    = pointForGeometryOffset(dragEndOffset);
             static_cast<void>(SendMessageW(textViewWindow, WM_LBUTTONDOWN, MK_LBUTTON, dragStartPoint));
             static_cast<void>(SendMessageW(textViewWindow, WM_MOUSEMOVE, MK_LBUTTON, dragEndPoint));
             static_cast<void>(SendMessageW(textViewWindow, WM_LBUTTONUP, 0u, dragEndPoint));
@@ -7170,11 +7009,9 @@ private:
         uncachedProbe.rangeStart   = 0u;
         uncachedProbe.rangeEnd     = 2u;
         uncachedProbe.widthDip     = 320.0f;
-        const bool uncachedProbeSucceeded = SendMessageW(viewerWindow,
-                                                         WndMsg::kViewerTextDebugSetLayoutCacheBudget,
-                                                         0u,
-                                                         reinterpret_cast<LPARAM>(&uncachedProbe)) != FALSE &&
-                                            SUCCEEDED(uncachedProbe.result);
+        const bool uncachedProbeSucceeded =
+            SendMessageW(viewerWindow, WndMsg::kViewerTextDebugSetLayoutCacheBudget, 0u, reinterpret_cast<LPARAM>(&uncachedProbe)) != FALSE &&
+            SUCCEEDED(uncachedProbe.result);
         Check(uncachedProbeSucceeded, L"ViewerText keeps over-budget DirectWrite geometry correct through one uncached layout", success);
         WndMsg::ViewerTextDebugSnapshot uncachedSnapshot{};
         Check(TryGetViewerTextDebugSnapshot(viewerWindow, uncachedSnapshot) && uncachedSnapshot.textLayoutCacheEntryCount <= 2u &&
@@ -7197,11 +7034,9 @@ private:
     for (const auto& [offset, column] : lineCases)
     {
         WndMsg::ViewerTextDebugHexLineRequest request{};
-        request.offset = offset;
+        request.offset       = offset;
         const bool formatted = SendMessageW(viewerWindow, WndMsg::kViewerTextDebugFormatUtf8HexLine, 0u, reinterpret_cast<LPARAM>(&request)) != FALSE;
-        Check(formatted && request.validBytes == 16u,
-              std::format(L"ViewerText formats the UTF-8 hex row at offset {}", offset),
-              success);
+        Check(formatted && request.validBytes == 16u, std::format(L"ViewerText formats the UTF-8 hex row at offset {}", offset), success);
         Check(request.text[column] == kHighSurrogate && request.text[column + 1u] == kLowSurrogate,
               std::format(L"ViewerText emits a valid U+1F600 surrogate pair at byte column {}", column),
               success);
@@ -7217,21 +7052,14 @@ private:
     acceptedCopyRequest.activeOffset = ViewerTextSafety::kMaxHexClipboardBytes - 1u;
     const bool acceptedCopyDispatched =
         SendMessageW(viewerWindow, WndMsg::kViewerTextDebugCopyHexSelection, 0u, reinterpret_cast<LPARAM>(&acceptedCopyRequest)) != FALSE;
-    Check(acceptedCopyDispatched && acceptedCopyRequest.dispatched,
-          L"ViewerText dispatches the real hex clipboard path at the exact source-byte cap",
-          success);
-    Check(hostStub.WarningAlertCount() == warningsBeforeCopy,
-          L"ViewerText does not warn when a hex clipboard selection is exactly at the cap",
-          success);
+    Check(acceptedCopyDispatched && acceptedCopyRequest.dispatched, L"ViewerText dispatches the real hex clipboard path at the exact source-byte cap", success);
+    Check(hostStub.WarningAlertCount() == warningsBeforeCopy, L"ViewerText does not warn when a hex clipboard selection is exactly at the cap", success);
 
     WndMsg::ViewerTextDebugHexCopyRequest copyRequest{};
-    copyRequest.anchorOffset = 0u;
-    copyRequest.activeOffset = static_cast<uint64_t>(fixture.size() - 1u);
-    const bool copyDispatched =
-        SendMessageW(viewerWindow, WndMsg::kViewerTextDebugCopyHexSelection, 0u, reinterpret_cast<LPARAM>(&copyRequest)) != FALSE;
-    Check(copyDispatched && copyRequest.dispatched,
-          L"ViewerText dispatches the real bounded hex clipboard path for an over-cap selection",
-          success);
+    copyRequest.anchorOffset  = 0u;
+    copyRequest.activeOffset  = static_cast<uint64_t>(fixture.size() - 1u);
+    const bool copyDispatched = SendMessageW(viewerWindow, WndMsg::kViewerTextDebugCopyHexSelection, 0u, reinterpret_cast<LPARAM>(&copyRequest)) != FALSE;
+    Check(copyDispatched && copyRequest.dispatched, L"ViewerText dispatches the real bounded hex clipboard path for an over-cap selection", success);
     Check(hostStub.WarningAlertCount() == warningsBeforeCopy + 1u,
           L"ViewerText shows one localized warning after truncating an over-cap hex clipboard selection",
           success);
@@ -7257,29 +7085,19 @@ private:
         ++expectedTerminalCount;
 
         WndMsg::ViewerTextDebugSnapshot faultSnapshot{};
-        const bool terminal = WaitForViewerTextSnapshot(viewerWindow,
-                                                        [&](const WndMsg::ViewerTextDebugSnapshot& value) noexcept
-        {
+        const bool terminal = WaitForViewerTextSnapshot(viewerWindow, [&](const WndMsg::ViewerTextDebugSnapshot& value) noexcept {
             return ! value.isLoading && value.asyncOpenTerminalCount == expectedTerminalCount && FAILED(value.asyncOpenLastTerminalHr);
-        },
-                                                        5000ms,
-                                                        &faultSnapshot);
-        Check(terminal,
-              std::format(L"ViewerText async-open fault {} reaches exactly one failed terminal result", static_cast<unsigned int>(fault)),
-              success);
+        }, 5000ms, &faultSnapshot);
+        Check(terminal, std::format(L"ViewerText async-open fault {} reaches exactly one failed terminal result", static_cast<unsigned int>(fault)), success);
     }
 
-    const bool restoreRequested = SendMessageW(
-                                      viewerWindow, WndMsg::kViewerTextDebugReloadWithOpenFault, static_cast<WPARAM>(WndMsg::ViewerTextDebugAsyncOpenFault::None), 0u) !=
-                                  FALSE;
+    const bool restoreRequested =
+        SendMessageW(viewerWindow, WndMsg::kViewerTextDebugReloadWithOpenFault, static_cast<WPARAM>(WndMsg::ViewerTextDebugAsyncOpenFault::None), 0u) != FALSE;
     Check(restoreRequested, L"ViewerText accepts a clean reload after every injected failure", success);
     ++expectedTerminalCount;
-    const bool restored = WaitForViewerTextSnapshot(viewerWindow,
-                                                    [&](const WndMsg::ViewerTextDebugSnapshot& value) noexcept
-    {
+    const bool restored = WaitForViewerTextSnapshot(viewerWindow, [&](const WndMsg::ViewerTextDebugSnapshot& value) noexcept {
         return ! value.isLoading && value.asyncOpenTerminalCount == expectedTerminalCount && SUCCEEDED(value.asyncOpenLastTerminalHr);
-    },
-                                                    5000ms);
+    }, 5000ms);
     Check(restored, L"ViewerText recovers with one successful terminal result after the fault sequence", success);
 
     auto closeControl = std::make_shared<BlockingReadControl>();
@@ -7302,11 +7120,10 @@ private:
     bool unloadStressQueued = true;
     for (size_t index = 0u; index < 32u; ++index)
     {
-        unloadStressQueued = unloadStressQueued &&
-                             SendMessageW(viewerWindow,
-                                          WndMsg::kViewerTextDebugReloadWithOpenFault,
-                                          static_cast<WPARAM>(WndMsg::ViewerTextDebugAsyncOpenFault::None),
-                                          0u) != FALSE;
+        unloadStressQueued =
+            unloadStressQueued &&
+            SendMessageW(viewerWindow, WndMsg::kViewerTextDebugReloadWithOpenFault, static_cast<WPARAM>(WndMsg::ViewerTextDebugAsyncOpenFault::None), 0u) !=
+                FALSE;
     }
     Check(unloadStressQueued, L"ViewerText queues async-open unload stress work", success);
 
@@ -7405,11 +7222,11 @@ private:
         return false;
     }
 
-    constexpr std::string_view kSourceText      = "ViewerText transactional Save As source\r\nsecond line\r\n";
-    constexpr std::string_view kDestinationText = "pre-existing destination bytes must survive\r\n";
-    const std::filesystem::path sourcePath      = WriteUtf8TextFile(tempDir / L"source.txt", kSourceText);
-    const std::filesystem::path destinationPath = WriteUtf8TextFile(tempDir / L"destination.txt", kDestinationText);
-    const std::filesystem::path streamPath      = tempDir / L"streamed.txt";
+    constexpr std::string_view kSourceText            = "ViewerText transactional Save As source\r\nsecond line\r\n";
+    constexpr std::string_view kDestinationText       = "pre-existing destination bytes must survive\r\n";
+    const std::filesystem::path sourcePath            = WriteUtf8TextFile(tempDir / L"source.txt", kSourceText);
+    const std::filesystem::path destinationPath       = WriteUtf8TextFile(tempDir / L"destination.txt", kDestinationText);
+    const std::filesystem::path streamPath            = tempDir / L"streamed.txt";
     const std::filesystem::path streamDestinationPath = tempDir / L"stream-destination.txt";
 
     auto cleanupFiles = wil::scope_exit([&]() noexcept
@@ -7486,7 +7303,7 @@ private:
         }
 
         const std::vector<HWND> existingWindows = CollectVisibleWindowsByClass(kViewerTextWindowClassName);
-        const std::wstring pathText              = path.wstring();
+        const std::wstring pathText             = path.wstring();
         ViewerOpenContext context{};
         context.fileSystem     = static_cast<IFileSystem*>(&fileSystem);
         context.fileSystemName = L"File System";
@@ -7513,7 +7330,7 @@ private:
 
         WndMsg::ViewerTextDebugSnapshot snapshot{};
         const bool loaded = WaitForViewerTextSnapshot(viewerWindow,
-                                                       [&](const WndMsg::ViewerTextDebugSnapshot& value) noexcept
+                                                      [&](const WndMsg::ViewerTextDebugSnapshot& value) noexcept
         {
             if (value.isLoading || value.textStreamActive != expectStream || value.renderCount == 0u)
             {
@@ -7521,10 +7338,11 @@ private:
             }
             return expectStream || std::wstring_view(value.textPreview).find(L"ViewerText transactional Save As source") != std::wstring_view::npos;
         },
-                                                       15000ms,
-                                                       &snapshot);
-        Check(loaded, expectStream ? L"ViewerText enters streamed mode for the oversized Save As fixture"
-                                   : L"ViewerText fully loads the Save As source before test dispatch",
+                                                      15000ms,
+                                                      &snapshot);
+        Check(loaded,
+              expectStream ? L"ViewerText enters streamed mode for the oversized Save As fixture"
+                           : L"ViewerText fully loads the Save As source before test dispatch",
               success);
         return loaded;
     };
@@ -7532,10 +7350,10 @@ private:
     const auto invokeSave = [&](const std::filesystem::path& path,
                                 UINT encodingSelection,
                                 WndMsg::ViewerTextDebugSaveFault fault = WndMsg::ViewerTextDebugSaveFault::None,
-                                bool simulateLoading = false) noexcept -> HRESULT
+                                bool simulateLoading                   = false) noexcept -> HRESULT
     {
         WndMsg::ViewerTextDebugSaveRequest request{};
-        request.destinationPath = path.c_str();
+        request.destinationPath   = path.c_str();
         request.encodingSelection = encodingSelection;
         request.fault             = fault;
         request.simulateLoading   = simulateLoading;
@@ -7544,9 +7362,7 @@ private:
         return request.result;
     };
 
-    const auto checkBytes = [&](const std::filesystem::path& path,
-                                const std::vector<std::byte>& expected,
-                                std::wstring_view description) noexcept
+    const auto checkBytes = [&](const std::filesystem::path& path, const std::vector<std::byte>& expected, std::wstring_view description) noexcept
     {
         const auto actual = ReadBinaryFile(path);
         Check(actual.has_value() && actual.value() == expected, description, success);
@@ -7557,10 +7373,7 @@ private:
         const size_t count = CountViewerTextSaveTemps(tempDir, countError);
         Check(! countError && count == 0u, L"ViewerText Save As leaves no sibling transaction temp behind", success);
     };
-    const auto resetDestination = [&]()
-    {
-        static_cast<void>(WriteUtf8TextFile(destinationPath, kDestinationText));
-    };
+    const auto resetDestination = [&]() { static_cast<void>(WriteUtf8TextFile(destinationPath, kDestinationText)); };
 
     if (! openViewer(sourcePath, nullptr, false))
     {
@@ -7595,9 +7408,7 @@ private:
         resetDestination();
         const HRESULT failureHr = invokeSave(destinationPath, failureCase.encodingSelection, failureCase.fault);
         Check(FAILED(failureHr), std::format(L"ViewerText injected {} Save As fault fails the transaction", failureCase.name), success);
-        checkBytes(sourcePath,
-                   sourceBytes.value(),
-                   std::format(L"ViewerText injected {} Save As fault preserves source bytes", failureCase.name));
+        checkBytes(sourcePath, sourceBytes.value(), std::format(L"ViewerText injected {} Save As fault preserves source bytes", failureCase.name));
         checkBytes(destinationPath,
                    destinationBytes.value(),
                    std::format(L"ViewerText injected {} Save As fault preserves pre-existing destination bytes", failureCase.name));
@@ -7628,10 +7439,7 @@ private:
     checkNoTemps();
 
     resetDestination();
-    const HRESULT loadingHr = invokeSave(destinationPath,
-                                         IDM_VIEWER_ENCODING_SAVE_KEEP_ORIGINAL,
-                                         WndMsg::ViewerTextDebugSaveFault::None,
-                                         true);
+    const HRESULT loadingHr = invokeSave(destinationPath, IDM_VIEWER_ENCODING_SAVE_KEEP_ORIGINAL, WndMsg::ViewerTextDebugSaveFault::None, true);
     Check(loadingHr == HRESULT_FROM_WIN32(ERROR_BUSY), L"ViewerText refuses Save As while loading before destination mutation", success);
     checkBytes(sourcePath, sourceBytes.value(), L"ViewerText loading refusal preserves source bytes");
     checkBytes(destinationPath, destinationBytes.value(), L"ViewerText loading refusal preserves pre-existing destination bytes");
@@ -7640,7 +7448,7 @@ private:
     closeViewer();
 
     std::string streamText;
-    constexpr size_t kStreamFixtureBytes = (2u * 1024u * 1024u) + 257u;
+    constexpr size_t kStreamFixtureBytes   = (2u * 1024u * 1024u) + 257u;
     constexpr std::string_view kStreamLine = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n";
     streamText.reserve(kStreamFixtureBytes + kStreamLine.size());
     while (streamText.size() < kStreamFixtureBytes)
@@ -7656,8 +7464,7 @@ private:
         return false;
     }
 
-    constexpr char kStreamConfiguration[] =
-        R"json({"textBufferMiB":1,"hexBufferMiB":8,"showLineNumbers":"0","wrapText":"1"})json";
+    constexpr char kStreamConfiguration[] = R"json({"textBufferMiB":1,"hexBufferMiB":8,"showLineNumbers":"0","wrapText":"1"})json";
     if (! openViewer(streamPath, kStreamConfiguration, true))
     {
         closeViewer();
@@ -7665,9 +7472,7 @@ private:
     }
 
     const HRESULT streamedReencodeHr = invokeSave(streamDestinationPath, IDM_VIEWER_ENCODING_SAVE_UTF8);
-    Check(streamedReencodeHr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED),
-          L"ViewerText refuses streamed re-encode before destination mutation",
-          success);
+    Check(streamedReencodeHr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED), L"ViewerText refuses streamed re-encode before destination mutation", success);
     checkBytes(streamPath, streamBytes.value(), L"ViewerText streamed re-encode refusal preserves source bytes");
     checkBytes(streamDestinationPath, destinationBytes.value(), L"ViewerText streamed re-encode refusal preserves pre-existing destination bytes");
     checkNoTemps();
@@ -7946,8 +7751,7 @@ private:
     sparsePaneDiffText += "\n+";
     sparsePaneDiffText.append(70000u, '\t');
     sparsePaneDiffText.push_back('\n');
-    const std::filesystem::path sparsePaneDiffPath =
-        WriteUtf8TextFile(tempDir / L"viewertext-sparse-pane-checkpoints.diff", sparsePaneDiffText);
+    const std::filesystem::path sparsePaneDiffPath = WriteUtf8TextFile(tempDir / L"viewertext-sparse-pane-checkpoints.diff", sparsePaneDiffText);
 
     auto cleanupTemp = wil::scope_exit([&]() noexcept
     {
@@ -8844,17 +8648,15 @@ private:
 
     WndMsg::ViewerTextDebugSnapshot sparsePaneSnapshot{};
     const bool sparsePaneReady = WaitForViewerTextSnapshot(viewerWindow,
-                                                            [](const WndMsg::ViewerTextDebugSnapshot& snapshot) noexcept
+                                                           [](const WndMsg::ViewerTextDebugSnapshot& snapshot) noexcept
     {
         return snapshot.documentKind == WndMsg::ViewerTextDebugDocumentKind::Diff && snapshot.diffParsedAvailable &&
                snapshot.diffPresentation == WndMsg::ViewerTextDebugDiffPresentation::SideBySide && snapshot.paneLocalSideBySideLayout &&
                snapshot.textSparseWrapActive && ! snapshot.textVisualLineCountExact && snapshot.builtLogicalLineCount > 0u;
     },
-                                                            10000ms,
-                                                            &sparsePaneSnapshot);
-    Check(sparsePaneReady,
-          L"ViewerText activates sparse side-by-side layout for a single huge unequal-width diff row",
-          success);
+                                                           10000ms,
+                                                           &sparsePaneSnapshot);
+    Check(sparsePaneReady, L"ViewerText activates sparse side-by-side layout for a single huge unequal-width diff row", success);
     const HWND sparsePaneTextView = FindWindowExW(viewerWindow, nullptr, kViewerTextViewWindowClassName, nullptr);
     Check(sparsePaneTextView != nullptr, L"ViewerText sparse pane checkpoint fixture exposes its text surface", success);
     bool foundSparseSplitRow = false;
@@ -8864,10 +8666,7 @@ private:
         const size_t logicalProbeCount = std::min<size_t>(sparsePaneSnapshot.builtLogicalLineCount, 32u);
         for (size_t logicalLine = 0u; logicalLine < logicalProbeCount; ++logicalLine)
         {
-            if (SendMessageW(viewerWindow,
-                             WndMsg::kViewerTextDebugClickTextLogicalLine,
-                             static_cast<WPARAM>(logicalLine),
-                             0u) == FALSE)
+            if (SendMessageW(viewerWindow, WndMsg::kViewerTextDebugClickTextLogicalLine, static_cast<WPARAM>(logicalLine), 0u) == FALSE)
             {
                 continue;
             }
@@ -8875,7 +8674,7 @@ private:
             if (TryGetViewerTextDebugSnapshot(viewerWindow, candidate) && candidate.topVisibleLogicalLine == logicalLine &&
                 candidate.topVisibleRightPaneColumnStart > candidate.topVisibleLeftPaneColumnStart)
             {
-                sparseSplitStart   = candidate;
+                sparseSplitStart    = candidate;
                 foundSparseSplitRow = true;
                 break;
             }
@@ -8890,15 +8689,9 @@ private:
                                        sparseSplitNext.topVisibleLogicalLine == sparseSplitStart.topVisibleLogicalLine &&
                                        sparseSplitNext.topVisibleLeftPaneColumnStart > sparseSplitStart.topVisibleLeftPaneColumnStart &&
                                        sparseSplitNext.topVisibleRightPaneColumnStart > sparseSplitStart.topVisibleRightPaneColumnStart;
-        const uint32_t leftDelta = advancedBothPanes
-                                       ? sparseSplitNext.topVisibleLeftPaneColumnStart - sparseSplitStart.topVisibleLeftPaneColumnStart
-                                       : 0u;
-        const uint32_t rightDelta = advancedBothPanes
-                                        ? sparseSplitNext.topVisibleRightPaneColumnStart - sparseSplitStart.topVisibleRightPaneColumnStart
-                                        : 0u;
-        Check(advancedBothPanes && leftDelta != rightDelta,
-              L"ViewerText advances unequal sparse diff panes with independent DirectWrite checkpoints",
-              success);
+        const uint32_t leftDelta     = advancedBothPanes ? sparseSplitNext.topVisibleLeftPaneColumnStart - sparseSplitStart.topVisibleLeftPaneColumnStart : 0u;
+        const uint32_t rightDelta = advancedBothPanes ? sparseSplitNext.topVisibleRightPaneColumnStart - sparseSplitStart.topVisibleRightPaneColumnStart : 0u;
+        Check(advancedBothPanes && leftDelta != rightDelta, L"ViewerText advances unequal sparse diff panes with independent DirectWrite checkpoints", success);
 
         static_cast<void>(SendMessageW(sparsePaneTextView, WM_VSCROLL, MAKEWPARAM(SB_LINEUP, 0u), 0u));
         WndMsg::ViewerTextDebugSnapshot sparseSplitRoundTrip{};
@@ -9000,11 +8793,11 @@ struct ViewerSpaceProviderDirectory final
 class ViewerSpaceSyntheticFilesInformation final : public IFilesInformation
 {
 public:
-    ViewerSpaceSyntheticFilesInformation(std::vector<std::byte> buffer,
-                                         unsigned long usedBytes,
-                                         unsigned long allocatedBytes,
-                                         unsigned long count) noexcept
-        : _buffer(std::move(buffer)), _usedBytes(usedBytes), _allocatedBytes(allocatedBytes), _count(count)
+    ViewerSpaceSyntheticFilesInformation(std::vector<std::byte> buffer, unsigned long usedBytes, unsigned long allocatedBytes, unsigned long count) noexcept
+        : _buffer(std::move(buffer)),
+          _usedBytes(usedBytes),
+          _allocatedBytes(allocatedBytes),
+          _count(count)
     {
     }
     ~ViewerSpaceSyntheticFilesInformation() = default;
@@ -9188,7 +8981,7 @@ private:
             {
                 return HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND);
             }
-            directory = it->second;
+            directory                  = it->second;
             _readCounts[requestedPath] = ViewerSpaceScan::SaturatingAdd(_readCounts[requestedPath], uint64_t{1u});
         }
         if (FAILED(directory.readResult))
@@ -9200,8 +8993,7 @@ private:
         for (const ViewerSpaceProviderEntry& source : directory.entries)
         {
             const size_t entrySize = EntrySize(source.name);
-            if (entrySize == 0u || ! ViewerSpaceScan::TryAddSize(totalBytes, entrySize, totalBytes) ||
-                totalBytes > (std::numeric_limits<unsigned long>::max)())
+            if (entrySize == 0u || ! ViewerSpaceScan::TryAddSize(totalBytes, entrySize, totalBytes) || totalBytes > (std::numeric_limits<unsigned long>::max)())
             {
                 return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
             }
@@ -9216,17 +9008,16 @@ private:
             auto* entry                            = reinterpret_cast<FileInfo*>(buffer.data() + offset);
             entry->FileIndex                       = source.index;
             entry->FileAttributes                  = source.attributes;
-            entry->EndOfFile                       = source.bytes > static_cast<uint64_t>((std::numeric_limits<__int64>::max)())
-                                                         ? (std::numeric_limits<__int64>::max)()
-                                                         : static_cast<__int64>(source.bytes);
-            entry->AllocationSize                  = entry->EndOfFile;
-            entry->FileNameSize                    = static_cast<unsigned long>(source.name.size() * sizeof(wchar_t));
+            entry->EndOfFile      = source.bytes > static_cast<uint64_t>((std::numeric_limits<__int64>::max)()) ? (std::numeric_limits<__int64>::max)()
+                                                                                                                : static_cast<__int64>(source.bytes);
+            entry->AllocationSize = entry->EndOfFile;
+            entry->FileNameSize   = static_cast<unsigned long>(source.name.size() * sizeof(wchar_t));
             if (! source.name.empty())
             {
                 std::memcpy(entry->FileName, source.name.data(), entry->FileNameSize);
             }
             entry->FileName[source.name.size()] = L'\0';
-            entry->NextEntryOffset = index + 1u < directory.entries.size() ? static_cast<unsigned long>(entrySize) : 0u;
+            entry->NextEntryOffset              = index + 1u < directory.entries.size() ? static_cast<unsigned long>(entrySize) : 0u;
             offset += entrySize;
         }
 
@@ -9252,7 +9043,7 @@ private:
             default: break;
         }
 
-        auto result = std::make_unique<ViewerSpaceSyntheticFilesInformation>(std::move(buffer), usedBytes, allocatedBytes, count);
+        auto result       = std::make_unique<ViewerSpaceSyntheticFilesInformation>(std::move(buffer), usedBytes, allocatedBytes, count);
         *filesInformation = result.release();
         return S_OK;
     }
@@ -9266,7 +9057,7 @@ private:
 
 [[nodiscard]] bool TestViewerSpaceScanPolicyHelpers() noexcept
 {
-    bool success = true;
+    bool success                           = true;
     ViewerSpaceScan::ResourcePolicy policy = ViewerSpaceScan::kProductionResourcePolicy;
     policy.maxProviderBufferBytes          = 1024u;
     policy.maxProviderEntriesPerFolder     = 4u;
@@ -9288,7 +9079,7 @@ private:
         return false;
     }
 
-    FileInfo* buffer              = nullptr;
+    FileInfo* buffer             = nullptr;
     unsigned long usedBytes      = 0u;
     unsigned long allocatedBytes = 0u;
     unsigned long count          = 0u;
@@ -9312,19 +9103,16 @@ private:
           L"ViewerSpace provider parser accepts the first aligned record",
           success);
     ViewerSpaceScan::ProviderEntryView second{};
-    const ValidationError secondError = firstError == ValidationError::None
-                                            ? ViewerSpaceScan::ValidateProviderEntry(bytes, first.nextOffset, policy, second)
-                                            : ValidationError::TruncatedHeader;
+    const ValidationError secondError = firstError == ValidationError::None ? ViewerSpaceScan::ValidateProviderEntry(bytes, first.nextOffset, policy, second)
+                                                                            : ValidationError::TruncatedHeader;
     Check(secondError == ValidationError::None && second.name == L"file.bin" && second.isLast,
           L"ViewerSpace provider parser reaches the exact terminal record",
           success);
-    Check(secondError == ValidationError::None &&
-              ViewerSpaceScan::ValidateProviderTerminalExtent(bytes, first.nextOffset, second) == ValidationError::None,
+    Check(secondError == ValidationError::None && ViewerSpaceScan::ValidateProviderTerminalExtent(bytes, first.nextOffset, second) == ValidationError::None,
           L"ViewerSpace provider parser reconciles the terminal record extent with used bytes",
           success);
 
-    Check(ViewerSpaceScan::ValidateProviderBufferContract(buffer, usedBytes, usedBytes - 1u, count, policy) ==
-              ValidationError::UsedExceedsAllocated,
+    Check(ViewerSpaceScan::ValidateProviderBufferContract(buffer, usedBytes, usedBytes - 1u, count, policy) == ValidationError::UsedExceedsAllocated,
           L"ViewerSpace provider contract rejects used bytes beyond allocation",
           success);
     Check(ViewerSpaceScan::ValidateProviderBufferContract(buffer, usedBytes, allocatedBytes, policy.maxProviderEntriesPerFolder + 1u, policy) ==
@@ -9342,12 +9130,10 @@ private:
               ViewerSpaceScan::ValidateProviderChildName(std::wstring_view(L"bad\0name", 8u)) == ValidationError::UnsafeName,
           L"ViewerSpace child-name policy rejects path injection, cycles, and embedded NULs",
           success);
-    Check(ViewerSpaceScan::SaturatingAdd((std::numeric_limits<uint64_t>::max)() - 2u, uint64_t{9u}) ==
-              (std::numeric_limits<uint64_t>::max)(),
+    Check(ViewerSpaceScan::SaturatingAdd((std::numeric_limits<uint64_t>::max)() - 2u, uint64_t{9u}) == (std::numeric_limits<uint64_t>::max)(),
           L"ViewerSpace accounting saturates instead of wrapping",
           success);
-    Check(ViewerSpaceScan::kProductionResourcePolicy.maxChildArenaSlots >=
-              ViewerSpaceScan::kProductionResourcePolicy.maxChildReferences * 4u,
+    Check(ViewerSpaceScan::kProductionResourcePolicy.maxChildArenaSlots >= ViewerSpaceScan::kProductionResourcePolicy.maxChildReferences * 4u,
           L"ViewerSpace child arena covers geometric live blocks plus every predecessor block at the child-reference ceiling",
           success);
 
@@ -9411,12 +9197,10 @@ private:
         return false;
     }
 
-    constexpr wchar_t kSmallPolicyEnv[] = L"REDSALAMANDER_VIEWERSPACE_FORCE_SMALL_SCAN_POLICY";
+    constexpr wchar_t kSmallPolicyEnv[]    = L"REDSALAMANDER_VIEWERSPACE_FORCE_SMALL_SCAN_POLICY";
     const std::wstring previousSmallPolicy = GetEnvironmentString(kSmallPolicyEnv);
-    auto restoreEnvironment = wil::scope_exit([&]() noexcept
-    {
-        static_cast<void>(SetEnvironmentVariableW(kSmallPolicyEnv, previousSmallPolicy.empty() ? nullptr : previousSmallPolicy.c_str()));
-    });
+    auto restoreEnvironment                = wil::scope_exit([&]() noexcept
+    { static_cast<void>(SetEnvironmentVariableW(kSmallPolicyEnv, previousSmallPolicy.empty() ? nullptr : previousSmallPolicy.c_str())); });
     static_cast<void>(SetEnvironmentVariableW(kSmallPolicyEnv, L"1"));
 
     const auto runScenario = [&](ViewerSpaceSyntheticProvider& provider,
@@ -9457,7 +9241,7 @@ private:
         context.focusedPath    = rootPath.c_str();
 
         const std::vector<HWND> existingWindows = CollectVisibleWindowsByClass(kViewerSpaceWindowClassName);
-        const HRESULT openHr = viewer->Open(&context);
+        const HRESULT openHr                    = viewer->Open(&context);
         Check(SUCCEEDED(openHr), std::format(L"{} opens", label), success);
         if (FAILED(openHr))
         {
@@ -9495,24 +9279,23 @@ private:
         Check(settled, std::format(L"{} reaches a stable terminal model", label), success);
         if (! settled)
         {
-            std::wcout << std::format(L"[INFO] {} final snapshot: state={}, pending={}, validation={}, realDirs={}, traversed={}, rootBytes={}, folders={}, files={}\n",
-                                      label,
-                                      static_cast<uint32_t>(snapshot.scanState),
-                                      snapshot.pendingQueueCount,
-                                      snapshot.modelValidationError,
-                                      snapshot.realDirectoryCount,
-                                      snapshot.modelTraversedDirectories,
-                                      snapshot.rootTotalBytes,
-                                      snapshot.scannedFolders,
-                                      snapshot.scannedFiles);
+            std::wcout << std::format(
+                L"[INFO] {} final snapshot: state={}, pending={}, validation={}, realDirs={}, traversed={}, rootBytes={}, folders={}, files={}\n",
+                label,
+                static_cast<uint32_t>(snapshot.scanState),
+                snapshot.pendingQueueCount,
+                snapshot.modelValidationError,
+                snapshot.realDirectoryCount,
+                snapshot.modelTraversedDirectories,
+                snapshot.rootTotalBytes,
+                snapshot.scannedFolders,
+                snapshot.scannedFiles);
         }
         inspect(snapshot, viewerWindow);
 
         const HRESULT closeHr = viewer->Close();
         Check(SUCCEEDED(closeHr), std::format(L"{} closes", label), success);
-        Check(PumpUntil([&]() noexcept { return IsWindow(viewerWindow) == FALSE; }, 5000ms),
-              std::format(L"{} destroys its window", label),
-              success);
+        Check(PumpUntil([&]() noexcept { return IsWindow(viewerWindow) == FALSE; }, 5000ms), std::format(L"{} destroys its window", label), success);
     };
 
     ViewerSpaceSyntheticProvider wideProvider;
@@ -9535,8 +9318,8 @@ private:
         Check(snapshot.rootTotalBytes == 210u && snapshot.scannedFolders == 6u && snapshot.scannedFiles == 6u,
               L"Wide capped scan preserves exact rolled-up totals and counts",
               success);
-        Check(snapshot.realDirectoryCount == 4u && snapshot.fileCandidateCount == 3u && snapshot.aggregateFolders == 3u &&
-                  snapshot.aggregateFiles == 3u && snapshot.aggregateBytes == 150u,
+        Check(snapshot.realDirectoryCount == 4u && snapshot.fileCandidateCount == 3u && snapshot.aggregateFolders == 3u && snapshot.aggregateFiles == 3u &&
+                  snapshot.aggregateBytes == 150u,
               L"Wide capped scan itemizes only the tiny policy and aggregates the omitted subtrees exactly",
               success);
         Check(snapshot.childReferenceCount <= 8u && snapshot.childArenaSlots == 10u && snapshot.childArenaFreeSlots == 0u &&
@@ -9568,20 +9351,22 @@ private:
                 WndMsg::ViewerSpacePerfScanState::Error,
                 [&](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot, HWND) noexcept
     {
-        Check(snapshot.modelValidationError == static_cast<uint32_t>(ViewerSpaceScan::ValidationError::DepthLimit) &&
-                  snapshot.realDirectoryCount <= 4u && snapshot.childArenaSlots <= snapshot.modelChildArenaSlotLimit,
+        Check(snapshot.modelValidationError == static_cast<uint32_t>(ViewerSpaceScan::ValidationError::DepthLimit) && snapshot.realDirectoryCount <= 4u &&
+                  snapshot.childArenaSlots <= snapshot.modelChildArenaSlotLimit,
               L"Deep provider traversal stops at the deterministic depth cap without unbounded model growth",
               success);
     });
 
-    const auto runRejectedRoot = [&](std::wstring root,
-                                     ViewerSpaceProviderDirectory directory,
-                                     ViewerSpaceScan::ValidationError expectedError,
-                                     std::wstring_view label) noexcept
+    const auto runRejectedRoot =
+        [&](std::wstring root, ViewerSpaceProviderDirectory directory, ViewerSpaceScan::ValidationError expectedError, std::wstring_view label) noexcept
     {
         ViewerSpaceSyntheticProvider provider;
         provider.AddDirectory(root, std::move(directory));
-        runScenario(provider, std::move(root), label, WndMsg::ViewerSpacePerfScanState::Error, [&](const auto& snapshot, HWND) noexcept
+        runScenario(provider,
+                    std::move(root),
+                    label,
+                    WndMsg::ViewerSpacePerfScanState::Error,
+                    [&](const auto& snapshot, HWND) noexcept
         {
             Check(snapshot.modelValidationError == static_cast<uint32_t>(expectedError) && snapshot.modelRejectedEntries > 0u &&
                       snapshot.realDirectoryCount <= snapshot.modelRetainedDirectoryLimit,
@@ -9609,8 +9394,8 @@ private:
                 WndMsg::ViewerSpacePerfScanState::Error,
                 [&](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot, HWND) noexcept
     {
-        Check(snapshot.modelValidationError == static_cast<uint32_t>(ViewerSpaceScan::ValidationError::AncestorCycle) &&
-                  snapshot.modelRejectedEntries > 0u && aliasCycleProvider.ReadCount(L"V:\\alias-cycle\\branch\\back") == 0u,
+        Check(snapshot.modelValidationError == static_cast<uint32_t>(ViewerSpaceScan::ValidationError::AncestorCycle) && snapshot.modelRejectedEntries > 0u &&
+                  aliasCycleProvider.ReadCount(L"V:\\alias-cycle\\branch\\back") == 0u,
               L"ViewerSpace rejects a repeated nonzero provider identity before descending through an ancestor alias",
               success);
     });
@@ -9619,10 +9404,8 @@ private:
     misalignedDirectory.entries.push_back(ViewerSpaceProviderEntry{L"one.bin", 1u, FILE_ATTRIBUTE_NORMAL, 1u});
     misalignedDirectory.entries.push_back(ViewerSpaceProviderEntry{L"two.bin", 2u, FILE_ATTRIBUTE_NORMAL, 2u});
     misalignedDirectory.fault = ViewerSpaceProviderFault::MisalignedNextOffset;
-    runRejectedRoot(L"V:\\misaligned",
-                    std::move(misalignedDirectory),
-                    ViewerSpaceScan::ValidationError::InvalidNextOffset,
-                    L"ViewerSpace misaligned provider buffer");
+    runRejectedRoot(
+        L"V:\\misaligned", std::move(misalignedDirectory), ViewerSpaceScan::ValidationError::InvalidNextOffset, L"ViewerSpace misaligned provider buffer");
 
     ViewerSpaceProviderDirectory countDirectory;
     countDirectory.entries.push_back(ViewerSpaceProviderEntry{L"only.bin", 1u, FILE_ATTRIBUTE_NORMAL, 1u});
@@ -9632,10 +9415,8 @@ private:
     ViewerSpaceProviderDirectory truncatedDirectory;
     truncatedDirectory.entries.push_back(ViewerSpaceProviderEntry{L"truncated.bin", 1u, FILE_ATTRIBUTE_NORMAL, 1u});
     truncatedDirectory.fault = ViewerSpaceProviderFault::TruncatedUsedBytes;
-    runRejectedRoot(L"V:\\truncated",
-                    std::move(truncatedDirectory),
-                    ViewerSpaceScan::ValidationError::TruncatedHeader,
-                    L"ViewerSpace truncated used-buffer bytes");
+    runRejectedRoot(
+        L"V:\\truncated", std::move(truncatedDirectory), ViewerSpaceScan::ValidationError::TruncatedHeader, L"ViewerSpace truncated used-buffer bytes");
 
     ViewerSpaceProviderDirectory allocatedTooSmallDirectory;
     allocatedTooSmallDirectory.entries.push_back(ViewerSpaceProviderEntry{L"allocation.bin", 1u, FILE_ATTRIBUTE_NORMAL, 1u});
@@ -9666,14 +9447,12 @@ private:
     duplicateDirectory.entries.push_back(ViewerSpaceProviderEntry{L"two.bin", 2u, FILE_ATTRIBUTE_NORMAL, 7u});
     runRejectedRoot(L"V:\\duplicate", std::move(duplicateDirectory), ViewerSpaceScan::ValidationError::DuplicateId, L"ViewerSpace duplicate provider id");
 
-    constexpr wchar_t kNextModelIdEnv[] = L"REDSALAMANDER_VIEWERSPACE_TEST_NEXT_MODEL_ID";
+    constexpr wchar_t kNextModelIdEnv[]    = L"REDSALAMANDER_VIEWERSPACE_TEST_NEXT_MODEL_ID";
     const std::wstring previousNextModelId = GetEnvironmentString(kNextModelIdEnv);
     static_cast<void>(SetEnvironmentVariableW(kNextModelIdEnv, L"1073741823"));
     {
         auto restoreNextModelId = wil::scope_exit([&]() noexcept
-        {
-            static_cast<void>(SetEnvironmentVariableW(kNextModelIdEnv, previousNextModelId.empty() ? nullptr : previousNextModelId.c_str()));
-        });
+        { static_cast<void>(SetEnvironmentVariableW(kNextModelIdEnv, previousNextModelId.empty() ? nullptr : previousNextModelId.c_str())); });
         ViewerSpaceSyntheticProvider exhaustedProvider;
         ViewerSpaceProviderDirectory exhaustedDirectory;
         exhaustedDirectory.entries.push_back(ViewerSpaceProviderEntry{L"child-a", 0u, FILE_ATTRIBUTE_DIRECTORY, 1u});
@@ -9685,19 +9464,18 @@ private:
                     WndMsg::ViewerSpacePerfScanState::Error,
                     [&](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot, HWND) noexcept
         {
-            Check(snapshot.modelValidationError == static_cast<uint32_t>(ViewerSpaceScan::ValidationError::ItemIdLimit) &&
-                      snapshot.realDirectoryCount == 1u && snapshot.childReferenceCount == 0u &&
-                      snapshot.modelRetainedChildReferences == 0u && snapshot.modelTraversedDirectories == 1u &&
+            Check(snapshot.modelValidationError == static_cast<uint32_t>(ViewerSpaceScan::ValidationError::ItemIdLimit) && snapshot.realDirectoryCount == 1u &&
+                      snapshot.childReferenceCount == 0u && snapshot.modelRetainedChildReferences == 0u && snapshot.modelTraversedDirectories == 1u &&
                       snapshot.modelRetainedNameBytes == std::wstring_view(L"V:\\item-id-exhaustion").size() * sizeof(wchar_t),
                   L"ViewerSpace preflights the whole directory-id range before retaining or publishing any child",
                   success);
         });
     }
 
-    constexpr wchar_t kMaxOutstandingEnv[] = L"REDSALAMANDER_VIEWERSPACE_TEST_MAX_OUTSTANDING_DIRECTORIES";
+    constexpr wchar_t kMaxOutstandingEnv[]         = L"REDSALAMANDER_VIEWERSPACE_TEST_MAX_OUTSTANDING_DIRECTORIES";
     constexpr wchar_t kMaxRetainedDirectoriesEnv[] = L"REDSALAMANDER_VIEWERSPACE_TEST_MAX_RETAINED_DIRECTORIES";
-    const std::wstring previousMaxOutstanding = GetEnvironmentString(kMaxOutstandingEnv);
-    const std::wstring previousMaxRetained     = GetEnvironmentString(kMaxRetainedDirectoriesEnv);
+    const std::wstring previousMaxOutstanding      = GetEnvironmentString(kMaxOutstandingEnv);
+    const std::wstring previousMaxRetained         = GetEnvironmentString(kMaxRetainedDirectoriesEnv);
     static_cast<void>(SetEnvironmentVariableW(kMaxOutstandingEnv, L"4"));
     static_cast<void>(SetEnvironmentVariableW(kMaxRetainedDirectoriesEnv, L"8"));
     {
@@ -9727,8 +9505,8 @@ private:
                     [&](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot, HWND) noexcept
         {
             Check(snapshot.modelValidationError == static_cast<uint32_t>(ViewerSpaceScan::ValidationError::OutstandingLimit) &&
-                      snapshot.realDirectoryCount == 4u && snapshot.childReferenceCount == 3u &&
-                      snapshot.modelRetainedChildReferences == 3u && snapshot.modelTraversedDirectories == 4u &&
+                      snapshot.realDirectoryCount == 4u && snapshot.childReferenceCount == 3u && snapshot.modelRetainedChildReferences == 3u &&
+                      snapshot.modelTraversedDirectories == 4u &&
                       snapshot.modelRetainedNameBytes == (std::wstring_view(L"V:\\outstanding").size() + 6u) * sizeof(wchar_t) &&
                       outstandingProvider.ReadCount(L"V:\\outstanding\\d0\\nested") == 0u,
                   L"ViewerSpace counts ancestor completions and publishes no child before outstanding admission",
@@ -9740,8 +9518,8 @@ private:
     ViewerSpaceProviderDirectory overflowDirectory;
     for (uint32_t index = 0u; index < 3u; ++index)
     {
-        overflowDirectory.entries.push_back(
-            ViewerSpaceProviderEntry{std::format(L"huge{}.bin", index), static_cast<uint64_t>((std::numeric_limits<__int64>::max)()), FILE_ATTRIBUTE_NORMAL, index + 1u});
+        overflowDirectory.entries.push_back(ViewerSpaceProviderEntry{
+            std::format(L"huge{}.bin", index), static_cast<uint64_t>((std::numeric_limits<__int64>::max)()), FILE_ATTRIBUTE_NORMAL, index + 1u});
     }
     overflowProvider.AddDirectory(L"V:\\overflow", std::move(overflowDirectory));
     runScenario(overflowProvider,
@@ -9800,7 +9578,9 @@ private:
 struct ViewerSpaceBlockingDirectoryControl final
 {
     ViewerSpaceBlockingDirectoryControl()
-        : entered(CreateEventW(nullptr, TRUE, FALSE, nullptr)), release(CreateEventW(nullptr, TRUE, FALSE, nullptr)), exited(CreateEventW(nullptr, TRUE, FALSE, nullptr))
+        : entered(CreateEventW(nullptr, TRUE, FALSE, nullptr)),
+          release(CreateEventW(nullptr, TRUE, FALSE, nullptr)),
+          exited(CreateEventW(nullptr, TRUE, FALSE, nullptr))
     {
     }
     ViewerSpaceBlockingDirectoryControl(const ViewerSpaceBlockingDirectoryControl&)            = delete;
@@ -9830,7 +9610,7 @@ HRESULT ViewerSpaceBlockingDirectoryRead(void* context, const wchar_t* /*path*/,
     *filesInformation = nullptr;
     control->calls.fetch_add(1u, std::memory_order_acq_rel);
     static_cast<void>(SetEvent(control->entered.get()));
-    const auto signalExit = wil::scope_exit([control]() noexcept { static_cast<void>(SetEvent(control->exited.get())); });
+    const auto signalExit  = wil::scope_exit([control]() noexcept { static_cast<void>(SetEvent(control->exited.get())); });
     const DWORD waitResult = WaitForSingleObject(control->release.get(), 30000u);
     if (waitResult != WAIT_OBJECT_0)
     {
@@ -9886,14 +9666,14 @@ HRESULT ViewerSpaceBlockingDirectoryRead(void* context, const wchar_t* /*path*/,
         return false;
     }
 
-    const FARPROC createProc    = GetProcAddress(pluginModule.get(), "RedSalamanderCreate");
-    const FARPROC shutdownProc  = GetProcAddress(pluginModule.get(), "RedSalamanderPluginShutdown");
-    const FARPROC canUnloadProc = GetProcAddress(pluginModule.get(), "RedSalamanderPluginCanUnloadNow");
+    const FARPROC createProc       = GetProcAddress(pluginModule.get(), "RedSalamanderCreate");
+    const FARPROC shutdownProc     = GetProcAddress(pluginModule.get(), "RedSalamanderPluginShutdown");
+    const FARPROC canUnloadProc    = GetProcAddress(pluginModule.get(), "RedSalamanderPluginCanUnloadNow");
     RedSalamanderCreateFn createFn = nullptr;
-    using PluginShutdownFn = void(__stdcall*)();
-    using PluginCanUnloadFn = BOOL(__stdcall*)();
-    PluginShutdownFn shutdownFn   = nullptr;
-    PluginCanUnloadFn canUnloadFn = nullptr;
+    using PluginShutdownFn         = void(__stdcall*)();
+    using PluginCanUnloadFn        = BOOL(__stdcall*)();
+    PluginShutdownFn shutdownFn    = nullptr;
+    PluginCanUnloadFn canUnloadFn  = nullptr;
     static_assert(sizeof(createFn) == sizeof(createProc));
     static_assert(sizeof(shutdownFn) == sizeof(shutdownProc));
     static_assert(sizeof(canUnloadFn) == sizeof(canUnloadProc));
@@ -9935,19 +9715,20 @@ HRESULT ViewerSpaceBlockingDirectoryRead(void* context, const wchar_t* /*path*/,
 
         const std::wstring rootPath = L"V:\\race";
         ViewerOpenContext context{};
-        context.fileSystem     = static_cast<IFileSystem*>(&fileSystem);
-        context.fileSystemName = L"Synthetic";
-        context.focusedPath    = rootPath.c_str();
+        context.fileSystem                      = static_cast<IFileSystem*>(&fileSystem);
+        context.fileSystemName                  = L"Synthetic";
+        context.focusedPath                     = rootPath.c_str();
         const std::vector<HWND> existingWindows = CollectVisibleWindowsByClass(kViewerSpaceWindowClassName);
         Check(viewer && SUCCEEDED(viewer->Open(&context)), L"ViewerSpace opens the PostUpdate race fixture", success);
 
         HWND window = nullptr;
-        Check(PumpUntil([&]() noexcept
+        Check(PumpUntil(
+                  [&]() noexcept
         {
             window = FindNewVisibleWindowByClass(kViewerSpaceWindowClassName, existingWindows);
             return window != nullptr;
         },
-                        8000ms),
+                  8000ms),
               L"ViewerSpace PostUpdate race window becomes visible",
               success);
 
@@ -9966,32 +9747,32 @@ HRESULT ViewerSpaceBlockingDirectoryRead(void* context, const wchar_t* /*path*/,
         static_cast<void>(SetEvent(pauseRelease.get()));
 
         WndMsg::ViewerSpacePerfDebugSnapshot raceSnapshot{};
-        Check(PumpUntil([&]() noexcept
+        Check(PumpUntil(
+                  [&]() noexcept
         {
             raceSnapshot = {};
             return window && SendMessageW(window, WndMsg::kViewerSpaceDebugGetPerfSnapshot, 0u, reinterpret_cast<LPARAM>(&raceSnapshot)) == TRUE &&
                    raceSnapshot.postUpdateInnerGenerationRejects >= 1u && raceSnapshot.scanState == WndMsg::ViewerSpacePerfScanState::Done &&
                    raceSnapshot.pendingQueueCount == 0u && raceSnapshot.pendingQueueBytes == 0u;
         },
-                        10000ms),
+                  10000ms),
               L"ViewerSpace inner generation check rejects the resumed stale update with an empty queue",
               success);
         if (viewer)
         {
             static_cast<void>(viewer->Close());
         }
-        Check(! window || PumpUntil([&]() noexcept { return IsWindow(window) == FALSE; }, 5000ms),
-              L"ViewerSpace PostUpdate race window closes cleanly",
-              success);
+        Check(
+            ! window || PumpUntil([&]() noexcept { return IsWindow(window) == FALSE; }, 5000ms), L"ViewerSpace PostUpdate race window closes cleanly", success);
     }
 
     struct CloseCounter final : IViewerCallback
     {
-        CloseCounter()                                      = default;
-        CloseCounter(const CloseCounter&)                    = delete;
-        CloseCounter(CloseCounter&&)                         = delete;
-        CloseCounter& operator=(const CloseCounter&)         = delete;
-        CloseCounter& operator=(CloseCounter&&)              = delete;
+        CloseCounter()                               = default;
+        CloseCounter(const CloseCounter&)            = delete;
+        CloseCounter(CloseCounter&&)                 = delete;
+        CloseCounter& operator=(const CloseCounter&) = delete;
+        CloseCounter& operator=(CloseCounter&&)      = delete;
         HRESULT STDMETHODCALLTYPE ViewerClosed(void* cookie) noexcept override
         {
             cookieMatched.store(cookie == this, std::memory_order_release);
@@ -10020,19 +9801,20 @@ HRESULT ViewerSpaceBlockingDirectoryRead(void* context, const wchar_t* /*path*/,
 
     const std::wstring blockedPath = L"V:\\blocked";
     ViewerOpenContext blockedContext{};
-    blockedContext.fileSystem     = static_cast<IFileSystem*>(&blockedFileSystem);
-    blockedContext.fileSystemName = L"Synthetic";
-    blockedContext.focusedPath    = blockedPath.c_str();
+    blockedContext.fileSystem                      = static_cast<IFileSystem*>(&blockedFileSystem);
+    blockedContext.fileSystemName                  = L"Synthetic";
+    blockedContext.focusedPath                     = blockedPath.c_str();
     const std::vector<HWND> existingBlockedWindows = CollectVisibleWindowsByClass(kViewerSpaceWindowClassName);
     Check(SUCCEEDED(blockedViewer->Open(&blockedContext)), L"ViewerSpace opens the blocked provider fixture", success);
 
     HWND blockedWindow = nullptr;
-    Check(PumpUntil([&]() noexcept
+    Check(PumpUntil(
+              [&]() noexcept
     {
         blockedWindow = FindNewVisibleWindowByClass(kViewerSpaceWindowClassName, existingBlockedWindows);
         return blockedWindow && WaitForSingleObject(block.entered.get(), 0u) == WAIT_OBJECT_0;
     },
-                    8000ms),
+              8000ms),
           L"ViewerSpace reaches blocked ReadDirectoryInfo while its window remains responsive",
           success);
 
@@ -10059,9 +9841,7 @@ HRESULT ViewerSpaceBlockingDirectoryRead(void* context, const wchar_t* /*path*/,
     Check(PumpUntil([&]() noexcept { return blockedFileSystem.GetReferenceCount() == 1u; }, 8000ms),
           L"ViewerSpace worker and provider self-references retire exactly once after unblock",
           success);
-    Check(canUnloadFn() == FALSE,
-          L"ViewerSpace intentionally quarantines same-path runtime reload for the process after forced abandonment",
-          success);
+    Check(canUnloadFn() == FALSE, L"ViewerSpace intentionally quarantines same-path runtime reload for the process after forced abandonment", success);
     Check(closeCounter.count.load(std::memory_order_acquire) == 1u, L"ViewerSpace does not report a second close after worker retirement", success);
     return success;
 #endif
@@ -10275,9 +10055,9 @@ HRESULT ViewerSpaceBlockingDirectoryRead(void* context, const wchar_t* /*path*/,
     ViewerOpenContext context{};
     context.focusedPath = samplePathText.c_str();
 
-    const auto installedVlc                    = FindInstalledVlcForLoaderTest();
+    const auto installedVlc                   = FindInstalledVlcForLoaderTest();
     const std::wstring dllDirectoryBeforeOpen = ReadProcessDllDirectoryForTest();
-    const HRESULT openHr = viewer->Open(&context);
+    const HRESULT openHr                      = viewer->Open(&context);
     Check(SUCCEEDED(openHr), L"ViewerVLC window open succeeds", success);
     if (FAILED(openHr))
     {
@@ -10299,8 +10079,8 @@ HRESULT ViewerSpaceBlockingDirectoryRead(void* context, const wchar_t* /*path*/,
         return false;
     }
 
-    HWND videoWindow = nullptr;
-    HWND hudWindow   = nullptr;
+    HWND videoWindow                = nullptr;
+    HWND hudWindow                  = nullptr;
     const bool visibleSurfacesReady = PumpUntil(
         [&]() noexcept
     {
@@ -10352,9 +10132,7 @@ HRESULT ViewerSpaceBlockingDirectoryRead(void* context, const wchar_t* /*path*/,
         Check(loadSnapshot.vlcModuleLoaded, L"ViewerVLC loads libvlc.dll with its sibling dependencies", success);
         Check(loadSnapshot.vlcInstanceLoaded, L"ViewerVLC creates a libVLC instance", success);
         Check(loadSnapshot.vlcPlayerCreated && ! loadSnapshot.missingVisible, L"ViewerVLC starts playback for the valid WAV fixture", success);
-        Check(ReadProcessDllDirectoryForTest() == dllDirectoryBeforeOpen,
-              L"ViewerVLC dependency loading leaves the process DLL directory unchanged",
-              success);
+        Check(ReadProcessDllDirectoryForTest() == dllDirectoryBeforeOpen, L"ViewerVLC dependency loading leaves the process DLL directory unchanged", success);
     }
     else
     {
@@ -10372,7 +10150,8 @@ HRESULT ViewerSpaceBlockingDirectoryRead(void* context, const wchar_t* /*path*/,
         bool videoFocusReady               = productRoutedVideoFocus;
         if (! videoFocusReady)
         {
-            std::wcout << L"[INFO] ViewerVLC did not route parent focus into the video surface; using the explicit video-focus fallback for keyboard-contract coverage.\n";
+            std::wcout << L"[INFO] ViewerVLC did not route parent focus into the video surface; using the explicit video-focus fallback for keyboard-contract "
+                          L"coverage.\n";
             static_cast<void>(SetFocus(videoWindow));
             videoFocusReady = PumpUntil([&]() noexcept { return GetFocus() == videoWindow; }, 2000ms);
         }
@@ -10511,9 +10290,7 @@ HRESULT ViewerSpaceBlockingDirectoryRead(void* context, const wchar_t* /*path*/,
 
     constexpr char kMaxUnsignedJson[] =
         R"json({"fileCachingMs":18446744073709551615,"networkCachingMs":18446744073709551615,"defaultPlaybackRatePercent":18446744073709551615,"lastVolumePercent":18446744073709551615})json";
-    Check(SUCCEEDED(informations->SetConfiguration(kMaxUnsignedJson)),
-          L"ViewerVLC clamps maximum unsigned JSON values before narrowing",
-          success);
+    Check(SUCCEEDED(informations->SetConfiguration(kMaxUnsignedJson)), L"ViewerVLC clamps maximum unsigned JSON values before narrowing", success);
     const char* clampedJson = nullptr;
     Check(SUCCEEDED(informations->GetConfiguration(&clampedJson)) && clampedJson != nullptr,
           L"ViewerVLC returns the safely clamped unsigned configuration",
@@ -10559,11 +10336,11 @@ HRESULT ViewerSpaceBlockingDirectoryRead(void* context, const wchar_t* /*path*/,
 
     struct CloseCounter final : IViewerCallback
     {
-        CloseCounter()                                   = default;
-        CloseCounter(const CloseCounter&)                = delete;
-        CloseCounter(CloseCounter&&)                     = delete;
-        CloseCounter& operator=(const CloseCounter&)     = delete;
-        CloseCounter& operator=(CloseCounter&&)          = delete;
+        CloseCounter()                               = default;
+        CloseCounter(const CloseCounter&)            = delete;
+        CloseCounter(CloseCounter&&)                 = delete;
+        CloseCounter& operator=(const CloseCounter&) = delete;
+        CloseCounter& operator=(CloseCounter&&)      = delete;
 
         HRESULT STDMETHODCALLTYPE ViewerClosed(void* cookie) noexcept override
         {
@@ -10711,7 +10488,7 @@ HRESULT ViewerSpaceBlockingDirectoryRead(void* context, const wchar_t* /*path*/,
     Check(SendMessageW(viewerWindow, WndMsg::kViewerVlcDebugSetAsyncControl, 0, reinterpret_cast<LPARAM>(&asyncControl)) != FALSE,
           L"ViewerVLC debug hook arms a deterministic loader-submit failure",
           success);
-    const uint64_t rejectedBefore = snapshot.loadQueueRejected;
+    const uint64_t rejectedBefore     = snapshot.loadQueueRejected;
     const auto submitFailureStartedAt = std::chrono::steady_clock::now();
     const HRESULT submitFailureOpenHr = viewer->Open(&context);
     const uint64_t submitFailureReturnUs =
@@ -10728,7 +10505,7 @@ HRESULT ViewerSpaceBlockingDirectoryRead(void* context, const wchar_t* /*path*/,
         5000ms);
     Check(submitFailureTerminal, L"ViewerVLC posts a terminal UI error after loader-submit failure", success);
 
-    const uint64_t loadPostFallbacksBefore = snapshot.loadPostFallbacks;
+    const uint64_t loadPostFallbacksBefore  = snapshot.loadPostFallbacks;
     const uint64_t postFailuresBefore       = snapshot.asyncResultPostFailures;
     asyncControl                            = {};
     asyncControl.failNextLoadCompletionPost = true;
@@ -10746,10 +10523,10 @@ HRESULT ViewerSpaceBlockingDirectoryRead(void* context, const wchar_t* /*path*/,
         5000ms);
     Check(loadPostFallbackTerminal, L"ViewerVLC load-completion post failure reaches the identity-bound terminal UI fallback", success);
 
-    const uint64_t staleBefore = snapshot.staleLoadResults;
+    const uint64_t staleBefore    = snapshot.staleLoadResults;
     const uint64_t acceptedBefore = snapshot.loadQueueAccepted;
-    asyncControl                    = {};
-    asyncControl.loadDelayMs        = 250;
+    asyncControl                  = {};
+    asyncControl.loadDelayMs      = 250;
     static_cast<void>(SendMessageW(viewerWindow, WndMsg::kViewerVlcDebugSetAsyncControl, 0, reinterpret_cast<LPARAM>(&asyncControl)));
     Check(SUCCEEDED(viewer->Open(&context)) && SUCCEEDED(viewer->Open(&context)), L"ViewerVLC accepts rapid superseding delayed opens", success);
     const bool staleRequestRejected = PumpUntil(
@@ -10824,20 +10601,20 @@ HRESULT ViewerSpaceBlockingDirectoryRead(void* context, const wchar_t* /*path*/,
     Check(SendMessageW(viewerWindow, WndMsg::kViewerVlcDebugSetStopDelay, 0, reinterpret_cast<LPARAM>(&stopDelay)) != FALSE,
           L"ViewerVLC debug hook arms delayed stop/release",
           success);
-    const uint64_t cleanupPostFallbacksBefore = snapshot.cleanupPostFallbacks;
-    const uint64_t closePostFailuresBefore    = snapshot.asyncResultPostFailures;
+    const uint64_t cleanupPostFallbacksBefore      = snapshot.cleanupPostFallbacks;
+    const uint64_t closePostFailuresBefore         = snapshot.asyncResultPostFailures;
     const uint64_t cleanupAllocationFailuresBefore = snapshot.cleanupAllocationFailures;
     const uint64_t cleanupSubmitFailuresBefore     = snapshot.cleanupSubmitFailures;
-    asyncControl                              = {};
-    asyncControl.failNextCloseCompletionPost  = true;
+    asyncControl                                   = {};
+    asyncControl.failNextCloseCompletionPost       = true;
     Check(SendMessageW(viewerWindow, WndMsg::kViewerVlcDebugSetAsyncControl, 0, reinterpret_cast<LPARAM>(&asyncControl)) != FALSE,
           L"ViewerVLC debug hook arms a deterministic close-completion payload-post failure",
           success);
     const HWND retainedVideoWindow = FindFirstChildWindowByClass(viewerWindow, kViewerVLCVideoWindowClassName);
-    const auto closeStartedAt       = std::chrono::steady_clock::now();
-    const HRESULT closeHr           = viewer->Close();
-    const uint64_t closeReturnUs = static_cast<uint64_t>(
-        std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - closeStartedAt).count());
+    const auto closeStartedAt      = std::chrono::steady_clock::now();
+    const HRESULT closeHr          = viewer->Close();
+    const uint64_t closeReturnUs =
+        static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - closeStartedAt).count());
     Check(SUCCEEDED(closeHr), L"ViewerVLC HUD contract window close succeeds", success);
     Check(closeReturnUs < 100'000u, L"ViewerVLC Close returns without waiting for delayed stop/release", success);
     Check(IsWindow(viewerWindow) != FALSE && IsWindow(retainedVideoWindow) != FALSE,
@@ -10863,7 +10640,7 @@ HRESULT ViewerSpaceBlockingDirectoryRead(void* context, const wchar_t* /*path*/,
     {
         const std::vector<HWND> existingCycleWindows = CollectVisibleWindowsByClass(kViewerVLCWindowClassName);
         Check(SUCCEEDED(viewer->Open(&context)), L"ViewerVLC rapidly reopens after asynchronous close", success);
-        HWND cycleWindow = nullptr;
+        HWND cycleWindow       = nullptr;
         const bool cycleOpened = PumpUntil(
             [&]() noexcept
         {
@@ -10902,8 +10679,8 @@ HRESULT ViewerSpaceBlockingDirectoryRead(void* context, const wchar_t* /*path*/,
               success);
         previousWindowIdentity = snapshot.windowIdentity;
 
-        asyncControl             = {};
-        asyncControl.loadDelayMs = 75;
+        asyncControl                           = {};
+        asyncControl.loadDelayMs               = 75;
         asyncControl.failNextCleanupAllocation = cycle == 0;
         asyncControl.failNextCleanupSubmit     = cycle == 1;
         static_cast<void>(SendMessageW(cycleWindow, WndMsg::kViewerVlcDebugSetAsyncControl, 0, reinterpret_cast<LPARAM>(&asyncControl)));
@@ -10912,12 +10689,10 @@ HRESULT ViewerSpaceBlockingDirectoryRead(void* context, const wchar_t* /*path*/,
         Check(SUCCEEDED(viewer->Open(&context)), L"ViewerVLC queues a delayed superseding load in a rapid-reopen cycle", success);
         const auto rapidCloseStartedAt = std::chrono::steady_clock::now();
         const HRESULT rapidCloseHr     = viewer->Close();
-        const uint64_t rapidCloseReturnUs = static_cast<uint64_t>(
-            std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - rapidCloseStartedAt).count());
+        const uint64_t rapidCloseReturnUs =
+            static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - rapidCloseStartedAt).count());
         Check(SUCCEEDED(rapidCloseHr), L"ViewerVLC closes immediately after a delayed rapid-reopen load", success);
-        Check(rapidCloseReturnUs < 100'000u,
-              L"ViewerVLC cleanup allocation/submit fault injection never blocks Close on stop/release",
-              success);
+        Check(rapidCloseReturnUs < 100'000u, L"ViewerVLC cleanup allocation/submit fault injection never blocks Close on stop/release", success);
         Check(IsWindow(cycleWindow) != FALSE && IsWindowVisible(cycleWindow) == FALSE,
               L"ViewerVLC retains and hides the rapid-reopen window until delayed work is drained",
               success);
@@ -10985,14 +10760,10 @@ HRESULT ViewerSpaceBlockingDirectoryRead(void* context, const wchar_t* /*path*/,
 
         const auto parentDestroyStartedAt = std::chrono::steady_clock::now();
         forcedParent.reset();
-        const uint64_t parentDestroyReturnUs = static_cast<uint64_t>(
-            std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - parentDestroyStartedAt).count());
-        Check(parentDestroyReturnUs < 250'000u,
-              L"ViewerVLC forced parent destruction does not wait for delayed cleanup",
-              success);
-        Check(IsWindow(forcedChild) == FALSE,
-              L"ViewerVLC child HWND is destroyed immediately with its forced parent",
-              success);
+        const uint64_t parentDestroyReturnUs =
+            static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - parentDestroyStartedAt).count());
+        Check(parentDestroyReturnUs < 250'000u, L"ViewerVLC forced parent destruction does not wait for delayed cleanup", success);
+        Check(IsWindow(forcedChild) == FALSE, L"ViewerVLC child HWND is destroyed immediately with its forced parent", success);
     }
 
     const bool expectDispatcherPin = forcedChild != nullptr;
@@ -11001,9 +10772,7 @@ HRESULT ViewerSpaceBlockingDirectoryRead(void* context, const wchar_t* /*path*/,
     pluginModule.reset();
     if (expectDispatcherPin)
     {
-        Check(GetModuleHandleW(L"ViewerVLC.dll") != nullptr,
-              L"ViewerVLC dispatcher pin keeps the plugin mapped after forced parent destruction",
-              success);
+        Check(GetModuleHandleW(L"ViewerVLC.dll") != nullptr, L"ViewerVLC dispatcher pin keeps the plugin mapped after forced parent destruction", success);
     }
     Check(PumpUntil([]() noexcept { return GetModuleHandleW(L"ViewerVLC.dll") == nullptr; }, 5000ms),
           L"ViewerVLC unloads after the HWND-independent dispatcher completes stop/release",

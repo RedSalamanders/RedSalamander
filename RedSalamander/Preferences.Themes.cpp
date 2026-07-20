@@ -133,7 +133,8 @@ void DrawRoundedColorSwatch(HDC hdc, RECT rc, UINT dpi, const AppTheme& theme, C
     const int height = std::max(0l, rc.bottom - rc.top);
     const int radius = std::max(1, std::min(UiMetrics::ScaleDip(dpi, 4), std::min(width, height) / 2));
 
-    COLORREF border = theme.systemHighContrast ? GetSysColor(COLOR_WINDOWTEXT) : UiMetrics::BlendColorRefWeightedTruncate(background, theme.menu.text, theme.dark ? 70 : 50, 255);
+    COLORREF border = theme.systemHighContrast ? GetSysColor(COLOR_WINDOWTEXT)
+                                               : UiMetrics::BlendColorRefWeightedTruncate(background, theme.menu.text, theme.dark ? 70 : 50, 255);
     COLORREF fill   = background;
     if (argb.has_value())
     {
@@ -1047,13 +1048,13 @@ constexpr std::array<std::wstring_view, 65> kKnownColorKeys = {{
         return rows;
     }
 
-    const std::wstring_view themeId     = themeIdOpt.value();
-    bool editable                       = false;
-    const auto* def                     = FindThemeDefinitionForDisplay(state, themeId, editable);
-    const std::wstring_view baseThemeId = (def && ! def->baseThemeId.empty()) ? std::wstring_view(def->baseThemeId) : themeId;
-    AppThemeSelectionResolution resolution = ResolveAppThemeSelection(themeId, def, L"RedSalamander");
-    const auto* overrides = resolution.resolvedColors.has_value() ? &resolution.resolvedColors->colors : nullptr;
-    AppTheme appTheme     = std::move(resolution.theme);
+    const std::wstring_view themeId         = themeIdOpt.value();
+    bool editable                           = false;
+    const auto* def                         = FindThemeDefinitionForDisplay(state, themeId, editable);
+    const std::wstring_view baseThemeId     = (def && ! def->baseThemeId.empty()) ? std::wstring_view(def->baseThemeId) : themeId;
+    AppThemeSelectionResolution resolution  = ResolveAppThemeSelection(themeId, def, L"RedSalamander");
+    const auto* overrides                   = resolution.resolvedColors.has_value() ? &resolution.resolvedColors->colors : nullptr;
+    AppTheme appTheme                       = std::move(resolution.theme);
     const MonitorTextViewTheme monitorTheme = ResolveMonitorThemeForDisplay(baseThemeId, overrides);
 
     const std::wstring_view filter = PrefsUi::TrimWhitespace(state.themesSearchText);
@@ -2043,9 +2044,12 @@ void ApplyThemeToPreferencesDialog(HWND dlg, PreferencesDialogState& state, cons
     state.inputDisabledBrush.reset();
     state.cardBrush.reset();
 
-    state.inputBackgroundColor         = UiMetrics::BlendColorRefWeightedTruncate(state.cardBackgroundColor, state.theme.windowBackground, state.theme.dark ? 50 : 30, 255);
-    state.inputFocusedBackgroundColor  = UiMetrics::BlendColorRefWeightedTruncate(state.inputBackgroundColor, state.theme.menu.text, state.theme.dark ? 20 : 16, 255);
-    state.inputDisabledBackgroundColor = UiMetrics::BlendColorRefWeightedTruncate(state.theme.windowBackground, state.inputBackgroundColor, state.theme.dark ? 70 : 40, 255);
+    state.inputBackgroundColor =
+        UiMetrics::BlendColorRefWeightedTruncate(state.cardBackgroundColor, state.theme.windowBackground, state.theme.dark ? 50 : 30, 255);
+    state.inputFocusedBackgroundColor =
+        UiMetrics::BlendColorRefWeightedTruncate(state.inputBackgroundColor, state.theme.menu.text, state.theme.dark ? 20 : 16, 255);
+    state.inputDisabledBackgroundColor =
+        UiMetrics::BlendColorRefWeightedTruncate(state.theme.windowBackground, state.inputBackgroundColor, state.theme.dark ? 70 : 40, 255);
     if (! state.theme.systemHighContrast)
     {
         state.cardBrush.reset(CreateSolidBrush(state.cardBackgroundColor));
@@ -3115,9 +3119,9 @@ void ThemesPane::UpdateEditorFromSelection(HWND host, PreferencesDialogState& st
         const auto* def                     = FindThemeDefinitionForDisplay(state, themeIdOpt.value(), editable);
         const std::wstring_view baseThemeId = (def && ! def->baseThemeId.empty()) ? std::wstring_view(def->baseThemeId) : themeIdOpt.value();
 
-        AppThemeSelectionResolution resolution = ResolveAppThemeSelection(themeIdOpt.value(), def, L"RedSalamander");
-        const auto* overrides = resolution.resolvedColors.has_value() ? &resolution.resolvedColors->colors : nullptr;
-        AppTheme appTheme     = std::move(resolution.theme);
+        AppThemeSelectionResolution resolution  = ResolveAppThemeSelection(themeIdOpt.value(), def, L"RedSalamander");
+        const auto* overrides                   = resolution.resolvedColors.has_value() ? &resolution.resolvedColors->colors : nullptr;
+        AppTheme appTheme                       = std::move(resolution.theme);
         const MonitorTextViewTheme monitorTheme = ResolveMonitorThemeForDisplay(baseThemeId, overrides);
 
         const auto colorOpt = TryGetEffectiveThemeColorArgb(appTheme, monitorTheme, overrides, selectedKey);

@@ -86,23 +86,23 @@ constexpr float kMinVisibleTileAreaDip2          = 64.0f;
 constexpr uint32_t kAdaptiveFileCandidateCeiling = 20000u;
 constexpr uint64_t kMaxScanCacheSnapshotBytes    = 64ull * 1024ull * 1024ull;
 #ifdef ENABLE_TESTS
-constexpr wchar_t kForceSmallScanPolicyEnvVar[]    = L"REDSALAMANDER_VIEWERSPACE_FORCE_SMALL_SCAN_POLICY";
-constexpr wchar_t kTestMaxOutstandingEnvVar[]      = L"REDSALAMANDER_VIEWERSPACE_TEST_MAX_OUTSTANDING_DIRECTORIES";
+constexpr wchar_t kForceSmallScanPolicyEnvVar[]       = L"REDSALAMANDER_VIEWERSPACE_FORCE_SMALL_SCAN_POLICY";
+constexpr wchar_t kTestMaxOutstandingEnvVar[]         = L"REDSALAMANDER_VIEWERSPACE_TEST_MAX_OUTSTANDING_DIRECTORIES";
 constexpr wchar_t kTestMaxRetainedDirectoriesEnvVar[] = L"REDSALAMANDER_VIEWERSPACE_TEST_MAX_RETAINED_DIRECTORIES";
-constexpr wchar_t kTestNextModelIdEnvVar[]          = L"REDSALAMANDER_VIEWERSPACE_TEST_NEXT_MODEL_ID";
-constexpr uint32_t kRendererFailureD3DDevice        = 1u;
-constexpr uint32_t kRendererFailureD2DContext       = 2u;
-constexpr uint32_t kRendererFailureSwapChain        = 3u;
-constexpr uint32_t kRendererFailureResizeBuffers    = 4u;
-constexpr uint32_t kRendererFailureGetBuffer        = 5u;
-constexpr uint32_t kRendererFailureTargetBitmap     = 6u;
-constexpr uint32_t kRendererFailureRenderTarget     = 7u;
-constexpr uint32_t kRendererDiscardDestroy          = 20u;
-constexpr uint32_t kRendererDiscardDpiChanged       = 21u;
-constexpr uint32_t kRendererDiscardStaticDeviceLost = 22u;
-constexpr uint32_t kRendererDiscardDeviceLost       = 23u;
-constexpr uint32_t kRendererDiscardTheme            = 25u;
-constexpr uint32_t kRendererDiscardUnknown          = 26u;
+constexpr wchar_t kTestNextModelIdEnvVar[]            = L"REDSALAMANDER_VIEWERSPACE_TEST_NEXT_MODEL_ID";
+constexpr uint32_t kRendererFailureD3DDevice          = 1u;
+constexpr uint32_t kRendererFailureD2DContext         = 2u;
+constexpr uint32_t kRendererFailureSwapChain          = 3u;
+constexpr uint32_t kRendererFailureResizeBuffers      = 4u;
+constexpr uint32_t kRendererFailureGetBuffer          = 5u;
+constexpr uint32_t kRendererFailureTargetBitmap       = 6u;
+constexpr uint32_t kRendererFailureRenderTarget       = 7u;
+constexpr uint32_t kRendererDiscardDestroy            = 20u;
+constexpr uint32_t kRendererDiscardDpiChanged         = 21u;
+constexpr uint32_t kRendererDiscardStaticDeviceLost   = 22u;
+constexpr uint32_t kRendererDiscardDeviceLost         = 23u;
+constexpr uint32_t kRendererDiscardTheme              = 25u;
+constexpr uint32_t kRendererDiscardUnknown            = 26u;
 #endif
 
 [[nodiscard]] uint64_t MaxScanCacheSnapshotBytes() noexcept
@@ -1549,7 +1549,7 @@ void ShutdownScanScheduler() noexcept
     {
         std::scoped_lock lock(g_scanSchedulerMutex);
         g_scanSchedulerShutdown = true;
-        scheduler = std::move(g_scanScheduler);
+        scheduler               = std::move(g_scanScheduler);
     }
 
     if (scheduler)
@@ -2143,7 +2143,7 @@ void ViewerSpace::UnregisterWndClassIfIdle() noexcept
         return;
     }
 
-    g_viewerSpaceClassAtom                             = 0;
+    g_viewerSpaceClassAtom                            = 0;
     g_viewerSpaceClassBackgroundBrush.classRegistered = false;
     g_viewerSpaceClassBackgroundBrush.pendingBrush.reset();
     g_viewerSpaceClassBackgroundBrush.pendingColor = CLR_INVALID;
@@ -2330,9 +2330,9 @@ LRESULT ViewerSpace::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
                 else if (node.isDirectory)
                 {
                     snapshot->realDirectoryCount += 1u;
-                    snapshot->aggregateBytes = ViewerSpaceScan::SaturatingAdd(snapshot->aggregateBytes, node.aggregateBytes);
-                    snapshot->aggregateFolders = ViewerSpaceScan::SaturatingAdd(snapshot->aggregateFolders, node.aggregateFolders);
-                    snapshot->aggregateFiles = ViewerSpaceScan::SaturatingAdd(snapshot->aggregateFiles, node.aggregateFiles);
+                    snapshot->aggregateBytes      = ViewerSpaceScan::SaturatingAdd(snapshot->aggregateBytes, node.aggregateBytes);
+                    snapshot->aggregateFolders    = ViewerSpaceScan::SaturatingAdd(snapshot->aggregateFolders, node.aggregateFolders);
+                    snapshot->aggregateFiles      = ViewerSpaceScan::SaturatingAdd(snapshot->aggregateFiles, node.aggregateFiles);
                     snapshot->childReferenceCount = ViewerSpaceScan::SaturatingAdd(snapshot->childReferenceCount, static_cast<uint64_t>(node.childrenCount));
                 }
             }
@@ -2401,18 +2401,18 @@ LRESULT ViewerSpace::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
             {
                 snapshot->childArenaFreeSlots = ViewerSpaceScan::SaturatingAdd(snapshot->childArenaFreeSlots, static_cast<uint64_t>(block.capacity));
             }
-            snapshot->modelAcceptedEntries         = _lastModelAcceptedEntries;
-            snapshot->modelRejectedEntries         = _lastModelRejectedEntries;
-            snapshot->modelCappedDirectories       = _lastModelCappedDirectories;
-            snapshot->modelCappedFiles             = _lastModelCappedFiles;
-            snapshot->modelRetainedNameBytes       = _lastModelRetainedNameBytes;
-            snapshot->modelRetainedChildReferences = _lastModelRetainedChildReferences;
-            snapshot->modelTraversedDirectories    = _lastModelTraversedDirectories;
-            snapshot->modelRetainedDirectoryLimit  = _scanResourcePolicy.maxRetainedDirectories;
-            snapshot->modelRetainedFileLimit       = _scanResourcePolicy.maxRetainedFileRecords;
-            snapshot->modelChildReferenceLimit     = _scanResourcePolicy.maxChildReferences;
-            snapshot->modelChildArenaSlotLimit     = _scanResourcePolicy.maxChildArenaSlots;
-            snapshot->modelValidationError         = static_cast<uint32_t>(_lastModelValidationError);
+            snapshot->modelAcceptedEntries             = _lastModelAcceptedEntries;
+            snapshot->modelRejectedEntries             = _lastModelRejectedEntries;
+            snapshot->modelCappedDirectories           = _lastModelCappedDirectories;
+            snapshot->modelCappedFiles                 = _lastModelCappedFiles;
+            snapshot->modelRetainedNameBytes           = _lastModelRetainedNameBytes;
+            snapshot->modelRetainedChildReferences     = _lastModelRetainedChildReferences;
+            snapshot->modelTraversedDirectories        = _lastModelTraversedDirectories;
+            snapshot->modelRetainedDirectoryLimit      = _scanResourcePolicy.maxRetainedDirectories;
+            snapshot->modelRetainedFileLimit           = _scanResourcePolicy.maxRetainedFileRecords;
+            snapshot->modelChildReferenceLimit         = _scanResourcePolicy.maxChildReferences;
+            snapshot->modelChildArenaSlotLimit         = _scanResourcePolicy.maxChildArenaSlots;
+            snapshot->modelValidationError             = static_cast<uint32_t>(_lastModelValidationError);
             snapshot->postUpdateInnerGenerationRejects = _debugPostUpdateInnerGenerationRejects.load(std::memory_order_acquire);
 
             Debug::Perf::EmitValue(L"viewer.space.model.directory_count", static_cast<uint64_t>(snapshot->realDirectoryCount));
@@ -5951,18 +5951,18 @@ void ViewerSpace::StartScan(std::wstring_view rootPath, bool allowCache)
     CancelScan();
     ReapFinishedScanWorkers();
     CancelScanCacheBuild();
-    _scanCacheLastStoredGeneration = 0;
-    _scanCompletedSinceSeconds     = 0.0;
-    _lastScanCacheSnapshotBytes    = 0u;
-    _lastModelAcceptedEntries      = 0u;
-    _lastModelRejectedEntries      = 0u;
-    _lastModelCappedDirectories    = 0u;
-    _lastModelCappedFiles          = 0u;
-    _lastModelRetainedNameBytes    = 0u;
+    _scanCacheLastStoredGeneration    = 0;
+    _scanCompletedSinceSeconds        = 0.0;
+    _lastScanCacheSnapshotBytes       = 0u;
+    _lastModelAcceptedEntries         = 0u;
+    _lastModelRejectedEntries         = 0u;
+    _lastModelCappedDirectories       = 0u;
+    _lastModelCappedFiles             = 0u;
+    _lastModelRetainedNameBytes       = 0u;
     _lastModelRetainedChildReferences = 0u;
-    _lastModelTraversedDirectories = 0u;
-    _lastModelValidationError      = ViewerSpaceScan::ValidationError::None;
-    _scanResourcePolicy            = ActiveScanResourcePolicy();
+    _lastModelTraversedDirectories    = 0u;
+    _lastModelValidationError         = ViewerSpaceScan::ValidationError::None;
+    _scanResourcePolicy               = ActiveScanResourcePolicy();
 #ifdef ENABLE_TESTS
     _debugPostUpdateInnerGenerationRejects.store(0u, std::memory_order_release);
 #endif
@@ -6198,11 +6198,11 @@ void ViewerSpace::StartScan(std::wstring_view rootPath, bool allowCache)
 
     UpdateHeaderTextCache();
 
-    auto done                                = std::make_shared<std::atomic_bool>(false);
-    wil::com_ptr<IFileSystem> scanFileSystem = _fileSystem;
-    const bool fileSystemIsWin32             = _fileSystemIsWin32;
+    auto done                                                = std::make_shared<std::atomic_bool>(false);
+    wil::com_ptr<IFileSystem> scanFileSystem                 = _fileSystem;
+    const bool fileSystemIsWin32                             = _fileSystemIsWin32;
     const ViewerSpaceScan::ResourcePolicy scanResourcePolicy = _scanResourcePolicy;
-    uint32_t initialModelNodeId = 2u;
+    uint32_t initialModelNodeId                              = 2u;
 #ifdef ENABLE_TESTS
     if (const std::optional<uint32_t> value = ReadPositiveUint32Environment(kTestNextModelIdEnvVar); value.has_value())
     {
@@ -6216,20 +6216,19 @@ void ViewerSpace::StartScan(std::wstring_view rootPath, bool allowCache)
     auto releaseUnloadGateOnFailure = wil::scope_exit([]() noexcept { g_scanWorkerUnloadGates.fetch_sub(1u, std::memory_order_acq_rel); });
 
     ScanWorker newWorker;
-    newWorker.done = done;
-    newWorker.thread =
-        std::jthread([workerOwner,
-                      generation,
-                      done,
-                      scanFileSystem = std::move(scanFileSystem),
-                      fileSystemIsWin32,
-                      scanRootPath = std::move(scanRootPath),
-                      topFilesPerDirectory,
-                      scanThreads,
-                      scanResourcePolicy,
-                      initialModelNodeId](std::stop_token st) mutable noexcept
+    newWorker.done   = done;
+    newWorker.thread = std::jthread([workerOwner,
+                                     generation,
+                                     done,
+                                     scanFileSystem = std::move(scanFileSystem),
+                                     fileSystemIsWin32,
+                                     scanRootPath = std::move(scanRootPath),
+                                     topFilesPerDirectory,
+                                     scanThreads,
+                                     scanResourcePolicy,
+                                     initialModelNodeId](std::stop_token st) mutable noexcept
     {
-        auto markDone = wil::scope_exit([done]() noexcept { done->store(true, std::memory_order_release); });
+        auto markDone               = wil::scope_exit([done]() noexcept { done->store(true, std::memory_order_release); });
         auto releaseWorkerReference = wil::scope_exit([workerOwner]() noexcept { workerOwner->Release(); });
         workerOwner->ScanMain(st,
                               generation,
@@ -6366,14 +6365,12 @@ void ViewerSpace::AbandonScanWorkers() noexcept
     {
         Debug::Perf::EmitValue(L"viewer.space.scan.worker_reaped", reapedWorkers);
         Debug::Perf::EmitValue(L"viewer.space.scan.worker_abandoned", abandonedWorkers);
-        Debug::Perf::EmitDurationUs(
-            L"viewer.space.close.cancel_us", Debug::Perf::ElapsedUs(abandonStartedAt), abandonedWorkers, reapedWorkers);
+        Debug::Perf::EmitDurationUs(L"viewer.space.close.cancel_us", Debug::Perf::ElapsedUs(abandonStartedAt), abandonedWorkers, reapedWorkers);
     }
 }
 
 void ViewerSpace::ReapFinishedScanWorkers() noexcept
 {
-
     if (_scanWorker.thread.joinable())
     {
         if (_scanWorker.done != nullptr && _scanWorker.done->load(std::memory_order_acquire))
@@ -6417,7 +6414,8 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
     struct ScanResourceTracker final
     {
         explicit ScanResourceTracker(ViewerSpaceScan::ResourcePolicy scanPolicy, uint64_t rootNameBytes) noexcept
-            : policy(scanPolicy), retainedNameBytes(std::min(rootNameBytes, scanPolicy.maxRetainedNameBytes))
+            : policy(scanPolicy),
+              retainedNameBytes(std::min(rootNameBytes, scanPolicy.maxRetainedNameBytes))
         {
         }
         ~ScanResourceTracker() = default;
@@ -6495,10 +6493,10 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
 
         ViewerSpaceScan::ResourcePolicy policy{};
         std::mutex mutex;
-        uint64_t retainedDirectories   = 1u;
-        uint64_t retainedFiles         = 0u;
+        uint64_t retainedDirectories     = 1u;
+        uint64_t retainedFiles           = 0u;
         uint64_t retainedChildReferences = 0u;
-        uint64_t retainedNameBytes     = 0u;
+        uint64_t retainedNameBytes       = 0u;
         std::atomic_uint64_t acceptedEntries{0u};
         std::atomic_uint64_t rejectedEntries{0u};
         std::atomic_uint64_t cappedDirectories{0u};
@@ -6554,7 +6552,7 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
         const uint64_t cappedDirectories = resources.cappedDirectories.load(std::memory_order_relaxed);
         const uint64_t cappedFiles       = resources.cappedFiles.load(std::memory_order_relaxed);
         const uint64_t traversedDirs     = resources.traversedDirectories.load(std::memory_order_relaxed);
-        const auto validationError = static_cast<ViewerSpaceScan::ValidationError>(resources.validationError.load(std::memory_order_relaxed));
+        const auto validationError       = static_cast<ViewerSpaceScan::ValidationError>(resources.validationError.load(std::memory_order_relaxed));
 
         PendingUpdate resourceUp;
         resourceUp.kind                    = PendingUpdate::Kind::ResourceSummary;
@@ -6721,12 +6719,12 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
 
     struct ChildDir final
     {
-        uint64_t traversalId    = 0u;
-        uint32_t modelNodeId    = 0u;
-        uint32_t aggregateOwner = 0u;
+        uint64_t traversalId     = 0u;
+        uint32_t modelNodeId     = 0u;
+        uint32_t aggregateOwner  = 0u;
         unsigned long providerId = 0u;
-        bool aggregateRoot      = false;
-        bool descend            = true;
+        bool aggregateRoot       = false;
+        bool descend             = true;
         std::wstring name;
     };
 
@@ -6746,11 +6744,11 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
         size_t processedEntries = 0;
         std::vector<ChildDir> children;
         std::vector<FileSummaryItem> topFiles;
-        uint64_t fileCount  = 0u;
+        uint64_t fileCount            = 0u;
         uint64_t nonDescendingFolders = 0u;
-        uint64_t otherBytes = 0u;
-        uint64_t otherFolders = 0u;
-        uint64_t otherFiles = 0u;
+        uint64_t otherBytes           = 0u;
+        uint64_t otherFolders         = 0u;
+        uint64_t otherFiles           = 0u;
     };
 
     struct LogicalNameLess final
@@ -6794,16 +6792,14 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
         });
 
         const uint32_t progressNodeId = item.modelNodeId != 0u ? item.modelNodeId : item.aggregateOwner;
-        auto failProvider = [&](ViewerSpaceScan::ValidationError error, HRESULT hr, bool propagateFailure) noexcept
+        auto failProvider             = [&](ViewerSpaceScan::ValidationError error, HRESULT hr, bool propagateFailure) noexcept
         {
-            enumerateHr = hr;
-            item.failed = true;
+            enumerateHr           = hr;
+            item.failed           = true;
             item.propagateFailure = propagateFailure;
             resources.RecordValidationFailure(error);
-            Debug::Warning(L"ViewerSpace: Rejected provider directory '{}' ({}, HRESULT: {:#x})",
-                           item.path,
-                           ValidationErrorDetail(error),
-                           static_cast<uint32_t>(hr));
+            Debug::Warning(
+                L"ViewerSpace: Rejected provider directory '{}' ({}, HRESULT: {:#x})", item.path, ValidationErrorDetail(error), static_cast<uint32_t>(hr));
             if (item.modelNodeId != 0u)
             {
                 PendingUpdate errorUp;
@@ -6859,16 +6855,16 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
             return;
         }
 
-        ViewerSpaceScan::ValidationError validation = ViewerSpaceScan::ValidateProviderBufferContract(
-            buffer, bufferSize, allocatedSize, advertisedCount, resourcePolicy);
+        ViewerSpaceScan::ValidationError validation =
+            ViewerSpaceScan::ValidateProviderBufferContract(buffer, bufferSize, allocatedSize, advertisedCount, resourcePolicy);
         if (validation != ViewerSpaceScan::ValidationError::None)
         {
             failProvider(validation, HRESULT_FROM_WIN32(ERROR_INVALID_DATA), true);
             return;
         }
 
-        uint64_t localFolderCount = 0u;
-        uint64_t localFileCount   = 0u;
+        uint64_t localFolderCount       = 0u;
+        uint64_t localFileCount         = 0u;
         const size_t fileCandidateLimit = std::min(topFilesPerDirectory, static_cast<size_t>(resourcePolicy.maxRetainedFileRecords));
         std::unordered_set<unsigned long> providerIds;
         std::set<std::wstring, LogicalNameLess> providerNames(LogicalNameLess{fileSystemIsWin32});
@@ -6936,7 +6932,7 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
                 }
                 if (entryView.isLast)
                 {
-                    validation = ViewerSpaceScan::ValidateProviderTerminalExtent(providerBuffer, validationOffset, entryView);
+                    validation        = ViewerSpaceScan::ValidateProviderTerminalExtent(providerBuffer, validationOffset, entryView);
                     validatedTerminal = validation == ViewerSpaceScan::ValidationError::None;
                     break;
                 }
@@ -6953,8 +6949,8 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
                 return;
             }
 
-            size_t offset      = 0u;
-            uint64_t parsed    = 0u;
+            size_t offset     = 0u;
+            uint64_t parsed   = 0u;
             bool observedLast = false;
 
             while (offset < providerBuffer.size())
@@ -6998,9 +6994,9 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
                 }
                 else
                 {
-                    localFileCount = ViewerSpaceScan::SaturatingAdd(localFileCount, uint64_t{1u});
+                    localFileCount           = ViewerSpaceScan::SaturatingAdd(localFileCount, uint64_t{1u});
                     const uint64_t fileBytes = entry.EndOfFile > 0 ? static_cast<uint64_t>(entry.EndOfFile) : 0u;
-                    item.bytes = ViewerSpaceScan::SaturatingAdd(item.bytes, fileBytes);
+                    item.bytes               = ViewerSpaceScan::SaturatingAdd(item.bytes, fileBytes);
 
                     auto aggregateFile = [&](uint64_t bytes, bool alreadyCounted) noexcept
                     {
@@ -7244,9 +7240,9 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
                 return;
             }
 
-            uint64_t parentBytes = 0;
+            uint64_t parentBytes       = 0;
             uint32_t parentModelNodeId = 0u;
-            bool parentReady     = false;
+            bool parentReady           = false;
             {
                 std::scoped_lock lock(frontierMutex);
                 auto parentIt = completions.find(parentTraversalId);
@@ -7256,13 +7252,13 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
                 }
 
                 DirectoryCompletion& parent = parentIt->second;
-                parent.bytes       = ViewerSpaceScan::SaturatingAdd(parent.bytes, bytes);
-                parent.folderCount = ViewerSpaceScan::SaturatingAdd(parent.folderCount, folderCount);
-                parent.fileCount   = ViewerSpaceScan::SaturatingAdd(parent.fileCount, fileCount);
-                parent.displayError = parent.displayError || failed;
-                parent.failed      = parent.failed || failed;
-                parentBytes        = parent.bytes;
-                parentModelNodeId  = parent.modelNodeId;
+                parent.bytes                = ViewerSpaceScan::SaturatingAdd(parent.bytes, bytes);
+                parent.folderCount          = ViewerSpaceScan::SaturatingAdd(parent.folderCount, folderCount);
+                parent.fileCount            = ViewerSpaceScan::SaturatingAdd(parent.fileCount, fileCount);
+                parent.displayError         = parent.displayError || failed;
+                parent.failed               = parent.failed || failed;
+                parentBytes                 = parent.bytes;
+                parentModelNodeId           = parent.modelNodeId;
                 if (parent.pendingChildren > 0u)
                 {
                     parent.pendingChildren -= 1u;
@@ -7294,12 +7290,12 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
         ProgressState progress;
 
         StackItem item;
-        item.traversalId    = job.traversalId;
-        item.modelNodeId    = job.modelNodeId;
-        item.aggregateOwner = job.aggregateOwner;
-        item.aggregateRoot  = job.aggregateRoot;
-        item.depth          = job.depth;
-        item.path           = std::move(job.path);
+        item.traversalId       = job.traversalId;
+        item.modelNodeId       = job.modelNodeId;
+        item.aggregateOwner    = job.aggregateOwner;
+        item.aggregateRoot     = job.aggregateRoot;
+        item.depth             = job.depth;
+        item.path              = std::move(job.path);
         item.providerAncestors = std::move(job.providerAncestors);
         if (item.depth > resourcePolicy.maxTraversalDepth)
         {
@@ -7330,14 +7326,13 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
                 childJob.parentTraversalId = item.traversalId;
                 childJob.depth             = ViewerSpaceScan::SaturatingAdd(item.depth, 1u);
                 childJob.path              = JoinPath(item.path, child.name, pathSeparator);
-                childJob.providerAncestors = child.providerId == 0u
-                                                 ? item.providerAncestors
-                                                 : std::make_shared<ProviderAncestor>(child.providerId, item.providerAncestors);
+                childJob.providerAncestors =
+                    child.providerId == 0u ? item.providerAncestors : std::make_shared<ProviderAncestor>(child.providerId, item.providerAncestors);
                 if (childJob.depth > resourcePolicy.maxTraversalDepth || childJob.path.size() > resourcePolicy.maxPathChars)
                 {
                     item.failed = true;
                     resources.RecordValidationFailure(childJob.depth > resourcePolicy.maxTraversalDepth ? ViewerSpaceScan::ValidationError::DepthLimit
-                                                                                                          : ViewerSpaceScan::ValidationError::PathLimit);
+                                                                                                        : ViewerSpaceScan::ValidationError::PathLimit);
                     childJobs.clear();
                     break;
                 }
@@ -7358,9 +7353,9 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
             completion.bytes                = ViewerSpaceScan::SaturatingAdd(completion.bytes, item.bytes);
             completion.folderCount          = ViewerSpaceScan::SaturatingAdd(completion.folderCount, item.nonDescendingFolders);
             completion.fileCount            = ViewerSpaceScan::SaturatingAdd(completion.fileCount, item.fileCount);
-            completion.enumerated = true;
-            completion.displayError = completion.displayError || item.failed;
-            completion.failed       = completion.failed || (item.failed && item.propagateFailure);
+            completion.enumerated           = true;
+            completion.displayError         = completion.displayError || item.failed;
+            completion.failed               = completion.failed || (item.failed && item.propagateFailure);
 
             uint64_t childPathBytes = 0u;
             for (const ScanJob& childJob : childJobs)
@@ -7371,17 +7366,16 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
                                   completions.size() > resourcePolicy.maxOutstandingDirectories - childJobs.size() ||
                                   childPathBytes > resourcePolicy.maxOutstandingPathBytes - std::min(livePathBytes, resourcePolicy.maxOutstandingPathBytes)))
             {
-                completion.failed = true;
+                completion.failed       = true;
                 completion.displayError = true;
-                item.failed       = true;
+                item.failed             = true;
                 resources.RecordValidationFailure(ViewerSpaceScan::ValidationError::OutstandingLimit);
                 childJobs.clear();
             }
             if (! item.failed)
             {
                 if (item.modelNodeId != 0u &&
-                    (nextModelId == 0u || nextModelId >= kFileRecordIdBase ||
-                     item.children.size() > static_cast<size_t>(kFileRecordIdBase - nextModelId)))
+                    (nextModelId == 0u || nextModelId >= kFileRecordIdBase || item.children.size() > static_cast<size_t>(kFileRecordIdBase - nextModelId)))
                 {
                     completion.failed       = true;
                     completion.displayError = true;
@@ -7805,7 +7799,7 @@ void ViewerSpace::DrainUpdates() noexcept
                 if (parent == nullptr || ! AddRealNodeChild(*parent, update.nodeId))
                 {
                     _nodes[node.id] = {};
-                    _overallState  = ScanState::Error;
+                    _overallState   = ScanState::Error;
                     break;
                 }
 
@@ -8465,7 +8459,7 @@ std::optional<uint32_t> ViewerSpace::AllocateChildArenaBlock(uint32_t capacity) 
         return std::nullopt;
     }
 
-    size_t bestIndex    = _childrenArenaFreeBlocks.size();
+    size_t bestIndex      = _childrenArenaFreeBlocks.size();
     uint32_t bestCapacity = (std::numeric_limits<uint32_t>::max)();
     for (size_t index = 0u; index < _childrenArenaFreeBlocks.size(); ++index)
     {
@@ -8493,8 +8487,7 @@ std::optional<uint32_t> ViewerSpace::AllocateChildArenaBlock(uint32_t capacity) 
     }
 
     const size_t previousSize = _childrenArena.size();
-    if (previousSize > _scanResourcePolicy.maxChildArenaSlots ||
-        capacity > static_cast<uint32_t>(_scanResourcePolicy.maxChildArenaSlots - previousSize) ||
+    if (previousSize > _scanResourcePolicy.maxChildArenaSlots || capacity > static_cast<uint32_t>(_scanResourcePolicy.maxChildArenaSlots - previousSize) ||
         previousSize > static_cast<size_t>((std::numeric_limits<uint32_t>::max)()))
     {
         return std::nullopt;
@@ -8512,8 +8505,7 @@ void ViewerSpace::ReleaseChildArenaBlock(uint32_t start, uint32_t capacity) noex
     }
 
     _childrenArenaFreeBlocks.push_back(ChildArenaFreeBlock{start, capacity});
-    std::sort(_childrenArenaFreeBlocks.begin(), _childrenArenaFreeBlocks.end(), [](const ChildArenaFreeBlock& left, const ChildArenaFreeBlock& right) noexcept
-    {
+    std::sort(_childrenArenaFreeBlocks.begin(), _childrenArenaFreeBlocks.end(), [](const ChildArenaFreeBlock& left, const ChildArenaFreeBlock& right) noexcept {
         return left.start < right.start;
     });
 
@@ -8982,11 +8974,11 @@ void ViewerSpace::RebuildLayout() noexcept
         std::vector<uint32_t>& forcedChildIds = workspace.forcedChildIds;
 
         const uint64_t retainedAggregateCount = ViewerSpaceScan::SaturatingAdd(parent->aggregateFolders, parent->aggregateFiles);
-        const size_t baseOtherCount = static_cast<size_t>(std::min<uint64_t>(retainedAggregateCount, (std::numeric_limits<size_t>::max)()));
-        const uint64_t baseOtherBytes   = parent->aggregateBytes;
-        const double baseOtherWeight    = baseOtherCount == 0u ? 0.0 : static_cast<double>(std::max<uint64_t>(baseOtherBytes, 1u));
-        const uint64_t baseOtherFolders = parent->aggregateFolders;
-        const uint64_t baseOtherFiles   = parent->aggregateFiles;
+        const size_t baseOtherCount           = static_cast<size_t>(std::min<uint64_t>(retainedAggregateCount, (std::numeric_limits<size_t>::max)()));
+        const uint64_t baseOtherBytes         = parent->aggregateBytes;
+        const double baseOtherWeight          = baseOtherCount == 0u ? 0.0 : static_cast<double>(std::max<uint64_t>(baseOtherBytes, 1u));
+        const uint64_t baseOtherFolders       = parent->aggregateFolders;
+        const uint64_t baseOtherFiles         = parent->aggregateFiles;
 
         uint64_t otherBytes   = baseOtherBytes;
         double otherWeight    = baseOtherWeight;

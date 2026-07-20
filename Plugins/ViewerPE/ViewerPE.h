@@ -107,9 +107,9 @@ private:
 
     struct AsyncParseResult
     {
-        uint64_t requestId = 0;
+        uint64_t requestId      = 0;
         uint64_t windowIdentity = 0;
-        HRESULT hr         = E_FAIL;
+        HRESULT hr              = E_FAIL;
         std::wstring title;
         std::wstring subtitle;
         std::wstring body;
@@ -137,7 +137,7 @@ private:
 
     std::string _configurationJson;
 
-    bool _isLoading = false;
+    bool _isLoading      = false;
     HRESULT _lastParseHr = E_PENDING;
 
     wil::com_ptr<IHostAlerts> _hostAlerts;

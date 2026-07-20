@@ -165,8 +165,7 @@ struct CompareOptionsEditDiagnosticState
     RECT bounds{};
 };
 
-[[nodiscard]] std::vector<CompareOptionsEditDiagnosticState> CollectVisibleCompareOptionsEditDiagnostics(HWND hwnd,
-                                                                                                         std::wstring_view label) noexcept
+[[nodiscard]] std::vector<CompareOptionsEditDiagnosticState> CollectVisibleCompareOptionsEditDiagnostics(HWND hwnd, std::wstring_view label) noexcept
 {
     using namespace std::chrono_literals;
 
@@ -175,8 +174,10 @@ struct CompareOptionsEditDiagnosticState
         return {};
     }
 
-    auto result = std::make_shared<std::vector<CompareOptionsEditDiagnosticState>>();
-    const bool completed = RunUiaActionWithMessagePump(L"CompareOptions edit diagnostics", label, [result, hwnd]() noexcept
+    auto result          = std::make_shared<std::vector<CompareOptionsEditDiagnosticState>>();
+    const bool completed = RunUiaActionWithMessagePump(L"CompareOptions edit diagnostics",
+                                                       label,
+                                                       [result, hwnd]() noexcept
     {
         for (const auto& element : FindMatchingVisibleDescendantElements(hwnd, UIA_EditControlTypeId))
         {
@@ -195,8 +196,7 @@ struct CompareOptionsEditDiagnosticState
             static_cast<void>(element->get_CurrentBoundingRectangle(&state.bounds));
 
             wil::com_ptr<IUIAutomationValuePattern> valuePattern;
-            if (SUCCEEDED(element->GetCurrentPatternAs(UIA_ValuePatternId, __uuidof(IUIAutomationValuePattern), valuePattern.put_void())) &&
-                valuePattern)
+            if (SUCCEEDED(element->GetCurrentPatternAs(UIA_ValuePatternId, __uuidof(IUIAutomationValuePattern), valuePattern.put_void())) && valuePattern)
             {
                 state.hasValuePattern = true;
 
@@ -227,11 +227,7 @@ struct CompareOptionsEditDiagnosticState
         return L"<missing>";
     }
 
-    return std::format(L"name='{0}' value='{1}' readonly={2} controlType={3}",
-                       state->name,
-                       state->value,
-                       state->isReadOnly,
-                       state->controlType);
+    return std::format(L"name='{0}' value='{1}' readonly={2} controlType={3}", state->name, state->value, state->isReadOnly, state->controlType);
 }
 
 [[nodiscard]] std::wstring DescribeCompareOptionsThemeSnapshot(const CompareDirectoriesOptionsDebugSnapshot& value) noexcept
@@ -299,9 +295,7 @@ struct CompareOptionsEditDiagnosticState
     return details;
 }
 
-[[nodiscard]] std::optional<UiaValuePatternState> CollectNamedCompareOptionsEditValueState(HWND hwnd,
-                                                                                           std::wstring_view name,
-                                                                                           std::wstring_view label) noexcept
+[[nodiscard]] std::optional<UiaValuePatternState> CollectNamedCompareOptionsEditValueState(HWND hwnd, std::wstring_view name, std::wstring_view label) noexcept
 {
     for (const auto& rawState : CollectWindowHostRawProviderValuePatternStates(hwnd, UIA_EditControlTypeId))
     {
@@ -321,9 +315,7 @@ struct CompareOptionsEditDiagnosticState
     return CollectVisibleDescendantValuePatternStateByNameWithMessagePump(hwnd, UIA_EditControlTypeId, name, label);
 }
 
-[[nodiscard]] std::optional<UiaValuePatternState> WaitForNamedCompareOptionsEditValueState(HWND hwnd,
-                                                                                           std::wstring_view name,
-                                                                                           std::wstring_view label) noexcept
+[[nodiscard]] std::optional<UiaValuePatternState> WaitForNamedCompareOptionsEditValueState(HWND hwnd, std::wstring_view name, std::wstring_view label) noexcept
 {
     using namespace std::chrono_literals;
 
@@ -727,8 +719,8 @@ struct CompareOptionsEditDiagnosticState
 
         const auto buttonState = CollectVisibleDescendantNamedElementStateWithMessagePump(
             targetCompare, UIA_ButtonControlTypeId, L"Compare Directories baseline options command-button probe");
-        const bool namedButtonExposed = (buttonState.has_value() && ! buttonState->name.empty()) ||
-                                        (uiaPatternStats.has_value() && uiaPatternStats->namedButtonControlCount > 0u);
+        const bool namedButtonExposed =
+            (buttonState.has_value() && ! buttonState->name.empty()) || (uiaPatternStats.has_value() && uiaPatternStats->namedButtonControlCount > 0u);
         if (buttonState.has_value())
         {
             state.Require(
@@ -783,11 +775,8 @@ struct CompareOptionsEditDiagnosticState
         return false;
     }
 
-    const auto closeCompareWindow = [&](std::wstring_view context) noexcept
-    {
-        return CloseCompareDirectoriesWindowsForOptionsSelfTest(context);
-    };
-    const auto cleanup = wil::scope_exit([&]() noexcept { static_cast<void>(closeCompareWindow(L"long-run open/close cleanup")); });
+    const auto closeCompareWindow = [&](std::wstring_view context) noexcept { return CloseCompareDirectoriesWindowsForOptionsSelfTest(context); };
+    const auto cleanup            = wil::scope_exit([&]() noexcept { static_cast<void>(closeCompareWindow(L"long-run open/close cleanup")); });
 
     state.Require(closeCompareWindow(L"long-run open/close setup"), L"Compare Directories window did not settle closed before long-run open/close validation.");
     if (! state.failure.empty())
@@ -972,8 +961,8 @@ struct CompareOptionsEditDiagnosticState
 
         const auto buttonState = CollectVisibleDescendantNamedElementStateWithMessagePump(
             compare, UIA_ButtonControlTypeId, L"Compare Directories open/close options command-button probe");
-        const bool namedButtonExposed = (buttonState.has_value() && ! buttonState->name.empty()) ||
-                                        (uiaPatternStats.has_value() && uiaPatternStats->namedButtonControlCount > 0u);
+        const bool namedButtonExposed =
+            (buttonState.has_value() && ! buttonState->name.empty()) || (uiaPatternStats.has_value() && uiaPatternStats->namedButtonControlCount > 0u);
         if (buttonState.has_value())
         {
             state.Require(! buttonState->name.empty(),
@@ -1008,11 +997,8 @@ struct CompareOptionsEditDiagnosticState
         return false;
     }
 
-    const auto closeCompareWindow = [&](std::wstring_view context) noexcept
-    {
-        return CloseCompareDirectoriesWindowsForOptionsSelfTest(context);
-    };
-    const auto cleanup = wil::scope_exit([&]() noexcept { static_cast<void>(closeCompareWindow(L"live DX body interaction cleanup")); });
+    const auto closeCompareWindow = [&](std::wstring_view context) noexcept { return CloseCompareDirectoriesWindowsForOptionsSelfTest(context); };
+    const auto cleanup            = wil::scope_exit([&]() noexcept { static_cast<void>(closeCompareWindow(L"live DX body interaction cleanup")); });
 
     state.Require(closeCompareWindow(L"live DX body interaction setup"),
                   L"Compare Directories window did not settle closed before live DX body interaction validation.");
@@ -1353,8 +1339,7 @@ struct CompareOptionsEditDiagnosticState
         return false;
     }
 
-    const auto initialValueState =
-        WaitForNamedCompareOptionsEditValueState(compare, ignoreFilesEditName, L"initial live DX body interaction edit read");
+    const auto initialValueState = WaitForNamedCompareOptionsEditValueState(compare, ignoreFilesEditName, L"initial live DX body interaction edit read");
     if (! initialValueState.has_value())
     {
         CompareDirectoriesOptionsDebugSnapshot diagnostic{};
@@ -1380,8 +1365,8 @@ struct CompareOptionsEditDiagnosticState
     state.Require(waitForOptionsSnapshot(
                       [](const CompareDirectoriesOptionsDebugSnapshot& value) noexcept
     {
-        return value.focusTarget == CompareDirectoriesOptionsDebugFocusTarget::None && value.optionsDialogVisible && value.visibleBodyRenderedDxHostCount == 1u &&
-               value.bodyDxHostResizeFailureCount == 0u;
+        return value.focusTarget == CompareDirectoriesOptionsDebugFocusTarget::None && value.optionsDialogVisible &&
+               value.visibleBodyRenderedDxHostCount == 1u && value.bodyDxHostResizeFailureCount == 0u;
     },
                       snapshot),
                   L"Compare Directories options did not keep neutral DX focus before ValuePattern mutation.");
@@ -1399,8 +1384,7 @@ struct CompareOptionsEditDiagnosticState
         return SetWindowHostRawProviderValueByNameWithMessagePump(compare, UIA_EditControlTypeId, editName, expectedValue, label) ||
                SetVisibleDescendantValueByNameWithMessagePump(compare, UIA_EditControlTypeId, editName, expectedValue, label);
     };
-    const auto waitForEditValue                                = [&](std::wstring_view expectedValue,
-                                             std::chrono::milliseconds waitBudget = 3000ms) noexcept
+    const auto waitForEditValue = [&](std::wstring_view expectedValue, std::chrono::milliseconds waitBudget = 3000ms) noexcept
     {
         const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(waitBudget);
         while (std::chrono::steady_clock::now() < deadline)
@@ -1422,7 +1406,7 @@ struct CompareOptionsEditDiagnosticState
 
     const auto setAndWaitForEditValue = [&](std::wstring_view expectedValue, std::wstring_view label) noexcept
     {
-        const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
+        const auto deadline         = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
         constexpr auto kAttemptWait = 350ms;
         do
         {
@@ -1440,10 +1424,9 @@ struct CompareOptionsEditDiagnosticState
     {
         CompareDirectoriesOptionsDebugSnapshot diagnostic{};
         static_cast<void>(DebugGetCompareDirectoriesOptionsSnapshot(diagnostic));
-        const auto currentNamedState =
-            CollectNamedCompareOptionsEditValueState(compare, editName, std::format(L"{} diagnostic named edit read", phase));
-        const auto editStates = CollectVisibleCompareOptionsEditDiagnostics(compare, phase);
-        const auto rawEditStates = CollectWindowHostRawProviderValuePatternStates(compare, UIA_EditControlTypeId);
+        const auto currentNamedState = CollectNamedCompareOptionsEditValueState(compare, editName, std::format(L"{} diagnostic named edit read", phase));
+        const auto editStates        = CollectVisibleCompareOptionsEditDiagnostics(compare, phase);
+        const auto rawEditStates     = CollectWindowHostRawProviderValuePatternStates(compare, UIA_EditControlTypeId);
         return std::format(
             L"phase='{}' edit='{}' expected='{}' initial='{}' edited='{}' snapshot={} lastObserved={} currentNamed={} visibleEdits={} rawEdits={}",
             phase,
@@ -1496,7 +1479,7 @@ struct CompareOptionsEditDiagnosticState
                value.visibleLegacyToggleCount == 0u && value.visibleLegacyEditCount == 0u && value.visibleBodyRenderedDxHostCount == 1u &&
                value.bodyDxHostResizeFailureCount == 0u;
     },
-                      snapshot);
+        snapshot);
     state.Require(keptStableAfterLiveInteraction,
                   std::format(L"Compare Directories options should keep its one-host DX body intact after live DX toggle/edit interaction; {}.",
                               describeOptionsSnapshot(snapshot)));
@@ -1510,17 +1493,16 @@ struct CompareOptionsEditDiagnosticState
         return false;
     }
 
-    const auto invokeButtonOrActivateTarget = [&](const CompareDirectoriesOptionsDebugFocusTarget target,
-                                                  std::wstring_view buttonText,
-                                                  std::wstring_view label) noexcept
+    const auto invokeButtonOrActivateTarget =
+        [&](const CompareDirectoriesOptionsDebugFocusTarget target, std::wstring_view buttonText, std::wstring_view label) noexcept
     {
         if (InvokeVisibleDescendantByNameWithMessagePump(compare, UIA_ButtonControlTypeId, buttonText, label))
         {
             return true;
         }
 
-        SelfTest::AppendSelfTestTrace(std::format(
-            L"CompareOptions: UIA InvokePattern did not complete '{}'; using the explicit focus + Space fallback.", label));
+        SelfTest::AppendSelfTestTrace(
+            std::format(L"CompareOptions: UIA InvokePattern did not complete '{}'; using the explicit focus + Space fallback.", label));
         return DebugFocusCompareDirectoriesOptionsTargetForWindow(compare, target) && sendSpaceToTargetHost(target, label);
     };
 
@@ -1577,8 +1559,8 @@ struct CompareOptionsEditDiagnosticState
     state.Require(waitForOptionsSnapshot(
                       [](const CompareDirectoriesOptionsDebugSnapshot& value) noexcept
     {
-        return value.focusTarget == CompareDirectoriesOptionsDebugFocusTarget::None && value.optionsDialogVisible && value.visibleBodyRenderedDxHostCount == 1u &&
-               value.bodyDxHostResizeFailureCount == 0u;
+        return value.focusTarget == CompareDirectoriesOptionsDebugFocusTarget::None && value.optionsDialogVisible &&
+               value.visibleBodyRenderedDxHostCount == 1u && value.bodyDxHostResizeFailureCount == 0u;
     },
                       restoredSnapshot),
                   L"Compare Directories options did not keep neutral DX focus before reopened edit restore validation.");
@@ -1804,8 +1786,7 @@ struct CompareOptionsEditDiagnosticState
     state.Require(DebugFocusCompareDirectoriesOptionsTarget(CompareDirectoriesOptionsDebugFocusTarget::IgnoreFilesEdit),
                   L"Compare Directories options did not focus the ignore-files edit before theme-cycle validation.");
     const std::wstring ignoreFilesEditName = LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_IGNORE_FILES_TITLE);
-    state.Require(! ignoreFilesEditName.empty(),
-                  L"Compare Directories options Ignore files title should resolve before theme-cycle validation.");
+    state.Require(! ignoreFilesEditName.empty(), L"Compare Directories options Ignore files title should resolve before theme-cycle validation.");
     state.Require(waitForOptionsSnapshot(
                       [](const CompareDirectoriesOptionsDebugSnapshot& value) noexcept
     {
@@ -1991,8 +1972,7 @@ struct CompareOptionsEditDiagnosticState
                           std::format(L"Compare Directories options should keep visible DX command-button support after the {} theme update.", label));
         }
 
-        const auto valueState =
-            WaitForNamedCompareOptionsEditValueState(compare, ignoreFilesEditName, L"Compare Directories theme-cycle edit read");
+        const auto valueState = WaitForNamedCompareOptionsEditValueState(compare, ignoreFilesEditName, L"Compare Directories theme-cycle edit read");
         if (! valueState.has_value())
         {
             const auto editStates = CollectVisibleCompareOptionsEditDiagnostics(compare, label);
@@ -2799,8 +2779,9 @@ struct CompareOptionsEditDiagnosticState
         };
 
         std::vector<ScrollableResizeCandidate> scrollableResizeCandidates;
-        const UINT resizeDpi = (std::max)(static_cast<UINT>(USER_DEFAULT_SCREEN_DPI), GetDpiForWindow(compare));
-        const auto dipsToPixels = [resizeDpi](const int dips) noexcept { return (std::max)(1, MulDiv(dips, static_cast<int>(resizeDpi), USER_DEFAULT_SCREEN_DPI)); };
+        const UINT resizeDpi    = (std::max)(static_cast<UINT>(USER_DEFAULT_SCREEN_DPI), GetDpiForWindow(compare));
+        const auto dipsToPixels = [resizeDpi](const int dips) noexcept
+        { return (std::max)(1, MulDiv(dips, static_cast<int>(resizeDpi), USER_DEFAULT_SCREEN_DPI)); };
         const auto addScrollableResizeCandidate = [&](int widthPx, int heightPx) noexcept
         {
             widthPx  = std::clamp(widthPx, 1, currentWidthPx);
@@ -2865,11 +2846,10 @@ struct CompareOptionsEditDiagnosticState
             PumpPendingMessages();
 
             CompareDirectoriesOptionsDebugSnapshot candidateSnapshot = snapshot;
-            const bool candidateScrollable = resized != FALSE &&
-                                             waitForOptionsSnapshot([&](const CompareDirectoriesOptionsDebugSnapshot& value) noexcept
-                                             { return hasSettledDxShell(value) && value.bodyScrollMax > 0; },
-                                                                    candidateSnapshot);
-            snapshot = candidateSnapshot;
+            const bool candidateScrollable = resized != FALSE && waitForOptionsSnapshot([&](const CompareDirectoriesOptionsDebugSnapshot& value) noexcept {
+                return hasSettledDxShell(value) && value.bodyScrollMax > 0;
+            }, candidateSnapshot);
+            snapshot                       = candidateSnapshot;
 
             RECT actualRect{};
             static_cast<void>(GetWindowRect(compare, &actualRect));

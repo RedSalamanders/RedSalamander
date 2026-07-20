@@ -319,8 +319,7 @@ std::unique_ptr<FolderView::EnumerationPayload> FolderView::ExecuteEnumeration(c
         return payload;
     }
 
-    auto borrowed =
-        DirectoryInfoCache::GetInstance().BorrowDirectoryInfo(_fileSystem.get(), folder, DirectoryInfoCache::BorrowMode::AllowEnumerate, stopToken);
+    auto borrowed = DirectoryInfoCache::GetInstance().BorrowDirectoryInfo(_fileSystem.get(), folder, DirectoryInfoCache::BorrowMode::AllowEnumerate, stopToken);
     if (borrowed.Status() != S_OK)
     {
         payload->status = borrowed.Status();
@@ -358,8 +357,8 @@ std::unique_ptr<FolderView::EnumerationPayload> FolderView::ExecuteEnumeration(c
         {
             bufferSizeHint = 0;
         }
-        const size_t countHint = static_cast<size_t>(entryCount);
-        const size_t maxByBuffer = bufferSizeHint > 0u ? static_cast<size_t>(bufferSizeHint) / sizeof(FileInfo) : countHint;
+        const size_t countHint    = static_cast<size_t>(entryCount);
+        const size_t maxByBuffer  = bufferSizeHint > 0u ? static_cast<size_t>(bufferSizeHint) / sizeof(FileInfo) : countHint;
         const size_t clampedCount = std::min(countHint, std::min(maxByBuffer, kEnumerationReserveCeiling));
 
         // GetCount is an untrusted allocation hint; reserve only a bounded amount derived from the real buffer.
@@ -673,7 +672,7 @@ std::unique_ptr<FolderView::EnumerationPayload> FolderView::ExecuteEnumeration(c
                     UniqueThreadpoolWork tpWork(::CreateThreadpoolWork(
                         [](PTP_CALLBACK_INSTANCE, PVOID context, PTP_WORK) noexcept
                     {
-                        auto* work = static_cast<QueryWork*>(context);
+                        auto* work                   = static_cast<QueryWork*>(context);
                         [[maybe_unused]] auto coInit = wil::CoInitializeEx_failfast(COINIT_MULTITHREADED);
                         if (work->stopRequested->load() ||
                             (work->generationCounter && work->generationCounter->load(std::memory_order_acquire) != work->generation))
@@ -758,7 +757,7 @@ std::unique_ptr<FolderView::EnumerationPayload> FolderView::ExecuteEnumeration(c
                 {
                     std::vector<size_t> itemIndices;
                     std::wstring fullPath;
-                    DWORD fileAttributes                    = 0;
+                    DWORD fileAttributes                     = 0;
                     std::atomic<bool>* stopRequested         = nullptr;
                     std::atomic<uint64_t>* generationCounter = nullptr;
                     uint64_t generation                      = 0;
@@ -810,7 +809,7 @@ std::unique_ptr<FolderView::EnumerationPayload> FolderView::ExecuteEnumeration(c
                     UniqueThreadpoolWork workItem(::CreateThreadpoolWork(
                         [](PTP_CALLBACK_INSTANCE, PVOID context, PTP_WORK) noexcept
                     {
-                        auto* work = static_cast<PerFileWork*>(context);
+                        auto* work                   = static_cast<PerFileWork*>(context);
                         [[maybe_unused]] auto coInit = wil::CoInitializeEx_failfast(COINIT_MULTITHREADED);
                         if (work->stopRequested->load() ||
                             (work->generationCounter && work->generationCounter->load(std::memory_order_acquire) != work->generation))
@@ -999,9 +998,8 @@ void FolderView::OnDirectoryCacheDirty()
         const UINT_PTR timer      = SetTimer(_hWnd.get(), kDirectoryCacheRefreshTimerId, intervalMs, nullptr);
         if (timer != 0)
         {
-            _directoryCacheRefreshTimer = timer;
-            _pendingRefreshDebounceDelayMs =
-                (std::max)(_pendingRefreshDebounceDelayMs, static_cast<uint64_t>(intervalMs));
+            _directoryCacheRefreshTimer    = timer;
+            _pendingRefreshDebounceDelayMs = (std::max)(_pendingRefreshDebounceDelayMs, static_cast<uint64_t>(intervalMs));
             return;
         }
     }
@@ -1069,24 +1067,24 @@ void FolderView::OnDirectoryImpact(std::unique_ptr<DirectoryInfoCache::Directory
                     }
                 }
 
-                bool collapsedChain  = false;
+                bool collapsedChain = false;
                 for (auto& rename : _pendingRefreshSelectionRenames)
                 {
                     if (WStringViewEq{}(rename.toDisplayName, impact->renamedFromDisplayName))
                     {
                         rename.toDisplayName.assign(impact->renamedToDisplayName);
                         rename.fromWasSelected = rename.fromWasSelected || fromWasSelected;
-                        rename.expiresAt = expiresAt;
-                        collapsedChain = true;
+                        rename.expiresAt       = expiresAt;
+                        collapsedChain         = true;
                     }
                 }
 
                 if (! collapsedChain)
                 {
                     _pendingRefreshSelectionRenames.push_back({.fromDisplayName = impact->renamedFromDisplayName,
-                                                               .toDisplayName = impact->renamedToDisplayName,
+                                                               .toDisplayName   = impact->renamedToDisplayName,
                                                                .fromWasSelected = fromWasSelected,
-                                                               .expiresAt = expiresAt});
+                                                               .expiresAt       = expiresAt});
                 }
             }
             OnDirectoryCacheDirty();
@@ -1123,7 +1121,7 @@ void FolderView::RequestRefreshFromCache()
     }
 
     EnsureEnumerationThread();
-    const uint64_t generation = _enumerationGeneration.fetch_add(1, std::memory_order_release) + 1;
+    const uint64_t generation      = _enumerationGeneration.fetch_add(1, std::memory_order_release) + 1;
     const uint64_t debounceDelayMs = _pendingRefreshDebounceDelayMs;
     _pendingRefreshDebounceDelayMs = 0u;
     RecordPendingRefreshToPaintStart(generation, debounceDelayMs);
@@ -1580,8 +1578,8 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
     std::vector<bool> refreshSelectionRenameTargetsObserved(refreshSelectionRenames.size(), false);
 
     // Incremental refresh: preserve rendering state for unchanged items
-    size_t itemsPreserved = 0;
-    size_t selectionPreserved = 0;
+    size_t itemsPreserved               = 0;
+    size_t selectionPreserved           = 0;
     size_t renameSelectionTransferCount = 0;
     if (isRefresh && ! _items.empty())
     {
@@ -1603,9 +1601,9 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
                 continue; // New item, no state to transfer
             }
 
-            const auto& oldItem = _items[it->second];
+            const auto& oldItem          = _items[it->second];
             oldItemsObserved[it->second] = true;
-            newItem.selected    = oldItem.selected;
+            newItem.selected             = oldItem.selected;
             if (oldItem.selected)
             {
                 ++selectionPreserved;
@@ -1750,14 +1748,13 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
         Debug::Perf::Emit(L"folder.refresh.preserve_count", L"", 0, preservedCount, itemCount, S_OK);
         Debug::Perf::Emit(L"folder.refresh.rebuild_count", L"", 0, rebuildCount, itemCount, S_OK);
         Debug::Perf::Emit(L"folder.refresh.selection_preserve_count", L"", 0, static_cast<uint64_t>(selectionPreserved), itemCount, S_OK);
-        Debug::Perf::Emit(
-            L"folder.refresh.rename_transfer_count", L"", 0, static_cast<uint64_t>(renameSelectionTransferCount), static_cast<uint64_t>(refreshSelectionRenames.size()), S_OK);
-        Debug::Perf::Emit(L"folder.refresh.missing_selection_count",
+        Debug::Perf::Emit(L"folder.refresh.rename_transfer_count",
                           L"",
                           0,
-                          static_cast<uint64_t>(_recentlyMissingRefreshSelections.size()),
-                          itemCount,
+                          static_cast<uint64_t>(renameSelectionTransferCount),
+                          static_cast<uint64_t>(refreshSelectionRenames.size()),
                           S_OK);
+        Debug::Perf::Emit(L"folder.refresh.missing_selection_count", L"", 0, static_cast<uint64_t>(_recentlyMissingRefreshSelections.size()), itemCount, S_OK);
         Debug::Perf::Emit(L"folder.refresh.debounce_delay_ms", L"", 0, debounceDelayMs, itemCount, S_OK);
         Debug::Perf::Emit(L"folder.refresh.enumeration_count", L"", 0, 1u, itemCount, S_OK);
         UpdatePendingRefreshToPaintResult(payload->generation, itemCount);

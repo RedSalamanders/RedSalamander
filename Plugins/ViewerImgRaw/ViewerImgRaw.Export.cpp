@@ -378,8 +378,7 @@ HRESULT EncodeBgraToImageFileWic(const std::wstring& outputPath,
         layout.rowBytes > std::numeric_limits<UINT>::max())
     {
         outStatusMessage = LoadStringResource(g_hInstance, IDS_VIEWERRAW_EXPORT_IMAGE_TOO_LARGE);
-        return validation == ViewerImgRawResource::ValidationError::InvalidDimensions ? E_INVALIDARG
-                                                                                       : HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+        return validation == ViewerImgRawResource::ValidationError::InvalidDimensions ? E_INVALIDARG : HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
     }
     if (layout.bgraBytes > bgra.size())
     {
@@ -412,8 +411,8 @@ HRESULT EncodeBgraToImageFileWic(const std::wstring& outputPath,
     // below) is destroyed first — closing its file handle — and this scope_exit fires last,
     // deleting the temp after the handle is gone. On success, `committed` is set only after the
     // rename, so the (already renamed-away) temp is never deleted.
-    bool committed = false;
-    auto cleanupTemp            = wil::scope_exit([&tempPath, &committed]() noexcept
+    bool committed   = false;
+    auto cleanupTemp = wil::scope_exit([&tempPath, &committed]() noexcept
     {
         if (! committed)
         {
@@ -621,7 +620,7 @@ HRESULT EncodeBgraToImageFileWic(const std::wstring& outputPath,
     if (MoveFileExW(tempPath.c_str(), outputWin32Path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) == 0)
     {
         const DWORD lastError = GetLastError();
-        outStatusMessage = FormatExportError(IDS_VIEWERRAW_EXPORT_FINALIZE_FAILED_FMT, HRESULT_FROM_WIN32(lastError));
+        outStatusMessage      = FormatExportError(IDS_VIEWERRAW_EXPORT_FINALIZE_FAILED_FMT, HRESULT_FROM_WIN32(lastError));
         return HRESULT_FROM_WIN32(lastError); // cleanupTemp removes the temp; the original is untouched
     }
 
@@ -724,7 +723,7 @@ void ViewerImgRaw::BeginExportImpl(HWND hwnd, const wchar_t* outputPathOverride)
         ExportSaveDialogResult overridden{};
         overridden.path             = outputPathOverride;
         overridden.formatFromFilter = ExportFormatFromExtension(PathExtensionView(overridden.path)).value_or(defaultFormat);
-        save                         = std::move(overridden);
+        save                        = std::move(overridden);
     }
     else
     {
@@ -808,7 +807,7 @@ void ViewerImgRaw::BeginExportImpl(HWND hwnd, const wchar_t* outputPathOverride)
         Release(); // balance the AddRef() above
         return;
     }
-    ctx->work            = [this, hwnd, exportFormat, width = w, height = h, encoderOptions, output = std::move(output), pixels = std::move(pixels)]() mutable
+    ctx->work = [this, hwnd, exportFormat, width = w, height = h, encoderOptions, output = std::move(output), pixels = std::move(pixels)]() mutable
     {
         auto releaseSelf = wil::scope_exit([&] { Release(); });
 

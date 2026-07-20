@@ -5,14 +5,14 @@
 #include "DxUiThemePalette.h"
 #include "FileActionLauncher.h"
 #include "FileActionResolver.h"
-#include "FolderWindowInternal.h"
 #include "FolderWindow.FileSystem.Private.h"
+#include "FolderWindowInternal.h"
 #include "Helpers.h"
-#include "LocalFileTransaction.h"
-#include "PathUtils.h"
 #include "HostServices.h"
+#include "LocalFileTransaction.h"
 #include "MaskSyntax.h"
 #include "NavigationLocation.h"
+#include "PathUtils.h"
 
 #include "SettingsStore.h"
 #include "ViewerPluginManager.h"
@@ -4615,8 +4615,7 @@ void FolderWindow::SetFolderPath(Pane pane, const std::filesystem::path& path)
             return;
         }
 
-        static_cast<void>(
-            ShowConnectionManagerWindow(_hWnd.get(), *this, L"RedSalamander", *_settings, _theme, filterPluginId, static_cast<uint8_t>(pane)));
+        static_cast<void>(ShowConnectionManagerWindow(_hWnd.get(), *this, L"RedSalamander", *_settings, _theme, filterPluginId, static_cast<uint8_t>(pane)));
     };
 
     auto parseNavConnectionName = [&](std::wstring_view rawNavText, std::wstring& outConnectionName, std::wstring& outPathOverride) -> bool
@@ -5557,7 +5556,8 @@ bool DebugSetFolderViewPaneFilterPromptHelpExpanded(bool expanded) noexcept
 bool DebugConfirmFolderViewPaneFilterPrompt() noexcept
 {
     const HWND hwnd = GetFolderViewPaneFilterPromptHandle();
-    return PostDxUiPromptCloseDebugCommand(hwnd, WndMsg::kFolderViewPaneFilterPromptDebug, static_cast<WPARAM>(FolderViewPaneFilterPromptDebugCommand::Confirm));
+    return PostDxUiPromptCloseDebugCommand(
+        hwnd, WndMsg::kFolderViewPaneFilterPromptDebug, static_cast<WPARAM>(FolderViewPaneFilterPromptDebugCommand::Confirm));
 }
 
 bool DebugCancelFolderViewPaneFilterPrompt() noexcept
@@ -5787,7 +5787,8 @@ bool DebugSetFolderViewChangeCasePromptSelections(size_t styleIndex, size_t targ
 bool DebugConfirmFolderViewChangeCasePrompt() noexcept
 {
     const HWND hwnd = GetFolderViewChangeCasePromptHandle();
-    return PostDxUiPromptCloseDebugCommand(hwnd, WndMsg::kFolderViewChangeCasePromptDebug, static_cast<WPARAM>(FolderViewChangeCasePromptDebugCommand::Confirm));
+    return PostDxUiPromptCloseDebugCommand(
+        hwnd, WndMsg::kFolderViewChangeCasePromptDebug, static_cast<WPARAM>(FolderViewChangeCasePromptDebugCommand::Confirm));
 }
 
 bool DebugCancelFolderViewChangeCasePrompt() noexcept

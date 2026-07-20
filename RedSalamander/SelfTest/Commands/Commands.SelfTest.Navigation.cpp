@@ -276,8 +276,8 @@ void RestorePanePluginAndPathAfterNavigationCase(FolderWindow::Pane pane,
     const auto requireStableNavigationShell = [&](std::wstring_view expectedFocusedItem, std::wstring_view context) noexcept
     {
         NavigationViewDebugSnapshot snapshot{};
-        const bool shellStable = WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
-                                                               [&](const NavigationViewDebugSnapshot& value) noexcept
+        const bool shellStable                                     = WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
+                                                                                                   [&](const NavigationViewDebugSnapshot& value) noexcept
         {
             return value.focusTarget == NavigationViewDebugFocusTarget::None && ! value.editMode && ! value.historyDropdownVisible &&
                    ! value.editSuggestPopupVisible && ! value.fullPathPopupVisible && ! value.fullPathPopupEditMode && value.visibleChildWindowCount == 0u &&
@@ -821,8 +821,8 @@ void RestorePanePluginAndPathAfterNavigationCase(FolderWindow::Pane pane,
     const auto requireStableNavigationShell = [&](size_t expectedSelectedCount, std::wstring_view context) noexcept
     {
         NavigationViewDebugSnapshot snapshot{};
-        const bool shellStable = WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
-                                                               [&](const NavigationViewDebugSnapshot& value) noexcept
+        const bool shellStable                                     = WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
+                                                                                                   [&](const NavigationViewDebugSnapshot& value) noexcept
         {
             return value.focusTarget == NavigationViewDebugFocusTarget::None && ! value.editMode && ! value.historyDropdownVisible &&
                    ! value.editSuggestPopupVisible && ! value.fullPathPopupVisible && ! value.fullPathPopupEditMode && value.visibleChildWindowCount == 0u &&
@@ -837,30 +837,29 @@ void RestorePanePluginAndPathAfterNavigationCase(FolderWindow::Pane pane,
         const std::optional<std::filesystem::path> currentPanePath = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
         state.Require(
             shellStable,
-            std::format(
-                L"Navigation shell did not stay quiet during {}; focusTarget={}, editMode={}, historyVisible={}, suggestVisible={}, "
-                L"popupVisible={}, childWindows={}, currentPath='{}', panePath='{}', baselinePath='{}', historyCount={}, baselineHistoryCount={}, "
-                L"refreshCount={}, itemCount={}, baselineItemCount={}, selectedCount={}, expectedSelectedCount={}, focusedItem='{}', "
-                L"focusedFolderViewMatch={}.",
-                context,
-                static_cast<unsigned>(snapshot.focusTarget),
-                snapshot.editMode ? L"yes" : L"no",
-                snapshot.historyDropdownVisible ? L"yes" : L"no",
-                snapshot.editSuggestPopupVisible ? L"yes" : L"no",
-                snapshot.fullPathPopupVisible ? L"yes" : L"no",
-                snapshot.visibleChildWindowCount,
-                snapshot.currentPathText,
-                currentPanePath.has_value() ? currentPanePath->wstring() : std::wstring{},
-                baselineSnapshot.currentPathText,
-                snapshot.historyCount,
-                baselineSnapshot.historyCount,
-                g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left),
-                g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left),
-                baselineItemCount,
-                g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left),
-                expectedSelectedCount,
-                g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left),
-                g_folderWindow.GetFocusedFolderViewHwnd() == folderView ? L"yes" : L"no"));
+            std::format(L"Navigation shell did not stay quiet during {}; focusTarget={}, editMode={}, historyVisible={}, suggestVisible={}, "
+                        L"popupVisible={}, childWindows={}, currentPath='{}', panePath='{}', baselinePath='{}', historyCount={}, baselineHistoryCount={}, "
+                        L"refreshCount={}, itemCount={}, baselineItemCount={}, selectedCount={}, expectedSelectedCount={}, focusedItem='{}', "
+                        L"focusedFolderViewMatch={}.",
+                        context,
+                        static_cast<unsigned>(snapshot.focusTarget),
+                        snapshot.editMode ? L"yes" : L"no",
+                        snapshot.historyDropdownVisible ? L"yes" : L"no",
+                        snapshot.editSuggestPopupVisible ? L"yes" : L"no",
+                        snapshot.fullPathPopupVisible ? L"yes" : L"no",
+                        snapshot.visibleChildWindowCount,
+                        snapshot.currentPathText,
+                        currentPanePath.has_value() ? currentPanePath->wstring() : std::wstring{},
+                        baselineSnapshot.currentPathText,
+                        snapshot.historyCount,
+                        baselineSnapshot.historyCount,
+                        g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left),
+                        g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left),
+                        baselineItemCount,
+                        g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left),
+                        expectedSelectedCount,
+                        g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left),
+                        g_folderWindow.GetFocusedFolderViewHwnd() == folderView ? L"yes" : L"no"));
     };
 
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_SELECTION_SELECT_ALL, 0), 0);
@@ -2056,12 +2055,12 @@ void RestorePanePluginAndPathAfterNavigationCase(FolderWindow::Pane pane,
 
         NavigationViewDebugSnapshot snapshot{};
         std::wstring focusedItem;
-        uint64_t refreshCount    = 0u;
-        size_t itemCount         = 0u;
-        size_t selectedCount     = 0u;
-        bool capturedSnapshot    = false;
-        bool shellStable         = false;
-        const auto deadline      = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
+        uint64_t refreshCount = 0u;
+        size_t itemCount      = 0u;
+        size_t selectedCount  = 0u;
+        bool capturedSnapshot = false;
+        bool shellStable      = false;
+        const auto deadline   = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
         while (std::chrono::steady_clock::now() < deadline)
         {
             PumpPendingMessages();
@@ -2091,30 +2090,30 @@ void RestorePanePluginAndPathAfterNavigationCase(FolderWindow::Pane pane,
                                   L"suggestVisible={}, popupVisible={}, childWindows={}, currentPath='{}', expectedPath='{}', historyCount={}/{}, "
                                   L"refreshCount={}/{}, itemCount={}/{}, selectedCount={}/{}, focusedItem='{}'/'b.log', focusedFolderView=0x{:X}, "
                                   L"expectedFolderView=0x{:X}, activePane={}, focusedPane={}, focusHwnd=0x{:X}.",
-                        context,
-                        capturedSnapshot ? L"yes" : L"no",
-                        static_cast<unsigned>(snapshot.focusTarget),
-                        snapshot.editMode ? L"yes" : L"no",
-                        snapshot.historyDropdownVisible ? L"yes" : L"no",
-                        snapshot.editSuggestPopupVisible ? L"yes" : L"no",
-                        snapshot.fullPathPopupVisible ? L"yes" : L"no",
-                        snapshot.visibleChildWindowCount,
-                        snapshot.currentPathText,
-                        root.wstring(),
-                        snapshot.historyCount,
-                        baselineSnapshot.historyCount,
-                        refreshCount,
-                        baselineRefreshCount,
-                        itemCount,
-                        baselineItemCount,
-                        selectedCount,
-                        expectedSelectedCount,
-                        focusedItem,
-                        reinterpret_cast<uintptr_t>(focusedFolderView),
-                        reinterpret_cast<uintptr_t>(folderView),
-                        g_folderWindow.GetActivePane() == FolderWindow::Pane::Left ? L"Left" : L"Right",
-                        g_folderWindow.GetFocusedPane() == FolderWindow::Pane::Left ? L"Left" : L"Right",
-                        reinterpret_cast<uintptr_t>(GetFocus())));
+                                  context,
+                                  capturedSnapshot ? L"yes" : L"no",
+                                  static_cast<unsigned>(snapshot.focusTarget),
+                                  snapshot.editMode ? L"yes" : L"no",
+                                  snapshot.historyDropdownVisible ? L"yes" : L"no",
+                                  snapshot.editSuggestPopupVisible ? L"yes" : L"no",
+                                  snapshot.fullPathPopupVisible ? L"yes" : L"no",
+                                  snapshot.visibleChildWindowCount,
+                                  snapshot.currentPathText,
+                                  root.wstring(),
+                                  snapshot.historyCount,
+                                  baselineSnapshot.historyCount,
+                                  refreshCount,
+                                  baselineRefreshCount,
+                                  itemCount,
+                                  baselineItemCount,
+                                  selectedCount,
+                                  expectedSelectedCount,
+                                  focusedItem,
+                                  reinterpret_cast<uintptr_t>(focusedFolderView),
+                                  reinterpret_cast<uintptr_t>(folderView),
+                                  g_folderWindow.GetActivePane() == FolderWindow::Pane::Left ? L"Left" : L"Right",
+                                  g_folderWindow.GetFocusedPane() == FolderWindow::Pane::Left ? L"Left" : L"Right",
+                                  reinterpret_cast<uintptr_t>(GetFocus())));
     };
 
     const auto runMaskDialogPass = [&](const UINT commandId,
@@ -4239,8 +4238,8 @@ struct OwnedMenuSessionEscapeResult
     }
 
     NavigationViewDebugSnapshot closedSnapshot{};
-    const bool shellClosedCleanly = WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
-                                                                  [&](const NavigationViewDebugSnapshot& value) noexcept
+    const bool shellClosedCleanly                              = WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
+                                                                                               [&](const NavigationViewDebugSnapshot& value) noexcept
     {
         return ! value.editMode && ! value.historyDropdownVisible && ! value.editSuggestPopupVisible && ! value.fullPathPopupVisible &&
                ! value.fullPathPopupEditMode && value.visibleChildWindowCount == 0u && value.currentPathText == root.wstring() &&
@@ -4606,9 +4605,9 @@ struct OwnedMenuSessionEscapeResult
         return false;
     }
 
-    const HWND editHost             = editSnapshot.currentEditHostHwnd;
-    const std::wstring selectedText = editSnapshot.currentEditText;
-    const std::wstring pastedText   = L"pasted-address-text";
+    const HWND editHost                = editSnapshot.currentEditHostHwnd;
+    const std::wstring selectedText    = editSnapshot.currentEditText;
+    const std::wstring pastedText      = L"pasted-address-text";
     const auto waitForSelectedEditText = [&](NavigationViewDebugSnapshot& outSnapshot) noexcept
     {
         return WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
@@ -4656,8 +4655,7 @@ struct OwnedMenuSessionEscapeResult
     if (! waitForSelectedEditText(selectionBeforePaste))
     {
         selectAllEditText();
-        state.Require(waitForSelectedEditText(selectionBeforePaste),
-                      L"Address-bar edit selection should remain selected immediately before paste validation.");
+        state.Require(waitForSelectedEditText(selectionBeforePaste), L"Address-bar edit selection should remain selected immediately before paste validation.");
     }
     if (! state.failure.empty())
     {
@@ -4669,13 +4667,9 @@ struct OwnedMenuSessionEscapeResult
     PumpPendingMessages();
 
     NavigationViewDebugSnapshot pastedSnapshot{};
-    const bool pasteApplied = WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
-                                                            [&](const NavigationViewDebugSnapshot& value) noexcept
-    {
+    const bool pasteApplied                 = WaitForNavigationViewSnapshot(FolderWindow::Pane::Left, [&](const NavigationViewDebugSnapshot& value) noexcept {
         return value.editMode && value.currentEditHostHwnd == editHost && value.currentEditText == pastedText && ! value.currentEditHasSelection;
-    },
-                                                            SelfTest::Scale(3000ms),
-                                                            &pastedSnapshot);
+    }, SelfTest::Scale(3000ms), &pastedSnapshot);
     const std::wstring nativeTextAfterPaste = ReadWindowText(pastedSnapshot.currentEditInputHwnd);
     state.Require(pasteApplied,
                   std::format(L"Ctrl+V/Paste command should replace the selected address-bar edit text while edit mode is active; "
@@ -7051,18 +7045,18 @@ struct OwnedMenuSessionEscapeResult
         Sleep(20);
     }
 
-    const HWND focusedFolderView                 = g_folderWindow.GetFocusedFolderViewHwnd();
-    const HWND win32Focus                        = GetFocus();
-    const uint64_t currentRefreshCount           = g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left);
-    const size_t currentItemCount                = g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left);
-    const size_t currentSelectedCount            = g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left);
+    const HWND focusedFolderView       = g_folderWindow.GetFocusedFolderViewHwnd();
+    const HWND win32Focus              = GetFocus();
+    const uint64_t currentRefreshCount = g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left);
+    const size_t currentItemCount      = g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left);
+    const size_t currentSelectedCount  = g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left);
     const std::wstring currentFocusedDisplayName{g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left)};
-    const bool panePathStable                    = restoredPath.has_value() && OrdinalString::EqualsNoCasePath(restoredPath.value(), leftRoot);
-    const bool focusedFolderViewMatch            = focusedFolderView == folderView;
-    const bool focusedItemMatch                  = currentFocusedDisplayName == L"b.log";
-    const bool refreshCountStable                = currentRefreshCount == baselineRefreshCount;
-    const bool itemCountStable                   = currentItemCount == baselineItemCount;
-    const bool selectedCountStable               = currentSelectedCount == baselineSelectedCount;
+    const bool panePathStable         = restoredPath.has_value() && OrdinalString::EqualsNoCasePath(restoredPath.value(), leftRoot);
+    const bool focusedFolderViewMatch = focusedFolderView == folderView;
+    const bool focusedItemMatch       = currentFocusedDisplayName == L"b.log";
+    const bool refreshCountStable     = currentRefreshCount == baselineRefreshCount;
+    const bool itemCountStable        = currentItemCount == baselineItemCount;
+    const bool selectedCountStable    = currentSelectedCount == baselineSelectedCount;
 
     state.Require(shellRestored,
                   std::format(L"Navigation shell did not restore cleanly after Compare Directories close; focusTarget={}, editMode={}, historyVisible={}, "
@@ -9125,8 +9119,8 @@ struct OwnedMenuSessionEscapeResult
     }
 
     NavigationViewDebugSnapshot snapshot{};
-    const bool shellStable = WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
-                                                           [&](const NavigationViewDebugSnapshot& value) noexcept
+    const bool shellStable                                     = WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
+                                                                                               [&](const NavigationViewDebugSnapshot& value) noexcept
     {
         return value.focusTarget == NavigationViewDebugFocusTarget::None && ! value.editMode && ! value.historyDropdownVisible &&
                ! value.editSuggestPopupVisible && ! value.fullPathPopupVisible && ! value.fullPathPopupEditMode && value.visibleChildWindowCount == 0u &&

@@ -28,7 +28,7 @@ void SendScaledHeaderResizeDrag(HWND activePage, const RECT& headerRect) noexcep
 
     constexpr size_t kRequiredStableSamples = 24u;
 
-    const auto deadline          = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
+    const auto deadline              = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
     uint64_t previousRenderCount     = 0u;
     uint64_t previousInvalidateCount = 0u;
     size_t stableSamples             = 0u;
@@ -80,8 +80,8 @@ void SendScaledHeaderResizeDrag(HWND activePage, const RECT& headerRect) noexcep
         return false;
     }
 
-    const HWND ancestor = GetAncestor(hwnd, GA_ROOT);
-    const HWND root     = ancestor ? ancestor : hwnd;
+    const HWND ancestor       = GetAncestor(hwnd, GA_ROOT);
+    const HWND root           = ancestor ? ancestor : hwnd;
     const auto targetHasFocus = [&]() noexcept
     {
         const HWND focused = GetFocus();
@@ -514,9 +514,9 @@ private:
 } // namespace
 
 #include "Commands.SelfTest.Preferences.ChromeAndPlugins.cpp"
+#include "Commands.SelfTest.Preferences.Dispatch.cpp"
 #include "Commands.SelfTest.Preferences.FileOpsCompareAndTree.cpp"
 #include "Commands.SelfTest.Preferences.HotPathsAndKeyboard.cpp"
 #include "Commands.SelfTest.Preferences.PluginsThemesAdvanced.cpp"
 #include "Commands.SelfTest.Preferences.ThemesGeneralPanes.cpp"
 #include "Commands.SelfTest.Preferences.ViewersAndKeyboardLists.cpp"
-#include "Commands.SelfTest.Preferences.Dispatch.cpp"

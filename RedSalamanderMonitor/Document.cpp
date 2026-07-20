@@ -202,8 +202,8 @@ void Document::SetText(const std::wstring& text)
     _lines.clear();
     _visibleLines.clear(); // Clear visible lines when replacing all text
     _retainedTextBytes = 0u;
-    size_t start = 0;
-    size_t end   = 0;
+    size_t start       = 0;
+    size_t end         = 0;
     while (end != std::wstring::npos)
     {
         end = text.find(L'\n', start);
@@ -448,8 +448,8 @@ Document::RetentionResult Document::EnforceRetentionLimits(size_t maxLines, uint
         return result;
     }
 
-    _totalLengthValid  = false;
-    _offsetsValid      = false;
+    _totalLengthValid = false;
+    _offsetsValid     = false;
     _lineOffsets.clear();
     _maxLineCharsValid = false;
     _maxLineChars      = 0u;
@@ -934,8 +934,7 @@ Document::FilteredTailResult Document::BuildFilteredTailText(size_t firstAll, si
 bool Document::SaveTextToFile(const std::wstring& path) const
 {
     Common::Files::LocalFileTransaction transaction;
-    if (FAILED(Common::Files::LocalFileTransaction::Create(
-            std::filesystem::path(path), Common::Files::ExistingTargetPolicy::Replace, false, transaction)))
+    if (FAILED(Common::Files::LocalFileTransaction::Create(std::filesystem::path(path), Common::Files::ExistingTargetPolicy::Replace, false, transaction)))
     {
         return false;
     }

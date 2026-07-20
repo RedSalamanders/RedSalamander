@@ -71,11 +71,8 @@ struct ImapUidBatchRange
 [[nodiscard]] bool TryParseImapMailboxStatus(std::string_view response, ImapMailboxStatus& out) noexcept;
 [[nodiscard]] bool TryParseImapCapabilities(std::string_view response, ImapCapabilities& out) noexcept;
 [[nodiscard]] long ValidateImapMessageUidValidity(uint64_t expectedUidValidity, const std::optional<uint64_t>& observedUidValidity) noexcept;
-[[nodiscard]] long ExecuteImapSingleMessageDelete(bool uidPlusAvailable,
-                                                  uint64_t uid,
-                                                  ImapDeleteCommandExecutor executor,
-                                                  void* context,
-                                                  ImapDeleteOutcome& outOutcome) noexcept;
+[[nodiscard]] long ExecuteImapSingleMessageDelete(
+    bool uidPlusAvailable, uint64_t uid, ImapDeleteCommandExecutor executor, void* context, ImapDeleteOutcome& outOutcome) noexcept;
 [[nodiscard]] std::vector<ImapUidBatchRange> BuildImapUidBatchRanges(size_t uidCount, size_t maxBatchSize);
 [[nodiscard]] size_t ResolveImapSummaryRepairFetchBudget(size_t requestedUidCount) noexcept;
 } // namespace FileSystemCurlInternal

@@ -16,13 +16,13 @@
 
 namespace RedSalamander::ViewerFileComboHost
 {
-inline constexpr int kStandaloneComboHeightDip        = 28;
-inline constexpr int kStandaloneComboChromePaddingDip = 2;
-inline constexpr int kStandaloneComboAccentHeightDip  = 1;
-inline constexpr int kStandaloneComboAccentGapDip     = 1;
+inline constexpr int kStandaloneComboHeightDip               = 28;
+inline constexpr int kStandaloneComboChromePaddingDip        = 2;
+inline constexpr int kStandaloneComboAccentHeightDip         = 1;
+inline constexpr int kStandaloneComboAccentGapDip            = 1;
 inline constexpr size_t kStandaloneComboPopupMaxVisibleItems = 8u;
-inline constexpr int kStandaloneComboPopupRowHeightDip        = 24;
-inline constexpr int kStandaloneComboPopupChromeHeightDip     = 10;
+inline constexpr int kStandaloneComboPopupRowHeightDip       = 24;
+inline constexpr int kStandaloneComboPopupChromeHeightDip    = 10;
 
 [[nodiscard]] inline bool MessageMayOpenWindowComboPopup(UINT msg, WPARAM wp) noexcept
 {

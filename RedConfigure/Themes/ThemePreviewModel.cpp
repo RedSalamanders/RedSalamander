@@ -1,7 +1,7 @@
 #include "ThemePreviewModel.h"
 
-#include "ThemeDefinitionIo.h"
 #include "Helpers.h"
+#include "ThemeDefinitionIo.h"
 
 #include <array>
 #include <chrono>
@@ -53,7 +53,8 @@ constexpr std::array<DefaultColor, 26> kDefaultColors = {{
 [[nodiscard]] std::optional<std::wstring_view> PaletteNameFromEditorKey(std::wstring_view key) noexcept
 {
     constexpr std::wstring_view kPrefix = L"palette.";
-    if (! key.starts_with(kPrefix) || key.size() <= kPrefix.size()) return std::nullopt;
+    if (! key.starts_with(kPrefix) || key.size() <= kPrefix.size())
+        return std::nullopt;
     return key.substr(kPrefix.size());
 }
 } // namespace
@@ -80,8 +81,8 @@ std::optional<uint32_t> ThemePreviewModel::GetEffectiveColor(std::wstring_view k
     }
     if (const auto dynamic = _resolved.dynamicColors.find(std::wstring(key)); dynamic != _resolved.dynamicColors.end())
     {
-        return Common::Settings::EvaluateDynamicThemeColor(
-            dynamic->second, Common::Settings::ThemeRuntimeContext{.seedHash32 = _previewSeed, .highContrast = false});
+        return Common::Settings::EvaluateDynamicThemeColor(dynamic->second,
+                                                           Common::Settings::ThemeRuntimeContext{.seedHash32 = _previewSeed, .highContrast = false});
     }
     const auto found = _resolved.colors.find(std::wstring(key));
     if (found != _resolved.colors.end())
@@ -125,9 +126,9 @@ bool ThemePreviewModel::TryEditOverride(std::wstring_view key, std::wstring_view
         return false;
     }
     const std::wstring keyText(key);
-    auto& destination = paletteName.has_value() ? _theme.palette : _theme.colors;
+    auto& destination                 = paletteName.has_value() ? _theme.palette : _theme.colors;
     const std::wstring destinationKey = paletteName.has_value() ? std::wstring(paletteName.value()) : keyText;
-    const auto previous = destination.find(destinationKey);
+    const auto previous               = destination.find(destinationKey);
     const std::optional<Common::Settings::ThemeColorSource> previousSource =
         previous == destination.end() ? std::nullopt : std::optional<Common::Settings::ThemeColorSource>(previous->second);
     destination[destinationKey] = std::move(source);
@@ -172,19 +173,22 @@ bool ThemePreviewModel::CreatePaletteEntry(std::wstring_view name, std::wstring_
         reference.references.push_back(std::wstring(L"palette.") + std::wstring(name));
         for (auto& [paletteName, value] : candidate.palette)
         {
-            if (paletteName != name && value == source) value = reference;
+            if (paletteName != name && value == source)
+                value = reference;
         }
         for (auto& [_, value] : candidate.colors)
         {
-            if (value == source) value = reference;
+            if (value == source)
+                value = reference;
         }
     }
 
     const Common::Settings::ThemeDefinition previous = _theme;
-    _theme = std::move(candidate);
-    if (Recompute()) return true;
+    _theme                                           = std::move(candidate);
+    if (Recompute())
+        return true;
     const std::wstring failedError = _lastError;
-    _theme = previous;
+    _theme                         = previous;
     static_cast<void>(Recompute());
     _lastError = failedError;
     return false;
@@ -201,7 +205,7 @@ bool ThemePreviewModel::WrapSourceWithTransform(std::wstring_view key, ThemeSour
         return false;
     }
 
-    const auto& sources = paletteName.has_value() ? _theme.palette : _theme.colors;
+    const auto& sources          = paletteName.has_value() ? _theme.palette : _theme.colors;
     const std::wstring sourceKey = paletteName.has_value() ? std::wstring(paletteName.value()) : std::wstring(key);
     Common::Settings::ThemeColorSource original;
     if (const auto found = sources.find(sourceKey); found != sources.end())
@@ -223,7 +227,8 @@ bool ThemePreviewModel::WrapSourceWithTransform(std::wstring_view key, ThemeSour
     {
         const bool alphaNumeric = (ch >= L'a' && ch <= L'z') || (ch >= L'A' && ch <= L'Z') || (ch >= L'0' && ch <= L'9');
         stem.push_back(alphaNumeric ? ch : L'_');
-        if (stem.size() >= 52u) break;
+        if (stem.size() >= 52u)
+            break;
     }
     std::wstring generatedName = stem;
     for (uint32_t suffix = 2u; _theme.palette.contains(generatedName); ++suffix)
@@ -233,19 +238,20 @@ bool ThemePreviewModel::WrapSourceWithTransform(std::wstring_view key, ThemeSour
 
     Common::Settings::ThemeDefinition candidate = _theme;
     candidate.palette.emplace(generatedName, std::move(original));
-    const std::wstring expression = transform == ThemeSourceTransform::Darken10
-                                        ? std::format(L"darken(palette.{},10%)", generatedName)
-                                        : std::format(L"blend(palette.{0},app.accent,16%)", generatedName);
+    const std::wstring expression = transform == ThemeSourceTransform::Darken10 ? std::format(L"darken(palette.{},10%)", generatedName)
+                                                                                : std::format(L"blend(palette.{0},app.accent,16%)", generatedName);
     Common::Settings::ThemeColorSource transformed;
-    if (FAILED(Common::Settings::ParseThemeColorSource(expression, transformed, &_lastError))) return false;
-    auto& candidateSources = paletteName.has_value() ? candidate.palette : candidate.colors;
+    if (FAILED(Common::Settings::ParseThemeColorSource(expression, transformed, &_lastError)))
+        return false;
+    auto& candidateSources      = paletteName.has_value() ? candidate.palette : candidate.colors;
     candidateSources[sourceKey] = std::move(transformed);
 
     const Common::Settings::ThemeDefinition previous = _theme;
-    _theme = std::move(candidate);
-    if (Recompute()) return true;
+    _theme                                           = std::move(candidate);
+    if (Recompute())
+        return true;
     const std::wstring failedError = _lastError;
-    _theme = previous;
+    _theme                         = previous;
     static_cast<void>(Recompute());
     _lastError = failedError;
     return false;
@@ -278,18 +284,19 @@ bool ThemePreviewModel::RenamePaletteEntry(std::wstring_view oldName, std::wstri
     }
 
     Common::Settings::ThemeDefinition candidate = _theme;
-    auto source = candidate.palette.extract(std::wstring(oldName));
-    source.key() = std::wstring(newName);
+    auto source                                 = candidate.palette.extract(std::wstring(oldName));
+    source.key()                                = std::wstring(newName);
     candidate.palette.insert(std::move(source));
     const std::wstring oldReference = std::wstring(L"palette.") + std::wstring(oldName);
     const std::wstring newReference = std::wstring(L"palette.") + std::wstring(newName);
-    const auto rewrite = [&](auto& sources)
+    const auto rewrite              = [&](auto& sources)
     {
         for (auto& [_, value] : sources)
         {
             for (std::wstring& reference : value.references)
             {
-                if (reference == oldReference) reference = newReference;
+                if (reference == oldReference)
+                    reference = newReference;
             }
         }
     };
@@ -297,10 +304,11 @@ bool ThemePreviewModel::RenamePaletteEntry(std::wstring_view oldName, std::wstri
     rewrite(candidate.colors);
 
     const Common::Settings::ThemeDefinition previous = _theme;
-    _theme = std::move(candidate);
-    if (Recompute()) return true;
+    _theme                                           = std::move(candidate);
+    if (Recompute())
+        return true;
     const std::wstring failedError = _lastError;
-    _theme = previous;
+    _theme                         = previous;
     static_cast<void>(Recompute());
     _lastError = failedError;
     return false;
@@ -322,21 +330,25 @@ Common::Settings::ThemeColorEvaluationPhase ThemePreviewModel::GetEvaluationPhas
 {
     const auto phaseFor = [&](auto&& self, std::wstring_view sourceName, size_t depth) -> Common::Settings::ThemeColorEvaluationPhase
     {
-        if (depth >= 32u) return Common::Settings::ThemeColorEvaluationPhase::Load;
+        if (depth >= 32u)
+            return Common::Settings::ThemeColorEvaluationPhase::Load;
         const std::optional<std::wstring_view> paletteName = PaletteNameFromEditorKey(sourceName);
-        const auto& sources = paletteName.has_value() ? _theme.palette : _theme.colors;
-        const std::wstring sourceKey = paletteName.has_value() ? std::wstring(paletteName.value()) : std::wstring(sourceName);
-        const auto found = sources.find(sourceKey);
+        const auto& sources                                = paletteName.has_value() ? _theme.palette : _theme.colors;
+        const std::wstring sourceKey                       = paletteName.has_value() ? std::wstring(paletteName.value()) : std::wstring(sourceName);
+        const auto found                                   = sources.find(sourceKey);
         Common::Settings::ThemeColorEvaluationPhase phase =
             found == sources.end() ? Common::Settings::ThemeColorEvaluationPhase::Load : Common::Settings::GetThemeColorEvaluationPhase(found->second);
-        if (phase == Common::Settings::ThemeColorEvaluationPhase::Paint) return phase;
+        if (phase == Common::Settings::ThemeColorEvaluationPhase::Paint)
+            return phase;
         if (const auto dependencies = _resolved.dependencies.find(std::wstring(sourceName)); dependencies != _resolved.dependencies.end())
         {
             for (const std::wstring& dependency : dependencies->second)
             {
                 const auto dependencyPhase = self(self, dependency, depth + 1u);
-                if (dependencyPhase == Common::Settings::ThemeColorEvaluationPhase::Paint) return dependencyPhase;
-                if (dependencyPhase == Common::Settings::ThemeColorEvaluationPhase::Event) phase = dependencyPhase;
+                if (dependencyPhase == Common::Settings::ThemeColorEvaluationPhase::Paint)
+                    return dependencyPhase;
+                if (dependencyPhase == Common::Settings::ThemeColorEvaluationPhase::Event)
+                    phase = dependencyPhase;
             }
         }
         return phase;
@@ -347,9 +359,9 @@ Common::Settings::ThemeColorEvaluationPhase ThemePreviewModel::GetEvaluationPhas
 std::optional<Common::Settings::ThemeColorSourceKind> ThemePreviewModel::GetSourceKind(std::wstring_view key) const noexcept
 {
     const std::optional<std::wstring_view> paletteName = PaletteNameFromEditorKey(key);
-    const auto& sources = paletteName.has_value() ? _theme.palette : _theme.colors;
-    const std::wstring sourceKey = paletteName.has_value() ? std::wstring(paletteName.value()) : std::wstring(key);
-    const auto found = sources.find(sourceKey);
+    const auto& sources                                = paletteName.has_value() ? _theme.palette : _theme.colors;
+    const std::wstring sourceKey                       = paletteName.has_value() ? std::wstring(paletteName.value()) : std::wstring(key);
+    const auto found                                   = sources.find(sourceKey);
     return found == sources.end() ? std::nullopt : std::optional<Common::Settings::ThemeColorSourceKind>(found->second.kind);
 }
 
@@ -372,9 +384,9 @@ bool ThemePreviewModel::Recompute()
 {
     const auto startedAt = std::chrono::steady_clock::now();
     Common::Settings::ThemeResolutionContext context;
-    const bool light = IsLightBase(_theme.baseThemeId);
+    const bool light      = IsLightBase(_theme.baseThemeId);
     context.effectiveDark = ! light;
-    context.baseColor = [light](std::wstring_view key) -> std::optional<uint32_t>
+    context.baseColor     = [light](std::wstring_view key) -> std::optional<uint32_t>
     {
         for (const DefaultColor& color : kDefaultColors)
         {
@@ -385,8 +397,8 @@ bool ThemePreviewModel::Recompute()
         }
         return std::nullopt;
     };
-    context.systemColors = {{0xFF0078D4u, 0xFF60A5FAu, 0xFF005FB8u, light ? 0xFFFFFFFFu : 0xFF202020u,
-                             light ? 0xFF111111u : 0xFFF3F3F3u, 0xFF0078D4u, 0xFFFFFFFFu}};
+    context.systemColors = {
+        {0xFF0078D4u, 0xFF60A5FAu, 0xFF005FB8u, light ? 0xFFFFFFFFu : 0xFF202020u, light ? 0xFF111111u : 0xFFF3F3F3u, 0xFF0078D4u, 0xFFFFFFFFu}};
     Common::Settings::ResolvedThemeColors candidate;
     std::wstring message;
     if (FAILED(Common::Settings::ResolveThemeDefinition(_theme, context, candidate, &message)))

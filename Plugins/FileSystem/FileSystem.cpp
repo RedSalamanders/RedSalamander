@@ -1160,15 +1160,17 @@ void RunDebugMountedVolumeStorageProbeSelfTest(unsigned int& passed, unsigned in
         return;
     }
 
-    const HRESULT hr = fileSystem->GetStorageCharacteristics(L"R:\\MountedVolume\\Folder\\file.bin", &characteristics);
+    const HRESULT hr                        = fileSystem->GetStorageCharacteristics(L"R:\\MountedVolume\\Folder\\file.bin", &characteristics);
     const unsigned int firstVolumeNameCalls = state.volumeNameCalls;
-    const HRESULT cachedHr = fileSystem->GetStorageCharacteristics(L"R:\\MountedVolume\\Other\\second.bin", &characteristics);
+    const HRESULT cachedHr                  = fileSystem->GetStorageCharacteristics(L"R:\\MountedVolume\\Other\\second.bin", &characteristics);
     fileSystem->Release();
 
     DebugCheck(hr == S_OK, L"mounted-volume storage probe should keep GetStorageCharacteristics non-failing", passed, failed);
     DebugCheck(cachedHr == S_OK, L"cached mounted-volume storage query should remain non-failing", passed, failed);
     DebugCheck(state.volumeNameCalls == firstVolumeNameCalls,
-               L"repeated storage queries for one resolved volume should reuse the per-instance physical probe", passed, failed);
+               L"repeated storage queries for one resolved volume should reuse the per-instance physical probe",
+               passed,
+               failed);
     DebugCheck(state.volumePathCalls > 0u, L"mounted-volume storage probe should resolve the real volume root", passed, failed);
     DebugCheck(state.volumeNameCalls > 0u, L"mounted-volume storage probe should resolve a volume GUID path", passed, failed);
     DebugCheck(state.lastVolumeNameInput == state.volumeRoot, L"mounted-volume storage probe should resolve the returned mount root", passed, failed);
@@ -1991,10 +1993,10 @@ HRESULT STDMETHODCALLTYPE FileSystem::CreateFileWriter(const wchar_t* path, File
         }
         const std::wstring prefix = std::wstring(filePath.substr(separator + 1u)) + L".~rs-write-";
         const Common::Paths::UniqueSiblingFileOptions options{.prefix             = prefix,
-                                                               .suffix             = L".tmp",
-                                                               .shareMode          = FILE_SHARE_READ,
-                                                               .flagsAndAttributes = FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_TEMPORARY,
-                                                               .maximumAttempts   = 32u};
+                                                              .suffix             = L".tmp",
+                                                              .shareMode          = FILE_SHARE_READ,
+                                                              .flagsAndAttributes = FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_TEMPORARY,
+                                                              .maximumAttempts    = 32u};
         const HRESULT tempHr = Common::Paths::CreateUniqueSiblingFile(filePath, options, tempPath, file);
         if (FAILED(tempHr))
         {
@@ -2189,12 +2191,12 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetStorageCharacteristics(const wchar_t* p
     characteristics->preferredCopyMoveConcurrency = 0;
     characteristics->preferredDeleteConcurrency   = 0;
 
-    const std::wstring driveRoot      = ExtractDriveRoot(path);
-    const std::wstring volumeRoot     = ResolveLocalVolumeRootPath(path);
-    const std::wstring& driveTypeRoot = ! volumeRoot.empty() ? volumeRoot : driveRoot;
-    const UINT driveType              = ! driveTypeRoot.empty() ? GetDriveTypeW(driveTypeRoot.c_str()) : DRIVE_UNKNOWN;
-    const bool highLatency            = driveType == DRIVE_REMOTE || IsUncPath(path);
-    const std::wstring cacheKey = std::format(L"{}\n{}\n{}\n{}", volumeRoot, driveRoot, driveType, highLatency ? 1u : 0u);
+    const std::wstring driveRoot        = ExtractDriveRoot(path);
+    const std::wstring volumeRoot       = ResolveLocalVolumeRootPath(path);
+    const std::wstring& driveTypeRoot   = ! volumeRoot.empty() ? volumeRoot : driveRoot;
+    const UINT driveType                = ! driveTypeRoot.empty() ? GetDriveTypeW(driveTypeRoot.c_str()) : DRIVE_UNKNOWN;
+    const bool highLatency              = driveType == DRIVE_REMOTE || IsUncPath(path);
+    const std::wstring cacheKey         = std::format(L"{}\n{}\n{}\n{}", volumeRoot, driveRoot, driveType, highLatency ? 1u : 0u);
     const unsigned long callerSizeBytes = characteristics->sizeBytes;
     {
         // Hold the per-instance lock through the first physical probe so concurrent operation-start
@@ -2202,7 +2204,7 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetStorageCharacteristics(const wchar_t* p
         std::scoped_lock lock(_storageCharacteristicsMutex);
         if (const auto cached = _storageCharacteristicsCache.find(cacheKey); cached != _storageCharacteristicsCache.end())
         {
-            *characteristics          = cached->second;
+            *characteristics           = cached->second;
             characteristics->sizeBytes = callerSizeBytes;
             Debug::Perf::Emit(L"FileOps.Storage.ProbeCache", L"hit", 0u, 1u, 0u, S_OK);
             return S_OK;
@@ -2210,7 +2212,7 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetStorageCharacteristics(const wchar_t* p
 
         FillStorageCharacteristicsLocal(*characteristics, volumeRoot, driveRoot, driveType, highLatency);
         FileSystemStorageCharacteristics cached = *characteristics;
-        cached.sizeBytes = sizeof(FileSystemStorageCharacteristics);
+        cached.sizeBytes                        = sizeof(FileSystemStorageCharacteristics);
         _storageCharacteristicsCache.emplace(cacheKey, cached);
     }
     Debug::Perf::Emit(L"FileOps.Storage.ProbeCache", L"miss", 0u, 0u, 1u, S_OK);
@@ -2440,124 +2442,123 @@ HRESULT STDMETHODCALLTYPE FileSystem::SetConfiguration(const char* configuration
     if (configurationJsonUtf8 != nullptr && configurationJsonUtf8[0] != '\0')
     {
         sourceConfiguration = configurationJsonUtf8;
-        parsed = Common::Json::ParseObjectDocument(sourceConfiguration, YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM);
+        parsed              = Common::Json::ParseObjectDocument(sourceConfiguration, YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM);
         if (! parsed)
         {
             return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
         }
 
-        yyjson_val* root = parsed.root;
-                yyjson_val* concurrencyModeVal = yyjson_obj_get(root, "concurrencyMode");
-                if (concurrencyModeVal && yyjson_is_str(concurrencyModeVal))
-                {
-                    const char* valueText = yyjson_get_str(concurrencyModeVal);
-                    if (valueText && valueText[0] != '\0')
-                    {
-                        concurrencyMode = ParseConcurrencyMode(valueText);
-                    }
-                }
+        yyjson_val* root               = parsed.root;
+        yyjson_val* concurrencyModeVal = yyjson_obj_get(root, "concurrencyMode");
+        if (concurrencyModeVal && yyjson_is_str(concurrencyModeVal))
+        {
+            const char* valueText = yyjson_get_str(concurrencyModeVal);
+            if (valueText && valueText[0] != '\0')
+            {
+                concurrencyMode = ParseConcurrencyMode(valueText);
+            }
+        }
 
-                yyjson_val* copyMoveVal = yyjson_obj_get(root, "copyMoveMaxConcurrency");
-                if (copyMoveVal && yyjson_is_int(copyMoveVal))
-                {
-                    const int64_t value = yyjson_get_int(copyMoveVal);
-                    if (value >= 1)
-                    {
-                        copyMoveMaxConcurrency = static_cast<unsigned int>(std::min<int64_t>(value, static_cast<int64_t>(kMaxCopyMoveMaxConcurrency)));
-                    }
-                }
+        yyjson_val* copyMoveVal = yyjson_obj_get(root, "copyMoveMaxConcurrency");
+        if (copyMoveVal && yyjson_is_int(copyMoveVal))
+        {
+            const int64_t value = yyjson_get_int(copyMoveVal);
+            if (value >= 1)
+            {
+                copyMoveMaxConcurrency = static_cast<unsigned int>(std::min<int64_t>(value, static_cast<int64_t>(kMaxCopyMoveMaxConcurrency)));
+            }
+        }
 
-                yyjson_val* deleteVal = yyjson_obj_get(root, "deleteMaxConcurrency");
-                if (deleteVal && yyjson_is_int(deleteVal))
-                {
-                    const int64_t value = yyjson_get_int(deleteVal);
-                    if (value >= 1)
-                    {
-                        deleteMaxConcurrency = static_cast<unsigned int>(std::min<int64_t>(value, static_cast<int64_t>(kMaxDeleteMaxConcurrency)));
-                    }
-                }
+        yyjson_val* deleteVal = yyjson_obj_get(root, "deleteMaxConcurrency");
+        if (deleteVal && yyjson_is_int(deleteVal))
+        {
+            const int64_t value = yyjson_get_int(deleteVal);
+            if (value >= 1)
+            {
+                deleteMaxConcurrency = static_cast<unsigned int>(std::min<int64_t>(value, static_cast<int64_t>(kMaxDeleteMaxConcurrency)));
+            }
+        }
 
-                yyjson_val* deleteRecycleVal = yyjson_obj_get(root, "deleteRecycleBinMaxConcurrency");
-                if (deleteRecycleVal && yyjson_is_int(deleteRecycleVal))
-                {
-                    const int64_t value = yyjson_get_int(deleteRecycleVal);
-                    if (value >= 1)
-                    {
-                        deleteRecycleBinMaxConcurrency =
-                            static_cast<unsigned int>(std::min<int64_t>(value, static_cast<int64_t>(kMaxDeleteRecycleBinMaxConcurrency)));
-                    }
-                }
+        yyjson_val* deleteRecycleVal = yyjson_obj_get(root, "deleteRecycleBinMaxConcurrency");
+        if (deleteRecycleVal && yyjson_is_int(deleteRecycleVal))
+        {
+            const int64_t value = yyjson_get_int(deleteRecycleVal);
+            if (value >= 1)
+            {
+                deleteRecycleBinMaxConcurrency = static_cast<unsigned int>(std::min<int64_t>(value, static_cast<int64_t>(kMaxDeleteRecycleBinMaxConcurrency)));
+            }
+        }
 
-                yyjson_val* recycleBinBatchSizeVal = yyjson_obj_get(root, "recycleBinBatchSize");
-                if (recycleBinBatchSizeVal && yyjson_is_int(recycleBinBatchSizeVal))
-                {
-                    const int64_t value = yyjson_get_int(recycleBinBatchSizeVal);
-                    if (value >= 1)
-                    {
-                        recycleBinBatchSize = static_cast<unsigned int>(std::min<int64_t>(value, static_cast<int64_t>(kMaxRecycleBinBatchSize)));
-                    }
-                }
+        yyjson_val* recycleBinBatchSizeVal = yyjson_obj_get(root, "recycleBinBatchSize");
+        if (recycleBinBatchSizeVal && yyjson_is_int(recycleBinBatchSizeVal))
+        {
+            const int64_t value = yyjson_get_int(recycleBinBatchSizeVal);
+            if (value >= 1)
+            {
+                recycleBinBatchSize = static_cast<unsigned int>(std::min<int64_t>(value, static_cast<int64_t>(kMaxRecycleBinBatchSize)));
+            }
+        }
 
-                yyjson_val* softMaxVal = yyjson_obj_get(root, "enumerationSoftMaxBufferMiB");
-                if (softMaxVal && yyjson_is_int(softMaxVal))
-                {
-                    const int64_t value = yyjson_get_int(softMaxVal);
-                    if (value >= 1)
-                    {
-                        enumerationSoftMaxBufferMiB = static_cast<unsigned long>(std::min<int64_t>(value, static_cast<int64_t>(maxBufferMiB)));
-                    }
-                }
+        yyjson_val* softMaxVal = yyjson_obj_get(root, "enumerationSoftMaxBufferMiB");
+        if (softMaxVal && yyjson_is_int(softMaxVal))
+        {
+            const int64_t value = yyjson_get_int(softMaxVal);
+            if (value >= 1)
+            {
+                enumerationSoftMaxBufferMiB = static_cast<unsigned long>(std::min<int64_t>(value, static_cast<int64_t>(maxBufferMiB)));
+            }
+        }
 
-                yyjson_val* hardMaxVal = yyjson_obj_get(root, "enumerationHardMaxBufferMiB");
-                if (hardMaxVal && yyjson_is_int(hardMaxVal))
-                {
-                    const int64_t value = yyjson_get_int(hardMaxVal);
-                    if (value >= 1)
-                    {
-                        enumerationHardMaxBufferMiB = static_cast<unsigned long>(std::min<int64_t>(value, static_cast<int64_t>(maxBufferMiB)));
-                    }
-                }
+        yyjson_val* hardMaxVal = yyjson_obj_get(root, "enumerationHardMaxBufferMiB");
+        if (hardMaxVal && yyjson_is_int(hardMaxVal))
+        {
+            const int64_t value = yyjson_get_int(hardMaxVal);
+            if (value >= 1)
+            {
+                enumerationHardMaxBufferMiB = static_cast<unsigned long>(std::min<int64_t>(value, static_cast<int64_t>(maxBufferMiB)));
+            }
+        }
 
-                yyjson_val* reparsePolicyVal = yyjson_obj_get(root, "reparsePointPolicy");
-                if (reparsePolicyVal && yyjson_is_str(reparsePolicyVal))
-                {
-                    const char* valueText = yyjson_get_str(reparsePolicyVal);
-                    if (valueText && valueText[0] != '\0')
-                    {
-                        reparsePointPolicy = ParseReparsePointPolicy(valueText);
-                    }
-                }
+        yyjson_val* reparsePolicyVal = yyjson_obj_get(root, "reparsePointPolicy");
+        if (reparsePolicyVal && yyjson_is_str(reparsePolicyVal))
+        {
+            const char* valueText = yyjson_get_str(reparsePolicyVal);
+            if (valueText && valueText[0] != '\0')
+            {
+                reparsePointPolicy = ParseReparsePointPolicy(valueText);
+            }
+        }
 
-                yyjson_val* searchBackendVal = yyjson_obj_get(root, "searchBackendPreference");
-                if (searchBackendVal && yyjson_is_str(searchBackendVal))
-                {
-                    const char* valueText = yyjson_get_str(searchBackendVal);
-                    if (valueText && valueText[0] != '\0')
-                    {
-                        searchBackendPreference = ParseSearchBackendPreference(valueText);
-                    }
-                }
+        yyjson_val* searchBackendVal = yyjson_obj_get(root, "searchBackendPreference");
+        if (searchBackendVal && yyjson_is_str(searchBackendVal))
+        {
+            const char* valueText = yyjson_get_str(searchBackendVal);
+            if (valueText && valueText[0] != '\0')
+            {
+                searchBackendPreference = ParseSearchBackendPreference(valueText);
+            }
+        }
 
-                yyjson_val* searchWalkersVal = yyjson_obj_get(root, "searchMaxDirectoryWalkers");
-                if (searchWalkersVal && yyjson_is_int(searchWalkersVal))
-                {
-                    const int64_t value = yyjson_get_int(searchWalkersVal);
-                    if (value >= 1)
-                    {
-                        searchMaxDirectoryWalkers = static_cast<unsigned int>(std::min<int64_t>(value, static_cast<int64_t>(kMaxSearchMaxDirectoryWalkers)));
-                    }
-                }
+        yyjson_val* searchWalkersVal = yyjson_obj_get(root, "searchMaxDirectoryWalkers");
+        if (searchWalkersVal && yyjson_is_int(searchWalkersVal))
+        {
+            const int64_t value = yyjson_get_int(searchWalkersVal);
+            if (value >= 1)
+            {
+                searchMaxDirectoryWalkers = static_cast<unsigned int>(std::min<int64_t>(value, static_cast<int64_t>(kMaxSearchMaxDirectoryWalkers)));
+            }
+        }
 
 #ifdef _DEBUG
-                yyjson_val* delayVal = yyjson_obj_get(root, "directorySizeDelayMs");
-                if (delayVal && yyjson_is_int(delayVal))
-                {
-                    const int64_t value = yyjson_get_int(delayVal);
-                    if (value >= 0)
-                    {
-                        directorySizeDelayMs = static_cast<unsigned int>(std::min<int64_t>(value, 50));
-                    }
-                }
+        yyjson_val* delayVal = yyjson_obj_get(root, "directorySizeDelayMs");
+        if (delayVal && yyjson_is_int(delayVal))
+        {
+            const int64_t value = yyjson_get_int(delayVal);
+            if (value >= 0)
+            {
+                directorySizeDelayMs = static_cast<unsigned int>(std::min<int64_t>(value, 50));
+            }
+        }
 #endif
     }
 

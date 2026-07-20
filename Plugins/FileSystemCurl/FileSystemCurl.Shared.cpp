@@ -1,7 +1,7 @@
+#include "CurlProcessRuntime.h"
 #include "FileSystemCurl.Internal.h"
 #include "FileSystemCurlResources.h"
 #include "HandleIo.h"
-#include "CurlProcessRuntime.h"
 #include "YyjsonHelpers.h"
 
 using namespace FileSystemCurlInternal;
@@ -109,22 +109,20 @@ namespace FileSystemCurlInternal
 
 [[nodiscard]] std::optional<std::wstring> TryGetJsonString(yyjson_val* obj, const char* key) noexcept
 {
-    const Common::Json::MemberResult<std::wstring> value =
-        Common::Json::GetUtf16StringMemberStrict(obj, key, Common::Json::MemberRequirement::Optional);
+    const Common::Json::MemberResult<std::wstring> value = Common::Json::GetUtf16StringMemberStrict(obj, key, Common::Json::MemberRequirement::Optional);
     return value.HasValue() ? std::optional<std::wstring>{value.value} : std::nullopt;
 }
 
 [[nodiscard]] std::optional<uint64_t> TryGetJsonUInt(yyjson_val* obj, const char* key) noexcept
 {
-    const Common::Json::MemberResult<uint64_t> value =
-        Common::Json::GetUInt64Member(obj, key, Common::Json::MemberRequirement::Optional);
+    const Common::Json::MemberResult<uint64_t> value = Common::Json::GetUInt64Member(obj, key, Common::Json::MemberRequirement::Optional);
     return value.HasValue() ? std::optional<uint64_t>{value.value} : std::nullopt;
 }
 
 [[nodiscard]] std::optional<bool> TryGetJsonBool(yyjson_val* obj, const char* key) noexcept
 {
-    const Common::Json::MemberResult<bool> value = Common::Json::GetBoolMember(
-        obj, key, Common::Json::MemberRequirement::Optional, Common::Json::BooleanIntegerPolicy::AllowZeroAndNonzero);
+    const Common::Json::MemberResult<bool> value =
+        Common::Json::GetBoolMember(obj, key, Common::Json::MemberRequirement::Optional, Common::Json::BooleanIntegerPolicy::AllowZeroAndNonzero);
     return value.HasValue() ? std::optional<bool>{value.value} : std::nullopt;
 }
 } // namespace FileSystemCurlInternal
@@ -1792,8 +1790,7 @@ namespace
     {
         return HRESULT_FROM_WIN32(ERROR_SHUTDOWN_IN_PROGRESS);
     }
-    return GetCurlRuntimeLease().Acquire(
-        []() noexcept -> HRESULT { return curl_global_init(CURL_GLOBAL_DEFAULT) == CURLE_OK ? S_OK : E_FAIL; });
+    return GetCurlRuntimeLease().Acquire([]() noexcept -> HRESULT { return curl_global_init(CURL_GLOBAL_DEFAULT) == CURLE_OK ? S_OK : E_FAIL; });
 }
 
 void CleanupSharedCurlRuntime() noexcept
@@ -2048,8 +2045,7 @@ namespace
 {
 void TryCompleteFileSystemCurlShutdown() noexcept
 {
-    if (! g_fileSystemCurlShutdownRequested.load(std::memory_order_acquire) ||
-        g_fileSystemCurlInstanceCount.load(std::memory_order_acquire) != 0u)
+    if (! g_fileSystemCurlShutdownRequested.load(std::memory_order_acquire) || g_fileSystemCurlInstanceCount.load(std::memory_order_acquire) != 0u)
     {
         return;
     }
@@ -2081,9 +2077,8 @@ void BeginFileSystemCurlShutdown() noexcept
 bool CanUnloadFileSystemCurlNow() noexcept
 {
     TryCompleteFileSystemCurlShutdown();
-    return g_fileSystemCurlShutdownRequested.load(std::memory_order_acquire) &&
-           g_fileSystemCurlInstanceCount.load(std::memory_order_acquire) == 0u && GetCurlEasyPool().CanUnloadNow() &&
-           ! GetCurlRuntimeLease().IsAcquired();
+    return g_fileSystemCurlShutdownRequested.load(std::memory_order_acquire) && g_fileSystemCurlInstanceCount.load(std::memory_order_acquire) == 0u &&
+           GetCurlEasyPool().CanUnloadNow() && ! GetCurlRuntimeLease().IsAcquired();
 }
 
 bool CanCreateFileSystemCurl() noexcept
@@ -3909,7 +3904,7 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::SetConfiguration(const char* configura
     if (configurationJsonUtf8 != nullptr && configurationJsonUtf8[0] != '\0')
     {
         nextConfiguration = configurationJsonUtf8;
-        parsed = Common::Json::ParseObjectDocument(nextConfiguration, YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM);
+        parsed            = Common::Json::ParseObjectDocument(nextConfiguration, YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM);
         if (! parsed)
         {
             return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);

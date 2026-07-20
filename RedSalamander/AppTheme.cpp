@@ -95,8 +95,7 @@ COLORREF SysColor(int index) noexcept
 
 uint32_t ArgbFromColor(const D2D1::ColorF& color) noexcept
 {
-    const auto channel = [](float value) noexcept
-    { return static_cast<uint32_t>(std::clamp(std::lround(std::clamp(value, 0.0f, 1.0f) * 255.0f), 0l, 255l)); };
+    const auto channel = [](float value) noexcept { return static_cast<uint32_t>(std::clamp(std::lround(std::clamp(value, 0.0f, 1.0f) * 255.0f), 0l, 255l)); };
     return (channel(color.a) << 24u) | (channel(color.r) << 16u) | (channel(color.g) << 8u) | channel(color.b);
 }
 
@@ -673,9 +672,8 @@ static FileOperationsTheme MakeFileOperationsTheme(const NavigationViewTheme& na
     theme.progressBackground = navigationTheme.progressBackground;
     theme.progressTotal      = navigationTheme.progressOk;
     theme.progressItem       = navigationTheme.accent;
-    theme.successText        = highContrast ? ColorFromCOLORREF(menuTheme.text)
-                                            : (menuTheme.darkBase ? D2D1::ColorF(0.45f, 0.86f, 0.52f)
-                                                                  : D2D1::ColorF(0.10f, 0.55f, 0.22f));
+    theme.successText =
+        highContrast ? ColorFromCOLORREF(menuTheme.text) : (menuTheme.darkBase ? D2D1::ColorF(0.45f, 0.86f, 0.52f) : D2D1::ColorF(0.10f, 0.55f, 0.22f));
 
     const D2D1::ColorF border   = ColorFromCOLORREF(menuTheme.border);
     const D2D1::ColorF disabled = ColorFromCOLORREF(menuTheme.disabledText);
@@ -871,8 +869,8 @@ AppTheme ResolveAppTheme(ThemeMode requestedMode, std::wstring_view rainbowSeed,
         theme.windowBackground = RGB(255, 255, 255);
     }
 
-    theme.folderView.rainbowMode = requestedMode == ThemeMode::Rainbow;
-    theme.folderView.darkBase    = dark;
+    theme.folderView.rainbowMode                                = requestedMode == ThemeMode::Rainbow;
+    theme.folderView.darkBase                                   = dark;
     theme.folderView.itemBackgroundSelectedUsesInheritedRainbow = requestedMode == ThemeMode::Rainbow;
 
     theme.navigationView.rainbowMode = requestedMode == ThemeMode::Rainbow;
@@ -907,10 +905,7 @@ void ApplyAppThemeColorOverrides(AppTheme& theme, const std::unordered_map<std::
         const auto it = colors.find(std::wstring(key));
         return it == colors.end() ? std::nullopt : std::optional<uint32_t>(it->second);
     };
-    const auto alphaFromArgb = [](uint32_t argb) noexcept
-    {
-        return static_cast<float>((argb >> 24) & 0xFFu) / 255.0f;
-    };
+    const auto alphaFromArgb = [](uint32_t argb) noexcept { return static_cast<float>((argb >> 24) & 0xFFu) / 255.0f; };
     const auto applyColorRef = [&](std::wstring_view key, COLORREF& target) noexcept
     {
         if (const auto argb = findOverride(key))
@@ -1020,80 +1015,132 @@ void ApplyAppThemeColorOverrides(AppTheme& theme, const std::unordered_map<std::
 
     if (! findOverride(L"folderView.textSelectedInactive") && ! theme.highContrast)
     {
-        const float alpha             = std::clamp(theme.folderView.itemBackgroundSelectedInactive.a, 0.0f, 1.0f);
-        const D2D1::ColorF background = theme.folderView.backgroundColor;
-        const D2D1::ColorF overlay    = theme.folderView.itemBackgroundSelectedInactive;
-        const D2D1::ColorF composite  = D2D1::ColorF(overlay.r * alpha + background.r * (1.0f - alpha),
-                                                     overlay.g * alpha + background.g * (1.0f - alpha),
-                                                     overlay.b * alpha + background.b * (1.0f - alpha),
-                                                     1.0f);
+        const float alpha                     = std::clamp(theme.folderView.itemBackgroundSelectedInactive.a, 0.0f, 1.0f);
+        const D2D1::ColorF background         = theme.folderView.backgroundColor;
+        const D2D1::ColorF overlay            = theme.folderView.itemBackgroundSelectedInactive;
+        const D2D1::ColorF composite          = D2D1::ColorF(overlay.r * alpha + background.r * (1.0f - alpha),
+                                                             overlay.g * alpha + background.g * (1.0f - alpha),
+                                                             overlay.b * alpha + background.b * (1.0f - alpha),
+                                                             1.0f);
         theme.folderView.textSelectedInactive = ColorFromCOLORREF(ChooseContrastingTextColor(ColorToCOLORREF(composite)));
     }
 }
 
 std::optional<uint32_t> FindAppThemeColorArgb(const AppTheme& theme, std::wstring_view key) noexcept
 {
-    if (key == L"app.accent") return ArgbFromColor(theme.accent);
-    if (key == L"window.background") return ArgbFromColorRef(theme.windowBackground);
-    if (key == L"menu.background") return ArgbFromColorRef(theme.menu.background);
-    if (key == L"menu.text") return ArgbFromColorRef(theme.menu.text);
-    if (key == L"menu.disabledText") return ArgbFromColorRef(theme.menu.disabledText);
-    if (key == L"menu.selectionBg") return ArgbFromColorRef(theme.menu.selectionBg);
-    if (key == L"menu.selectionText") return ArgbFromColorRef(theme.menu.selectionText);
-    if (key == L"menu.separator") return ArgbFromColorRef(theme.menu.separator);
-    if (key == L"menu.border") return ArgbFromColorRef(theme.menu.border);
-    if (key == L"navigation.background") return ArgbFromColor(theme.navigationView.background);
-    if (key == L"navigation.backgroundHover") return ArgbFromColor(theme.navigationView.backgroundHover);
-    if (key == L"navigation.backgroundPressed") return ArgbFromColor(theme.navigationView.backgroundPressed);
-    if (key == L"navigation.text") return ArgbFromColor(theme.navigationView.text);
-    if (key == L"navigation.separator") return ArgbFromColor(theme.navigationView.separator);
-    if (key == L"navigation.accent") return ArgbFromColor(theme.navigationView.accent);
-    if (key == L"navigation.progressOk") return ArgbFromColor(theme.navigationView.progressOk);
-    if (key == L"navigation.progressWarn") return ArgbFromColor(theme.navigationView.progressWarn);
-    if (key == L"navigation.progressBackground") return ArgbFromColor(theme.navigationView.progressBackground);
-    if (key == L"folderView.background") return ArgbFromColor(theme.folderView.backgroundColor);
-    if (key == L"folderView.itemBackgroundNormal") return ArgbFromColor(theme.folderView.itemBackgroundNormal);
-    if (key == L"folderView.itemBackgroundHovered") return ArgbFromColor(theme.folderView.itemBackgroundHovered);
-    if (key == L"folderView.itemBackgroundSelected") return ArgbFromColor(theme.folderView.itemBackgroundSelected);
-    if (key == L"folderView.itemBackgroundSelectedInactive") return ArgbFromColor(theme.folderView.itemBackgroundSelectedInactive);
-    if (key == L"folderView.itemBackgroundFocused") return ArgbFromColor(theme.folderView.itemBackgroundFocused);
-    if (key == L"folderView.textNormal") return ArgbFromColor(theme.folderView.textNormal);
-    if (key == L"folderView.textSelected") return ArgbFromColor(theme.folderView.textSelected);
-    if (key == L"folderView.textSelectedInactive") return ArgbFromColor(theme.folderView.textSelectedInactive);
-    if (key == L"folderView.textDisabled") return ArgbFromColor(theme.folderView.textDisabled);
-    if (key == L"folderView.focusBorder") return ArgbFromColor(theme.folderView.focusBorder);
-    if (key == L"folderView.gridLines") return ArgbFromColor(theme.folderView.gridLines);
-    if (key == L"folderView.errorBackground") return ArgbFromColor(theme.folderView.errorBackground);
-    if (key == L"folderView.errorText") return ArgbFromColor(theme.folderView.errorText);
-    if (key == L"folderView.warningBackground") return ArgbFromColor(theme.folderView.warningBackground);
-    if (key == L"folderView.warningText") return ArgbFromColor(theme.folderView.warningText);
-    if (key == L"folderView.infoBackground") return ArgbFromColor(theme.folderView.infoBackground);
-    if (key == L"folderView.infoText") return ArgbFromColor(theme.folderView.infoText);
-    if (key == L"fileOps.progressBackground") return ArgbFromColor(theme.fileOperations.progressBackground);
-    if (key == L"fileOps.progressTotal") return ArgbFromColor(theme.fileOperations.progressTotal);
-    if (key == L"fileOps.progressItem") return ArgbFromColor(theme.fileOperations.progressItem);
-    if (key == L"fileOps.graphBackground") return ArgbFromColor(theme.fileOperations.graphBackground);
-    if (key == L"fileOps.graphGrid") return ArgbFromColor(theme.fileOperations.graphGrid);
-    if (key == L"fileOps.graphLimit") return ArgbFromColor(theme.fileOperations.graphLimit);
-    if (key == L"fileOps.graphLine") return ArgbFromColor(theme.fileOperations.graphLine);
-    if (key == L"fileOps.scrollbarTrack") return ArgbFromColor(theme.fileOperations.scrollbarTrack);
-    if (key == L"fileOps.scrollbarThumb") return ArgbFromColor(theme.fileOperations.scrollbarThumb);
-    if (key == L"viewer.diff.addedBackground") return ArgbFromColor(theme.viewerDiff.addedBackground);
-    if (key == L"viewer.diff.removedBackground") return ArgbFromColor(theme.viewerDiff.removedBackground);
-    if (key == L"viewer.diff.contextBackground") return ArgbFromColor(theme.viewerDiff.contextBackground);
-    if (key == L"viewer.diff.headerBackground") return ArgbFromColor(theme.viewerDiff.headerBackground);
-    if (key == L"viewer.diff.bannerBackground") return ArgbFromColor(theme.viewerDiff.bannerBackground);
-    if (key == L"viewer.diff.placeholderBackground") return ArgbFromColor(theme.viewerDiff.placeholderBackground);
-    if (key == L"viewer.diff.divider") return ArgbFromColor(theme.viewerDiff.divider);
+    if (key == L"app.accent")
+        return ArgbFromColor(theme.accent);
+    if (key == L"window.background")
+        return ArgbFromColorRef(theme.windowBackground);
+    if (key == L"menu.background")
+        return ArgbFromColorRef(theme.menu.background);
+    if (key == L"menu.text")
+        return ArgbFromColorRef(theme.menu.text);
+    if (key == L"menu.disabledText")
+        return ArgbFromColorRef(theme.menu.disabledText);
+    if (key == L"menu.selectionBg")
+        return ArgbFromColorRef(theme.menu.selectionBg);
+    if (key == L"menu.selectionText")
+        return ArgbFromColorRef(theme.menu.selectionText);
+    if (key == L"menu.separator")
+        return ArgbFromColorRef(theme.menu.separator);
+    if (key == L"menu.border")
+        return ArgbFromColorRef(theme.menu.border);
+    if (key == L"navigation.background")
+        return ArgbFromColor(theme.navigationView.background);
+    if (key == L"navigation.backgroundHover")
+        return ArgbFromColor(theme.navigationView.backgroundHover);
+    if (key == L"navigation.backgroundPressed")
+        return ArgbFromColor(theme.navigationView.backgroundPressed);
+    if (key == L"navigation.text")
+        return ArgbFromColor(theme.navigationView.text);
+    if (key == L"navigation.separator")
+        return ArgbFromColor(theme.navigationView.separator);
+    if (key == L"navigation.accent")
+        return ArgbFromColor(theme.navigationView.accent);
+    if (key == L"navigation.progressOk")
+        return ArgbFromColor(theme.navigationView.progressOk);
+    if (key == L"navigation.progressWarn")
+        return ArgbFromColor(theme.navigationView.progressWarn);
+    if (key == L"navigation.progressBackground")
+        return ArgbFromColor(theme.navigationView.progressBackground);
+    if (key == L"folderView.background")
+        return ArgbFromColor(theme.folderView.backgroundColor);
+    if (key == L"folderView.itemBackgroundNormal")
+        return ArgbFromColor(theme.folderView.itemBackgroundNormal);
+    if (key == L"folderView.itemBackgroundHovered")
+        return ArgbFromColor(theme.folderView.itemBackgroundHovered);
+    if (key == L"folderView.itemBackgroundSelected")
+        return ArgbFromColor(theme.folderView.itemBackgroundSelected);
+    if (key == L"folderView.itemBackgroundSelectedInactive")
+        return ArgbFromColor(theme.folderView.itemBackgroundSelectedInactive);
+    if (key == L"folderView.itemBackgroundFocused")
+        return ArgbFromColor(theme.folderView.itemBackgroundFocused);
+    if (key == L"folderView.textNormal")
+        return ArgbFromColor(theme.folderView.textNormal);
+    if (key == L"folderView.textSelected")
+        return ArgbFromColor(theme.folderView.textSelected);
+    if (key == L"folderView.textSelectedInactive")
+        return ArgbFromColor(theme.folderView.textSelectedInactive);
+    if (key == L"folderView.textDisabled")
+        return ArgbFromColor(theme.folderView.textDisabled);
+    if (key == L"folderView.focusBorder")
+        return ArgbFromColor(theme.folderView.focusBorder);
+    if (key == L"folderView.gridLines")
+        return ArgbFromColor(theme.folderView.gridLines);
+    if (key == L"folderView.errorBackground")
+        return ArgbFromColor(theme.folderView.errorBackground);
+    if (key == L"folderView.errorText")
+        return ArgbFromColor(theme.folderView.errorText);
+    if (key == L"folderView.warningBackground")
+        return ArgbFromColor(theme.folderView.warningBackground);
+    if (key == L"folderView.warningText")
+        return ArgbFromColor(theme.folderView.warningText);
+    if (key == L"folderView.infoBackground")
+        return ArgbFromColor(theme.folderView.infoBackground);
+    if (key == L"folderView.infoText")
+        return ArgbFromColor(theme.folderView.infoText);
+    if (key == L"fileOps.progressBackground")
+        return ArgbFromColor(theme.fileOperations.progressBackground);
+    if (key == L"fileOps.progressTotal")
+        return ArgbFromColor(theme.fileOperations.progressTotal);
+    if (key == L"fileOps.progressItem")
+        return ArgbFromColor(theme.fileOperations.progressItem);
+    if (key == L"fileOps.graphBackground")
+        return ArgbFromColor(theme.fileOperations.graphBackground);
+    if (key == L"fileOps.graphGrid")
+        return ArgbFromColor(theme.fileOperations.graphGrid);
+    if (key == L"fileOps.graphLimit")
+        return ArgbFromColor(theme.fileOperations.graphLimit);
+    if (key == L"fileOps.graphLine")
+        return ArgbFromColor(theme.fileOperations.graphLine);
+    if (key == L"fileOps.scrollbarTrack")
+        return ArgbFromColor(theme.fileOperations.scrollbarTrack);
+    if (key == L"fileOps.scrollbarThumb")
+        return ArgbFromColor(theme.fileOperations.scrollbarThumb);
+    if (key == L"viewer.diff.addedBackground")
+        return ArgbFromColor(theme.viewerDiff.addedBackground);
+    if (key == L"viewer.diff.removedBackground")
+        return ArgbFromColor(theme.viewerDiff.removedBackground);
+    if (key == L"viewer.diff.contextBackground")
+        return ArgbFromColor(theme.viewerDiff.contextBackground);
+    if (key == L"viewer.diff.headerBackground")
+        return ArgbFromColor(theme.viewerDiff.headerBackground);
+    if (key == L"viewer.diff.bannerBackground")
+        return ArgbFromColor(theme.viewerDiff.bannerBackground);
+    if (key == L"viewer.diff.placeholderBackground")
+        return ArgbFromColor(theme.viewerDiff.placeholderBackground);
+    if (key == L"viewer.diff.divider")
+        return ArgbFromColor(theme.viewerDiff.divider);
     return std::nullopt;
 }
 
 Common::Settings::ThemeResolutionContext MakeAppThemeResolutionContext(const AppTheme& baseTheme)
 {
     Common::Settings::ThemeResolutionContext context = Common::Settings::MakeSystemThemeResolutionContext(baseTheme.dark);
-    context.effectiveDark = baseTheme.dark;
-    context.highContrast  = baseTheme.highContrast;
-    context.baseColor     = [baseTheme](std::wstring_view key) { return FindAppThemeColorArgb(baseTheme, key); };
+    context.effectiveDark                            = baseTheme.dark;
+    context.highContrast                             = baseTheme.highContrast;
+    context.baseColor                                = [baseTheme](std::wstring_view key) { return FindAppThemeColorArgb(baseTheme, key); };
     return context;
 }
 
@@ -1102,7 +1149,7 @@ void ApplyResolvedDynamicThemeOverrides(AppTheme& theme, const Common::Settings:
     constexpr std::wstring_view kSelectionKey = L"folderView.itemBackgroundSelected";
     if (const auto dynamic = resolved.dynamicColors.find(std::wstring(kSelectionKey)); dynamic != resolved.dynamicColors.end())
     {
-        theme.folderView.itemBackgroundSelectedDynamic = dynamic->second;
+        theme.folderView.itemBackgroundSelectedDynamic              = dynamic->second;
         theme.folderView.itemBackgroundSelectedUsesInheritedRainbow = false;
         return;
     }
@@ -1114,8 +1161,8 @@ void ApplyResolvedDynamicThemeOverrides(AppTheme& theme, const Common::Settings:
 }
 
 AppThemeSelectionResolution ResolveAppThemeSelection(std::wstring_view selectedThemeId,
-                                                      const Common::Settings::ThemeDefinition* customDefinition,
-                                                      std::wstring_view rainbowSeed) noexcept
+                                                     const Common::Settings::ThemeDefinition* customDefinition,
+                                                     std::wstring_view rainbowSeed) noexcept
 {
     AppThemeSelectionResolution result;
     result.baseMode = ThemeModeFromThemeId(selectedThemeId);
@@ -1126,8 +1173,8 @@ AppThemeSelectionResolution ResolveAppThemeSelection(std::wstring_view selectedT
         return result;
     }
 
-    result.baseMode            = ThemeModeFromThemeId(customDefinition->baseThemeId);
-    const AppTheme baseTheme   = ResolveAppTheme(result.baseMode, rainbowSeed);
+    result.baseMode                 = ThemeModeFromThemeId(customDefinition->baseThemeId);
+    const AppTheme baseTheme        = ResolveAppTheme(result.baseMode, rainbowSeed);
     result.customDefinitionResolved = baseTheme.highContrast;
     if (baseTheme.highContrast)
     {

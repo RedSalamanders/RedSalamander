@@ -188,7 +188,8 @@ namespace
             return false;
         }
 
-        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), std::format(L"Failed to focus the Preferences category host during {}.", context));
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                      std::format(L"Failed to focus the Preferences category host during {}.", context));
         PumpPendingMessages();
 
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryHotPaths),
@@ -385,17 +386,17 @@ namespace
             return false;
         }
 
-        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Hot Paths live interaction test.");
+        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                      L"Failed to focus the Preferences category host for Hot Paths live interaction test.");
         PumpPendingMessages();
 
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryHotPaths),
                       L"Failed to select the Preferences Hot Paths category for Hot Paths live interaction test.");
         PumpPendingMessages();
 
-        const bool pageReady = waitForSnapshot(
-            [](const PreferencesDebugSnapshot& value) noexcept
-        { return value.currentCategory == kPrefCategoryHotPaths && value.currentPageDxHostResizeFailureCount == 0u; },
-            outSnapshot);
+        const bool pageReady = waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept {
+            return value.currentCategory == kPrefCategoryHotPaths && value.currentPageDxHostResizeFailureCount == 0u;
+        }, outSnapshot);
         state.Require(pageReady,
                       std::format(L"Preferences Hot Paths page did not settle to the active DX surface before live interaction validation; {}.",
                                   DescribeHotPathsSnapshot(outSnapshot)));
@@ -668,7 +669,8 @@ namespace
             return false;
         }
 
-        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Hot Paths open-preferences toggle validation.");
+        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                      L"Failed to focus the Preferences category host for Hot Paths open-preferences toggle validation.");
         PumpPendingMessages();
 
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryHotPaths),
@@ -892,7 +894,8 @@ namespace
         }, outSnapshot);
     };
 
-    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Hot Paths browse interaction test.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                  L"Failed to focus the Preferences category host for Hot Paths browse interaction test.");
     PumpPendingMessages();
 
     state.Require(DebugSelectPreferencesCategory(kPrefCategoryHotPaths),
@@ -900,9 +903,9 @@ namespace
     PumpPendingMessages();
 
     PreferencesDebugSnapshot snapshot{};
-    const bool pageReady = waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept
-    { return value.currentCategory == kPrefCategoryHotPaths && value.currentPageDxHostResizeFailureCount == 0u; },
-                                           snapshot);
+    const bool pageReady = waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept {
+        return value.currentCategory == kPrefCategoryHotPaths && value.currentPageDxHostResizeFailureCount == 0u;
+    }, snapshot);
     state.Require(pageReady,
                   std::format(L"Preferences Hot Paths page did not settle to the active DX surface before browse interaction validation; {}.",
                               DescribeHotPathsSnapshot(snapshot)));
@@ -1140,7 +1143,8 @@ namespace
             return false;
         }
 
-        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Hot Paths tab-traversal validation.");
+        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                      L"Failed to focus the Preferences category host for Hot Paths tab-traversal validation.");
         PumpPendingMessages();
 
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryHotPaths),
@@ -1156,8 +1160,7 @@ namespace
         },
             outSnapshot);
         state.Require(pageReady,
-                      std::format(L"Preferences Hot Paths page did not settle before tab-traversal validation; {}.",
-                                  DescribeHotPathsSnapshot(outSnapshot)));
+                      std::format(L"Preferences Hot Paths page did not settle before tab-traversal validation; {}.", DescribeHotPathsSnapshot(outSnapshot)));
         return state.failure.empty();
     };
 
@@ -1219,9 +1222,9 @@ namespace
                value.currentPageRenderedDxHostCount <= 1u && value.currentPageDxHostResizeFailureCount == 0u;
     },
         snapshot);
-    state.Require(firstFieldFocused,
-                  std::format(L"Preferences Hot Paths first visible field did not take focus before tab-traversal validation; {}.",
-                              DescribeHotPathsSnapshot(snapshot)));
+    state.Require(
+        firstFieldFocused,
+        std::format(L"Preferences Hot Paths first visible field did not take focus before tab-traversal validation; {}.", DescribeHotPathsSnapshot(snapshot)));
     if (! state.failure.empty())
     {
         return false;
@@ -1410,7 +1413,8 @@ namespace
         return pagePatternStats;
     };
 
-    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Hot Paths round-trip test.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                  L"Failed to focus the Preferences category host for Hot Paths round-trip test.");
     PumpPendingMessages();
 
     state.Require(DebugSelectPreferencesCategory(kPrefCategoryHotPaths), L"Failed to select the Preferences Hot Paths category for Hot Paths round-trip test.");
@@ -1455,7 +1459,8 @@ namespace
     state.Require(
         hotPathsPagePatternStats->editControlCount + hotPathsPagePatternStats->checkBoxControlCount + hotPathsPagePatternStats->radioButtonControlCount > 0u,
         L"Preferences Hot Paths page should expose visible input descendants before round-trip navigation.");
-    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to refocus the Preferences category host before leaving Hot Paths for General.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                  L"Failed to refocus the Preferences category host before leaving Hot Paths for General.");
     if (! state.failure.empty())
     {
         return false;
@@ -1606,7 +1611,8 @@ namespace
             return false;
         }
 
-        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Hot Paths theme-cycle validation.");
+        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                      L"Failed to focus the Preferences category host for Hot Paths theme-cycle validation.");
         PumpPendingMessages();
 
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryHotPaths),
@@ -1835,7 +1841,8 @@ namespace
             return false;
         }
 
-        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), std::format(L"Failed to focus the Preferences category host during {}.", context));
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                      std::format(L"Failed to focus the Preferences category host during {}.", context));
         PumpPendingMessages();
 
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryKeyboard),
@@ -2070,7 +2077,8 @@ namespace
         return pagePatternStats;
     };
 
-    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Keyboard round-trip test.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                  L"Failed to focus the Preferences category host for Keyboard round-trip test.");
     PumpPendingMessages();
 
     state.Require(DebugSelectPreferencesCategory(kPrefCategoryKeyboard),
@@ -2111,7 +2119,8 @@ namespace
 
     state.Require(keyboardPagePatternStats->editControlCount + keyboardPagePatternStats->comboBoxControlCount > 0u,
                   L"Preferences Keyboard page should expose visible edit or combo descendants before round-trip navigation.");
-    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to refocus the Preferences category host before leaving Keyboard for General.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                  L"Failed to refocus the Preferences category host before leaving Keyboard for General.");
     if (! state.failure.empty())
     {
         return false;
@@ -2209,9 +2218,7 @@ namespace
     return L"Unknown";
 }
 
-[[nodiscard]] std::wstring FormatKeyboardThemeCycleSnapshot(const PreferencesDebugSnapshot& value,
-                                                            const AppTheme& expectedTheme,
-                                                            const size_t expectedRowCount)
+[[nodiscard]] std::wstring FormatKeyboardThemeCycleSnapshot(const PreferencesDebugSnapshot& value, const AppTheme& expectedTheme, const size_t expectedRowCount)
 {
     return std::format(
         L"expected(dark={}, highContrast={}, rainbow={}, rows={}), actual(category={}, dark={}, highContrast={}, rainbow={}, rows={}, visibleRows={}, "
@@ -2328,7 +2335,8 @@ namespace
             return false;
         }
 
-        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Keyboard theme-cycle validation.");
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                      L"Failed to focus the Preferences category host for Keyboard theme-cycle validation.");
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryKeyboard), L"Failed to select the Preferences Keyboard category for theme-cycle validation.");
         PumpPendingMessages();
 
@@ -2525,7 +2533,7 @@ namespace
     const auto restoreSettings                        = wil::scope_exit([&]() noexcept { g_settings = baselineSettings; });
 
     g_settings.shortcuts = ShortcutDefaults::CreateDefaultShortcuts();
-    bool mutatedBinding = false;
+    bool mutatedBinding  = false;
     for (auto& binding : g_settings.shortcuts->functionBar)
     {
         if (binding.commandId == L"cmd/pane/find")
@@ -2595,7 +2603,8 @@ namespace
             return false;
         }
 
-        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Keyboard tab-traversal validation.");
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                      L"Failed to focus the Preferences category host for Keyboard tab-traversal validation.");
 
         if (waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept {
             return value.currentCategory == kPrefCategoryKeyboard && value.keyboardListRowCount > 0u && value.currentPageDxHostResizeFailureCount == 0u;
@@ -2784,7 +2793,8 @@ namespace
         return DebugGetPreferencesDialogSnapshot(outSnapshot) && predicate(outSnapshot);
     };
 
-    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Keyboard search round-trip test.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                  L"Failed to focus the Preferences category host for Keyboard search round-trip test.");
     state.Require(DebugSelectPreferencesCategory(kPrefCategoryKeyboard),
                   L"Failed to select the Preferences Keyboard category for retained-search round-trip validation.");
     PumpPendingMessages();
@@ -2900,7 +2910,8 @@ namespace
         return DebugGetPreferencesDialogSnapshot(outSnapshot) && predicate(outSnapshot);
     };
 
-    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Keyboard deferred-search test.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                  L"Failed to focus the Preferences category host for Keyboard deferred-search test.");
     state.Require(DebugSelectPreferencesCategory(kPrefCategoryKeyboard), L"Failed to select the Preferences Keyboard category for deferred-search validation.");
     PumpPendingMessages();
 
@@ -3327,7 +3338,7 @@ namespace
     const auto restoreSettings                        = wil::scope_exit([&]() noexcept { g_settings = baselineSettings; });
 
     g_settings.shortcuts = ShortcutDefaults::CreateDefaultShortcuts();
-    bool mutatedBinding = false;
+    bool mutatedBinding  = false;
     for (auto& binding : g_settings.shortcuts->functionBar)
     {
         if (binding.commandId == L"cmd/pane/find")
@@ -3619,7 +3630,7 @@ namespace
     const auto restoreSettings                        = wil::scope_exit([&]() noexcept { g_settings = baselineSettings; });
 
     g_settings.shortcuts = ShortcutDefaults::CreateDefaultShortcuts();
-    bool mutatedBinding = false;
+    bool mutatedBinding  = false;
     for (auto& binding : g_settings.shortcuts->functionBar)
     {
         if (binding.commandId == L"cmd/pane/find")
@@ -3963,7 +3974,7 @@ namespace
     const auto restoreSettings                        = wil::scope_exit([&]() noexcept { g_settings = baselineSettings; });
 
     g_settings.shortcuts = ShortcutDefaults::CreateDefaultShortcuts();
-    bool mutatedBinding = false;
+    bool mutatedBinding  = false;
     for (auto& binding : g_settings.shortcuts->functionBar)
     {
         if (binding.commandId == L"cmd/pane/find")
@@ -4082,7 +4093,8 @@ namespace
             outSnapshot);
     };
 
-    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Keyboard import interaction test.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                  L"Failed to focus the Preferences category host for Keyboard import interaction test.");
     state.Require(DebugSelectPreferencesCategory(kPrefCategoryKeyboard),
                   L"Failed to select the Preferences Keyboard category for import interaction validation.");
     PumpPendingMessages();
@@ -4291,7 +4303,7 @@ namespace
     const auto restoreSettings                        = wil::scope_exit([&]() noexcept { g_settings = baselineSettings; });
 
     g_settings.shortcuts = ShortcutDefaults::CreateDefaultShortcuts();
-    bool mutatedBinding = false;
+    bool mutatedBinding  = false;
     for (auto& binding : g_settings.shortcuts->functionBar)
     {
         if (binding.commandId == L"cmd/pane/find")
@@ -4371,7 +4383,8 @@ namespace
             return false;
         }
 
-        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Keyboard remove interaction test.");
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                      L"Failed to focus the Preferences category host for Keyboard remove interaction test.");
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryKeyboard),
                       L"Failed to select the Preferences Keyboard category for remove interaction validation.");
         PumpPendingMessages();
@@ -4614,7 +4627,8 @@ namespace
             return false;
         }
 
-        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Keyboard assign interaction test.");
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                      L"Failed to focus the Preferences category host for Keyboard assign interaction test.");
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryKeyboard),
                       L"Failed to select the Preferences Keyboard category for assign interaction validation.");
         PumpPendingMessages();
@@ -4806,7 +4820,7 @@ namespace
     const auto restoreSettings                        = wil::scope_exit([&]() noexcept { g_settings = baselineSettings; });
 
     g_settings.shortcuts = ShortcutDefaults::CreateDefaultShortcuts();
-    bool mutatedBinding = false;
+    bool mutatedBinding  = false;
     for (auto& binding : g_settings.shortcuts->functionBar)
     {
         if (binding.commandId == L"cmd/pane/find")
@@ -5151,7 +5165,7 @@ namespace
     const auto restoreSettings                        = wil::scope_exit([&]() noexcept { g_settings = baselineSettings; });
 
     g_settings.shortcuts = ShortcutDefaults::CreateDefaultShortcuts();
-    bool mutatedBinding = false;
+    bool mutatedBinding  = false;
     for (auto& binding : g_settings.shortcuts->functionBar)
     {
         if (binding.commandId == L"cmd/pane/find")
@@ -5550,7 +5564,7 @@ namespace
     const Common::Settings::Settings baselineSettings = g_settings;
     const auto restoreSettings                        = wil::scope_exit([&]() noexcept { g_settings = baselineSettings; });
 
-    g_settings.shortcuts = ShortcutDefaults::CreateDefaultShortcuts();
+    g_settings.shortcuts      = ShortcutDefaults::CreateDefaultShortcuts();
     bool mutatedTargetBinding = false;
     for (auto& binding : g_settings.shortcuts->functionBar)
     {
@@ -6027,7 +6041,7 @@ namespace
     const Common::Settings::Settings baselineSettings = g_settings;
     const auto restoreSettings                        = wil::scope_exit([&]() noexcept { g_settings = baselineSettings; });
 
-    g_settings.shortcuts = ShortcutDefaults::CreateDefaultShortcuts();
+    g_settings.shortcuts        = ShortcutDefaults::CreateDefaultShortcuts();
     bool mutatedConflictBinding = false;
     for (auto& binding : g_settings.shortcuts->functionBar)
     {

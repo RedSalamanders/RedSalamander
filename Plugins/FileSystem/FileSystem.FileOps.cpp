@@ -789,8 +789,8 @@ struct MoveCopyProof final
 
 struct MoveCopyProofManifest final
 {
-    MoveCopyProofManifest() = default;
-    ~MoveCopyProofManifest() = default;
+    MoveCopyProofManifest()                                        = default;
+    ~MoveCopyProofManifest()                                       = default;
     MoveCopyProofManifest(const MoveCopyProofManifest&)            = delete;
     MoveCopyProofManifest& operator=(const MoveCopyProofManifest&) = delete;
     MoveCopyProofManifest(MoveCopyProofManifest&&)                 = delete;
@@ -833,7 +833,7 @@ struct OperationContext
     const wchar_t* progressSource                           = nullptr;
     const wchar_t* progressDestination                      = nullptr;
 
-    ParallelOperationState* parallel = nullptr;
+    ParallelOperationState* parallel      = nullptr;
     MoveCopyProofManifest* moveCopyProofs = nullptr;
 
     ULONGLONG lastProgressReportTick = 0;
@@ -3541,10 +3541,10 @@ struct MoveSourceDeleteStats final
 // without re-reading either file: the source must still match its pre-copy snapshot and the final
 // destination must have the same size. MOVE cleanup later rechecks both snapshots before deletion.
 [[nodiscard]] HRESULT RecordCompletedMoveCopyProof(OperationContext& context,
-                                                    const std::wstring& sourceExtended,
-                                                    HANDLE sourceHandle,
-                                                    const BY_HANDLE_FILE_INFORMATION& sourceBefore,
-                                                    const std::wstring& destinationExtended) noexcept
+                                                   const std::wstring& sourceExtended,
+                                                   HANDLE sourceHandle,
+                                                   const BY_HANDLE_FILE_INFORMATION& sourceBefore,
+                                                   const std::wstring& destinationExtended) noexcept
 {
     if (context.moveCopyProofs == nullptr)
     {
@@ -3899,10 +3899,10 @@ HRESULT CopyFileInternal(OperationContext& context, const PathInfo& source, cons
         if (! allowOverwriteEffective)
         {
             uint64_t identicalBytes = 0;
-            const bool existingFilesMatch = context.moveCopyProofs != nullptr
-                                                ? SUCCEEDED(RecordExistingIdenticalMoveCopyProof(
-                                                      context, source.extended, destination.extended, identicalBytes))
-                                                : PlainFilesEqualByContentNoFollow(source.extended, destination.extended, &identicalBytes);
+            const bool existingFilesMatch =
+                context.moveCopyProofs != nullptr
+                    ? SUCCEEDED(RecordExistingIdenticalMoveCopyProof(context, source.extended, destination.extended, identicalBytes))
+                    : PlainFilesEqualByContentNoFollow(source.extended, destination.extended, &identicalBytes);
             if (existingFilesMatch)
             {
                 *bytesCopied = identicalBytes;
@@ -4019,8 +4019,7 @@ HRESULT CopyFileInternal(OperationContext& context, const PathInfo& source, cons
 
     restoreDestinationReadonly = false;
     *bytesCopied               = fileBytes;
-    const HRESULT proofHr = RecordCompletedMoveCopyProof(
-        context, source.extended, moveProofSourceHandle.get(), moveProofSourceBefore, destination.extended);
+    const HRESULT proofHr = RecordCompletedMoveCopyProof(context, source.extended, moveProofSourceHandle.get(), moveProofSourceBefore, destination.extended);
     if (FAILED(proofHr))
     {
         const HRESULT hrFailure = returnFailure(proofHr, fileBytes, fileBytes);
@@ -4469,8 +4468,8 @@ HRESULT CopyDirectoryInternal(OperationContext& context, const PathInfo& source,
         return returnFailure(HRESULT_FROM_WIN32(error));
     }
 
-    bool hadFailure = false;
-    bool hadSkipped = false;
+    bool hadFailure           = false;
+    bool hadSkipped           = false;
     bool hadIdenticalFileSkip = false;
 
     do
@@ -5798,8 +5797,8 @@ HRESULT MovePathInternal(OperationContext& context,
 
     MoveCopyProofManifest moveCopyProofs;
     MoveCopyProofManifest* const previousMoveCopyProofs = context.moveCopyProofs;
-    context.moveCopyProofs = &moveCopyProofs;
-    auto restoreMoveCopyProofs = wil::scope_exit([&]() noexcept { context.moveCopyProofs = previousMoveCopyProofs; });
+    context.moveCopyProofs                              = &moveCopyProofs;
+    auto restoreMoveCopyProofs                          = wil::scope_exit([&]() noexcept { context.moveCopyProofs = previousMoveCopyProofs; });
 
     uint64_t bytesCopied = 0;
     const HRESULT copyHr = CopyPathInternalWithDirectoryParallelism(context, source, destination, flags, reparsePointPolicy, maxCopyConcurrency, &bytesCopied);

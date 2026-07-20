@@ -66,11 +66,11 @@ namespace
 constexpr int kHeaderHeightDip = 28;
 constexpr int kStatusHeightDip = 22;
 
-constexpr UINT_PTR kLoadingDelayTimerId           = 1;
-constexpr UINT_PTR kLoadingAnimTimerId            = 2;
-constexpr UINT kLoadingDelayMs                    = 200u;
-constexpr UINT kLoadingAnimIntervalMs             = 16u;
-constexpr float kLoadingSpinnerDegPerSec          = 90.0f;
+constexpr UINT_PTR kLoadingDelayTimerId               = 1;
+constexpr UINT_PTR kLoadingAnimTimerId                = 2;
+constexpr UINT kLoadingDelayMs                        = 200u;
+constexpr UINT kLoadingAnimIntervalMs                 = 16u;
+constexpr float kLoadingSpinnerDegPerSec              = 90.0f;
 constexpr wchar_t kFileComboHostOriginalWndProcProp[] = L"RS.ViewerImgRaw.FileComboHostOriginalWndProc";
 constexpr wchar_t kFileComboHostStateProp[]           = L"RS.ViewerImgRaw.FileComboHostState";
 #if defined(ENABLE_TESTS)
@@ -482,8 +482,7 @@ void ShutdownViewerImgRawModuleState() noexcept
 
 bool CanUnloadViewerImgRawModuleNow() noexcept
 {
-    return g_viewerImgRawShutdownCleanupComplete.load(std::memory_order_acquire) &&
-           g_viewerImgRawLiveInstanceCount.load(std::memory_order_acquire) == 0u &&
+    return g_viewerImgRawShutdownCleanupComplete.load(std::memory_order_acquire) && g_viewerImgRawLiveInstanceCount.load(std::memory_order_acquire) == 0u &&
            g_viewerImgRawAsyncWorkCount.load(std::memory_order_acquire) == 0u;
 }
 
@@ -866,17 +865,17 @@ LRESULT ViewerImgRaw::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcep
                 return FALSE;
             }
 
-            *snapshot                   = {};
-            snapshot->hasImage          = HasDisplayImage();
+            *snapshot                     = {};
+            snapshot->hasImage            = HasDisplayImage();
             snapshot->displayingThumbnail = IsDisplayingThumbnail();
-            snapshot->baseOrientation  = NormalizeExifOrientation(_baseOrientation);
-            snapshot->viewOrientation  = NormalizeExifOrientation(_viewOrientation);
+            snapshot->baseOrientation     = NormalizeExifOrientation(_baseOrientation);
+            snapshot->viewOrientation     = NormalizeExifOrientation(_viewOrientation);
 
             if (_currentImage && snapshot->hasImage)
             {
-                snapshot->sourceWidth  = snapshot->displayingThumbnail ? _currentImage->thumbWidth : _currentImage->rawWidth;
-                snapshot->sourceHeight = snapshot->displayingThumbnail ? _currentImage->thumbHeight : _currentImage->rawHeight;
-                const bool swapAxes     = snapshot->viewOrientation >= 5u && snapshot->viewOrientation <= 8u;
+                snapshot->sourceWidth    = snapshot->displayingThumbnail ? _currentImage->thumbWidth : _currentImage->rawWidth;
+                snapshot->sourceHeight   = snapshot->displayingThumbnail ? _currentImage->thumbHeight : _currentImage->rawHeight;
+                const bool swapAxes      = snapshot->viewOrientation >= 5u && snapshot->viewOrientation <= 8u;
                 snapshot->orientedWidth  = swapAxes ? snapshot->sourceHeight : snapshot->sourceWidth;
                 snapshot->orientedHeight = swapAxes ? snapshot->sourceWidth : snapshot->sourceHeight;
             }
@@ -909,12 +908,12 @@ LRESULT ViewerImgRaw::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcep
             *snapshot = {};
             {
                 std::scoped_lock lock(_cacheMutex);
-                snapshot->speculativeBytes      = _speculativeDecodedBytes;
-                snapshot->speculativeBytesPeak  = _speculativeDecodedBytesPeak;
-                snapshot->budgetAcceptedCount   = _speculativeBudgetAcceptedCount;
-                snapshot->budgetRejectedCount   = _speculativeBudgetRejectedCount;
-                snapshot->cachedImageCount      = _imageCache.size();
-                snapshot->inflightDecodeCount   = _inflightDecodes.size();
+                snapshot->speculativeBytes     = _speculativeDecodedBytes;
+                snapshot->speculativeBytesPeak = _speculativeDecodedBytesPeak;
+                snapshot->budgetAcceptedCount  = _speculativeBudgetAcceptedCount;
+                snapshot->budgetRejectedCount  = _speculativeBudgetRejectedCount;
+                snapshot->cachedImageCount     = _imageCache.size();
+                snapshot->inflightDecodeCount  = _inflightDecodes.size();
             }
             snapshot->speculativeBytesLimit = SpeculativeDecodedByteLimit();
             PopulateAsyncOpenDebugSnapshot(*snapshot);
@@ -983,9 +982,8 @@ LRESULT ViewerImgRaw::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcep
         case WM_PAINT: OnPaint(); return 0;
         case WM_ERASEBKGND: return OnEraseBkgnd(hwnd, reinterpret_cast<HDC>(wp));
         case kAsyncProgressMessage:
-            OnAsyncProgress(static_cast<uint64_t>(wp),
-                            ViewerImgRawAsyncProtocol::UnpackProgressStage(lp),
-                            ViewerImgRawAsyncProtocol::UnpackProgressPercent(lp));
+            OnAsyncProgress(
+                static_cast<uint64_t>(wp), ViewerImgRawAsyncProtocol::UnpackProgressStage(lp), ViewerImgRawAsyncProtocol::UnpackProgressPercent(lp));
             return 0;
         case kAsyncOpenCompleteMessage:
         {
@@ -1386,8 +1384,7 @@ LRESULT ViewerImgRaw::OnNcDestroy(HWND hwnd, WPARAM wp, LPARAM lp) noexcept
 LRESULT ViewerImgRaw::HandleFileComboHostMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, bool& handled) noexcept
 {
     const bool popupWasOpen      = _fileComboControl && _fileComboControl->DebugIsPopupOpen();
-    const bool preExpandForPopup =
-        ! popupWasOpen && _fileComboControl && RedSalamander::ViewerFileComboHost::MessageMayOpenWindowComboPopup(msg, wp);
+    const bool preExpandForPopup = ! popupWasOpen && _fileComboControl && RedSalamander::ViewerFileComboHost::MessageMayOpenWindowComboPopup(msg, wp);
     if (preExpandForPopup)
     {
         _fileComboHostPreExpandPopup = true;
@@ -1656,9 +1653,9 @@ void ViewerImgRaw::ComputeLayoutRects(HWND hwnd) noexcept
     }
 
     const bool showCombo = ! _embeddedMode && _otherItems.size() > 1;
-    const int padding = Common::WindowSizing::DipToPixelRounded(dpi, RedSalamander::ViewerFileComboHost::kStandaloneComboChromePaddingDip);
-    const int comboH = std::max(1L, Common::WindowSizing::DipToPixelRounded(dpi, RedSalamander::ViewerFileComboHost::kStandaloneComboHeightDip));
-    int headerH      = _embeddedMode ? 0 : Common::WindowSizing::DipToPixelRounded(dpi, kHeaderHeightDip);
+    const int padding    = Common::WindowSizing::DipToPixelRounded(dpi, RedSalamander::ViewerFileComboHost::kStandaloneComboChromePaddingDip);
+    const int comboH     = std::max(1L, Common::WindowSizing::DipToPixelRounded(dpi, RedSalamander::ViewerFileComboHost::kStandaloneComboHeightDip));
+    int headerH          = _embeddedMode ? 0 : Common::WindowSizing::DipToPixelRounded(dpi, kHeaderHeightDip);
     if (showCombo)
     {
         headerH = (std::max)(headerH, comboH + 2 * padding);
@@ -1694,10 +1691,8 @@ void ViewerImgRaw::ComputeLayoutRects(HWND hwnd) noexcept
             const int w                = std::max(1L, (_headerRect.right - _headerRect.left) - 2 * padding);
             const int y                = _headerRect.top + std::max(0L, ((_headerRect.bottom - _headerRect.top) - comboH) / 2);
             const bool expandPopupHost = _fileComboHostPreExpandPopup || (_fileComboControl && _fileComboControl->DebugIsPopupOpen());
-            const int hostHeight = comboH +
-                                   (expandPopupHost ? RedSalamander::ViewerFileComboHost::ComputeStandaloneComboPopupHeightPx(
-                                                          _otherItems.size(), dpi)
-                                                    : 0);
+            const int hostHeight =
+                comboH + (expandPopupHost ? RedSalamander::ViewerFileComboHost::ComputeStandaloneComboPopupHeightPx(_otherItems.size(), dpi) : 0);
             SetWindowPos(_hFileComboHost.get(), HWND_TOP, x, y, w, hostHeight, SWP_NOACTIVATE);
 
             if (_fileComboControl)
@@ -3590,8 +3585,8 @@ void ViewerImgRaw::OnPaint()
                 const CachedImage* image = _currentImage;
                 const uint32_t imgWPx    = image ? (IsDisplayingThumbnail() ? image->thumbWidth : image->rawWidth) : 0;
                 const uint32_t imgHPx    = image ? (IsDisplayingThumbnail() ? image->thumbHeight : image->rawHeight) : 0;
-                const float imgWDip = Common::WindowSizing::PixelToDip(static_cast<float>(imgWPx), static_cast<float>(dpi));
-                const float imgHDip = Common::WindowSizing::PixelToDip(static_cast<float>(imgHPx), static_cast<float>(dpi));
+                const float imgWDip      = Common::WindowSizing::PixelToDip(static_cast<float>(imgWPx), static_cast<float>(dpi));
+                const float imgHDip      = Common::WindowSizing::PixelToDip(static_cast<float>(imgHPx), static_cast<float>(dpi));
 
                 if (imgWDip > 0.0f && imgHDip > 0.0f)
                 {
@@ -3606,8 +3601,8 @@ void ViewerImgRaw::OnPaint()
                     });
 
                     const uint16_t orientation        = (_viewOrientation >= 1 && _viewOrientation <= 8) ? _viewOrientation : static_cast<uint16_t>(1);
-                    const float xDip = Common::WindowSizing::PixelToDip(x, static_cast<float>(dpi));
-                    const float yDip = Common::WindowSizing::PixelToDip(y, static_cast<float>(dpi));
+                    const float xDip                  = Common::WindowSizing::PixelToDip(x, static_cast<float>(dpi));
+                    const float yDip                  = Common::WindowSizing::PixelToDip(y, static_cast<float>(dpi));
                     const D2D1_MATRIX_3X2_F transform = ExifOrientationTransform(orientation, imgWDip, imgHDip) *
                                                         D2D1::Matrix3x2F::Scale(displayedZoom, displayedZoom) * D2D1::Matrix3x2F::Translation(xDip, yDip);
                     _d2dTarget->SetTransform(transform);

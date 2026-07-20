@@ -140,7 +140,7 @@ private:
     };
 
     static constexpr uint32_t kProtocolVersion = 1u;
-    static constexpr LONG kMaxParticipants      = 32;
+    static constexpr LONG kMaxParticipants     = 32;
 
     [[nodiscard]] HRESULT EnsureTransport() noexcept
     {
@@ -149,7 +149,7 @@ private:
             return S_OK;
         }
 
-        const DWORD processId       = GetCurrentProcessId();
+        const DWORD processId        = GetCurrentProcessId();
         const std::wstring mutexName = std::format(L"Local\\RedSalamander.CurlRuntime.{}.Mutex", processId);
         const std::wstring mapName   = std::format(L"Local\\RedSalamander.CurlRuntime.{}.State", processId);
 
@@ -175,8 +175,7 @@ private:
         }
         const bool created = GetLastError() != ERROR_ALREADY_EXISTS;
 
-        wil::unique_mapview_ptr<SharedState> state(
-            static_cast<SharedState*>(MapViewOfFile(mapping.get(), FILE_MAP_ALL_ACCESS, 0u, 0u, sizeof(SharedState))));
+        wil::unique_mapview_ptr<SharedState> state(static_cast<SharedState*>(MapViewOfFile(mapping.get(), FILE_MAP_ALL_ACCESS, 0u, 0u, sizeof(SharedState))));
         if (! state)
         {
             return HRESULT_FROM_WIN32(GetLastError());
@@ -184,7 +183,7 @@ private:
 
         if (created)
         {
-            *state          = {};
+            *state         = {};
             state->version = kProtocolVersion;
         }
         else if (state->version != kProtocolVersion)
@@ -202,6 +201,6 @@ private:
     wil::unique_handle _processMutex;
     wil::unique_handle _mapping;
     wil::unique_mapview_ptr<SharedState> _state;
-    bool _acquired      = false;
+    bool _acquired = false;
 };
 } // namespace Common::CurlRuntime

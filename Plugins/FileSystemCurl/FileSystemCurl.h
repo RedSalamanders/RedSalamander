@@ -22,10 +22,10 @@
 #include <wil/resource.h>
 #pragma warning(pop)
 
+#include "PackedFileInfoBuffer.h"
 #include "PlugInterfaces/DriveInfo.h"
 #include "PlugInterfaces/FileSystem.h"
 #include "PlugInterfaces/Informations.h"
-#include "PackedFileInfoBuffer.h"
 #include "PlugInterfaces/NavigationMenu.h"
 
 struct IHost;

@@ -14,11 +14,11 @@
 
 namespace ViewerWebSecurity
 {
-inline constexpr uint32_t kDefaultMaxDocumentMiB = 32u;
-inline constexpr uint32_t kMaximumDocumentMiB = 64u;
-inline constexpr bool kDefaultAllowExternalNavigation = false;
+inline constexpr uint32_t kDefaultMaxDocumentMiB              = 32u;
+inline constexpr uint32_t kMaximumDocumentMiB                 = 64u;
+inline constexpr bool kDefaultAllowExternalNavigation         = false;
 inline constexpr uint64_t kGeneratedOutputFixedAllowanceBytes = 1ull * 1024ull * 1024ull;
-inline constexpr uint64_t kMaximumGeneratedOutputBytes = 128ull * 1024ull * 1024ull;
+inline constexpr uint64_t kMaximumGeneratedOutputBytes        = 128ull * 1024ull * 1024ull;
 
 inline constexpr std::wstring_view kInternalDocumentOrigin = L"https://viewer.redsalamander.invalid";
 inline constexpr std::wstring_view kInternalDocumentFilter = L"https://viewer.redsalamander.invalid/*";
@@ -96,13 +96,10 @@ enum class NavigationAction : uint8_t
     return StartsWithNoCase(uri, L"http://") || StartsWithNoCase(uri, L"https://");
 }
 
-[[nodiscard]] constexpr NavigationAction EvaluateNavigation(std::wstring_view uri,
-                                                            NavigationSurface surface,
-                                                            bool userInitiated,
-                                                            bool allowExternalNavigation,
-                                                            std::wstring_view allowedTopLevelDocument) noexcept
+[[nodiscard]] constexpr NavigationAction EvaluateNavigation(
+    std::wstring_view uri, NavigationSurface surface, bool userInitiated, bool allowExternalNavigation, std::wstring_view allowedTopLevelDocument) noexcept
 {
-    const bool exactDocument = ! allowedTopLevelDocument.empty() && EqualsNoCase(uri, allowedTopLevelDocument);
+    const bool exactDocument    = ! allowedTopLevelDocument.empty() && EqualsNoCase(uri, allowedTopLevelDocument);
     const bool documentFragment = ! allowedTopLevelDocument.empty() && uri.size() > allowedTopLevelDocument.size() &&
                                   StartsWithNoCase(uri, allowedTopLevelDocument) && uri[allowedTopLevelDocument.size()] == L'#';
     if (surface == NavigationSurface::TopLevel && (exactDocument || documentFragment))
@@ -171,8 +168,7 @@ enum class NormalizeTextResult : uint8_t
 {
     output.clear();
 
-    if (bytes.size() >= 3u && static_cast<uint8_t>(bytes[0]) == 0xEFu && static_cast<uint8_t>(bytes[1]) == 0xBBu &&
-        static_cast<uint8_t>(bytes[2]) == 0xBFu)
+    if (bytes.size() >= 3u && static_cast<uint8_t>(bytes[0]) == 0xEFu && static_cast<uint8_t>(bytes[1]) == 0xBBu && static_cast<uint8_t>(bytes[2]) == 0xBFu)
     {
         bytes.remove_prefix(3u);
     }
@@ -203,10 +199,10 @@ enum class NormalizeTextResult : uint8_t
         size_t codeUnits = (std::min)(kChunkCodeUnits, (bytes.size() - byteOffset) / 2u);
         for (size_t index = 0u; index < codeUnits; ++index)
         {
-            const uint8_t first = static_cast<uint8_t>(bytes[byteOffset + index * 2u]);
+            const uint8_t first  = static_cast<uint8_t>(bytes[byteOffset + index * 2u]);
             const uint8_t second = static_cast<uint8_t>(bytes[byteOffset + index * 2u + 1u]);
-            chunk[index] = utf16Le ? static_cast<wchar_t>(static_cast<uint16_t>(first) | (static_cast<uint16_t>(second) << 8u))
-                                   : static_cast<wchar_t>((static_cast<uint16_t>(first) << 8u) | static_cast<uint16_t>(second));
+            chunk[index]         = utf16Le ? static_cast<wchar_t>(static_cast<uint16_t>(first) | (static_cast<uint16_t>(second) << 8u))
+                                           : static_cast<wchar_t>((static_cast<uint16_t>(first) << 8u) | static_cast<uint16_t>(second));
         }
 
         const bool moreInput = byteOffset + codeUnits * 2u < bytes.size();
@@ -220,14 +216,15 @@ enum class NormalizeTextResult : uint8_t
         }
 
         const int codeUnitCount = static_cast<int>(codeUnits);
-        const int required = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, chunk.data(), codeUnitCount, nullptr, 0, nullptr, nullptr);
+        const int required      = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, chunk.data(), codeUnitCount, nullptr, 0, nullptr, nullptr);
         if (required <= 0)
         {
             return NormalizeTextResult::InvalidEncoding;
         }
 
         uint64_t nextSize = 0u;
-        if (! TryAccumulateWithinLimit(static_cast<uint64_t>(output.size()), static_cast<uint64_t>(required), static_cast<uint64_t>(maxOutputBytes), nextSize) ||
+        if (! TryAccumulateWithinLimit(
+                static_cast<uint64_t>(output.size()), static_cast<uint64_t>(required), static_cast<uint64_t>(maxOutputBytes), nextSize) ||
             nextSize > static_cast<uint64_t>((std::numeric_limits<size_t>::max)()))
         {
             return NormalizeTextResult::TooLarge;
@@ -235,7 +232,8 @@ enum class NormalizeTextResult : uint8_t
 
         const size_t oldSize = output.size();
         output.resize(static_cast<size_t>(nextSize));
-        const int written = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, chunk.data(), codeUnitCount, output.data() + oldSize, required, nullptr, nullptr);
+        const int written =
+            WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, chunk.data(), codeUnitCount, output.data() + oldSize, required, nullptr, nullptr);
         if (written != required)
         {
             output.resize(oldSize);
@@ -250,22 +248,22 @@ enum class NormalizeTextResult : uint8_t
 
 struct DebugSnapshot
 {
-    uint32_t sizeBytes = sizeof(DebugSnapshot);
-    DocumentRoute route = DocumentRoute::None;
-    BOOL scriptsEnabled = FALSE;
-    BOOL privateOrigin = FALSE;
-    BOOL stagedFileTracked = FALSE;
-    BOOL navigationCompleted = FALSE;
-    BOOL navigationSucceeded = FALSE;
-    BOOL generatedOutputRejected = FALSE;
-    uint64_t loadedSourceBytes = 0u;
-    uint64_t pendingCleanupCount = 0u;
-    uint64_t generatedOutputBytes = 0u;
-    uint64_t generatedOutputLimit = 0u;
+    uint32_t sizeBytes             = sizeof(DebugSnapshot);
+    DocumentRoute route            = DocumentRoute::None;
+    BOOL scriptsEnabled            = FALSE;
+    BOOL privateOrigin             = FALSE;
+    BOOL stagedFileTracked         = FALSE;
+    BOOL navigationCompleted       = FALSE;
+    BOOL navigationSucceeded       = FALSE;
+    BOOL generatedOutputRejected   = FALSE;
+    uint64_t loadedSourceBytes     = 0u;
+    uint64_t pendingCleanupCount   = 0u;
+    uint64_t generatedOutputBytes  = 0u;
+    uint64_t generatedOutputLimit  = 0u;
     uint64_t asyncLoadPostFailures = 0u;
     uint64_t asyncSavePostFailures = 0u;
-    BOOL loadPostFailureTerminal = FALSE;
-    BOOL saveInProgress = FALSE;
+    BOOL loadPostFailureTerminal   = FALSE;
+    BOOL saveInProgress            = FALSE;
     std::array<wchar_t, 512u> allowedDocumentUrl{};
     std::array<wchar_t, 512u> webViewSourceUrl{};
 };
@@ -274,22 +272,22 @@ enum class DebugControlAction : WPARAM
 {
     FailNextAsyncLoadCompletionPost = 1u,
     FailNextAsyncSaveCompletionPost = 2u,
-    SaveAsToPath = 3u,
+    SaveAsToPath                    = 3u,
 };
 
 struct DebugSaveAsRequest
 {
-    uint32_t sizeBytes = sizeof(DebugSaveAsRequest);
+    uint32_t sizeBytes             = sizeof(DebugSaveAsRequest);
     const wchar_t* destinationPath = nullptr;
-    uint32_t faultMask = 0u;
-    HRESULT submissionHr = E_FAIL;
+    uint32_t faultMask             = 0u;
+    HRESULT submissionHr           = E_FAIL;
 };
 
 enum DebugSaveFault : uint32_t
 {
-    DebugSaveFaultNone = 0u,
-    DebugSaveFaultWrite = 1u << 0u,
-    DebugSaveFaultFlush = 1u << 1u,
+    DebugSaveFaultNone   = 0u,
+    DebugSaveFaultWrite  = 1u << 0u,
+    DebugSaveFaultFlush  = 1u << 1u,
     DebugSaveFaultCommit = 1u << 2u,
 };
 

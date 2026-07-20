@@ -4442,13 +4442,13 @@ case SelfTestState::Step::Causeway_BridgeRejectsHostileChildNames:
         L"placeholder-07-long-safe-name.txt",
     }};
     constexpr std::wstring_view kValidSibling = L"z-valid-sibling.txt";
-    constexpr std::string_view kPayload        = "causeway-hostile-child-name-payload";
-    const unsigned int scenario                = static_cast<unsigned int>(state.stepState / 2);
-    const FileSystemOperation operation        = scenario == 0u ? FILESYSTEM_COPY : FILESYSTEM_MOVE;
-    const std::wstring rootLeaf                = std::format(L"causeway-hostile-{}-src", scenario == 0u ? L"copy" : L"move");
-    const std::wstring dummyRoot               = L"/" + rootLeaf;
-    const std::wstring dummyEscapeFile         = L"/escape.txt";
-    const std::filesystem::path localDest      = state.tempRoot / std::format(L"causeway-hostile-{}-dst", scenario == 0u ? L"copy" : L"move");
+    constexpr std::string_view kPayload = "causeway-hostile-child-name-payload";
+    const unsigned int scenario = static_cast<unsigned int>(state.stepState / 2);
+    const FileSystemOperation operation = scenario == 0u ? FILESYSTEM_COPY : FILESYSTEM_MOVE;
+    const std::wstring rootLeaf = std::format(L"causeway-hostile-{}-src", scenario == 0u ? L"copy" : L"move");
+    const std::wstring dummyRoot = L"/" + rootLeaf;
+    const std::wstring dummyEscapeFile = L"/escape.txt";
+    const std::filesystem::path localDest = state.tempRoot / std::format(L"causeway-hostile-{}-dst", scenario == 0u ? L"copy" : L"move");
     const std::filesystem::path destinationRoot = localDest / rootLeaf;
     const std::filesystem::path escapedDestination = localDest / L"escape.txt";
 
@@ -4562,15 +4562,15 @@ case SelfTestState::Step::Causeway_BridgeRejectsHostileChildNames:
 
     std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> summaries;
     state.fileOps->CollectCompletedTasks(summaries);
-    const auto summary = std::find_if(summaries.begin(), summaries.end(), [&](const auto& value) noexcept {
-        return state.taskA.has_value() && value.taskId == state.taskA.value();
-    });
+    const auto summary = std::find_if(
+        summaries.begin(), summaries.end(), [&](const auto& value) noexcept { return state.taskA.has_value() && value.taskId == state.taskA.value(); });
     if (summary == summaries.end())
     {
         Fail(L"Causeway hostile-child-name test could not find its completed summary.");
         return true;
     }
-    const size_t rejectedNameCount = static_cast<size_t>(std::count_if(summary->issueDiagnostics.begin(), summary->issueDiagnostics.end(), [](const auto& issue) noexcept {
+    const size_t rejectedNameCount =
+        static_cast<size_t>(std::count_if(summary->issueDiagnostics.begin(), summary->issueDiagnostics.end(), [](const auto& issue) noexcept {
         return issue.category == L"bridge.source.invalidChildName";
     }));
     constexpr size_t kExpectedRejectedEntries = 7u; // Six invalid components plus the second name in the case-colliding pair.
@@ -4724,9 +4724,9 @@ case SelfTestState::Step::Causeway_BridgeProviderOutputContracts:
 case SelfTestState::Step::Causeway_BridgeSchedulingAndResourceContracts:
 {
     constexpr uint64_t kBridgeBudgetCeilingBytes = 256ull * 1024ull * 1024ull;
-    constexpr unsigned int kFilesPerDirectory    = 10u;
-    constexpr unsigned int kDirectoryCount       = 2u;
-    const ULONGLONG nowTick                       = GetTickCount64();
+    constexpr unsigned int kFilesPerDirectory = 10u;
+    constexpr unsigned int kDirectoryCount = 2u;
+    const ULONGLONG nowTick = GetTickCount64();
     if (HasTimedOut(state, nowTick, 120'000ull))
     {
         Fail(L"Causeway_BridgeSchedulingAndResourceContracts timed out.");
@@ -4767,9 +4767,9 @@ case SelfTestState::Step::Causeway_BridgeSchedulingAndResourceContracts:
     }
 
     const FileSystemOperation operation = scenario == 0u ? FILESYSTEM_COPY : FILESYSTEM_MOVE;
-    const std::wstring rootLeaf         = std::format(L"causeway-resource-{}-src", scenario == 0u ? L"copy" : L"move");
-    const std::wstring dummyRoot        = L"/" + rootLeaf;
-    const std::wstring dummyNested      = dummyRoot + L"/nested";
+    const std::wstring rootLeaf = std::format(L"causeway-resource-{}-src", scenario == 0u ? L"copy" : L"move");
+    const std::wstring dummyRoot = L"/" + rootLeaf;
+    const std::wstring dummyNested = dummyRoot + L"/nested";
     const std::filesystem::path localDest = state.tempRoot / std::format(L"causeway-resource-{}-dst", scenario == 0u ? L"copy" : L"move");
 
     if (((state.stepState - 1u) % 2u) == 0u)
@@ -4778,8 +4778,8 @@ case SelfTestState::Step::Causeway_BridgeSchedulingAndResourceContracts:
         {
             g_settings.fileOperations.emplace();
         }
-        g_settings.fileOperations->preCalcEnabled                = true;
-        g_settings.fileOperations->crossFsBridgeBufferSizeKB     = 2048u;
+        g_settings.fileOperations->preCalcEnabled = true;
+        g_settings.fileOperations->crossFsBridgeBufferSizeKB = 2048u;
         static_cast<void>(SetPluginConfiguration(
             state.infoLocal.get(),
             R"json({"concurrencyMode":"manual","copyMoveMaxConcurrency":16,"deleteMaxConcurrency":8,"deleteRecycleBinMaxConcurrency":2,"enumerationSoftMaxBufferMiB":512,"enumerationHardMaxBufferMiB":2048,"reparsePointPolicy":"copyReparse","searchBackendPreference":"auto","searchMaxDirectoryWalkers":4})json"));
@@ -4787,8 +4787,7 @@ case SelfTestState::Step::Causeway_BridgeSchedulingAndResourceContracts:
             state.infoDummy.get(),
             R"json({"maxChildrenPerDirectory":0,"maxDepth":10,"seed":42,"latencyMs":20,"streamChunkLatencyMs":50,"virtualSpeedLimit":"0"})json"));
 
-        const FileSystemFlags cleanupFlags =
-            static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY);
+        const FileSystemFlags cleanupFlags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY);
         static_cast<void>(state.fsDummy->DeleteItem(dummyRoot.c_str(), cleanupFlags, nullptr, nullptr, nullptr));
         if (! EnsureDummyFolderExists(state.fsDummy.get(), dummyRoot) || ! EnsureDummyFolderExists(state.fsDummy.get(), dummyNested) ||
             ! RecreateEmptyDirectory(localDest))
@@ -4840,9 +4839,8 @@ case SelfTestState::Step::Causeway_BridgeSchedulingAndResourceContracts:
     }
     if (FAILED(completed->second.hr))
     {
-        Fail(std::format(L"Causeway scheduling/resource {} failed with 0x{:08X}.",
-                         scenario == 0u ? L"COPY" : L"MOVE",
-                         static_cast<unsigned long>(completed->second.hr)));
+        Fail(std::format(
+            L"Causeway scheduling/resource {} failed with 0x{:08X}.", scenario == 0u ? L"COPY" : L"MOVE", static_cast<unsigned long>(completed->second.hr)));
         return true;
     }
     if (! completed->second.preCalcSuppressedForHighMetadataCrossFs || completed->second.preCalcCompleted)
@@ -4869,12 +4867,7 @@ case SelfTestState::Step::Causeway_BridgeSchedulingAndResourceContracts:
     }
 
     const std::wstring_view operationName = scenario == 0u ? L"COPY" : L"MOVE";
-    Debug::Perf::Emit(L"FileOps.SelfTest.CausewayBridgeBufferPeakBytes",
-                      operationName,
-                      0u,
-                      peakBudgetBytes,
-                      kBridgeBudgetCeilingBytes,
-                      completed->second.hr);
+    Debug::Perf::Emit(L"FileOps.SelfTest.CausewayBridgeBufferPeakBytes", operationName, 0u, peakBudgetBytes, kBridgeBudgetCeilingBytes, completed->second.hr);
     Debug::Perf::Emit(L"FileOps.SelfTest.CausewaySourceDirectoryEnumerations",
                       operationName,
                       0u,
@@ -4897,13 +4890,13 @@ case SelfTestState::Step::Causeway_BridgeFileReparsePolicy:
     }
 
     constexpr std::wstring_view kReparseFile = L"reparse-file.bin";
-    constexpr std::wstring_view kValidFile   = L"valid-sibling.bin";
-    constexpr std::string_view kPayload      = "causeway-reparse-file-target-bytes";
-    const unsigned int scenario              = state.stepState < 2u ? 0u : 1u;
-    const std::wstring rootLeaf              = std::format(L"causeway-file-reparse-{}-src", scenario == 0u ? L"skip" : L"copy");
-    const std::wstring dummyRoot             = L"/" + rootLeaf;
-    const std::filesystem::path localDest    = state.tempRoot / std::format(L"causeway-file-reparse-{}-dst", scenario == 0u ? L"skip" : L"copy");
-    const std::filesystem::path copiedRoot   = localDest / rootLeaf;
+    constexpr std::wstring_view kValidFile = L"valid-sibling.bin";
+    constexpr std::string_view kPayload = "causeway-reparse-file-target-bytes";
+    const unsigned int scenario = state.stepState < 2u ? 0u : 1u;
+    const std::wstring rootLeaf = std::format(L"causeway-file-reparse-{}-src", scenario == 0u ? L"skip" : L"copy");
+    const std::wstring dummyRoot = L"/" + rootLeaf;
+    const std::filesystem::path localDest = state.tempRoot / std::format(L"causeway-file-reparse-{}-dst", scenario == 0u ? L"skip" : L"copy");
+    const std::filesystem::path copiedRoot = localDest / rootLeaf;
 
     const auto resetHooks = []() noexcept
     {
@@ -4922,8 +4915,7 @@ case SelfTestState::Step::Causeway_BridgeFileReparsePolicy:
         static_cast<void>(SetPluginConfiguration(
             state.infoDummy.get(),
             R"json({"maxChildrenPerDirectory":0,"maxDepth":10,"seed":42,"latencyMs":0,"streamChunkLatencyMs":0,"virtualSpeedLimit":"0"})json"));
-        const FileSystemFlags cleanupFlags =
-            static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY);
+        const FileSystemFlags cleanupFlags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY);
         static_cast<void>(state.fsDummy->DeleteItem(dummyRoot.c_str(), cleanupFlags, nullptr, nullptr, nullptr));
         if (! EnsureDummyFolderExists(state.fsDummy.get(), dummyRoot) ||
             ! DummyWriteTextFile(state.fsDummy.get(), dummyRoot + L"/" + std::wstring(kReparseFile), kPayload, true) ||
@@ -4998,8 +4990,7 @@ case SelfTestState::Step::Causeway_BridgeFileReparsePolicy:
     }
 
     std::error_code ec;
-    if (std::filesystem::exists(copiedRoot / std::wstring(kReparseFile), ec) || ec ||
-        ! FileSizeEquals(copiedRoot / std::wstring(kValidFile), kPayload.size()))
+    if (std::filesystem::exists(copiedRoot / std::wstring(kReparseFile), ec) || ec || ! FileSizeEquals(copiedRoot / std::wstring(kValidFile), kPayload.size()))
     {
         Fail(L"Causeway file-reparse policy copied target bytes or failed to continue with the valid sibling.");
         return true;
@@ -5009,13 +5000,12 @@ case SelfTestState::Step::Causeway_BridgeFileReparsePolicy:
     {
         std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> summaries;
         state.fileOps->CollectCompletedTasks(summaries);
-        const auto summary = std::find_if(summaries.begin(), summaries.end(), [&](const auto& value) noexcept {
-            return state.taskA.has_value() && value.taskId == state.taskA.value();
+        const auto summary = std::find_if(
+            summaries.begin(), summaries.end(), [&](const auto& value) noexcept { return state.taskA.has_value() && value.taskId == state.taskA.value(); });
+        const bool sawUnsupported =
+            summary != summaries.end() && std::any_of(summary->issueDiagnostics.begin(), summary->issueDiagnostics.end(), [](const auto& issue) noexcept {
+            return issue.category == L"bridge.reparse.unsupported" && issue.status == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
         });
-        const bool sawUnsupported = summary != summaries.end() &&
-                                    std::any_of(summary->issueDiagnostics.begin(), summary->issueDiagnostics.end(), [](const auto& issue) noexcept {
-                                        return issue.category == L"bridge.reparse.unsupported" && issue.status == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
-                                    });
         if (! sawUnsupported)
         {
             Fail(L"Causeway file CopyReparse scenario did not retain the ERROR_NOT_SUPPORTED diagnostic.");
@@ -5050,7 +5040,7 @@ case SelfTestState::Step::Causeway_BridgeFailureStatusAndPausedReader:
     }
 
     constexpr std::wstring_view kDummyRoot = L"/causeway-worker-failure-src";
-    const std::filesystem::path localDest  = state.tempRoot / L"causeway-worker-failure-dst";
+    const std::filesystem::path localDest = state.tempRoot / L"causeway-worker-failure-dst";
     if (state.stepState == 0u)
     {
         if (! RunFileOpsBridgePausedReaderStopSelfTestForSelfTest(*state.fileOps))
@@ -5068,8 +5058,7 @@ case SelfTestState::Step::Causeway_BridgeFailureStatusAndPausedReader:
         static_cast<void>(SetPluginConfiguration(
             state.infoDummy.get(),
             R"json({"maxChildrenPerDirectory":0,"maxDepth":10,"seed":42,"latencyMs":10,"streamChunkLatencyMs":20,"virtualSpeedLimit":"0"})json"));
-        const FileSystemFlags cleanupFlags =
-            static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY);
+        const FileSystemFlags cleanupFlags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY);
         static_cast<void>(state.fsDummy->DeleteItem(std::wstring(kDummyRoot).c_str(), cleanupFlags, nullptr, nullptr, nullptr));
         if (! EnsureDummyFolderExists(state.fsDummy.get(), kDummyRoot) || ! RecreateEmptyDirectory(localDest))
         {
@@ -5620,9 +5609,8 @@ case SelfTestState::Step::Floodgate_CrossFsDirectoryMoveCleanupPreservesChangedS
         {
             ReleaseFileOpsBridgeMoveSourceCleanupPauseForSelfTest();
             SetFileOpsBridgeMoveSourceCleanupPauseForSelfTest(false);
-            Fail(std::format(L"Floodgate bridge directory MOVE manifest did not retain the copied tree before cleanup. peak={}, current={}.",
-                             peakEntries,
-                             currentEntries));
+            Fail(std::format(
+                L"Floodgate bridge directory MOVE manifest did not retain the copied tree before cleanup. peak={}, current={}.", peakEntries, currentEntries));
             return true;
         }
 

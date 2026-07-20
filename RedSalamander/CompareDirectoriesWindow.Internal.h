@@ -583,7 +583,7 @@ private:
 
     OptionsPanelController _optionsPanel{};
 
-    Common::Settings::Settings* _settings = nullptr;
+    Common::Settings::Settings* _settings  = nullptr;
     FolderWindow* _applicationFolderWindow = nullptr;
     AppTheme _theme{};
     const ShortcutManager* _shortcuts = nullptr;

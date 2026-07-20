@@ -653,15 +653,10 @@ void ReleaseSharedWindowHostAttachment(WindowHost* host, DWORD ownerThreadId) no
 #if defined(_DEBUG)
     creationFlags |= D3D11_CREATE_DEVICE_DEBUG;
 #endif
-    D3D_FEATURE_LEVEL levels[] = {D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1};
+    D3D_FEATURE_LEVEL levels[]        = {D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1};
     D3D_DRIVER_TYPE createdDriverType = D3D_DRIVER_TYPE_UNKNOWN;
-    const HRESULT hr = CreateD3D11DeviceWithWarpFallback(creationFlags,
-                                                         levels,
-                                                         false,
-                                                         resources.d3dDevice.addressof(),
-                                                         &resources.featureLevel,
-                                                         resources.d3dContext.addressof(),
-                                                         &createdDriverType);
+    const HRESULT hr                  = CreateD3D11DeviceWithWarpFallback(
+        creationFlags, levels, false, resources.d3dDevice.addressof(), &resources.featureLevel, resources.d3dContext.addressof(), &createdDriverType);
     if (FAILED(hr) || ! resources.d3dDevice || ! resources.d3dContext)
     {
         Debug::Error(L"DxUi::WindowHost: shared D3D11CreateDevice failed: 0x{:08X}", hr);
@@ -2373,8 +2368,7 @@ LRESULT WindowHost::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, boo
         case WM_SIZE:
             handled = true;
             OnSize(static_cast<UINT>(LOWORD(lp)), static_cast<UINT>(HIWORD(lp)));
-            if ((wp == SIZE_RESTORED || wp == SIZE_MAXIMIZED) && _hwnd && IsHostWindowEffectivelyVisible(_hwnd) &&
-                _animationSuspendedWhileHidden)
+            if ((wp == SIZE_RESTORED || wp == SIZE_MAXIMIZED) && _hwnd && IsHostWindowEffectivelyVisible(_hwnd) && _animationSuspendedWhileHidden)
             {
                 _animationSuspendedWhileHidden = false;
                 RequestAnimation();
@@ -2607,7 +2601,7 @@ LRESULT WindowHost::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, boo
             }
             const bool rightButton                  = msg == WM_RBUTTONUP;
             const std::weak_ptr<int> targetLifetime = target ? target->GetLifetimeToken() : std::weak_ptr<int>{};
-            bool controlHandled                    = false;
+            bool controlHandled                     = false;
             if (target)
             {
                 controlHandled = target->OnMouseUp(*this, point, rightButton, static_cast<UINT>(wp));

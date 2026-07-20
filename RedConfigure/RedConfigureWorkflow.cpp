@@ -1,7 +1,7 @@
 #include "RedConfigureWorkflow.h"
 
-#include "SettingsStore.h"
 #include "Helpers.h"
+#include "SettingsStore.h"
 #include "ThemeDefinitionIo.h"
 
 #include <algorithm>
@@ -17,12 +17,11 @@ namespace
 {
 [[nodiscard]] bool EqualIgnoreCase(std::wstring_view lhs, std::wstring_view rhs) noexcept
 {
-    return lhs.size() == rhs.size() && ::CompareStringOrdinal(lhs.data(), static_cast<int>(lhs.size()), rhs.data(), static_cast<int>(rhs.size()), TRUE) ==
-                                           CSTR_EQUAL;
+    return lhs.size() == rhs.size() &&
+           ::CompareStringOrdinal(lhs.data(), static_cast<int>(lhs.size()), rhs.data(), static_cast<int>(rhs.size()), TRUE) == CSTR_EQUAL;
 }
 
-[[nodiscard]] const RedConfigure::LocalizationTargetCell* FindCell(const RedConfigure::LocalizationReviewRow& row,
-                                                                   std::wstring_view cultureName) noexcept
+[[nodiscard]] const RedConfigure::LocalizationTargetCell* FindCell(const RedConfigure::LocalizationReviewRow& row, std::wstring_view cultureName) noexcept
 {
     for (const auto& cell : row.targets)
     {
@@ -132,11 +131,8 @@ namespace
     return result;
 }
 
-[[nodiscard]] std::wstring RecipeValue(RedConfigure::Workflow::ThemeRecipe recipe,
-                                       std::wstring_view key,
-                                       std::wstring_view before,
-                                       std::wstring_view argument,
-                                       uint32_t alphaPercent)
+[[nodiscard]] std::wstring RecipeValue(
+    RedConfigure::Workflow::ThemeRecipe recipe, std::wstring_view key, std::wstring_view before, std::wstring_view argument, uint32_t alphaPercent)
 {
     using RedConfigure::Workflow::ThemeRecipe;
     const std::wstring_view operand = before.empty() ? key : before;
@@ -148,14 +144,18 @@ namespace
         case ThemeRecipe::SoftenedSelections: return std::format(L"alpha({},72%)", operand);
         case ThemeRecipe::IncreasedContrast: return std::format(L"contrast({})", operand);
         case ThemeRecipe::SemanticStatusColors:
-            if (key.find(L"warning") != std::wstring_view::npos) return L"ref(palette.warning)";
-            if (key.find(L"error") != std::wstring_view::npos) return L"ref(palette.error)";
-            if (key.find(L"success") != std::wstring_view::npos || key.find(L"progressOk") != std::wstring_view::npos) return L"ref(palette.success)";
+            if (key.find(L"warning") != std::wstring_view::npos)
+                return L"ref(palette.warning)";
+            if (key.find(L"error") != std::wstring_view::npos)
+                return L"ref(palette.error)";
+            if (key.find(L"success") != std::wstring_view::npos || key.find(L"progressOk") != std::wstring_view::npos)
+                return L"ref(palette.success)";
             return std::wstring(before);
         case ThemeRecipe::SetAlpha: return std::format(L"alpha({},{}%)", operand, std::min(alphaPercent, 100u));
-        case ThemeRecipe::ReplaceReference: return Replaced(before, argument.substr(0u, argument.find(L'=')), argument.find(L'=') == std::wstring_view::npos
-                                                                                                         ? std::wstring_view{}
-                                                                                                         : argument.substr(argument.find(L'=') + 1u));
+        case ThemeRecipe::ReplaceReference:
+            return Replaced(before,
+                            argument.substr(0u, argument.find(L'=')),
+                            argument.find(L'=') == std::wstring_view::npos ? std::wstring_view{} : argument.substr(argument.find(L'=') + 1u));
         case ThemeRecipe::ConvertSolidsToReferences: return argument.empty() ? std::wstring(before) : std::format(L"ref(palette.{})", argument);
         case ThemeRecipe::RemoveOverrides: return {};
         default: return std::wstring(before);
@@ -180,8 +180,7 @@ namespace
     return result;
 }
 
-[[nodiscard]] bool ThemeDefinitionsEqual(const Common::Settings::ThemeDefinition& lhs,
-                                         const Common::Settings::ThemeDefinition& rhs) noexcept
+[[nodiscard]] bool ThemeDefinitionsEqual(const Common::Settings::ThemeDefinition& lhs, const Common::Settings::ThemeDefinition& rhs) noexcept
 {
     return lhs.formatVersion == rhs.formatVersion && lhs.id == rhs.id && lhs.name == rhs.name && lhs.baseThemeId == rhs.baseThemeId &&
            lhs.palette == rhs.palette && lhs.colors == rhs.colors;
@@ -196,8 +195,7 @@ namespace
     {
         if (! change.sourcePaletteName.empty())
         {
-            if (! change.sourceValueSource.has_value() ||
-                ! candidate.palette.emplace(change.sourcePaletteName, change.sourceValueSource.value()).second)
+            if (! change.sourceValueSource.has_value() || ! candidate.palette.emplace(change.sourcePaletteName, change.sourceValueSource.value()).second)
             {
                 diagnostic = RedConfigure::Workflow::ThemeMassDiagnostic::InvalidGeneratedSource;
                 return false;
@@ -205,8 +203,8 @@ namespace
         }
 
         constexpr std::wstring_view palettePrefix = L"palette.";
-        const bool isPalette = change.key.starts_with(palettePrefix);
-        auto& destination    = isPalette ? candidate.palette : candidate.colors;
+        const bool isPalette                      = change.key.starts_with(palettePrefix);
+        auto& destination                         = isPalette ? candidate.palette : candidate.colors;
         const std::wstring destinationKey(isPalette ? std::wstring_view(change.key).substr(palettePrefix.size()) : std::wstring_view(change.key));
         if (preview.request.recipe == RedConfigure::Workflow::ThemeRecipe::RemoveOverrides)
         {
@@ -245,8 +243,10 @@ using Common::Colors::RelativeLuminanceFromArgb;
     };
     for (const auto& [foreground, background] : pairs)
     {
-        if (key == foreground) return background;
-        if (key == background) return foreground;
+        if (key == foreground)
+            return background;
+        if (key == background)
+            return foreground;
     }
     return std::nullopt;
 }
@@ -276,7 +276,8 @@ bool LanguageColumnModel::Add(std::wstring_view cultureName)
 bool LanguageColumnModel::Remove(std::wstring_view cultureName)
 {
     const auto it = std::ranges::find_if(_columns, [cultureName](const auto& column) { return EqualIgnoreCase(column.cultureName, cultureName); });
-    if (it == _columns.end()) return false;
+    if (it == _columns.end())
+        return false;
     _columns.erase(it);
     return true;
 }
@@ -284,7 +285,8 @@ bool LanguageColumnModel::Remove(std::wstring_view cultureName)
 bool LanguageColumnModel::Move(std::wstring_view cultureName, size_t newIndex)
 {
     const auto it = std::ranges::find_if(_columns, [cultureName](const auto& column) { return EqualIgnoreCase(column.cultureName, cultureName); });
-    if (it == _columns.end()) return false;
+    if (it == _columns.end())
+        return false;
     LanguageColumn column = std::move(*it);
     _columns.erase(it);
     _columns.insert(_columns.begin() + static_cast<std::ptrdiff_t>(std::min(newIndex, _columns.size())), std::move(column));
@@ -295,7 +297,8 @@ bool LanguageColumnModel::Move(std::wstring_view cultureName, size_t newIndex)
 bool LanguageColumnModel::SetPinned(std::wstring_view cultureName, bool pinned)
 {
     const auto it = std::ranges::find_if(_columns, [cultureName](const auto& column) { return EqualIgnoreCase(column.cultureName, cultureName); });
-    if (it == _columns.end() || it->pinned == pinned) return false;
+    if (it == _columns.end() || it->pinned == pinned)
+        return false;
     it->pinned = pinned;
     NormalizePinnedOrder();
     return true;
@@ -310,7 +313,8 @@ std::vector<std::wstring> LanguageColumnModel::GetOrderedCultures() const
 {
     std::vector<std::wstring> result;
     result.reserve(_columns.size());
-    for (const LanguageColumn& column : _columns) result.push_back(column.cultureName);
+    for (const LanguageColumn& column : _columns)
+        result.push_back(column.cultureName);
     return result;
 }
 
@@ -336,24 +340,23 @@ ValidationSummary ValidateWorkspace(const RedConfigureSession& session,
     ValidationSummary summary;
     const auto add = [&summary](ValidationIssue issue)
     {
-        if (issue.severity == ValidationSeverity::Error) ++summary.errorCount;
-        else ++summary.warningCount;
+        if (issue.severity == ValidationSeverity::Error)
+            ++summary.errorCount;
+        else
+            ++summary.warningCount;
         summary.issues.push_back(std::move(issue));
     };
 
     for (const std::wstring& error : session.GetWorkspace().errors)
     {
-        add({.severity = ValidationSeverity::Error,
-             .category = ValidationCategory::Workspace,
-             .code = ValidationCode::WorkspaceProcessingError,
+        add({.severity  = ValidationSeverity::Error,
+             .category  = ValidationCategory::Workspace,
+             .code      = ValidationCode::WorkspaceProcessingError,
              .arguments = {error}});
     }
     for (const std::wstring& error : session.GetThemeCatalog().errors)
     {
-        add({.severity = ValidationSeverity::Error,
-             .category = ValidationCategory::Theme,
-             .code = ValidationCode::ThemeCatalogError,
-             .arguments = {error}});
+        add({.severity = ValidationSeverity::Error, .category = ValidationCategory::Theme, .code = ValidationCode::ThemeCatalogError, .arguments = {error}});
     }
     for (const auto& row : session.GetLocalizationReviewRows())
     {
@@ -361,20 +364,20 @@ ValidationSummary ValidateWorkspace(const RedConfigureSession& session,
         {
             if (cell.validation.status != Localization::PlaceholderStatus::Ok)
             {
-                add({.severity = ValidationSeverity::Error,
-                     .category = ValidationCategory::Localization,
-                     .code = ValidationCode::PlaceholderMismatch,
-                     .ownerName = row.ownerName,
-                     .resourceId = row.id,
+                add({.severity    = ValidationSeverity::Error,
+                     .category    = ValidationCategory::Localization,
+                     .code        = ValidationCode::PlaceholderMismatch,
+                     .ownerName   = row.ownerName,
+                     .resourceId  = row.id,
                      .cultureName = cell.cultureName});
             }
             else if (! cell.hasExistingTranslation && ! cell.dirty)
             {
-                add({.severity = ValidationSeverity::Warning,
-                     .category = ValidationCategory::Localization,
-                     .code = ValidationCode::MissingTranslation,
-                     .ownerName = row.ownerName,
-                     .resourceId = row.id,
+                add({.severity    = ValidationSeverity::Warning,
+                     .category    = ValidationCategory::Localization,
+                     .code        = ValidationCode::MissingTranslation,
+                     .ownerName   = row.ownerName,
+                     .resourceId  = row.id,
                      .cultureName = cell.cultureName});
             }
         }
@@ -387,9 +390,9 @@ ValidationSummary ValidateWorkspace(const RedConfigureSession& session,
     }
     if (! session.GetThemePreviewModel().GetLastError().empty())
     {
-        add({.severity = ValidationSeverity::Error,
-             .category = ValidationCategory::Theme,
-             .code = ValidationCode::ThemeResolutionError,
+        add({.severity  = ValidationSeverity::Error,
+             .category  = ValidationCategory::Theme,
+             .code      = ValidationCode::ThemeResolutionError,
              .arguments = {std::wstring(session.GetThemePreviewModel().GetLastError())}});
     }
     if (localizationOutputRoot.empty() || themeOutputPath.empty())
@@ -404,9 +407,7 @@ ValidationSummary ValidateWorkspace(const RedConfigureSession& session,
     std::vector<LocalizationExportPreview> previews;
     if (FAILED(session.BuildLocalizationReviewExportPreviews(previews)))
     {
-        add({.severity = ValidationSeverity::Error,
-             .category = ValidationCategory::Export,
-             .code = ValidationCode::LocalizationPreviewBuildFailed});
+        add({.severity = ValidationSeverity::Error, .category = ValidationCategory::Export, .code = ValidationCode::LocalizationPreviewBuildFailed});
     }
     else
     {
@@ -417,15 +418,11 @@ ValidationSummary ValidateWorkspace(const RedConfigureSession& session,
             std::ranges::transform(normalized, normalized.begin(), [](wchar_t ch) noexcept { return static_cast<wchar_t>(std::towlower(ch)); });
             if (! outputPaths.insert(normalized).second)
             {
-                add({.severity = ValidationSeverity::Error,
-                     .category = ValidationCategory::Export,
-                     .code = ValidationCode::DuplicateLocalizationOutputPath});
+                add({.severity = ValidationSeverity::Error, .category = ValidationCategory::Export, .code = ValidationCode::DuplicateLocalizationOutputPath});
             }
             if (EqualIgnoreCase(normalized, themeOutputPath.lexically_normal().wstring()))
             {
-                add({.severity = ValidationSeverity::Error,
-                     .category = ValidationCategory::Export,
-                     .code = ValidationCode::LocalizationThemeOutputConflict});
+                add({.severity = ValidationSeverity::Error, .category = ValidationCategory::Export, .code = ValidationCode::LocalizationThemeOutputConflict});
             }
         }
     }
@@ -434,11 +431,11 @@ ValidationSummary ValidateWorkspace(const RedConfigureSession& session,
     {
         for (const DuplicateAccelerator& duplicate : FindDuplicateSiblingAccelerators(session.GetLocalizationReviewRows(), culture))
         {
-            add({.severity = ValidationSeverity::Warning,
-                 .category = ValidationCategory::Accelerator,
-                 .code = ValidationCode::DuplicateAccelerator,
-                 .arguments = {std::wstring(1u, duplicate.accelerator)},
-                 .ownerName = duplicate.ownerName,
+            add({.severity    = ValidationSeverity::Warning,
+                 .category    = ValidationCategory::Accelerator,
+                 .code        = ValidationCode::DuplicateAccelerator,
+                 .arguments   = {std::wstring(1u, duplicate.accelerator)},
+                 .ownerName   = duplicate.ownerName,
                  .cultureName = std::wstring(culture)});
         }
     }
@@ -448,8 +445,7 @@ ValidationSummary ValidateWorkspace(const RedConfigureSession& session,
 LocalizationBatchPreview PreviewLocalizationBatch(std::span<const LocalizationReviewRow> rows, const LocalizationBatchRequest& request)
 {
     LocalizationBatchPreview preview{.request = request};
-    if (request.targetCulture.empty() ||
-        (request.kind == LocalizationBatchKind::CopyCulture && request.sourceCulture.empty()) ||
+    if (request.targetCulture.empty() || (request.kind == LocalizationBatchKind::CopyCulture && request.sourceCulture.empty()) ||
         (request.kind == LocalizationBatchKind::FindReplace && request.findText.empty()))
     {
         preview.result = BatchApprovalResult::Invalid;
@@ -459,7 +455,8 @@ LocalizationBatchPreview PreviewLocalizationBatch(std::span<const LocalizationRe
     if (indices.empty())
     {
         indices.resize(rows.size());
-        for (size_t index = 0u; index < rows.size(); ++index) indices[index] = index;
+        for (size_t index = 0u; index < rows.size(); ++index)
+            indices[index] = index;
     }
     for (const size_t rowIndex : indices)
     {
@@ -469,15 +466,17 @@ LocalizationBatchPreview PreviewLocalizationBatch(std::span<const LocalizationRe
             preview.result = BatchApprovalResult::Invalid;
             return preview;
         }
-        const LocalizationReviewRow& row = rows[rowIndex];
+        const LocalizationReviewRow& row     = rows[rowIndex];
         const LocalizationTargetCell* target = FindCell(row, request.targetCulture);
-        if (! target) continue;
+        if (! target)
+            continue;
         std::wstring after = target->targetText;
         switch (request.kind)
         {
             case LocalizationBatchKind::CopyEnglish: after = row.sourceText; break;
             case LocalizationBatchKind::CopyCulture:
-                if (const LocalizationTargetCell* source = FindCell(row, request.sourceCulture)) after = source->targetText;
+                if (const LocalizationTargetCell* source = FindCell(row, request.sourceCulture))
+                    after = source->targetText;
                 break;
             case LocalizationBatchKind::Clear: after.clear(); break;
             case LocalizationBatchKind::FindReplace: after = Replaced(after, request.findText, request.replaceText); break;
@@ -489,13 +488,13 @@ LocalizationBatchPreview PreviewLocalizationBatch(std::span<const LocalizationRe
         const bool afterReviewed = request.kind == LocalizationBatchKind::MarkReviewed || target->reviewed;
         if (after != target->targetText || afterReviewed != target->reviewed)
         {
-            preview.changes.push_back({.ownerName = row.ownerName,
-                                       .resourceId = row.id,
-                                       .cultureName = request.targetCulture,
-                                       .before = target->targetText,
-                                       .after = std::move(after),
+            preview.changes.push_back({.ownerName      = row.ownerName,
+                                       .resourceId     = row.id,
+                                       .cultureName    = request.targetCulture,
+                                       .before         = target->targetText,
+                                       .after          = std::move(after),
                                        .beforeReviewed = target->reviewed,
-                                       .afterReviewed = afterReviewed});
+                                       .afterReviewed  = afterReviewed});
         }
     }
     preview.result = preview.changes.empty() ? BatchApprovalResult::NoChanges : BatchApprovalResult::Ready;
@@ -507,9 +506,10 @@ std::vector<DuplicateAccelerator> FindDuplicateSiblingAccelerators(std::span<con
     std::map<std::pair<std::wstring, wchar_t>, std::vector<std::wstring>> grouped;
     for (const auto& row : rows)
     {
-        if (row.id.find(L"MENU") == std::wstring::npos && row.id.find(L"CMD") == std::wstring::npos) continue;
+        if (row.id.find(L"MENU") == std::wstring::npos && row.id.find(L"CMD") == std::wstring::npos)
+            continue;
         const LocalizationTargetCell* cell = FindCell(row, cultureName);
-        const std::wstring_view text = cell && ! cell->targetText.empty() ? std::wstring_view(cell->targetText) : std::wstring_view(row.sourceText);
+        const std::wstring_view text       = cell && ! cell->targetText.empty() ? std::wstring_view(cell->targetText) : std::wstring_view(row.sourceText);
         if (const std::optional<wchar_t> accelerator = Accelerator(text))
         {
             grouped[{row.ownerName, accelerator.value()}].push_back(row.id);
@@ -537,21 +537,26 @@ ClipboardMatrix ParseClipboardMatrix(std::wstring_view text)
     while (lineStart < text.size())
     {
         size_t lineEnd = text.find_first_of(L"\r\n", lineStart);
-        if (lineEnd == std::wstring_view::npos) lineEnd = text.size();
+        if (lineEnd == std::wstring_view::npos)
+            lineEnd = text.size();
         std::vector<std::wstring> row;
         size_t cellStart = lineStart;
         while (cellStart <= lineEnd)
         {
             size_t cellEnd = text.find(L'\t', cellStart);
-            if (cellEnd == std::wstring_view::npos || cellEnd > lineEnd) cellEnd = lineEnd;
+            if (cellEnd == std::wstring_view::npos || cellEnd > lineEnd)
+                cellEnd = lineEnd;
             row.emplace_back(text.substr(cellStart, cellEnd - cellStart));
-            if (cellEnd == lineEnd) break;
+            if (cellEnd == lineEnd)
+                break;
             cellStart = cellEnd + 1u;
         }
         matrix.rows.push_back(std::move(row));
-        if (lineEnd == text.size()) break;
+        if (lineEnd == text.size())
+            break;
         lineStart = lineEnd + 1u;
-        if (lineStart < text.size() && text[lineEnd] == L'\r' && text[lineStart] == L'\n') ++lineStart;
+        if (lineStart < text.size() && text[lineEnd] == L'\r' && text[lineStart] == L'\n')
+            ++lineStart;
     }
     return matrix;
 }
@@ -561,10 +566,12 @@ std::wstring SerializeClipboardMatrix(const ClipboardMatrix& matrix)
     std::wstring result;
     for (size_t rowIndex = 0u; rowIndex < matrix.rows.size(); ++rowIndex)
     {
-        if (rowIndex > 0u) result += L"\r\n";
+        if (rowIndex > 0u)
+            result += L"\r\n";
         for (size_t columnIndex = 0u; columnIndex < matrix.rows[rowIndex].size(); ++columnIndex)
         {
-            if (columnIndex > 0u) result.push_back(L'\t');
+            if (columnIndex > 0u)
+                result.push_back(L'\t');
             result += matrix.rows[rowIndex][columnIndex];
         }
     }
@@ -576,7 +583,7 @@ ThemeMassPreview PreviewThemeMassChange(const Themes::ThemePreviewModel& model, 
     ThemeMassPreview preview{.request = request, .beforeTheme = model.GetTheme()};
     if (request.recipe == ThemeRecipe::SetAlpha && request.alphaPercent > 100u)
     {
-        preview.result = BatchApprovalResult::Invalid;
+        preview.result     = BatchApprovalResult::Invalid;
         preview.diagnostic = ThemeMassDiagnostic::InvalidAlpha;
         return preview;
     }
@@ -589,7 +596,7 @@ ThemeMassPreview PreviewThemeMassChange(const Themes::ThemePreviewModel& model, 
         if (separator == std::wstring::npos || separator == 0u || separator + 1u >= request.argument.size() ||
             request.argument.find(L'=', separator + 1u) != std::wstring::npos)
         {
-            preview.result = BatchApprovalResult::Invalid;
+            preview.result     = BatchApprovalResult::Invalid;
             preview.diagnostic = ThemeMassDiagnostic::MalformedReferenceReplacement;
             return preview;
         }
@@ -599,7 +606,7 @@ ThemeMassPreview PreviewThemeMassChange(const Themes::ThemePreviewModel& model, 
     if (request.recipe == ThemeRecipe::ConvertSolidsToReferences &&
         (! Common::Settings::IsValidThemePaletteName(request.argument) || ! model.GetTheme().palette.contains(request.argument)))
     {
-        preview.result = BatchApprovalResult::Invalid;
+        preview.result     = BatchApprovalResult::Invalid;
         preview.diagnostic = ThemeMassDiagnostic::MissingPaletteTarget;
         return preview;
     }
@@ -614,7 +621,7 @@ ThemeMassPreview PreviewThemeMassChange(const Themes::ThemePreviewModel& model, 
             std::wstring parseMessage;
             if (FAILED(Common::Settings::ParseThemeColorSource(before, parsed, &parseMessage)))
             {
-                preview.result = BatchApprovalResult::Invalid;
+                preview.result     = BatchApprovalResult::Invalid;
                 preview.diagnostic = ThemeMassDiagnostic::InvalidExistingSource;
                 preview.changes.clear();
                 return preview;
@@ -646,9 +653,10 @@ ThemeMassPreview PreviewThemeMassChange(const Themes::ThemePreviewModel& model, 
         std::optional<Common::Settings::ThemeColorSource> afterSource;
         if (request.recipe == ThemeRecipe::ReplaceReference)
         {
-            if (! beforeSource.has_value()) continue;
+            if (! beforeSource.has_value())
+                continue;
             Common::Settings::ThemeColorSource rewritten = beforeSource.value();
-            bool changed = false;
+            bool changed                                 = false;
             for (std::wstring& reference : rewritten.references)
             {
                 if (reference == replaceFrom)
@@ -657,13 +665,15 @@ ThemeMassPreview PreviewThemeMassChange(const Themes::ThemePreviewModel& model, 
                     changed   = true;
                 }
             }
-            if (! changed) continue;
+            if (! changed)
+                continue;
             after       = Common::Settings::FormatThemeColorSource(rewritten);
             afterSource = std::move(rewritten);
         }
         else if (request.recipe == ThemeRecipe::ConvertSolidsToReferences)
         {
-            if (! beforeSource.has_value() || beforeSource->kind != Common::Settings::ThemeColorSourceKind::Direct) continue;
+            if (! beforeSource.has_value() || beforeSource->kind != Common::Settings::ThemeColorSourceKind::Direct)
+                continue;
             Common::Settings::ThemeColorSource reference;
             reference.kind = Common::Settings::ThemeColorSourceKind::Reference;
             reference.references.push_back(std::wstring(L"palette.") + request.argument);
@@ -672,7 +682,8 @@ ThemeMassPreview PreviewThemeMassChange(const Themes::ThemePreviewModel& model, 
         }
         else if (request.recipe == ThemeRecipe::RemoveOverrides)
         {
-            if (! beforeSource.has_value()) continue;
+            if (! beforeSource.has_value())
+                continue;
         }
         else
         {
@@ -681,7 +692,7 @@ ThemeMassPreview PreviewThemeMassChange(const Themes::ThemePreviewModel& model, 
             std::wstring parseMessage;
             if (FAILED(Common::Settings::ParseThemeColorSource(after, parsed, &parseMessage)))
             {
-                preview.result = BatchApprovalResult::Invalid;
+                preview.result     = BatchApprovalResult::Invalid;
                 preview.diagnostic = ThemeMassDiagnostic::InvalidGeneratedSource;
                 preview.changes.clear();
                 return preview;
@@ -697,20 +708,20 @@ ThemeMassPreview PreviewThemeMassChange(const Themes::ThemePreviewModel& model, 
                 std::wstring parseMessage;
                 if (sourceValue.empty() || FAILED(Common::Settings::ParseThemeColorSource(sourceValue, parsed, &parseMessage)))
                 {
-                    preview.result = BatchApprovalResult::Invalid;
+                    preview.result     = BatchApprovalResult::Invalid;
                     preview.diagnostic = ThemeMassDiagnostic::InvalidGeneratedSource;
                     preview.changes.clear();
                     return preview;
                 }
                 sourceValueSource = std::move(parsed);
             }
-            preview.changes.push_back({.key = key,
-                                       .before = before,
-                                       .after = after,
-                                       .beforeSource = std::move(beforeSource),
-                                       .afterSource = std::move(afterSource),
+            preview.changes.push_back({.key               = key,
+                                       .before            = before,
+                                       .after             = after,
+                                       .beforeSource      = std::move(beforeSource),
+                                       .afterSource       = std::move(afterSource),
                                        .sourcePaletteName = std::move(sourcePaletteName),
-                                       .sourceValue = std::move(sourceValue),
+                                       .sourceValue       = std::move(sourceValue),
                                        .sourceValueSource = std::move(sourceValueSource)});
         }
     }
@@ -730,7 +741,7 @@ ThemeMassPreview PreviewThemeMassChange(const Themes::ThemePreviewModel& model, 
     candidateModel.SetTheme(candidate);
     if (! candidateModel.GetLastError().empty())
     {
-        preview.result = BatchApprovalResult::Invalid;
+        preview.result     = BatchApprovalResult::Invalid;
         preview.diagnostic = ThemeMassDiagnostic::InvalidCandidate;
         return preview;
     }
@@ -780,9 +791,8 @@ std::optional<DuplicateThemeCandidate> BuildDuplicateThemeCandidate(std::wstring
     {
         idStem = std::wstring(L"user/") + std::wstring(sourceId.substr(8u));
     }
-    const std::wstring idSuffix = sequence == 1u ? L"-copy" : std::format(L"-copy-{}", sequence);
-    const std::wstring nameSuffix = sequence == 1u ? std::format(L" {}", localizedCopyLabel)
-                                                   : std::format(L" {} {}", localizedCopyLabel, sequence);
+    const std::wstring idSuffix   = sequence == 1u ? L"-copy" : std::format(L"-copy-{}", sequence);
+    const std::wstring nameSuffix = sequence == 1u ? std::format(L" {}", localizedCopyLabel) : std::format(L" {} {}", localizedCopyLabel, sequence);
     if (idSuffix.size() >= maximumLength || nameSuffix.size() >= maximumLength)
     {
         return std::nullopt;
@@ -800,12 +810,12 @@ std::optional<DuplicateThemeCandidate> BuildDuplicateThemeCandidate(std::wstring
 ThemeTokenMetadata BuildThemeTokenMetadata(const Themes::ThemePreviewModel& model, std::wstring_view key)
 {
     ThemeTokenMetadata metadata;
-    metadata.key = key;
-    const size_t dot = key.find(L'.');
-    metadata.group = std::wstring(dot == std::wstring_view::npos ? key : key.substr(0u, dot));
-    const auto kind = model.GetSourceKind(key);
-    metadata.sourceKind = ! kind.has_value() ? ThemeTokenSourceKind::Inherited
-                          : kind.value() == Common::Settings::ThemeColorSourceKind::Direct ? ThemeTokenSourceKind::Literal
+    metadata.key        = key;
+    const size_t dot    = key.find(L'.');
+    metadata.group      = std::wstring(dot == std::wstring_view::npos ? key : key.substr(0u, dot));
+    const auto kind     = model.GetSourceKind(key);
+    metadata.sourceKind = ! kind.has_value()                                                  ? ThemeTokenSourceKind::Inherited
+                          : kind.value() == Common::Settings::ThemeColorSourceKind::Direct    ? ThemeTokenSourceKind::Literal
                           : kind.value() == Common::Settings::ThemeColorSourceKind::Reference ? ThemeTokenSourceKind::Reference
                                                                                               : ThemeTokenSourceKind::Function;
     metadata.usageCount = model.GetAffected(key).size() + 1u;
@@ -818,8 +828,8 @@ ThemeTokenMetadata BuildThemeTokenMetadata(const Themes::ThemePreviewModel& mode
             const double lhsLuminance = RelativeLuminanceFromArgb(lhs.value());
             const double rhsLuminance = RelativeLuminanceFromArgb(rhs.value());
             metadata.contrastRatio    = ContrastRatioFromRelativeLuminance(lhsLuminance, rhsLuminance);
-            metadata.contrastKnown = true;
-            metadata.contrastPass  = metadata.contrastRatio >= 4.5;
+            metadata.contrastKnown    = true;
+            metadata.contrastPass     = metadata.contrastRatio >= 4.5;
         }
     }
     return metadata;

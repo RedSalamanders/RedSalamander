@@ -187,23 +187,20 @@ void EtwListener::StartConsumerWorker(TRACEHANDLE traceHandle,
 }
 
 #if defined(ENABLE_TESTS)
-void EtwListener::DebugStartConsumerForTesting(TRACEHANDLE traceHandle,
-                                               DebugProcessTraceFunction processTrace,
-                                               DebugCloseTraceFunction closeTrace,
-                                               void* context,
-                                               DWORD shutdownTimeoutMs)
+void EtwListener::DebugStartConsumerForTesting(
+    TRACEHANDLE traceHandle, DebugProcessTraceFunction processTrace, DebugCloseTraceFunction closeTrace, void* context, DWORD shutdownTimeoutMs)
 {
     if (_workerThread.joinable() || ! processTrace || ! closeTrace || traceHandle == INVALID_PROCESSTRACE_HANDLE)
     {
         return;
     }
 
-    auto callbackState     = std::make_shared<CallbackState>([](const Debug::InfoParam&, const std::wstring&) {});
-    _callbackState         = callbackState;
-    _traceHandle           = traceHandle;
-    _debugCloseTrace       = closeTrace;
-    _debugTraceContext     = context;
-    _shutdownTimeoutMs     = shutdownTimeoutMs;
+    auto callbackState = std::make_shared<CallbackState>([](const Debug::InfoParam&, const std::wstring&) {});
+    _callbackState     = callbackState;
+    _traceHandle       = traceHandle;
+    _debugCloseTrace   = closeTrace;
+    _debugTraceContext = context;
+    _shutdownTimeoutMs = shutdownTimeoutMs;
     StartConsumerWorker(traceHandle, callbackState, processTrace, context);
 }
 #endif
@@ -220,7 +217,7 @@ void EtwListener::Stop()
     if (_traceHandle != INVALID_PROCESSTRACE_HANDLE)
     {
         const TRACEHANDLE traceHandle = _traceHandle;
-        _traceHandle = INVALID_PROCESSTRACE_HANDLE;
+        _traceHandle                  = INVALID_PROCESSTRACE_HANDLE;
 #if defined(ENABLE_TESTS)
         if (_debugCloseTrace)
         {
@@ -229,7 +226,7 @@ void EtwListener::Stop()
         else
 #endif
         {
-        static_cast<void>(CloseTrace(traceHandle));
+            static_cast<void>(CloseTrace(traceHandle));
         }
     }
 
@@ -248,8 +245,7 @@ void EtwListener::Stop()
         }
         else
         {
-            Debug::Warning(L"EtwListener::Stop: bounded wait ended with result 0x{:08X}; detaching lifetime-owned consumer state",
-                           waitResult);
+            Debug::Warning(L"EtwListener::Stop: bounded wait ended with result 0x{:08X}; detaching lifetime-owned consumer state", waitResult);
             _workerThread.detach();
         }
     }

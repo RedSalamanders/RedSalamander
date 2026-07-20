@@ -370,8 +370,7 @@ HRESULT FolderWindow::StartFileOperationFromFolderView(Pane pane, FolderView::Fi
             return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
         }
 
-        if (! CanCrossFileSystemCopyMove(
-                localEntry->fileSystem, localEntry->id, destinationState.fileSystem, destinationState.pluginId, request.operation))
+        if (! CanCrossFileSystemCopyMove(localEntry->fileSystem, localEntry->id, destinationState.fileSystem, destinationState.pluginId, request.operation))
         {
             destinationState.folderView.ShowAlertOverlay(FolderView::ErrorOverlayKind::Operation,
                                                          FolderView::OverlaySeverity::Error,
@@ -380,10 +379,10 @@ HRESULT FolderWindow::StartFileOperationFromFolderView(Pane pane, FolderView::Fi
             return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
         }
 
-        fileSystem                 = localEntry->fileSystem;
-        destinationFileSystem      = destinationState.fileSystem;
-        destinationPane            = pane;
-        sourcePluginIdOverride     = localEntry->id;
+        fileSystem                  = localEntry->fileSystem;
+        destinationFileSystem       = destinationState.fileSystem;
+        destinationPane             = pane;
+        sourcePluginIdOverride      = localEntry->id;
         sourcePluginShortIdOverride = localEntry->shortId;
     }
 
@@ -490,24 +489,24 @@ HRESULT FolderWindow::StartFileOperationFromFolderView(Pane pane, FolderView::Fi
 
     const bool waitForOthers                = _fileOperations->ShouldQueueNewTask();
     std::filesystem::path destinationFolder = request.destinationFolder.value_or(std::filesystem::path{});
-    uint64_t taskId = 0;
-    HRESULT startHr = _fileOperations->StartOperation(request.operation,
-                                                      sourcePane,
-                                                      destinationPane,
-                                                      fileSystem,
-                                                      std::move(request.sourcePaths),
-                                                      std::move(destinationFolder),
-                                                      request.flags,
-                                                      waitForOthers,
-                                                      0,
-                                                      FileOperationState::ExecutionMode::PerItem,
-                                                      false,
-                                                      std::move(destinationFileSystem),
-                                                      &taskId,
-                                                      {},
-                                                      {},
-                                                      std::move(sourcePluginIdOverride),
-                                                      std::move(sourcePluginShortIdOverride));
+    uint64_t taskId                         = 0;
+    HRESULT startHr                         = _fileOperations->StartOperation(request.operation,
+                                                                              sourcePane,
+                                                                              destinationPane,
+                                                                              fileSystem,
+                                                                              std::move(request.sourcePaths),
+                                                                              std::move(destinationFolder),
+                                                                              request.flags,
+                                                                              waitForOthers,
+                                                                              0,
+                                                                              FileOperationState::ExecutionMode::PerItem,
+                                                                              false,
+                                                                              std::move(destinationFileSystem),
+                                                                              &taskId,
+                                                                              {},
+                                                                              {},
+                                                                              std::move(sourcePluginIdOverride),
+                                                                              std::move(sourcePluginShortIdOverride));
     if (SUCCEEDED(startHr) && taskId != 0u && request.completionCallback)
     {
         _fileOperationRequestCompletionCallbacks.insert_or_assign(taskId, std::move(request.completionCallback));
@@ -1137,9 +1136,9 @@ void FolderWindow::CommandPermanentDelete(Pane pane)
 
 bool FolderWindow::SanityCheckBothPanes(FolderWindow::PaneState& src, FolderWindow::PaneState& dest, FileSystemOperation operation)
 {
-    bool ok             = true;
-    bool sameFolder     = false;
-    bool contextsDiffer = false;
+    bool ok                   = true;
+    bool sameFolder           = false;
+    bool contextsDiffer       = false;
     bool destinationUnsettled = false;
     if (! _fileOperations)
     {
@@ -1213,9 +1212,9 @@ bool FolderWindow::SanityCheckBothPanes(FolderWindow::PaneState& src, FolderWind
     {
         const std::wstring title   = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
         int messageId              = destinationUnsettled ? IDS_MSG_PANE_OP_DESTINATION_LOADING
-                                     : sameFolder        ? IDS_MSG_PANE_OP_REQUIRES_DIFFERENT_FOLDER
-                                     : contextsDiffer    ? IDS_MSG_PANE_OP_REQUIRES_COMPATIBLE_FS
-                                                         : IDS_MSG_PANE_OP_REQUIRES_SAME_FS;
+                                     : sameFolder         ? IDS_MSG_PANE_OP_REQUIRES_DIFFERENT_FOLDER
+                                     : contextsDiffer     ? IDS_MSG_PANE_OP_REQUIRES_COMPATIBLE_FS
+                                                          : IDS_MSG_PANE_OP_REQUIRES_SAME_FS;
         const std::wstring message = LoadStringResource(nullptr, static_cast<UINT>(messageId));
         src.folderView.ShowAlertOverlay(FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Error, title, message);
         return false;
@@ -1333,8 +1332,7 @@ LRESULT FolderWindow::OnFileOperationCompleted(LPARAM lp) noexcept
         return 0;
     }
 
-    if (auto completionIt = _fileOperationRequestCompletionCallbacks.find(payload->taskId);
-        completionIt != _fileOperationRequestCompletionCallbacks.end())
+    if (auto completionIt = _fileOperationRequestCompletionCallbacks.find(payload->taskId); completionIt != _fileOperationRequestCompletionCallbacks.end())
     {
         std::function<void(HRESULT)> completion = std::move(completionIt->second);
         _fileOperationRequestCompletionCallbacks.erase(completionIt);
@@ -1369,11 +1367,11 @@ LRESULT FolderWindow::OnFileOperationCompleted(LPARAM lp) noexcept
     if (! _fileOperationCompletedCallbacks.empty())
     {
         FileOperationCompletedEvent e{};
-        e.taskId            = payload->taskId;
-        e.operation         = task->GetOperation();
-        e.sourcePane        = sourcePane;
-        e.destinationPane   = destinationPane;
-        e.sourcePaths       = task->_sourcePaths;
+        e.taskId          = payload->taskId;
+        e.operation       = task->GetOperation();
+        e.sourcePane      = sourcePane;
+        e.destinationPane = destinationPane;
+        e.sourcePaths     = task->_sourcePaths;
         {
             std::scoped_lock lock(task->_sourceItemStatusMutex);
             e.itemOutcomes.reserve(task->_sourceItemStatuses.size());

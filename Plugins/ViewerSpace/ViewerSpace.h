@@ -247,13 +247,13 @@ private:
         uint64_t otherFiles   = 0;
         std::vector<FileSummaryItem> topFiles;
 
-        uint64_t acceptedEntries         = 0;
-        uint64_t rejectedEntries         = 0;
-        uint64_t cappedDirectories       = 0;
-        uint64_t cappedFiles             = 0;
-        uint64_t retainedNameBytes       = 0;
-        uint64_t retainedChildReferences = 0;
-        uint64_t traversedDirectories    = 0;
+        uint64_t acceptedEntries                         = 0;
+        uint64_t rejectedEntries                         = 0;
+        uint64_t cappedDirectories                       = 0;
+        uint64_t cappedFiles                             = 0;
+        uint64_t retainedNameBytes                       = 0;
+        uint64_t retainedChildReferences                 = 0;
+        uint64_t traversedDirectories                    = 0;
         ViewerSpaceScan::ValidationError validationError = ViewerSpaceScan::ValidationError::None;
     };
 
@@ -481,21 +481,21 @@ private:
 
     std::shared_ptr<void> _scanCacheBuildSnapshot;
     std::wstring _scanCacheBuildRootKey;
-    uint32_t _scanTopFilesPerDirectory           = 0;
-    uint32_t _scanCacheBuildTopFilesPerDirectory = 0;
-    uint32_t _scanCacheBuildGeneration           = 0;
-    uint32_t _scanCacheLastStoredGeneration      = 0;
-    size_t _scanCacheBuildChildrenNext           = 0;
-    size_t _scanCacheBuildNodesNext              = 0;
-    size_t _scanCacheBuildFileRecordsNext        = 0;
-    uint64_t _lastScanCacheSnapshotBytes         = 0u;
-    uint64_t _lastModelAcceptedEntries           = 0u;
-    uint64_t _lastModelRejectedEntries           = 0u;
-    uint64_t _lastModelCappedDirectories         = 0u;
-    uint64_t _lastModelCappedFiles               = 0u;
-    uint64_t _lastModelRetainedNameBytes         = 0u;
-    uint64_t _lastModelRetainedChildReferences   = 0u;
-    uint64_t _lastModelTraversedDirectories      = 0u;
+    uint32_t _scanTopFilesPerDirectory                         = 0;
+    uint32_t _scanCacheBuildTopFilesPerDirectory               = 0;
+    uint32_t _scanCacheBuildGeneration                         = 0;
+    uint32_t _scanCacheLastStoredGeneration                    = 0;
+    size_t _scanCacheBuildChildrenNext                         = 0;
+    size_t _scanCacheBuildNodesNext                            = 0;
+    size_t _scanCacheBuildFileRecordsNext                      = 0;
+    uint64_t _lastScanCacheSnapshotBytes                       = 0u;
+    uint64_t _lastModelAcceptedEntries                         = 0u;
+    uint64_t _lastModelRejectedEntries                         = 0u;
+    uint64_t _lastModelCappedDirectories                       = 0u;
+    uint64_t _lastModelCappedFiles                             = 0u;
+    uint64_t _lastModelRetainedNameBytes                       = 0u;
+    uint64_t _lastModelRetainedChildReferences                 = 0u;
+    uint64_t _lastModelTraversedDirectories                    = 0u;
     ViewerSpaceScan::ValidationError _lastModelValidationError = ViewerSpaceScan::ValidationError::None;
 
     std::unordered_map<uint32_t, Node> _syntheticNodes;

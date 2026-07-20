@@ -340,7 +340,7 @@ namespace
     while (true)
     {
         const HRESULT pageBoundaryHr = firstPage ? pager.BeginFirstPage(GetTickCount64()) : pager.BeginContinuation(continuationToken, GetTickCount64());
-        firstPage = false;
+        firstPage                    = false;
         if (FAILED(pageBoundaryHr))
         {
             return pageBoundaryHr;
@@ -356,7 +356,7 @@ namespace
         }
 
         const auto& result = outcome.GetResult();
-        size_t pageBytes = 0u;
+        size_t pageBytes   = 0u;
 
         // Directories (common prefixes)
         for (const auto& cp : result.GetCommonPrefixes())
@@ -432,11 +432,11 @@ namespace
 
         const bool isTruncated       = result.GetIsTruncated();
         const Aws::String& nextToken = result.GetNextContinuationToken();
-        const HRESULT pageHr = pager.CompletePage(result.GetCommonPrefixes().size() + result.GetContents().size(),
-                                                  pageBytes,
-                                                  isTruncated,
-                                                  std::string_view(nextToken.c_str(), nextToken.size()),
-                                                  GetTickCount64());
+        const HRESULT pageHr         = pager.CompletePage(result.GetCommonPrefixes().size() + result.GetContents().size(),
+                                                          pageBytes,
+                                                          isTruncated,
+                                                          std::string_view(nextToken.c_str(), nextToken.size()),
+                                                          GetTickCount64());
         if (FAILED(pageHr))
         {
             return pageHr;
@@ -573,7 +573,7 @@ protected:
             return traits_type::eof();
         }
 
-        DWORD read = 0;
+        DWORD read            = 0;
         const DWORD requested = static_cast<DWORD>((std::min)(static_cast<uint64_t>(_buffer.size()), _declaredBytes - _fetchedBytes));
         if (ReadFile(_file, _buffer.data(), requested, &read, nullptr) == 0)
         {
@@ -593,8 +593,8 @@ protected:
     }
 
 private:
-    HANDLE _file         = nullptr;
-    HRESULT _readErrorHr = S_OK;
+    HANDLE _file            = nullptr;
+    HRESULT _readErrorHr    = S_OK;
     uint64_t _declaredBytes = 0u;
     uint64_t _fetchedBytes  = 0u;
     std::array<char, 64 * 1024> _buffer{};

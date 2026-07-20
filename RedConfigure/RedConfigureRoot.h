@@ -26,7 +26,7 @@ public:
     RedConfigureRootController& operator=(RedConfigureRootController&&)      = delete;
     virtual ~RedConfigureRootController()                                    = default;
 
-    virtual void ReloadWorkspaceFromFields() = 0;
+    virtual void ReloadWorkspaceFromFields()         = 0;
     virtual void SelectPageForTest(size_t pageIndex) = 0;
 };
 

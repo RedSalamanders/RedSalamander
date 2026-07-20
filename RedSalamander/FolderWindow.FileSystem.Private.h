@@ -45,39 +45,35 @@ void AddToFolderHistory(std::vector<std::filesystem::path>& history, size_t maxI
 void SetFolderHistoryFilterState(Common::Settings::FoldersSettings& folders,
                                  const std::filesystem::path& displayPath,
                                  const FolderView::NameFilterState& filter);
-void PruneFolderHistoryFilters(Common::Settings::FoldersSettings& folders,
-                               const std::vector<std::filesystem::path>& history,
-                               size_t maxItems);
+void PruneFolderHistoryFilters(Common::Settings::FoldersSettings& folders, const std::vector<std::filesystem::path>& history, size_t maxItems);
 [[nodiscard]] bool LooksLikeWindowsAbsolutePath(std::wstring_view text) noexcept;
 [[nodiscard]] std::filesystem::path GetDefaultFileSystemRoot() noexcept;
-[[nodiscard]] const FileSystemPluginManager::PluginEntry* FindPluginById(
-    const std::vector<FileSystemPluginManager::PluginEntry>& plugins, std::wstring_view pluginId) noexcept;
+[[nodiscard]] const FileSystemPluginManager::PluginEntry* FindPluginById(const std::vector<FileSystemPluginManager::PluginEntry>& plugins,
+                                                                         std::wstring_view pluginId) noexcept;
 [[nodiscard]] std::optional<std::filesystem::path> TryResolveInstanceContextToWindowsPath(std::wstring_view instanceContext) noexcept;
-[[nodiscard]] std::optional<UINT> ResolveEditNewValidationMessageId(std::wstring_view trimmed,
-                                                                    const std::filesystem::path& targetFolder) noexcept;
+[[nodiscard]] std::optional<UINT> ResolveEditNewValidationMessageId(std::wstring_view trimmed, const std::filesystem::path& targetFolder) noexcept;
 [[nodiscard]] std::wstring GetComputerNameTextForFileActions() noexcept;
 [[nodiscard]] std::wstring TryGetFileSystemPluginDisplayName(const std::vector<FileSystemPluginManager::PluginEntry>& plugins,
                                                              std::wstring_view pluginId,
                                                              std::wstring_view pluginShortId) noexcept;
 [[nodiscard]] std::optional<std::wstring> PromptForCreateDirectoryName(HWND ownerWindow,
-                                                                      std::wstring_view createInPath,
-                                                                      std::wstring_view initialName,
-                                                                      const AppTheme& theme);
-[[nodiscard]] std::optional<EditNewPromptResult> PromptForEditNewFile(
-    HWND ownerWindow,
-    const std::filesystem::path& targetFolder,
-    std::wstring_view displayPath,
-    const Common::Settings::EditorFileActionsSettings* editorSettings,
-    std::wstring_view computerName,
-    const AppTheme& theme,
-    std::wstring_view initialFileName = {},
-    std::wstring_view captionText     = {},
-    bool showEditorControls           = true);
+                                                                       std::wstring_view createInPath,
+                                                                       std::wstring_view initialName,
+                                                                       const AppTheme& theme);
+[[nodiscard]] std::optional<EditNewPromptResult> PromptForEditNewFile(HWND ownerWindow,
+                                                                      const std::filesystem::path& targetFolder,
+                                                                      std::wstring_view displayPath,
+                                                                      const Common::Settings::EditorFileActionsSettings* editorSettings,
+                                                                      std::wstring_view computerName,
+                                                                      const AppTheme& theme,
+                                                                      std::wstring_view initialFileName = {},
+                                                                      std::wstring_view captionText     = {},
+                                                                      bool showEditorControls           = true);
 [[nodiscard]] std::optional<ChangeCase::Options> PromptForChangeCase(HWND ownerWindow, const AppTheme& theme, bool allowSubdirs) noexcept;
 [[nodiscard]] std::optional<std::wstring> PromptForSelectionMask(
     HWND ownerWindow, const std::vector<std::wstring>& history, const AppTheme& theme, UINT captionId, UINT labelId);
 [[nodiscard]] std::optional<FolderView::NameFilterState> PromptForPaneFilter(HWND ownerWindow,
-                                                                            const std::vector<std::wstring>& history,
-                                                                            const AppTheme& theme,
-                                                                            const FolderView::NameFilterState& initial);
+                                                                             const std::vector<std::wstring>& history,
+                                                                             const AppTheme& theme,
+                                                                             const FolderView::NameFilterState& initial);
 } // namespace FolderWindowFileSystemInternal

@@ -9,12 +9,12 @@
 
 // add headers that you want to pre-compile here
 #include "CppUnitTest.h"
+#include "TestSupport/TestSupport.h"
 #include <Windows.h>
 #include <filesystem>
 #include <string>
 #include <string_view>
 #include <system_error>
-#include "TestSupport/TestSupport.h"
 
 namespace PerformanceTests2
 {
@@ -23,11 +23,8 @@ inline constexpr std::wstring_view kPerformanceTests2HarnessSegment{L"performanc
 
 [[nodiscard]] inline std::filesystem::path AcquirePerformanceTestSandbox(std::wstring_view caseName, std::error_code& ec)
 {
-    return RedSalamander::TestSupport::AcquireTestDirectory({.harnessSegment      = kPerformanceTests2HarnessSegment,
-                                                             .leafSegment         = caseName,
-                                                             .fallbackRunIdPrefix = L"direct",
-                                                             .emptyLeafFallback   = L"default"},
-                                                            ec);
+    return RedSalamander::TestSupport::AcquireTestDirectory(
+        {.harnessSegment = kPerformanceTests2HarnessSegment, .leafSegment = caseName, .fallbackRunIdPrefix = L"direct", .emptyLeafFallback = L"default"}, ec);
 }
 
 } // namespace PerformanceTests2

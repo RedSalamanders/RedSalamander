@@ -62,7 +62,7 @@ struct ParsedArguments final
     std::wstring sqliteDatabasePath;
     std::wstring actionOption;
     std::wstring errorMessage;
-    bool storeBackendExplicit                             = false;
+    bool storeBackendExplicit = false;
 #if defined(RS_SEARCH_TEST_HOOKS)
     SearchServiceBroker::ServerTestHook testHook = SearchServiceBroker::ServerTestHook::None;
 #endif
@@ -3298,7 +3298,7 @@ void WINAPI ServiceMain(DWORD argc, wchar_t** argv) noexcept
     while (writtenTotal < byteCount)
     {
         const DWORD requested = static_cast<DWORD>((std::min)(bytes.size(), byteCount - writtenTotal));
-        DWORD written = 0u;
+        DWORD written         = 0u;
         if (WriteFile(destination, bytes.data(), requested, &written, nullptr) == FALSE || written == 0u)
         {
             return false;
@@ -3321,16 +3321,15 @@ void WINAPI ServiceMain(DWORD argc, wchar_t** argv) noexcept
     const std::wstring_view mode = std::wstring_view(argv.get()[1]).substr(kPrefix.size());
     if (mode == L"streams")
     {
-        const HANDLE stdoutHandle = GetStdHandle(STD_OUTPUT_HANDLE);
-        const HANDLE stderrHandle = GetStdHandle(STD_ERROR_HANDLE);
+        const HANDLE stdoutHandle     = GetStdHandle(STD_OUTPUT_HANDLE);
+        const HANDLE stderrHandle     = GetStdHandle(STD_ERROR_HANDLE);
         constexpr size_t kStreamBytes = 2u * 1024u * 1024u;
         outExitCode = WriteTestSupportProbeChunk(stdoutHandle, 'O', kStreamBytes) && WriteTestSupportProbeChunk(stderrHandle, 'E', kStreamBytes) ? 0 : 81;
         return true;
     }
     if (mode == L"arguments")
     {
-        const bool argumentsMatch = argc == 6 && std::wstring_view(argv.get()[2]) == L"space value" &&
-                                    std::wstring_view(argv.get()[3]) == L"quote\"value" &&
+        const bool argumentsMatch = argc == 6 && std::wstring_view(argv.get()[2]) == L"space value" && std::wstring_view(argv.get()[3]) == L"quote\"value" &&
                                     std::wstring_view(argv.get()[4]) == L"backslash\\tail\\" &&
                                     std::wstring_view(argv.get()[5]) == L"Unicode-\u6E2C\u8A66-\U0001F642";
         constexpr std::string_view kOk{"ARGUMENTS_OK"};
@@ -3404,13 +3403,13 @@ void WINAPI ServiceMain(DWORD argc, wchar_t** argv) noexcept
             outExitCode = 90;
             return true;
         }
-        wchar_t* end = nullptr;
+        wchar_t* end              = nullptr;
         const uintptr_t rawHandle = static_cast<uintptr_t>(_wcstoui64(argv.get()[2], &end, 10));
-        const bool inherited = end && *end == L'\0' && SetEvent(reinterpret_cast<HANDLE>(rawHandle)) != FALSE;
+        const bool inherited      = end && *end == L'\0' && SetEvent(reinterpret_cast<HANDLE>(rawHandle)) != FALSE;
         constexpr std::string_view kClosed{"HANDLE_CLOSED"};
         constexpr std::string_view kInherited{"HANDLE_INHERITED"};
         const std::string_view output = inherited ? kInherited : kClosed;
-        DWORD written = 0u;
+        DWORD written                 = 0u;
         static_cast<void>(WriteFile(GetStdHandle(STD_OUTPUT_HANDLE), output.data(), static_cast<DWORD>(output.size()), &written, nullptr));
         outExitCode = inherited ? 91 : 0;
         return true;

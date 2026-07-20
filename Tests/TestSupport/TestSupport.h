@@ -36,15 +36,14 @@ struct TestDirectoryOptions final
     std::wstring_view leafSegment;
     std::wstring_view fallbackRunIdPrefix;
     std::wstring_view emptyLeafFallback = L"case";
-    TestDirectoryKind kind               = TestDirectoryKind::Scratch;
-    bool includeLeafSegment              = true;
-    bool cleanExisting                   = true;
+    TestDirectoryKind kind              = TestDirectoryKind::Scratch;
+    bool includeLeafSegment             = true;
+    bool cleanExisting                  = true;
 };
 
 [[nodiscard]] inline bool IsSafeTestSandboxSegmentCharacter(const wchar_t ch) noexcept
 {
-    return (ch >= L'0' && ch <= L'9') || (ch >= L'A' && ch <= L'Z') || (ch >= L'a' && ch <= L'z') || ch == L'.' || ch == L'-' ||
-           ch == L'_';
+    return (ch >= L'0' && ch <= L'9') || (ch >= L'A' && ch <= L'Z') || (ch >= L'a' && ch <= L'z') || ch == L'.' || ch == L'-' || ch == L'_';
 }
 
 [[nodiscard]] inline std::wstring SanitizeTestSandboxSegment(std::wstring_view text, std::wstring_view emptyFallback = L"case")
@@ -184,11 +183,10 @@ private:
             return {};
         }
 
-        current = current.lexically_normal();
+        current                                  = current.lexically_normal();
         const std::filesystem::path platformRoot = current.parent_path();
         const std::filesystem::path buildRoot    = platformRoot.parent_path();
-        if ((current.filename() == L"Debug" || current.filename() == L"Release" || current.filename() == L"ASan Debug") &&
-            buildRoot.filename() == L".build")
+        if ((current.filename() == L"Debug" || current.filename() == L"Release" || current.filename() == L"ASan Debug") && buildRoot.filename() == L".build")
         {
             return (buildRoot / L"TestSandbox").lexically_normal();
         }
@@ -234,9 +232,8 @@ private:
             return {};
         }
 
-        const std::wstring runId = ResolveTestRunId(options.fallbackRunIdPrefix);
-        const std::wstring_view areaName =
-            options.kind == TestDirectoryKind::Scratch ? kScratchDirectoryName : kArtifactsDirectoryName;
+        const std::wstring runId         = ResolveTestRunId(options.fallbackRunIdPrefix);
+        const std::wstring_view areaName = options.kind == TestDirectoryKind::Scratch ? kScratchDirectoryName : kArtifactsDirectoryName;
         std::filesystem::path directory =
             sandboxBase / std::wstring(kRunsDirectoryName) / runId / std::wstring(areaName) / std::wstring(options.harnessSegment);
         if (options.includeLeafSegment)
@@ -283,7 +280,7 @@ struct MessagePumpWaitOptions final
 
 struct MessagePumpWaitResult final
 {
-    bool conditionMet = false;
+    bool conditionMet             = false;
     size_t dispatchedMessageCount = 0u;
     std::chrono::milliseconds elapsed{};
     std::wstring timeoutDiagnostic;
@@ -302,8 +299,7 @@ struct MessagePumpWaitResult final
     return dispatchedCount;
 }
 
-template <typename Predicate>
-[[nodiscard]] inline MessagePumpWaitResult PumpMessagesUntil(Predicate&& predicate, const MessagePumpWaitOptions& options)
+template <typename Predicate> [[nodiscard]] inline MessagePumpWaitResult PumpMessagesUntil(Predicate&& predicate, const MessagePumpWaitOptions& options)
 {
     MessagePumpWaitResult result{};
     const auto startedAt = std::chrono::steady_clock::now();
@@ -350,12 +346,12 @@ template <typename Snapshot, typename CaptureSnapshot, typename Predicate>
 [[nodiscard]] inline bool WaitForSnapshot(CaptureSnapshot&& captureSnapshot,
                                           Predicate&& predicate,
                                           const MessagePumpWaitOptions& options,
-                                          Snapshot* outSnapshot = nullptr,
+                                          Snapshot* outSnapshot           = nullptr,
                                           std::wstring* timeoutDiagnostic = nullptr)
 {
     Snapshot snapshot{};
     Snapshot lastSnapshot{};
-    bool sawSnapshot = false;
+    bool sawSnapshot                 = false;
     MessagePumpWaitResult waitResult = PumpMessagesUntil(
         [&]() noexcept
     {
@@ -389,4 +385,4 @@ template <typename Snapshot, typename CaptureSnapshot, typename Predicate>
     }
     return waitResult.conditionMet;
 }
-}
+} // namespace RedSalamander::TestSupport

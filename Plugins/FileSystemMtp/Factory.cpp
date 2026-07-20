@@ -184,9 +184,8 @@ std::optional<std::string> g_pickerFakeBackendJson;
     {
         std::vector<FileSystemMtpInternal::MtpConnectionBrowseDevice> devices;
 #ifdef _DEBUG
-        const HRESULT hr =
-            fakeBackend ? FileSystemMtpInternal::EnumerateMtpConnectionBrowseDevicesFromBackend(*fakeBackend, devices)
-                        : FileSystemMtpInternal::EnumerateMtpConnectionBrowseDevices(devices);
+        const HRESULT hr = fakeBackend ? FileSystemMtpInternal::EnumerateMtpConnectionBrowseDevicesFromBackend(*fakeBackend, devices)
+                                       : FileSystemMtpInternal::EnumerateMtpConnectionBrowseDevices(devices);
 #else
         const HRESULT hr = FileSystemMtpInternal::EnumerateMtpConnectionBrowseDevices(devices);
 #endif
@@ -210,9 +209,8 @@ std::optional<std::string> g_pickerFakeBackendJson;
 
         std::vector<FileSystemMtpInternal::MtpConnectionBrowseStorage> storages;
 #ifdef _DEBUG
-        const HRESULT hr =
-            fakeBackend ? FileSystemMtpInternal::EnumerateMtpConnectionBrowseStoragesFromBackend(*fakeBackend, parentDeviceId, storages)
-                        : FileSystemMtpInternal::EnumerateMtpConnectionBrowseStorages(parentDeviceId, storages);
+        const HRESULT hr = fakeBackend ? FileSystemMtpInternal::EnumerateMtpConnectionBrowseStoragesFromBackend(*fakeBackend, parentDeviceId, storages)
+                                       : FileSystemMtpInternal::EnumerateMtpConnectionBrowseStorages(parentDeviceId, storages);
 #else
         const HRESULT hr = FileSystemMtpInternal::EnumerateMtpConnectionBrowseStorages(parentDeviceId, storages);
 #endif
@@ -262,8 +260,10 @@ extern "C" HRESULT __stdcall RedSalamanderGetConfigurationSchema(REFIID riid, co
     return FactoryGetConfigurationSchema<IFileSystem>(kEntries, riid, pluginId, schemaJsonUtf8);
 }
 
-extern "C" PLUGFACTORY_API HRESULT __stdcall RedSalamanderBrowseConnectionTargets(
-    REFIID riid, const wchar_t* pluginId, const FactoryConnectionBrowseRequest* request, FactoryConnectionBrowseResult* result) noexcept
+extern "C" PLUGFACTORY_API HRESULT __stdcall RedSalamanderBrowseConnectionTargets(REFIID riid,
+                                                                                  const wchar_t* pluginId,
+                                                                                  const FactoryConnectionBrowseRequest* request,
+                                                                                  FactoryConnectionBrowseResult* result) noexcept
 {
     if (! result)
     {
@@ -296,7 +296,7 @@ extern "C" PLUGFACTORY_API HRESULT __stdcall RedSalamanderBrowseConnectionTarget
     Debug::Perf::Scope perf(devicesRequest ? L"mtp.connection_browse.devices_us" : L"mtp.connection_browse.storages_us");
 
     std::string jsonUtf8;
-    uint64_t resultCount = 0u;
+    uint64_t resultCount   = 0u;
     const HRESULT browseHr = BuildConnectionBrowseJson(*request, jsonUtf8, resultCount);
     perf.SetValue0(resultCount);
     perf.SetHr(browseHr);

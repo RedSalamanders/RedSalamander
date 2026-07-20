@@ -107,12 +107,11 @@ template <typename WorkerFunc> void RunCreateDirectoryPromptModalCycle(HWND main
     worker.join();
 }
 
-[[nodiscard]] bool WaitForCreateDirectoryPromptSelectedTextSnapshot(
-    HWND prompt,
-    const std::filesystem::path& expectedCreateInPath,
-    std::wstring_view expectedText,
-    std::chrono::milliseconds timeout,
-    FolderViewCreateDirectoryPromptDebugSnapshot& outSnapshot) noexcept
+[[nodiscard]] bool WaitForCreateDirectoryPromptSelectedTextSnapshot(HWND prompt,
+                                                                    const std::filesystem::path& expectedCreateInPath,
+                                                                    std::wstring_view expectedText,
+                                                                    std::chrono::milliseconds timeout,
+                                                                    FolderViewCreateDirectoryPromptDebugSnapshot& outSnapshot) noexcept
 {
     using namespace std::chrono_literals;
 
@@ -127,10 +126,9 @@ template <typename WorkerFunc> void RunCreateDirectoryPromptModalCycle(HWND main
     {
         PumpPendingMessages();
         outSnapshot = {};
-        if (DebugGetFolderViewCreateDirectoryPromptSnapshot(outSnapshot) && outSnapshot.usesDxUiHost &&
-            outSnapshot.visibleChildWindowCount <= 1u && outSnapshot.createInPath == expectedPath && outSnapshot.text == expectedText &&
-            outSnapshot.nameFieldFocused && outSnapshot.selectionStart == 0u && outSnapshot.selectionEnd == expectedText.size() &&
-            outSnapshot.validationText.empty())
+        if (DebugGetFolderViewCreateDirectoryPromptSnapshot(outSnapshot) && outSnapshot.usesDxUiHost && outSnapshot.visibleChildWindowCount <= 1u &&
+            outSnapshot.createInPath == expectedPath && outSnapshot.text == expectedText && outSnapshot.nameFieldFocused && outSnapshot.selectionStart == 0u &&
+            outSnapshot.selectionEnd == expectedText.size() && outSnapshot.validationText.empty())
         {
             return true;
         }
@@ -139,10 +137,9 @@ template <typename WorkerFunc> void RunCreateDirectoryPromptModalCycle(HWND main
     }
 
     outSnapshot = {};
-    return DebugGetFolderViewCreateDirectoryPromptSnapshot(outSnapshot) && outSnapshot.usesDxUiHost &&
-           outSnapshot.visibleChildWindowCount <= 1u && outSnapshot.createInPath == expectedPath && outSnapshot.text == expectedText &&
-           outSnapshot.nameFieldFocused && outSnapshot.selectionStart == 0u && outSnapshot.selectionEnd == expectedText.size() &&
-           outSnapshot.validationText.empty();
+    return DebugGetFolderViewCreateDirectoryPromptSnapshot(outSnapshot) && outSnapshot.usesDxUiHost && outSnapshot.visibleChildWindowCount <= 1u &&
+           outSnapshot.createInPath == expectedPath && outSnapshot.text == expectedText && outSnapshot.nameFieldFocused && outSnapshot.selectionStart == 0u &&
+           outSnapshot.selectionEnd == expectedText.size() && outSnapshot.validationText.empty();
 }
 
 template <typename WorkerFunc> void RunEditNewPromptModalCycle(HWND mainWindow, WorkerFunc&& workerFunc) noexcept
@@ -799,7 +796,7 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
             cycleResult.ownerDisabled           = IsWindowEnabled(mainWindow) == FALSE;
             cycleResult.visibleChildWindowCount = CountVisibleChildWindows(about);
             cycleResult.exposesUiaProvider      = WindowExposesUiaProvider(about);
-            const auto collectReadableSurface = [&]() noexcept
+            const auto collectReadableSurface   = [&]() noexcept
             {
                 cycleResult.uiaPatternStats = CollectVisibleUiaDescendantPatternStats(about);
                 cycleResult.aboutTextState  = CollectVisibleDescendantNamedElementState(about, UIA_TextControlTypeId);
@@ -3100,16 +3097,14 @@ struct FatalErrorReadableSurfaceProbe final
         while (std::chrono::steady_clock::now() < snapshotDeadline)
         {
             PumpPendingMessages();
-            if (DebugGetFolderViewChangeCasePromptSnapshot(editedSnapshot) &&
-                editedSnapshot.includeSubdirsChecked == (expectedState == ToggleState_On))
+            if (DebugGetFolderViewChangeCasePromptSnapshot(editedSnapshot) && editedSnapshot.includeSubdirsChecked == (expectedState == ToggleState_On))
             {
                 return true;
             }
             std::this_thread::sleep_for(20ms);
         }
 
-        return DebugGetFolderViewChangeCasePromptSnapshot(editedSnapshot) &&
-               editedSnapshot.includeSubdirsChecked == (expectedState == ToggleState_On);
+        return DebugGetFolderViewChangeCasePromptSnapshot(editedSnapshot) && editedSnapshot.includeSubdirsChecked == (expectedState == ToggleState_On);
     };
 
     constexpr size_t kUpperStyleIndex          = 1u;
@@ -3990,11 +3985,10 @@ void AutomatePaneFilterDialog(HWND mainWindow, PaneFilterDialogAutomationState& 
     state.Require(SelfTest::WriteTextFile(root / L"a.txt", "a"), L"Failed to create pane-filter prompt test file.");
 
     const std::optional<Common::Settings::SelectionMasksSettings> selectionMasksBefore = g_settings.selectionMasks;
-    const auto restoreSelectionMasks = wil::scope_exit([&]() noexcept { g_settings.selectionMasks = selectionMasksBefore; });
-    Common::Settings::SelectionMasksSettings selectionMasks =
-        g_settings.selectionMasks.value_or(Common::Settings::SelectionMasksSettings{});
-    selectionMasks.filterHistory = {L"*.txt", L"*.log"};
-    g_settings.selectionMasks    = std::move(selectionMasks);
+    const auto restoreSelectionMasks                        = wil::scope_exit([&]() noexcept { g_settings.selectionMasks = selectionMasksBefore; });
+    Common::Settings::SelectionMasksSettings selectionMasks = g_settings.selectionMasks.value_or(Common::Settings::SelectionMasksSettings{});
+    selectionMasks.filterHistory                            = {L"*.txt", L"*.log"};
+    g_settings.selectionMasks                               = std::move(selectionMasks);
 
     const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
     const auto restorePath                                = wil::scope_exit([&]
@@ -6177,8 +6171,7 @@ void AutomateChangeCasePrompt(
         return false;
     }
 
-    const SelfTest::TestSandbox sandbox =
-        SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::Commands, L"pane_rename_long_selection");
+    const SelfTest::TestSandbox sandbox = SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::Commands, L"pane_rename_long_selection");
     state.Require(sandbox.IsValid(), L"Pane-rename long-selection TestSandbox root unavailable.");
     if (! sandbox.IsValid())
     {
@@ -7070,7 +7063,7 @@ void AutomateChangeCasePrompt(
             }
 
             FolderViewEditNewPromptDebugSnapshot snapshot{};
-            bool captured = false;
+            bool captured                 = false;
             const auto validationDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(1000ms);
             while (std::chrono::steady_clock::now() < validationDeadline)
             {
@@ -7115,9 +7108,9 @@ void AutomateChangeCasePrompt(
                               formatNameList(probe.missingValidationForNames)));
     state.Require(probe.closedForNames.empty(),
                   std::format(L"Edit New should keep the dialog open after invalid file names; closed for: {}.", formatNameList(probe.closedForNames)));
-    state.Require(probe.unfocusedForNames.empty(),
-                  std::format(L"Edit New should refocus the file-name field after invalid file names; unfocused for: {}.",
-                              formatNameList(probe.unfocusedForNames)));
+    state.Require(
+        probe.unfocusedForNames.empty(),
+        std::format(L"Edit New should refocus the file-name field after invalid file names; unfocused for: {}.", formatNameList(probe.unfocusedForNames)));
     state.Require(probe.cancelled, L"Failed to cancel Edit New validation prompt.");
 
     ec.clear();
@@ -8631,8 +8624,8 @@ void AutomateChangeCasePrompt(
             return;
         }
 
-        confirmCycle.capturedSnapshot = WaitForCreateDirectoryPromptSelectedTextSnapshot(
-            prompt, root, suggestedOne, SelfTest::Scale(3000ms), confirmCycle.snapshot);
+        confirmCycle.capturedSnapshot =
+            WaitForCreateDirectoryPromptSelectedTextSnapshot(prompt, root, suggestedOne, SelfTest::Scale(3000ms), confirmCycle.snapshot);
         if (! confirmCycle.capturedSnapshot)
         {
             return;
@@ -8680,8 +8673,8 @@ void AutomateChangeCasePrompt(
             return;
         }
 
-        reopenCycle.capturedSnapshot = WaitForCreateDirectoryPromptSelectedTextSnapshot(
-            prompt, root, suggestedTwo, SelfTest::Scale(3000ms), reopenCycle.snapshot);
+        reopenCycle.capturedSnapshot =
+            WaitForCreateDirectoryPromptSelectedTextSnapshot(prompt, root, suggestedTwo, SelfTest::Scale(3000ms), reopenCycle.snapshot);
         if (! reopenCycle.capturedSnapshot)
         {
             return;
@@ -8924,17 +8917,15 @@ void AutomateChangeCasePrompt(
             cycleResult.ownedByMainWindow = IsOwnedBy(prompt, mainWindow);
             cycleResult.capturedSnapshot  = WaitForCreateDirectoryPromptSelectedTextSnapshot(
                 prompt, root, LoadStringResource(nullptr, IDS_NEW_FOLDER_DEFAULT_NAME), SelfTest::Scale(3000ms), cycleResult.snapshot);
-            cycleResult.uiaPatternStats   = WaitForVisiblePromptButtonStats(prompt, SelfTest::Scale(3000ms));
-            cycleResult.valueStateMatchesSnapshot = WaitForVisibleDescendantValuePatternState(
-                prompt,
-                UIA_EditControlTypeId,
-                [&](const UiaValuePatternState& state) noexcept { return state.value == cycleResult.snapshot.text; },
-                cycleResult.valueState,
-                std::format(L"Create-directory prompt cycle {} initial ValuePattern read", cycle));
-            cycleResult.buttonState       = CollectVisibleDescendantNamedElementState(prompt, UIA_ButtonControlTypeId);
-            cycleResult.setText           = DebugSetFolderViewCreateDirectoryPromptText(requestedName);
-            cycleResult.actionTriggered   = accept ? DebugConfirmFolderViewCreateDirectoryPrompt() : DebugCancelFolderViewCreateDirectoryPrompt();
-            cycleResult.closed            = WaitForWindowClosed(prompt, SelfTest::Scale(3000ms));
+            cycleResult.uiaPatternStats = WaitForVisiblePromptButtonStats(prompt, SelfTest::Scale(3000ms));
+            cycleResult.valueStateMatchesSnapshot =
+                WaitForVisibleDescendantValuePatternState(prompt, UIA_EditControlTypeId, [&](const UiaValuePatternState& state) noexcept {
+                return state.value == cycleResult.snapshot.text;
+            }, cycleResult.valueState, std::format(L"Create-directory prompt cycle {} initial ValuePattern read", cycle));
+            cycleResult.buttonState     = CollectVisibleDescendantNamedElementState(prompt, UIA_ButtonControlTypeId);
+            cycleResult.setText         = DebugSetFolderViewCreateDirectoryPromptText(requestedName);
+            cycleResult.actionTriggered = accept ? DebugConfirmFolderViewCreateDirectoryPrompt() : DebugCancelFolderViewCreateDirectoryPrompt();
+            cycleResult.closed          = WaitForWindowClosed(prompt, SelfTest::Scale(3000ms));
         });
 
         state.Require(cycleResult.sawPrompt, std::format(L"Create-directory prompt did not open during cycle {}.", cycle));
@@ -10007,8 +9998,7 @@ void AutomateChangeCasePrompt(
         return false;
     }
 
-    const SelfTest::TestSandbox sandbox =
-        SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::Commands, L"item_properties_scroll");
+    const SelfTest::TestSandbox sandbox = SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::Commands, L"item_properties_scroll");
     state.Require(sandbox.IsValid(), L"Item-properties scroll TestSandbox root unavailable.");
     if (! sandbox.IsValid())
     {
@@ -10754,7 +10744,8 @@ void AutomateChangeCasePrompt(
     leftAlert  = {};
     rightAlert = {};
     state.Require(g_folderWindow.DebugGetPaneAlertSnapshot(FolderWindow::Pane::Left, leftAlert), L"Left pane alert snapshot should be available after clear.");
-    state.Require(g_folderWindow.DebugGetPaneAlertSnapshot(FolderWindow::Pane::Right, rightAlert), L"Right pane alert snapshot should be available after clear.");
+    state.Require(g_folderWindow.DebugGetPaneAlertSnapshot(FolderWindow::Pane::Right, rightAlert),
+                  L"Right pane alert snapshot should be available after clear.");
     state.Require(leftAlert.visible && leftAlert.message == L"Left pane alert should stay",
                   L"Clearing the right host alert cookie should not dismiss the left pane alert.");
     state.Require(! rightAlert.visible, L"Clearing the right host alert cookie should dismiss only the right pane alert.");

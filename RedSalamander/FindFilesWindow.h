@@ -28,11 +28,8 @@ struct FindFilesPaneContext
     std::filesystem::path rootPluginPath;
 };
 
-[[nodiscard]] bool ShowFindFilesWindow(HWND owner,
-                                       FolderWindow& applicationFolderWindow,
-                                       Common::Settings::Settings& settings,
-                                       const AppTheme& theme,
-                                       FindFilesPaneContext context) noexcept;
+[[nodiscard]] bool ShowFindFilesWindow(
+    HWND owner, FolderWindow& applicationFolderWindow, Common::Settings::Settings& settings, const AppTheme& theme, FindFilesPaneContext context) noexcept;
 
 void UpdateFindFilesWindowsTheme(const AppTheme& theme) noexcept;
 
@@ -50,8 +47,9 @@ struct FindFilesDebugSourceOutcome final
     size_t sourceIndex = 0;
     HRESULT status     = E_PENDING;
 };
-[[nodiscard]] std::vector<size_t> DebugSelectKnownCompletedFindFilesSourceIndicesForTests(
-    size_t sourceCount, std::span<const FindFilesDebugSourceOutcome> outcomes, HRESULT overallStatus);
+[[nodiscard]] std::vector<size_t> DebugSelectKnownCompletedFindFilesSourceIndicesForTests(size_t sourceCount,
+                                                                                          std::span<const FindFilesDebugSourceOutcome> outcomes,
+                                                                                          HRESULT overallStatus);
 
 enum class FindFilesDebugOperation : uint8_t
 {

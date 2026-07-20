@@ -1738,13 +1738,14 @@ enum : size_t
             return false;
         }
 
-        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), std::format(L"Failed to focus the Preferences category host during {}.", context));
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                      std::format(L"Failed to focus the Preferences category host during {}.", context));
         PumpPendingMessages();
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
                       std::format(L"Failed to select the Preferences Themes category during {}.", context));
 
         PreferencesDebugSnapshot snapshot{};
-        const std::wstring themesTitle = LoadStringResource(nullptr, IDS_PREFS_CAT_THEMES);
+        const std::wstring themesTitle   = LoadStringResource(nullptr, IDS_PREFS_CAT_THEMES);
         const auto waitForThemesSnapshot = [&]() noexcept
         {
             const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
@@ -1764,12 +1765,13 @@ enum : size_t
             snapshot = {};
             return DebugGetPreferencesDialogSnapshot(snapshot) && snapshot.currentCategory == kPrefCategoryThemes && snapshot.pageTitle == themesTitle;
         };
-        state.Require(waitForThemesSnapshot(),
-                      std::format(L"Preferences navigation did not settle on the Themes category during {}; currentCategory='{}' pageTitle='{}' visibleChildren={}.",
-                                  context,
-                                  static_cast<int>(snapshot.currentCategory),
-                                  snapshot.pageTitle,
-                                  snapshot.visibleCurrentPageChildWindowCount));
+        state.Require(
+            waitForThemesSnapshot(),
+            std::format(L"Preferences navigation did not settle on the Themes category during {}; currentCategory='{}' pageTitle='{}' visibleChildren={}.",
+                        context,
+                        static_cast<int>(snapshot.currentCategory),
+                        snapshot.pageTitle,
+                        snapshot.visibleCurrentPageChildWindowCount));
         state.Require(snapshot.visibleCurrentPageChildWindowCount == 1u,
                       std::format(L"Preferences Themes page should expose exactly one visible child window during {}; saw {}.",
                                   context,
@@ -2459,7 +2461,8 @@ enum : size_t
         return false;
     }
 
-    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Viewers grid UIA selection test.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                  L"Failed to focus the Preferences category host for Viewers grid UIA selection test.");
     SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
     SendMessageW(categoryTreeHost, WM_KEYUP, VK_HOME, 0);
     PumpPendingMessages();
@@ -2625,12 +2628,12 @@ enum : size_t
     {
         PreferencesDebugSnapshot currentSnapshot{};
         const bool snapshotAvailable = DebugGetPreferencesDialogSnapshot(currentSnapshot);
-        const HWND currentDialog      = GetPreferencesDialogHandle();
-        const bool dialogAlive        = IsWindow(prefs) != FALSE;
-        const bool sameDialog         = currentDialog == prefs;
-        const HWND nativeFocus        = GetFocus();
-        const HWND activePage         = DebugGetPreferencesActivePageHandle();
-        const HWND activeDx           = DebugGetPreferencesActivePageDxHostHandle();
+        const HWND currentDialog     = GetPreferencesDialogHandle();
+        const bool dialogAlive       = IsWindow(prefs) != FALSE;
+        const bool sameDialog        = currentDialog == prefs;
+        const HWND nativeFocus       = GetFocus();
+        const HWND activePage        = DebugGetPreferencesActivePageHandle();
+        const HWND activeDx          = DebugGetPreferencesActivePageDxHostHandle();
 
         return std::format(L" {}: snapshotAvailable={}, dialogAlive={}, sameDialog={}, expectedDialog=0x{:X}, currentDialog=0x{:X}, category={}, "
                            L"search='{}', rows={}, selected='{}', focus={}, createdPaneWindows={}, visiblePaneWindows={}, pageChildren={}, "
@@ -2683,9 +2686,9 @@ enum : size_t
                    value.visiblePaneWindowCount == 0u && value.visibleCurrentPageChildWindowCount == 1u && value.currentPageDxHostResizeFailureCount == 0u;
         },
             outSnapshot);
-        state.Require(pageSettled,
-                      std::format(L"Preferences Viewers page did not settle before tab-traversal validation.{}",
-                                  describeViewersSnapshot(L"initial page wait")));
+        state.Require(
+            pageSettled,
+            std::format(L"Preferences Viewers page did not settle before tab-traversal validation.{}", describeViewersSnapshot(L"initial page wait")));
         state.Require(GetPreferencesDialogHandle() == prefs && IsWindow(prefs) != FALSE,
                       std::format(L"Preferences Viewers tab-traversal setup did not retain the opened dialog HWND.{}",
                                   describeViewersSnapshot(L"initial dialog identity")));
@@ -3325,7 +3328,8 @@ enum : size_t
             return false;
         }
 
-        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Viewers header-reorder validation.");
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                      L"Failed to focus the Preferences category host for Viewers header-reorder validation.");
         SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
         SendMessageW(categoryTreeHost, WM_KEYUP, VK_HOME, 0);
         PumpPendingMessages();
@@ -3517,7 +3521,8 @@ enum : size_t
             return false;
         }
 
-        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Viewers reordered-copy validation.");
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                      L"Failed to focus the Preferences category host for Viewers reordered-copy validation.");
         SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
         SendMessageW(categoryTreeHost, WM_KEYUP, VK_HOME, 0);
         PumpPendingMessages();
@@ -3741,7 +3746,8 @@ enum : size_t
             return false;
         }
 
-        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Viewers header-resize validation.");
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                      L"Failed to focus the Preferences category host for Viewers header-resize validation.");
         SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
         SendMessageW(categoryTreeHost, WM_KEYUP, VK_HOME, 0);
         PumpPendingMessages();
@@ -5743,9 +5749,9 @@ enum : size_t
             RECT currentExtensionHeaderRect{};
             RECT currentViewerHeaderRect{};
             const bool haveMatchHeader = DebugGetPreferencesViewersListHeaderClientRect(kViewersAssociationMatchColumn, currentExtensionHeaderRect);
-            const bool haveF3Header = DebugGetPreferencesViewersListHeaderClientRect(kViewersAssociationPrimaryActionColumn, currentViewerHeaderRect);
-            lastExtensionHeaderRect = currentExtensionHeaderRect;
-            lastViewerHeaderRect = currentViewerHeaderRect;
+            const bool haveF3Header    = DebugGetPreferencesViewersListHeaderClientRect(kViewersAssociationPrimaryActionColumn, currentViewerHeaderRect);
+            lastExtensionHeaderRect    = currentExtensionHeaderRect;
+            lastViewerHeaderRect       = currentViewerHeaderRect;
             if (value.currentCategory == kPrefCategoryViewers && value.viewersSelectedExtensionText == L".selftest-viewers-001" &&
                 value.viewersListRowCount == baselineRowCount && value.viewersListVisibleColumnCount >= 2u &&
                 value.viewersListVisibleCellCount >= value.viewersListVisibleColumnCount && value.currentPageDxHostResizeFailureCount == 0u &&
@@ -5754,7 +5760,7 @@ enum : size_t
                 currentViewerHeaderRect.bottom > currentViewerHeaderRect.top && currentExtensionHeaderRect.left < currentViewerHeaderRect.left)
             {
                 outExtensionHeaderRect = currentExtensionHeaderRect;
-                outViewerHeaderRect = currentViewerHeaderRect;
+                outViewerHeaderRect    = currentViewerHeaderRect;
                 return true;
             }
 
@@ -5765,7 +5771,7 @@ enum : size_t
         if (! ready)
         {
             outExtensionHeaderRect = lastExtensionHeaderRect;
-            outViewerHeaderRect = lastViewerHeaderRect;
+            outViewerHeaderRect    = lastViewerHeaderRect;
         }
         return ready;
     };
@@ -6857,7 +6863,8 @@ enum : size_t
         return false;
     }
 
-    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Keyboard header-reorder validation.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                  L"Failed to focus the Preferences category host for Keyboard header-reorder validation.");
     state.Require(DebugSelectPreferencesCategory(kPrefCategoryKeyboard),
                   L"Failed to select the Preferences Keyboard category for Keyboard header-reorder validation.");
     PumpPendingMessages();
@@ -7098,7 +7105,7 @@ enum : size_t
         return false;
     }
 
-    selectionState = {};
+    selectionState             = {};
     const bool stableSelection = WaitForVisibleGridSelectionState(prefs,
                                                                   [&](const UiaSelectionPatternState& value) noexcept
     {
@@ -7189,7 +7196,8 @@ enum : size_t
         return false;
     }
 
-    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Keyboard header-resize validation.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                  L"Failed to focus the Preferences category host for Keyboard header-resize validation.");
     state.Require(DebugSelectPreferencesCategory(kPrefCategoryKeyboard),
                   L"Failed to select the Preferences Keyboard category for Keyboard header-resize validation.");
     PumpPendingMessages();
@@ -7410,7 +7418,7 @@ enum : size_t
     const auto restoreSettings                        = wil::scope_exit([&]() noexcept { g_settings = baselineSettings; });
 
     g_settings.shortcuts = ShortcutDefaults::CreateDefaultShortcuts();
-    bool mutatedBinding = false;
+    bool mutatedBinding  = false;
     for (auto& binding : g_settings.shortcuts->functionBar)
     {
         if (binding.commandId == L"cmd/pane/find")
@@ -7528,7 +7536,8 @@ enum : size_t
         return false;
     }
 
-    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Keyboard reordered-copy validation.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                  L"Failed to focus the Preferences category host for Keyboard reordered-copy validation.");
     state.Require(DebugSelectPreferencesCategory(kPrefCategoryKeyboard),
                   L"Failed to select the Preferences Keyboard category for Keyboard reordered-copy validation.");
     PumpPendingMessages();
@@ -7755,7 +7764,7 @@ enum : size_t
     const auto restoreSettings                        = wil::scope_exit([&]() noexcept { g_settings = baselineSettings; });
 
     g_settings.shortcuts = ShortcutDefaults::CreateDefaultShortcuts();
-    bool mutatedBinding = false;
+    bool mutatedBinding  = false;
     for (auto& binding : g_settings.shortcuts->functionBar)
     {
         if (binding.commandId == L"cmd/pane/find")
@@ -7845,7 +7854,8 @@ enum : size_t
         return false;
     }
 
-    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Keyboard reordered-resized validation.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                  L"Failed to focus the Preferences category host for Keyboard reordered-resized validation.");
     state.Require(DebugSelectPreferencesCategory(kPrefCategoryKeyboard),
                   L"Failed to select the Preferences Keyboard category for Keyboard reordered-resized validation.");
     PumpPendingMessages();
@@ -8482,7 +8492,7 @@ enum : size_t
     const auto restoreSettings                        = wil::scope_exit([&]() noexcept { g_settings = baselineSettings; });
 
     g_settings.shortcuts = ShortcutDefaults::CreateDefaultShortcuts();
-    bool mutatedBinding = false;
+    bool mutatedBinding  = false;
     for (auto& binding : g_settings.shortcuts->functionBar)
     {
         if (binding.commandId == L"cmd/pane/find")

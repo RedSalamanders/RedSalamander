@@ -130,8 +130,10 @@ extern "C"
     // - On S_OK, result->jsonUtf8 is allocated with CoTaskMemAlloc and must be
     //   freed by the caller with CoTaskMemFree().
     // - Omitted export means the plugin does not provide connection browse.
-    PLUGFACTORY_API HRESULT __stdcall RedSalamanderBrowseConnectionTargets(
-        REFIID riid, const wchar_t* pluginId, const FactoryConnectionBrowseRequest* request, FactoryConnectionBrowseResult* result) noexcept;
+    PLUGFACTORY_API HRESULT __stdcall RedSalamanderBrowseConnectionTargets(REFIID riid,
+                                                                           const wchar_t* pluginId,
+                                                                           const FactoryConnectionBrowseRequest* request,
+                                                                           FactoryConnectionBrowseResult* result) noexcept;
 
     // Optional module-level quiet-point support:
     //

@@ -10,9 +10,7 @@ class FolderWindow;
 
 // Binds the process-lifetime plugin host to the composition root before any
 // plugin can call it. Dependencies remain non-owning and outlive the host.
-void ConfigureHostServices(FolderWindow& folderWindow,
-                           std::atomic<HWND>& folderWindowHwnd,
-                           Common::Settings::Settings& settings) noexcept;
+void ConfigureHostServices(FolderWindow& folderWindow, std::atomic<HWND>& folderWindowHwnd, Common::Settings::Settings& settings) noexcept;
 
 // Returns a process-lifetime host services object that plugins can use via QueryInterface.
 // The returned pointer is always non-null.

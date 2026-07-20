@@ -1037,11 +1037,8 @@ struct EncodedWord
     return S_OK;
 }
 
-[[nodiscard]] HRESULT ExecuteImapSingleMessageDelete(bool uidPlusAvailable,
-                                                     uint64_t uid,
-                                                     ImapDeleteCommandExecutor executor,
-                                                     void* context,
-                                                     ImapDeleteOutcome& outOutcome) noexcept
+[[nodiscard]] HRESULT ExecuteImapSingleMessageDelete(
+    bool uidPlusAvailable, uint64_t uid, ImapDeleteCommandExecutor executor, void* context, ImapDeleteOutcome& outOutcome) noexcept
 {
     outOutcome = {};
     if (uid == 0u || executor == nullptr)
@@ -1067,9 +1064,9 @@ struct EncodedWord
         return S_OK;
     }
 
-    const HRESULT expungeHr       = hr;
-    outOutcome.rollbackAttempted  = true;
-    outOutcome.rollbackHr         = executor(context, ImapDeleteCommand::RemoveDeletedFlag, uid);
+    const HRESULT expungeHr      = hr;
+    outOutcome.rollbackAttempted = true;
+    outOutcome.rollbackHr        = executor(context, ImapDeleteCommand::RemoveDeletedFlag, uid);
     if (SUCCEEDED(outOutcome.rollbackHr))
     {
         outOutcome.targetMarkedDeleted = false;

@@ -911,10 +911,7 @@ void RunDebugOverwriteCleanupContractSelfTest(unsigned int& passed, unsigned int
 
 void RunDebugCaseOnlyRenameContractSelfTest(unsigned int& passed, unsigned int& failed) noexcept
 {
-    DebugCheck(IsCaseSensitiveSelfRename(L"/folder/name.txt", L"/folder/name.txt"),
-               L"an exact Curl path match should remain a self-rename",
-               passed,
-               failed);
+    DebugCheck(IsCaseSensitiveSelfRename(L"/folder/name.txt", L"/folder/name.txt"), L"an exact Curl path match should remain a self-rename", passed, failed);
     DebugCheck(! IsCaseSensitiveSelfRename(L"/folder/name.txt", L"/folder/Name.txt"),
                L"a Curl case-only path change must execute the provider rename operation",
                passed,
@@ -1009,8 +1006,7 @@ void RunDebugCaseOnlyRenameContractSelfTest(unsigned int& passed, unsigned int& 
         // The replacement is already the authoritative destination. Reporting failure here would
         // invite a retry or host cleanup after the point of no return; leave the rollback sibling
         // for later maintenance and surface the cleanup problem only as a diagnostic.
-        Debug::Warning(L"FileSystemCurl: replacement succeeded but rollback-backup cleanup failed (hr={:#x}).",
-                       static_cast<unsigned long>(cleanupHr));
+        Debug::Warning(L"FileSystemCurl: replacement succeeded but rollback-backup cleanup failed (hr={:#x}).", static_cast<unsigned long>(cleanupHr));
     }
     return S_OK;
 }

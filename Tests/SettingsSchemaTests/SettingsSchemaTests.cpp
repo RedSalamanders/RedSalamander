@@ -13,8 +13,8 @@
 #include <array>
 #include <chrono>
 #include <filesystem>
-#include <fstream>
 #include <format>
+#include <fstream>
 #include <iostream>
 #include <optional>
 #include <string>
@@ -28,8 +28,8 @@
 #pragma warning(pop)
 
 #include "PluginConfiguration.h"
-#include "SettingsStore.h"
 #include "SettingsSchemaParser.h"
+#include "SettingsStore.h"
 #include "TestSupport/ChildProcess.h"
 
 namespace
@@ -396,8 +396,7 @@ void TestNonAscii(bool& success)
 [[nodiscard]] bool HasPluginConfigurationIssue(const Common::PluginConfiguration::SchemaParseResult& result,
                                                Common::PluginConfiguration::ValidationCode code) noexcept
 {
-    return std::ranges::any_of(result.issues,
-                               [code](const Common::PluginConfiguration::ValidationIssue& issue) noexcept { return issue.code == code; });
+    return std::ranges::any_of(result.issues, [code](const Common::PluginConfiguration::ValidationIssue& issue) noexcept { return issue.code == code; });
 }
 
 void TestPluginConfigurationModelAndCodec(bool& success)
@@ -420,7 +419,7 @@ void TestPluginConfigurationModelAndCodec(bool& success)
         ],
         "futureRootMember": true
     })json";
-    const SchemaParseResult schema = ParseSchema(schemaJson);
+    const SchemaParseResult schema        = ParseSchema(schemaJson);
     Check(! schema.HasErrors() && schema.fields.size() == 6u, L"plugin config schema: every supported field type parses without errors", success);
     if (schema.fields.size() != 6u)
     {
@@ -464,7 +463,7 @@ void TestPluginConfigurationModelAndCodec(bool& success)
         "hidden": "retained-hidden",
         "futureAfter": true
     })json";
-    ConfigurationParseResult configuration = ParseConfiguration(schema.fields, configurationJson);
+    ConfigurationParseResult configuration       = ParseConfiguration(schema.fields, configurationJson);
     Check(! configuration.HasErrors() && configuration.sourceWasObject && configuration.values.size() == schema.fields.size(),
           L"plugin config model: configuration object overlays schema defaults",
           success);
@@ -493,21 +492,18 @@ void TestPluginConfigurationModelAndCodec(bool& success)
           L"plugin config model: selection arrays skip wrong types without losing future string values",
           success);
 
-    configuration.values[textIndex].text    = L"edited";
-    configuration.values[countIndex].integer = 99;
+    configuration.values[textIndex].text       = L"edited";
+    configuration.values[countIndex].integer   = 99;
     configuration.values[enabledIndex].boolean = true;
-    configuration.values[modeIndex].text = L"a";
-    configuration.values[tagsIndex].selection = {L"b"};
+    configuration.values[modeIndex].text       = L"a";
+    configuration.values[tagsIndex].selection  = {L"b"};
     std::string serialized;
     const HRESULT serializeHr = SerializeConfiguration(configurationJson, schema.fields, configuration.values, serialized);
     Check(serializeHr == S_OK && ! serialized.empty(), L"plugin config codec: edited values serialize successfully", success);
 
     Common::Settings::JsonValue serializedRoot;
-    Check(Common::Settings::ParseJsonValue(serialized, serializedRoot) == S_OK,
-          L"plugin config codec: serialized output is valid JSON",
-          success);
-    Check(Common::Settings::FindMember(serializedRoot, "futureBefore") != nullptr &&
-              Common::Settings::FindMember(serializedRoot, "futureAfter") != nullptr,
+    Check(Common::Settings::ParseJsonValue(serialized, serializedRoot) == S_OK, L"plugin config codec: serialized output is valid JSON", success);
+    Check(Common::Settings::FindMember(serializedRoot, "futureBefore") != nullptr && Common::Settings::FindMember(serializedRoot, "futureAfter") != nullptr,
           L"plugin config codec: unknown future members survive edits",
           success);
     Check(Common::Settings::GetWString(serializedRoot, "text") == std::make_optional<std::wstring>(L"edited") &&
@@ -515,22 +511,18 @@ void TestPluginConfigurationModelAndCodec(bool& success)
           L"plugin config codec: text and bool edits are applied",
           success);
     const Common::Settings::JsonValue* countValue = Common::Settings::FindMember(serializedRoot, "count");
-    const bool countIsNine = countValue &&
-                             ((std::get_if<int64_t>(&countValue->value) && *std::get_if<int64_t>(&countValue->value) == 9) ||
-                              (std::get_if<uint64_t>(&countValue->value) && *std::get_if<uint64_t>(&countValue->value) == 9u));
-    Check(countIsNine,
-          L"plugin config codec: integer constraints clamp during serialization",
-          success);
+    const bool countIsNine = countValue && ((std::get_if<int64_t>(&countValue->value) && *std::get_if<int64_t>(&countValue->value) == 9) ||
+                                            (std::get_if<uint64_t>(&countValue->value) && *std::get_if<uint64_t>(&countValue->value) == 9u));
+    Check(countIsNine, L"plugin config codec: integer constraints clamp during serialization", success);
 
     constexpr std::string_view invalidSchema = R"json({ "fields": [
         { "key": "duplicate", "type": "value", "min": 10, "max": 1 },
         { "key": "duplicate", "type": "text" },
         { "key": "future", "type": "future-type" }
     ] })json";
-    const SchemaParseResult invalid = ParseSchema(invalidSchema);
+    const SchemaParseResult invalid          = ParseSchema(invalidSchema);
     Check(invalid.HasErrors() && HasPluginConfigurationIssue(invalid, ValidationCode::InvalidConstraintRange) &&
-              HasPluginConfigurationIssue(invalid, ValidationCode::DuplicateFieldKey) &&
-              HasPluginConfigurationIssue(invalid, ValidationCode::UnsupportedType),
+              HasPluginConfigurationIssue(invalid, ValidationCode::DuplicateFieldKey) && HasPluginConfigurationIssue(invalid, ValidationCode::UnsupportedType),
           L"plugin config schema: invalid constraints, duplicate IDs, and future types have explicit validation results",
           success);
 }
@@ -627,7 +619,7 @@ void TestSettingsStoreConflictAndPrimitiveGuards(bool& success)
 {
     const std::wstring appId = std::format(L"RedSalamanderSettingsStoreGuards-{}-{}", GetCurrentProcessId(), GetTickCount64());
     CleanupSettingsTestArtifacts(appId);
-    const auto cleanup = wil::scope_exit([&]() noexcept { CleanupSettingsTestArtifacts(appId); });
+    const auto cleanup                       = wil::scope_exit([&]() noexcept { CleanupSettingsTestArtifacts(appId); });
     const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(appId);
 
     Common::Settings::Settings seed{};
@@ -636,21 +628,17 @@ void TestSettingsStoreConflictAndPrimitiveGuards(bool& success)
 
     Common::Settings::Settings firstWriter{};
     Common::Settings::Settings staleWriter{};
-    Check(Common::Settings::TryLoadSettingsNoRecovery(appId, firstWriter) == S_OK &&
-              Common::Settings::TryLoadSettingsNoRecovery(appId, staleWriter) == S_OK,
+    Check(Common::Settings::TryLoadSettingsNoRecovery(appId, firstWriter) == S_OK && Common::Settings::TryLoadSettingsNoRecovery(appId, staleWriter) == S_OK,
           L"settings CAS: independent snapshots load from the same revision",
           success);
     firstWriter.theme.currentThemeId = L"builtin/dark";
-    Check(Common::Settings::SaveSettings(appId, firstWriter) == S_OK,
-          L"settings CAS: first writer publishes and advances its revision",
-          success);
+    Check(Common::Settings::SaveSettings(appId, firstWriter) == S_OK, L"settings CAS: first writer publishes and advances its revision", success);
     staleWriter.theme.currentThemeId = L"builtin/highContrast";
     Check(Common::Settings::SaveSettings(appId, staleWriter) == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH),
           L"settings CAS: stale writer cannot replace a newer file",
           success);
     Common::Settings::Settings afterConflict{};
-    Check(Common::Settings::TryLoadSettingsNoRecovery(appId, afterConflict) == S_OK &&
-              afterConflict.theme.currentThemeId == L"builtin/dark",
+    Check(Common::Settings::TryLoadSettingsNoRecovery(appId, afterConflict) == S_OK && afterConflict.theme.currentThemeId == L"builtin/dark",
           L"settings CAS: rejected writer leaves the committed document intact",
           success);
 
@@ -675,20 +663,15 @@ void TestSettingsStoreConflictAndPrimitiveGuards(bool& success)
     Check(WriteTestBytes(settingsPath, kOverflowFixture), L"settings uint32: overflow fixture is written", success);
     Common::Settings::Settings overflowLoaded{};
     const HRESULT overflowLoadHr = Common::Settings::TryLoadSettingsNoRecovery(appId, overflowLoaded);
-    const auto overflowWindow = overflowLoaded.windows.find(L"MainWindow");
+    const auto overflowWindow    = overflowLoaded.windows.find(L"MainWindow");
     Check(overflowLoadHr == S_OK && overflowWindow != overflowLoaded.windows.end() && ! overflowWindow->second.dpi.has_value(),
           L"settings uint32: values above UINT32_MAX are rejected instead of truncated",
           success);
 
     constexpr std::string_view kInvalidFixture = "{ invalid json";
     Check(WriteTestBytes(settingsPath, kInvalidFixture), L"settings recovery: invalid fixture is written", success);
-    wil::unique_hfile replacementBlocker(CreateFileW(settingsPath.c_str(),
-                                                     GENERIC_READ,
-                                                     FILE_SHARE_READ | FILE_SHARE_WRITE,
-                                                     nullptr,
-                                                     OPEN_EXISTING,
-                                                     FILE_ATTRIBUTE_NORMAL,
-                                                     nullptr));
+    wil::unique_hfile replacementBlocker(
+        CreateFileW(settingsPath.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
     Check(static_cast<bool>(replacementBlocker), L"settings recovery: source replacement is denied for the backup-failure drill", success);
     Common::Settings::Settings recovered{};
     Common::Settings::SettingsLoadRecoveryInfo recovery{};
@@ -697,8 +680,7 @@ void TestSettingsStoreConflictAndPrimitiveGuards(bool& success)
               recovered.persistence.savePermission == Common::Settings::SettingsSavePermission::ExplicitReplacementRequired,
           L"settings recovery: failed backup leaves defaults save-blocked",
           success);
-    Check(Common::Settings::SaveSettings(appId, recovered) == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) &&
-              ReadTestBytes(settingsPath) == kInvalidFixture,
+    Check(Common::Settings::SaveSettings(appId, recovered) == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) && ReadTestBytes(settingsPath) == kInvalidFixture,
           L"settings recovery: automatic save cannot destroy the only recovery artifact",
           success);
 }
@@ -707,13 +689,11 @@ void TestConnectionProfileIdentityGuards(bool& success)
 {
     const std::wstring appId = std::format(L"RedSalamanderConnectionIdentity-{}-{}", GetCurrentProcessId(), GetTickCount64());
     CleanupSettingsTestArtifacts(appId);
-    const auto cleanup = wil::scope_exit([&]() noexcept { CleanupSettingsTestArtifacts(appId); });
+    const auto cleanup                       = wil::scope_exit([&]() noexcept { CleanupSettingsTestArtifacts(appId); });
     const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(appId);
 
     std::wstring generatedId;
-    Check(Common::Settings::CreateConnectionProfileId(generatedId) == S_OK,
-          L"connection identity: shared ID generator succeeds",
-          success);
+    Check(Common::Settings::CreateConnectionProfileId(generatedId) == S_OK, L"connection identity: shared ID generator succeeds", success);
     std::wstring normalizedGeneratedId;
     Check(Common::Settings::NormalizeConnectionProfileId(generatedId, normalizedGeneratedId) == S_OK && normalizedGeneratedId == generatedId,
           L"connection identity: generated IDs are canonical lowercase GUIDs",
@@ -773,9 +753,7 @@ void TestConnectionProfileIdentityGuards(bool& success)
               success);
     }
 
-    Check(Common::Settings::SaveSettings(appId, migrated) == S_OK,
-          L"connection identity: the explicit migration can be persisted with source CAS",
-          success);
+    Check(Common::Settings::SaveSettings(appId, migrated) == S_OK, L"connection identity: the explicit migration can be persisted with source CAS", success);
     Common::Settings::Settings afterMigration{};
     Check(Common::Settings::TryLoadSettingsNoRecovery(appId, afterMigration) == S_OK && afterMigration.connections.has_value() &&
               afterMigration.connections->items.size() == 2u,
@@ -809,12 +787,10 @@ void TestSettingsStoreCrossProcessCas(const std::filesystem::path& executablePat
     Check(Common::Settings::SaveSettings(appId, seed) == S_OK, L"settings cross-process CAS: baseline save succeeds", success);
 
     Common::Settings::Settings parentWriter{};
-    Check(Common::Settings::TryLoadSettingsNoRecovery(appId, parentWriter) == S_OK,
-          L"settings cross-process CAS: parent loads the baseline revision",
-          success);
+    Check(Common::Settings::TryLoadSettingsNoRecovery(appId, parentWriter) == S_OK, L"settings cross-process CAS: parent loads the baseline revision", success);
 
     const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(appId);
-    std::filesystem::path readyPath = settingsPath;
+    std::filesystem::path readyPath          = settingsPath;
     readyPath += L".child-ready";
     std::filesystem::path goPath = settingsPath;
     goPath += L".child-go";
@@ -887,9 +863,7 @@ int wmain(int argc, wchar_t** argv)
 
     std::array<wchar_t, 32768> executablePath{};
     const DWORD executableLength = GetModuleFileNameW(nullptr, executablePath.data(), static_cast<DWORD>(executablePath.size()));
-    Check(executableLength > 0u && executableLength < executablePath.size(),
-          L"settings cross-process CAS: current test executable path is available",
-          success);
+    Check(executableLength > 0u && executableLength < executablePath.size(), L"settings cross-process CAS: current test executable path is available", success);
     if (executableLength > 0u && executableLength < executablePath.size())
     {
         TestSettingsStoreCrossProcessCas(std::filesystem::path(std::wstring(executablePath.data(), executableLength)), success);

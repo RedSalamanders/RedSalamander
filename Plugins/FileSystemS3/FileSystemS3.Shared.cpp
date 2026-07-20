@@ -14,7 +14,9 @@ class AwsSdkRuntime final
 public:
     using Action = void (*)(void* cookie);
 
-    AwsSdkRuntime(Action initialize, Action shutdown, void* cookie) noexcept : _initialize(initialize), _shutdown(shutdown), _cookie(cookie) {}
+    AwsSdkRuntime(Action initialize, Action shutdown, void* cookie) noexcept : _initialize(initialize), _shutdown(shutdown), _cookie(cookie)
+    {
+    }
 
     [[nodiscard]] HRESULT Acquire() noexcept
     {
@@ -46,7 +48,7 @@ public:
                 break;
             }
 
-            const BOOL waited = SleepConditionVariableSRW(&_changed, &_lock, INFINITE, 0u);
+            const BOOL waited     = SleepConditionVariableSRW(&_changed, &_lock, INFINITE, 0u);
             const DWORD waitError = waited != FALSE ? ERROR_SUCCESS : GetLastError();
             ReleaseSRWLockExclusive(&_lock);
             if (waited == FALSE)
@@ -179,15 +181,15 @@ private:
         ReleaseSRWLockExclusive(&_lock);
     }
 
-    SRWLOCK _lock = SRWLOCK_INIT;
+    SRWLOCK _lock               = SRWLOCK_INIT;
     CONDITION_VARIABLE _changed = CONDITION_VARIABLE_INIT;
-    Action _initialize = nullptr;
-    Action _shutdown   = nullptr;
-    void* _cookie      = nullptr;
-    State _state       = State::Uninitialized;
-    unsigned long _refCount = 0u;
-    HRESULT _failureStatus  = E_FAIL;
-    bool _shutdownRequested = false;
+    Action _initialize          = nullptr;
+    Action _shutdown            = nullptr;
+    void* _cookie               = nullptr;
+    State _state                = State::Uninitialized;
+    unsigned long _refCount     = 0u;
+    HRESULT _failureStatus      = E_FAIL;
+    bool _shutdownRequested     = false;
 };
 
 [[nodiscard]] Aws::SDKOptions& AwsOptions() noexcept
@@ -443,8 +445,7 @@ void RunDebugAwsSdkLifetimeContractSelfTest(unsigned int& passed, unsigned int& 
 
 [[nodiscard]] std::optional<std::wstring> TryGetJsonString(yyjson_val* root, const char* key) noexcept
 {
-    const Common::Json::MemberResult<std::wstring> value =
-        Common::Json::GetUtf16StringMemberStrict(root, key, Common::Json::MemberRequirement::Optional);
+    const Common::Json::MemberResult<std::wstring> value = Common::Json::GetUtf16StringMemberStrict(root, key, Common::Json::MemberRequirement::Optional);
     return value.HasValue() ? std::optional<std::wstring>{value.value} : std::nullopt;
 }
 
@@ -460,8 +461,7 @@ void RunDebugAwsSdkLifetimeContractSelfTest(unsigned int& passed, unsigned int& 
 
 [[nodiscard]] std::optional<bool> TryGetJsonBool(yyjson_val* root, const char* key) noexcept
 {
-    const Common::Json::MemberResult<bool> value =
-        Common::Json::GetBoolMember(root, key, Common::Json::MemberRequirement::Optional);
+    const Common::Json::MemberResult<bool> value = Common::Json::GetBoolMember(root, key, Common::Json::MemberRequirement::Optional);
     return value.HasValue() ? std::optional<bool>{value.value} : std::nullopt;
 }
 

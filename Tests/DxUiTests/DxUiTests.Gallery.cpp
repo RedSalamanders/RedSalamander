@@ -188,15 +188,15 @@ struct GalleryTheme
     const float hue           = static_cast<float>(hash % 360u);
     const D2D1::ColorF accent = ColorFromHSV(hue, 0.85f, dark ? 0.80f : 0.90f, 1.0f);
 
-    AppTheme appTheme               = ResolveAppTheme(dark ? ThemeMode::Dark : ThemeMode::Light, seed, accent);
-    appTheme.requestedMode          = ThemeMode::Rainbow;
-    appTheme.folderView.rainbowMode = true;
-    appTheme.folderView.darkBase    = dark;
+    AppTheme appTheme                                              = ResolveAppTheme(dark ? ThemeMode::Dark : ThemeMode::Light, seed, accent);
+    appTheme.requestedMode                                         = ThemeMode::Rainbow;
+    appTheme.folderView.rainbowMode                                = true;
+    appTheme.folderView.darkBase                                   = dark;
     appTheme.folderView.itemBackgroundSelectedUsesInheritedRainbow = true;
-    appTheme.navigationView.rainbowMode = true;
-    appTheme.navigationView.darkBase    = dark;
-    appTheme.menu.rainbowMode            = true;
-    appTheme.menu.darkBase               = dark;
+    appTheme.navigationView.rainbowMode                            = true;
+    appTheme.navigationView.darkBase                               = dark;
+    appTheme.menu.rainbowMode                                      = true;
+    appTheme.menu.darkBase                                         = dark;
 
     ThemePalette palette  = MakeAppThemeDxPalette(appTheme);
     palette.reducedMotion = true;
@@ -221,7 +221,7 @@ struct GalleryTheme
 
     for (const auto& theme : customThemes)
     {
-        std::wstring slug = theme.id;
+        std::wstring slug                       = theme.id;
         constexpr std::wstring_view kUserPrefix = L"user/";
         if (slug.starts_with(kUserPrefix))
         {

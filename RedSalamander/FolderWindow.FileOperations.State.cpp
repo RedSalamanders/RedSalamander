@@ -1,5 +1,5 @@
-#include "FolderWindow.FileOperationsInternal.h"
 #include "FolderWindow.FileOperations.State.Private.h"
+#include "FolderWindow.FileOperationsInternal.h"
 
 #include "ConnectionProfileUtils.h"
 #include "FileSystemPathIdentity.h"
@@ -41,10 +41,7 @@ namespace FolderWindowFileOperationsStateInternal
 {
 using Task = FolderWindow::FileOperationState::Task;
 
-[[nodiscard]] HRESULT AdvanceValidatedFileInfoEntry(FileInfo* entry,
-                                                    const std::byte* bufferBase,
-                                                    const std::byte* bufferEnd,
-                                                    FileInfo*& nextOut) noexcept;
+[[nodiscard]] HRESULT AdvanceValidatedFileInfoEntry(FileInfo* entry, const std::byte* bufferBase, const std::byte* bufferEnd, FileInfo*& nextOut) noexcept;
 [[nodiscard]] HRESULT TryGetValidatedFileInfoName(FileInfo* entry,
                                                   const std::byte* bufferBase,
                                                   const std::byte* bufferEnd,
@@ -272,8 +269,7 @@ void AtomicMax(std::atomic<uint64_t>& target, uint64_t value) noexcept
     return false;
 }
 
-[[nodiscard]] bool ConsumeBridgeCounterForSelfTest(std::atomic<unsigned long>& remainingCount,
-                                                   std::atomic<unsigned long>& attemptCount) noexcept
+[[nodiscard]] bool ConsumeBridgeCounterForSelfTest(std::atomic<unsigned long>& remainingCount, std::atomic<unsigned long>& attemptCount) noexcept
 {
     unsigned long remaining = remainingCount.load(std::memory_order_acquire);
     while (remaining > 0u)
@@ -288,9 +284,7 @@ void AtomicMax(std::atomic<uint64_t>& target, uint64_t value) noexcept
     return false;
 }
 
-[[nodiscard]] HRESULT MaybeInjectHostileBridgeChildNamesForSelfTest(FileInfo* head,
-                                                                    std::byte* bufferBase,
-                                                                    std::byte* bufferEnd) noexcept
+[[nodiscard]] HRESULT MaybeInjectHostileBridgeChildNamesForSelfTest(FileInfo* head, std::byte* bufferBase, std::byte* bufferEnd) noexcept
 {
     if (! g_fileOpsBridgeInjectHostileChildNames.exchange(false, std::memory_order_acq_rel))
     {
@@ -319,11 +313,11 @@ void AtomicMax(std::atomic<uint64_t>& target, uint64_t value) noexcept
             return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
         }
 
-        const auto* entryBytes = reinterpret_cast<const std::byte*>(entry);
-        const size_t available = static_cast<size_t>(bufferEnd - entryBytes);
-        const size_t recordBytes = entry->NextEntryOffset != 0u ? static_cast<size_t>(entry->NextEntryOffset) : available;
+        const auto* entryBytes       = reinterpret_cast<const std::byte*>(entry);
+        const size_t available       = static_cast<size_t>(bufferEnd - entryBytes);
+        const size_t recordBytes     = entry->NextEntryOffset != 0u ? static_cast<size_t>(entry->NextEntryOffset) : available;
         constexpr size_t kNameOffset = offsetof(FileInfo, FileName);
-        const size_t hostileBytes = hostileName.size() * sizeof(wchar_t);
+        const size_t hostileBytes    = hostileName.size() * sizeof(wchar_t);
         if (recordBytes < kNameOffset || hostileBytes > recordBytes - kNameOffset)
         {
             return HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER);
@@ -332,7 +326,7 @@ void AtomicMax(std::atomic<uint64_t>& target, uint64_t value) noexcept
         std::memcpy(entry->FileName, hostileName.data(), hostileBytes);
         entry->FileNameSize = static_cast<unsigned long>(hostileBytes);
 
-        FileInfo* next = nullptr;
+        FileInfo* next          = nullptr;
         const HRESULT advanceHr = AdvanceValidatedFileInfoEntry(entry, bufferBase, bufferEnd, next);
         if (advanceHr == S_FALSE)
         {
@@ -350,9 +344,7 @@ void AtomicMax(std::atomic<uint64_t>& target, uint64_t value) noexcept
     return S_OK;
 }
 
-[[nodiscard]] HRESULT MaybeInjectBridgeFileReparseForSelfTest(FileInfo* head,
-                                                              std::byte* bufferBase,
-                                                              std::byte* bufferEnd) noexcept
+[[nodiscard]] HRESULT MaybeInjectBridgeFileReparseForSelfTest(FileInfo* head, std::byte* bufferBase, std::byte* bufferEnd) noexcept
 {
     if (! ConsumeBridgeCounterForSelfTest(g_fileOpsBridgeInjectFileReparseCount, g_fileOpsBridgeInjectFileReparseAttempts))
     {
@@ -557,11 +549,10 @@ struct SelfTestBridgeFileWriter final : IFileWriter
             return E_POINTER;
         }
 
-        if (bytesToWrite > 0u &&
-            ConsumeBridgeCounterForSelfTest(g_fileOpsBridgeUnderConsumeNextWriteCount, g_fileOpsBridgeUnderConsumeNextWriteAttempts))
+        if (bytesToWrite > 0u && ConsumeBridgeCounterForSelfTest(g_fileOpsBridgeUnderConsumeNextWriteCount, g_fileOpsBridgeUnderConsumeNextWriteAttempts))
         {
             unsigned long persistedBytes = 0;
-            const HRESULT hr = _inner->Write(buffer, bytesToWrite - 1u, &persistedBytes);
+            const HRESULT hr             = _inner->Write(buffer, bytesToWrite - 1u, &persistedBytes);
             if (SUCCEEDED(hr))
             {
                 *bytesWritten = bytesToWrite;
@@ -797,7 +788,7 @@ void MaybeMutateBridgeDestinationBeforeMoveCleanupForSelfTest(IFileSystemIO& des
     constexpr const wchar_t* kMutationPayloadEnv = L"REDSALAMANDER_FILEOPS_BRIDGE_MUTATE_DESTINATION_BEFORE_MOVE_CLEANUP_PAYLOAD";
 
     const std::optional<std::wstring> configured = TryReadEnvironmentVariableForSelfTest(kMutationPathEnv);
-    auto normalizeForCompare = [](std::wstring value) noexcept
+    auto normalizeForCompare                     = [](std::wstring value) noexcept
     {
         std::replace(value.begin(), value.end(), L'/', L'\\');
         return value;
@@ -2143,8 +2134,8 @@ constexpr uint64_t kCrossFsBridgeBufferBudgetBytes       = 256ull * 1024ull * 10
 class CrossFsBridgeBufferBudget final
 {
 public:
-    CrossFsBridgeBufferBudget() = default;
-    ~CrossFsBridgeBufferBudget() = default;
+    CrossFsBridgeBufferBudget()                                            = default;
+    ~CrossFsBridgeBufferBudget()                                           = default;
     CrossFsBridgeBufferBudget(const CrossFsBridgeBufferBudget&)            = delete;
     CrossFsBridgeBufferBudget& operator=(const CrossFsBridgeBufferBudget&) = delete;
     CrossFsBridgeBufferBudget(CrossFsBridgeBufferBudget&&)                 = delete;
@@ -2242,8 +2233,8 @@ public:
 private:
     uint64_t _bytes = 0u;
 };
-constexpr uint64_t kDefaultBandwidthLimitBytesPerSecond  = 0;
-constexpr size_t kBridgeAdmissionQueueLimit              = 16u;
+constexpr uint64_t kDefaultBandwidthLimitBytesPerSecond = 0;
+constexpr size_t kBridgeAdmissionQueueLimit             = 16u;
 
 [[nodiscard]] size_t GetBridgeAdmissionQueueLimit() noexcept
 {
@@ -2332,8 +2323,7 @@ constexpr size_t kBridgeAdmissionQueueLimit              = 16u;
 {
     constexpr size_t kMaximumWindowsComponentLength = 255u;
     if (name.empty() || name.size() > kMaximumWindowsComponentLength || name.back() == L' ' || name.back() == L'.' ||
-        name.find_first_of(L":*?\"<>|") != std::wstring_view::npos ||
-        IsReservedWindowsBridgeChildName(name))
+        name.find_first_of(L":*?\"<>|") != std::wstring_view::npos || IsReservedWindowsBridgeChildName(name))
     {
         return HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
     }
@@ -2350,8 +2340,7 @@ constexpr size_t kBridgeAdmissionQueueLimit              = 16u;
     }
 
     const std::optional<FileSystemPathIdentity> identity = TryParseFileSystemPathIdentityContract(jsonUtf8, pluginId);
-    return identity.has_value() && identity->pathTextStableIdentity &&
-           identity->componentComparison == FileSystemPathComponentComparison::OrdinalIgnoreCase;
+    return identity.has_value() && identity->pathTextStableIdentity && identity->componentComparison == FileSystemPathComponentComparison::OrdinalIgnoreCase;
 }
 
 struct BridgeOrdinalIgnoreCaseLess final
@@ -2513,8 +2502,8 @@ struct AdaptiveBridgeTuning final
         }
 
         const unsigned long hintedBytes = ClampCrossFsBridgeBufferBytes(hints.preferredBufferBytes);
-        sawBufferHint                  = true;
-        resolvedBytes = (std::max)(resolvedBytes, hintedBytes);
+        sawBufferHint                   = true;
+        resolvedBytes                   = (std::max)(resolvedBytes, hintedBytes);
     };
 
     applyHints(sourceFileSystem, sourcePath, FILESYSTEM_TRANSFER_SOURCE_READ);
@@ -2525,8 +2514,7 @@ struct AdaptiveBridgeTuning final
         // this avoids silently disabling WAN/cloud tuning for every non-default preference value.
         tuning.bufferBytes = resolvedBytes;
     }
-    else if (tuning.latencyClass >= FILESYSTEM_TRANSFER_LATENCY_WAN ||
-             (tuning.flags & FILESYSTEM_TRANSFER_HINT_PREFERS_LARGE_BUFFERS) != 0u)
+    else if (tuning.latencyClass >= FILESYSTEM_TRANSFER_LATENCY_WAN || (tuning.flags & FILESYSTEM_TRANSFER_HINT_PREFERS_LARGE_BUFFERS) != 0u)
     {
         tuning.bufferBytes = (std::max)(configuredBytes, ClampCrossFsBridgeBufferBytes(8u * 1024u * 1024u));
     }
@@ -3908,8 +3896,7 @@ using ConflictAction = Task::ConflictAction;
     return result;
 }
 
-[[nodiscard]] Task::ConflictPromptState::ItemMetadata ReadConflictItemMetadata(
-    IFileSystemIO* io, std::wstring_view path, bool useWin32Metadata) noexcept
+[[nodiscard]] Task::ConflictPromptState::ItemMetadata ReadConflictItemMetadata(IFileSystemIO* io, std::wstring_view path, bool useWin32Metadata) noexcept
 {
     Task::ConflictPromptState::ItemMetadata result{};
     if (path.empty())
@@ -3931,11 +3918,11 @@ using ConflictAction = Task::ConflictAction;
             return result;
         }
 
-        result.available     = true;
-        result.attributes    = data.dwFileAttributes;
-        result.isDirectory   = (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-        const uint64_t lastWriteTime = (static_cast<uint64_t>(data.ftLastWriteTime.dwHighDateTime) << 32) |
-                                       static_cast<uint64_t>(data.ftLastWriteTime.dwLowDateTime);
+        result.available   = true;
+        result.attributes  = data.dwFileAttributes;
+        result.isDirectory = (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+        const uint64_t lastWriteTime =
+            (static_cast<uint64_t>(data.ftLastWriteTime.dwHighDateTime) << 32) | static_cast<uint64_t>(data.ftLastWriteTime.dwLowDateTime);
         result.lastWriteTime = static_cast<__int64>(lastWriteTime);
         if (! result.isDirectory)
         {
@@ -3951,7 +3938,7 @@ using ConflictAction = Task::ConflictAction;
     }
 
     FileSystemBasicInformation basic{};
-    basic.sizeBytes = sizeof(basic);
+    basic.sizeBytes       = sizeof(basic);
     const HRESULT basicHr = io->GetFileBasicInformation(pathText.c_str(), &basic);
     if (SUCCEEDED(basicHr))
     {
@@ -4139,11 +4126,11 @@ struct ConflictPromptBeginResult
                                                             bool ignoreCachedDecision) noexcept
 {
     auto [promptSourcePath, promptDestinationPath] = GetMostSpecificPathsForDiagnostics(task, perItemCookie, sourcePath, destinationPath);
-    const DWORD ownerThreadId          = GetCurrentThreadId();
-    const bool sourceUsesWin32Metadata = NavigationLocation::EqualsNoCase(task._sourcePluginId, L"builtin/file-system");
-    const bool destinationUsesWin32Metadata = NavigationLocation::EqualsNoCase(task._destinationPluginId, L"builtin/file-system") ||
-                                              (task._destinationPluginId.empty() && ! task._destinationFileSystem && sourceUsesWin32Metadata);
-    const bool deferLocalExistsOverwrite = bucket == ConflictBucket::Exists && sourceUsesWin32Metadata && destinationUsesWin32Metadata;
+    const DWORD ownerThreadId                      = GetCurrentThreadId();
+    const bool sourceUsesWin32Metadata             = NavigationLocation::EqualsNoCase(task._sourcePluginId, L"builtin/file-system");
+    const bool destinationUsesWin32Metadata        = NavigationLocation::EqualsNoCase(task._destinationPluginId, L"builtin/file-system") ||
+                                                     (task._destinationPluginId.empty() && ! task._destinationFileSystem && sourceUsesWin32Metadata);
+    const bool deferLocalExistsOverwrite           = bucket == ConflictBucket::Exists && sourceUsesWin32Metadata && destinationUsesWin32Metadata;
 
     std::unique_lock lock(task._conflictArbiter.mutex);
 
@@ -4172,14 +4159,7 @@ struct ConflictPromptBeginResult
         }
     }
 
-    SetConflictPromptLocked(task,
-                            bucket,
-                            status,
-                            promptSourcePath,
-                            promptDestinationPath,
-                            allowRetry,
-                            retryFailed,
-                            deferLocalExistsOverwrite);
+    SetConflictPromptLocked(task, bucket, status, promptSourcePath, promptDestinationPath, allowRetry, retryFailed, deferLocalExistsOverwrite);
     lock.unlock();
 
     task.LogDiagnostic(FolderWindow::FileOperationState::DiagnosticSeverity::Warning,
@@ -4189,23 +4169,18 @@ struct ConflictPromptBeginResult
                        promptSourcePath,
                        promptDestinationPath);
 
-    const uint64_t metadataStartUs = PerfNowUs();
+    const uint64_t metadataStartUs             = PerfNowUs();
     const wil::com_ptr<IFileSystemIO> sourceIo = QueryFileSystemIo(task._fileSystem.get());
     wil::com_ptr<IFileSystemIO> destinationIo  = task._destinationFileSystem ? QueryFileSystemIo(task._destinationFileSystem.get()) : sourceIo;
-    const Task::ConflictPromptState::ItemMetadata sourceMetadata =
-        ReadConflictItemMetadata(sourceIo.get(), promptSourcePath, sourceUsesWin32Metadata);
+    const Task::ConflictPromptState::ItemMetadata sourceMetadata = ReadConflictItemMetadata(sourceIo.get(), promptSourcePath, sourceUsesWin32Metadata);
     const Task::ConflictPromptState::ItemMetadata destinationMetadata =
         ReadConflictItemMetadata(destinationIo.get(), promptDestinationPath, destinationUsesWin32Metadata);
     const uint64_t metadataUs = PerfElapsedUs(metadataStartUs);
     task._perf.conflictMetadataUs.fetch_add(metadataUs, std::memory_order_relaxed);
     if (Debug::Perf::IsCaptureEnabled())
     {
-        Debug::Perf::Emit(L"FileOps.Conflict.MetadataPromptUs",
-                          L"",
-                          metadataUs,
-                          sourceMetadata.available ? 1u : 0u,
-                          destinationMetadata.available ? 1u : 0u,
-                          S_OK);
+        Debug::Perf::Emit(
+            L"FileOps.Conflict.MetadataPromptUs", L"", metadataUs, sourceMetadata.available ? 1u : 0u, destinationMetadata.available ? 1u : 0u, S_OK);
     }
 
     lock.lock();
@@ -4215,9 +4190,9 @@ struct ConflictPromptBeginResult
     {
         livePrompt.sourceMetadata      = sourceMetadata;
         livePrompt.destinationMetadata = destinationMetadata;
-        const bool suppressExistsOverwrite = bucket == ConflictBucket::Exists && sourceUsesWin32Metadata && destinationUsesWin32Metadata &&
-                                             (! sourceMetadata.available || ! destinationMetadata.available ||
-                                              (! sourceMetadata.isDirectory && destinationMetadata.isDirectory));
+        const bool suppressExistsOverwrite =
+            bucket == ConflictBucket::Exists && sourceUsesWin32Metadata && destinationUsesWin32Metadata &&
+            (! sourceMetadata.available || ! destinationMetadata.available || (! sourceMetadata.isDirectory && destinationMetadata.isDirectory));
         const ConflictActionLayout layout = BuildConflictActionLayout(bucket, allowRetry, suppressExistsOverwrite);
         livePrompt.actions                = layout.actions;
         livePrompt.actionCount            = layout.actionCount;
@@ -4850,10 +4825,10 @@ private:
 
     void workerMain(std::stop_token stopToken) noexcept
     {
-        [[maybe_unused]] auto coInit = wil::CoInitializeEx_failfast();
+        [[maybe_unused]] auto coInit                  = wil::CoInitializeEx_failfast();
         PerItemTaskScheduler* const previousScheduler = s_currentScheduler;
-        s_currentScheduler                              = this;
-        const auto restoreScheduler = wil::scope_exit([&]() noexcept { s_currentScheduler = previousScheduler; });
+        s_currentScheduler                            = this;
+        const auto restoreScheduler                   = wil::scope_exit([&]() noexcept { s_currentScheduler = previousScheduler; });
 
         for (;;)
         {
@@ -5047,7 +5022,7 @@ bool RunFileOpsPerItemSchedulerNestedSaturationSelfTestForSelfTestInternal(Folde
 
     struct SaturationState final
     {
-        SaturationState()                                 = default;
+        SaturationState()                                  = default;
         SaturationState(const SaturationState&)            = delete;
         SaturationState(SaturationState&&)                 = delete;
         SaturationState& operator=(const SaturationState&) = delete;
@@ -5253,15 +5228,13 @@ bool IsFileOpsCircuitBreakerTransientErrorForSelfTest(DWORD error) noexcept
     return IsCircuitBreakerTransientError(error);
 }
 
-bool DebugReadFileOpsConflictMetadataForSelfTest(IFileSystemIO* io,
-                                                 std::wstring_view path,
-                                                 FileOpsConflictMetadataDebugResult& out) noexcept
+bool DebugReadFileOpsConflictMetadataForSelfTest(IFileSystemIO* io, std::wstring_view path, FileOpsConflictMetadataDebugResult& out) noexcept
 {
     const Task::ConflictPromptState::ItemMetadata metadata = ReadConflictItemMetadata(io, path, false);
-    out.available                                         = metadata.available;
-    out.isDirectory                                       = metadata.isDirectory;
-    out.attributes                                        = metadata.attributes;
-    out.lastWriteTime                                     = metadata.lastWriteTime;
+    out.available                                          = metadata.available;
+    out.isDirectory                                        = metadata.isDirectory;
+    out.attributes                                         = metadata.attributes;
+    out.lastWriteTime                                      = metadata.lastWriteTime;
     return metadata.available;
 }
 #endif
@@ -6846,22 +6819,14 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
         Debug::Perf::Emit(L"FileOps.Queue.CancelWhileWaiting", L"", 0u, perfStats.queueCancelWhileWaiting, 0u, hr);
         Debug::Perf::Emit(L"FileOps.Queue.DepthOnEnter", L"", 0u, perfStats.queueDepthOnEnter, 0u, hr);
         Debug::Perf::Emit(L"FileOps.Queue.ActiveOperations", L"", 0u, perfStats.queueActiveOperations, 0u, hr);
-        Debug::Perf::Emit(
-            L"FileOps.Scheduler.WaitForWorkUs", L"", perfStats.schedulerWaitForWorkUs.load(std::memory_order_acquire), 0u, 0u, hr);
-        Debug::Perf::Emit(
-            L"FileOps.Scheduler.ProcessIndexUs", L"", perfStats.schedulerProcessIndexUs.load(std::memory_order_acquire), 0u, 0u, hr);
-        Debug::Perf::Emit(
-            L"FileOps.Scheduler.DequeueAttempts", L"", 0u, perfStats.schedulerDequeueAttempts.load(std::memory_order_acquire), 0u, hr);
-        Debug::Perf::Emit(
-            L"FileOps.Scheduler.DequeueSuccess", L"", 0u, perfStats.schedulerDequeueSuccess.load(std::memory_order_acquire), 0u, hr);
+        Debug::Perf::Emit(L"FileOps.Scheduler.WaitForWorkUs", L"", perfStats.schedulerWaitForWorkUs.load(std::memory_order_acquire), 0u, 0u, hr);
+        Debug::Perf::Emit(L"FileOps.Scheduler.ProcessIndexUs", L"", perfStats.schedulerProcessIndexUs.load(std::memory_order_acquire), 0u, 0u, hr);
+        Debug::Perf::Emit(L"FileOps.Scheduler.DequeueAttempts", L"", 0u, perfStats.schedulerDequeueAttempts.load(std::memory_order_acquire), 0u, hr);
+        Debug::Perf::Emit(L"FileOps.Scheduler.DequeueSuccess", L"", 0u, perfStats.schedulerDequeueSuccess.load(std::memory_order_acquire), 0u, hr);
         Debug::Perf::Emit(
             L"FileOps.Conflict.WaitUs", L"", perfStats.conflictWaitUs, progressSnapshot.completedBytes, progressSnapshot.itemCompletedCallbackCount, hr);
-        Debug::Perf::Emit(L"FileOps.Conflict.MetadataUs",
-                          L"",
-                          perfStats.conflictMetadataUs.load(std::memory_order_acquire),
-                          perfStats.conflictPromptCount,
-                          0u,
-                          hr);
+        Debug::Perf::Emit(
+            L"FileOps.Conflict.MetadataUs", L"", perfStats.conflictMetadataUs.load(std::memory_order_acquire), perfStats.conflictPromptCount, 0u, hr);
         Debug::Perf::Emit(L"FileOps.Conflict.ConvergenceWaitUs",
                           L"",
                           perfStats.conflictConvergenceWaitUs,
@@ -7387,8 +7352,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
         }
 #ifdef ENABLE_TESTS
         const int reparsePolicyOverride = g_fileOpsBridgeReparsePolicyOverride.load(std::memory_order_acquire);
-        if (reparsePolicyOverride >= static_cast<int>(ReparsePointPolicy::CopyReparse) &&
-            reparsePolicyOverride <= static_cast<int>(ReparsePointPolicy::Skip))
+        if (reparsePolicyOverride >= static_cast<int>(ReparsePointPolicy::CopyReparse) && reparsePolicyOverride <= static_cast<int>(ReparsePointPolicy::Skip))
         {
             reparsePointPolicy = static_cast<ReparsePointPolicy>(reparsePolicyOverride);
         }
@@ -7698,8 +7662,8 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
             void* cookie                                       = nullptr;
             DWORD sourceRootAttributesHint                     = 0;
             ReparsePointPolicy reparsePointPolicy              = ReparsePointPolicy::CopyReparse;
-            bool destinationUsesOrdinalIgnoreCaseComponents     = false;
-            bool destinationUsesWindowsChildNameRules           = false;
+            bool destinationUsesOrdinalIgnoreCaseComponents    = false;
+            bool destinationUsesWindowsChildNameRules          = false;
 
             // Total bytes is best-effort: if unknown, keep 0.
             uint64_t totalBytes                         = 0;
@@ -7723,11 +7687,11 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                 CopiedEntryKind kind = CopiedEntryKind::File;
                 std::wstring sourcePath;
                 std::wstring destinationPath;
-                uint64_t sizeBytes = 0;
-                bool hasKnownSize  = false;
+                uint64_t sizeBytes   = 0;
+                bool hasKnownSize    = false;
                 uint64_t contentHash = 0;
                 bool hasContentHash  = false;
-                bool hasBasicInfo  = false;
+                bool hasBasicInfo    = false;
                 FileSystemBasicInformation basicInfo{};
             };
 
@@ -7760,9 +7724,9 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
 
             CrossFsBridgeBufferLease bufferBudgetLease;
             std::unique_ptr<std::byte[]> buffer;
-            unsigned long bufferBytes = 0;
-            HRESULT bufferAllocationHr = S_OK;
-            DWORD progressPeriodMs    = 200u;
+            unsigned long bufferBytes     = 0;
+            HRESULT bufferAllocationHr    = S_OK;
+            DWORD progressPeriodMs        = 200u;
             uint32_t transferLatencyClass = FILESYSTEM_TRANSFER_LATENCY_UNKNOWN;
             uint32_t transferHintFlags    = FILESYSTEM_TRANSFER_HINT_NONE;
 
@@ -7796,13 +7760,13 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                   totalBytes(totalBytesIn)
             {
                 destinationUsesOrdinalIgnoreCaseComponents = UsesOrdinalIgnoreCaseComponents(destinationFs, task._destinationPluginId);
-                destinationUsesWindowsChildNameRules = destinationUsesOrdinalIgnoreCaseComponents ||
-                                                       NavigationLocation::EqualsNoCase(task._destinationPluginId, L"builtin/file-system") ||
-                                                       NavigationLocation::EqualsNoCase(task._destinationPluginId, L"builtin/file-system-dummy");
-                const uint64_t initialBandwidth      = task._desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
-                options.sizeBytes                    = sizeof(FileSystemOptions);
-                options.bandwidthLimitBytesPerSecond = initialBandwidth;
-                options.copyMoveMaxConcurrency       = std::min(sourcePluginMaxConcurrencyBudget, destinationPluginMaxConcurrencyBudget);
+                destinationUsesWindowsChildNameRules       = destinationUsesOrdinalIgnoreCaseComponents ||
+                                                             NavigationLocation::EqualsNoCase(task._destinationPluginId, L"builtin/file-system") ||
+                                                             NavigationLocation::EqualsNoCase(task._destinationPluginId, L"builtin/file-system-dummy");
+                const uint64_t initialBandwidth            = task._desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
+                options.sizeBytes                          = sizeof(FileSystemOptions);
+                options.bandwidthLimitBytesPerSecond       = initialBandwidth;
+                options.copyMoveMaxConcurrency             = std::min(sourcePluginMaxConcurrencyBudget, destinationPluginMaxConcurrencyBudget);
                 bandwidthLimitBytesPerSecond.store(initialBandwidth, std::memory_order_release);
 
                 const AdaptiveBridgeTuning tuning = ResolveAdaptiveCrossFsBridgeTuning(
@@ -8062,20 +8026,20 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
 
                 const uint64_t throughputBytesPerSecond =
                     (perf.copyUs > 0 && transferredBytes > 0) ? static_cast<uint64_t>((transferredBytes * 1000000ull) / perf.copyUs) : 0ull;
-                const std::wstring detail =
-                    std::format(L"source={} destination={} bytes={} bufferBytes={} progressPeriodMs={} latencyClass={} hintFlags=0x{:X} progressCalls={} readerWaitUs={} writerWaitUs={} readUs={} writeUs={}",
-                                sourcePath,
-                                destinationPath,
-                                transferredBytes,
-                                bufferBytes,
-                                progressPeriodMs,
-                                transferLatencyClass,
-                                transferHintFlags,
-                                perf.progressCalls,
-                                perf.readerWaitUs,
-                                perf.writerWaitUs,
-                                perf.readUs,
-                                perf.writeUs);
+                const std::wstring detail = std::format(L"source={} destination={} bytes={} bufferBytes={} progressPeriodMs={} latencyClass={} "
+                                                        L"hintFlags=0x{:X} progressCalls={} readerWaitUs={} writerWaitUs={} readUs={} writeUs={}",
+                                                        sourcePath,
+                                                        destinationPath,
+                                                        transferredBytes,
+                                                        bufferBytes,
+                                                        progressPeriodMs,
+                                                        transferLatencyClass,
+                                                        transferHintFlags,
+                                                        perf.progressCalls,
+                                                        perf.readerWaitUs,
+                                                        perf.writerWaitUs,
+                                                        perf.readUs,
+                                                        perf.writeUs);
                 Debug::Perf::Emit(L"FileOps.Bridge.Copy", detail, perf.copyUs, transferredBytes, throughputBytesPerSecond, hr);
             }
 
@@ -8113,13 +8077,13 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                                                              bool& overwriteGranted,
                                                              bool& replaceReadOnlyGranted) noexcept
             {
-                FileSystemIssueAction action   = FileSystemIssueAction::Cancel;
+                FileSystemIssueAction action = FileSystemIssueAction::Cancel;
                 FileSystemOptions issueOptions{};
                 {
                     std::scoped_lock lock(callbackMutex);
                     issueOptions = options;
                 }
-                issueOptions.sizeBytes         = sizeof(FileSystemOptions);
+                issueOptions.sizeBytes = sizeof(FileSystemOptions);
 #ifdef ENABLE_TESTS
                 task._dbgCallbackActiveScopeCount.fetch_add(1u, std::memory_order_relaxed);
                 const auto dbgCallbackScope = wil::scope_exit([&] noexcept { task._dbgCallbackActiveScopeCount.fetch_sub(1u, std::memory_order_relaxed); });
@@ -8242,10 +8206,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                 return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
             }
 
-            void MarkReparseSkipped(const std::wstring& sourcePath,
-                                    const std::wstring& destinationPath,
-                                    bool isDirectory,
-                                    bool isRoot) noexcept
+            void MarkReparseSkipped(const std::wstring& sourcePath, const std::wstring& destinationPath, bool isDirectory, bool isRoot) noexcept
             {
                 if (isDirectory)
                 {
@@ -8419,12 +8380,8 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                 }
             }
 
-            [[nodiscard]] HRESULT ReaderMatchesHash(IFileReader& reader,
-                                                    uint64_t sizeBytes,
-                                                    uint64_t expectedHash,
-                                                    std::byte* hashBuffer,
-                                                    unsigned long hashBufferBytes,
-                                                    bool& matches) noexcept
+            [[nodiscard]] HRESULT ReaderMatchesHash(
+                IFileReader& reader, uint64_t sizeBytes, uint64_t expectedHash, std::byte* hashBuffer, unsigned long hashBufferBytes, bool& matches) noexcept
             {
                 matches = false;
                 if (hashBuffer == nullptr || hashBufferBytes == 0u)
@@ -8439,7 +8396,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                     return hr;
                 }
 
-                uint64_t hash = HashOffsetBasis();
+                uint64_t hash      = HashOffsetBasis();
                 uint64_t readTotal = 0;
                 while (readTotal < sizeBytes)
                 {
@@ -8448,10 +8405,10 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                         return HRESULT_FROM_WIN32(ERROR_CANCELLED);
                     }
 
-                    const uint64_t remaining = sizeBytes - readTotal;
+                    const uint64_t remaining   = sizeBytes - readTotal;
                     const unsigned long toRead = remaining > hashBufferBytes ? hashBufferBytes : static_cast<unsigned long>(remaining);
-                    unsigned long bytesRead = 0;
-                    hr = reader.Read(hashBuffer, toRead, &bytesRead);
+                    unsigned long bytesRead    = 0;
+                    hr                         = reader.Read(hashBuffer, toRead, &bytesRead);
                     if (FAILED(hr))
                     {
                         return hr;
@@ -8788,7 +8745,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
             [[nodiscard]] HRESULT DeleteCopiedSourceForMove(const std::wstring& sourcePath, const std::wstring& destinationPath) noexcept
             {
                 MoveSourceCleanupStats stats{};
-                const HRESULT hr = DeleteCopiedSourceEntryForMove(sourcePath, destinationPath, stats);
+                const HRESULT hr          = DeleteCopiedSourceEntryForMove(sourcePath, destinationPath, stats);
                 uint64_t remainingEntries = 0;
                 {
                     std::scoped_lock lock(copiedEntriesMutex);
@@ -9115,16 +9072,16 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                 wil::com_ptr<IFileSystemAtomicWriter> atomicWriterCapability;
                 if (SUCCEEDED(destinationFs.QueryInterface(IID_PPV_ARGS(atomicWriterCapability.addressof()))) && atomicWriterCapability)
                 {
-                    BOOL supported = FALSE;
+                    BOOL supported             = FALSE;
                     const HRESULT capabilityHr = atomicWriterCapability->SupportsAtomicWriterCommit(destinationPath.c_str(), flags, &supported);
-                    useAtomicFinalWriter = SUCCEEDED(capabilityHr) && supported == TRUE;
+                    useAtomicFinalWriter       = SUCCEEDED(capabilityHr) && supported == TRUE;
                 }
 
-                const std::wstring tempPath = MakeTempDestinationPath(destinationPath, progressStreamId);
+                const std::wstring tempPath    = MakeTempDestinationPath(destinationPath, progressStreamId);
                 const std::wstring& writerPath = useAtomicFinalWriter ? destinationPath : tempPath;
-                bool tempStaged             = false;
-                bool promoted               = false;
-                const auto cleanupTemp      = wil::scope_exit([&] noexcept
+                bool tempStaged                = false;
+                bool promoted                  = false;
+                const auto cleanupTemp         = wil::scope_exit([&] noexcept
                 {
                     if (! promoted && tempStaged)
                     {
@@ -9606,7 +9563,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                     if (FAILED(hrDestinationSize) || destinationSizeBytes != fileTotalBytes)
                     {
                         const HRESULT partialHr = HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
-                        const bool isMove = task._operation == FILESYSTEM_MOVE;
+                        const bool isMove       = task._operation == FILESYSTEM_MOVE;
                         const std::wstring message =
                             FAILED(hrDestinationSize)
                                 ? std::format(L"Cross-filesystem {} could not re-stat destination after promote (hr=0x{:08X}).",
@@ -9632,7 +9589,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
 
                     if (task._operation == FILESYSTEM_COPY)
                     {
-                        bool hashMatches = false;
+                        bool hashMatches     = false;
                         const HRESULT hashHr = ReaderMatchesHash(*destinationReader, fileTotalBytes, fileContentHash, bufferIn, bufferBytesIn, hashMatches);
                         if (FAILED(hashHr) || ! hashMatches)
                         {
@@ -9964,12 +9921,11 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                 {
                     CrossFsBridgeBufferLease localBufferBudgetLease;
                     const uint64_t reservationBytes = static_cast<uint64_t>(bufferBytes) * 2ull;
-                    const bool acquiredBudget = localBufferBudgetLease.Acquire(reservationBytes, task._cancelled, task._stopToken);
-                    const HRESULT allocationHr = acquiredBudget
-                                                     ? S_OK
-                                                     : ((task._cancelled.load(std::memory_order_acquire) || task._stopToken.stop_requested())
-                                                            ? HRESULT_FROM_WIN32(ERROR_CANCELLED)
-                                                            : E_OUTOFMEMORY);
+                    const bool acquiredBudget       = localBufferBudgetLease.Acquire(reservationBytes, task._cancelled, task._stopToken);
+                    const HRESULT allocationHr      = acquiredBudget ? S_OK
+                                                                     : ((task._cancelled.load(std::memory_order_acquire) || task._stopToken.stop_requested())
+                                                                            ? HRESULT_FROM_WIN32(ERROR_CANCELLED)
+                                                                            : E_OUTOFMEMORY);
                     std::unique_ptr<std::byte[]> localBuffer;
                     if (acquiredBudget)
                     {
@@ -10470,8 +10426,8 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                         return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
                     }
                     const HRESULT dirHr = CopyDirectory(sourcePath, destinationPath);
-                    if (SUCCEEDED(dirHr) && (skippedDirectoryReparseCount > 0 || skippedFileReparseCount > 0 ||
-                                             skippedFileConflictCount.load(std::memory_order_acquire) > 0))
+                    if (SUCCEEDED(dirHr) &&
+                        (skippedDirectoryReparseCount > 0 || skippedFileReparseCount > 0 || skippedFileConflictCount.load(std::memory_order_acquire) > 0))
                     {
                         // Some child files were skipped at a conflict prompt; the tree is not a
                         // full copy. Caller treats PARTIAL as "source preserved" for MOVE.

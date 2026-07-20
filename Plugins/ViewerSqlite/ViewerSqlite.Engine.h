@@ -44,10 +44,10 @@ struct QueryCancellation final
 
 struct QueryWorkBudget final
 {
-    uint64_t maxVmSteps       = 50'000'000u;
-    uint32_t maxElapsedMs     = 5'000u;
-    uint64_t maxResultCells   = 500'000u;
-    uint64_t maxResultChars   = 16u * 1024u * 1024u;
+    uint64_t maxVmSteps     = 50'000'000u;
+    uint32_t maxElapsedMs   = 5'000u;
+    uint64_t maxResultCells = 500'000u;
+    uint64_t maxResultChars = 16u * 1024u * 1024u;
 };
 
 struct Config
@@ -122,7 +122,7 @@ enum class SnapshotKind : uint8_t
 
 struct SourceDebugSnapshot final
 {
-    uint64_t cachedConnectionOpenCount = 0;
+    uint64_t cachedConnectionOpenCount  = 0;
     uint64_t operationCount             = 0;
     uint64_t cancelledOperationCount    = 0;
     uint64_t workLimitFailureCount      = 0;
@@ -146,7 +146,7 @@ public:
     static SourceOpenResult OpenFromPath(std::filesystem::path localPath,
                                          std::wstring displayName,
                                          QueryCancellation cancellation = {},
-                                         uint64_t maxSnapshotBytes       = kMaxSnapshotBytes) noexcept;
+                                         uint64_t maxSnapshotBytes      = kMaxSnapshotBytes) noexcept;
 
     DatabaseSource(const DatabaseSource&)            = delete;
     DatabaseSource(DatabaseSource&&)                 = delete;
@@ -162,21 +162,19 @@ public:
     HRESULT ListTables(std::vector<TableInfo>& tables,
                        std::wstring& errorText,
                        QueryCancellation cancellation = {},
-                       QueryWorkBudget budget          = {}) const noexcept;
+                       QueryWorkBudget budget         = {}) const noexcept;
     QueryPageResult LoadTablePage(std::wstring_view tableName,
                                   uint32_t pageSize,
                                   uint64_t rowOffset,
                                   size_t orderByColumnIndex        = kNoSortColumn,
                                   TableSortDirection sortDirection = TableSortDirection::None,
                                   QueryCancellation cancellation   = {},
-                                  QueryWorkBudget budget            = {}) const noexcept;
+                                  QueryWorkBudget budget           = {}) const noexcept;
     QueryPageResult ExecuteReadOnlyQuery(std::wstring_view sql,
                                          uint32_t rowCap,
                                          QueryCancellation cancellation = {},
-                                         QueryWorkBudget budget          = {}) const noexcept;
-    ValidationResult ValidateReadOnlyQuery(std::wstring_view sql,
-                                           QueryCancellation cancellation = {},
-                                           QueryWorkBudget budget          = {}) const noexcept;
+                                         QueryWorkBudget budget         = {}) const noexcept;
+    ValidationResult ValidateReadOnlyQuery(std::wstring_view sql, QueryCancellation cancellation = {}, QueryWorkBudget budget = {}) const noexcept;
 
 private:
     DatabaseSource(std::filesystem::path localPath,
@@ -193,13 +191,12 @@ private:
                                               uint64_t snapshotBytes,
                                               QueryCancellation cancellation) noexcept;
 
-    HRESULT ListTablesLocked(std::vector<TableInfo>& tables,
-                             std::wstring& errorText,
-                             QueryCancellation cancellation,
-                             QueryWorkBudget budget) const noexcept;
+    HRESULT ListTablesLocked(std::vector<TableInfo>& tables, std::wstring& errorText, QueryCancellation cancellation, QueryWorkBudget budget) const noexcept;
 
-    friend SourceOpenResult OpenFromViewerContext(
-        IFileSystem* fileSystem, std::wstring_view path, bool directOpenLocalFiles, QueryCancellation cancellation) noexcept;
+    friend SourceOpenResult OpenFromViewerContext(IFileSystem* fileSystem,
+                                                  std::wstring_view path,
+                                                  bool directOpenLocalFiles,
+                                                  QueryCancellation cancellation) noexcept;
 
     std::filesystem::path _localPath;
     std::wstring _displayName;
