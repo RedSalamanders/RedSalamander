@@ -322,8 +322,10 @@ jobs:
           $triplet = $env:VCPKG_DEFAULT_TRIPLET
           $vcpkgRoot = Join-Path $env:GITHUB_WORKSPACE ".build\vcpkg_installed\$triplet"
           $incRoot = Join-Path $vcpkgRoot "include"
-          $libRoot = Join-Path $vcpkgRoot "lib"
-          $binRoot = Join-Path $vcpkgRoot "bin"
+          $isDebugConfiguration = "${{ inputs.configuration }}" -like "*Debug*"
+          $vcpkgConfiguration = if ($isDebugConfiguration) { "Debug" } else { "Release" }
+          $libRoot = Join-Path $vcpkgRoot $(if ($isDebugConfiguration) { "debug\lib" } else { "lib" })
+          $binRoot = Join-Path $vcpkgRoot $(if ($isDebugConfiguration) { "debug\bin" } else { "bin" })
 
           if (-not (Test-Path $incRoot)) { throw "vcpkg include root not found: $incRoot" }
           if (-not (Test-Path $libRoot)) { throw "vcpkg lib root not found: $libRoot" }
@@ -340,6 +342,7 @@ jobs:
           $env:ForceImportBeforeCppTargets = $vcpkgProps
           $env:ForceImportAfterCppTargets = $vcpkgTargets
           $env:VcpkgRoot = Join-Path $env:GITHUB_WORKSPACE "vcpkg"
+          $env:VcpkgConfiguration = $vcpkgConfiguration
           $env:VcpkgManifestInstall = "false"
           $env:VCPkgLocalAppDataDisabled = "true"
 
