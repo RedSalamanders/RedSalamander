@@ -192,6 +192,8 @@ Describe 'Pinned build-tool and CI identity' {
     It 'keeps ARM64 compilation and critical contract suites in the PR gate' {
         $ci = Get-Content -LiteralPath (Join-Path $repoRoot '.github\workflows\ci.yml') -Raw
         $selfTests = Get-Content -LiteralPath (Join-Path $repoRoot 'Specs\Testing\Testing_SelfTests.md') -Raw
+        $ci | Should Match 'push:\s*\r?\n\s*branches:\s*\[main, master\]'
+        $ci | Should Match 'pull_request:\s*\r?\n\s*branches:\s*\[main, master\]'
         $ci | Should Match 'platform:\s*ARM64'
         $ci | Should Match 'configuration:\s*Debug'
         $selfTests | Should Match 'PluginContractTests, SettingsSchemaTests, and CrashHandlingTests'
