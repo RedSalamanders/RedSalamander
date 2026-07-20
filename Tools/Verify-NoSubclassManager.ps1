@@ -40,3 +40,4 @@ if ($matches.Count -gt 0)
 }
 
 Write-Host "Verified: no SetWindowSubclass / DefSubclassProc / RemoveWindowSubclass usage remains under Common, Plugins, or RedSalamander." -ForegroundColor Green
+$global:LASTEXITCODE = 0
