@@ -7,9 +7,9 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
 
 $patterns = @(
-    'SetWindowSubclass\('
-    'DefSubclassProc\('
-    'RemoveWindowSubclass\('
+    'SetWindowSubclass('
+    'DefSubclassProc('
+    'RemoveWindowSubclass('
 )
 
 $searchRoots = @(
@@ -19,16 +19,32 @@ $searchRoots = @(
 )
 
 $matches = @()
-foreach ($pattern in $patterns)
+$ripgrep = Get-Command 'rg' -ErrorAction SilentlyContinue
+if ($ripgrep)
 {
-    $result = & rg --line-number --color never --fixed-strings $pattern @searchRoots 2>$null
-    if ($LASTEXITCODE -eq 0 -and $result)
+    foreach ($pattern in $patterns)
     {
-        $matches += $result
+        $result = & $ripgrep.Source --line-number --color never --fixed-strings $pattern @searchRoots 2>$null
+        if ($LASTEXITCODE -eq 0 -and $result)
+        {
+            $matches += $result
+        }
+        elseif ($LASTEXITCODE -gt 1)
+        {
+            throw "ripgrep failed while checking pattern '$pattern'."
+        }
     }
-    elseif ($LASTEXITCODE -gt 1)
+}
+else
+{
+    $sourceFiles = Get-ChildItem -Path $searchRoots -Recurse -File -Include *.c,*.cc,*.cpp,*.cxx,*.h,*.hh,*.hpp,*.hxx,*.inl
+    foreach ($pattern in $patterns)
     {
-        throw "ripgrep failed while checking pattern '$pattern'."
+        $matches += @(
+            $sourceFiles |
+                Select-String -SimpleMatch -Pattern $pattern |
+                ForEach-Object { "$($_.Path):$($_.LineNumber):$($_.Line)" }
+        )
     }
 }
 
@@ -40,3 +56,4 @@ if ($matches.Count -gt 0)
 }
 
 Write-Host "Verified: no SetWindowSubclass / DefSubclassProc / RemoveWindowSubclass usage remains under Common, Plugins, or RedSalamander." -ForegroundColor Green
+$global:LASTEXITCODE = 0

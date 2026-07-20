@@ -376,7 +376,9 @@ git -C .\vcpkg checkout --detach ((Get-Content .\vcpkg-tool.json -Raw | ConvertF
 ```
 
 The install script validates that local tool identity before modifying `.build\vcpkg_installed`. The repository and
-CI use manifest/toolchain integration and do not require or permit a user-wide `vcpkg integrate install` step.
+CI use manifest/toolchain integration and do not require or permit a user-wide `vcpkg integrate install` step. CI
+imports `vcpkg.props` and `vcpkg.targets` directly from the pinned checkout for the lifetime of the build so headers
+and the complete installed library set come from the same reviewed tool revision.
 
 ### Adding New Libraries
 

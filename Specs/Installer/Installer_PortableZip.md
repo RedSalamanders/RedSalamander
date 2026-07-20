@@ -51,6 +51,10 @@ post-release check.
 - Local dependency installation and CI must use the exact tool commit. A bundled or arbitrary PATH installation
   without a matching Git checkout is rejected.
 - CI cache keys include both pin files and CI must not mutate user-wide MSBuild state with `vcpkg integrate install`.
+  The reusable build imports `vcpkg.props` and `vcpkg.targets` directly from the pinned checkout through MSBuild's
+  per-invocation `ForceImportBeforeCppTargets` / `ForceImportAfterCppTargets` properties, which must be set before
+  invoking `build.ps1` so automatic linking consumes the already-installed triplet libraries. The invocation disables
+  local-app-data discovery so a runner-level or user-wide integration cannot add a second, unpinned target import.
 - `build.ps1 -MaxCpuCount <N>` may bound MSBuild workers when a machine cannot reliably initialize the default
   number of compiler/resource processes. Zero retains MSBuild's default.
 

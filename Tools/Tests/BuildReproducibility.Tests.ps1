@@ -180,11 +180,31 @@ Describe 'Pinned build-tool and CI identity' {
         $ci | Should Match 'git checkout --detach \$toolCommit'
         $ci | Should Match '\$actualToolCommit -ne \$toolCommit'
         $ci | Should Not Match 'vcpkg(?:\.exe)?\s+integrate\s+install'
+        $ci | Should Match '\$env:ForceImportBeforeCppTargets\s*=\s*\$vcpkgProps'
+        $ci | Should Match '\$env:ForceImportAfterCppTargets\s*=\s*\$vcpkgTargets'
+        $ci | Should Match '\$isDebugConfiguration\s*=\s*"\$\{\{ inputs\.configuration \}\}"\s+-like\s+"\*Debug\*"'
+        $ci | Should Match '\$env:VcpkgConfiguration\s*=\s*\$vcpkgConfiguration'
+        $ci | Should Match 'if \(\$isDebugConfiguration\) \{ "debug\\lib" \} else \{ "lib" \}'
+        $ci | Should Match 'if \(\$isDebugConfiguration\) \{ "debug\\bin" \} else \{ "bin" \}'
+        $ci | Should Match '\$env:VcpkgManifestInstall\s*=\s*"false"'
+        $ci | Should Match '\$env:VCPkgLocalAppDataDisabled\s*=\s*"true"'
+        $ci | Should Match 'vcpkg\\scripts\\buildsystems\\msbuild'
+        $ci.IndexOf('$env:ForceImportBeforeCppTargets') | Should BeLessThan $ci.IndexOf('& $buildScript @buildArgs')
+        $ci.IndexOf('$env:ForceImportAfterCppTargets') | Should BeLessThan $ci.IndexOf('& $buildScript @buildArgs')
     }
 
     It 'keeps ARM64 compilation and critical contract suites in the PR gate' {
         $ci = Get-Content -LiteralPath (Join-Path $repoRoot '.github\workflows\ci.yml') -Raw
+        $subclassGuard = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools\Verify-NoSubclassManager.ps1') -Raw
         $selfTests = Get-Content -LiteralPath (Join-Path $repoRoot 'Specs\Testing\Testing_SelfTests.md') -Raw
+        $ci | Should Match 'push:\s*\r?\n\s*branches:\s*\[main, master\]'
+        $ci | Should Match 'pull_request:\s*\r?\n\s*branches:\s*\[main, master\]'
+        $ci | Should Match 'id:\s*cpp_changes'
+        $ci | Should Match 'git diff --name-only "\$env:BASE_SHA\.\.\.HEAD"'
+        @($ci | Select-String -Pattern "if: steps\.cpp_changes\.outputs\.changed == 'true'" -AllMatches).Matches.Count | Should Be 3
+        $subclassGuard | Should Match "Get-Command 'rg' -ErrorAction SilentlyContinue"
+        $subclassGuard | Should Match 'Select-String -SimpleMatch -Pattern \$pattern'
+        $subclassGuard | Should Match '\$global:LASTEXITCODE\s*=\s*0\s*$'
         $ci | Should Match 'platform:\s*ARM64'
         $ci | Should Match 'configuration:\s*Debug'
         $selfTests | Should Match 'PluginContractTests, SettingsSchemaTests, and CrashHandlingTests'
