@@ -131,9 +131,11 @@ The workflow:
 5. Downloads both ZIPs and computes their SHA256 values through `Installer/winget/generate-manifest.ps1`.
 6. Runs a self-contained `winget validate --manifest` wrapper in the workflow. It is intentionally inline because the workflow checks out the release tag before generating the manifest, and older release tags may not contain helper scripts added later. The wrapper treats the known `winget.exe v1.11.x` schema-header warning for `ManifestVersion: 1.12.0` as non-fatal, but only when the manifest otherwise reports validation success and all warnings are that exact legacy schema-header warning.
 7. Enables Winget `LocalManifestFiles`, runs `winget install --manifest winget-manifest` on the disposable runner, checks that `RedSalamander` appears in `winget list`, and then uninstalls it with `winget uninstall --id RedSalamanders.RedSalamander --purge`.
-8. Submits the generated manifest directory with `wingetcreate submit` only for `release.published` runs or manual runs where `submit=true`.
+8. For `release.published` runs or manual runs where `submit=true`, searches for an existing open PR for the same RedSalamander version and stops on a duplicate.
+9. Submits the generated manifest directory with `wingetcreate submit` using Winget's `Update: RedSalamanders.RedSalamander to <version>` title format, extracts the created PR URL from WingetCreate's output, and updates the PR through the GitHub API.
+10. Replaces WingetCreate's blank template body with a completed Winget checklist plus the release URL, installer type, architectures, commands, minimum OS, manifest schema, and the validation/install/list/uninstall evidence produced earlier in the same run.
 
-`WINGET_TOKEN` must be a GitHub personal access token with the permissions required by WingetCreate to open a pull request against `microsoft/winget-pkgs`.
+`WINGET_TOKEN` must be a GitHub personal access token with the permissions required by WingetCreate to open a pull request against `microsoft/winget-pkgs` and update that PR's title and body.
 
 ## Reintroducing MSI
 
