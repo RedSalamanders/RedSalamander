@@ -198,6 +198,8 @@ Describe 'Pinned build-tool and CI identity' {
         $ci | Should Match 'id:\s*cpp_changes'
         $ci | Should Match 'git diff --name-only "\$env:BASE_SHA\.\.\.HEAD"'
         @($ci | Select-String -Pattern "if: steps\.cpp_changes\.outputs\.changed == 'true'" -AllMatches).Matches.Count | Should Be 3
+        $subclassGuard | Should Match "Get-Command 'rg' -ErrorAction SilentlyContinue"
+        $subclassGuard | Should Match 'Select-String -SimpleMatch -Pattern \$pattern'
         $subclassGuard | Should Match '\$global:LASTEXITCODE\s*=\s*0\s*$'
         $ci | Should Match 'platform:\s*ARM64'
         $ci | Should Match 'configuration:\s*Debug'
