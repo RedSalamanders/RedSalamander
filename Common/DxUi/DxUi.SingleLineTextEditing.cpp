@@ -661,7 +661,7 @@ void ClearSingleLineTextLayoutCache(SingleLineTextLayoutCache& cache, bool secur
 
     if (cache)
     {
-        cache->layout = layout;
+        cache->layout               = layout;
         if (secureCacheText)
         {
             SecureWipe::SecureClear(cache->text);

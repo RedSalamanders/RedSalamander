@@ -15,10 +15,10 @@ public:
     {
     }
 
-    ShellCommandHGlobalDataObject(const ShellCommandHGlobalDataObject&)            = delete;
-    ShellCommandHGlobalDataObject(ShellCommandHGlobalDataObject&&)                 = delete;
+    ShellCommandHGlobalDataObject(const ShellCommandHGlobalDataObject&) = delete;
+    ShellCommandHGlobalDataObject(ShellCommandHGlobalDataObject&&) = delete;
     ShellCommandHGlobalDataObject& operator=(const ShellCommandHGlobalDataObject&) = delete;
-    ShellCommandHGlobalDataObject& operator=(ShellCommandHGlobalDataObject&&)      = delete;
+    ShellCommandHGlobalDataObject& operator=(ShellCommandHGlobalDataObject&&) = delete;
 
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, void** object) override
     {
@@ -67,17 +67,14 @@ public:
         {
             return E_OUTOFMEMORY;
         }
-        *medium                = {};
-        medium->tymed          = TYMED_HGLOBAL;
-        medium->hGlobal        = duplicate;
-        medium->pUnkForRelease = nullptr;
+        *medium                 = {};
+        medium->tymed           = TYMED_HGLOBAL;
+        medium->hGlobal         = duplicate;
+        medium->pUnkForRelease  = nullptr;
         return S_OK;
     }
 
-    HRESULT STDMETHODCALLTYPE GetDataHere(FORMATETC*, STGMEDIUM*) override
-    {
-        return DATA_E_FORMATETC;
-    }
+    HRESULT STDMETHODCALLTYPE GetDataHere(FORMATETC*, STGMEDIUM*) override { return DATA_E_FORMATETC; }
     HRESULT STDMETHODCALLTYPE QueryGetData(FORMATETC* format) override
     {
         if (! format)
@@ -95,26 +92,11 @@ public:
         *result = {};
         return DATA_S_SAMEFORMATETC;
     }
-    HRESULT STDMETHODCALLTYPE SetData(FORMATETC*, STGMEDIUM*, BOOL) override
-    {
-        return E_NOTIMPL;
-    }
-    HRESULT STDMETHODCALLTYPE EnumFormatEtc(DWORD, IEnumFORMATETC**) override
-    {
-        return E_NOTIMPL;
-    }
-    HRESULT STDMETHODCALLTYPE DAdvise(FORMATETC*, DWORD, IAdviseSink*, DWORD*) override
-    {
-        return OLE_E_ADVISENOTSUPPORTED;
-    }
-    HRESULT STDMETHODCALLTYPE DUnadvise(DWORD) override
-    {
-        return OLE_E_ADVISENOTSUPPORTED;
-    }
-    HRESULT STDMETHODCALLTYPE EnumDAdvise(IEnumSTATDATA**) override
-    {
-        return OLE_E_ADVISENOTSUPPORTED;
-    }
+    HRESULT STDMETHODCALLTYPE SetData(FORMATETC*, STGMEDIUM*, BOOL) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE EnumFormatEtc(DWORD, IEnumFORMATETC**) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE DAdvise(FORMATETC*, DWORD, IAdviseSink*, DWORD*) override { return OLE_E_ADVISENOTSUPPORTED; }
+    HRESULT STDMETHODCALLTYPE DUnadvise(DWORD) override { return OLE_E_ADVISENOTSUPPORTED; }
+    HRESULT STDMETHODCALLTYPE EnumDAdvise(IEnumSTATDATA**) override { return OLE_E_ADVISENOTSUPPORTED; }
 
 private:
     std::atomic<ULONG> _refCount{1u};
@@ -881,7 +863,10 @@ private:
         return HRESULT_FROM_WIN32(ERROR_FILENAME_EXCED_RANGE);
     }
 
-    auto cleanupTemp = wil::scope_exit([&]() noexcept { static_cast<void>(DeleteFileW(tempPath.c_str())); });
+    auto cleanupTemp = wil::scope_exit([&]() noexcept
+    {
+        static_cast<void>(DeleteFileW(tempPath.c_str()));
+    });
 
     HRESULT hr = persistFile->Save(tempPathText.c_str(), TRUE);
     if (FAILED(hr))
@@ -2796,7 +2781,10 @@ struct ClipboardDropEffectReadStatus
 
     state.Require(WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
                                                 [&](const NavigationViewDebugSnapshot& value) noexcept
-    { return ! value.editMode && value.debugExitEditCount > editSnapshot.debugExitEditCount && value.debugLastExitEditReason == L"escape"; },
+    {
+        return ! value.editMode && value.debugExitEditCount > editSnapshot.debugExitEditCount &&
+               value.debugLastExitEditReason == L"escape";
+    },
                                                 navigationEditTimeout),
                   std::format(L"Navigation edit did not cancel before stale-navigation clipboard paste test. {}",
                               DescribeFolderFocusForShellCommandTest(FolderWindow::Pane::Left, leftView)));
@@ -3252,7 +3240,7 @@ struct ClipboardDropEffectReadStatus
         return false;
     }
 
-    const std::filesystem::path suiteRoot  = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
     const std::filesystem::path root       = suiteRoot / L"work" / (L"drop_integrity_" + NewGuidText());
     const std::filesystem::path sourceRoot = root / L"sources";
     const std::filesystem::path destRoot   = root / L"dest";
@@ -3286,7 +3274,7 @@ struct ClipboardDropEffectReadStatus
 
     const std::wstring leftPluginBefore                       = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
     const std::optional<std::filesystem::path> leftPathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
-    const auto restorePane                                    = wil::scope_exit([&]
+    const auto restorePane = wil::scope_exit([&]
     {
         static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
         if (leftPathBefore.has_value())
@@ -3298,7 +3286,8 @@ struct ClipboardDropEffectReadStatus
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
                   L"Failed to activate local provider for drop-integrity guards.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, destRoot);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, destRoot, SelfTest::Scale(3000ms)), L"Failed to enumerate drop-integrity destination.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, destRoot, SelfTest::Scale(3000ms)),
+                  L"Failed to enumerate drop-integrity destination.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"Archive", L"Work"}, SelfTest::Scale(3000ms)),
                   L"Drop-integrity destination items were not ready.");
 
@@ -3338,15 +3327,17 @@ struct ClipboardDropEffectReadStatus
 
     existingTaskIds = CollectFileOperationTaskIdsForShellCommandTest(fileOps);
     performed       = DROPEFFECT_NONE;
-    dropHr = folderView->DebugPerformFileDropForSelfTest({delta}, DROPEFFECT_COPY, &performed, POINT{-1, -1}, false, DROPEFFECT_COPY | DROPEFFECT_MOVE, 0u);
-    state.Require(SUCCEEDED(dropHr) && performed == DROPEFFECT_MOVE, L"No-modifier same-volume drop should select MOVE when COPY and MOVE are both allowed.");
+    dropHr = folderView->DebugPerformFileDropForSelfTest(
+        {delta}, DROPEFFECT_COPY, &performed, POINT{-1, -1}, false, DROPEFFECT_COPY | DROPEFFECT_MOVE, 0u);
+    state.Require(SUCCEEDED(dropHr) && performed == DROPEFFECT_MOVE,
+                  L"No-modifier same-volume drop should select MOVE when COPY and MOVE are both allowed.");
     static_cast<void>(RequireQueuedShellFileOperationTask(state, fileOps, existingTaskIds, FILESYSTEM_MOVE, destRoot, L"Same-volume default drop"));
     state.Require(WaitForPathExistsForShellCommandTest(destRoot / delta.filename(), SelfTest::Scale(5000ms)),
                   L"Same-volume default MOVE should eventually commit through the host.");
 
     existingTaskIds = CollectFileOperationTaskIdsForShellCommandTest(fileOps);
     performed       = DROPEFFECT_NONE;
-    dropHr          = folderView->DebugPerformFileDropForSelfTest({gamma}, DROPEFFECT_MOVE, &performed, POINT{-1, -1}, true);
+    dropHr = folderView->DebugPerformFileDropForSelfTest({gamma}, DROPEFFECT_MOVE, &performed, POINT{-1, -1}, true);
     state.Require(SUCCEEDED(dropHr) && performed == DROPEFFECT_COPY,
                   std::format(L"External asynchronous MOVE must report COPY until completion; hr=0x{:08X}, effect={}.",
                               static_cast<unsigned long>(dropHr),
@@ -3375,7 +3366,8 @@ struct ClipboardDropEffectReadStatus
     existingTaskIds = CollectFileOperationTaskIdsForShellCommandTest(fileOps);
     performed       = DROPEFFECT_COPY;
     dropHr          = folderView->DebugPerformFileDropForSelfTest({alpha}, DROPEFFECT_COPY, &performed);
-    state.Require(dropHr == DRAGDROP_S_CANCEL && performed == DROPEFFECT_NONE, L"Drop into an unenumerated destination must be rejected.");
+    state.Require(dropHr == DRAGDROP_S_CANCEL && performed == DROPEFFECT_NONE,
+                  L"Drop into an unenumerated destination must be rejected.");
     state.Require(! ResolveNewFileOperationsTaskIdForSelfTest(fileOps, existingTaskIds, SelfTest::Scale(250ms)).has_value(),
                   L"Unenumerated destination drop must not queue a task.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, workSub);
@@ -3394,17 +3386,17 @@ struct ClipboardDropEffectReadStatus
     }
 
     const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
-    const std::filesystem::path root      = suiteRoot / L"work" / (L"malformed_drop_" + NewGuidText());
+    const std::filesystem::path root       = suiteRoot / L"work" / (L"malformed_drop_" + NewGuidText());
     state.Require(SelfTest::EnsureDirectory(root), L"Failed to create malformed-drop destination.");
     state.Require(SelfTest::WriteTextFile(root / L"keep.txt", "keep"), L"Failed to create malformed-drop marker.");
-    const auto cleanupFiles                                   = wil::scope_exit([root]() noexcept
+    const auto cleanupFiles = wil::scope_exit([root]() noexcept
     {
         std::error_code cleanupEc;
         std::filesystem::remove_all(root, cleanupEc);
     });
     const std::wstring leftPluginBefore                       = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
     const std::optional<std::filesystem::path> leftPathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
-    const auto restorePane                                    = wil::scope_exit([&]
+    const auto restorePane = wil::scope_exit([&]
     {
         static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
         if (leftPathBefore.has_value())
@@ -3415,7 +3407,8 @@ struct ClipboardDropEffectReadStatus
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
                   L"Failed to activate local provider for malformed-drop injection.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)), L"FolderView must settle before malformed drop payload injection.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)),
+                  L"FolderView must settle before malformed drop payload injection.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"keep.txt"}, SelfTest::Scale(3000ms)),
                   L"Malformed-drop destination enumeration did not complete.");
 
@@ -3450,10 +3443,10 @@ struct ClipboardDropEffectReadStatus
     *internalHeader = InternalHeader{1u, 0u, 0u, (std::numeric_limits<uint32_t>::max)()};
     GlobalUnlock(hostileInternal.get());
 
-    const CLIPFORMAT internalFormat          = static_cast<CLIPFORMAT>(RegisterClipboardFormatW(L"RedSalamander.InternalFileDrop.V1"));
+    const CLIPFORMAT internalFormat = static_cast<CLIPFORMAT>(RegisterClipboardFormatW(L"RedSalamander.InternalFileDrop.V1"));
     wil::com_ptr<IDataObject> internalObject = MakeShellCommandHGlobalDataObject(internalFormat, std::move(hostileInternal));
-    DWORD performed                          = DROPEFFECT_COPY;
-    const HRESULT internalHr                 = folderView->DebugPerformDropFromDataObjectForSelfTest(internalObject.get(), DROPEFFECT_COPY, &performed);
+    DWORD performed                         = DROPEFFECT_COPY;
+    const HRESULT internalHr = folderView->DebugPerformDropFromDataObjectForSelfTest(internalObject.get(), DROPEFFECT_COPY, &performed);
     state.Require(internalHr == HRESULT_FROM_WIN32(ERROR_INVALID_DATA) && performed == DROPEFFECT_NONE,
                   std::format(L"Hostile internal pathCount should fail closed; hr=0x{:08X}, effect={}.",
                               static_cast<unsigned long>(internalHr),
@@ -3476,8 +3469,8 @@ struct ClipboardDropEffectReadStatus
     GlobalUnlock(malformedHdrop.get());
 
     wil::com_ptr<IDataObject> hdropObject = MakeShellCommandHGlobalDataObject(CF_HDROP, std::move(malformedHdrop));
-    performed                             = DROPEFFECT_COPY;
-    const HRESULT hdropHr                 = folderView->DebugPerformDropFromDataObjectForSelfTest(hdropObject.get(), DROPEFFECT_COPY, &performed);
+    performed                              = DROPEFFECT_COPY;
+    const HRESULT hdropHr = folderView->DebugPerformDropFromDataObjectForSelfTest(hdropObject.get(), DROPEFFECT_COPY, &performed);
     state.Require(hdropHr == HRESULT_FROM_WIN32(ERROR_INVALID_DATA) && performed == DROPEFFECT_NONE,
                   std::format(L"Out-of-range DROPFILES::pFiles should fail closed; hr=0x{:08X}, effect={}.",
                               static_cast<unsigned long>(hdropHr),
@@ -3497,7 +3490,7 @@ struct ClipboardDropEffectReadStatus
     }
 
     const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
-    const std::filesystem::path root      = suiteRoot / L"work" / (L"pointer_targets_" + NewGuidText());
+    const std::filesystem::path root       = suiteRoot / L"work" / (L"pointer_targets_" + NewGuidText());
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
     ec.clear();
@@ -3518,7 +3511,7 @@ struct ClipboardDropEffectReadStatus
 
     const std::wstring leftPluginBefore                       = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
     const std::optional<std::filesystem::path> leftPathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
-    const auto restorePane                                    = wil::scope_exit([&]
+    const auto restorePane = wil::scope_exit([&]
     {
         static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
         if (leftPathBefore.has_value())
@@ -3558,9 +3551,16 @@ struct ClipboardDropEffectReadStatus
                   L"Plain click on an unselected item should collapse selection to that item.");
 
     constexpr short kEmptyCoordinate = -20;
-    SendMessageW(viewHwnd, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(static_cast<WORD>(kEmptyCoordinate), static_cast<WORD>(kEmptyCoordinate)));
-    SendMessageW(viewHwnd, WM_LBUTTONUP, 0, MAKELPARAM(static_cast<WORD>(kEmptyCoordinate), static_cast<WORD>(kEmptyCoordinate)));
-    state.Require(folderView->DebugGetDragSourcePathsForSelfTest().empty(), L"Empty-background click should disarm stale focused-item drag sources.");
+    SendMessageW(viewHwnd,
+                 WM_LBUTTONDOWN,
+                 MK_LBUTTON,
+                 MAKELPARAM(static_cast<WORD>(kEmptyCoordinate), static_cast<WORD>(kEmptyCoordinate)));
+    SendMessageW(viewHwnd,
+                 WM_LBUTTONUP,
+                 0,
+                 MAKELPARAM(static_cast<WORD>(kEmptyCoordinate), static_cast<WORD>(kEmptyCoordinate)));
+    state.Require(folderView->DebugGetDragSourcePathsForSelfTest().empty(),
+                  L"Empty-background click should disarm stale focused-item drag sources.");
 
     folderView->DebugSetHoveredIndexForSelfTest(folderView->DebugGetItemCount() + 5u);
     state.Require(folderView->DebugWarmRenderingForSelfTest(), L"Rendering should survive a stale out-of-range hover index.");
@@ -3606,7 +3606,8 @@ struct ClipboardDropEffectReadStatus
     state.Require(SelfTest::EnsureDirectory(destRoot), L"Failed to create clipboard shortcut destination root.");
     state.Require(SelfTest::WriteTextFile(alphaPath, "alpha"), L"Failed to create alpha.txt source.");
     state.Require(SelfTest::WriteTextFile(betaPath, "beta"), L"Failed to create beta.txt source.");
-    state.Require(WriteTextFileShellPathForShellCommandTest(destRoot / L"alpha - Shortcut.lnk", "occupied"), L"Failed to create existing shortcut-name slot.");
+    state.Require(WriteTextFileShellPathForShellCommandTest(destRoot / L"alpha - Shortcut.lnk", "occupied"),
+                  L"Failed to create existing shortcut-name slot.");
     if (! state.failure.empty())
     {
         return false;
@@ -3774,7 +3775,10 @@ struct ClipboardDropEffectReadStatus
     SelfTestLatency::SetNextDelay(SelfTestLatency::Point::PasteShortcutAfterSlotProbe, SelfTest::Scale(1200ms));
     constexpr const wchar_t* kFailCompletionPostEnv = L"REDSALAMANDER_PASTE_SHORTCUT_FAIL_COMPLETION_POST";
     static_cast<void>(::SetEnvironmentVariableW(kFailCompletionPostEnv, L"1"));
-    const auto clearCompletionPostHook = wil::scope_exit([&]() noexcept { static_cast<void>(::SetEnvironmentVariableW(kFailCompletionPostEnv, nullptr)); });
+    const auto clearCompletionPostHook = wil::scope_exit([&]() noexcept
+    {
+        static_cast<void>(::SetEnvironmentVariableW(kFailCompletionPostEnv, nullptr));
+    });
 
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_CLIPBOARD_PASTE_SHORTCUT, 0), 0);
     PumpPendingMessages();
@@ -3797,7 +3801,8 @@ struct ClipboardDropEffectReadStatus
 
     std::filesystem::path alphaTarget2;
     const HRESULT hrAlpha2 = ReadShortcutTargetForShellCommandTest(alphaLink2, alphaTarget2);
-    state.Require(SUCCEEDED(hrAlpha2), std::format(L"Failed to read concurrent second shortcut target, hr=0x{:08X}.", static_cast<unsigned long>(hrAlpha2)));
+    state.Require(SUCCEEDED(hrAlpha2),
+                  std::format(L"Failed to read concurrent second shortcut target, hr=0x{:08X}.", static_cast<unsigned long>(hrAlpha2)));
     state.Require(OrdinalString::EqualsNoCasePath(alphaTarget2, alphaPath), L"Concurrent second shortcut should target alpha.txt.");
 
     return state.failure.empty();
@@ -3880,9 +3885,10 @@ struct ClipboardDropEffectReadStatus
     Debug::Perf::Emit(L"clipboard.paste_shortcut_command_return_us", L"async", commandReturnUs, 1u, 0u, S_OK);
 
     const uint64_t maxCommandUs = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(SelfTest::Scale(250ms)).count());
-    state.Require(
-        commandReturnUs < maxCommandUs,
-        std::format(L"Paste Shortcut command should return before delayed worker completion; commandReturnUs={} maxUs={}.", commandReturnUs, maxCommandUs));
+    state.Require(commandReturnUs < maxCommandUs,
+                  std::format(L"Paste Shortcut command should return before delayed worker completion; commandReturnUs={} maxUs={}.",
+                              commandReturnUs,
+                              maxCommandUs));
     state.Require(WaitForShellCommandLatencyConsume(SelfTestLatency::Point::PasteShortcutSave, 1u, SelfTest::Scale(1000ms)),
                   L"Paste Shortcut worker should consume the shared PasteShortcutSave latency hook.");
     bool alphaLinkExistsAfterReturn      = false;
@@ -3896,9 +3902,9 @@ struct ClipboardDropEffectReadStatus
                               DescribeDirectoryEntriesForShellCommandTest(destRoot)));
     bool alphaLinkExistsAfterWorker      = false;
     const HRESULT alphaExistsAfterWorker = QueryShellShortcutPathForShellCommandTest(alphaLink, alphaLinkExistsAfterWorker);
-    state.Require(
-        SUCCEEDED(alphaExistsAfterWorker) && alphaLinkExistsAfterWorker,
-        std::format(L"Async Paste Shortcut should eventually create the shortcut; existsHr=0x{:08X}.", static_cast<unsigned long>(alphaExistsAfterWorker)));
+    state.Require(SUCCEEDED(alphaExistsAfterWorker) && alphaLinkExistsAfterWorker,
+                  std::format(L"Async Paste Shortcut should eventually create the shortcut; existsHr=0x{:08X}.",
+                              static_cast<unsigned long>(alphaExistsAfterWorker)));
 
     std::filesystem::path alphaTarget;
     const HRESULT hrAlpha = ReadShortcutTargetForShellCommandTest(alphaLink, alphaTarget);
@@ -3989,22 +3995,24 @@ struct ClipboardDropEffectReadStatus
     Debug::Perf::Emit(L"clipboard.paste_shortcut_command_return_us", L"navigate-away", commandReturnUs, 1u, 0u, S_OK);
 
     const uint64_t maxCommandUs = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(SelfTest::Scale(300ms)).count());
-    state.Require(
-        commandReturnUs < maxCommandUs,
-        std::format(L"Paste Shortcut command should not wait for delayed shortcut save; commandReturnUs={} maxUs={}.", commandReturnUs, maxCommandUs));
+    state.Require(commandReturnUs < maxCommandUs,
+                  std::format(L"Paste Shortcut command should not wait for delayed shortcut save; commandReturnUs={} maxUs={}.",
+                              commandReturnUs,
+                              maxCommandUs));
     state.Require(WaitForShellCommandLatencyConsume(SelfTestLatency::Point::PasteShortcutSave, 1u, SelfTest::Scale(1000ms)),
                   L"Close-safe Paste Shortcut worker should consume the shared PasteShortcutSave latency hook.");
 
-    const auto navigateStartedAt   = std::chrono::steady_clock::now();
+    const auto navigateStartedAt = std::chrono::steady_clock::now();
     const HRESULT switchProviderHr = g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system-dummy");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, std::filesystem::path(L"/"));
     const uint64_t navigateReturnUs = Debug::Perf::ElapsedUs(navigateStartedAt);
     Debug::Perf::Emit(L"clipboard.paste_shortcut_navigate_away_us", L"provider-switch", navigateReturnUs, 1u, 0u, switchProviderHr);
     const uint64_t maxNavigateUs = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(SelfTest::Scale(500ms)).count());
     state.Require(SUCCEEDED(switchProviderHr), L"Paste Shortcut provider-context test should switch to the dummy provider while work is delayed.");
-    state.Require(
-        navigateReturnUs < maxNavigateUs,
-        std::format(L"Provider switch during delayed Paste Shortcut should return quickly; navigateReturnUs={} maxUs={}.", navigateReturnUs, maxNavigateUs));
+    state.Require(navigateReturnUs < maxNavigateUs,
+                  std::format(L"Provider switch during delayed Paste Shortcut should return quickly; navigateReturnUs={} maxUs={}.",
+                              navigateReturnUs,
+                              maxNavigateUs));
     state.Require(std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left)) == L"builtin/file-system-dummy",
                   L"Pane should retain the dummy provider while Paste Shortcut worker is still delayed.");
 
@@ -4136,9 +4144,9 @@ struct ClipboardDropEffectReadStatus
                               static_cast<unsigned long>(staleLinkHr)));
     state.Require(alert.visible, L"Failed stale Paste Shortcut completion should show a pane alert after navigation away.");
     state.Require(alert.severity == FolderView::OverlaySeverity::Error, L"Failed stale Paste Shortcut alert should be an error.");
-    state.Require(
-        alert.hr == kForcedCreateFailure,
-        std::format(L"Failed stale Paste Shortcut alert should carry the CreateShellShortcut HRESULT; hr=0x{:08X}.", static_cast<unsigned long>(alert.hr)));
+    state.Require(alert.hr == kForcedCreateFailure,
+                  std::format(L"Failed stale Paste Shortcut alert should carry the CreateShellShortcut HRESULT; hr=0x{:08X}.",
+                              static_cast<unsigned long>(alert.hr)));
     state.Require(alert.title == LoadStringResource(nullptr, IDS_CMD_CLIPBOARD_PASTE_SHORTCUT),
                   L"Failed stale Paste Shortcut alert should use the localized command title.");
 
@@ -4219,96 +4227,66 @@ struct ClipboardDropEffectReadStatus
 
 void RunShellCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestOptions& options, SelfTest::SelfTestSuiteResult& suite) noexcept
 {
-    SelfTest::RunCase(options, suite, L"cmd_pane_openSecurity_routes_focused_item_security_page", [=](CaseState& state) noexcept {
-        return TestPaneOpenSecurityRoutesFocusedItem(mainWindow, state);
-    });
-    SelfTest::RunCase(options, suite, L"cmd_pane_contextMenuCurrentDirectory_routes_current_folder", [=](CaseState& state) noexcept {
-        return TestPaneContextMenuCurrentDirectoryRoutesFolder(mainWindow, state);
-    });
-    SelfTest::RunCase(options, suite, L"cmd_pane_changeAttributes_applies_attributes_removes_streams_and_reports", [=](CaseState& state) noexcept {
-        return TestPaneChangeAttributesAppliesAttributesRemovesStreamsAndReports(mainWindow, state);
-    });
-    SelfTest::RunCase(options, suite, L"cmd_pane_changeAttributes_recurse_applies_datetime_with_progress", [=](CaseState& state) noexcept {
-        return TestPaneChangeAttributesRecursesAndAppliesDateTimeWithProgress(mainWindow, state);
-    });
-    SelfTest::RunCase(options, suite, L"cmd_pane_goToShortcutOrLinkTarget_url_navigates_to_local_target", [=](CaseState& state) noexcept {
-        return TestPaneGoToShortcutOrLinkTargetUrlNavigatesToLocalTarget(mainWindow, state);
-    });
-    SelfTest::RunCase(options, suite, L"cmd_pane_goToShortcutOrLinkTarget_lnk_navigates_to_file_target", [=](CaseState& state) noexcept {
-        return TestPaneGoToShortcutOrLinkTargetLnkNavigatesToFileTarget(mainWindow, state);
-    });
-    SelfTest::RunCase(options, suite, L"cmd_pane_goToShortcutOrLinkTarget_lnk_navigates_to_directory_target", [=](CaseState& state) noexcept {
-        return TestPaneGoToShortcutOrLinkTargetLnkNavigatesToDirectoryTarget(mainWindow, state);
-    });
-    SelfTest::RunCase(options, suite, L"cmd_pane_goToShortcutOrLinkTarget_broken_lnk_reports_alert", [=](CaseState& state) noexcept {
-        return TestPaneGoToShortcutOrLinkTargetBrokenLnkReportsAlert(mainWindow, state);
-    });
-    SelfTest::RunCase(options, suite, L"cmd_pane_goToShortcutOrLinkTarget_web_url_reports_unsupported", [=](CaseState& state) noexcept {
-        return TestPaneGoToShortcutOrLinkTargetWebUrlReportsUnsupported(mainWindow, state);
-    });
-    SelfTest::RunCase(options, suite, L"cmd_pane_goToShortcutOrLinkTarget_junction_navigates_to_target", [=](CaseState& state) noexcept {
-        return TestPaneGoToShortcutOrLinkTargetJunctionNavigatesToTarget(mainWindow, state);
-    });
-    SelfTest::RunCase(options, suite, L"cmd_pane_executeOpen_junction_navigates_without_crash", [=](CaseState& state) noexcept {
-        return TestPaneExecuteOpenJunctionNavigatesWithoutCrashing(mainWindow, state);
-    });
-    SelfTest::RunCase(options, suite, L"cmd_pane_itemProperties_show_shortcut_and_reparse_targets", [=](CaseState& state) noexcept {
-        return TestPaneItemPropertiesShowShortcutAndReparseTargets(mainWindow, state);
-    });
-    SelfTest::RunCase(options, suite, L"cmd_pane_newFromShellTemplate_creates_null_data_and_filename_templates", [=](CaseState& state) noexcept {
-        return TestPaneNewFromShellTemplateCreatesNullDataAndFileNameTemplates(mainWindow, state);
-    });
-    SelfTest::RunCase(options, suite, L"cmd_pane_newFromShellTemplate_menu_and_missing_template_feedback", [=](CaseState& state) noexcept {
-        return TestPaneNewFromShellTemplateMenuAndMissingTemplateFeedback(mainWindow, state);
-    });
-    SelfTest::RunCase(options, suite, L"cmd_pane_clipboardCut_sets_move_drop_effect", [=](CaseState& state) noexcept {
-        return TestPaneClipboardCutSetsMoveDropEffect(mainWindow, state);
-    });
-    SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPaste_uses_preferred_move_effect", [=](CaseState& state) noexcept {
-        return TestPaneClipboardPasteUsesPreferredMoveEffect(mainWindow, state);
-    });
-    SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPaste_path_change_clears_stale_overlay", [=](CaseState& state) noexcept {
-        return TestPaneClipboardPasteIgnoresStaleOverlayAfterPathChange(mainWindow, state);
-    });
-    SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPaste_ignores_unfocused_navigation_edit", [=](CaseState& state) noexcept {
-        return TestPaneClipboardPasteIgnoresUnfocusedNavigationEdit(mainWindow, state);
-    });
-    SelfTest::RunCase(options, suite, L"Commands_FileOpsClipboardPasteUsesHostQueue", [=](CaseState& state) noexcept {
-        return TestFileOpsClipboardPasteUsesHostQueue(mainWindow, state);
-    });
-    SelfTest::RunCase(options, suite, L"Commands_FileOpsFolderPickerMoveUsesHostQueue", [=](CaseState& state) noexcept {
-        return TestFileOpsFolderPickerMoveUsesHostQueue(mainWindow, state);
-    });
-    SelfTest::RunCase(options, suite, L"Commands_FileOpsMissingCallbackRejectsDirectFallback", [=](CaseState& state) noexcept {
-        return TestFileOpsMissingCallbackRejectsDirectFallback(mainWindow, state);
-    });
-    SelfTest::RunCase(options, suite, L"Commands_FileOpsDragDropMissingCallbackRejectsDirectFallback", [=](CaseState& state) noexcept {
-        return TestFileOpsDragDropMissingCallbackRejectsDirectFallback(mainWindow, state);
-    });
-    SelfTest::RunCase(
-        options, suite, L"folderView_drop_integrity_guards", [=](CaseState& state) noexcept { return TestFolderViewDropIntegrityGuards(mainWindow, state); });
-    SelfTest::RunCase(options, suite, L"folderView_drop_rejects_malformed_payloads", [=](CaseState& state) noexcept {
-        return TestFolderViewRejectsMalformedDropPayloads(mainWindow, state);
-    });
-    SelfTest::RunCase(options, suite, L"folderView_pointer_targets_and_stale_hover_are_safe", [=](CaseState& state) noexcept {
-        return TestFolderViewPointerTargetsAndStaleHoverAreSafe(mainWindow, state);
-    });
-    SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPasteShortcut_creates_unique_links", [=](CaseState& state) noexcept {
-        return TestPaneClipboardPasteShortcutCreatesLinks(mainWindow, state);
-    });
-    SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPasteShortcut_concurrent_invocations_create_distinct_links", [=](CaseState& state) noexcept {
-        return TestPaneClipboardPasteShortcutConcurrentInvocationsCreateDistinctLinks(mainWindow, state);
-    });
-    SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPasteShortcut_returns_before_worker_complete", [=](CaseState& state) noexcept {
-        return TestPaneClipboardPasteShortcutReturnsBeforeWorkerComplete(mainWindow, state);
-    });
-    SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPasteShortcut_close_does_not_wait_for_worker", [=](CaseState& state) noexcept {
-        return TestPaneClipboardPasteShortcutCloseDoesNotWaitForWorker(mainWindow, state);
-    });
-    SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPasteShortcut_failure_after_navigate_shows_alert", [=](CaseState& state) noexcept {
-        return TestPaneClipboardPasteShortcutFailureAfterNavigateShowsAlert(mainWindow, state);
-    });
-    SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPasteShortcut_rejects_missing_clipboard_paths", [=](CaseState& state) noexcept {
-        return TestPaneClipboardPasteShortcutRejectsMissingClipboardPaths(mainWindow, state);
-    });
+    SelfTest::RunCase(options, suite, L"cmd_pane_openSecurity_routes_focused_item_security_page", [=](CaseState& state) noexcept
+    { return TestPaneOpenSecurityRoutesFocusedItem(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_contextMenuCurrentDirectory_routes_current_folder", [=](CaseState& state) noexcept
+    { return TestPaneContextMenuCurrentDirectoryRoutesFolder(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_changeAttributes_applies_attributes_removes_streams_and_reports", [=](CaseState& state) noexcept
+    { return TestPaneChangeAttributesAppliesAttributesRemovesStreamsAndReports(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_changeAttributes_recurse_applies_datetime_with_progress", [=](CaseState& state) noexcept
+    { return TestPaneChangeAttributesRecursesAndAppliesDateTimeWithProgress(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_goToShortcutOrLinkTarget_url_navigates_to_local_target", [=](CaseState& state) noexcept
+    { return TestPaneGoToShortcutOrLinkTargetUrlNavigatesToLocalTarget(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_goToShortcutOrLinkTarget_lnk_navigates_to_file_target", [=](CaseState& state) noexcept
+    { return TestPaneGoToShortcutOrLinkTargetLnkNavigatesToFileTarget(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_goToShortcutOrLinkTarget_lnk_navigates_to_directory_target", [=](CaseState& state) noexcept
+    { return TestPaneGoToShortcutOrLinkTargetLnkNavigatesToDirectoryTarget(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_goToShortcutOrLinkTarget_broken_lnk_reports_alert", [=](CaseState& state) noexcept
+    { return TestPaneGoToShortcutOrLinkTargetBrokenLnkReportsAlert(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_goToShortcutOrLinkTarget_web_url_reports_unsupported", [=](CaseState& state) noexcept
+    { return TestPaneGoToShortcutOrLinkTargetWebUrlReportsUnsupported(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_goToShortcutOrLinkTarget_junction_navigates_to_target", [=](CaseState& state) noexcept
+    { return TestPaneGoToShortcutOrLinkTargetJunctionNavigatesToTarget(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_executeOpen_junction_navigates_without_crash", [=](CaseState& state) noexcept
+    { return TestPaneExecuteOpenJunctionNavigatesWithoutCrashing(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_itemProperties_show_shortcut_and_reparse_targets", [=](CaseState& state) noexcept
+    { return TestPaneItemPropertiesShowShortcutAndReparseTargets(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_newFromShellTemplate_creates_null_data_and_filename_templates", [=](CaseState& state) noexcept
+    { return TestPaneNewFromShellTemplateCreatesNullDataAndFileNameTemplates(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_newFromShellTemplate_menu_and_missing_template_feedback", [=](CaseState& state) noexcept
+    { return TestPaneNewFromShellTemplateMenuAndMissingTemplateFeedback(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_clipboardCut_sets_move_drop_effect", [=](CaseState& state) noexcept
+    { return TestPaneClipboardCutSetsMoveDropEffect(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPaste_uses_preferred_move_effect", [=](CaseState& state) noexcept
+    { return TestPaneClipboardPasteUsesPreferredMoveEffect(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPaste_path_change_clears_stale_overlay", [=](CaseState& state) noexcept
+    { return TestPaneClipboardPasteIgnoresStaleOverlayAfterPathChange(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPaste_ignores_unfocused_navigation_edit", [=](CaseState& state) noexcept
+    { return TestPaneClipboardPasteIgnoresUnfocusedNavigationEdit(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"Commands_FileOpsClipboardPasteUsesHostQueue", [=](CaseState& state) noexcept
+    { return TestFileOpsClipboardPasteUsesHostQueue(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"Commands_FileOpsFolderPickerMoveUsesHostQueue", [=](CaseState& state) noexcept
+    { return TestFileOpsFolderPickerMoveUsesHostQueue(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"Commands_FileOpsMissingCallbackRejectsDirectFallback", [=](CaseState& state) noexcept
+    { return TestFileOpsMissingCallbackRejectsDirectFallback(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"Commands_FileOpsDragDropMissingCallbackRejectsDirectFallback", [=](CaseState& state) noexcept
+    { return TestFileOpsDragDropMissingCallbackRejectsDirectFallback(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"folderView_drop_integrity_guards", [=](CaseState& state) noexcept
+    { return TestFolderViewDropIntegrityGuards(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"folderView_drop_rejects_malformed_payloads", [=](CaseState& state) noexcept
+    { return TestFolderViewRejectsMalformedDropPayloads(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"folderView_pointer_targets_and_stale_hover_are_safe", [=](CaseState& state) noexcept
+    { return TestFolderViewPointerTargetsAndStaleHoverAreSafe(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPasteShortcut_creates_unique_links", [=](CaseState& state) noexcept
+    { return TestPaneClipboardPasteShortcutCreatesLinks(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPasteShortcut_concurrent_invocations_create_distinct_links", [=](CaseState& state) noexcept
+    { return TestPaneClipboardPasteShortcutConcurrentInvocationsCreateDistinctLinks(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPasteShortcut_returns_before_worker_complete", [=](CaseState& state) noexcept
+    { return TestPaneClipboardPasteShortcutReturnsBeforeWorkerComplete(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPasteShortcut_close_does_not_wait_for_worker", [=](CaseState& state) noexcept
+    { return TestPaneClipboardPasteShortcutCloseDoesNotWaitForWorker(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPasteShortcut_failure_after_navigate_shows_alert", [=](CaseState& state) noexcept
+    { return TestPaneClipboardPasteShortcutFailureAfterNavigateShowsAlert(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPasteShortcut_rejects_missing_clipboard_paths", [=](CaseState& state) noexcept
+    { return TestPaneClipboardPasteShortcutRejectsMissingClipboardPaths(mainWindow, state); });
 }

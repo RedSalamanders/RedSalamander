@@ -841,50 +841,50 @@ public:
 
     struct PaneViewOptionsDebugSnapshot
     {
-        bool fileExtensionsVisible                  = true;
-        bool navigationBarVisible                   = true;
-        bool navigationViewWindowVisible            = false;
-        bool filterBarVisible                       = false;
-        bool filterBarWindowVisible                 = false;
-        bool filterBarUsesDxUiHost                  = false;
-        bool filterBarLabelVisible                  = false;
-        bool filterBarComboVisible                  = false;
-        bool filterBarToggleVisible                 = false;
-        bool filterBarToggleChecked                 = false;
-        bool filterEnabled                          = false;
-        bool thumbnailsVisible                      = false;
-        float thumbnailTargetDip                    = 16.0f;
-        uint64_t thumbnailQueuedCount               = 0;
-        uint64_t thumbnailCompletedCount            = 0;
-        uint64_t thumbnailFallbackCount             = 0;
-        uint64_t thumbnailStaleDropCount            = 0;
-        uint64_t thumbnailPendingCount              = 0;
-        uint64_t thumbnailCacheHitCount             = 0;
-        uint64_t thumbnailShellSuccessCount         = 0;
-        uint64_t thumbnailShellCacheHitCount        = 0;
-        uint64_t thumbnailShellCacheMissCount       = 0;
+        bool fileExtensionsVisible               = true;
+        bool navigationBarVisible                = true;
+        bool navigationViewWindowVisible         = false;
+        bool filterBarVisible                    = false;
+        bool filterBarWindowVisible              = false;
+        bool filterBarUsesDxUiHost               = false;
+        bool filterBarLabelVisible               = false;
+        bool filterBarComboVisible               = false;
+        bool filterBarToggleVisible              = false;
+        bool filterBarToggleChecked              = false;
+        bool filterEnabled                       = false;
+        bool thumbnailsVisible                   = false;
+        float thumbnailTargetDip                 = 16.0f;
+        uint64_t thumbnailQueuedCount            = 0;
+        uint64_t thumbnailCompletedCount         = 0;
+        uint64_t thumbnailFallbackCount          = 0;
+        uint64_t thumbnailStaleDropCount         = 0;
+        uint64_t thumbnailPendingCount           = 0;
+        uint64_t thumbnailCacheHitCount          = 0;
+        uint64_t thumbnailShellSuccessCount      = 0;
+        uint64_t thumbnailShellCacheHitCount     = 0;
+        uint64_t thumbnailShellCacheMissCount    = 0;
         uint64_t thumbnailShellProviderAllowedCount = 0;
         uint64_t thumbnailShellProviderTimeoutCount = 0;
-        uint64_t thumbnailWicSuccessCount           = 0;
-        uint64_t thumbnailWicFactoryCreateCount     = 0;
-        uint64_t thumbnailDecodeFailureCount        = 0;
-        uint64_t thumbnailVisibleApplyCount         = 0;
-        uint64_t thumbnailVisibleItemCount          = 0;
-        uint64_t thumbnailVisibleThumbnailCount     = 0;
-        uint64_t thumbnailTotalThumbnailCount       = 0;
-        uint64_t thumbnailCacheBytes                = 0;
-        uint64_t thumbnailCacheEvictedCount         = 0;
-        uint64_t thumbnailCancelCount               = 0;
-        bool thumbnailLastDrawSawThumbnail          = false;
-        uint32_t thumbnailLastDrawSourceWidthPx     = 0;
-        uint32_t thumbnailLastDrawSourceHeightPx    = 0;
-        D2D1_RECT_F thumbnailLastDrawSlotRectDip    = D2D1::RectF();
-        D2D1_RECT_F thumbnailLastDrawRectDip        = D2D1::RectF();
-        bool iconLastDrawSawIcon                    = false;
-        uint32_t iconLastDrawSourceWidthPx          = 0;
-        uint32_t iconLastDrawSourceHeightPx         = 0;
-        D2D1_RECT_F iconLastDrawSlotRectDip         = D2D1::RectF();
-        D2D1_RECT_F iconLastDrawRectDip             = D2D1::RectF();
+        uint64_t thumbnailWicSuccessCount        = 0;
+        uint64_t thumbnailWicFactoryCreateCount  = 0;
+        uint64_t thumbnailDecodeFailureCount     = 0;
+        uint64_t thumbnailVisibleApplyCount      = 0;
+        uint64_t thumbnailVisibleItemCount       = 0;
+        uint64_t thumbnailVisibleThumbnailCount  = 0;
+        uint64_t thumbnailTotalThumbnailCount    = 0;
+        uint64_t thumbnailCacheBytes             = 0;
+        uint64_t thumbnailCacheEvictedCount      = 0;
+        uint64_t thumbnailCancelCount            = 0;
+        bool thumbnailLastDrawSawThumbnail       = false;
+        uint32_t thumbnailLastDrawSourceWidthPx  = 0;
+        uint32_t thumbnailLastDrawSourceHeightPx = 0;
+        D2D1_RECT_F thumbnailLastDrawSlotRectDip = D2D1::RectF();
+        D2D1_RECT_F thumbnailLastDrawRectDip     = D2D1::RectF();
+        bool iconLastDrawSawIcon                 = false;
+        uint32_t iconLastDrawSourceWidthPx       = 0;
+        uint32_t iconLastDrawSourceHeightPx      = 0;
+        D2D1_RECT_F iconLastDrawSlotRectDip      = D2D1::RectF();
+        D2D1_RECT_F iconLastDrawRectDip          = D2D1::RectF();
         std::wstring filterText;
         std::wstring filterBarText;
         std::wstring filterBarFieldText;
@@ -896,35 +896,35 @@ public:
 
     struct PreviewPaneDebugSnapshot
     {
-        bool active                                    = false;
-        Pane sourcePane                                = Pane::Left;
-        Pane hostPane                                  = Pane::Right;
-        bool tabsVisible                               = false;
-        bool tabsUseDxUiHost                           = false;
-        bool previewTabsHasHeaderDivider               = false;
-        bool previewTabSelected                        = false;
-        bool folderTabSelected                         = true;
-        bool previewContentVisible                     = false;
-        bool previewContentUsesDxUiHost                = false;
-        bool previewUsesEmbeddedViewer                 = false;
-        bool previewPropertiesCardMode                 = false;
-        bool previewPropertiesUsesScrollPanel          = false;
-        bool previewPropertiesCanScroll                = false;
-        bool previewPropertiesUsesRainbow              = false;
-        bool folderViewVisible                         = true;
-        bool previewCloseButtonVisible                 = false;
-        HWND previewTabsHwnd                           = nullptr;
-        HWND previewContentHwnd                        = nullptr;
-        HWND previewEmbeddedViewerHwnd                 = nullptr;
-        uintptr_t previewViewerInstanceId              = 0;
-        size_t previewDirectChildCount                 = 0u;
-        size_t previewVisibleDirectChildCount          = 0u;
-        size_t previewOwnVisibleDirectChildCount       = 0u;
-        size_t previewLastOpenCreatedChildCount        = 0u;
-        size_t previewLastOpenDetectedChildCount       = 0u;
+        bool active                           = false;
+        Pane sourcePane                       = Pane::Left;
+        Pane hostPane                         = Pane::Right;
+        bool tabsVisible                      = false;
+        bool tabsUseDxUiHost                  = false;
+        bool previewTabsHasHeaderDivider      = false;
+        bool previewTabSelected               = false;
+        bool folderTabSelected                = true;
+        bool previewContentVisible            = false;
+        bool previewContentUsesDxUiHost       = false;
+        bool previewUsesEmbeddedViewer        = false;
+        bool previewPropertiesCardMode        = false;
+        bool previewPropertiesUsesScrollPanel = false;
+        bool previewPropertiesCanScroll       = false;
+        bool previewPropertiesUsesRainbow     = false;
+        bool folderViewVisible                = true;
+        bool previewCloseButtonVisible        = false;
+        HWND previewTabsHwnd                  = nullptr;
+        HWND previewContentHwnd               = nullptr;
+        HWND previewEmbeddedViewerHwnd        = nullptr;
+        uintptr_t previewViewerInstanceId     = 0;
+        size_t previewDirectChildCount        = 0u;
+        size_t previewVisibleDirectChildCount = 0u;
+        size_t previewOwnVisibleDirectChildCount = 0u;
+        size_t previewLastOpenCreatedChildCount = 0u;
+        size_t previewLastOpenDetectedChildCount = 0u;
         size_t previewLastOpenHiddenRejectedChildCount = 0u;
-        bool previewLastOpenRejectedChildCardinality   = false;
-        bool previewLastReopenRejectedChildSet         = false;
+        bool previewLastOpenRejectedChildCardinality = false;
+        bool previewLastReopenRejectedChildSet = false;
         RECT tabRect{};
         RECT folderTabClientRect{};
         RECT previewTabClientRect{};
@@ -1021,8 +1021,8 @@ public:
         HRESULT hr = S_OK;
         std::filesystem::path archivePath;
         std::filesystem::path destinationPath;
-        uint64_t entryCount           = 0u;
-        uint64_t bytesProcessed       = 0u;
+        uint64_t entryCount     = 0u;
+        uint64_t bytesProcessed = 0u;
         uint64_t skippedConflictCount = 0u;
         std::vector<std::wstring> entries;
     };
@@ -1068,8 +1068,11 @@ public:
     [[nodiscard]] bool DebugClickSplitterArrow(Pane pane) noexcept;
     [[nodiscard]] bool DebugGetPaneViewOptionsSnapshot(Pane pane, PaneViewOptionsDebugSnapshot& out) const;
     void DebugSetThumbnailProviderMode(Pane pane, FolderView::DebugThumbnailProviderMode mode) noexcept;
-    [[nodiscard]] bool DebugSeedThumbnailPendingAndPostThumbnailBitmapMessagesForTest(
-        Pane pane, uint64_t pendingCount, uint64_t staleBatchMessageCount, uint64_t staleGenerationMessageCount, uint64_t unaccountedCurrentMessageCount);
+    [[nodiscard]] bool DebugSeedThumbnailPendingAndPostThumbnailBitmapMessagesForTest(Pane pane,
+                                                                                      uint64_t pendingCount,
+                                                                                      uint64_t staleBatchMessageCount,
+                                                                                      uint64_t staleGenerationMessageCount,
+                                                                                      uint64_t unaccountedCurrentMessageCount);
     [[nodiscard]] bool DebugGetPreviewPaneSnapshot(PreviewPaneDebugSnapshot& out) const noexcept;
     void DebugSetNextPreviewEmbeddedChildFaultForTest(PreviewEmbeddedChildFaultForTest fault) noexcept;
     [[nodiscard]] bool DebugSetPreviewPaneTab(Pane hostPane, bool previewTab) noexcept;
@@ -1742,11 +1745,11 @@ private:
 
 #ifdef ENABLE_TESTS
     PreviewEmbeddedChildFaultForTest _debugNextPreviewEmbeddedChildFault = PreviewEmbeddedChildFaultForTest::None;
-    size_t _debugPreviewLastOpenCreatedChildCount                        = 0u;
-    size_t _debugPreviewLastOpenDetectedChildCount                       = 0u;
-    size_t _debugPreviewLastOpenHiddenRejectedChildCount                 = 0u;
-    bool _debugPreviewLastOpenRejectedChildCardinality                   = false;
-    bool _debugPreviewLastReopenRejectedChildSet                         = false;
+    size_t _debugPreviewLastOpenCreatedChildCount = 0u;
+    size_t _debugPreviewLastOpenDetectedChildCount = 0u;
+    size_t _debugPreviewLastOpenHiddenRejectedChildCount = 0u;
+    bool _debugPreviewLastOpenRejectedChildCardinality = false;
+    bool _debugPreviewLastReopenRejectedChildSet = false;
 #endif
 
     friend LRESULT CALLBACK FolderWindowDxHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;

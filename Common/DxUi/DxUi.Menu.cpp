@@ -56,40 +56,40 @@ namespace
 // Menu layout constants (WinUI spec §3.2)
 // ---------------------------------------------------------------------------
 
-constexpr float kMenuCornerRadiusDip          = kPopupRoundSmallCornerRadiusDip;
-constexpr float kMenuBorderDip                = 1.0f;
-constexpr float kMenuPaddingTopDip            = 4.0f;
-constexpr float kMenuPaddingBottomDip         = 4.0f;
-constexpr float kMenuMinWidthDip              = 128.0f;
-constexpr float kMenuMaxWidthDip              = 456.0f;
-constexpr float kMenuShadowLeftDip            = 10.0f;
-constexpr float kMenuShadowTopDip             = 8.0f;
-constexpr float kMenuShadowRightDip           = 10.0f;
-constexpr float kMenuShadowBottomDip          = 14.0f;
-constexpr float kIconAreaWidthDip             = 28.0f;
-constexpr float kTextLeftPaddingDip           = 36.0f;
-constexpr float kTextToAccelGapDip            = 16.0f;
-constexpr float kAccelRightPaddingDip         = 16.0f;
-constexpr float kChevronRightPaddingDip       = 12.0f;
-constexpr float kChevronAreaWidthDip          = 24.0f;
-constexpr float kItemHoverRadiusDip           = 4.0f;
-constexpr float kItemHoverInsetDip            = 4.0f;
-constexpr float kIconSlotLeftInsetDip         = kMenuBorderDip + kItemHoverInsetDip + 2.0f;
-constexpr float kIconSlotWidthDip             = kIconAreaWidthDip - kItemHoverInsetDip - 2.0f;
-constexpr float kSeparatorHeightDip           = 9.0f; // 1px line + 4 DIP margin above/below
-constexpr float kSeparatorMarginDip           = 4.0f;
-constexpr float kSliderItemHeightDip          = 72.0f;
-constexpr float kSliderTrackInsetDip          = 16.0f;
-constexpr float kSliderTrackTopDip            = 50.0f;
-constexpr float kSliderTrackHeightDip         = 2.0f;
-constexpr float kSliderStopMinExtentDip       = 8.0f;
-constexpr float kSliderStopMaxExtentDip       = 20.0f;
-constexpr float kSliderStopCornerRadiusDip    = 2.0f;
+constexpr float kMenuCornerRadiusDip       = kPopupRoundSmallCornerRadiusDip;
+constexpr float kMenuBorderDip             = 1.0f;
+constexpr float kMenuPaddingTopDip         = 4.0f;
+constexpr float kMenuPaddingBottomDip      = 4.0f;
+constexpr float kMenuMinWidthDip           = 128.0f;
+constexpr float kMenuMaxWidthDip           = 456.0f;
+constexpr float kMenuShadowLeftDip         = 10.0f;
+constexpr float kMenuShadowTopDip          = 8.0f;
+constexpr float kMenuShadowRightDip        = 10.0f;
+constexpr float kMenuShadowBottomDip       = 14.0f;
+constexpr float kIconAreaWidthDip          = 28.0f;
+constexpr float kTextLeftPaddingDip        = 36.0f;
+constexpr float kTextToAccelGapDip         = 16.0f;
+constexpr float kAccelRightPaddingDip      = 16.0f;
+constexpr float kChevronRightPaddingDip    = 12.0f;
+constexpr float kChevronAreaWidthDip       = 24.0f;
+constexpr float kItemHoverRadiusDip        = 4.0f;
+constexpr float kItemHoverInsetDip         = 4.0f;
+constexpr float kIconSlotLeftInsetDip      = kMenuBorderDip + kItemHoverInsetDip + 2.0f;
+constexpr float kIconSlotWidthDip          = kIconAreaWidthDip - kItemHoverInsetDip - 2.0f;
+constexpr float kSeparatorHeightDip        = 9.0f; // 1px line + 4 DIP margin above/below
+constexpr float kSeparatorMarginDip        = 4.0f;
+constexpr float kSliderItemHeightDip       = 72.0f;
+constexpr float kSliderTrackInsetDip       = 16.0f;
+constexpr float kSliderTrackTopDip         = 50.0f;
+constexpr float kSliderTrackHeightDip      = 2.0f;
+constexpr float kSliderStopMinExtentDip    = 8.0f;
+constexpr float kSliderStopMaxExtentDip    = 20.0f;
+constexpr float kSliderStopCornerRadiusDip     = 2.0f;
 constexpr uint64_t kSliderAnimationDurationMs = 160u;
-constexpr float kSliderMenuMinWidthDip        = 260.0f;
-constexpr float kSubmenuVerticalOffsetDip     = 4.0f;
-constexpr float kCascadeHoverDelayMs          = 400;
-constexpr float kTextMeasureWidthDip          = 1024.0f;
+constexpr float kSliderMenuMinWidthDip     = 260.0f;
+constexpr float kSubmenuVerticalOffsetDip  = 4.0f;
+constexpr float kCascadeHoverDelayMs       = 400;
+constexpr float kTextMeasureWidthDip       = 1024.0f;
 #if DXUI_MENU_PERSISTENT_DIAGNOSTICS
 constexpr uint64_t kMenuLoopTraceRepeatFlushCount = 1024u;
 #endif
@@ -1239,12 +1239,12 @@ struct MenuItemLayoutRects
 static constexpr wchar_t kMenuWindowClass[] = L"DxUi_ContextMenu";
 static std::atomic<bool> s_classRegistered  = false;
 #if defined(ENABLE_TESTS)
-static constexpr UINT kMenuDebugCaptureBitmapMessage    = WM_APP + 0x214;
-static constexpr UINT kMenuDebugGetItemTextMessage      = WM_APP + 0x215;
-static constexpr UINT kMenuDebugSetBackdropMessage      = WM_APP + 0x216;
-static constexpr UINT kMenuDebugGetStateMessage         = WM_APP + 0x217;
-static constexpr UINT kMenuDebugGetItemRectMessage      = WM_APP + 0x218;
-static constexpr UINT kMenuDebugGetItemPaintMessage     = WM_APP + 0x219;
+static constexpr UINT kMenuDebugCaptureBitmapMessage = WM_APP + 0x214;
+static constexpr UINT kMenuDebugGetItemTextMessage   = WM_APP + 0x215;
+static constexpr UINT kMenuDebugSetBackdropMessage   = WM_APP + 0x216;
+static constexpr UINT kMenuDebugGetStateMessage      = WM_APP + 0x217;
+static constexpr UINT kMenuDebugGetItemRectMessage   = WM_APP + 0x218;
+static constexpr UINT kMenuDebugGetItemPaintMessage  = WM_APP + 0x219;
 static constexpr DWORD kMenuDebugStateDispatchTimeoutMs = 1000u;
 #endif
 
@@ -1310,14 +1310,14 @@ struct MenuPopup
 
     std::optional<size_t> draggingSliderItemIndex;
     std::optional<size_t> sliderAnimationItemIndex;
-    float sliderAnimatedPosition         = 0.0f;
-    float sliderAnimationStartPosition   = 0.0f;
-    float sliderAnimationTargetPosition  = 0.0f;
+    float sliderAnimatedPosition        = 0.0f;
+    float sliderAnimationStartPosition  = 0.0f;
+    float sliderAnimationTargetPosition = 0.0f;
     uint64_t sliderAnimationStartTickMs  = 0u;
     bool sliderAnimationActive           = false;
     bool sliderAnimationInitialized      = false;
     uint64_t sliderDragTargetChangeCount = 0u;
-    size_t lastPaintedItemCount          = 0u;
+    size_t lastPaintedItemCount           = 0u;
     std::chrono::steady_clock::time_point sliderInteractionStartedAt{};
 
     UINT_PTR hoverTimerId                = 0;
@@ -1701,16 +1701,16 @@ void InvalidatePopup(MenuPopup& popup) noexcept
 
 void SetSliderAnimationTarget(MenuPopup& popup, float targetPosition) noexcept
 {
-    const float maxPosition   = popup.draggingSliderItemIndex.has_value() && popup.draggingSliderItemIndex.value() < popup.itemCount
-                                    ? static_cast<float>((std::max)(size_t{1u}, popup.items[popup.draggingSliderItemIndex.value()].sliderStops.size()) - 1u)
-                                    : targetPosition;
+    const float maxPosition = popup.draggingSliderItemIndex.has_value() && popup.draggingSliderItemIndex.value() < popup.itemCount
+                                  ? static_cast<float>((std::max)(size_t{1u}, popup.items[popup.draggingSliderItemIndex.value()].sliderStops.size()) - 1u)
+                                  : targetPosition;
     const float clampedTarget = std::clamp(targetPosition, 0.0f, maxPosition);
     if (! popup.sliderAnimationInitialized)
     {
         popup.sliderAnimatedPosition        = clampedTarget;
         popup.sliderAnimationStartPosition  = clampedTarget;
         popup.sliderAnimationTargetPosition = clampedTarget;
-        popup.sliderAnimationInitialized    = true;
+        popup.sliderAnimationInitialized     = true;
         return;
     }
 
@@ -1748,10 +1748,10 @@ void SetSliderAnimationTarget(MenuPopup& popup, float targetPosition) noexcept
         return false;
     }
 
-    const uint64_t elapsedMs     = nowTickMs > popup.sliderAnimationStartTickMs ? nowTickMs - popup.sliderAnimationStartTickMs : 0u;
-    const float progress         = std::clamp(static_cast<float>(elapsedMs) / static_cast<float>(kSliderAnimationDurationMs), 0.0f, 1.0f);
-    const float inverse          = 1.0f - progress;
-    const float eased            = 1.0f - (inverse * inverse * inverse);
+    const uint64_t elapsedMs = nowTickMs > popup.sliderAnimationStartTickMs ? nowTickMs - popup.sliderAnimationStartTickMs : 0u;
+    const float progress     = std::clamp(static_cast<float>(elapsedMs) / static_cast<float>(kSliderAnimationDurationMs), 0.0f, 1.0f);
+    const float inverse      = 1.0f - progress;
+    const float eased        = 1.0f - (inverse * inverse * inverse);
     popup.sliderAnimatedPosition = std::lerp(popup.sliderAnimationStartPosition, popup.sliderAnimationTargetPosition, eased);
     if (progress >= 1.0f)
     {
@@ -2069,11 +2069,11 @@ struct MenuDebugGetItemPaintRequest
 
 struct MenuDebugGetStateDispatch
 {
-    MenuDebugGetStateDispatch()                                            = default;
-    MenuDebugGetStateDispatch(const MenuDebugGetStateDispatch&)            = delete;
-    MenuDebugGetStateDispatch& operator=(const MenuDebugGetStateDispatch&) = delete;
-    MenuDebugGetStateDispatch(MenuDebugGetStateDispatch&&)                 = delete;
-    MenuDebugGetStateDispatch& operator=(MenuDebugGetStateDispatch&&)      = delete;
+    MenuDebugGetStateDispatch()                                                = default;
+    MenuDebugGetStateDispatch(const MenuDebugGetStateDispatch&)                = delete;
+    MenuDebugGetStateDispatch& operator=(const MenuDebugGetStateDispatch&)     = delete;
+    MenuDebugGetStateDispatch(MenuDebugGetStateDispatch&&)                     = delete;
+    MenuDebugGetStateDispatch& operator=(MenuDebugGetStateDispatch&&)          = delete;
 
     enum class State : uint8_t
     {
@@ -2090,11 +2090,11 @@ struct MenuDebugGetStateDispatch
 
 struct MenuDebugGetStatePayload
 {
-    MenuDebugGetStatePayload()                                           = default;
-    MenuDebugGetStatePayload(const MenuDebugGetStatePayload&)            = delete;
-    MenuDebugGetStatePayload& operator=(const MenuDebugGetStatePayload&) = delete;
-    MenuDebugGetStatePayload(MenuDebugGetStatePayload&&)                 = delete;
-    MenuDebugGetStatePayload& operator=(MenuDebugGetStatePayload&&)      = delete;
+    MenuDebugGetStatePayload()                                             = default;
+    MenuDebugGetStatePayload(const MenuDebugGetStatePayload&)               = delete;
+    MenuDebugGetStatePayload& operator=(const MenuDebugGetStatePayload&)    = delete;
+    MenuDebugGetStatePayload(MenuDebugGetStatePayload&&)                    = delete;
+    MenuDebugGetStatePayload& operator=(MenuDebugGetStatePayload&&)         = delete;
 
     ~MenuDebugGetStatePayload() noexcept
     {
@@ -2653,9 +2653,11 @@ public:
         size_t paintedItemCount = 0u;
         for (size_t i = firstVisibleItem; i < popup->itemCount; ++i)
         {
-            const auto& item       = popup->items[i];
-            const float y          = popup->itemOffsetsDip.size() == popup->itemCount + 1u ? popup->itemOffsetsDip[i] : kMenuPaddingTopDip;
-            const float itemHeight = popup->itemOffsetsDip.size() == popup->itemCount + 1u ? popup->itemOffsetsDip[i + 1u] - y : itemHeightDip;
+            const auto& item = popup->items[i];
+            const float y = popup->itemOffsetsDip.size() == popup->itemCount + 1u ? popup->itemOffsetsDip[i] : kMenuPaddingTopDip;
+            const float itemHeight = popup->itemOffsetsDip.size() == popup->itemCount + 1u
+                                         ? popup->itemOffsetsDip[i + 1u] - y
+                                         : itemHeightDip;
 
             const D2D1_RECT_F itemRect        = D2D1::RectF(kMenuBorderDip, y, contentWidth - kMenuBorderDip, y + itemHeight);
             const D2D1_RECT_F visibleItemRect = D2D1::RectF(surfaceLeft + itemRect.left,
@@ -2749,14 +2751,14 @@ public:
                 const size_t stopCount = item.sliderStops.size();
                 if (activeBrush && stopCount > 0u)
                 {
-                    const uint32_t sliderValue   = ClampSliderValue(item);
-                    const float trackCenterY     = (trackRect.top + trackRect.bottom) * 0.5f;
+                    const uint32_t sliderValue = ClampSliderValue(item);
+                    const float trackCenterY   = (trackRect.top + trackRect.bottom) * 0.5f;
                     const float animatedPosition = popup->sliderAnimationItemIndex == std::optional<size_t>{i} && popup->sliderAnimationInitialized
                                                        ? popup->sliderAnimatedPosition
                                                        : static_cast<float>(sliderValue);
-                    const float activeRight =
-                        stopCount <= 1u ? trackRect.left
-                                        : trackRect.left + ((trackRect.right - trackRect.left) * animatedPosition / static_cast<float>(stopCount - 1u));
+                    const float activeRight = stopCount <= 1u
+                                                  ? trackRect.left
+                                                  : trackRect.left + ((trackRect.right - trackRect.left) * animatedPosition / static_cast<float>(stopCount - 1u));
                     if (activeRight > trackRect.left)
                     {
                         const D2D1_RECT_F activeRect = D2D1::RectF(trackRect.left, trackRect.top, activeRight, trackRect.bottom);
@@ -2783,12 +2785,14 @@ public:
                         }
                     }
 
-                    const float animatedT   = stopCount <= 1u ? 0.0f : std::clamp(animatedPosition / static_cast<float>(stopCount - 1u), 0.0f, 1.0f);
-                    const float thumbX      = std::lerp(trackRect.left, trackRect.right, animatedT);
+                    const float animatedT = stopCount <= 1u ? 0.0f : std::clamp(animatedPosition / static_cast<float>(stopCount - 1u), 0.0f, 1.0f);
+                    const float thumbX    = std::lerp(trackRect.left, trackRect.right, animatedT);
                     const float thumbExtent = std::lerp(kSliderStopMinExtentDip, kSliderStopMaxExtentDip, animatedT);
                     const D2D1_ROUNDED_RECT thumbRect{
-                        D2D1::RectF(
-                            thumbX - thumbExtent * 0.5f, trackCenterY - thumbExtent * 0.5f, thumbX + thumbExtent * 0.5f, trackCenterY + thumbExtent * 0.5f),
+                        D2D1::RectF(thumbX - thumbExtent * 0.5f,
+                                    trackCenterY - thumbExtent * 0.5f,
+                                    thumbX + thumbExtent * 0.5f,
+                                    trackCenterY + thumbExtent * 0.5f),
                         kSliderStopCornerRadiusDip,
                         kSliderStopCornerRadiusDip,
                     };
@@ -2920,6 +2924,7 @@ public:
                                  DWRITE_TEXT_ALIGNMENT_CENTER,
                                  DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
             }
+
         }
 
         popup->lastPaintedItemCount = paintedItemCount;
@@ -3250,7 +3255,7 @@ void RelayoutMenuPopupForDpi(MenuPopup& popup, UINT dpi, const RECT* suggestedWi
     popup.contentHeightDip       = sizeDip.height;
     popup.draggingScrollbarThumb = false;
     popup.draggingSliderItemIndex.reset();
-    popup.scrollbarHotPart = MenuPopup::ScrollbarHotPart::None;
+    popup.scrollbarHotPart       = MenuPopup::ScrollbarHotPart::None;
     popup.ClampScrollOffset();
 
     SetWindowPos(popup.hwnd, HWND_TOP, windowRect.left, windowRect.top, windowWidthPx, windowHeightPx, SWP_NOACTIVATE | SWP_NOOWNERZORDER);
@@ -5162,7 +5167,7 @@ void RunMenuModalLoop(MenuController& controller)
             flushRepeatedMessageTrace();
             if (controller.sessionCallbacks.switchRootFromMenuBarHover)
             {
-                const size_t hoverIndex            = static_cast<size_t>(msg.wParam);
+                const size_t hoverIndex             = static_cast<size_t>(msg.wParam);
                 const std::uintptr_t hoverSequence = static_cast<std::uintptr_t>(msg.lParam);
                 if (auto request = controller.sessionCallbacks.switchRootFromMenuBarHover(hoverIndex, hoverSequence); request.has_value())
                 {

@@ -729,6 +729,7 @@ struct ResultListMutation
     bool inserted = false;
 };
 
+
 [[nodiscard]] uint64_t MakeResultStableId(const FindResultRecord& record) noexcept
 {
     return (static_cast<uint64_t>(StableHash32(record.key)) << 32u) ^ static_cast<uint64_t>(StableHash32(record.relativePath));
@@ -1856,10 +1857,10 @@ private:
     void OnGridContextMenu(Grid& sender, size_t rowIndex, POINT screenPoint) override;
     [[nodiscard]] wil::com_ptr<ID2D1Bitmap1> GetGridIconBitmap(const Grid& sender, int iconIndex, float targetDipSize, ID2D1DeviceContext* d2dContext) override;
 
-    HWND _ownerWindow                      = nullptr;
+    HWND _ownerWindow                     = nullptr;
     FolderWindow* _applicationFolderWindow = nullptr;
-    HWND _restoreFocusWindow               = nullptr;
-    Common::Settings::Settings* _settings  = nullptr;
+    HWND _restoreFocusWindow              = nullptr;
+    Common::Settings::Settings* _settings = nullptr;
     AppTheme _theme{};
     FindFilesPaneContext _context;
     size_t _dispatchDepth      = 0u;
@@ -2138,7 +2139,7 @@ struct SearchCallbacks final : IFileSystemSearchCallback
         payload->epoch      = _epoch;
         payload->enqueuedAt = now;
         _batch.clear();
-        _batchFirstQueuedAt       = {};
+        _batchFirstQueuedAt = {};
         const WPARAM operationKey = static_cast<WPARAM>(payload->epoch);
         if (! PostMessagePayload(_hwnd, WndMsg::kFindSearchResults, operationKey, std::move(payload)))
         {
@@ -2476,7 +2477,7 @@ void SearchSessionController::Run(SearchRequest request, uint64_t epoch) noexcep
     if (complete)
     {
         const WPARAM operationKey = static_cast<WPARAM>(complete->epoch);
-        completionQueued          = PostMessagePayload(_ownerHwnd, WndMsg::kFindSearchComplete, operationKey, std::move(complete));
+        completionQueued = PostMessagePayload(_ownerHwnd, WndMsg::kFindSearchComplete, operationKey, std::move(complete));
     }
     if (! completionQueued)
     {
@@ -2485,8 +2486,8 @@ void SearchSessionController::Run(SearchRequest request, uint64_t epoch) noexcep
         // completion so the UI thread still runs OnSearchComplete -> CompleteDeferredCloseIfReady and a
         // deferred window close does not leak the hidden window. Best-effort: if even this post fails the
         // window survives until app teardown, but no UI-thread state is corrupted.
-        static_cast<void>(
-            PostMessagePayload(_ownerHwnd, WndMsg::kFindSearchComplete, static_cast<WPARAM>(epoch), std::unique_ptr<FindSearchCompletePayload>{}));
+        static_cast<void>(PostMessagePayload(
+            _ownerHwnd, WndMsg::kFindSearchComplete, static_cast<WPARAM>(epoch), std::unique_ptr<FindSearchCompletePayload>{}));
     }
 }
 
@@ -3433,10 +3434,9 @@ void FindFilesWindow::EnsureFileOperationCompletedSubscription() noexcept
     {
         return;
     }
-    _fileOperationCompletedCallbackToken =
-        _applicationFolderWindow->AddFileOperationCompletedCallback([this](const FolderWindow::FileOperationCompletedEvent& e) noexcept {
-        OnFolderWindowFileOperationCompleted(e);
-    }, _fileOperationCompletedCallbackLifetime);
+    _fileOperationCompletedCallbackToken = _applicationFolderWindow->AddFileOperationCompletedCallback([this](const FolderWindow::FileOperationCompletedEvent& e) noexcept
+    { OnFolderWindowFileOperationCompleted(e); },
+                                                                                            _fileOperationCompletedCallbackLifetime);
 }
 
 void FindFilesWindow::ReapExpiredPendingResultRemovals(uint64_t nowTickMs) noexcept
@@ -5609,27 +5609,32 @@ bool FindFilesWindow::BeginSearch(SearchOperation operation, const SearchTextOve
 void FindFilesWindow::OnSearchResults(WPARAM operationKey, LPARAM lParam) noexcept
 {
     uint64_t drainedResultsRecordCount = 0u;
-    auto drained                       = TakeAndCoalesceContiguousPostedPayloads<FindSearchResultsPayload>(
+    auto drained = TakeAndCoalesceContiguousPostedPayloads<FindSearchResultsPayload>(
         _hWnd.get(),
         WndMsg::kFindSearchResults,
         operationKey,
         lParam,
         [](const FindSearchResultsPayload& current, uint64_t drainedPayloadCount) noexcept
-    { return drainedPayloadCount < kResultsDrainMaxMessages && current.results.size() < kResultsDrainMaxRecords; },
+        { return drainedPayloadCount < kResultsDrainMaxMessages && current.results.size() < kResultsDrainMaxRecords; },
         [&](std::unique_ptr<FindSearchResultsPayload>& current, std::unique_ptr<FindSearchResultsPayload> newer) noexcept
-    {
-        if (newer->epoch != current->epoch)
         {
-            return;
-        }
-        if (newer->enqueuedAt != SteadyClock::time_point{})
-        {
-            Debug::Perf::Emit(
-                L"find.ui.results_to_visible_latency_ms", L"", ElapsedUsSince(newer->enqueuedAt), static_cast<uint64_t>(newer->results.size()), 0u, S_OK);
-        }
-        drainedResultsRecordCount += static_cast<uint64_t>(newer->results.size());
-        current->results.insert(current->results.end(), std::make_move_iterator(newer->results.begin()), std::make_move_iterator(newer->results.end()));
-    });
+            if (newer->epoch != current->epoch)
+            {
+                return;
+            }
+            if (newer->enqueuedAt != SteadyClock::time_point{})
+            {
+                Debug::Perf::Emit(L"find.ui.results_to_visible_latency_ms",
+                                  L"",
+                                  ElapsedUsSince(newer->enqueuedAt),
+                                  static_cast<uint64_t>(newer->results.size()),
+                                  0u,
+                                  S_OK);
+            }
+            drainedResultsRecordCount += static_cast<uint64_t>(newer->results.size());
+            current->results.insert(
+                current->results.end(), std::make_move_iterator(newer->results.begin()), std::make_move_iterator(newer->results.end()));
+        });
     auto payload = std::move(drained.payload);
     if (! payload)
     {
@@ -5780,12 +5785,12 @@ void FindFilesWindow::OnSearchProgress(WPARAM operationKey, LPARAM lParam) noexc
         lParam,
         [](const FindSearchProgressPayload&, uint64_t) noexcept { return true; },
         [](std::unique_ptr<FindSearchProgressPayload>& current, std::unique_ptr<FindSearchProgressPayload> newer) noexcept
-    {
-        if (newer->epoch == current->epoch)
         {
-            current = std::move(newer);
-        }
-    });
+            if (newer->epoch == current->epoch)
+            {
+                current = std::move(newer);
+            }
+        });
     auto payload = std::move(drained.payload);
     if (! payload)
     {
@@ -7517,8 +7522,11 @@ LRESULT CALLBACK FindFilesWindow::WndProc(HWND hwnd, UINT message, WPARAM wParam
 
 } // namespace
 
-bool ShowFindFilesWindow(
-    HWND owner, FolderWindow& applicationFolderWindow, Common::Settings::Settings& settings, const AppTheme& theme, FindFilesPaneContext context) noexcept
+bool ShowFindFilesWindow(HWND owner,
+                         FolderWindow& applicationFolderWindow,
+                         Common::Settings::Settings& settings,
+                         const AppTheme& theme,
+                         FindFilesPaneContext context) noexcept
 {
     auto* window = new (std::nothrow) FindFilesWindow(owner, applicationFolderWindow, settings, theme, std::move(context));
     if (! window)
@@ -7589,7 +7597,8 @@ std::vector<size_t> DebugSelectKnownCompletedFindFilesSourceIndicesForTests(size
         keys.push_back(std::to_wstring(index));
     }
 
-    const std::unordered_set<std::wstring> completedKeys = CollectKnownCompletedResultKeys(std::span<const std::wstring>(keys), outcomes, overallStatus);
+    const std::unordered_set<std::wstring> completedKeys =
+        CollectKnownCompletedResultKeys(std::span<const std::wstring>(keys), outcomes, overallStatus);
     std::vector<size_t> completedIndices;
     completedIndices.reserve(completedKeys.size());
     for (size_t index = 0; index < keys.size(); ++index)

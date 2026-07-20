@@ -185,8 +185,8 @@ private:
         Themes::ThemeCatalog themeCatalog;
         Common::Settings::ThemeDefinition loadedThemeBaseline;
         size_t activeThemeIndex = 0u;
-        bool hasLocalization    = true;
-        bool hasThemeCatalog    = true;
+        bool hasLocalization = true;
+        bool hasThemeCatalog = true;
     };
 
     void RecordUndoSnapshot();

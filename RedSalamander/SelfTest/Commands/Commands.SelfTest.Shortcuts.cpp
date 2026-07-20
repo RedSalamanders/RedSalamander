@@ -1013,8 +1013,8 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
         }
 
         Trace(std::format(L"Shortcuts live search: {} reading initial search ValuePattern", phaseLabel));
-        const auto initialSearchState = CollectVisibleDescendantValuePatternStateWithMessagePump(
-            shortcuts, UIA_EditControlTypeId, std::format(L"Shortcuts {} initial search read", phaseLabel));
+        const auto initialSearchState =
+            CollectVisibleDescendantValuePatternStateWithMessagePump(shortcuts, UIA_EditControlTypeId, std::format(L"Shortcuts {} initial search read", phaseLabel));
         state.Require(initialSearchState.has_value(),
                       std::format(L"Failed to collect UI Automation value state for the Shortcuts search field during {}.", phaseLabel));
         if (initialSearchState.has_value())
@@ -1057,9 +1057,9 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
         }
 
         Trace(std::format(L"Shortcuts live search: {} setting query '{}'", phaseLabel, searchQuery));
-        state.Require(
-            SetVisibleDescendantValueWithMessagePump(shortcuts, UIA_EditControlTypeId, searchQuery, std::format(L"Shortcuts {} search SetValue", phaseLabel)),
-            std::format(L"Failed to apply the live UIA search query '{}' to the Shortcuts search field during {}.", searchQuery, phaseLabel));
+        state.Require(SetVisibleDescendantValueWithMessagePump(
+                          shortcuts, UIA_EditControlTypeId, searchQuery, std::format(L"Shortcuts {} search SetValue", phaseLabel)),
+                      std::format(L"Failed to apply the live UIA search query '{}' to the Shortcuts search field during {}.", searchQuery, phaseLabel));
         state.Require(waitForSnapshot(
                           [&](const ShortcutsWindowDebugSnapshot& value) noexcept
         {
@@ -1131,7 +1131,8 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
 
     ShortcutsWindowDebugSnapshot snapshot{};
     Trace(L"Shortcuts live search: clearing reopened query");
-    state.Require(SetVisibleDescendantValueWithMessagePump(shortcuts, UIA_EditControlTypeId, L"", L"Shortcuts reopened live search clear SetValue"),
+    state.Require(SetVisibleDescendantValueWithMessagePump(
+                      shortcuts, UIA_EditControlTypeId, L"", L"Shortcuts reopened live search clear SetValue"),
                   L"Failed to clear the Shortcuts search field through live UIA interaction after reopen.");
     state.Require(waitForSnapshot(
                       [&](const ShortcutsWindowDebugSnapshot& value) noexcept
@@ -1144,8 +1145,8 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
     state.Require(snapshot.visibleChildWindowCount == 0u, L"Shortcuts live UIA search clear should not expose visible child fallback after reopen.");
 
     Trace(L"Shortcuts live search: reading cleared reopened search ValuePattern");
-    const auto restoredSearchState =
-        CollectVisibleDescendantValuePatternStateWithMessagePump(shortcuts, UIA_EditControlTypeId, L"Shortcuts reopened live search clear read");
+    const auto restoredSearchState = CollectVisibleDescendantValuePatternStateWithMessagePump(
+        shortcuts, UIA_EditControlTypeId, L"Shortcuts reopened live search clear read");
     state.Require(restoredSearchState.has_value(),
                   L"Failed to collect UI Automation value state for the Shortcuts search field after clearing the reopened live query.");
     if (restoredSearchState.has_value())
@@ -2241,7 +2242,9 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
         SendMessageW(shortcuts, WM_KEYDOWN, VK_ESCAPE, 0);
         SendMessageW(shortcuts, WM_KEYUP, VK_ESCAPE, 0);
         state.Require(WaitForWindowClosed(shortcuts, SelfTest::Scale(3000ms)),
-                      std::format(L"Shortcuts Escape did not close the window during {}; {}.", context, DescribeShortcutsEscapeStateForSelfTest(shortcuts)));
+                      std::format(L"Shortcuts Escape did not close the window during {}; {}.",
+                                  context,
+                                  DescribeShortcutsEscapeStateForSelfTest(shortcuts)));
         state.Require(GetShortcutsWindowHandle() == nullptr || IsWindow(GetShortcutsWindowHandle()) == FALSE,
                       std::format(L"Shortcuts window should not remain open after {}; {}.", context, DescribeShortcutsEscapeStateForSelfTest(shortcuts)));
         return state.failure.empty();

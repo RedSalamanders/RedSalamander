@@ -395,8 +395,8 @@ std::wstring PadLeftToWidth(std::wstring_view text, size_t width)
 
 std::wstring BuildDetailsText(bool isDirectory, uint64_t sizeBytes, int64_t lastWriteTime, DWORD fileAttributes, size_t sizeSlotChars)
 {
-    const auto fields = Common::FileMetadata::FormatDisplayFields({.lastWriteTime100nsSince1601 = lastWriteTime, .fileAttributes = fileAttributes},
-                                                                  Common::FileMetadata::DisplayProfile::CompactDetails);
+    const auto fields = Common::FileMetadata::FormatDisplayFields(
+        {.lastWriteTime100nsSince1601 = lastWriteTime, .fileAttributes = fileAttributes}, Common::FileMetadata::DisplayProfile::CompactDetails);
 
     if (isDirectory)
     {

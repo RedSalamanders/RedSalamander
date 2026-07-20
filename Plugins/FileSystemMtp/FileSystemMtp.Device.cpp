@@ -6,8 +6,8 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
-#include <cassert>
 #include <chrono>
+#include <cassert>
 #include <condition_variable>
 #include <cstdint>
 #include <cstring>
@@ -63,7 +63,8 @@ struct ComInitialization
                 APTTYPE apartmentType{};
                 APTTYPEQUALIFIER apartmentQualifier{};
                 const HRESULT apartmentHr = CoGetApartmentType(&apartmentType, &apartmentQualifier);
-                assert(SUCCEEDED(apartmentHr) && apartmentType == APTTYPE_MTA && "WPD backend calls must execute on the lifetime-MTA command worker.");
+                assert(SUCCEEDED(apartmentHr) && apartmentType == APTTYPE_MTA &&
+                       "WPD backend calls must execute on the lifetime-MTA command worker.");
             }
 #endif
             hr = S_OK;
@@ -1031,7 +1032,7 @@ public:
             return seekHr;
         }
 
-        _position   = position.QuadPart;
+        _position  = position.QuadPart;
         newPosition = _position;
         return S_OK;
     }
@@ -1084,8 +1085,8 @@ private:
 
 struct SelfTestWpdOptions
 {
-    uint32_t readFileDelayMs            = 0;
-    bool sessionDeathOnce               = false;
+    uint32_t readFileDelayMs = 0;
+    bool sessionDeathOnce = false;
     bool changeFileSizeAfterFirstLookup = false;
 };
 
@@ -1098,7 +1099,11 @@ struct SelfTestWpdOptions
     };
 }
 
-[[nodiscard]] MtpItem SelfTestItem(std::wstring name, std::wstring objectId, unsigned long attributes, uint64_t sizeBytes = 0, std::wstring persistentId = {})
+[[nodiscard]] MtpItem SelfTestItem(std::wstring name,
+                                   std::wstring objectId,
+                                   unsigned long attributes,
+                                   uint64_t sizeBytes = 0,
+                                   std::wstring persistentId = {})
 {
     if (persistentId.empty())
     {
@@ -1121,16 +1126,16 @@ struct SelfTestWpdOptions
 class WpdDeviceOperations
 {
 public:
-    virtual ~WpdDeviceOperations()                                                        = default;
-    virtual MtpBackendInfo GetInfo() const noexcept                                       = 0;
-    virtual HRESULT EnumerateDevices(std::vector<DeviceDescriptor>& devices) noexcept     = 0;
+    virtual ~WpdDeviceOperations() = default;
+    virtual MtpBackendInfo GetInfo() const noexcept = 0;
+    virtual HRESULT EnumerateDevices(std::vector<DeviceDescriptor>& devices) noexcept = 0;
     virtual HRESULT OpenSession(std::wstring_view pnpId,
                                 DWORD desiredAccess,
                                 wil::com_ptr<IPortableDevice>& device,
-                                wil::com_ptr<IPortableDeviceContent>& content) noexcept   = 0;
+                                wil::com_ptr<IPortableDeviceContent>& content) noexcept = 0;
     virtual HRESULT EnumerateItems(const wil::com_ptr<IPortableDeviceContent>& content,
                                    std::wstring_view parentObjectId,
-                                   std::vector<MtpItem>& items) noexcept                  = 0;
+                                   std::vector<MtpItem>& items) noexcept = 0;
     virtual HRESULT CreateReader(const ResolvedObject& resolved,
                                  const std::shared_ptr<WpdCancellationState>& cancelState,
                                  std::shared_ptr<IMtpBackendFileReader>& reader) noexcept = 0;
@@ -1157,7 +1162,9 @@ public:
         return OpenDeviceSession(pnpId, desiredAccess, device, content);
     }
 
-    HRESULT EnumerateItems(const wil::com_ptr<IPortableDeviceContent>& content, std::wstring_view parentObjectId, std::vector<MtpItem>& items) noexcept override
+    HRESULT EnumerateItems(const wil::com_ptr<IPortableDeviceContent>& content,
+                           std::wstring_view parentObjectId,
+                           std::vector<MtpItem>& items) noexcept override
     {
         return EnumerateObjectItems(content, parentObjectId, items);
     }
@@ -1209,14 +1216,19 @@ public:
         return S_OK;
     }
 
-    HRESULT OpenSession(std::wstring_view, DWORD, wil::com_ptr<IPortableDevice>& device, wil::com_ptr<IPortableDeviceContent>& content) noexcept override
+    HRESULT OpenSession(std::wstring_view,
+                        DWORD,
+                        wil::com_ptr<IPortableDevice>& device,
+                        wil::com_ptr<IPortableDeviceContent>& content) noexcept override
     {
         device.reset();
         content.reset();
         return S_OK;
     }
 
-    HRESULT EnumerateItems(const wil::com_ptr<IPortableDeviceContent>&, std::wstring_view parentObjectId, std::vector<MtpItem>& items) noexcept override
+    HRESULT EnumerateItems(const wil::com_ptr<IPortableDeviceContent>&,
+                           std::wstring_view parentObjectId,
+                           std::vector<MtpItem>& items) noexcept override
     {
         items.clear();
         if (_options.sessionDeathOnce && parentObjectId == L"selftest-camera" && ! _sessionDeathReturned)
@@ -1240,9 +1252,12 @@ public:
         {
             constexpr std::string_view original = "RedSalamander deterministic MTP fixture\r\n";
             constexpr std::string_view changed  = "RedSalamander refreshed MTP fixture payload\r\n";
-            const bool changedSize              = _options.changeFileSizeAfterFirstLookup && _photoLookupCount++ != 0u;
-            items.push_back(SelfTestItem(
-                L"photo001.txt", L"selftest-photo-001", FILE_ATTRIBUTE_READONLY, changedSize ? changed.size() : original.size(), L"selftest-photo-001-puid"));
+            const bool changedSize = _options.changeFileSizeAfterFirstLookup && _photoLookupCount++ != 0u;
+            items.push_back(SelfTestItem(L"photo001.txt",
+                                         L"selftest-photo-001",
+                                         FILE_ATTRIBUTE_READONLY,
+                                         changedSize ? changed.size() : original.size(),
+                                         L"selftest-photo-001-puid"));
         }
         else
         {
@@ -1257,7 +1272,7 @@ public:
     {
         constexpr std::string_view original = "RedSalamander deterministic MTP fixture\r\n";
         constexpr std::string_view changed  = "RedSalamander refreshed MTP fixture payload\r\n";
-        const std::string_view payload      = resolved.item.sizeBytes == changed.size() ? changed : original;
+        const std::string_view payload = resolved.item.sizeBytes == changed.size() ? changed : original;
         std::vector<std::byte> bytes(payload.size());
         std::memcpy(bytes.data(), payload.data(), payload.size());
         reader = CreateMemoryBackendFileReader(std::move(bytes), _options.readFileDelayMs);
@@ -1449,9 +1464,7 @@ public:
             return S_OK;
         }
 
-        return RunResolvedOperationWithCacheRetry(normalized,
-                                                  kReadAccess,
-                                                  [&](const ResolvedObject& resolved) noexcept
+        return RunResolvedOperationWithCacheRetry(normalized, kReadAccess, [&](const ResolvedObject& resolved) noexcept
         {
             if ((resolved.item.attributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
             {
@@ -1932,8 +1945,8 @@ private:
         {
             if (OrdinalString::EqualsNoCase(device.displayName, displayName))
             {
-                descriptor                                                         = device;
-                _deviceDescriptorByDisplayKey[requestedKey]                        = descriptor;
+                descriptor = device;
+                _deviceDescriptorByDisplayKey[requestedKey]                     = descriptor;
                 _deviceDescriptorByDisplayKey[CaseFoldKey(descriptor.displayName)] = descriptor;
                 return S_OK;
             }
@@ -1942,8 +1955,8 @@ private:
                 const std::wstring deviceHash = FormatMtpIdentityHash(device.pnpId);
                 if (OrdinalString::EqualsNoCase(deviceHash, requestedHash.value()))
                 {
-                    descriptor                                                         = device;
-                    _deviceDescriptorByDisplayKey[requestedKey]                        = descriptor;
+                    descriptor = device;
+                    _deviceDescriptorByDisplayKey[requestedKey]                     = descriptor;
                     _deviceDescriptorByDisplayKey[CaseFoldKey(descriptor.displayName)] = descriptor;
                     return S_OK;
                 }
@@ -1959,8 +1972,8 @@ private:
                              wil::com_ptr<IPortableDeviceContent>& content) noexcept
     {
         const std::wstring key = CaseFoldKey(pnpId);
-        if (const auto cached = _sessionsByPnpId.find(key);
-            cached != _sessionsByPnpId.end() && DesiredAccessIsCovered(cached->second.desiredAccess, desiredAccess))
+        if (const auto cached = _sessionsByPnpId.find(key); cached != _sessionsByPnpId.end() &&
+                                                          DesiredAccessIsCovered(cached->second.desiredAccess, desiredAccess))
         {
             device  = cached->second.device;
             content = cached->second.content;
@@ -1976,15 +1989,15 @@ private:
             return FailAndMaybeInvalidateCaches(openHr);
         }
 
-        device                = session.device;
-        content               = session.content;
+        device  = session.device;
+        content = session.content;
         _sessionsByPnpId[key] = std::move(session);
         return S_OK;
     }
 
     HRESULT TryResolveCachedPath(std::wstring_view normalizedPath, DWORD desiredAccess, ResolvedObject& resolved, bool& found) noexcept
     {
-        found                  = false;
+        found = false;
         const std::wstring key = CaseFoldKey(normalizedPath);
         const auto cached      = _pathCache.find(key);
         if (cached == _pathCache.end())
@@ -2000,14 +2013,14 @@ private:
             return FailAndMaybeInvalidateCaches(sessionHr);
         }
 
-        resolved               = ResolvedObject{};
-        resolved.deviceRoot    = cached->second.deviceRoot;
+        resolved            = ResolvedObject{};
+        resolved.deviceRoot = cached->second.deviceRoot;
         resolved.fromPathCache = true;
-        resolved.pnpId         = cached->second.pnpId;
-        resolved.objectId      = cached->second.objectId;
-        resolved.item          = cached->second.item;
-        resolved.device        = std::move(device);
-        resolved.content       = std::move(content);
+        resolved.pnpId      = cached->second.pnpId;
+        resolved.objectId   = cached->second.objectId;
+        resolved.item       = cached->second.item;
+        resolved.device     = std::move(device);
+        resolved.content    = std::move(content);
         _pathCacheHits.fetch_add(1u, std::memory_order_acq_rel);
         found = true;
         return S_OK;
@@ -2119,17 +2132,19 @@ private:
 
         switch (hr)
         {
-            case HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND):
-            case HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND):
-            case HRESULT_FROM_WIN32(ERROR_INVALID_NAME):
-            case HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED):
-            case HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS):
-            case HRESULT_FROM_WIN32(ERROR_DIR_NOT_EMPTY):
-            case HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED):
-            case HRESULT_FROM_WIN32(ERROR_WRITE_PROTECT):
-            case HRESULT_FROM_WIN32(ERROR_CANCELLED):
-            case HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED): return false;
-            default: return true;
+        case HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND):
+        case HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND):
+        case HRESULT_FROM_WIN32(ERROR_INVALID_NAME):
+        case HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED):
+        case HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS):
+        case HRESULT_FROM_WIN32(ERROR_DIR_NOT_EMPTY):
+        case HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED):
+        case HRESULT_FROM_WIN32(ERROR_WRITE_PROTECT):
+        case HRESULT_FROM_WIN32(ERROR_CANCELLED):
+        case HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED):
+            return false;
+        default:
+            return true;
         }
     }
 
@@ -2149,7 +2164,8 @@ private:
         return hr;
     }
 
-    template <typename Operation> HRESULT RunResolvedOperationWithCacheRetry(std::wstring_view path, DWORD desiredAccess, Operation&& operation) noexcept
+    template<typename Operation>
+    HRESULT RunResolvedOperationWithCacheRetry(std::wstring_view path, DWORD desiredAccess, Operation&& operation) noexcept
     {
         for (uint32_t attempt = 0u; attempt < 2u; ++attempt)
         {
@@ -2200,7 +2216,7 @@ private:
             return S_OK;
         }
 
-        bool foundCached       = false;
+        bool foundCached = false;
         const HRESULT cachedHr = TryResolveCachedPath(normalized, desiredAccess, resolved, foundCached);
         if (FAILED(cachedHr))
         {
@@ -2244,7 +2260,7 @@ private:
         {
             currentPath = JoinPath(currentPath, segments[index]);
 
-            bool childCached            = false;
+            bool childCached = false;
             const HRESULT childCachedHr = TryResolveCachedPath(currentPath, desiredAccess, resolved, childCached);
             if (FAILED(childCachedHr))
             {
@@ -2273,7 +2289,9 @@ private:
         return S_OK;
     }
 
-    HRESULT ResolveDestinationPathCached(std::wstring_view path, ResolvedDestination& destination, DWORD desiredAccess = kWriteAccess) noexcept
+    HRESULT ResolveDestinationPathCached(std::wstring_view path,
+                                         ResolvedDestination& destination,
+                                         DWORD desiredAccess = kWriteAccess) noexcept
     {
         destination                = ResolvedDestination{};
         destination.normalizedPath = NormalizeMtpPath(path);
@@ -2406,10 +2424,7 @@ private:
         return hr;
     }
 
-    HRESULT CopyOrMoveFileByTransferCached(std::wstring_view sourcePath,
-                                           const ResolvedObject& source,
-                                           const ResolvedDestination& destination,
-                                           bool move) noexcept
+    HRESULT CopyOrMoveFileByTransferCached(std::wstring_view sourcePath, const ResolvedObject& source, const ResolvedDestination& destination, bool move) noexcept
     {
         std::vector<std::byte> bytes;
         {
@@ -2525,7 +2540,7 @@ HRESULT EnumerateMtpConnectionBrowseDevices(std::vector<MtpConnectionBrowseDevic
     for (const DeviceDescriptor& descriptor : descriptors)
     {
         std::wstring devicePuid = descriptor.pnpId;
-        const HRESULT puidHr    = ReadConnectionBrowseDevicePersistentId(descriptor.pnpId, devicePuid);
+        const HRESULT puidHr = ReadConnectionBrowseDevicePersistentId(descriptor.pnpId, devicePuid);
         if (FAILED(puidHr) || devicePuid.empty())
         {
             devicePuid = descriptor.pnpId;

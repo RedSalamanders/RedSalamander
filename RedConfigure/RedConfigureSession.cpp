@@ -4,8 +4,8 @@
 #include "Localization/RcParser.h"
 #include "Localization/RcWriter.h"
 #include "RedConfigureBinaryFile.h"
-#include "RedConfigureWorkflow.h"
 #include "ThemeDefinitionIo.h"
+#include "RedConfigureWorkflow.h"
 
 #include <algorithm>
 #include <array>
@@ -912,7 +912,7 @@ HRESULT RedConfigureSession::LoadWorkspace(const std::filesystem::path& root, st
     _activeThemeIndex           = 0u;
     _undoHistory.clear();
     _redoHistory.clear();
-    _cultureName = cultureName.empty() ? std::wstring(L"en-US") : std::move(cultureName);
+    _cultureName                = cultureName.empty() ? std::wstring(L"en-US") : std::move(cultureName);
 
     {
         Debug::Perf::Scope discoverPerf(L"redconfigure.workspace.discover_us");
@@ -1143,16 +1143,15 @@ bool RedConfigureSession::UpdateThemeColor(std::wstring_view colorKey, std::wstr
     {
         return false;
     }
-    _undoHistory.push_back(EditSnapshot{.translations           = {},
+    _undoHistory.push_back(EditSnapshot{.translations = {},
                                         .localizationReviewRows = {},
-                                        .theme                  = before,
-                                        .themeCatalog           = {},
-                                        .loadedThemeBaseline    = _loadedThemeBaseline,
-                                        .activeThemeIndex       = _activeThemeIndex,
-                                        .hasLocalization        = false,
-                                        .hasThemeCatalog        = false});
-    if (_undoHistory.size() > 64u)
-        _undoHistory.erase(_undoHistory.begin());
+                                        .theme = before,
+                                        .themeCatalog = {},
+                                        .loadedThemeBaseline = _loadedThemeBaseline,
+                                        .activeThemeIndex = _activeThemeIndex,
+                                        .hasLocalization = false,
+                                        .hasThemeCatalog = false});
+    if (_undoHistory.size() > 64u) _undoHistory.erase(_undoHistory.begin());
     _redoHistory.clear();
     return true;
 }
@@ -1193,10 +1192,11 @@ DuplicateThemeResult RedConfigureSession::DuplicateActiveTheme(std::wstring_view
     }
     RecordUndoSnapshot();
     Common::Settings::ThemeDefinition duplicate = _themePreview.GetTheme();
-    duplicate.id                                = newId;
-    duplicate.name                              = newName;
-    const fs::path path                         = _workspace.root / L"RedConfigureOutput" / (SanitizePathPart(std::wstring(newId)) + L".theme.json5");
-    _themeCatalog.themes.push_back(Themes::ThemeCatalogEntry{.path = path, .definition = duplicate, .origin = Themes::ThemeCatalogOrigin::User});
+    duplicate.id = newId;
+    duplicate.name = newName;
+    const fs::path path = _workspace.root / L"RedConfigureOutput" / (SanitizePathPart(std::wstring(newId)) + L".theme.json5");
+    _themeCatalog.themes.push_back(
+        Themes::ThemeCatalogEntry{.path = path, .definition = duplicate, .origin = Themes::ThemeCatalogOrigin::User});
     _activeThemeIndex = _themeCatalog.themes.size() - 1u;
     _themePreview.SetTheme(duplicate);
     _loadedThemeBaseline = duplicate;
@@ -1226,7 +1226,8 @@ Workflow::BatchApprovalResult RedConfigureSession::ApplyLocalizationBatch(const 
 {
     if (preview.result != Workflow::BatchApprovalResult::Ready)
     {
-        return preview.result == Workflow::BatchApprovalResult::NoChanges ? Workflow::BatchApprovalResult::NoChanges : Workflow::BatchApprovalResult::Invalid;
+        return preview.result == Workflow::BatchApprovalResult::NoChanges ? Workflow::BatchApprovalResult::NoChanges
+                                                                          : Workflow::BatchApprovalResult::Invalid;
     }
 
     struct TargetLocation
@@ -1244,13 +1245,11 @@ Workflow::BatchApprovalResult RedConfigureSession::ApplyLocalizationBatch(const 
             const LocalizationReviewRow& row = _localizationReviewRows[rowIndex];
             if (row.ownerName == change.ownerName && row.id == change.resourceId)
             {
-                if (matchingRow.has_value())
-                    return Workflow::BatchApprovalResult::Stale;
+                if (matchingRow.has_value()) return Workflow::BatchApprovalResult::Stale;
                 matchingRow = rowIndex;
             }
         }
-        if (! matchingRow.has_value())
-            return Workflow::BatchApprovalResult::Stale;
+        if (! matchingRow.has_value()) return Workflow::BatchApprovalResult::Stale;
 
         const LocalizationReviewRow& row = _localizationReviewRows[matchingRow.value()];
         std::optional<size_t> matchingCell;
@@ -1258,13 +1257,11 @@ Workflow::BatchApprovalResult RedConfigureSession::ApplyLocalizationBatch(const 
         {
             if (CompareTextIgnoreCase(row.targets[cellIndex].cultureName, change.cultureName) == 0)
             {
-                if (matchingCell.has_value())
-                    return Workflow::BatchApprovalResult::Stale;
+                if (matchingCell.has_value()) return Workflow::BatchApprovalResult::Stale;
                 matchingCell = cellIndex;
             }
         }
-        if (! matchingCell.has_value())
-            return Workflow::BatchApprovalResult::Stale;
+        if (! matchingCell.has_value()) return Workflow::BatchApprovalResult::Stale;
         const LocalizationTargetCell& cell = row.targets[matchingCell.value()];
         if (cell.targetText != change.before || cell.reviewed != change.beforeReviewed)
         {
@@ -1277,19 +1274,19 @@ Workflow::BatchApprovalResult RedConfigureSession::ApplyLocalizationBatch(const 
     for (size_t changeIndex = 0u; changeIndex < preview.changes.size(); ++changeIndex)
     {
         const Workflow::LocalizationBatchChange& change = preview.changes[changeIndex];
-        LocalizationReviewRow& row                      = _localizationReviewRows[targets[changeIndex].rowIndex];
-        LocalizationTargetCell& cell                    = row.targets[targets[changeIndex].cellIndex];
-        cell.targetText                                 = change.after;
-        cell.validation                                 = Localization::ValidatePlaceholders(row.sourceText, cell.targetText);
-        cell.dirty                                      = true;
-        cell.reviewed                                   = change.afterReviewed;
+        LocalizationReviewRow& row = _localizationReviewRows[targets[changeIndex].rowIndex];
+        LocalizationTargetCell& cell = row.targets[targets[changeIndex].cellIndex];
+        cell.targetText = change.after;
+        cell.validation = Localization::ValidatePlaceholders(row.sourceText, cell.targetText);
+        cell.dirty      = true;
+        cell.reviewed   = change.afterReviewed;
     }
     return Workflow::BatchApprovalResult::Applied;
 }
 
 Workflow::BatchApprovalResult RedConfigureSession::ApplyThemeMassChange(const Workflow::ThemeMassPreview& preview)
 {
-    Themes::ThemePreviewModel candidate        = _themePreview;
+    Themes::ThemePreviewModel candidate = _themePreview;
     const Workflow::BatchApprovalResult result = Workflow::ApplyThemeMassChange(candidate, preview);
     if (result != Workflow::BatchApprovalResult::Applied)
     {
@@ -1315,8 +1312,8 @@ bool RedConfigureSession::ApplyClipboardMatrix(size_t startRow, size_t startCult
         for (size_t columnOffset = 0u; columnOffset < matrix.rows[rowOffset].size() && startCultureIndex + columnOffset < row.targets.size(); ++columnOffset)
         {
             LocalizationTargetCell& cell = row.targets[startCultureIndex + columnOffset];
-            const std::wstring& text     = matrix.rows[rowOffset][columnOffset];
-            const auto validation        = Localization::ValidatePlaceholders(row.sourceText, text);
+            const std::wstring& text = matrix.rows[rowOffset][columnOffset];
+            const auto validation = Localization::ValidatePlaceholders(row.sourceText, text);
             if (validation.status != Localization::PlaceholderStatus::Ok)
             {
                 continue;
@@ -1336,32 +1333,30 @@ bool RedConfigureSession::ApplyClipboardMatrix(size_t startRow, size_t startCult
 
 bool RedConfigureSession::Undo()
 {
-    if (_undoHistory.empty())
-        return false;
+    if (_undoHistory.empty()) return false;
     EditSnapshot snapshot = std::move(_undoHistory.back());
     _undoHistory.pop_back();
-    _redoHistory.push_back(EditSnapshot{.translations           = _translations,
+    _redoHistory.push_back(EditSnapshot{.translations = _translations,
                                         .localizationReviewRows = _localizationReviewRows,
-                                        .theme                  = _themePreview.GetTheme(),
-                                        .themeCatalog           = _themeCatalog,
-                                        .loadedThemeBaseline    = _loadedThemeBaseline,
-                                        .activeThemeIndex       = _activeThemeIndex});
+                                        .theme = _themePreview.GetTheme(),
+                                        .themeCatalog = _themeCatalog,
+                                        .loadedThemeBaseline = _loadedThemeBaseline,
+                                        .activeThemeIndex = _activeThemeIndex});
     RestoreSnapshot(std::move(snapshot));
     return true;
 }
 
 bool RedConfigureSession::Redo()
 {
-    if (_redoHistory.empty())
-        return false;
+    if (_redoHistory.empty()) return false;
     EditSnapshot snapshot = std::move(_redoHistory.back());
     _redoHistory.pop_back();
-    _undoHistory.push_back(EditSnapshot{.translations           = _translations,
+    _undoHistory.push_back(EditSnapshot{.translations = _translations,
                                         .localizationReviewRows = _localizationReviewRows,
-                                        .theme                  = _themePreview.GetTheme(),
-                                        .themeCatalog           = _themeCatalog,
-                                        .loadedThemeBaseline    = _loadedThemeBaseline,
-                                        .activeThemeIndex       = _activeThemeIndex});
+                                        .theme = _themePreview.GetTheme(),
+                                        .themeCatalog = _themeCatalog,
+                                        .loadedThemeBaseline = _loadedThemeBaseline,
+                                        .activeThemeIndex = _activeThemeIndex});
     RestoreSnapshot(std::move(snapshot));
     return true;
 }
@@ -1392,14 +1387,13 @@ Workflow::ValidationSummary RedConfigureSession::Validate() const
 
 void RedConfigureSession::RecordUndoSnapshot()
 {
-    _undoHistory.push_back(EditSnapshot{.translations           = _translations,
+    _undoHistory.push_back(EditSnapshot{.translations = _translations,
                                         .localizationReviewRows = _localizationReviewRows,
-                                        .theme                  = _themePreview.GetTheme(),
-                                        .themeCatalog           = _themeCatalog,
-                                        .loadedThemeBaseline    = _loadedThemeBaseline,
-                                        .activeThemeIndex       = _activeThemeIndex});
-    if (_undoHistory.size() > 64u)
-        _undoHistory.erase(_undoHistory.begin());
+                                        .theme = _themePreview.GetTheme(),
+                                        .themeCatalog = _themeCatalog,
+                                        .loadedThemeBaseline = _loadedThemeBaseline,
+                                        .activeThemeIndex = _activeThemeIndex});
+    if (_undoHistory.size() > 64u) _undoHistory.erase(_undoHistory.begin());
     _redoHistory.clear();
 }
 
@@ -1450,8 +1444,7 @@ HRESULT RedConfigureSession::ExportLocalization(const std::filesystem::path& pat
     }
     std::wstring written;
     Localization::RcParseResult parsed;
-    if (const HRESULT hr = ReadTextFile(path, written); FAILED(hr))
-        return hr;
+    if (const HRESULT hr = ReadTextFile(path, written); FAILED(hr)) return hr;
     return Localization::ParseRcStringTables(written, parsed);
 }
 
@@ -1477,10 +1470,8 @@ HRESULT RedConfigureSession::ExportLocalizationReview(const std::filesystem::pat
         }
         std::wstring written;
         Localization::RcParseResult parsed;
-        if (const HRESULT hr = ReadTextFile(path, written); FAILED(hr))
-            return hr;
-        if (const HRESULT hr = Localization::ParseRcStringTables(written, parsed); FAILED(hr))
-            return hr;
+        if (const HRESULT hr = ReadTextFile(path, written); FAILED(hr)) return hr;
+        if (const HRESULT hr = Localization::ParseRcStringTables(written, parsed); FAILED(hr)) return hr;
     }
 
     if (exportedFileCount)
@@ -1571,8 +1562,7 @@ HRESULT RedConfigureSession::ExportTheme(const std::filesystem::path& path) cons
         return hr;
     }
     std::vector<uint8_t> bytes;
-    if (const HRESULT hr = ReadBinaryFile(path, bytes); FAILED(hr))
-        return hr;
+    if (const HRESULT hr = ReadBinaryFile(path, bytes); FAILED(hr)) return hr;
     Common::Settings::ThemeDefinition parsed;
     const std::string_view written(reinterpret_cast<const char*>(bytes.data()), bytes.size());
     return Common::Settings::ParseThemeDefinitionJson5(written, parsed, nullptr, nullptr);

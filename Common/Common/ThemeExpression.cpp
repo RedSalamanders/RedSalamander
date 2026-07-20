@@ -1,8 +1,8 @@
 #include "ThemeExpression.h"
 
-#include "Helpers.h"
 #include "SettingsStore.h"
 #include "ThemeDefinitionIo.h"
+#include "Helpers.h"
 
 #include <algorithm>
 #include <array>
@@ -71,7 +71,7 @@ using Common::Settings::ThemeSystemColorRole;
 
 [[nodiscard]] bool ParseDouble(std::wstring_view text, double& out) noexcept
 {
-    text                                  = Trim(text);
+    text = Trim(text);
     constexpr size_t kMaxNumberCharacters = 64u;
     if (text.empty() || text.size() > kMaxNumberCharacters)
     {
@@ -131,7 +131,7 @@ using Common::Settings::ThemeSystemColorRole;
         ++first;
     }
 
-    double value            = 0.0;
+    double value = 0.0;
     const auto [end, error] = std::from_chars(first, last, value, std::chars_format::general);
     if (error != std::errc{} || end != last || ! std::isfinite(value))
     {
@@ -206,20 +206,13 @@ using Common::Settings::ThemeSystemColorRole;
 [[nodiscard]] std::optional<ThemeSystemColorRole> ParseSystemRole(std::wstring_view text) noexcept
 {
     const std::wstring lower = ToLower(Trim(text));
-    if (lower == L"accent")
-        return ThemeSystemColorRole::Accent;
-    if (lower == L"accentlight")
-        return ThemeSystemColorRole::AccentLight;
-    if (lower == L"accentdark")
-        return ThemeSystemColorRole::AccentDark;
-    if (lower == L"window")
-        return ThemeSystemColorRole::Window;
-    if (lower == L"windowtext")
-        return ThemeSystemColorRole::WindowText;
-    if (lower == L"highlight")
-        return ThemeSystemColorRole::Highlight;
-    if (lower == L"highlighttext")
-        return ThemeSystemColorRole::HighlightText;
+    if (lower == L"accent") return ThemeSystemColorRole::Accent;
+    if (lower == L"accentlight") return ThemeSystemColorRole::AccentLight;
+    if (lower == L"accentdark") return ThemeSystemColorRole::AccentDark;
+    if (lower == L"window") return ThemeSystemColorRole::Window;
+    if (lower == L"windowtext") return ThemeSystemColorRole::WindowText;
+    if (lower == L"highlight") return ThemeSystemColorRole::Highlight;
+    if (lower == L"highlighttext") return ThemeSystemColorRole::HighlightText;
     return std::nullopt;
 }
 
@@ -227,14 +220,14 @@ using Common::Settings::ThemeSystemColorRole;
 {
     switch (role)
     {
-        case ThemeSystemColorRole::Accent: return L"accent";
-        case ThemeSystemColorRole::AccentLight: return L"accentLight";
-        case ThemeSystemColorRole::AccentDark: return L"accentDark";
-        case ThemeSystemColorRole::Window: return L"window";
-        case ThemeSystemColorRole::WindowText: return L"windowText";
-        case ThemeSystemColorRole::Highlight: return L"highlight";
-        case ThemeSystemColorRole::HighlightText: return L"highlightText";
-        case ThemeSystemColorRole::Count: break;
+    case ThemeSystemColorRole::Accent: return L"accent";
+    case ThemeSystemColorRole::AccentLight: return L"accentLight";
+    case ThemeSystemColorRole::AccentDark: return L"accentDark";
+    case ThemeSystemColorRole::Window: return L"window";
+    case ThemeSystemColorRole::WindowText: return L"windowText";
+    case ThemeSystemColorRole::Highlight: return L"highlight";
+    case ThemeSystemColorRole::HighlightText: return L"highlightText";
+    case ThemeSystemColorRole::Count: break;
     }
     return L"accent";
 }
@@ -291,13 +284,13 @@ struct Oklch
     const double g = SrgbToLinear(Channel(argb, 8u) / 255.0);
     const double b = SrgbToLinear(Channel(argb, 0u) / 255.0);
 
-    const double l    = std::cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
-    const double m    = std::cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
-    const double s    = std::cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+    const double l = std::cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+    const double m = std::cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+    const double s = std::cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
     const double labL = 0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s;
     const double labA = 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s;
     const double labB = 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s;
-    double hue        = std::atan2(labB, labA) * 180.0 / std::numbers::pi;
+    double hue = std::atan2(labB, labA) * 180.0 / std::numbers::pi;
     if (hue < 0.0)
     {
         hue += 360.0;
@@ -360,7 +353,9 @@ struct LinearRgb
         }
     }
     const auto encode = [](double value) noexcept
-    { return static_cast<uint8_t>(std::clamp(std::lround(LinearToSrgb(std::clamp(value, 0.0, 1.0)) * 255.0), 0l, 255l)); };
+    {
+        return static_cast<uint8_t>(std::clamp(std::lround(LinearToSrgb(std::clamp(value, 0.0, 1.0)) * 255.0), 0l, 255l));
+    };
     return Pack(color.alpha, encode(rgb.r), encode(rgb.g), encode(rgb.b));
 }
 
@@ -401,9 +396,9 @@ struct LinearRgb
     double bestDistance = std::numeric_limits<double>::max();
     for (int tone = 0; tone <= 100; ++tone)
     {
-        Oklch candidate                            = source;
-        candidate.lightness                        = static_cast<double>(tone) / 100.0;
-        const uint32_t argb                        = FromOklch(candidate);
+        Oklch candidate = source;
+        candidate.lightness = static_cast<double>(tone) / 100.0;
+        const uint32_t argb = FromOklch(candidate);
         const std::optional<double> candidateRatio = RenderedContrastRatio(argb, background);
         if (! candidateRatio.has_value() || candidateRatio.value() < ratio)
         {
@@ -422,45 +417,21 @@ struct LinearRgb
 [[nodiscard]] uint32_t HsvToArgb(double hue, double saturation, double value, double alpha) noexcept
 {
     hue = std::fmod(hue, 360.0);
-    if (hue < 0.0)
-        hue += 360.0;
+    if (hue < 0.0) hue += 360.0;
     const double chroma = value * saturation;
     const double x      = chroma * (1.0 - std::abs(std::fmod(hue / 60.0, 2.0) - 1.0));
     const double m      = value - chroma;
-    double r            = 0.0;
-    double g            = 0.0;
-    double b            = 0.0;
-    if (hue < 60.0)
-    {
-        r = chroma;
-        g = x;
-    }
-    else if (hue < 120.0)
-    {
-        r = x;
-        g = chroma;
-    }
-    else if (hue < 180.0)
-    {
-        g = chroma;
-        b = x;
-    }
-    else if (hue < 240.0)
-    {
-        g = x;
-        b = chroma;
-    }
-    else if (hue < 300.0)
-    {
-        r = x;
-        b = chroma;
-    }
-    else
-    {
-        r = chroma;
-        b = x;
-    }
-    const auto channel = [m](double component) noexcept { return static_cast<uint8_t>(std::clamp(std::lround((component + m) * 255.0), 0l, 255l)); };
+    double r = 0.0;
+    double g = 0.0;
+    double b = 0.0;
+    if (hue < 60.0) { r = chroma; g = x; }
+    else if (hue < 120.0) { r = x; g = chroma; }
+    else if (hue < 180.0) { g = chroma; b = x; }
+    else if (hue < 240.0) { g = x; b = chroma; }
+    else if (hue < 300.0) { r = x; b = chroma; }
+    else { r = chroma; b = x; }
+    const auto channel = [m](double component) noexcept
+    { return static_cast<uint8_t>(std::clamp(std::lround((component + m) * 255.0), 0l, 255l)); };
     return Pack(static_cast<uint8_t>(std::clamp(std::lround(alpha * 255.0), 0l, 255l)), channel(r), channel(g), channel(b));
 }
 
@@ -485,17 +456,14 @@ struct Resolver
              const ThemeResolutionContext& contextValue,
              ResolvedThemeColors& outputValue,
              std::wstring* messageValue) noexcept
-        : theme(themeValue),
-          context(contextValue),
-          output(outputValue),
-          message(messageValue)
+        : theme(themeValue), context(contextValue), output(outputValue), message(messageValue)
     {
     }
 
-    Resolver(const Resolver&)            = delete;
+    Resolver(const Resolver&) = delete;
     Resolver& operator=(const Resolver&) = delete;
-    Resolver(Resolver&&)                 = delete;
-    Resolver& operator=(Resolver&&)      = delete;
+    Resolver(Resolver&&) = delete;
+    Resolver& operator=(Resolver&&) = delete;
 
     [[nodiscard]] HRESULT ResolveReference(std::wstring_view reference, uint32_t& out)
     {
@@ -570,12 +538,10 @@ struct Resolver
             std::wstring path;
             for (const std::wstring& part : stack)
             {
-                if (! path.empty())
-                    path += L" -> ";
+                if (! path.empty()) path += L" -> ";
                 path += part;
             }
-            if (! path.empty())
-                path += L" -> ";
+            if (! path.empty()) path += L" -> ";
             path += name;
             return Invalid(message, std::format(L"Theme color dependency cycle: {}.", path));
         }
@@ -585,8 +551,8 @@ struct Resolver
         }
         states[name] = State::Visiting;
         stack.push_back(name);
-        bool resolved             = false;
-        const auto pop            = wil::scope_exit([&]
+        bool resolved = false;
+        const auto pop = wil::scope_exit([&]
         {
             stack.pop_back();
             states[name] = resolved ? State::Resolved : State::Unvisited;
@@ -619,8 +585,7 @@ struct Resolver
                 for (const std::wstring& reference : source.references)
                 {
                     uint32_t candidate = 0u;
-                    if (const HRESULT hr = ResolveReference(reference, candidate); FAILED(hr))
-                        return hr;
+                    if (const HRESULT hr = ResolveReference(reference, candidate); FAILED(hr)) return hr;
                     compiled.candidates.push_back(candidate);
                 }
             }
@@ -641,11 +606,10 @@ struct Resolver
         }
         if (palette)
         {
-            paletteCache[name.substr(8u)]         = out;
+            paletteCache[name.substr(8u)] = out;
             output.paletteColors[name.substr(8u)] = out;
         }
-        else
-            output.colors[name] = out;
+        else output.colors[name] = out;
         resolved = true;
         return S_OK;
     }
@@ -658,86 +622,80 @@ struct Resolver
                                                     : Invalid(message, L"Theme color source has an invalid reference arity.");
         };
 
-        uint32_t first  = 0u;
+        uint32_t first = 0u;
         uint32_t second = 0u;
-        uint32_t third  = 0u;
+        uint32_t third = 0u;
         switch (source.kind)
         {
-            case ThemeColorSourceKind::Direct: out = source.directArgb; return S_OK;
-            case ThemeColorSourceKind::Reference: return ref(0u, out);
-            case ThemeColorSourceKind::Lighten:
-                if (const HRESULT hr = ref(0u, first); FAILED(hr))
-                    return hr;
-                out = Blend(first, 0xFFFFFFFFu, source.parameters[0]);
-                return S_OK;
-            case ThemeColorSourceKind::Darken:
-                if (const HRESULT hr = ref(0u, first); FAILED(hr))
-                    return hr;
-                out = Blend(first, 0xFF000000u, source.parameters[0]);
-                return S_OK;
-            case ThemeColorSourceKind::Alpha:
-                if (const HRESULT hr = ref(0u, first); FAILED(hr))
-                    return hr;
-                out = (static_cast<uint32_t>(std::clamp(std::lround(source.parameters[0] * 255.0), 0l, 255l)) << 24u) | (first & 0x00FFFFFFu);
-                return S_OK;
-            case ThemeColorSourceKind::Blend:
-                if (const HRESULT hr = ref(0u, first); FAILED(hr))
-                    return hr;
-                if (const HRESULT hr = ref(1u, second); FAILED(hr))
-                    return hr;
-                out = Blend(first, second, source.parameters[0]);
-                return S_OK;
-            case ThemeColorSourceKind::Contrast:
-                if (const HRESULT hr = ref(0u, first); FAILED(hr))
-                    return hr;
-                if (source.references.size() == 1u)
-                {
-                    out = ContrastRatio(first, 0xFFFFFFFFu) >= ContrastRatio(first, 0xFF000000u) ? 0xFFFFFFFFu : 0xFF000000u;
-                    return S_OK;
-                }
-                if (const HRESULT hr = ref(1u, second); FAILED(hr))
-                    return hr;
-                if (const HRESULT hr = ref(2u, third); FAILED(hr))
-                    return hr;
-                out = ContrastRatio(first, second) >= ContrastRatio(first, third) ? second : third;
-                return S_OK;
-            case ThemeColorSourceKind::PerceptualTone:
+        case ThemeColorSourceKind::Direct:
+            out = source.directArgb;
+            return S_OK;
+        case ThemeColorSourceKind::Reference:
+            return ref(0u, out);
+        case ThemeColorSourceKind::Lighten:
+            if (const HRESULT hr = ref(0u, first); FAILED(hr)) return hr;
+            out = Blend(first, 0xFFFFFFFFu, source.parameters[0]);
+            return S_OK;
+        case ThemeColorSourceKind::Darken:
+            if (const HRESULT hr = ref(0u, first); FAILED(hr)) return hr;
+            out = Blend(first, 0xFF000000u, source.parameters[0]);
+            return S_OK;
+        case ThemeColorSourceKind::Alpha:
+            if (const HRESULT hr = ref(0u, first); FAILED(hr)) return hr;
+            out = (static_cast<uint32_t>(std::clamp(std::lround(source.parameters[0] * 255.0), 0l, 255l)) << 24u) | (first & 0x00FFFFFFu);
+            return S_OK;
+        case ThemeColorSourceKind::Blend:
+            if (const HRESULT hr = ref(0u, first); FAILED(hr)) return hr;
+            if (const HRESULT hr = ref(1u, second); FAILED(hr)) return hr;
+            out = Blend(first, second, source.parameters[0]);
+            return S_OK;
+        case ThemeColorSourceKind::Contrast:
+            if (const HRESULT hr = ref(0u, first); FAILED(hr)) return hr;
+            if (source.references.size() == 1u)
             {
-                if (const HRESULT hr = ref(0u, first); FAILED(hr))
-                    return hr;
-                Oklch color     = ToOklch(first);
-                color.lightness = source.parameters[0] / 100.0;
-                out             = FromOklch(color);
+                out = ContrastRatio(first, 0xFFFFFFFFu) >= ContrastRatio(first, 0xFF000000u) ? 0xFFFFFFFFu : 0xFF000000u;
                 return S_OK;
             }
-            case ThemeColorSourceKind::EnsureContrast:
-                if (const HRESULT hr = ref(0u, first); FAILED(hr))
-                    return hr;
-                if (const HRESULT hr = ref(1u, second); FAILED(hr))
-                    return hr;
-                if (const std::optional<uint32_t> adjusted = EnsureContrast(first, second, source.parameters[0]); adjusted.has_value())
-                {
-                    out = adjusted.value();
-                    return S_OK;
-                }
-                return Invalid(message, std::format(L"Contrast target {} is unattainable.", source.parameters[0]));
-            case ThemeColorSourceKind::Harmonize:
+            if (const HRESULT hr = ref(1u, second); FAILED(hr)) return hr;
+            if (const HRESULT hr = ref(2u, third); FAILED(hr)) return hr;
+            out = ContrastRatio(first, second) >= ContrastRatio(first, third) ? second : third;
+            return S_OK;
+        case ThemeColorSourceKind::PerceptualTone:
+        {
+            if (const HRESULT hr = ref(0u, first); FAILED(hr)) return hr;
+            Oklch color = ToOklch(first);
+            color.lightness = source.parameters[0] / 100.0;
+            out = FromOklch(color);
+            return S_OK;
+        }
+        case ThemeColorSourceKind::EnsureContrast:
+            if (const HRESULT hr = ref(0u, first); FAILED(hr)) return hr;
+            if (const HRESULT hr = ref(1u, second); FAILED(hr)) return hr;
+            if (const std::optional<uint32_t> adjusted = EnsureContrast(first, second, source.parameters[0]); adjusted.has_value())
             {
-                if (const HRESULT hr = ref(0u, first); FAILED(hr))
-                    return hr;
-                if (const HRESULT hr = ref(1u, second); FAILED(hr))
-                    return hr;
-                Oklch color        = ToOklch(first);
-                const Oklch target = ToOklch(second);
-                double delta       = std::fmod(target.hue - color.hue + 540.0, 360.0) - 180.0;
-                color.hue          = std::fmod(color.hue + delta * source.parameters[0] + 360.0, 360.0);
-                out                = FromOklch(color);
+                out = adjusted.value();
                 return S_OK;
             }
-            case ThemeColorSourceKind::SystemColor: out = context.systemColors[static_cast<size_t>(source.systemRole)]; return S_OK;
-            case ThemeColorSourceKind::Tone: return ref(context.effectiveDark ? 1u : 0u, out);
-            case ThemeColorSourceKind::SeededRainbow:
-            case ThemeColorSourceKind::SeededChoice: return Invalid(message, L"Paint-time source reached static resolution.");
+            return Invalid(message, std::format(L"Contrast target {} is unattainable.", source.parameters[0]));
+        case ThemeColorSourceKind::Harmonize:
+        {
+            if (const HRESULT hr = ref(0u, first); FAILED(hr)) return hr;
+            if (const HRESULT hr = ref(1u, second); FAILED(hr)) return hr;
+            Oklch color  = ToOklch(first);
+            const Oklch target = ToOklch(second);
+            double delta = std::fmod(target.hue - color.hue + 540.0, 360.0) - 180.0;
+            color.hue = std::fmod(color.hue + delta * source.parameters[0] + 360.0, 360.0);
+            out = FromOklch(color);
+            return S_OK;
+        }
+        case ThemeColorSourceKind::SystemColor:
+            out = context.systemColors[static_cast<size_t>(source.systemRole)];
+            return S_OK;
+        case ThemeColorSourceKind::Tone:
+            return ref(context.effectiveDark ? 1u : 0u, out);
+        case ThemeColorSourceKind::SeededRainbow:
+        case ThemeColorSourceKind::SeededChoice:
+            return Invalid(message, L"Paint-time source reached static resolution.");
         }
         return Invalid(message, L"Unsupported theme color source.");
     }
@@ -755,17 +713,18 @@ ThemeResolutionContext MakeSystemThemeResolutionContext(bool effectiveDark) noex
                static_cast<uint32_t>(GetBValue(color));
     };
     ThemeResolutionContext context;
-    context.effectiveDark   = effectiveDark;
+    context.effectiveDark = effectiveDark;
     DWORD colorizationColor = 0u;
     BOOL opaque             = FALSE;
-    const uint32_t accent =
-        SUCCEEDED(DwmGetColorizationColor(&colorizationColor, &opaque)) ? (0xFF000000u | (colorizationColor & 0x00FFFFFFu)) : argbFromSystem(COLOR_HIGHLIGHT);
-    context.systemColors[static_cast<size_t>(ThemeSystemColorRole::Accent)]        = accent;
-    context.systemColors[static_cast<size_t>(ThemeSystemColorRole::AccentLight)]   = Blend(accent, 0xFFFFFFFFu, 0.25);
-    context.systemColors[static_cast<size_t>(ThemeSystemColorRole::AccentDark)]    = Blend(accent, 0xFF000000u, 0.25);
-    context.systemColors[static_cast<size_t>(ThemeSystemColorRole::Window)]        = argbFromSystem(COLOR_WINDOW);
-    context.systemColors[static_cast<size_t>(ThemeSystemColorRole::WindowText)]    = argbFromSystem(COLOR_WINDOWTEXT);
-    context.systemColors[static_cast<size_t>(ThemeSystemColorRole::Highlight)]     = accent;
+    const uint32_t accent   = SUCCEEDED(DwmGetColorizationColor(&colorizationColor, &opaque))
+                                  ? (0xFF000000u | (colorizationColor & 0x00FFFFFFu))
+                                  : argbFromSystem(COLOR_HIGHLIGHT);
+    context.systemColors[static_cast<size_t>(ThemeSystemColorRole::Accent)] = accent;
+    context.systemColors[static_cast<size_t>(ThemeSystemColorRole::AccentLight)] = Blend(accent, 0xFFFFFFFFu, 0.25);
+    context.systemColors[static_cast<size_t>(ThemeSystemColorRole::AccentDark)] = Blend(accent, 0xFF000000u, 0.25);
+    context.systemColors[static_cast<size_t>(ThemeSystemColorRole::Window)] = argbFromSystem(COLOR_WINDOW);
+    context.systemColors[static_cast<size_t>(ThemeSystemColorRole::WindowText)] = argbFromSystem(COLOR_WINDOWTEXT);
+    context.systemColors[static_cast<size_t>(ThemeSystemColorRole::Highlight)] = accent;
     context.systemColors[static_cast<size_t>(ThemeSystemColorRole::HighlightText)] = argbFromSystem(COLOR_HIGHLIGHTTEXT);
     return context;
 }
@@ -773,8 +732,7 @@ ThemeResolutionContext MakeSystemThemeResolutionContext(bool effectiveDark) noex
 HRESULT ParseThemeColorSource(std::wstring_view text, ThemeColorSource& outSource, std::wstring* outMessage) noexcept
 {
     outSource = {};
-    if (outMessage)
-        outMessage->clear();
+    if (outMessage) outMessage->clear();
     text = Trim(text);
     if (text.empty() || text.size() > 256u)
     {
@@ -793,8 +751,8 @@ HRESULT ParseThemeColorSource(std::wstring_view text, ThemeColorSource& outSourc
     {
         return Invalid(outMessage, std::format(L"Invalid theme color expression '{}'.", text));
     }
-    const std::wstring function               = ToLower(Trim(text.substr(0u, open)));
-    const std::wstring_view argumentsText     = Trim(text.substr(open + 1u, text.size() - open - 2u));
+    const std::wstring function = ToLower(Trim(text.substr(0u, open)));
+    const std::wstring_view argumentsText = Trim(text.substr(open + 1u, text.size() - open - 2u));
     const std::vector<std::wstring_view> args = argumentsText.empty() ? std::vector<std::wstring_view>{} : SplitArguments(argumentsText);
     if (! argumentsText.empty() && args.empty())
     {
@@ -802,60 +760,45 @@ HRESULT ParseThemeColorSource(std::wstring_view text, ThemeColorSource& outSourc
     }
     const auto addReference = [&](std::wstring_view reference) -> bool
     {
-        if (! IsValidReference(reference))
-            return false;
+        if (! IsValidReference(reference)) return false;
         outSource.references.emplace_back(reference);
         return true;
     };
-    const auto requireAmount = [&](std::wstring_view value, size_t index) -> bool { return ParseAmount(value, outSource.parameters[index]); };
+    const auto requireAmount = [&](std::wstring_view value, size_t index) -> bool
+    {
+        return ParseAmount(value, outSource.parameters[index]);
+    };
 
-    if (function == L"ref" && args.size() == 1u && addReference(args[0]))
-        outSource.kind = ThemeColorSourceKind::Reference;
-    else if (function == L"lighten" && args.size() == 2u && addReference(args[0]) && requireAmount(args[1], 0u))
-        outSource.kind = ThemeColorSourceKind::Lighten;
-    else if (function == L"darken" && args.size() == 2u && addReference(args[0]) && requireAmount(args[1], 0u))
-        outSource.kind = ThemeColorSourceKind::Darken;
-    else if (function == L"alpha" && args.size() == 2u && addReference(args[0]) && requireAmount(args[1], 0u))
-        outSource.kind = ThemeColorSourceKind::Alpha;
-    else if (function == L"blend" && args.size() == 3u && addReference(args[0]) && addReference(args[1]) && requireAmount(args[2], 0u))
-        outSource.kind = ThemeColorSourceKind::Blend;
-    else if (function == L"contrast" && (args.size() == 1u || args.size() == 3u) && std::ranges::all_of(args, addReference))
-        outSource.kind = ThemeColorSourceKind::Contrast;
-    else if (function == L"perceptualtone" && args.size() == 2u && addReference(args[0]) && ParseDouble(args[1], outSource.parameters[0]) &&
-             outSource.parameters[0] >= 0.0 && outSource.parameters[0] <= 100.0)
-        outSource.kind = ThemeColorSourceKind::PerceptualTone;
-    else if (function == L"ensurecontrast" && args.size() == 3u && addReference(args[0]) && addReference(args[1]) &&
-             ParseDouble(args[2], outSource.parameters[0]) && outSource.parameters[0] >= 1.0 && outSource.parameters[0] <= 21.0)
-        outSource.kind = ThemeColorSourceKind::EnsureContrast;
-    else if (function == L"harmonize" && args.size() == 3u && addReference(args[0]) && addReference(args[1]) && requireAmount(args[2], 0u))
-        outSource.kind = ThemeColorSourceKind::Harmonize;
+    if (function == L"ref" && args.size() == 1u && addReference(args[0])) outSource.kind = ThemeColorSourceKind::Reference;
+    else if (function == L"lighten" && args.size() == 2u && addReference(args[0]) && requireAmount(args[1], 0u)) outSource.kind = ThemeColorSourceKind::Lighten;
+    else if (function == L"darken" && args.size() == 2u && addReference(args[0]) && requireAmount(args[1], 0u)) outSource.kind = ThemeColorSourceKind::Darken;
+    else if (function == L"alpha" && args.size() == 2u && addReference(args[0]) && requireAmount(args[1], 0u)) outSource.kind = ThemeColorSourceKind::Alpha;
+    else if (function == L"blend" && args.size() == 3u && addReference(args[0]) && addReference(args[1]) && requireAmount(args[2], 0u)) outSource.kind = ThemeColorSourceKind::Blend;
+    else if (function == L"contrast" && (args.size() == 1u || args.size() == 3u) && std::ranges::all_of(args, addReference)) outSource.kind = ThemeColorSourceKind::Contrast;
+    else if (function == L"perceptualtone" && args.size() == 2u && addReference(args[0]) && ParseDouble(args[1], outSource.parameters[0]) && outSource.parameters[0] >= 0.0 && outSource.parameters[0] <= 100.0) outSource.kind = ThemeColorSourceKind::PerceptualTone;
+    else if (function == L"ensurecontrast" && args.size() == 3u && addReference(args[0]) && addReference(args[1]) && ParseDouble(args[2], outSource.parameters[0]) && outSource.parameters[0] >= 1.0 && outSource.parameters[0] <= 21.0) outSource.kind = ThemeColorSourceKind::EnsureContrast;
+    else if (function == L"harmonize" && args.size() == 3u && addReference(args[0]) && addReference(args[1]) && requireAmount(args[2], 0u)) outSource.kind = ThemeColorSourceKind::Harmonize;
     else if (function == L"systemaccent" && args.empty())
     {
-        outSource.kind                         = ThemeColorSourceKind::SystemColor;
-        outSource.systemRole                   = ThemeSystemColorRole::Accent;
+        outSource.kind = ThemeColorSourceKind::SystemColor;
+        outSource.systemRole = ThemeSystemColorRole::Accent;
         outSource.preserveSystemAccentSpelling = true;
     }
     else if (function == L"systemcolor" && args.size() == 1u)
     {
         const std::optional<ThemeSystemColorRole> role = ParseSystemRole(args[0]);
-        if (! role.has_value())
-            return Invalid(outMessage, std::format(L"Unknown system color role '{}'.", args[0]));
-        outSource.kind       = ThemeColorSourceKind::SystemColor;
+        if (! role.has_value()) return Invalid(outMessage, std::format(L"Unknown system color role '{}'.", args[0]));
+        outSource.kind = ThemeColorSourceKind::SystemColor;
         outSource.systemRole = role.value();
     }
-    else if (function == L"tone" && args.size() == 2u && addReference(args[0]) && addReference(args[1]))
-        outSource.kind = ThemeColorSourceKind::Tone;
-    else if (function == L"seededrainbow" && args.size() == 5u && ToLower(args[0]) == L"runtime.seed" && requireAmount(args[1], 0u) &&
-             requireAmount(args[2], 1u) && requireAmount(args[3], 2u) && ParseDouble(args[4], outSource.parameters[3]) && outSource.parameters[3] >= 0.0 &&
-             outSource.parameters[3] <= 360.0)
-        outSource.kind = ThemeColorSourceKind::SeededRainbow;
+    else if (function == L"tone" && args.size() == 2u && addReference(args[0]) && addReference(args[1])) outSource.kind = ThemeColorSourceKind::Tone;
+    else if (function == L"seededrainbow" && args.size() == 5u && ToLower(args[0]) == L"runtime.seed" && requireAmount(args[1], 0u) && requireAmount(args[2], 1u) && requireAmount(args[3], 2u) && ParseDouble(args[4], outSource.parameters[3]) && outSource.parameters[3] >= 0.0 && outSource.parameters[3] <= 360.0) outSource.kind = ThemeColorSourceKind::SeededRainbow;
     else if (function == L"seededchoice" && args.size() >= 3u && args.size() <= 9u && ToLower(args[0]) == L"runtime.seed")
     {
         outSource.kind = ThemeColorSourceKind::SeededChoice;
         for (const std::wstring_view reference : std::span<const std::wstring_view>(args).subspan(1u))
         {
-            if (! addReference(reference))
-                return Invalid(outMessage, std::format(L"Invalid seededChoice reference '{}'.", reference));
+            if (! addReference(reference)) return Invalid(outMessage, std::format(L"Invalid seededChoice reference '{}'.", reference));
         }
     }
     else
@@ -870,36 +813,33 @@ std::wstring FormatThemeColorSource(const ThemeColorSource& source)
     const auto ref = [&](size_t index) -> std::wstring { return index < source.references.size() ? source.references[index] : L"invalid"; };
     switch (source.kind)
     {
-        case ThemeColorSourceKind::Direct: return FormatColor(source.directArgb);
-        case ThemeColorSourceKind::Reference: return std::format(L"ref({})", ref(0u));
-        case ThemeColorSourceKind::Lighten: return std::format(L"lighten({},{})", ref(0u), NumberText(source.parameters[0]));
-        case ThemeColorSourceKind::Darken: return std::format(L"darken({},{})", ref(0u), NumberText(source.parameters[0]));
-        case ThemeColorSourceKind::Alpha: return std::format(L"alpha({},{})", ref(0u), NumberText(source.parameters[0]));
-        case ThemeColorSourceKind::Blend: return std::format(L"blend({},{},{})", ref(0u), ref(1u), NumberText(source.parameters[0]));
-        case ThemeColorSourceKind::Contrast:
-            return source.references.size() == 1u ? std::format(L"contrast({})", ref(0u)) : std::format(L"contrast({},{},{})", ref(0u), ref(1u), ref(2u));
-        case ThemeColorSourceKind::PerceptualTone: return std::format(L"perceptualTone({},{})", ref(0u), NumberText(source.parameters[0]));
-        case ThemeColorSourceKind::EnsureContrast: return std::format(L"ensureContrast({},{},{})", ref(0u), ref(1u), NumberText(source.parameters[0]));
-        case ThemeColorSourceKind::Harmonize: return std::format(L"harmonize({},{},{})", ref(0u), ref(1u), NumberText(source.parameters[0]));
-        case ThemeColorSourceKind::SystemColor:
-            return source.preserveSystemAccentSpelling && source.systemRole == ThemeSystemColorRole::Accent
-                       ? L"systemAccent()"
-                       : std::format(L"systemColor({})", SystemRoleText(source.systemRole));
-        case ThemeColorSourceKind::Tone: return std::format(L"tone({},{})", ref(0u), ref(1u));
-        case ThemeColorSourceKind::SeededRainbow:
-            return std::format(L"seededRainbow(runtime.seed,{},{},{},{})",
-                               NumberText(source.parameters[0]),
-                               NumberText(source.parameters[1]),
-                               NumberText(source.parameters[2]),
-                               NumberText(source.parameters[3]));
-        case ThemeColorSourceKind::SeededChoice:
-        {
-            std::wstring result = L"seededChoice(runtime.seed";
-            for (const std::wstring& reference : source.references)
-                result += std::format(L",{}", reference);
-            result += L")";
-            return result;
-        }
+    case ThemeColorSourceKind::Direct: return FormatColor(source.directArgb);
+    case ThemeColorSourceKind::Reference: return std::format(L"ref({})", ref(0u));
+    case ThemeColorSourceKind::Lighten: return std::format(L"lighten({},{})", ref(0u), NumberText(source.parameters[0]));
+    case ThemeColorSourceKind::Darken: return std::format(L"darken({},{})", ref(0u), NumberText(source.parameters[0]));
+    case ThemeColorSourceKind::Alpha: return std::format(L"alpha({},{})", ref(0u), NumberText(source.parameters[0]));
+    case ThemeColorSourceKind::Blend: return std::format(L"blend({},{},{})", ref(0u), ref(1u), NumberText(source.parameters[0]));
+    case ThemeColorSourceKind::Contrast:
+        return source.references.size() == 1u ? std::format(L"contrast({})", ref(0u))
+                                             : std::format(L"contrast({},{},{})", ref(0u), ref(1u), ref(2u));
+    case ThemeColorSourceKind::PerceptualTone: return std::format(L"perceptualTone({},{})", ref(0u), NumberText(source.parameters[0]));
+    case ThemeColorSourceKind::EnsureContrast: return std::format(L"ensureContrast({},{},{})", ref(0u), ref(1u), NumberText(source.parameters[0]));
+    case ThemeColorSourceKind::Harmonize: return std::format(L"harmonize({},{},{})", ref(0u), ref(1u), NumberText(source.parameters[0]));
+    case ThemeColorSourceKind::SystemColor:
+        return source.preserveSystemAccentSpelling && source.systemRole == ThemeSystemColorRole::Accent
+                   ? L"systemAccent()"
+                   : std::format(L"systemColor({})", SystemRoleText(source.systemRole));
+    case ThemeColorSourceKind::Tone: return std::format(L"tone({},{})", ref(0u), ref(1u));
+    case ThemeColorSourceKind::SeededRainbow:
+        return std::format(L"seededRainbow(runtime.seed,{},{},{},{})",
+                           NumberText(source.parameters[0]), NumberText(source.parameters[1]), NumberText(source.parameters[2]), NumberText(source.parameters[3]));
+    case ThemeColorSourceKind::SeededChoice:
+    {
+        std::wstring result = L"seededChoice(runtime.seed";
+        for (const std::wstring& reference : source.references) result += std::format(L",{}", reference);
+        result += L")";
+        return result;
+    }
     }
     return {};
 }
@@ -916,10 +856,8 @@ bool IsEventTimeThemeColorSource(const ThemeColorSource& source) noexcept
 
 ThemeColorEvaluationPhase GetThemeColorEvaluationPhase(const ThemeColorSource& source) noexcept
 {
-    if (IsPaintTimeThemeColorSource(source))
-        return ThemeColorEvaluationPhase::Paint;
-    if (IsEventTimeThemeColorSource(source))
-        return ThemeColorEvaluationPhase::Event;
+    if (IsPaintTimeThemeColorSource(source)) return ThemeColorEvaluationPhase::Paint;
+    if (IsEventTimeThemeColorSource(source)) return ThemeColorEvaluationPhase::Event;
     return ThemeColorEvaluationPhase::Load;
 }
 
@@ -938,8 +876,7 @@ HRESULT ResolveThemeDefinition(const ThemeDefinition& theme,
     const auto emitPerf  = wil::scope_exit([&]
     {
         size_t edgeCount = 0u;
-        for (const auto& [_, dependencies] : outResolved.dependencies)
-            edgeCount += dependencies.size();
+        for (const auto& [_, dependencies] : outResolved.dependencies) edgeCount += dependencies.size();
         Debug::Perf::EmitDurationUs(L"theme.resolve_us",
                                     Debug::Perf::ElapsedUs(startedAt),
                                     static_cast<uint64_t>(outResolved.dependencies.size()),
@@ -948,44 +885,37 @@ HRESULT ResolveThemeDefinition(const ThemeDefinition& theme,
         Debug::Perf::EmitValue(L"theme.resolve.node_count", static_cast<uint64_t>(outResolved.dependencies.size()), result);
         Debug::Perf::EmitValue(L"theme.resolve.edge_count", static_cast<uint64_t>(edgeCount), result);
     });
-    outResolved          = {};
-    if (outMessage)
-        outMessage->clear();
+    outResolved = {};
+    if (outMessage) outMessage->clear();
 
     std::unordered_map<std::wstring, uint8_t> depthStates;
     std::unordered_map<std::wstring, size_t> depthCache;
-    HRESULT depthHr         = S_OK;
+    HRESULT depthHr = S_OK;
     const auto measureDepth = [&](auto&& self, const std::wstring& name, const ThemeColorSource& source) -> size_t
     {
-        if (FAILED(depthHr))
-            return 0u;
-        if (const auto cached = depthCache.find(name); cached != depthCache.end())
-            return cached->second;
-        if (depthStates[name] == 1u)
-            return 0u; // The resolver reports the complete cycle path after this bounded pass.
+        if (FAILED(depthHr)) return 0u;
+        if (const auto cached = depthCache.find(name); cached != depthCache.end()) return cached->second;
+        if (depthStates[name] == 1u) return 0u; // The resolver reports the complete cycle path after this bounded pass.
         depthStates[name] = 1u;
-        size_t depth      = 1u;
+        size_t depth = 1u;
         for (const std::wstring& reference : source.references)
         {
             const ThemeColorSource* dependency = nullptr;
-            std::wstring dependencyName        = reference;
+            std::wstring dependencyName = reference;
             if (reference.rfind(L"palette.", 0u) == 0u)
             {
                 const auto found = theme.palette.find(reference.substr(8u));
-                if (found != theme.palette.end())
-                    dependency = &found->second;
+                if (found != theme.palette.end()) dependency = &found->second;
             }
             else
             {
                 const auto found = theme.colors.find(reference);
-                if (found != theme.colors.end())
-                    dependency = &found->second;
+                if (found != theme.colors.end()) dependency = &found->second;
             }
-            if (dependency)
-                depth = std::max(depth, self(self, dependencyName, *dependency) + 1u);
+            if (dependency) depth = std::max(depth, self(self, dependencyName, *dependency) + 1u);
         }
         depthStates[name] = 2u;
-        depthCache[name]  = depth;
+        depthCache[name] = depth;
         if (depth > 32u && SUCCEEDED(depthHr))
         {
             depthHr = Invalid(outMessage, std::format(L"Theme color dependency depth exceeds 32 while resolving '{}'.", name));

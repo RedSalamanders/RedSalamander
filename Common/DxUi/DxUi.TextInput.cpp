@@ -59,7 +59,8 @@ struct ConcealedMaskBucket final
         return targetLength;
     }
 
-    const long double scaled = (static_cast<long double>(index) * static_cast<long double>(targetLength)) / static_cast<long double>(sourceLength);
+    const long double scaled = (static_cast<long double>(index) * static_cast<long double>(targetLength)) /
+                               static_cast<long double>(sourceLength);
     return (std::min)(targetLength, static_cast<size_t>(scaled + 0.5L));
 }
 
@@ -1173,12 +1174,12 @@ size_t TextField::GetSecretVisibleDotCount() const noexcept
     if (_maskLengthPolicy == PasswordMaskLengthPolicy::Exact)
     {
         exactCount = GetMaskedSourceTextElementBoundaries().size() - 1u;
-        result     = exactCount;
+        result = exactCount;
     }
     else
     {
         exactCount = _text.size();
-        result     = GetConcealedMaskVisibleDotCount(exactCount);
+        result = GetConcealedMaskVisibleDotCount(exactCount);
     }
 
     if (Debug::Perf::IsCaptureEnabled())
@@ -1415,12 +1416,12 @@ bool TextField::DebugGetSingleLinePaintState(const WindowHost& host, TextFieldDe
         out.trailingButtonRect    = SnapRectToPixel(host, GetPasswordRevealButtonRect());
         out.hasTrailingButtonRect = true;
     }
-    const DWRITE_READING_DIRECTION readingDirection               = ResolveReadingDirection(GetFlowDirection());
+    const DWRITE_READING_DIRECTION readingDirection = ResolveReadingDirection(GetFlowDirection());
     const std::optional<std::pair<size_t, size_t>> selectionRange = GetSelectionRange();
     const std::optional<std::pair<size_t, size_t>> displaySelectionRange =
         selectionRange.has_value() ? ControlTextRangeToDisplayTextRange(selectionRange.value().first, selectionRange.value().second) : std::nullopt;
-    if (const std::optional<D2D1_RECT_F> selectionPaintRect = ComputeSingleLineSelectionPaintRect(
-            host, GetDisplayText(), textRect, FontRole::Body, _horizontalScrollDip, displaySelectionRange, readingDirection);
+    if (const std::optional<D2D1_RECT_F> selectionPaintRect =
+            ComputeSingleLineSelectionPaintRect(host, GetDisplayText(), textRect, FontRole::Body, _horizontalScrollDip, displaySelectionRange, readingDirection);
         selectionPaintRect.has_value())
     {
         out.selectionPaintRect    = selectionPaintRect.value();
@@ -1508,10 +1509,10 @@ void TextField::Paint(WindowHost& host) const
         }
     }
 
-    const D2D1_RECT_F textRect                                    = GetTextRect();
-    const std::wstring displayText                                = GetDisplayText();
-    const bool usePlaceholder                                     = _text.empty() && ! _placeholder.empty();
-    const DWRITE_READING_DIRECTION readingDirection               = ResolveReadingDirection(GetFlowDirection());
+    const D2D1_RECT_F textRect                      = GetTextRect();
+    const std::wstring displayText                  = GetDisplayText();
+    const bool usePlaceholder                       = _text.empty() && ! _placeholder.empty();
+    const DWRITE_READING_DIRECTION readingDirection = ResolveReadingDirection(GetFlowDirection());
     const std::optional<std::pair<size_t, size_t>> selectionRange = GetSelectionRange();
     const std::optional<std::pair<size_t, size_t>> displaySelectionRange =
         selectionRange.has_value() ? ControlTextRangeToDisplayTextRange(selectionRange.value().first, selectionRange.value().second) : std::nullopt;
@@ -1565,8 +1566,8 @@ void TextField::Paint(WindowHost& host) const
                 GetOrCreateMultilineLayout(&host, displayText, std::max(1.0f, textRect.right - textRect.left), std::max(1.0f, textRect.bottom - textRect.top));
             const std::vector<DWRITE_LINE_METRICS> lineMetrics = GetMultilineLineMetrics(multilineLayout.get());
             const float multilineScrollDip                     = MeasureWrappedLineOffsetDip(lineMetrics, _multilineFirstVisibleLine);
-            caretRect =
-                MeasureMultilineCaretRectDip(&host, displayText, FontRole::Body, textRect, multilineScrollDip, ControlTextIndexToDisplayTextIndex(_caretIndex));
+            caretRect = MeasureMultilineCaretRectDip(
+                &host, displayText, FontRole::Body, textRect, multilineScrollDip, ControlTextIndexToDisplayTextIndex(_caretIndex));
         }
         else
         {
@@ -1578,7 +1579,8 @@ void TextField::Paint(WindowHost& host) const
                                                                     std::max(1.0f, textRect.bottom - textRect.top),
                                                                     readingDirection);
             }
-            const float caretOffset = MeasureCaretOffsetDip(paintSingleLineLayout.get(), displayText, ControlTextIndexToDisplayTextIndex(_caretIndex));
+            const float caretOffset =
+                MeasureCaretOffsetDip(paintSingleLineLayout.get(), displayText, ControlTextIndexToDisplayTextIndex(_caretIndex));
             const float caretMaxX   = std::max(textRect.left, textRect.right - 1.0f);
             const float caretX      = std::clamp(textRect.left + caretOffset - _horizontalScrollDip, textRect.left, caretMaxX);
             caretRect               = D2D1::RectF(caretX, textRect.top + 2.0f, caretX + 1.0f, textRect.bottom - 2.0f);
@@ -1762,7 +1764,7 @@ bool TextField::OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightBut
     {
         const D2D1_RECT_F textRect     = GetTextRect();
         const std::wstring displayText = GetDisplayText();
-        const auto multilineLayout     = CreateMultilineTextLayout(
+        const auto multilineLayout = CreateMultilineTextLayout(
             &host, displayText, FontRole::Body, std::max(1.0f, textRect.right - textRect.left), std::max(1.0f, textRect.bottom - textRect.top));
         const size_t displayHitIndex =
             HitTestMultilineCaretIndexDip(&host,
@@ -1828,13 +1830,13 @@ bool TextField::OnMouseDoubleClick(WindowHost& host, D2D1_POINT_2F point, bool r
     {
         const auto multilineLayout = CreateMultilineTextLayout(
             &host, displayText, FontRole::Body, std::max(1.0f, textRect.right - textRect.left), std::max(1.0f, textRect.bottom - textRect.top));
-        const size_t displayHitIndex =
-            HitTestMultilineCaretIndexDip(&host,
-                                          displayText,
-                                          FontRole::Body,
-                                          textRect,
-                                          MeasureWrappedLineOffsetDip(GetMultilineLineMetrics(multilineLayout.get()), _multilineFirstVisibleLine),
-                                          point);
+        const size_t displayHitIndex = HitTestMultilineCaretIndexDip(
+            &host,
+            displayText,
+            FontRole::Body,
+            textRect,
+            MeasureWrappedLineOffsetDip(GetMultilineLineMetrics(multilineLayout.get()), _multilineFirstVisibleLine),
+            point);
         hitIndex = DisplayTextIndexToControlTextIndex(displayHitIndex);
     }
     else
@@ -1888,13 +1890,13 @@ bool TextField::OnMouseMove(WindowHost& host, D2D1_POINT_2F point, UINT /*modifi
     {
         const auto multilineLayout = CreateMultilineTextLayout(
             &host, displayText, FontRole::Body, std::max(1.0f, textRect.right - textRect.left), std::max(1.0f, textRect.bottom - textRect.top));
-        const size_t displayHitIndex =
-            HitTestMultilineCaretIndexDip(&host,
-                                          displayText,
-                                          FontRole::Body,
-                                          textRect,
-                                          MeasureWrappedLineOffsetDip(GetMultilineLineMetrics(multilineLayout.get()), _multilineFirstVisibleLine),
-                                          point);
+        const size_t displayHitIndex = HitTestMultilineCaretIndexDip(
+            &host,
+            displayText,
+            FontRole::Body,
+            textRect,
+            MeasureWrappedLineOffsetDip(GetMultilineLineMetrics(multilineLayout.get()), _multilineFirstVisibleLine),
+            point);
         hitIndex = DisplayTextIndexToControlTextIndex(displayHitIndex);
     }
     else
@@ -2684,8 +2686,9 @@ std::optional<std::vector<D2D1_RECT_F>> TextField::GetTextInputRangeRects(const 
                                                                           size_t controlTextStartIndex,
                                                                           size_t controlTextEndIndex) const
 {
-    const std::wstring displayText                              = GetDisplayText();
-    const std::optional<std::pair<size_t, size_t>> displayRange = ControlTextRangeToDisplayTextRange(controlTextStartIndex, controlTextEndIndex);
+    const std::wstring displayText = GetDisplayText();
+    const std::optional<std::pair<size_t, size_t>> displayRange =
+        ControlTextRangeToDisplayTextRange(controlTextStartIndex, controlTextEndIndex);
     if (! displayRange.has_value())
     {
         return std::nullopt;
@@ -3234,7 +3237,7 @@ size_t TextField::ControlTextIndexToDisplayTextIndex(size_t controlTextIndex) co
     const size_t snappedControlIndex      = SnapCaretIndexToTextElementBoundary(_text, clampedControlIndex);
     const auto boundary                   = std::lower_bound(boundaries.begin(), boundaries.end(), snappedControlIndex);
     const size_t sourceElementIndex       = boundary == boundaries.end() ? sourceElementCount : static_cast<size_t>(boundary - boundaries.begin());
-    const size_t displayLength            = _maskLengthPolicy == PasswordMaskLengthPolicy::Exact ? sourceElementCount : GetSecretVisibleDotCount();
+    const size_t displayLength = _maskLengthPolicy == PasswordMaskLengthPolicy::Exact ? sourceElementCount : GetSecretVisibleDotCount();
     return ScaleMaskedTextIndex(sourceElementIndex, sourceElementCount, displayLength);
 }
 
@@ -3247,12 +3250,13 @@ size_t TextField::DisplayTextIndexToControlTextIndex(size_t displayTextIndex) co
 
     const std::vector<size_t>& boundaries = GetMaskedSourceTextElementBoundaries();
     const size_t sourceElementCount       = boundaries.size() - 1u;
-    const size_t displayLength            = _maskLengthPolicy == PasswordMaskLengthPolicy::Exact ? sourceElementCount : GetSecretVisibleDotCount();
-    const size_t sourceElementIndex       = ScaleMaskedTextIndex((std::min)(displayTextIndex, displayLength), displayLength, sourceElementCount);
+    const size_t displayLength = _maskLengthPolicy == PasswordMaskLengthPolicy::Exact ? sourceElementCount : GetSecretVisibleDotCount();
+    const size_t sourceElementIndex = ScaleMaskedTextIndex((std::min)(displayTextIndex, displayLength), displayLength, sourceElementCount);
     return boundaries[(std::min)(sourceElementIndex, sourceElementCount)];
 }
 
-std::optional<std::pair<size_t, size_t>> TextField::ControlTextRangeToDisplayTextRange(size_t controlTextStartIndex, size_t controlTextEndIndex) const noexcept
+std::optional<std::pair<size_t, size_t>> TextField::ControlTextRangeToDisplayTextRange(size_t controlTextStartIndex,
+                                                                                       size_t controlTextEndIndex) const noexcept
 {
     if (controlTextStartIndex >= controlTextEndIndex)
     {
@@ -3331,7 +3335,7 @@ void TextField::EnsureCaretVisible(const WindowHost* host, float availableWidthD
                                                                                std::max(1.0f, availableWidthDip + _horizontalScrollDip),
                                                                                std::max(1.0f, GetTextRect().bottom - GetTextRect().top),
                                                                                ResolveReadingDirection(GetFlowDirection()));
-    const float caretOffset                      = MeasureCaretOffsetDip(layout.get(), displayText, ControlTextIndexToDisplayTextIndex(_caretIndex));
+    const float caretOffset = MeasureCaretOffsetDip(layout.get(), displayText, ControlTextIndexToDisplayTextIndex(_caretIndex));
     const float padding                          = 6.0f;
     if (caretOffset < _horizontalScrollDip + padding)
     {
@@ -3427,8 +3431,8 @@ bool TextField::NotifyChanged()
         return true;
     }
 
-    std::wstring textSnapshot             = _text;
-    const bool secureSnapshot             = _masked;
+    std::wstring textSnapshot = _text;
+    const bool secureSnapshot = _masked;
     const std::weak_ptr<int> selfLifetime = GetLifetimeToken();
     onTextChanged(textSnapshot);
     if (secureSnapshot)

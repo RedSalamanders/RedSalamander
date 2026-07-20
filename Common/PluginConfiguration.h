@@ -95,7 +95,7 @@ struct ValidationIssue
 {
     ValidationSeverity severity = ValidationSeverity::Warning;
     ValidationCode code         = ValidationCode::InvalidJson;
-    size_t fieldIndex           = kNoFieldIndex;
+    size_t fieldIndex            = kNoFieldIndex;
     std::wstring fieldKey;
 };
 

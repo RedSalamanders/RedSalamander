@@ -2394,17 +2394,18 @@ bool NavigationView::TryGetSiblingFolders(const std::filesystem::path& parentPat
     }
 
     constexpr size_t kMaxSiblingItems = static_cast<size_t>(ID_SIBLING_SEARCH - ID_SIBLING_BASE);
-    const auto lessByName             = [](const std::filesystem::path& left, const std::filesystem::path& right)
+    const auto lessByName = [](const std::filesystem::path& left, const std::filesystem::path& right)
     { return _wcsicmp(left.filename().c_str(), right.filename().c_str()) < 0; };
     const auto isPreferred = [&](const std::filesystem::path& candidate)
     { return wil::compare_string_ordinal(candidate.native(), preferredPath.native(), true) == wistd::weak_ordering::equivalent; };
-    size_t largestReplaceableIndex    = SIZE_MAX;
+    size_t largestReplaceableIndex = SIZE_MAX;
     const auto findLargestReplaceable = [&]()
     {
         largestReplaceableIndex = SIZE_MAX;
         for (size_t i = 0; i < siblings.size(); ++i)
         {
-            if (! isPreferred(siblings[i]) && (largestReplaceableIndex == SIZE_MAX || lessByName(siblings[largestReplaceableIndex], siblings[i])))
+            if (! isPreferred(siblings[i]) &&
+                (largestReplaceableIndex == SIZE_MAX || lessByName(siblings[largestReplaceableIndex], siblings[i])))
             {
                 largestReplaceableIndex = i;
             }
@@ -2428,7 +2429,8 @@ bool NavigationView::TryGetSiblingFolders(const std::filesystem::path& parentPat
                 else
                 {
                     truncated = true;
-                    if (largestReplaceableIndex != SIZE_MAX && (isPreferred(candidate) || lessByName(candidate, siblings[largestReplaceableIndex])))
+                    if (largestReplaceableIndex != SIZE_MAX &&
+                        (isPreferred(candidate) || lessByName(candidate, siblings[largestReplaceableIndex])))
                     {
                         siblings[largestReplaceableIndex] = std::move(candidate);
                         findLargestReplaceable();
@@ -2569,8 +2571,9 @@ void NavigationView::ShowSiblingsDropdown(size_t separatorIndex)
     if (siblingsTruncated)
     {
         items.push_back(RedSalamander::DxUi::MenuFlyoutItem{.kind = RedSalamander::DxUi::MenuItemKind::Separator});
-        items.push_back(RedSalamander::DxUi::MenuFlyoutItem{
-            .text = LoadStringResource(nullptr, IDS_CMD_NAVIGATE_PATH), .iconGlyph = L"\uE721", .commandId = ID_SIBLING_SEARCH});
+        items.push_back(RedSalamander::DxUi::MenuFlyoutItem{.text = LoadStringResource(nullptr, IDS_CMD_NAVIGATE_PATH),
+                                                            .iconGlyph = L"\uE721",
+                                                            .commandId = ID_SIBLING_SEARCH});
     }
 
     if (items.empty())

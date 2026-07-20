@@ -109,7 +109,8 @@ std::wstring Utf16FromMultiByte(std::string_view text, UINT codePage, DWORD flag
 
 std::optional<std::wstring> TryGetJsonString(yyjson_val* obj, const char* key) noexcept
 {
-    const Common::Json::MemberResult<std::wstring> value = Common::Json::GetUtf16StringMemberStrict(obj, key, Common::Json::MemberRequirement::Optional);
+    const Common::Json::MemberResult<std::wstring> value =
+        Common::Json::GetUtf16StringMemberStrict(obj, key, Common::Json::MemberRequirement::Optional);
     return value.HasValue() ? std::optional<std::wstring>{value.value} : std::nullopt;
 }
 
@@ -358,7 +359,7 @@ HRESULT STDMETHODCALLTYPE FileSystem7z::SetConfiguration(const char* configurati
 
     if (configurationJsonUtf8 != nullptr && configurationJsonUtf8[0] != '\0')
     {
-        nextConfiguration                   = configurationJsonUtf8;
+        nextConfiguration = configurationJsonUtf8;
         Common::Json::ObjectDocument parsed = Common::Json::ParseObjectDocument(nextConfiguration, YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM);
         if (! parsed)
         {
@@ -763,8 +764,8 @@ HRESULT FileSystem7z::EnsureIndex(IFileSystemDirectoryEnumerationCallback* callb
                     continue;
                 }
 
-                archivePath     = _archivePath;
-                password        = _password;
+                archivePath = _archivePath;
+                password    = _password;
                 buildGeneration = _indexGeneration.load(std::memory_order_acquire);
 
                 ClearIndexLocked();
@@ -837,7 +838,7 @@ HRESULT FileSystem7z::EnsureIndex(IFileSystemDirectoryEnumerationCallback* callb
                     _children           = std::move(children);
                     _indexedArchivePath = _archivePath;
                     SecureWipe::SecureClear(_indexedPassword);
-                    _indexedPassword = _password;
+                    _indexedPassword    = _password;
                 }
 
                 resultHr = _indexStatus;
@@ -2466,9 +2467,9 @@ private:
     std::wstring _archivePath;
     std::wstring _password;
     IFileSystemDirectoryEnumerationCallback* _enumerationCallback = nullptr;
-    void* _enumerationCookie                                      = nullptr;
-    const std::atomic<uint64_t>* _generation                      = nullptr;
-    uint64_t _expectedGeneration                                  = 0u;
+    void* _enumerationCookie                                       = nullptr;
+    const std::atomic<uint64_t>* _generation                       = nullptr;
+    uint64_t _expectedGeneration                                   = 0u;
 };
 
 std::wstring PropVariantToWideString(const PROPVARIANT& value) noexcept
@@ -2666,8 +2667,8 @@ HRESULT CreateAndOpenArchive(const SevenZipExports& api,
         return hr;
     }
 
-    auto* callbackImpl = new (std::nothrow)
-        SevenZipOpenCallback(std::wstring(archivePath), std::wstring(password), enumerationCallback, enumerationCookie, generation, expectedGeneration);
+    auto* callbackImpl = new (std::nothrow) SevenZipOpenCallback(
+        std::wstring(archivePath), std::wstring(password), enumerationCallback, enumerationCookie, generation, expectedGeneration);
     if (! callbackImpl)
     {
         return E_OUTOFMEMORY;
@@ -2695,9 +2696,9 @@ HRESULT OpenArchiveAuto(const SevenZipExports& api,
                         wil::com_ptr<IInStream>& outStream,
                         wil::com_ptr<IArchiveOpenCallback>& outOpenCallback,
                         IFileSystemDirectoryEnumerationCallback* enumerationCallback = nullptr,
-                        void* enumerationCookie                                      = nullptr,
-                        const std::atomic<uint64_t>* generation                      = nullptr,
-                        uint64_t expectedGeneration                                  = 0u) noexcept
+                        void* enumerationCookie                                       = nullptr,
+                        const std::atomic<uint64_t>* generation                       = nullptr,
+                        uint64_t expectedGeneration                                   = 0u) noexcept
 {
     outArchive.reset();
     outStream.reset();
@@ -3415,7 +3416,7 @@ private:
             }
 
             _terminalReadStatus.store(hr, std::memory_order_release);
-            hr = S_OK;
+            hr                      = S_OK;
         }
 
         if (processed == 0 && _positionBytes < _fileSizeBytes)
@@ -3514,7 +3515,7 @@ private:
             _extractCompletedBytes.store(0, std::memory_order_relaxed);
             _extractStatus = S_OK;
 
-            _positionBytes = positionBytes;
+            _positionBytes          = positionBytes;
         }
 
         _extractCv.notify_all();
@@ -4073,7 +4074,7 @@ private:
 
     uint64_t _itemStreamPositionBytes = 0;
 
-    bool _useInMemorySpool = true;
+    bool _useInMemorySpool       = true;
     std::atomic<HRESULT> _terminalReadStatus{S_OK};
 
     std::vector<uint8_t> _spool;
@@ -4362,7 +4363,7 @@ struct DebugStoredZipEntry final
     struct CentralRecord final
     {
         DebugStoredZipEntry entry;
-        uint32_t crc         = 0;
+        uint32_t crc = 0;
         uint32_t localOffset = 0;
     };
 
@@ -4498,12 +4499,12 @@ struct DebugStoredZipEntry final
         return FAILED(rootHr) ? rootHr : E_FAIL;
     }
 
-    bool foundFoo  = false;
-    bool foundDup  = false;
+    bool foundFoo = false;
+    bool foundDup = false;
     bool foundRoot = false;
     for (unsigned int index = 0u;; ++index)
     {
-        FileInfo* entry     = nullptr;
+        FileInfo* entry = nullptr;
         const HRESULT getHr = rootInfo->Get(index, &entry);
         if (getHr == HRESULT_FROM_WIN32(ERROR_NO_MORE_FILES))
         {
@@ -4599,8 +4600,9 @@ struct DebugStoredZipEntry final
 
     wil::com_ptr<IFileReader> reader;
     g_debugForceSevenZipExtractPipelineForSelfTest.store(true, std::memory_order_release);
-    const auto restoreReaderPipeline = wil::scope_exit([&] { g_debugForceSevenZipExtractPipelineForSelfTest.store(false, std::memory_order_release); });
-    const HRESULT readerHr           = fileIo->CreateFileReader(L"/payload.bin", reader.put());
+    const auto restoreReaderPipeline = wil::scope_exit(
+        [&] { g_debugForceSevenZipExtractPipelineForSelfTest.store(false, std::memory_order_release); });
+    const HRESULT readerHr = fileIo->CreateFileReader(L"/payload.bin", reader.put());
     check(SUCCEEDED(readerHr) && reader, L"corrupt payload entry should create a reader");
     if (! reader)
     {
@@ -4608,11 +4610,11 @@ struct DebugStoredZipEntry final
     }
 
     std::array<std::byte, 4096> output{};
-    HRESULT terminalHr      = S_OK;
-    unsigned long bytesRead = 0;
+    HRESULT terminalHr       = S_OK;
+    unsigned long bytesRead  = 0;
     for (unsigned int attempt = 0; attempt < 16u; ++attempt)
     {
-        bytesRead        = 0;
+        bytesRead       = 0;
         const HRESULT hr = reader->Read(output.data(), static_cast<unsigned long>(output.size()), &bytesRead);
         if (FAILED(hr))
         {
@@ -4696,7 +4698,8 @@ struct DebugStoredZipEntry final
         return E_NOINTERFACE;
     }
 
-    check(information->SetConfiguration(R"json({"debugIndexBuildDelayMs":1000})json") == S_OK, L"debug delay configuration should be accepted");
+    check(information->SetConfiguration(R"json({"debugIndexBuildDelayMs":1000})json") == S_OK,
+          L"debug delay configuration should be accepted");
     check(initialize->Initialize(archivePath.c_str(), nullptr) == S_OK, L"cancellation fixture should initialize");
 
     class CancelAtFirstCheckpoint final : public IFileSystemDirectoryEnumerationCallback
@@ -4724,7 +4727,7 @@ struct DebugStoredZipEntry final
     const uint64_t startTick = GetTickCount64();
     wil::com_ptr<IFilesInformation> cancelledResult;
     const HRESULT cancelledHr = cancellable->ReadDirectoryInfoCancellable(L"/", &callback, nullptr, cancelledResult.put());
-    const uint64_t elapsedMs  = GetTickCount64() - startTick;
+    const uint64_t elapsedMs   = GetTickCount64() - startTick;
     check(cancelledHr == HRESULT_FROM_WIN32(ERROR_CANCELLED) && ! cancelledResult,
           L"cancellable enumeration should return cancellation without publishing a partial index");
     check(callback.progressCalls > 0u && elapsedMs < 500u, L"cancellation should interrupt the simulated blocked index promptly");
@@ -4746,12 +4749,12 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamander7zDebugSelfTests
         return E_POINTER;
     }
 
-    *passed                      = 0u;
-    *failed                      = 0u;
-    const HRESULT collisionHr    = RunDebugArchiveIndexCollisionSelfTest(*passed, *failed);
-    const HRESULT corruptHr      = RunDebugCorruptArchiveReaderSelfTest(*passed, *failed);
+    *passed = 0u;
+    *failed = 0u;
+    const HRESULT collisionHr = RunDebugArchiveIndexCollisionSelfTest(*passed, *failed);
+    const HRESULT corruptHr    = RunDebugCorruptArchiveReaderSelfTest(*passed, *failed);
     const HRESULT cancellationHr = RunDebugArchiveIndexCancellationSelfTest(*passed, *failed);
-    const HRESULT hr             = FAILED(collisionHr) ? collisionHr : (FAILED(corruptHr) ? corruptHr : cancellationHr);
+    const HRESULT hr = FAILED(collisionHr) ? collisionHr : (FAILED(corruptHr) ? corruptHr : cancellationHr);
     return *failed == 0u ? S_OK : (FAILED(hr) ? hr : E_FAIL);
 }
 #endif
@@ -4909,7 +4912,7 @@ HRESULT FileSystem7z::BuildIndex(const std::wstring& archivePath,
 
     outEntries.emplace(std::wstring(), ArchiveEntry{true, 0, 0, std::nullopt});
 
-    size_t indexedTextBytes       = 0u;
+    size_t indexedTextBytes = 0u;
     const auto reserveIndexedText = [&](std::wstring_view first, std::wstring_view second = {}) noexcept -> bool
     {
         const size_t firstBytes  = first.size() * sizeof(wchar_t);
@@ -4973,7 +4976,7 @@ HRESULT FileSystem7z::BuildIndex(const std::wstring& archivePath,
             continue;
         }
 
-        std::wstring parent        = ParentKey(raw.key);
+        std::wstring parent = ParentKey(raw.key);
         bool blockedByFileAncestor = false;
         if (! parent.empty())
         {

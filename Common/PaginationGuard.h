@@ -21,13 +21,13 @@ using CancellationProbe = HRESULT (*)(void* cookie) noexcept;
 
 struct Limits
 {
-    size_t maxPages                     = 4'096u;
-    size_t maxItems                     = 4'000'000u;
-    size_t maxBytes                     = 512u * 1024u * 1024u;
-    size_t maxTokenChars                = 64u * 1024u;
-    uint64_t deadlineTickMs             = 0u;
+    size_t maxPages      = 4'096u;
+    size_t maxItems      = 4'000'000u;
+    size_t maxBytes      = 512u * 1024u * 1024u;
+    size_t maxTokenChars = 64u * 1024u;
+    uint64_t deadlineTickMs = 0u;
     CancellationProbe cancellationProbe = nullptr;
-    void* cancellationCookie            = nullptr;
+    void* cancellationCookie             = nullptr;
 };
 
 [[nodiscard]] inline uint64_t DeadlineFromNow(uint64_t nowTickMs, uint64_t durationMs) noexcept
@@ -35,12 +35,10 @@ struct Limits
     return durationMs > (std::numeric_limits<uint64_t>::max)() - nowTickMs ? (std::numeric_limits<uint64_t>::max)() : nowTickMs + durationMs;
 }
 
-template <typename CharT> class ContinuationGuard final
+template<typename CharT> class ContinuationGuard final
 {
 public:
-    explicit ContinuationGuard(Limits limits) : _limits(limits)
-    {
-    }
+    explicit ContinuationGuard(Limits limits) : _limits(limits) {}
 
     [[nodiscard]] HRESULT BeginFirstPage(uint64_t nowTickMs) noexcept
     {
@@ -74,8 +72,11 @@ public:
         return BeginPage(nowTickMs);
     }
 
-    [[nodiscard]] HRESULT CompletePage(
-        size_t pageItems, size_t pageBytes, bool serverSaysMore, std::basic_string_view<CharT> nextToken, uint64_t nowTickMs) noexcept
+    [[nodiscard]] HRESULT CompletePage(size_t pageItems,
+                                       size_t pageBytes,
+                                       bool serverSaysMore,
+                                       std::basic_string_view<CharT> nextToken,
+                                       uint64_t nowTickMs) noexcept
     {
         if (! _pageOpen)
         {
@@ -102,18 +103,9 @@ public:
         return S_OK;
     }
 
-    [[nodiscard]] size_t PageCount() const noexcept
-    {
-        return _pages;
-    }
-    [[nodiscard]] size_t ItemCount() const noexcept
-    {
-        return _items;
-    }
-    [[nodiscard]] size_t ByteCount() const noexcept
-    {
-        return _bytes;
-    }
+    [[nodiscard]] size_t PageCount() const noexcept { return _pages; }
+    [[nodiscard]] size_t ItemCount() const noexcept { return _items; }
+    [[nodiscard]] size_t ByteCount() const noexcept { return _bytes; }
 
 private:
     [[nodiscard]] HRESULT BeginPage(uint64_t nowTickMs) noexcept
@@ -155,9 +147,9 @@ private:
 
     Limits _limits;
     std::unordered_set<std::basic_string<CharT>> _seenTokens;
-    size_t _pages  = 0u;
-    size_t _items  = 0u;
-    size_t _bytes  = 0u;
+    size_t _pages = 0u;
+    size_t _items = 0u;
+    size_t _bytes = 0u;
     bool _started  = false;
     bool _pageOpen = false;
 };

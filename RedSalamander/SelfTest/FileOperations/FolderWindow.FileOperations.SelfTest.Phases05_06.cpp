@@ -1338,16 +1338,16 @@ case SelfTestState::Step::Phase5_PreCalcCancelReleasesSlot:
                 ! layout.autoResizeAnimationEnabled || ! layout.footerQueueModeAnimationEnabled)
             {
                 Fail(std::format(L"File Operations popup footer should expose segmented mode, auto-dismiss, aggregate progress, animated resize, and a "
-                                 L"right-aligned details toggle during active work. queue={} aggregate={} details={} autoDismiss={} rightAligned={} "
-                                 L"reducedMotion={} animatedResize={} queueAnimation={}.",
-                                 layout.footerQueueModeSegmentedVisible ? 1 : 0,
-                                 layout.footerAggregateProgressVisible ? 1 : 0,
-                                 layout.footerDetailsToggleVisible ? 1 : 0,
-                                 layout.footerAutoDismissVisible ? 1 : 0,
-                                 layout.footerDetailsToggleRightAligned ? 1 : 0,
-                                 layout.reducedMotionEnabled ? 1 : 0,
-                                 layout.autoResizeAnimationEnabled ? 1 : 0,
-                                 layout.footerQueueModeAnimationEnabled ? 1 : 0));
+                                  L"right-aligned details toggle during active work. queue={} aggregate={} details={} autoDismiss={} rightAligned={} "
+                                  L"reducedMotion={} animatedResize={} queueAnimation={}.",
+                                  layout.footerQueueModeSegmentedVisible ? 1 : 0,
+                                  layout.footerAggregateProgressVisible ? 1 : 0,
+                                  layout.footerDetailsToggleVisible ? 1 : 0,
+                                  layout.footerAutoDismissVisible ? 1 : 0,
+                                  layout.footerDetailsToggleRightAligned ? 1 : 0,
+                                  layout.reducedMotionEnabled ? 1 : 0,
+                                  layout.autoResizeAnimationEnabled ? 1 : 0,
+                                  layout.footerQueueModeAnimationEnabled ? 1 : 0));
                 return true;
             }
 
@@ -1379,9 +1379,9 @@ case SelfTestState::Step::Phase5_PreCalcCancelReleasesSlot:
                 return true;
             }
 
-            const AppTheme motionRestoreTheme        = state.folderWindow->GetTheme();
-            const auto restoreMotionTheme            = wil::scope_exit([&]() noexcept { state.folderWindow->ApplyTheme(motionRestoreTheme); });
-            AppTheme reducedMotionTheme              = motionRestoreTheme;
+            const AppTheme motionRestoreTheme = state.folderWindow->GetTheme();
+            const auto restoreMotionTheme     = wil::scope_exit([&]() noexcept { state.folderWindow->ApplyTheme(motionRestoreTheme); });
+            AppTheme reducedMotionTheme       = motionRestoreTheme;
             reducedMotionTheme.reducedMotionOverride = true;
             state.folderWindow->ApplyTheme(reducedMotionTheme);
 
@@ -1717,7 +1717,10 @@ case SelfTestState::Step::Phase5_PreCalcSkipContinues:
 }
 case SelfTestState::Step::Phase5_CancelQueuedTask:
 {
-    const auto isCancelHr    = [](HRESULT hr) noexcept -> bool { return hr == HRESULT_FROM_WIN32(ERROR_CANCELLED) || hr == E_ABORT; };
+    const auto isCancelHr = [](HRESULT hr) noexcept -> bool
+    {
+        return hr == HRESULT_FROM_WIN32(ERROR_CANCELLED) || hr == E_ABORT;
+    };
     const auto summarizeTask = [&](std::optional<std::uint64_t> idOpt) -> std::wstring
     {
         if (! idOpt.has_value() || ! state.fileOps)
@@ -1729,13 +1732,14 @@ case SelfTestState::Step::Phase5_CancelQueuedTask:
         FolderWindow::FileOperationState::Task* task = state.fileOps->FindTask(id);
         const auto completionIt                      = state.completedTasks.find(id);
         const bool completed                         = completionIt != state.completedTasks.end();
-        const std::wstring completedText             = completed ? std::format(L" completed=1 hr=0x{:08X} started={} items={}/{} bytes={}",
-                                                                               static_cast<unsigned long>(completionIt->second.hr),
-                                                                               completionIt->second.started,
-                                                                               completionIt->second.progressCompletedItems,
-                                                                               completionIt->second.progressTotalItems,
-                                                                               completionIt->second.progressCompletedBytes)
-                                                                 : L" completed=0";
+        const std::wstring completedText             = completed
+                                                           ? std::format(L" completed=1 hr=0x{:08X} started={} items={}/{} bytes={}",
+                                                                         static_cast<unsigned long>(completionIt->second.hr),
+                                                                         completionIt->second.started,
+                                                                         completionIt->second.progressCompletedItems,
+                                                                         completionIt->second.progressTotalItems,
+                                                                         completionIt->second.progressCompletedBytes)
+                                                           : L" completed=0";
         if (! task)
         {
             return std::format(L"id={} live=0{}", id, completedText);
@@ -1826,8 +1830,9 @@ case SelfTestState::Step::Phase5_CancelQueuedTask:
     {
         if (state.completedTasks.find(state.taskA.value()) != state.completedTasks.end())
         {
-            Fail(std::format(
-                L"Active queue holder completed before the queued task could be created. A: {} B: {}", summarizeTask(state.taskA), summarizeTask(state.taskB)));
+            Fail(std::format(L"Active queue holder completed before the queued task could be created. A: {} B: {}",
+                             summarizeTask(state.taskA),
+                             summarizeTask(state.taskB)));
             return true;
         }
         if (taskA && ! taskA->_preCalcSkipped.load(std::memory_order_acquire))
@@ -1888,8 +1893,9 @@ case SelfTestState::Step::Phase5_CancelQueuedTask:
         }
         if (state.completedTasks.find(state.taskB.value()) != state.completedTasks.end())
         {
-            Fail(std::format(
-                L"Queued task completed before cancellation could observe the queue. A: {} B: {}", summarizeTask(state.taskA), summarizeTask(state.taskB)));
+            Fail(std::format(L"Queued task completed before cancellation could observe the queue. A: {} B: {}",
+                             summarizeTask(state.taskA),
+                             summarizeTask(state.taskB)));
             return true;
         }
         if (! taskB)
@@ -1899,7 +1905,9 @@ case SelfTestState::Step::Phase5_CancelQueuedTask:
         taskB->SetDesiredSpeedLimit(kQueueHoldSpeedLimitBytesPerSecond);
         if (taskB->HasEnteredOperation())
         {
-            Fail(std::format(L"Queued task entered operation before queued cancellation. A: {} B: {}", summarizeTask(state.taskA), summarizeTask(state.taskB)));
+            Fail(std::format(L"Queued task entered operation before queued cancellation. A: {} B: {}",
+                             summarizeTask(state.taskA),
+                             summarizeTask(state.taskB)));
             return true;
         }
         if (taskB->IsWaitingInQueue())
@@ -2236,7 +2244,8 @@ case SelfTestState::Step::Phase5_SwitchWaitToParallelResume:
             const auto it = state.completedTasks.find(pausedId);
             if (it != state.completedTasks.end())
             {
-                if (it->second.progressCompletedItems <= state.pauseResumeBaselineItems && it->second.progressCompletedBytes <= state.pauseResumeBaselineBytes)
+                if (it->second.progressCompletedItems <= state.pauseResumeBaselineItems &&
+                    it->second.progressCompletedBytes <= state.pauseResumeBaselineBytes)
                 {
                     Fail(std::format(L"Queue-paused task completed without publishing progress after resume (hr=0x{:08X}).",
                                      static_cast<unsigned long>(it->second.hr)));
@@ -2430,8 +2439,8 @@ case SelfTestState::Step::Phase6_PopupSmokeResizeAndPause:
         return true;
     }
 
-    const std::filesystem::path srcDir = state.tempRoot / L"phase6-src";
-    const std::filesystem::path dstDir = state.tempRoot / L"phase6-dst";
+    const std::filesystem::path srcDir  = state.tempRoot / L"phase6-src";
+    const std::filesystem::path dstDir  = state.tempRoot / L"phase6-dst";
 
     if (state.stepState == 0)
     {

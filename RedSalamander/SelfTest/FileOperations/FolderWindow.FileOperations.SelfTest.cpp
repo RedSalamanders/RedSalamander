@@ -45,8 +45,8 @@
 #include <AccCtrl.h>
 #include <AclAPI.h>
 #include <TlHelp32.h>
-#include <winhttp.h>
 #include <winioctl.h>
+#include <winhttp.h>
 
 #pragma warning(push)
 #pragma warning(disable : 4625 4626 5026 5027 4514 28182) // WIL headers: deleted copy/move and unreferenced inline helpers
@@ -148,30 +148,30 @@ struct WatchCallback;
 
 struct CompletedTaskInfo
 {
-    HRESULT hr                                     = S_OK;
-    ULONGLONG completionTick                       = 0;
-    bool preCalcCompleted                          = false;
-    bool earlyAdmissionTransferObserved            = false;
-    bool preCalcSkipped                            = false;
-    uint64_t preCalcTotalBytes                     = 0;
-    uint64_t preCalcDurationUs                     = 0;
-    unsigned int preCalcWorkerCountUsed            = 0;
-    bool started                                   = false;
-    unsigned long progressTotalItems               = 0;
-    unsigned long progressCompletedItems           = 0;
-    uint64_t progressCompletedBytes                = 0;
-    unsigned long completedFiles                   = 0;
-    unsigned long completedFolders                 = 0;
-    uint64_t conflictWaitUs                        = 0;
-    uint64_t conflictConvergenceWaitUs             = 0;
-    uint64_t conflictPromptCount                   = 0;
-    uint64_t bridgeDirectoryEnsureCount            = 0;
+    HRESULT hr                            = S_OK;
+    ULONGLONG completionTick              = 0;
+    bool preCalcCompleted                 = false;
+    bool earlyAdmissionTransferObserved   = false;
+    bool preCalcSkipped                   = false;
+    uint64_t preCalcTotalBytes            = 0;
+    uint64_t preCalcDurationUs            = 0;
+    unsigned int preCalcWorkerCountUsed   = 0;
+    bool started                          = false;
+    unsigned long progressTotalItems      = 0;
+    unsigned long progressCompletedItems  = 0;
+    uint64_t progressCompletedBytes       = 0;
+    unsigned long completedFiles          = 0;
+    unsigned long completedFolders        = 0;
+    uint64_t conflictWaitUs               = 0;
+    uint64_t conflictConvergenceWaitUs    = 0;
+    uint64_t conflictPromptCount          = 0;
+    uint64_t bridgeDirectoryEnsureCount   = 0;
     uint64_t bridgeSourceDirectoryEnumerationCount = 0;
-    bool preCalcSuppressedForHighMetadataCrossFs   = false;
-    uint64_t bridgeFileAdmissionCount              = 0;
-    uint64_t bridgeEarlyFileStartCount             = 0;
-    uint64_t bridgeAdmissionMaxQueueDepth          = 0;
-    unsigned int configuredMaxConcurrency          = 0;
+    bool preCalcSuppressedForHighMetadataCrossFs = false;
+    uint64_t bridgeFileAdmissionCount     = 0;
+    uint64_t bridgeEarlyFileStartCount    = 0;
+    uint64_t bridgeAdmissionMaxQueueDepth = 0;
+    unsigned int configuredMaxConcurrency = 0;
 };
 
 struct SelfTestState
@@ -739,14 +739,13 @@ constexpr auto kFileOpsPhaseOrder = std::to_array<SelfTestState::Step>({
     SelfTestState::Step::Riptide_EarlyAdmissionThreadStartFailureFallsBack, // Riptide R1-6 - early-admission pre-calc thread start failure falls back serially
     SelfTestState::Step::Riptide_EarlyAdmissionDisabledDoesNotStartThread,  // Riptide R1-6 - disabled pre-calc does not spawn an early-admission thread
     SelfTestState::Step::Riptide_LiveFinishedSnapshotCarriesDiagnostics,    // Riptide R2-6 - live just-finished popup row keeps diagnostics
-    SelfTestState::Step::Riptide_BridgeSequentialContinueOnErrorCopiesSiblings, // Riptide R2-7 - sequential bridge honors continue-on-error
-    SelfTestState::Step::Causeway_BridgeRejectsHostileChildNames,               // Causeway CW-1 - hostile provider names never reach path joins
-    SelfTestState::Step::Causeway_BridgeProviderOutputContracts,           // Causeway CW-2/CW-2A/CW-T1 - reject invalid reader/writer counts and short streams
-    SelfTestState::Step::Causeway_BridgeSchedulingAndResourceContracts,    // Causeway CW-3/CW-15/CW-25/CW-26 - nested scheduling, cloud listings, error
-                                                                           // vocabulary, memory budget
-    SelfTestState::Step::Causeway_BridgeFileReparsePolicy,                 // Causeway CW-8 - file reparse entries obey Skip/CopyReparse
-    SelfTestState::Step::Causeway_BridgeFailureStatusAndPausedReader,      // Causeway CW-18/CW-24 - paused-reader shutdown and real worker HRESULT propagation
-    SelfTestState::Step::Floodgate_CrossFsCopyGetSizeFailureRefusesCommit, // Floodgate FG-P0-2 - COPY refuses unverifiable unknown-size sources
+    SelfTestState::Step::Riptide_BridgeSequentialContinueOnErrorCopiesSiblings,    // Riptide R2-7 - sequential bridge honors continue-on-error
+    SelfTestState::Step::Causeway_BridgeRejectsHostileChildNames,                   // Causeway CW-1 - hostile provider names never reach path joins
+    SelfTestState::Step::Causeway_BridgeProviderOutputContracts,                    // Causeway CW-2/CW-2A/CW-T1 - reject invalid reader/writer counts and short streams
+    SelfTestState::Step::Causeway_BridgeSchedulingAndResourceContracts,             // Causeway CW-3/CW-15/CW-25/CW-26 - nested scheduling, cloud listings, error vocabulary, memory budget
+    SelfTestState::Step::Causeway_BridgeFileReparsePolicy,                          // Causeway CW-8 - file reparse entries obey Skip/CopyReparse
+    SelfTestState::Step::Causeway_BridgeFailureStatusAndPausedReader,                // Causeway CW-18/CW-24 - paused-reader shutdown and real worker HRESULT propagation
+    SelfTestState::Step::Floodgate_CrossFsCopyGetSizeFailureRefusesCommit,         // Floodgate FG-P0-2 - COPY refuses unverifiable unknown-size sources
     SelfTestState::Step::Floodgate_CrossFsMoveGetSizeFailurePreservesSource,       // Floodgate FG-P0-2 - MOVE preserves source when source size is unverifiable
     SelfTestState::Step::Floodgate_CrossFsMoveCleanupDetectsDestinationCorruption, // Floodgate FG-P0-4 - MOVE cleanup preserves source on destination
                                                                                    // corruption
@@ -2427,8 +2426,11 @@ struct PerfMetricSample
     return path.generic_wstring();
 }
 
-[[nodiscard]] bool WriteFileBytesFsIo(
-    const wil::com_ptr<IFileSystemIO>& io, const std::filesystem::path& path, const void* data, size_t sizeBytes, bool allowOverwrite = false) noexcept
+[[nodiscard]] bool WriteFileBytesFsIo(const wil::com_ptr<IFileSystemIO>& io,
+                                      const std::filesystem::path& path,
+                                      const void* data,
+                                      size_t sizeBytes,
+                                      bool allowOverwrite = false) noexcept
 {
     if (! io)
     {
@@ -3225,7 +3227,7 @@ bool RecreateEmptyDirectory(const std::filesystem::path& path) noexcept
     }
 
     constexpr DWORD kRetryDelayMs = 50u;
-    const ULONGLONG deadline      = ::GetTickCount64() + SelfTest::ScaleTimeout(6'000u);
+    const ULONGLONG deadline       = ::GetTickCount64() + SelfTest::ScaleTimeout(6'000u);
     do
     {
         std::error_code ec;
@@ -4690,7 +4692,7 @@ void PruneEmptyAlternateVolumeSandboxParents(const std::filesystem::path& sandbo
         }
 
         const std::filesystem::path& candidate = alternateVolumeSandbox.root;
-        const std::filesystem::path probe      = candidate / L"probe.tmp";
+        const std::filesystem::path probe = candidate / L"probe.tmp";
         {
             std::ofstream out(probe, std::ios::binary | std::ios::trunc);
             if (! out)
@@ -5106,8 +5108,8 @@ using TickResult = std::optional<bool>;
     switch (state.step)
     {
 #include "FolderWindow.FileOperations.SelfTest.Phases14_16.cpp"
-        return std::nullopt;
-    }
+    return std::nullopt;
+}
 
 #pragma warning(pop)
 } // namespace
@@ -5130,7 +5132,10 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
     // Keep the very large phase-local test fixtures off this dispatcher frame. In Debug builds,
     // placing every included phase in this one switch made Tick reserve roughly 780 KiB and left
     // too little of the default 1 MiB UI-thread stack for nested popup rendering.
-    const auto dispatchPhase = [&](const auto& tickPhase) noexcept -> TickResult { return tickPhase(state); };
+    const auto dispatchPhase = [&](const auto& tickPhase) noexcept -> TickResult
+    {
+        return tickPhase(state);
+    };
     if (const TickResult result = dispatchPhase(TickFairstreamPhases); result.has_value())
     {
         return result.value();
@@ -5190,12 +5195,12 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 return false;
             }
             AppendLog(L"Setup: resolved file-operations state");
-            state.autoDismissSuccessOriginal               = state.fileOps->GetAutoDismissSuccess();
-            state.fileOperationsOriginal                   = g_settings.fileOperations;
-            state.fileOperationsBackedUp                   = true;
-            state.appThemeOriginal                         = state.folderWindow->GetTheme();
-            state.appThemeBackedUp                         = true;
-            AppTheme deterministicMotionTheme              = state.appThemeOriginal.value();
+            state.autoDismissSuccessOriginal = state.fileOps->GetAutoDismissSuccess();
+            state.fileOperationsOriginal     = g_settings.fileOperations;
+            state.fileOperationsBackedUp     = true;
+            state.appThemeOriginal           = state.folderWindow->GetTheme();
+            state.appThemeBackedUp           = true;
+            AppTheme deterministicMotionTheme = state.appThemeOriginal.value();
             deterministicMotionTheme.reducedMotionOverride = false;
             state.folderWindow->ApplyTheme(deterministicMotionTheme);
             if (! g_settings.fileOperations.has_value())
@@ -5663,115 +5668,115 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
 }
 #pragma warning(pop)
 
-void FileOperationsSelfTest::NotifyTaskCompleted(std::uint64_t taskId, HRESULT hr) noexcept
-{
-    SelfTestState& state = GetState();
-    if (! state.running.load(std::memory_order_acquire))
+    void FileOperationsSelfTest::NotifyTaskCompleted(std::uint64_t taskId, HRESULT hr) noexcept
     {
-        return;
-    }
-
-    CompletedTaskInfo info{};
-    info.hr             = hr;
-    info.completionTick = GetTickCount64();
-    if (state.fileOps)
-    {
-        if (auto* task = state.fileOps->FindTask(taskId))
+        SelfTestState& state = GetState();
+        if (! state.running.load(std::memory_order_acquire))
         {
-            info.preCalcCompleted                        = task->_preCalcCompleted.load(std::memory_order_acquire);
-            info.earlyAdmissionTransferObserved          = task->_transferStartedBeforePreCalcComplete.load(std::memory_order_acquire);
-            info.preCalcSkipped                          = task->_preCalcSkipped.load(std::memory_order_acquire);
-            info.preCalcTotalBytes                       = task->_preCalcTotalBytes.load(std::memory_order_acquire);
-            info.preCalcDurationUs                       = task->_perf.preCalcUs.load(std::memory_order_acquire);
-            info.preCalcWorkerCountUsed                  = task->_preCalcWorkerCountUsed.load(std::memory_order_acquire);
-            info.started                                 = task->HasStarted();
-            info.conflictWaitUs                          = task->_perf.conflictWaitUs;
-            info.conflictConvergenceWaitUs               = task->_perf.conflictConvergenceWaitUs;
-            info.conflictPromptCount                     = task->_perf.conflictPromptCount;
-            info.bridgeDirectoryEnsureCount              = task->_bridgeDirectoryEnsureCount.load(std::memory_order_acquire);
-            info.bridgeSourceDirectoryEnumerationCount   = task->_bridgeSourceDirectoryEnumerationCount.load(std::memory_order_acquire);
-            info.preCalcSuppressedForHighMetadataCrossFs = task->_preCalcSuppressedForHighMetadataCrossFs;
-            info.bridgeFileAdmissionCount                = task->_bridgeFileAdmissionCount.load(std::memory_order_acquire);
-            info.bridgeEarlyFileStartCount               = task->_bridgeFileStartedBeforeProducerDone.load(std::memory_order_acquire);
-            info.bridgeAdmissionMaxQueueDepth            = task->_bridgeAdmissionMaxQueueDepth.load(std::memory_order_acquire);
-            info.configuredMaxConcurrency                = task->_effectiveConcurrencyBudget.load(std::memory_order_acquire);
-            if (info.configuredMaxConcurrency == 0u)
-            {
-                info.configuredMaxConcurrency = task->_perItemMaxConcurrencyBudget;
-            }
-            {
-                std::scoped_lock lock(task->_progressMutex);
-                info.progressTotalItems     = task->_progressTotalItems;
-                info.progressCompletedItems = task->_progressCompletedItems;
-                info.progressCompletedBytes = task->_progressCompletedBytes;
-                info.completedFiles         = task->_completedTopLevelFiles;
-                info.completedFolders       = task->_completedTopLevelFolders;
-            }
-        }
-    }
-
-    state.completedTasks[taskId] = info;
-}
-
-bool FileOperationsSelfTest::IsRunning() noexcept
-{
-    return GetState().running.load(std::memory_order_acquire);
-}
-
-bool FileOperationsSelfTest::IsDone() noexcept
-{
-    return GetState().done.load(std::memory_order_acquire);
-}
-
-SelfTest::SelfTestSuiteResult FileOperationsSelfTest::GetSuiteResult() noexcept
-{
-    SelfTestState& state = GetState();
-
-    SelfTest::SelfTestSuiteResult result{};
-    result.suite = SelfTest::SelfTestSuite::FileOperations;
-
-    const ULONGLONG nowTick = GetTickCount64();
-    if (state.runStartTick != 0 && nowTick >= static_cast<ULONGLONG>(state.runStartTick))
-    {
-        result.durationMs = static_cast<uint64_t>(nowTick - static_cast<ULONGLONG>(state.runStartTick));
-    }
-
-    result.failureMessage = state.failureMessage;
-
-    std::span<const SelfTestState::Step> reportedPhases = kFileOpsPhaseOrder;
-    if (! state.reportedPhaseOrder.empty())
-    {
-        reportedPhases = state.reportedPhaseOrder;
-    }
-
-    result.cases.reserve(reportedPhases.size());
-    for (const SelfTestState::Step step : reportedPhases)
-    {
-        const std::wstring_view expected = StepToString(step);
-        const auto it                    = std::find_if(
-            state.phaseResults.begin(), state.phaseResults.end(), [&](const SelfTest::SelfTestCaseResult& item) noexcept { return item.name == expected; });
-        if (it != state.phaseResults.end())
-        {
-            SelfTest::AppendCaseResult(result, *it);
-            continue;
+            return;
         }
 
-        const std::wstring_view reason = state.failed.load(std::memory_order_acquire) ? L"not reached (aborted due to failure)" : L"not reached";
-        SelfTest::AppendCaseResult(result, expected, SelfTest::SelfTestCaseResult::Status::skipped, reason, 0);
+        CompletedTaskInfo info{};
+        info.hr             = hr;
+        info.completionTick = GetTickCount64();
+        if (state.fileOps)
+        {
+            if (auto* task = state.fileOps->FindTask(taskId))
+            {
+                info.preCalcCompleted               = task->_preCalcCompleted.load(std::memory_order_acquire);
+                info.earlyAdmissionTransferObserved = task->_transferStartedBeforePreCalcComplete.load(std::memory_order_acquire);
+                info.preCalcSkipped                 = task->_preCalcSkipped.load(std::memory_order_acquire);
+                info.preCalcTotalBytes              = task->_preCalcTotalBytes.load(std::memory_order_acquire);
+                info.preCalcDurationUs              = task->_perf.preCalcUs.load(std::memory_order_acquire);
+                info.preCalcWorkerCountUsed         = task->_preCalcWorkerCountUsed.load(std::memory_order_acquire);
+                info.started                        = task->HasStarted();
+                info.conflictWaitUs                 = task->_perf.conflictWaitUs;
+                info.conflictConvergenceWaitUs      = task->_perf.conflictConvergenceWaitUs;
+                info.conflictPromptCount            = task->_perf.conflictPromptCount;
+                info.bridgeDirectoryEnsureCount     = task->_bridgeDirectoryEnsureCount.load(std::memory_order_acquire);
+                info.bridgeSourceDirectoryEnumerationCount = task->_bridgeSourceDirectoryEnumerationCount.load(std::memory_order_acquire);
+                info.preCalcSuppressedForHighMetadataCrossFs = task->_preCalcSuppressedForHighMetadataCrossFs;
+                info.bridgeFileAdmissionCount       = task->_bridgeFileAdmissionCount.load(std::memory_order_acquire);
+                info.bridgeEarlyFileStartCount      = task->_bridgeFileStartedBeforeProducerDone.load(std::memory_order_acquire);
+                info.bridgeAdmissionMaxQueueDepth   = task->_bridgeAdmissionMaxQueueDepth.load(std::memory_order_acquire);
+                info.configuredMaxConcurrency       = task->_effectiveConcurrencyBudget.load(std::memory_order_acquire);
+                if (info.configuredMaxConcurrency == 0u)
+                {
+                    info.configuredMaxConcurrency = task->_perItemMaxConcurrencyBudget;
+                }
+                {
+                    std::scoped_lock lock(task->_progressMutex);
+                    info.progressTotalItems     = task->_progressTotalItems;
+                    info.progressCompletedItems = task->_progressCompletedItems;
+                    info.progressCompletedBytes = task->_progressCompletedBytes;
+                    info.completedFiles         = task->_completedTopLevelFiles;
+                    info.completedFolders       = task->_completedTopLevelFolders;
+                }
+            }
+        }
+
+        state.completedTasks[taskId] = info;
     }
 
-    return result;
-}
+    bool FileOperationsSelfTest::IsRunning() noexcept
+    {
+        return GetState().running.load(std::memory_order_acquire);
+    }
 
-bool FileOperationsSelfTest::DidFail() noexcept
-{
-    return GetState().failed.load(std::memory_order_acquire);
-}
+    bool FileOperationsSelfTest::IsDone() noexcept
+    {
+        return GetState().done.load(std::memory_order_acquire);
+    }
 
-std::wstring_view FileOperationsSelfTest::FailureMessage() noexcept
-{
-    return GetState().failureMessage;
-}
+    SelfTest::SelfTestSuiteResult FileOperationsSelfTest::GetSuiteResult() noexcept
+    {
+        SelfTestState& state = GetState();
+
+        SelfTest::SelfTestSuiteResult result{};
+        result.suite = SelfTest::SelfTestSuite::FileOperations;
+
+        const ULONGLONG nowTick = GetTickCount64();
+        if (state.runStartTick != 0 && nowTick >= static_cast<ULONGLONG>(state.runStartTick))
+        {
+            result.durationMs = static_cast<uint64_t>(nowTick - static_cast<ULONGLONG>(state.runStartTick));
+        }
+
+        result.failureMessage = state.failureMessage;
+
+        std::span<const SelfTestState::Step> reportedPhases = kFileOpsPhaseOrder;
+        if (! state.reportedPhaseOrder.empty())
+        {
+            reportedPhases = state.reportedPhaseOrder;
+        }
+
+        result.cases.reserve(reportedPhases.size());
+        for (const SelfTestState::Step step : reportedPhases)
+        {
+            const std::wstring_view expected = StepToString(step);
+            const auto it                    = std::find_if(
+                state.phaseResults.begin(), state.phaseResults.end(), [&](const SelfTest::SelfTestCaseResult& item) noexcept { return item.name == expected; });
+            if (it != state.phaseResults.end())
+            {
+                SelfTest::AppendCaseResult(result, *it);
+                continue;
+            }
+
+            const std::wstring_view reason = state.failed.load(std::memory_order_acquire) ? L"not reached (aborted due to failure)" : L"not reached";
+            SelfTest::AppendCaseResult(result, expected, SelfTest::SelfTestCaseResult::Status::skipped, reason, 0);
+        }
+
+        return result;
+    }
+
+    bool FileOperationsSelfTest::DidFail() noexcept
+    {
+        return GetState().failed.load(std::memory_order_acquire);
+    }
+
+    std::wstring_view FileOperationsSelfTest::FailureMessage() noexcept
+    {
+        return GetState().failureMessage;
+    }
 
 #pragma warning(pop)
 

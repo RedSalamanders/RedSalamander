@@ -122,10 +122,10 @@ public:
     void QueueEtwEvent(const Debug::InfoParam& info, std::wstring message);
     struct RetentionLimits
     {
-        size_t maxQueuedEvents        = 4'096u;
-        size_t maxRetainedLines       = 100'000u;
+        size_t maxQueuedEvents      = 4'096u;
+        size_t maxRetainedLines     = 100'000u;
         uint64_t maxRetainedTextBytes = 64u * 1024u * 1024u;
-        size_t maxSearchMatches       = 100'000u;
+        size_t maxSearchMatches     = 100'000u;
     };
     void SetRetentionLimits(const RetentionLimits& limits) noexcept;
     [[nodiscard]] uint64_t GetDroppedEventCount() const noexcept

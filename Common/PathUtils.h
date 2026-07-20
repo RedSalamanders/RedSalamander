@@ -123,7 +123,8 @@ enum class WindowsPathClass
 [[nodiscard]] inline bool IsExtendedWindowsPath(std::wstring_view path) noexcept
 {
     const WindowsPathClass pathClass = ClassifyWindowsPath(path);
-    return pathClass == WindowsPathClass::ExtendedDriveAbsolute || pathClass == WindowsPathClass::ExtendedUnc || pathClass == WindowsPathClass::ExtendedOther;
+    return pathClass == WindowsPathClass::ExtendedDriveAbsolute || pathClass == WindowsPathClass::ExtendedUnc ||
+           pathClass == WindowsPathClass::ExtendedOther;
 }
 
 [[nodiscard]] inline bool IsDeviceWindowsPath(std::wstring_view path) noexcept
@@ -194,7 +195,8 @@ enum class WindowsPathClass
     {
         return true;
     }
-    return CompareStringOrdinal(left.data(), static_cast<int>(left.size()), right.data(), static_cast<int>(right.size()), TRUE) == CSTR_EQUAL;
+    return CompareStringOrdinal(
+               left.data(), static_cast<int>(left.size()), right.data(), static_cast<int>(right.size()), TRUE) == CSTR_EQUAL;
 }
 
 // Component-boundary containment for already-normalized local Windows path text.
@@ -206,7 +208,11 @@ enum class WindowsPathClass
     {
         return false;
     }
-    if (CompareStringOrdinal(root.data(), static_cast<int>(root.size()), candidate.data(), static_cast<int>(root.size()), TRUE) != CSTR_EQUAL)
+    if (CompareStringOrdinal(root.data(),
+                             static_cast<int>(root.size()),
+                             candidate.data(),
+                             static_cast<int>(root.size()),
+                             TRUE) != CSTR_EQUAL)
     {
         return false;
     }
@@ -227,7 +233,7 @@ struct UniqueSiblingFileOptions final
     size_t maximumAttempts   = 32u;
 };
 
-template <typename UniqueFile>
+template<typename UniqueFile>
 [[nodiscard]] inline HRESULT CreateUniqueFileInDirectory(std::wstring_view directory,
                                                          const UniqueSiblingFileOptions& options,
                                                          std::wstring& pathOut,
@@ -266,7 +272,13 @@ template <typename UniqueFile>
         candidate.append(guidText.data());
         candidate.append(options.suffix);
 
-        UniqueFile file(CreateFileW(candidate.c_str(), options.desiredAccess, options.shareMode, nullptr, CREATE_NEW, options.flagsAndAttributes, nullptr));
+        UniqueFile file(CreateFileW(candidate.c_str(),
+                                    options.desiredAccess,
+                                    options.shareMode,
+                                    nullptr,
+                                    CREATE_NEW,
+                                    options.flagsAndAttributes,
+                                    nullptr));
         if (file)
         {
             pathOut = std::move(candidate);
@@ -285,7 +297,7 @@ template <typename UniqueFile>
 
 // Creates and returns a sibling using CREATE_NEW. The path is published only after the
 // caller owns the handle, so collision retries cannot overwrite an existing file.
-template <typename UniqueFile>
+template<typename UniqueFile>
 [[nodiscard]] inline HRESULT CreateUniqueSiblingFile(std::wstring_view siblingOf,
                                                      const UniqueSiblingFileOptions& options,
                                                      std::wstring& pathOut,

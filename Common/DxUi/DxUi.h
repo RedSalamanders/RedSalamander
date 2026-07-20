@@ -55,11 +55,11 @@ inline constexpr UINT kModifierAlt = 0x0100u;
 [[nodiscard]] inline UINT ComposeModifierMask(bool shift,
                                               bool control,
                                               bool alt,
-                                              bool leftButton   = false,
-                                              bool rightButton  = false,
+                                              bool leftButton = false,
+                                              bool rightButton = false,
                                               bool middleButton = false,
-                                              bool xButton1     = false,
-                                              bool xButton2     = false) noexcept
+                                              bool xButton1 = false,
+                                              bool xButton2 = false) noexcept
 {
     UINT modifiers = 0u;
     modifiers |= shift ? MK_SHIFT : 0u;
@@ -2235,7 +2235,7 @@ private:
     [[nodiscard]] size_t ControlTextIndexToDisplayTextIndex(size_t controlTextIndex) const noexcept;
     [[nodiscard]] size_t DisplayTextIndexToControlTextIndex(size_t displayTextIndex) const noexcept;
     [[nodiscard]] std::optional<std::pair<size_t, size_t>> ControlTextRangeToDisplayTextRange(size_t controlTextStartIndex,
-                                                                                              size_t controlTextEndIndex) const noexcept;
+                                                                                             size_t controlTextEndIndex) const noexcept;
     [[nodiscard]] D2D1_RECT_F GetTextRect() const noexcept;
     [[nodiscard]] bool IsClearButtonVisible() const noexcept;
     [[nodiscard]] D2D1_RECT_F GetClearButtonRect() const noexcept;

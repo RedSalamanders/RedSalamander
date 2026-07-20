@@ -6,8 +6,8 @@
 
 #include "DxUi.h"
 #include "RedConfigureSession.h"
-#include "RedConfigureUiHelpers.h"
 #include "RedConfigureWorkflow.h"
+#include "RedConfigureUiHelpers.h"
 #include "SettingsStore.h"
 #include "resource.h"
 
@@ -633,8 +633,9 @@ public:
             return;
         }
 
-        const std::wstring& key                                   = _keys[rowIndex];
-        const RedConfigure::Workflow::ThemeTokenMetadata metadata = RedConfigure::Workflow::BuildThemeTokenMetadata(_session.GetThemePreviewModel(), key);
+        const std::wstring& key = _keys[rowIndex];
+        const RedConfigure::Workflow::ThemeTokenMetadata metadata =
+            RedConfigure::Workflow::BuildThemeTokenMetadata(_session.GetThemePreviewModel(), key);
         switch (columnIndex)
         {
             case 0u: outCell.text = key; break;
@@ -650,22 +651,25 @@ public:
             case 3u: outCell.text = _session.GetThemePreviewModel().GetAuthoredColorText(key); break;
             case 4u:
             {
-                const UINT sourceId =
-                    static_cast<UINT>(metadata.sourceKind == RedConfigure::Workflow::ThemeTokenSourceKind::Inherited   ? IDS_REDCONFIGURE_SOURCE_BASE
-                                      : metadata.sourceKind == RedConfigure::Workflow::ThemeTokenSourceKind::Literal   ? IDS_REDCONFIGURE_SOURCE_LITERAL
-                                      : metadata.sourceKind == RedConfigure::Workflow::ThemeTokenSourceKind::Reference ? IDS_REDCONFIGURE_SOURCE_TOKEN_REFERENCE
-                                                                                                                       : IDS_REDCONFIGURE_SOURCE_FUNCTION);
+                const UINT sourceId = static_cast<UINT>(metadata.sourceKind == RedConfigure::Workflow::ThemeTokenSourceKind::Inherited
+                                                            ? IDS_REDCONFIGURE_SOURCE_BASE
+                                                        : metadata.sourceKind == RedConfigure::Workflow::ThemeTokenSourceKind::Literal
+                                                            ? IDS_REDCONFIGURE_SOURCE_LITERAL
+                                                        : metadata.sourceKind == RedConfigure::Workflow::ThemeTokenSourceKind::Reference
+                                                            ? IDS_REDCONFIGURE_SOURCE_TOKEN_REFERENCE
+                                                            : IDS_REDCONFIGURE_SOURCE_FUNCTION);
                 outCell.text = LoadAppString(_instance, sourceId);
                 break;
             }
             case 5u: outCell.text = std::to_wstring(metadata.usageCount); break;
             case 6u:
                 outCell.text = metadata.contrastKnown
-                                   ? FormatStringResource(
-                                         _instance,
-                                         IDS_REDCONFIGURE_FMT_CONTRAST_VALUE,
-                                         metadata.contrastRatio,
-                                         LoadAppString(_instance, metadata.contrastPass ? IDS_REDCONFIGURE_CONTRAST_PASS : IDS_REDCONFIGURE_CONTRAST_FAIL))
+                                   ? FormatStringResource(_instance,
+                                                          IDS_REDCONFIGURE_FMT_CONTRAST_VALUE,
+                                                          metadata.contrastRatio,
+                                                          LoadAppString(_instance,
+                                                                        metadata.contrastPass ? IDS_REDCONFIGURE_CONTRAST_PASS
+                                                                                              : IDS_REDCONFIGURE_CONTRAST_FAIL))
                                    : L"—";
                 break;
             default: break;

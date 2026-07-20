@@ -14,7 +14,7 @@ namespace Common::Plugins
 class PackedFileInfoBuffer final
 {
 public:
-    PackedFileInfoBuffer()                                       = default;
+    PackedFileInfoBuffer()                                      = default;
     PackedFileInfoBuffer(const PackedFileInfoBuffer&)            = delete;
     PackedFileInfoBuffer(PackedFileInfoBuffer&&)                 = delete;
     PackedFileInfoBuffer& operator=(const PackedFileInfoBuffer&) = delete;
@@ -81,7 +81,8 @@ public:
         return LocateEntry(index, entry);
     }
 
-    template <typename TEntry, typename TPopulate> HRESULT Build(const std::vector<TEntry>& entries, TPopulate&& populate) noexcept
+    template <typename TEntry, typename TPopulate>
+    HRESULT Build(const std::vector<TEntry>& entries, TPopulate&& populate) noexcept
     {
         Reset();
         if (entries.empty())
@@ -96,7 +97,7 @@ public:
         size_t totalBytes = 0;
         for (const TEntry& source : entries)
         {
-            size_t entrySize     = 0;
+            size_t entrySize = 0;
             const HRESULT sizeHr = TryComputeEntrySize(std::wstring_view(source.name), entrySize);
             if (FAILED(sizeHr) || entrySize > static_cast<size_t>((std::numeric_limits<unsigned long>::max)()) ||
                 totalBytes > static_cast<size_t>((std::numeric_limits<unsigned long>::max)()) - entrySize)
@@ -112,7 +113,7 @@ public:
         size_t previousSize = 0;
         for (const TEntry& source : entries)
         {
-            size_t entrySize     = 0;
+            size_t entrySize = 0;
             const HRESULT sizeHr = TryComputeEntrySize(std::wstring_view(source.name), entrySize);
             if (FAILED(sizeHr) || entrySize > buffer.size() - offset)
             {
@@ -195,8 +196,8 @@ private:
             }
 
             size_t entrySize = 0;
-            const HRESULT sizeHr =
-                TryComputeEntrySize(std::wstring_view(entry->FileName, static_cast<size_t>(entry->FileNameSize) / sizeof(wchar_t)), entrySize);
+            const HRESULT sizeHr = TryComputeEntrySize(
+                std::wstring_view(entry->FileName, static_cast<size_t>(entry->FileNameSize) / sizeof(wchar_t)), entrySize);
             if (FAILED(sizeHr) || entrySize > _buffer.size() - offset)
             {
                 return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
@@ -230,4 +231,4 @@ private:
     unsigned long _count     = 0;
     unsigned long _usedBytes = 0;
 };
-} // namespace Common::Plugins
+}

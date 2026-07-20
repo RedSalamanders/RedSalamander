@@ -125,9 +125,9 @@ struct BatchRenameScopeOptions final
     bool includeFolders        = false;
 };
 
-constexpr WPARAM kBatchRenameTaskCollection      = 1u;
-constexpr WPARAM kBatchRenameTaskExecution       = 2u;
-constexpr WPARAM kBatchRenameTaskPreview         = 3u;
+constexpr WPARAM kBatchRenameTaskCollection = 1u;
+constexpr WPARAM kBatchRenameTaskExecution  = 2u;
+constexpr WPARAM kBatchRenameTaskPreview    = 3u;
 constexpr unsigned char kBatchRenameModuleAnchor = 0u;
 
 struct BatchRenameTaskProgressPayload final
@@ -373,7 +373,7 @@ void RunBatchRenameExecution(HWND hwnd,
     [[maybe_unused]] const wil::unique_couninitialize_call coUninit;
 
     wil::com_ptr<IFileSystem> workerFileSystem = std::move(fileSystem);
-    const auto workerStartedAt                 = std::chrono::steady_clock::now();
+    const auto workerStartedAt = std::chrono::steady_clock::now();
     if (localPlan.has_value())
     {
         const HRESULT revalidateHr = RevalidateLocalRenamePlan(pathIdentity, localPlan.value());
@@ -510,16 +510,17 @@ void ApplyLocalDestinationConflictValidation(const FileSystemPathIdentity& pathI
             }
         }
 
-        const auto existing = std::ranges::find_if(
-            parentListings, [&](const ParentListing& listing) noexcept { return EquivalentPath(pathIdentity, listing.path.native(), parent.native()); });
+        const auto existing = std::ranges::find_if(parentListings, [&](const ParentListing& listing) noexcept {
+            return EquivalentPath(pathIdentity, listing.path.native(), parent.native());
+        });
         if (existing != parentListings.end())
         {
             return *existing;
         }
 
         ParentListing listing{};
-        listing.path                                         = parent;
-        listing.pathKey                                      = parentKey;
+        listing.path    = parent;
+        listing.pathKey = parentKey;
         constexpr std::filesystem::directory_options options = std::filesystem::directory_options::skip_permission_denied;
         std::filesystem::directory_iterator iterator(parent, options, listing.error);
         if (! listing.error)
@@ -590,8 +591,9 @@ void ApplyLocalDestinationConflictValidation(const FileSystemPathIdentity& pathI
         }
         else
         {
-            destinationExists = std::ranges::any_of(
-                listing.childNames, [&](std::wstring_view childName) noexcept { return EquivalentComponent(pathIdentity, childName, destinationLeaf); });
+            destinationExists = std::ranges::any_of(listing.childNames, [&](std::wstring_view childName) noexcept {
+                return EquivalentComponent(pathIdentity, childName, destinationLeaf);
+            });
         }
 
         if (destinationExists && ! IsPlannedSourcePath(pathIdentity, plannedSources, destinationPath))
@@ -645,7 +647,7 @@ void ApplyContextualPreviewValidation(const BatchRenamePaneContext& context, con
 
 struct BatchRenamePreviewWork final
 {
-    HWND hwnd           = nullptr;
+    HWND hwnd = nullptr;
     uint64_t generation = 0u;
     BatchRenamePaneContext context;
     std::vector<BatchRename::Target> targets;
@@ -653,11 +655,11 @@ struct BatchRenamePreviewWork final
     std::unique_ptr<BatchRenamePreviewCompletedPayload> payload;
     wil::unique_hmodule modulePin;
 
-    BatchRenamePreviewWork()                                         = default;
-    BatchRenamePreviewWork(const BatchRenamePreviewWork&)            = delete;
-    BatchRenamePreviewWork(BatchRenamePreviewWork&&)                 = delete;
+    BatchRenamePreviewWork() = default;
+    BatchRenamePreviewWork(const BatchRenamePreviewWork&) = delete;
+    BatchRenamePreviewWork(BatchRenamePreviewWork&&) = delete;
     BatchRenamePreviewWork& operator=(const BatchRenamePreviewWork&) = delete;
-    BatchRenamePreviewWork& operator=(BatchRenamePreviewWork&&)      = delete;
+    BatchRenamePreviewWork& operator=(BatchRenamePreviewWork&&) = delete;
 
     void Execute(PTP_CALLBACK_INSTANCE callbackInstance) noexcept
     {
@@ -1019,7 +1021,7 @@ template <typename Visitor>
     std::vector<std::filesystem::path> pending;
     pending.push_back(context.rootPluginPath);
 
-    const BatchRenameScopeMatcher scopeMatcher      = BuildBatchRenameScopeMatcher(scope.mask);
+    const BatchRenameScopeMatcher scopeMatcher = BuildBatchRenameScopeMatcher(scope.mask);
     const FileSystemPathIdentity collectionIdentity = ResolveBatchRenamePathIdentity(context).value_or(
         FileSystemPathIdentity{.pathTextStableIdentity = true, .componentComparison = FileSystemPathComponentComparison::OrdinalCaseSensitive});
     std::unordered_set<std::wstring> queuedDirectories;
@@ -1325,7 +1327,7 @@ void EmitBatchRenameCollectMetrics(const std::chrono::steady_clock::time_point s
 
 struct BatchRenameCollectionWork final
 {
-    HWND hwnd           = nullptr;
+    HWND hwnd = nullptr;
     uint64_t generation = 0u;
     BatchRenamePaneContext context;
     BatchRenameScopeOptions scope;
@@ -1333,11 +1335,11 @@ struct BatchRenameCollectionWork final
     std::unique_ptr<BatchRenameCollectionCompletedPayload> payload;
     wil::unique_hmodule modulePin;
 
-    BatchRenameCollectionWork()                                            = default;
-    BatchRenameCollectionWork(const BatchRenameCollectionWork&)            = delete;
-    BatchRenameCollectionWork(BatchRenameCollectionWork&&)                 = delete;
+    BatchRenameCollectionWork() = default;
+    BatchRenameCollectionWork(const BatchRenameCollectionWork&) = delete;
+    BatchRenameCollectionWork(BatchRenameCollectionWork&&) = delete;
     BatchRenameCollectionWork& operator=(const BatchRenameCollectionWork&) = delete;
-    BatchRenameCollectionWork& operator=(BatchRenameCollectionWork&&)      = delete;
+    BatchRenameCollectionWork& operator=(BatchRenameCollectionWork&&) = delete;
 
     void Execute(PTP_CALLBACK_INSTANCE callbackInstance) noexcept
     {
@@ -3439,7 +3441,7 @@ void BatchRenameWindow::RebuildPreview() noexcept
     auto work    = std::unique_ptr<BatchRenamePreviewWork>(new (std::nothrow) BatchRenamePreviewWork{});
     if (! payload || ! work)
     {
-        _previewing   = false;
+        _previewing = false;
         _previewStats = {};
         _fullPreviewRows.clear();
         RefreshVisibleRows();
@@ -3447,16 +3449,16 @@ void BatchRenameWindow::RebuildPreview() noexcept
     }
 
     const uint64_t generation = _previewGeneration.fetch_add(1u, std::memory_order_acq_rel) + 1u;
-    work->hwnd                = _hWnd.get();
-    work->generation          = generation;
-    work->context             = _context;
-    work->targets             = _targets;
-    work->rules               = _rules;
-    work->payload             = std::move(payload);
-    work->modulePin           = AcquireModuleReferenceFromAddress(&kBatchRenameModuleAnchor);
+    work->hwnd       = _hWnd.get();
+    work->generation = generation;
+    work->context    = _context;
+    work->targets    = _targets;
+    work->rules      = _rules;
+    work->payload    = std::move(payload);
+    work->modulePin  = AcquireModuleReferenceFromAddress(&kBatchRenameModuleAnchor);
     if (! work->hwnd || ! work->modulePin || ! SubmitOwnedThreadpoolCallbackWithInstance(work))
     {
-        _previewing   = false;
+        _previewing = false;
         _previewStats = {};
         _fullPreviewRows.clear();
         RefreshVisibleRows();
@@ -3476,7 +3478,7 @@ void BatchRenameWindow::OnPreviewCompleted(std::unique_ptr<BatchRenamePreviewCom
 
     Debug::Perf::Scope recomputePerf(L"batchrename.preview.recompute.us");
     recomputePerf.SetDetail(_rules.mode == BatchRename::Mode::Manual ? L"worker-manual" : L"worker-rules");
-    _previewing   = false;
+    _previewing  = false;
     _previewStats = payload->plan.stats;
     recomputePerf.SetValue0(static_cast<uint64_t>(payload->plan.rows.size()));
     recomputePerf.SetValue1(static_cast<uint64_t>(payload->plan.stats.changedRows));
@@ -3927,8 +3929,9 @@ HRESULT BatchRenameWindow::ExecuteRename() noexcept
                                     fileSystem = std::move(fileSystem),
                                     pathIdentity,
                                     localPlan = std::move(localPlan),
-                                    ops       = std::move(ops),
-                                    payload   = std::move(payload)]() mutable noexcept {
+                                    ops     = std::move(ops),
+                                    payload = std::move(payload)]() mutable noexcept
+        {
             RunBatchRenameExecution(
                 hwnd, generation, *cancelFlag, std::move(fileSystem), pathIdentity, std::move(localPlan), std::move(ops), std::move(payload));
         });
@@ -3971,8 +3974,8 @@ void BatchRenameWindow::StartTargetCollection() noexcept
         return;
     }
 
-    auto payload    = std::unique_ptr<BatchRenameCollectionCompletedPayload>(new (std::nothrow) BatchRenameCollectionCompletedPayload{});
-    auto work       = std::unique_ptr<BatchRenameCollectionWork>(new (std::nothrow) BatchRenameCollectionWork{});
+    auto payload = std::unique_ptr<BatchRenameCollectionCompletedPayload>(new (std::nothrow) BatchRenameCollectionCompletedPayload{});
+    auto work    = std::unique_ptr<BatchRenameCollectionWork>(new (std::nothrow) BatchRenameCollectionWork{});
     auto cancelFlag = std::shared_ptr<std::atomic_bool>(new (std::nothrow) std::atomic_bool{false});
     if (! payload || ! work || ! cancelFlag)
     {
@@ -4015,7 +4018,7 @@ void BatchRenameWindow::OnCollectionCompleted(std::unique_ptr<BatchRenameCollect
         return;
     }
 
-    _collecting = false;
+    _collecting         = false;
     _collectionCancelFlag.reset();
     const bool canceled = IsBatchRenameCancellationHRESULT(payload->hr);
     if (FAILED(payload->hr) && ! canceled)
@@ -5214,8 +5217,9 @@ bool BatchRenameWindow::DebugInjectStaleExecutionPayload(std::filesystem::path s
 void BatchRenameWindow::DebugPumpWhileTasksActive(const bool waitForExecution) noexcept
 {
     const ULONGLONG deadline = GetTickCount64() + 30000ull;
-    const auto tasksActive   = [this, waitForExecution]() noexcept
-    { return _hWnd && (waitForExecution ? (_executing || _collecting || _previewing) : (_collecting || _previewing)); };
+    const auto tasksActive = [this, waitForExecution]() noexcept {
+        return _hWnd && (waitForExecution ? (_executing || _collecting || _previewing) : (_collecting || _previewing));
+    };
 
     while (tasksActive() && GetTickCount64() < deadline)
     {

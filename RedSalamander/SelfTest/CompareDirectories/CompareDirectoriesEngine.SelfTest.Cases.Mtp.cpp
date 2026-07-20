@@ -16,7 +16,8 @@ const auto AcquireMtpJournalLocalAppDataSandbox = [&](SelfTest::CaseState& state
     localAppData = sandbox.root.wstring();
     if (! SetEnvironmentVariableW(L"LOCALAPPDATA", localAppData.c_str()))
     {
-        state.Require(false, std::format(L"{}: failed to redirect LOCALAPPDATA to TestSandbox. error={}", label, static_cast<unsigned long>(GetLastError())));
+        state.Require(false,
+                      std::format(L"{}: failed to redirect LOCALAPPDATA to TestSandbox. error={}", label, static_cast<unsigned long>(GetLastError())));
         return false;
     }
 
@@ -25,18 +26,21 @@ const auto AcquireMtpJournalLocalAppDataSandbox = [&](SelfTest::CaseState& state
 };
 
 const auto RestoreMtpJournalLocalAppDataSandbox = [](const std::wstring& previousLocalAppData) noexcept
-{ static_cast<void>(SetEnvironmentVariableW(L"LOCALAPPDATA", previousLocalAppData.empty() ? nullptr : previousLocalAppData.c_str())); };
+{
+    static_cast<void>(SetEnvironmentVariableW(L"LOCALAPPDATA", previousLocalAppData.empty() ? nullptr : previousLocalAppData.c_str()));
+};
 
-const auto extractJsonUInt       = SelfTest::ExtractJsonUInt;
-const auto narrowAscii           = SelfTest::NarrowAscii;
-const auto stableDeviceHash      = SelfTest::StableDeviceHash;
+const auto extractJsonUInt      = SelfTest::ExtractJsonUInt;
+const auto narrowAscii          = SelfTest::NarrowAscii;
+const auto stableDeviceHash     = SelfTest::StableDeviceHash;
 const auto ensureDirectoryExists = SelfTest::EnsureDirectoryExists;
-const auto writeUtf8File         = SelfTest::WriteUtf8File;
+const auto writeUtf8File        = SelfTest::WriteUtf8File;
 const auto notifyInjectedJournal = [](std::wstring_view deviceIdentity) noexcept
 {
     using NotifyInjectedJournalFunc = HRESULT(__stdcall*)(const wchar_t* deviceIdentity);
     const std::wstring identity(deviceIdentity);
-    return SelfTest::CallMtpPluginExport<NotifyInjectedJournalFunc>("RedSalamanderMtpNotifyJournalInjectedForSelfTest", identity.c_str());
+    return SelfTest::CallMtpPluginExport<NotifyInjectedJournalFunc>(
+        "RedSalamanderMtpNotifyJournalInjectedForSelfTest", identity.c_str());
 };
 
 SelfTest::RunCase(options,
@@ -1122,14 +1126,15 @@ SelfTest::RunCase(options,
         return false;
     }
 
-    char byte               = 0;
-    unsigned long bytesRead = 0;
-    const auto start        = std::chrono::steady_clock::now();
-    const HRESULT readHr    = reader->Read(&byte, 1u, &bytesRead);
-    const auto elapsedMs    = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
-    state.Require(
-        readHr == kDeviceGone && bytesRead == 0u,
-        std::format(L"MTP hung watchdog: delayed Read expected device-gone/0 bytes, got hr=0x{:08X} bytes={}.", static_cast<unsigned long>(readHr), bytesRead));
+    char byte                 = 0;
+    unsigned long bytesRead   = 0;
+    const auto start          = std::chrono::steady_clock::now();
+    const HRESULT readHr      = reader->Read(&byte, 1u, &bytesRead);
+    const auto elapsedMs      = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
+    state.Require(readHr == kDeviceGone && bytesRead == 0u,
+                  std::format(L"MTP hung watchdog: delayed Read expected device-gone/0 bytes, got hr=0x{:08X} bytes={}.",
+                              static_cast<unsigned long>(readHr),
+                              bytesRead));
     state.Require(elapsedMs < 1000, std::format(L"MTP hung watchdog: delayed Read returned after {} ms; expected watchdog timeout.", elapsedMs));
 
     wil::com_ptr<IFilesInformation> disconnectedInfo;
@@ -1143,21 +1148,25 @@ SelfTest::RunCase(options,
     state.Require(SUCCEEDED(initializerHr) && initializer, L"MTP hung watchdog: missing IFileSystemInitialize.");
     const HRESULT reinitializeHr = initializer ? initializer->Initialize(L"/", R"json({"readOnly":true,"commandTimeoutMs":50})json") : initializerHr;
     state.Require(SUCCEEDED(reinitializeHr),
-                  std::format(L"MTP hung watchdog: Initialize did not recreate the backend worker. hr=0x{:08X}.", static_cast<unsigned long>(reinitializeHr)));
-    unsigned long attributes  = 0;
+                  std::format(L"MTP hung watchdog: Initialize did not recreate the backend worker. hr=0x{:08X}.",
+                              static_cast<unsigned long>(reinitializeHr)));
+    unsigned long attributes = 0;
     const HRESULT recoveredHr = io->GetAttributes(kPhotoPath.data(), &attributes);
     state.Require(SUCCEEDED(recoveredHr) && (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0,
-                  std::format(L"MTP hung watchdog: command after Initialize did not recover. hr=0x{:08X}.", static_cast<unsigned long>(recoveredHr)));
+                  std::format(L"MTP hung watchdog: command after Initialize did not recover. hr=0x{:08X}.",
+                              static_cast<unsigned long>(recoveredHr)));
 
     bytesRead                 = 0;
     const auto staleStart     = std::chrono::steady_clock::now();
     const HRESULT staleReadHr = reader->Read(&byte, 1u, &bytesRead);
-    const auto staleElapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - staleStart).count();
+    const auto staleElapsedMs =
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - staleStart).count();
     state.Require(staleReadHr == kDeviceGone && bytesRead == 0u,
                   std::format(L"MTP hung watchdog: stale pre-timeout reader expected device-gone/0 bytes, got hr=0x{:08X} bytes={}.",
                               static_cast<unsigned long>(staleReadHr),
                               bytesRead));
-    state.Require(staleElapsedMs < 250, std::format(L"MTP hung watchdog: stale reader took {} ms; generation rejection should be immediate.", staleElapsedMs));
+    state.Require(staleElapsedMs < 250,
+                  std::format(L"MTP hung watchdog: stale reader took {} ms; generation rejection should be immediate.", staleElapsedMs));
 
     reader.reset();
     io.reset();
@@ -1996,19 +2005,21 @@ SelfTest::RunCase(options,
 
     uint64_t readFileCalls = 0;
     state.Require(readCounter("readFileCalls", readFileCalls, L"after open"), L"MTP streamed reader: failed to read open counter.");
-    state.Require(readFileCalls == 0u, std::format(L"MTP streamed reader: opening the reader materialized the file; readFileCalls={}.", readFileCalls));
+    state.Require(readFileCalls == 0u,
+                  std::format(L"MTP streamed reader: opening the reader materialized the file; readFileCalls={}.", readFileCalls));
 
-    uint64_t sizeBytes   = 0;
+    uint64_t sizeBytes = 0;
     const HRESULT sizeHr = reader->GetSize(&sizeBytes);
     state.Require(SUCCEEDED(sizeHr) && sizeBytes == 41u,
                   std::format(L"MTP streamed reader: GetSize expected 41, got {} hr=0x{:08X}.", sizeBytes, static_cast<unsigned long>(sizeHr)));
     state.Require(readCounter("readFileCalls", readFileCalls, L"after GetSize"), L"MTP streamed reader: failed to read size counter.");
     state.Require(readFileCalls == 0u, std::format(L"MTP streamed reader: GetSize read file contents; readFileCalls={}.", readFileCalls));
 
-    char firstBytes[7]      = {};
+    char firstBytes[7] = {};
     unsigned long bytesRead = 0;
-    const HRESULT readHr    = reader->Read(firstBytes, static_cast<unsigned long>(std::size(firstBytes)), &bytesRead);
-    state.Require(SUCCEEDED(readHr) && bytesRead == static_cast<unsigned long>(std::size(firstBytes)) && std::string_view(firstBytes, bytesRead) == "RedSala",
+    const HRESULT readHr = reader->Read(firstBytes, static_cast<unsigned long>(std::size(firstBytes)), &bytesRead);
+    state.Require(SUCCEEDED(readHr) && bytesRead == static_cast<unsigned long>(std::size(firstBytes)) &&
+                      std::string_view(firstBytes, bytesRead) == "RedSala",
                   std::format(L"MTP streamed reader: first small read failed. bytes={} hr=0x{:08X}.", bytesRead, static_cast<unsigned long>(readHr)));
 
     uint64_t lastReadBytes = 0;
@@ -2210,7 +2221,8 @@ SelfTest::RunCase(options,
     if (backendThreadIdsObserved.has_value())
     {
         state.Require(backendThreadIdsObserved.value() == 1u,
-                      std::format(L"MTP backend worker reuse: expected one long-lived backend worker thread, observed {}.", backendThreadIdsObserved.value()));
+                      std::format(L"MTP backend worker reuse: expected one long-lived backend worker thread, observed {}.",
+                                  backendThreadIdsObserved.value()));
     }
     state.Require(props.find(R"json("backendThreadIdsOverflow":false)json") != std::string_view::npos,
                   L"MTP backend worker reuse: backend thread-id instrumentation overflowed.");
@@ -2278,7 +2290,8 @@ SelfTest::RunCase(options,
 
     if (deviceEnumerations.has_value())
     {
-        state.Require(deviceEnumerations.value() == 1u, std::format(L"MTP WPD cache: expected one device enumeration, got {}.", deviceEnumerations.value()));
+        state.Require(deviceEnumerations.value() == 1u,
+                      std::format(L"MTP WPD cache: expected one device enumeration, got {}.", deviceEnumerations.value()));
     }
     if (sessionOpens.has_value())
     {
@@ -2287,11 +2300,13 @@ SelfTest::RunCase(options,
     if (childEnumerations.has_value())
     {
         state.Require(childEnumerations.value() == 4u,
-                      std::format(L"MTP WPD cache: expected one four-segment ancestor walk, got {} child enumerations.", childEnumerations.value()));
+                      std::format(L"MTP WPD cache: expected one four-segment ancestor walk, got {} child enumerations.",
+                                  childEnumerations.value()));
     }
     if (pathCacheHits.has_value())
     {
-        state.Require(pathCacheHits.value() >= 4u, std::format(L"MTP WPD cache: expected repeated path cache hits, got {}.", pathCacheHits.value()));
+        state.Require(pathCacheHits.value() >= 4u,
+                      std::format(L"MTP WPD cache: expected repeated path cache hits, got {}.", pathCacheHits.value()));
     }
 
     return state.failure.empty();
@@ -2305,17 +2320,19 @@ SelfTest::RunCase(options,
     constexpr std::wstring_view kPhotoPath = L"/Fake Phone [devid:000000000000F00D]/Internal Storage/DCIM/Camera/photo001.txt";
 
     CreatedFileSystemInstance unsupported;
-    const HRESULT unsupportedHr =
-        TryCreateWpdCacheMtpFileSystemInstance(R"json({"unsupportedFixtureOption":true})json", R"json({"readOnly":true})json", L"/", unsupported);
+    const HRESULT unsupportedHr = TryCreateWpdCacheMtpFileSystemInstance(
+        R"json({"unsupportedFixtureOption":true})json", R"json({"readOnly":true})json", L"/", unsupported);
     if (unsupportedHr == HRESULT_FROM_WIN32(ERROR_PROC_NOT_FOUND))
     {
         return state.Skip(L"MTP WPD-cache fixture export is available only in debug plugin builds.");
     }
     state.Require(unsupportedHr == E_INVALIDARG,
-                  std::format(L"MTP WPD fixture options: unsupported option expected E_INVALIDARG, got 0x{:08X}.", static_cast<unsigned long>(unsupportedHr)));
+                  std::format(L"MTP WPD fixture options: unsupported option expected E_INVALIDARG, got 0x{:08X}.",
+                              static_cast<unsigned long>(unsupportedHr)));
 
     CreatedFileSystemInstance sessionFailure;
-    HRESULT hr = TryCreateWpdCacheMtpFileSystemInstance(R"json({"sessionDeathOnce":true})json", R"json({"readOnly":true})json", L"/", sessionFailure);
+    HRESULT hr = TryCreateWpdCacheMtpFileSystemInstance(
+        R"json({"sessionDeathOnce":true})json", R"json({"readOnly":true})json", L"/", sessionFailure);
     state.Require(SUCCEEDED(hr) && sessionFailure.fileSystem,
                   std::format(L"MTP WPD session recovery: fixture creation failed. hr=0x{:08X}.", static_cast<unsigned long>(hr)));
     if (FAILED(hr) || ! sessionFailure.fileSystem)
@@ -2331,16 +2348,16 @@ SelfTest::RunCase(options,
     }
     unsigned long attributes = 0;
     const HRESULT firstHr    = sessionIo->GetAttributes(kPhotoPath.data(), &attributes);
-    state.Require(
-        firstHr == RPC_E_DISCONNECTED,
-        std::format(L"MTP WPD session recovery: first injected session death expected RPC_E_DISCONNECTED, got 0x{:08X}.", static_cast<unsigned long>(firstHr)));
+    state.Require(firstHr == RPC_E_DISCONNECTED,
+                  std::format(L"MTP WPD session recovery: first injected session death expected RPC_E_DISCONNECTED, got 0x{:08X}.",
+                              static_cast<unsigned long>(firstHr)));
     const HRESULT retryHr = sessionIo->GetAttributes(kPhotoPath.data(), &attributes);
     state.Require(SUCCEEDED(retryHr) && (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0,
-                  std::format(L"MTP WPD session recovery: retry did not reopen a fresh session. hr=0x{:08X}.", static_cast<unsigned long>(retryHr)));
+                  std::format(L"MTP WPD session recovery: retry did not reopen a fresh session. hr=0x{:08X}.",
+                              static_cast<unsigned long>(retryHr)));
     const char* sessionProperties = nullptr;
-    hr                            = sessionIo->GetItemProperties(kPhotoPath.data(), &sessionProperties);
-    state.Require(SUCCEEDED(hr) && sessionProperties != nullptr &&
-                      std::string_view(sessionProperties).find(R"json("sessionOpens":2)json") != std::string_view::npos,
+    hr = sessionIo->GetItemProperties(kPhotoPath.data(), &sessionProperties);
+    state.Require(SUCCEEDED(hr) && sessionProperties != nullptr && std::string_view(sessionProperties).find(R"json("sessionOpens":2)json") != std::string_view::npos,
                   L"MTP WPD session recovery: instrumentation did not record the fresh session open.");
 
     CreatedFileSystemInstance changingSize;
@@ -2365,14 +2382,15 @@ SelfTest::RunCase(options,
 
     wil::com_ptr<IFileReader> reader;
     hr = changingIo->CreateFileReader(kPhotoPath.data(), reader.put());
-    state.Require(SUCCEEDED(hr) && reader, std::format(L"MTP WPD metadata refresh: CreateFileReader failed. hr=0x{:08X}.", static_cast<unsigned long>(hr)));
+    state.Require(SUCCEEDED(hr) && reader,
+                  std::format(L"MTP WPD metadata refresh: CreateFileReader failed. hr=0x{:08X}.", static_cast<unsigned long>(hr)));
     if (! reader)
     {
         return false;
     }
     constexpr std::string_view kChangedPayload = "RedSalamander refreshed MTP fixture payload\r\n";
-    unsigned long long sizeBytes               = 0;
-    hr                                         = reader->GetSize(&sizeBytes);
+    unsigned long long sizeBytes = 0;
+    hr = reader->GetSize(&sizeBytes);
     state.Require(SUCCEEDED(hr) && sizeBytes == kChangedPayload.size(),
                   std::format(L"MTP WPD metadata refresh: reader retained stale size {}; expected {}. hr=0x{:08X}.",
                               sizeBytes,
@@ -2380,9 +2398,11 @@ SelfTest::RunCase(options,
                               static_cast<unsigned long>(hr)));
     std::vector<char> payload(kChangedPayload.size());
     unsigned long bytesRead = 0;
-    hr                      = reader->Read(payload.data(), static_cast<unsigned long>(payload.size()), &bytesRead);
+    hr = reader->Read(payload.data(), static_cast<unsigned long>(payload.size()), &bytesRead);
     state.Require(SUCCEEDED(hr) && bytesRead == payload.size() && std::string_view(payload.data(), bytesRead) == kChangedPayload,
-                  std::format(L"MTP WPD metadata refresh: refreshed payload read failed. bytes={} hr=0x{:08X}.", bytesRead, static_cast<unsigned long>(hr)));
+                  std::format(L"MTP WPD metadata refresh: refreshed payload read failed. bytes={} hr=0x{:08X}.",
+                              bytesRead,
+                              static_cast<unsigned long>(hr)));
 
     return state.failure.empty();
 });
@@ -2413,21 +2433,23 @@ SelfTest::RunCase(options,
         reinterpret_cast<RunGenerationSelfTestFunc>(GetProcAddress(created.module.get(), "RedSalamanderMtpRunJournalGenerationSelfTest"));
     const auto resetProbeCount =
         reinterpret_cast<JournalProbeCountFunc>(GetProcAddress(created.module.get(), "RedSalamanderMtpResetJournalProbeCountForSelfTest"));
-    const auto getProbeCount = reinterpret_cast<JournalProbeCountFunc>(GetProcAddress(created.module.get(), "RedSalamanderMtpGetJournalProbeCountForSelfTest"));
+    const auto getProbeCount =
+        reinterpret_cast<JournalProbeCountFunc>(GetProcAddress(created.module.get(), "RedSalamanderMtpGetJournalProbeCountForSelfTest"));
 #pragma warning(pop)
     state.Require(runGenerationSelfTest && resetProbeCount && getProbeCount, L"MTP journal cache: required debug exports are missing.");
     if (! runGenerationSelfTest || ! resetProbeCount || ! getProbeCount)
     {
         return false;
     }
-    state.Require(runGenerationSelfTest() == TRUE, L"MTP journal cache: a stale absent observation was accepted after another instance began a journal write.");
+    state.Require(runGenerationSelfTest() == TRUE,
+                  L"MTP journal cache: a stale absent observation was accepted after another instance began a journal write.");
 
     uint64_t baselineProbes = 0u;
     for (uint32_t index = 0u; index < 16u; ++index)
     {
         static_cast<void>(resetProbeCount());
-        const std::wstring missingPath =
-            std::format(L"/Fake Phone [devpuid:fake-device]/Internal Storage/DCIM/Camera/firebreak-baseline-missing-{}.txt", index);
+        const std::wstring missingPath = std::format(
+            L"/Fake Phone [devpuid:fake-device]/Internal Storage/DCIM/Camera/firebreak-baseline-missing-{}.txt", index);
         const HRESULT deleteHr = created.fileSystem->DeleteItem(missingPath.c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr);
         state.Require(deleteHr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND),
                       std::format(L"MTP journal cache baseline: missing delete {} returned 0x{:08X}.", index, static_cast<unsigned long>(deleteHr)));
@@ -2438,16 +2460,20 @@ SelfTest::RunCase(options,
     static_cast<void>(resetProbeCount());
     for (uint32_t index = 0u; index < 16u; ++index)
     {
-        const std::wstring missingPath = std::format(L"/Fake Phone [devpuid:fake-device]/Internal Storage/DCIM/Camera/firebreak-missing-{}.txt", index);
-        const HRESULT deleteHr         = created.fileSystem->DeleteItem(missingPath.c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr);
+        const std::wstring missingPath = std::format(
+            L"/Fake Phone [devpuid:fake-device]/Internal Storage/DCIM/Camera/firebreak-missing-{}.txt", index);
+        const HRESULT deleteHr = created.fileSystem->DeleteItem(missingPath.c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr);
         state.Require(deleteHr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND),
                       std::format(L"MTP journal cache: missing delete {} returned 0x{:08X}.", index, static_cast<unsigned long>(deleteHr)));
     }
     const uint64_t probes = getProbeCount();
-    state.Require(probes <= 1u, std::format(L"MTP journal cache: 16 deletes performed {} filesystem journal probes; expected O(1) (at most one).", probes));
+    state.Require(probes <= 1u,
+                  std::format(L"MTP journal cache: 16 deletes performed {} filesystem journal probes; expected O(1) (at most one).", probes));
     Debug::Perf::EmitValue(L"mtp.overwrite.journal_filesystem_probes.candidate", probes, S_OK);
     state.Require(baselineProbes == 16u && probes < baselineProbes,
-                  std::format(L"MTP journal cache: deterministic baseline/candidate probes were {}/{}; expected 16/at-most-1.", baselineProbes, probes));
+                  std::format(L"MTP journal cache: deterministic baseline/candidate probes were {}/{}; expected 16/at-most-1.",
+                              baselineProbes,
+                              probes));
 
     return state.failure.empty();
 });
@@ -3862,7 +3888,8 @@ SelfTest::RunCase(options,
 
     std::wstring previousLocalAppData;
     std::wstring localAppData;
-    if (! AcquireMtpJournalLocalAppDataSandbox(state, L"mtp_journal_orphan_cleanup", L"MTP journal orphan-temp cleanup", localAppData, previousLocalAppData))
+    if (! AcquireMtpJournalLocalAppDataSandbox(
+            state, L"mtp_journal_orphan_cleanup", L"MTP journal orphan-temp cleanup", localAppData, previousLocalAppData))
     {
         return false;
     }
@@ -3934,7 +3961,8 @@ SelfTest::RunCase(options,
     }
 
     hr = notifyInjectedJournal(host);
-    state.Require(SUCCEEDED(hr), std::format(L"MTP journal orphan-temp cleanup: cache invalidation failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    state.Require(SUCCEEDED(hr),
+                  std::format(L"MTP journal orphan-temp cleanup: cache invalidation failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
     if (FAILED(hr))
     {
         return false;
@@ -3992,7 +4020,8 @@ SelfTest::RunCase(options,
 
     std::wstring previousLocalAppData;
     std::wstring localAppData;
-    if (! AcquireMtpJournalLocalAppDataSandbox(state, L"mtp_journal_temp_retry", L"MTP journal temp cleanup retry", localAppData, previousLocalAppData))
+    if (! AcquireMtpJournalLocalAppDataSandbox(
+            state, L"mtp_journal_temp_retry", L"MTP journal temp cleanup retry", localAppData, previousLocalAppData))
     {
         return false;
     }
@@ -4064,7 +4093,8 @@ SelfTest::RunCase(options,
     }
 
     hr = notifyInjectedJournal(host);
-    state.Require(SUCCEEDED(hr), std::format(L"MTP journal temp cleanup retry: cache invalidation failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    state.Require(SUCCEEDED(hr),
+                  std::format(L"MTP journal temp cleanup retry: cache invalidation failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
     if (FAILED(hr))
     {
         return false;
@@ -4128,7 +4158,8 @@ SelfTest::RunCase(options,
 
     std::wstring previousLocalAppData;
     std::wstring localAppData;
-    if (! AcquireMtpJournalLocalAppDataSandbox(state, L"mtp_journal_no_temp_puid", L"MTP journal no-tempPUID sweep", localAppData, previousLocalAppData))
+    if (! AcquireMtpJournalLocalAppDataSandbox(
+            state, L"mtp_journal_no_temp_puid", L"MTP journal no-tempPUID sweep", localAppData, previousLocalAppData))
     {
         return false;
     }
@@ -4230,7 +4261,9 @@ SelfTest::RunCase(options,
 
         hr = notifyInjectedJournal(host);
         state.Require(SUCCEEDED(hr),
-                      std::format(L"MTP journal no-tempPUID sweep: cache invalidation for {} failed. hr=0x{:08X}", scenario, static_cast<unsigned long>(hr)));
+                      std::format(L"MTP journal no-tempPUID sweep: cache invalidation for {} failed. hr=0x{:08X}",
+                                  scenario,
+                                  static_cast<unsigned long>(hr)));
         if (FAILED(hr))
         {
             return false;
@@ -4341,7 +4374,8 @@ SelfTest::RunCase(options,
 
     std::wstring previousLocalAppData;
     std::wstring localAppData;
-    if (! AcquireMtpJournalLocalAppDataSandbox(state, L"mtp_journal_rename_reject", L"MTP journal rename rejection bound", localAppData, previousLocalAppData))
+    if (! AcquireMtpJournalLocalAppDataSandbox(
+            state, L"mtp_journal_rename_reject", L"MTP journal rename rejection bound", localAppData, previousLocalAppData))
     {
         return false;
     }
@@ -4410,7 +4444,8 @@ SelfTest::RunCase(options,
     }
 
     hr = notifyInjectedJournal(host);
-    state.Require(SUCCEEDED(hr), std::format(L"MTP journal rename rejection bound: cache invalidation failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    state.Require(SUCCEEDED(hr),
+                  std::format(L"MTP journal rename rejection bound: cache invalidation failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
     if (FAILED(hr))
     {
         return false;
@@ -4660,9 +4695,10 @@ SelfTest::RunCase(options,
         }
 
         const HRESULT invalidateHr = notifyInjectedJournal(host);
-        state.Require(
-            SUCCEEDED(invalidateHr),
-            std::format(L"MTP overwrite safety matrix: cache invalidation for {} failed. hr=0x{:08X}", host, static_cast<unsigned long>(invalidateHr)));
+        state.Require(SUCCEEDED(invalidateHr),
+                      std::format(L"MTP overwrite safety matrix: cache invalidation for {} failed. hr=0x{:08X}",
+                                  host,
+                                  static_cast<unsigned long>(invalidateHr)));
         return SUCCEEDED(invalidateHr);
     };
 
@@ -5226,7 +5262,8 @@ SelfTest::RunCase(options,
 
     std::wstring previousLocalAppData;
     std::wstring localAppData;
-    if (! AcquireMtpJournalLocalAppDataSandbox(state, L"mtp_journal_completed_swap", L"MTP journal completed swap", localAppData, previousLocalAppData))
+    if (! AcquireMtpJournalLocalAppDataSandbox(
+            state, L"mtp_journal_completed_swap", L"MTP journal completed swap", localAppData, previousLocalAppData))
     {
         return false;
     }
@@ -5279,7 +5316,9 @@ SelfTest::RunCase(options,
         const char* properties = nullptr;
         const HRESULT propsHr  = io->GetItemProperties(finalPath.c_str(), &properties);
         state.Require(SUCCEEDED(propsHr) && properties != nullptr,
-                      std::format(L"MTP journal completed swap: {} GetItemProperties failed. hr=0x{:08X}", label, static_cast<unsigned long>(propsHr)));
+                      std::format(L"MTP journal completed swap: {} GetItemProperties failed. hr=0x{:08X}",
+                                  label,
+                                  static_cast<unsigned long>(propsHr)));
         if (FAILED(propsHr) || properties == nullptr)
         {
             return false;
@@ -5325,7 +5364,8 @@ SelfTest::RunCase(options,
     }
 
     hr = notifyInjectedJournal(host);
-    state.Require(SUCCEEDED(hr), std::format(L"MTP journal completed swap: cache invalidation failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    state.Require(SUCCEEDED(hr),
+                  std::format(L"MTP journal completed swap: cache invalidation failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
     if (FAILED(hr))
     {
         return false;
@@ -5347,7 +5387,8 @@ SelfTest::RunCase(options,
     }
 
     state.Require(propertyBatchCallsAfterSecondCommand <= 1u,
-                  std::format(L"MTP journal completed swap: second backend command replayed stale journal. after={}.", propertyBatchCallsAfterSecondCommand));
+                  std::format(L"MTP journal completed swap: second backend command replayed stale journal. after={}.",
+                              propertyBatchCallsAfterSecondCommand));
 
     return state.failure.empty();
 });
@@ -5477,7 +5518,8 @@ SelfTest::RunCase(options,
                   std::format(L"MTP rename overwrite swap: destination kept the source PUID instead of taking a temp PUID. source={} final={}",
                               widenAscii(sourcePuid),
                               widenAscii(finalDestinationPuid)));
-    state.Require(extractJsonUInt(props, "copyItemCalls") == 1u, L"MTP rename overwrite swap: fake backend trace did not show the temp-copy overwrite path.");
+    state.Require(extractJsonUInt(props, "copyItemCalls") == 1u,
+                  L"MTP rename overwrite swap: fake backend trace did not show the temp-copy overwrite path.");
 
     std::string readBack;
     state.Require(ReadPluginFileText(io.get(), destinationPath.c_str(), readBack, state, L"MTP rename overwrite swap dest readback"),
@@ -6095,8 +6137,10 @@ SelfTest::RunCase(options,
     if (SUCCEEDED(propsHr) && properties)
     {
         const std::string_view props(properties);
-        state.Require(extractJsonUInt(props, "copyItemCalls") == 1u, L"MTP copy accounting: fake backend did not record exactly one copy call.");
-        state.Require(extractJsonUInt(props, "lastCopyBytes") == 41u, L"MTP copy accounting: fake backend did not record the copied byte count.");
+        state.Require(extractJsonUInt(props, "copyItemCalls") == 1u,
+                      L"MTP copy accounting: fake backend did not record exactly one copy call.");
+        state.Require(extractJsonUInt(props, "lastCopyBytes") == 41u,
+                      L"MTP copy accounting: fake backend did not record the copied byte count.");
     }
 
     return state.failure.empty();
@@ -6123,8 +6167,7 @@ SelfTest::RunCase(options,
     wil::com_ptr<IFileSystemIO> io;
     wil::com_ptr<IFileSystemDirectoryOperations> dirOps;
     state.Require(CreateFileSystemIo(created.fileSystem, io), L"MTP fake directory move contract: missing IFileSystemIO.");
-    state.Require(CreateFileSystemDirectoryOperations(created.fileSystem, dirOps),
-                  L"MTP fake directory move contract: missing IFileSystemDirectoryOperations.");
+    state.Require(CreateFileSystemDirectoryOperations(created.fileSystem, dirOps), L"MTP fake directory move contract: missing IFileSystemDirectoryOperations.");
     if (! io || ! dirOps)
     {
         return false;
@@ -6137,11 +6180,11 @@ SelfTest::RunCase(options,
         return false;
     }
 
-    const std::wstring caseRoot        = std::format(L"/Fake Phone [devpuid:fake-device]/Internal Storage/DCIM/Camera/move-contract-{}", guid);
-    const std::wstring sourceParent    = caseRoot + L"/source-parent";
-    const std::wstring destParent      = caseRoot + L"/dest-parent";
-    const std::wstring sourceDir       = sourceParent + L"/source-dir";
-    const std::wstring destinationDir  = destParent + L"/renamed-dir";
+    const std::wstring caseRoot      = std::format(L"/Fake Phone [devpuid:fake-device]/Internal Storage/DCIM/Camera/move-contract-{}", guid);
+    const std::wstring sourceParent  = caseRoot + L"/source-parent";
+    const std::wstring destParent    = caseRoot + L"/dest-parent";
+    const std::wstring sourceDir     = sourceParent + L"/source-dir";
+    const std::wstring destinationDir = destParent + L"/renamed-dir";
     const std::wstring destinationFile = destParent + L"/existing-file.txt";
     state.Require(SUCCEEDED(dirOps->CreateDirectory(caseRoot.c_str())), L"MTP fake directory move contract: CreateDirectory(caseRoot) failed.");
     state.Require(SUCCEEDED(dirOps->CreateDirectory(sourceParent.c_str())), L"MTP fake directory move contract: CreateDirectory(sourceParent) failed.");
@@ -6171,13 +6214,14 @@ SelfTest::RunCase(options,
 
     unsigned long attrs         = 0;
     const HRESULT sourceAttrsHr = io->GetAttributes(sourceDir.c_str(), &attrs);
-    state.Require(
-        SUCCEEDED(sourceAttrsHr) && (attrs & FILE_ATTRIBUTE_DIRECTORY) != 0,
-        std::format(L"MTP fake directory move contract: source directory should remain, got hr=0x{:08X}.", static_cast<unsigned long>(sourceAttrsHr)));
+    state.Require(SUCCEEDED(sourceAttrsHr) && (attrs & FILE_ATTRIBUTE_DIRECTORY) != 0,
+                  std::format(L"MTP fake directory move contract: source directory should remain, got hr=0x{:08X}.",
+                              static_cast<unsigned long>(sourceAttrsHr)));
 
     const HRESULT destAttrsHr = io->GetAttributes(destinationDir.c_str(), &attrs);
     state.Require(destAttrsHr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND),
-                  std::format(L"MTP fake directory move contract: destination should not exist, got hr=0x{:08X}.", static_cast<unsigned long>(destAttrsHr)));
+                  std::format(L"MTP fake directory move contract: destination should not exist, got hr=0x{:08X}.",
+                              static_cast<unsigned long>(destAttrsHr)));
 
     std::string readBack;
     state.Require(ReadPluginFileText(io.get(), childPath.c_str(), readBack, state, L"MTP fake directory move contract child readback"),
@@ -6185,8 +6229,12 @@ SelfTest::RunCase(options,
     state.Require(readBack == kPayload, L"MTP fake directory move contract: source child contents changed.");
 
     constexpr std::string_view kDestinationPayload = "directory overwrite destination must remain intact";
-    state.Require(WritePluginFileText(
-                      io.get(), destinationFile.c_str(), FILESYSTEM_FLAG_NONE, kDestinationPayload, state, L"MTP fake directory overwrite destination write"),
+    state.Require(WritePluginFileText(io.get(),
+                                      destinationFile.c_str(),
+                                      FILESYSTEM_FLAG_NONE,
+                                      kDestinationPayload,
+                                      state,
+                                      L"MTP fake directory overwrite destination write"),
                   L"MTP fake directory overwrite contract: destination write failed.");
     if (! state.failure.empty())
     {
@@ -6206,24 +6254,24 @@ SelfTest::RunCase(options,
     }};
     for (const DirectoryOverwriteOperation operation : kDirectoryOverwriteOperations)
     {
-        const std::wstring_view label = operation == DirectoryOverwriteOperation::Copy   ? L"copy"
-                                        : operation == DirectoryOverwriteOperation::Move ? L"move"
-                                                                                         : L"rename";
-        HRESULT operationHr           = E_UNEXPECTED;
+        const std::wstring_view label = operation == DirectoryOverwriteOperation::Copy ? L"copy"
+                                      : operation == DirectoryOverwriteOperation::Move ? L"move"
+                                                                                       : L"rename";
+        HRESULT operationHr = E_UNEXPECTED;
         switch (operation)
         {
-            case DirectoryOverwriteOperation::Copy:
-                operationHr =
-                    created.fileSystem->CopyItem(sourceDir.c_str(), destinationFile.c_str(), FILESYSTEM_FLAG_ALLOW_OVERWRITE, nullptr, nullptr, nullptr);
-                break;
-            case DirectoryOverwriteOperation::Move:
-                operationHr =
-                    created.fileSystem->MoveItem(sourceDir.c_str(), destinationFile.c_str(), FILESYSTEM_FLAG_ALLOW_OVERWRITE, nullptr, nullptr, nullptr);
-                break;
-            case DirectoryOverwriteOperation::Rename:
-                operationHr =
-                    created.fileSystem->RenameItem(sourceDir.c_str(), destinationFile.c_str(), FILESYSTEM_FLAG_ALLOW_OVERWRITE, nullptr, nullptr, nullptr);
-                break;
+        case DirectoryOverwriteOperation::Copy:
+            operationHr = created.fileSystem->CopyItem(
+                sourceDir.c_str(), destinationFile.c_str(), FILESYSTEM_FLAG_ALLOW_OVERWRITE, nullptr, nullptr, nullptr);
+            break;
+        case DirectoryOverwriteOperation::Move:
+            operationHr = created.fileSystem->MoveItem(
+                sourceDir.c_str(), destinationFile.c_str(), FILESYSTEM_FLAG_ALLOW_OVERWRITE, nullptr, nullptr, nullptr);
+            break;
+        case DirectoryOverwriteOperation::Rename:
+            operationHr = created.fileSystem->RenameItem(
+                sourceDir.c_str(), destinationFile.c_str(), FILESYSTEM_FLAG_ALLOW_OVERWRITE, nullptr, nullptr, nullptr);
+            break;
         }
 
         state.Require(operationHr == HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED),
@@ -6234,9 +6282,14 @@ SelfTest::RunCase(options,
                       std::format(L"MTP fake directory overwrite contract: {} removed the source directory.", label));
 
         readBack.clear();
-        state.Require(ReadPluginFileText(io.get(), destinationFile.c_str(), readBack, state, L"MTP fake directory overwrite destination readback"),
+        state.Require(ReadPluginFileText(io.get(),
+                                         destinationFile.c_str(),
+                                         readBack,
+                                         state,
+                                         L"MTP fake directory overwrite destination readback"),
                       std::format(L"MTP fake directory overwrite contract: {} made the destination unreadable.", label));
-        state.Require(readBack == kDestinationPayload, std::format(L"MTP fake directory overwrite contract: {} changed the destination contents.", label));
+        state.Require(readBack == kDestinationPayload,
+                      std::format(L"MTP fake directory overwrite contract: {} changed the destination contents.", label));
     }
 
     return state.failure.empty();

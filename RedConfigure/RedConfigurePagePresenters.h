@@ -37,9 +37,9 @@ struct BatchChangeSummary
 
 struct BatchInteraction
 {
-    BatchInteractionPhase phase          = BatchInteractionPhase::Preview;
+    BatchInteractionPhase phase = BatchInteractionPhase::Preview;
     Workflow::BatchApprovalResult result = Workflow::BatchApprovalResult::NoChanges;
-    size_t changeCount                   = 0u;
+    size_t changeCount = 0u;
     std::optional<BatchChangeSummary> firstChange;
 };
 

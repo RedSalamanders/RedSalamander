@@ -5,9 +5,12 @@
 
 #include "FolderWindowInternal.h"
 
-inline void RestoreActivePaneFolderViewFocusIfWindowHadFocusBeforeHide(FolderWindow& folderWindow, HWND containerWindow, HWND focusedBeforeHide) noexcept
+inline void RestoreActivePaneFolderViewFocusIfWindowHadFocusBeforeHide(FolderWindow& folderWindow,
+                                                                       HWND containerWindow,
+                                                                       HWND focusedBeforeHide) noexcept
 {
-    if (! containerWindow || ! focusedBeforeHide || (focusedBeforeHide != containerWindow && IsChild(containerWindow, focusedBeforeHide) == FALSE))
+    if (! containerWindow || ! focusedBeforeHide ||
+        (focusedBeforeHide != containerWindow && IsChild(containerWindow, focusedBeforeHide) == FALSE))
     {
         return;
     }
@@ -245,7 +248,7 @@ struct FolderWindow::FileOperationState
             PerfStats& operator=(const PerfStats&) = delete;
             PerfStats& operator=(PerfStats&&)      = delete;
 
-            uint64_t queueWaitUs = 0;
+            uint64_t queueWaitUs              = 0;
             std::atomic<uint64_t> schedulerWaitUs{0};
             std::atomic<uint64_t> schedulerWaitForWorkUs{0};
             std::atomic<uint64_t> schedulerProcessIndexUs{0};
@@ -265,18 +268,18 @@ struct FolderWindow::FileOperationState
             std::atomic<uint64_t> preCalcCallbackUs{0};
             std::atomic<uint64_t> preCalcLockWaitUs{0};
             std::atomic<uint64_t> progressCallbackUs{0};
-            uint64_t progressFirstCallbackDelayMs     = 0;
-            uint64_t progressLockWaitUs               = 0;
-            uint64_t progressLockHoldUs               = 0;
-            uint64_t progressLockContentionCount      = 0;
-            uint64_t progressPathUpdateBytes          = 0;
-            uint64_t progressPathUpdateAppliedCount   = 0;
-            uint64_t progressPathUpdateSkippedCount   = 0;
-            uint64_t progressPathUpdateThrottledCount = 0;
-            uint64_t progressInFlightEvictions        = 0;
-            uint64_t perItemInFlightEvictions         = 0;
+            uint64_t progressFirstCallbackDelayMs        = 0;
+            uint64_t progressLockWaitUs                  = 0;
+            uint64_t progressLockHoldUs                  = 0;
+            uint64_t progressLockContentionCount         = 0;
+            uint64_t progressPathUpdateBytes             = 0;
+            uint64_t progressPathUpdateAppliedCount      = 0;
+            uint64_t progressPathUpdateSkippedCount      = 0;
+            uint64_t progressPathUpdateThrottledCount    = 0;
+            uint64_t progressInFlightEvictions           = 0;
+            uint64_t perItemInFlightEvictions            = 0;
             std::atomic<uint64_t> pauseWaitUs{0};
-            uint64_t conflictWaitUs = 0;
+            uint64_t conflictWaitUs                      = 0;
             std::atomic<uint64_t> conflictMetadataUs{0};
             uint64_t conflictConvergenceWaitUs           = 0;
             uint64_t conflictPromptCount                 = 0;
@@ -415,11 +418,11 @@ struct FolderWindow::FileOperationState
         std::vector<DWORD> _sourcePathAttributesHint;
         mutable std::mutex _operationMutex;
         std::filesystem::path _destinationFolder;
-        FileSystemFlags _flags                        = FILESYSTEM_FLAG_NONE;
-        bool _enablePreCalc                           = true;
+        FileSystemFlags _flags                  = FILESYSTEM_FLAG_NONE;
+        bool _enablePreCalc                     = true;
         bool _preCalcSuppressedForHighMetadataCrossFs = false;
-        unsigned int _preCalcMaxWorkers               = 4u;
-        unsigned long _crossFsBridgeBufferBytes       = 4096u * 1024u;
+        unsigned int _preCalcMaxWorkers         = 4u;
+        unsigned long _crossFsBridgeBufferBytes = 4096u * 1024u;
         std::atomic<unsigned long> _resolvedCrossFsBridgeBufferBytes{0};
         std::atomic<unsigned int> _preCalcWorkerCountUsed{0};
         std::atomic<bool> _autoConcurrencyUsed{false};
@@ -786,12 +789,14 @@ bool HasFileOpsConflictMetadataPauseEnteredForSelfTest() noexcept;
 void ReleaseFileOpsConflictMetadataPauseForSelfTest() noexcept;
 struct FileOpsConflictMetadataDebugResult
 {
-    bool available           = false;
-    bool isDirectory         = false;
+    bool available       = false;
+    bool isDirectory     = false;
     unsigned long attributes = 0;
-    __int64 lastWriteTime    = 0;
+    __int64 lastWriteTime     = 0;
 };
-bool DebugReadFileOpsConflictMetadataForSelfTest(IFileSystemIO* io, std::wstring_view path, FileOpsConflictMetadataDebugResult& out) noexcept;
+bool DebugReadFileOpsConflictMetadataForSelfTest(IFileSystemIO* io,
+                                                 std::wstring_view path,
+                                                 FileOpsConflictMetadataDebugResult& out) noexcept;
 bool RunFileOpsPerItemSchedulerShutdownQuietPointSelfTestForSelfTest(FolderWindow::FileOperationState& state) noexcept;
 bool RunFileOpsPerItemSchedulerNestedSaturationSelfTestForSelfTest(FolderWindow::FileOperationState& state) noexcept;
 bool RunFileOpsBridgePausedReaderStopSelfTestForSelfTest(FolderWindow::FileOperationState& state) noexcept;

@@ -7,8 +7,8 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
-#include <concepts>
 #include <condition_variable>
+#include <concepts>
 #include <cstdint>
 #include <cstring>
 #include <cwctype>
@@ -100,7 +100,9 @@ namespace Common::Colors
 // Drops the packed ARGB alpha channel and converts the remaining RGB bytes to Win32 COLORREF order.
 [[nodiscard]] inline COLORREF ColorRefFromArgb(uint32_t argb) noexcept
 {
-    return RGB(static_cast<BYTE>((argb >> 16u) & 0xFFu), static_cast<BYTE>((argb >> 8u) & 0xFFu), static_cast<BYTE>(argb & 0xFFu));
+    return RGB(static_cast<BYTE>((argb >> 16u) & 0xFFu),
+               static_cast<BYTE>((argb >> 8u) & 0xFFu),
+               static_cast<BYTE>(argb & 0xFFu));
 }
 
 // Interpolates COLORREF channels with an explicit integer denominator. Invalid denominators preserve
@@ -112,12 +114,16 @@ namespace Common::Colors
         return base;
     }
 
-    overlayWeight        = std::clamp(overlayWeight, 0, denominator);
+    overlayWeight       = std::clamp(overlayWeight, 0, denominator);
     const int baseWeight = denominator - overlayWeight;
-    const auto channel   = [baseWeight, overlayWeight, denominator](BYTE baseChannel, BYTE overlayChannel) noexcept
-    { return static_cast<BYTE>((static_cast<int>(baseChannel) * baseWeight + static_cast<int>(overlayChannel) * overlayWeight) / denominator); };
+    const auto channel = [baseWeight, overlayWeight, denominator](BYTE baseChannel, BYTE overlayChannel) noexcept
+    {
+        return static_cast<BYTE>((static_cast<int>(baseChannel) * baseWeight + static_cast<int>(overlayChannel) * overlayWeight) / denominator);
+    };
 
-    return RGB(channel(GetRValue(base), GetRValue(overlay)), channel(GetGValue(base), GetGValue(overlay)), channel(GetBValue(base), GetBValue(overlay)));
+    return RGB(channel(GetRValue(base), GetRValue(overlay)),
+               channel(GetGValue(base), GetGValue(overlay)),
+               channel(GetBValue(base), GetBValue(overlay)));
 }
 
 // Convenience form for the repeated 8-bit overlay-alpha policy.
@@ -152,36 +158,39 @@ namespace Detail
     float blue  = 0.0f;
     if (hueDegrees < 60.0f)
     {
-        red   = chroma;
+        red = chroma;
         green = x;
     }
     else if (hueDegrees < 120.0f)
     {
-        red   = x;
+        red = x;
         green = chroma;
     }
     else if (hueDegrees < 180.0f)
     {
         green = chroma;
-        blue  = x;
+        blue = x;
     }
     else if (hueDegrees < 240.0f)
     {
         green = x;
-        blue  = chroma;
+        blue = chroma;
     }
     else if (hueDegrees < 300.0f)
     {
-        red  = x;
+        red = x;
         blue = chroma;
     }
     else
     {
-        red  = chroma;
+        red = chroma;
         blue = x;
     }
 
-    const auto toByte = [](float channel) noexcept { return static_cast<BYTE>(std::lround(std::clamp(channel * 255.0f, 0.0f, 255.0f))); };
+    const auto toByte = [](float channel) noexcept
+    {
+        return static_cast<BYTE>(std::lround(std::clamp(channel * 255.0f, 0.0f, 255.0f)));
+    };
     return RGB(toByte(red + m), toByte(green + m), toByte(blue + m));
 }
 } // namespace Detail
@@ -214,8 +223,9 @@ namespace Detail
 
 [[nodiscard]] inline double RelativeLuminanceFromArgb(uint32_t argb) noexcept
 {
-    return RelativeLuminanceFromSrgb(
-        static_cast<double>((argb >> 16u) & 0xFFu) / 255.0, static_cast<double>((argb >> 8u) & 0xFFu) / 255.0, static_cast<double>(argb & 0xFFu) / 255.0);
+    return RelativeLuminanceFromSrgb(static_cast<double>((argb >> 16u) & 0xFFu) / 255.0,
+                                     static_cast<double>((argb >> 8u) & 0xFFu) / 255.0,
+                                     static_cast<double>(argb & 0xFFu) / 255.0);
 }
 
 [[nodiscard]] inline uint32_t CompositeArgbOverOpaqueBackground(uint32_t foregroundArgb, uint32_t backgroundArgb) noexcept
@@ -233,8 +243,9 @@ namespace Detail
 
 [[nodiscard]] inline double RelativeLuminanceFromColorRef(COLORREF color) noexcept
 {
-    return RelativeLuminanceFromSrgb(
-        static_cast<double>(GetRValue(color)) / 255.0, static_cast<double>(GetGValue(color)) / 255.0, static_cast<double>(GetBValue(color)) / 255.0);
+    return RelativeLuminanceFromSrgb(static_cast<double>(GetRValue(color)) / 255.0,
+                                     static_cast<double>(GetGValue(color)) / 255.0,
+                                     static_cast<double>(GetBValue(color)) / 255.0);
 }
 
 // Some product policies intentionally apply their threshold to encoded sRGB channels without linearizing.
@@ -263,11 +274,13 @@ namespace Common::Crypto
         return E_INVALIDARG;
     }
 
-    const NTSTATUS status = BCryptGenRandom(nullptr, reinterpret_cast<PUCHAR>(bytes.data()), static_cast<ULONG>(bytes.size()), BCRYPT_USE_SYSTEM_PREFERRED_RNG);
+    const NTSTATUS status = BCryptGenRandom(
+        nullptr, reinterpret_cast<PUCHAR>(bytes.data()), static_cast<ULONG>(bytes.size()), BCRYPT_USE_SYSTEM_PREFERRED_RNG);
     return BCRYPT_SUCCESS(status) ? S_OK : HRESULT_FROM_NT(status);
 }
 
-template <typename CharT> inline void AppendHexToken(std::basic_string<CharT>& value, std::span<const std::byte> bytes)
+template<typename CharT>
+inline void AppendHexToken(std::basic_string<CharT>& value, std::span<const std::byte> bytes)
 {
     constexpr std::basic_string_view<CharT> hex = []
     {
@@ -298,8 +311,11 @@ namespace Common::Paths
 // device-namespace, relative, and bare executable names.
 [[nodiscard]] inline bool IsExplicitAbsoluteExecutablePath(std::wstring_view path) noexcept
 {
-    const auto isSeparator   = [](const wchar_t ch) noexcept { return ch == L'\\' || ch == L'/'; };
-    const auto isDriveLetter = [](const wchar_t ch) noexcept { return (ch >= L'A' && ch <= L'Z') || (ch >= L'a' && ch <= L'z'); };
+    const auto isSeparator = [](const wchar_t ch) noexcept { return ch == L'\\' || ch == L'/'; };
+    const auto isDriveLetter = [](const wchar_t ch) noexcept
+    {
+        return (ch >= L'A' && ch <= L'Z') || (ch >= L'a' && ch <= L'z');
+    };
 
     if (path.size() >= 3u && isDriveLetter(path[0]) && path[1] == L':' && isSeparator(path[2]))
     {
@@ -330,8 +346,8 @@ namespace Common::Paths
             const wchar_t folded = (lhs >= L'a' && lhs <= L'z') ? static_cast<wchar_t>(lhs - (L'a' - L'A')) : lhs;
             return folded == rhs;
         };
-        if (path.size() <= 8u || ! equalsAsciiNoCase(path[4], L'U') || ! equalsAsciiNoCase(path[5], L'N') || ! equalsAsciiNoCase(path[6], L'C') ||
-            ! isSeparator(path[7]))
+        if (path.size() <= 8u || ! equalsAsciiNoCase(path[4], L'U') || ! equalsAsciiNoCase(path[5], L'N') ||
+            ! equalsAsciiNoCase(path[6], L'C') || ! isSeparator(path[7]))
         {
             return false;
         }
@@ -350,7 +366,7 @@ namespace Common::Paths
 
 // Builds `<readable-prefix><marker><128-bit-hex><suffix>`, truncating only the readable prefix
 // when a provider imposes a leaf-length cap. The marker/token/suffix identity is always preserved.
-template <typename CharT>
+template<typename CharT>
 [[nodiscard]] inline HRESULT BuildUniqueSiblingName(std::basic_string_view<CharT> readablePrefix,
                                                     std::basic_string_view<CharT> marker,
                                                     std::basic_string_view<CharT> suffix,
@@ -2279,13 +2295,13 @@ template <typename T> [[nodiscard]] inline bool SubmitOwnedThreadpoolCallback(st
 
     const BOOL queued = TrySubmitThreadpoolCallback(
         [](PTP_CALLBACK_INSTANCE /*instance*/, void* context) noexcept
-    {
-        std::unique_ptr<T> owned(static_cast<T*>(context));
-        if (owned)
         {
-            owned->Execute();
-        }
-    },
+            std::unique_ptr<T> owned(static_cast<T*>(context));
+            if (owned)
+            {
+                owned->Execute();
+            }
+        },
         payload.get(),
         nullptr);
     if (queued == 0)
@@ -2306,13 +2322,13 @@ template <typename T> [[nodiscard]] inline bool SubmitOwnedThreadpoolCallbackWit
 
     const BOOL queued = TrySubmitThreadpoolCallback(
         [](PTP_CALLBACK_INSTANCE instance, void* context) noexcept
-    {
-        std::unique_ptr<T> owned(static_cast<T*>(context));
-        if (owned)
         {
-            owned->Execute(instance);
-        }
-    },
+            std::unique_ptr<T> owned(static_cast<T*>(context));
+            if (owned)
+            {
+                owned->Execute(instance);
+            }
+        },
         payload.get(),
         nullptr);
     if (queued == 0)
@@ -2492,8 +2508,11 @@ template <typename T> inline void DeletePostedMessagePayload(void* payload) noex
     return true;
 }
 
-[[nodiscard]] inline bool TakeRegisteredPostedMessagePayload(
-    LPARAM token, HWND expectedHwnd, UINT expectedMessage, bool validateDestination, PostedMessagePayloadEntry& removed) noexcept
+[[nodiscard]] inline bool TakeRegisteredPostedMessagePayload(LPARAM token,
+                                                             HWND expectedHwnd,
+                                                             UINT expectedMessage,
+                                                             bool validateDestination,
+                                                             PostedMessagePayloadEntry& removed) noexcept
 {
     if (token == 0)
     {
@@ -2586,7 +2605,8 @@ template <typename T> [[nodiscard]] inline bool PostMessagePayload(HWND hwnd, UI
         return false;
     }
 
-    static_cast<void>(registry.entriesByToken.emplace(token, detail::PostedMessagePayloadEntry{.payload = raw, .hwnd = hwnd, .msg = msg, .del = deleter}));
+    static_cast<void>(registry.entriesByToken.emplace(
+        token, detail::PostedMessagePayloadEntry{.payload = raw, .hwnd = hwnd, .msg = msg, .del = deleter}));
     static_cast<void>(registry.tokensByHwnd[hwnd].insert(token));
 
     if (! PostMessageW(hwnd, msg, wParam, token))
@@ -2623,9 +2643,9 @@ template <typename T> [[nodiscard]] inline std::unique_ptr<T> TakeMessagePayload
 
 template <typename T> struct ContiguousPostedPayloadDrainResult final
 {
-    ContiguousPostedPayloadDrainResult()                                                         = default;
-    ContiguousPostedPayloadDrainResult(const ContiguousPostedPayloadDrainResult&)                = delete;
-    ContiguousPostedPayloadDrainResult& operator=(const ContiguousPostedPayloadDrainResult&)     = delete;
+    ContiguousPostedPayloadDrainResult()                                                        = default;
+    ContiguousPostedPayloadDrainResult(const ContiguousPostedPayloadDrainResult&)               = delete;
+    ContiguousPostedPayloadDrainResult& operator=(const ContiguousPostedPayloadDrainResult&)    = delete;
     ContiguousPostedPayloadDrainResult(ContiguousPostedPayloadDrainResult&&) noexcept            = default;
     ContiguousPostedPayloadDrainResult& operator=(ContiguousPostedPayloadDrainResult&&) noexcept = default;
 
@@ -2642,8 +2662,12 @@ template <typename T> struct ContiguousPostedPayloadDrainResult final
 /// enforce cancellation or caller-specific budgets. `reduce` owns the payload merge/replacement policy. Both
 /// callbacks must be noexcept.
 template <typename T, typename CanDrain, typename Reducer>
-[[nodiscard]] inline ContiguousPostedPayloadDrainResult<T> TakeAndCoalesceContiguousPostedPayloads(
-    HWND hwnd, UINT message, WPARAM operationKey, LPARAM currentLParam, CanDrain&& canDrain, Reducer&& reduce) noexcept
+[[nodiscard]] inline ContiguousPostedPayloadDrainResult<T> TakeAndCoalesceContiguousPostedPayloads(HWND hwnd,
+                                                                                                   UINT message,
+                                                                                                   WPARAM operationKey,
+                                                                                                   LPARAM currentLParam,
+                                                                                                   CanDrain&& canDrain,
+                                                                                                   Reducer&& reduce) noexcept
 {
     ContiguousPostedPayloadDrainResult<T> result;
     result.payload = TakeMessagePayload<T>(currentLParam);

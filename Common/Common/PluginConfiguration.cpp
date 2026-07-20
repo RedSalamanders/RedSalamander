@@ -19,8 +19,11 @@ namespace Common::PluginConfiguration
 {
 namespace
 {
-void AddIssue(
-    std::vector<ValidationIssue>& issues, ValidationSeverity severity, ValidationCode code, size_t fieldIndex = kNoFieldIndex, std::wstring fieldKey = {})
+void AddIssue(std::vector<ValidationIssue>& issues,
+              ValidationSeverity severity,
+              ValidationCode code,
+              size_t fieldIndex = kNoFieldIndex,
+              std::wstring fieldKey = {})
 {
     issues.push_back(ValidationIssue{.severity = severity, .code = code, .fieldIndex = fieldIndex, .fieldKey = std::move(fieldKey)});
 }
@@ -172,7 +175,7 @@ void ParseChoices(yyjson_val* item, size_t fieldIndex, Field& field, std::vector
     field.choices.reserve(optionCount);
     for (size_t optionIndex = 0; optionIndex < optionCount; ++optionIndex)
     {
-        yyjson_val* option                              = yyjson_arr_get(options, optionIndex);
+        yyjson_val* option = yyjson_arr_get(options, optionIndex);
         const std::optional<std::string_view> valueUtf8 = option && yyjson_is_obj(option) ? GetString(option, "value") : std::nullopt;
         if (! valueUtf8.has_value())
         {
@@ -194,7 +197,7 @@ void ParseChoices(yyjson_val* item, size_t fieldIndex, Field& field, std::vector
         }
 
         const std::optional<std::string_view> labelUtf8 = GetString(option, "label");
-        choice.label                                    = labelUtf8.has_value() ? Common::Strings::Utf16FromUtf8StrictOrEmpty(labelUtf8.value()) : choice.value;
+        choice.label = labelUtf8.has_value() ? Common::Strings::Utf16FromUtf8StrictOrEmpty(labelUtf8.value()) : choice.value;
         if (choice.label.empty())
         {
             choice.label = choice.value;
@@ -209,11 +212,21 @@ void ParseChoices(yyjson_val* item, size_t fieldIndex, Field& field, std::vector
     value.type = field.type;
     switch (field.type)
     {
-        case FieldType::Text: value.text = field.defaultText; break;
-        case FieldType::Value: value.integer = field.defaultInt; break;
-        case FieldType::Bool: value.boolean = field.defaultBool; break;
-        case FieldType::Option: value.text = field.defaultOption; break;
-        case FieldType::Selection: value.selection = field.defaultSelection; break;
+        case FieldType::Text:
+            value.text = field.defaultText;
+            break;
+        case FieldType::Value:
+            value.integer = field.defaultInt;
+            break;
+        case FieldType::Bool:
+            value.boolean = field.defaultBool;
+            break;
+        case FieldType::Option:
+            value.text = field.defaultOption;
+            break;
+        case FieldType::Selection:
+            value.selection = field.defaultSelection;
+            break;
     }
     return value;
 }
@@ -260,7 +273,9 @@ void ParseChoices(yyjson_val* item, size_t fieldIndex, Field& field, std::vector
     switch (field.type)
     {
         case FieldType::Text:
-        case FieldType::Option: result.value = Common::Strings::Utf8FromUtf16StrictOrEmpty(value.text); break;
+        case FieldType::Option:
+            result.value = Common::Strings::Utf8FromUtf16StrictOrEmpty(value.text);
+            break;
         case FieldType::Value:
         {
             int64_t integer = value.integer;
@@ -275,7 +290,9 @@ void ParseChoices(yyjson_val* item, size_t fieldIndex, Field& field, std::vector
             result.value = integer;
             break;
         }
-        case FieldType::Bool: result.value = value.boolean; break;
+        case FieldType::Bool:
+            result.value = value.boolean;
+            break;
         case FieldType::Selection:
         {
             auto array = std::make_shared<Settings::JsonArray>();
@@ -305,7 +322,7 @@ bool TryGetBoolToggleChoiceIndices(const Field& field, size_t& outOnIndex, size_
     std::optional<size_t> offIndex;
     for (size_t choiceIndex = 0; choiceIndex < field.choices.size(); ++choiceIndex)
     {
-        const Choice& choice       = field.choices[choiceIndex];
+        const Choice& choice = field.choices[choiceIndex];
         std::optional<bool> parsed = ParseBoolToken(choice.label);
         if (! parsed.has_value())
         {
@@ -410,10 +427,10 @@ SchemaParseResult ParseSchema(std::string_view schemaJsonUtf8) noexcept
         }
 
         Field field;
-        field.type                                      = fieldType.value();
-        field.key                                       = std::move(key);
+        field.type = fieldType.value();
+        field.key  = std::move(key);
         const std::optional<std::string_view> labelUtf8 = GetString(item, "label");
-        field.label                                     = labelUtf8.has_value() ? Common::Strings::Utf16FromUtf8StrictOrEmpty(labelUtf8.value()) : field.key;
+        field.label = labelUtf8.has_value() ? Common::Strings::Utf16FromUtf8StrictOrEmpty(labelUtf8.value()) : field.key;
         if (field.label.empty())
         {
             field.label = field.key;
@@ -442,8 +459,9 @@ SchemaParseResult ParseSchema(std::string_view schemaJsonUtf8) noexcept
         int64_t order = 0;
         if (GetInt64(item, "x-ui-order", order))
         {
-            field.uiOrder = static_cast<int>(
-                std::clamp<int64_t>(order, static_cast<int64_t>((std::numeric_limits<int>::min)()), static_cast<int64_t>((std::numeric_limits<int>::max)())));
+            field.uiOrder = static_cast<int>(std::clamp<int64_t>(order,
+                                                                  static_cast<int64_t>((std::numeric_limits<int>::min)()),
+                                                                  static_cast<int64_t>((std::numeric_limits<int>::max)())));
         }
 
         if (GetInt64(item, "min", field.min))
@@ -519,7 +537,7 @@ SchemaParseResult ParseSchema(std::string_view schemaJsonUtf8) noexcept
                             AddIssue(result.issues, ValidationSeverity::Warning, ValidationCode::InvalidDefault, fieldIndex, field.key);
                             continue;
                         }
-                        const char* text     = yyjson_get_str(value);
+                        const char* text = yyjson_get_str(value);
                         std::wstring decoded = text ? Common::Strings::Utf16FromUtf8StrictOrEmpty(text) : std::wstring{};
                         if (decoded.empty())
                         {
@@ -539,9 +557,7 @@ SchemaParseResult ParseSchema(std::string_view schemaJsonUtf8) noexcept
         result.fields.push_back(std::move(field));
     }
 
-    std::stable_sort(result.fields.begin(),
-                     result.fields.end(),
-                     [](const Field& lhs, const Field& rhs) noexcept
+    std::stable_sort(result.fields.begin(), result.fields.end(), [](const Field& lhs, const Field& rhs) noexcept
     {
         if (lhs.uiOrder != 0 && rhs.uiOrder != 0)
         {
@@ -585,9 +601,9 @@ ConfigurationParseResult ParseConfiguration(std::span<const Field> fields, std::
 
     for (size_t fieldIndex = 0; fieldIndex < fields.size(); ++fieldIndex)
     {
-        const Field& field                 = fields[fieldIndex];
-        FieldValue& value                  = result.values[fieldIndex];
-        const std::string keyUtf8          = Common::Strings::Utf8FromUtf16StrictOrEmpty(field.key);
+        const Field& field = fields[fieldIndex];
+        FieldValue& value  = result.values[fieldIndex];
+        const std::string keyUtf8 = Common::Strings::Utf8FromUtf16StrictOrEmpty(field.key);
         const Settings::JsonValue* current = keyUtf8.empty() ? nullptr : Settings::FindMember(root, keyUtf8);
         if (! current)
         {
@@ -719,7 +735,7 @@ HRESULT SerializeConfiguration(std::string_view originalConfigurationJsonUtf8,
     if (! originalObject || ! *originalObject)
     {
         recoveredSource = recoveredSource || ! originalConfigurationJsonUtf8.empty();
-        root.value      = std::make_shared<Settings::JsonObject>();
+        root.value       = std::make_shared<Settings::JsonObject>();
     }
     else
     {
@@ -747,16 +763,17 @@ HRESULT SerializeConfiguration(std::string_view originalConfigurationJsonUtf8,
         }
 
         Settings::JsonValue serialized = ToJsonValue(field, value);
-        auto first                     = std::ranges::find_if((*object)->members, [&](const auto& member) noexcept { return member.first == keyUtf8; });
+        auto first = std::ranges::find_if((*object)->members, [&](const auto& member) noexcept { return member.first == keyUtf8; });
         if (first == (*object)->members.end())
         {
             (*object)->members.emplace_back(keyUtf8, std::move(serialized));
             continue;
         }
         first->second = std::move(serialized);
-        (*object)->members.erase(
-            std::remove_if(std::next(first), (*object)->members.end(), [&](const auto& member) noexcept { return member.first == keyUtf8; }),
-            (*object)->members.end());
+        (*object)->members.erase(std::remove_if(std::next(first),
+                                               (*object)->members.end(),
+                                               [&](const auto& member) noexcept { return member.first == keyUtf8; }),
+                                 (*object)->members.end());
     }
 
     const HRESULT serializeHr = Settings::SerializeJsonValue(root, outConfigurationJsonUtf8);

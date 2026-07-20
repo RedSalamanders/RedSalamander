@@ -513,9 +513,9 @@ public:
 
         CaptureFocusRestoreTarget();
         _menuBar->SetSelectedIndex(firstEnabledIndex);
-        MenuBar* const menuBar                   = _menuBar;
+        MenuBar* const menuBar                    = _menuBar;
         const std::weak_ptr<int> menuBarLifetime = GetControlLifetimeToken(*menuBar);
-        const HWND hwnd                          = _hwnd.get();
+        const HWND hwnd                           = _hwnd.get();
         SetFocus(hwnd);
         if (menuBarLifetime.expired() || _menuBar != menuBar || ! _hwnd || _hwnd.get() != hwnd)
         {
@@ -538,9 +538,9 @@ public:
         }
 
         CaptureFocusRestoreTarget();
-        MenuBar* const menuBar                   = _menuBar;
+        MenuBar* const menuBar                    = _menuBar;
         const std::weak_ptr<int> menuBarLifetime = GetControlLifetimeToken(*menuBar);
-        const HWND hwnd                          = _hwnd.get();
+        const HWND hwnd                           = _hwnd.get();
         SetFocus(hwnd);
         if (menuBarLifetime.expired() || _menuBar != menuBar || ! _hwnd || _hwnd.get() != hwnd)
         {
@@ -598,8 +598,8 @@ private:
             return false;
         }
 
-        MenuBar* const menuBar                   = _menuBar;
-        const std::weak_ptr<int> menuBarLifetime = GetControlLifetimeToken(*menuBar);
+        MenuBar* const menuBar                         = _menuBar;
+        const std::weak_ptr<int> menuBarLifetime      = GetControlLifetimeToken(*menuBar);
         if (invokeRefresh && _refreshMenuState)
         {
             const RefreshMenuStateCallback refreshMenuState = _refreshMenuState;
@@ -753,16 +753,16 @@ private:
             return;
         }
 
-        MenuBar* const menuBar                   = _menuBar;
+        MenuBar* const menuBar                    = _menuBar;
         const std::weak_ptr<int> menuBarLifetime = GetControlLifetimeToken(*menuBar);
-        const HWND ownerWindow                   = _ownerWindow;
-        const ThemePalette theme                 = _theme;
+        const HWND ownerWindow                    = _ownerWindow;
+        const ThemePalette theme                  = _theme;
 
         ContextMenuSessionCallbacks sessionCallbacks{};
-        sessionCallbacks.focusFirstNavigableItem    = keyboardInvocation;
+        sessionCallbacks.focusFirstNavigableItem   = keyboardInvocation;
         sessionCallbacks.ignoreInitialLeftButtonUp  = keyboardInvocation;
         sessionCallbacks.ignoreInitialRightButtonUp = keyboardInvocation;
-        size_t activeIndex                          = index;
+        size_t activeIndex                       = index;
         sessionCallbacks.switchRootFromPointer = [this, &activeIndex, menuBarLifetime](POINT hoverScreenPoint) -> std::optional<ContextMenuRootSwitchRequest>
         {
             if (menuBarLifetime.expired())
@@ -852,10 +852,10 @@ private:
 
         if (self)
         {
-            const bool hadMenuBar                    = self->_menuBar != nullptr;
+            const bool hadMenuBar = self->_menuBar != nullptr;
             const std::weak_ptr<int> menuBarLifetime = hadMenuBar ? GetControlLifetimeToken(*self->_menuBar) : std::weak_ptr<int>{};
-            bool handled                             = false;
-            const LRESULT hostResult                 = self->_host.HandleMessage(hwnd, message, wParam, lParam, handled);
+            bool handled             = false;
+            const LRESULT hostResult = self->_host.HandleMessage(hwnd, message, wParam, lParam, handled);
             if (message != WM_NCDESTROY && hadMenuBar && menuBarLifetime.expired())
             {
                 return hostResult;

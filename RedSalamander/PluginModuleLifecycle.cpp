@@ -12,9 +12,12 @@ namespace
 using PluginShutdownExportFunc                     = void(__stdcall*)();
 using PluginCanUnloadNowExportFunc                 = BOOL(__stdcall*)();
 using PluginRetainModuleUntilProcessExitExportFunc = BOOL(__stdcall*)();
-} // namespace
+}
 
-bool UnloadModule(wil::unique_hmodule& module, ModuleUnloadMode mode, const std::filesystem::path& path, std::wstring_view pluginKind) noexcept
+bool UnloadModule(wil::unique_hmodule& module,
+                  ModuleUnloadMode mode,
+                  const std::filesystem::path& path,
+                  std::wstring_view pluginKind) noexcept
 {
     if (! module)
     {
@@ -56,8 +59,8 @@ bool UnloadModule(wil::unique_hmodule& module, ModuleUnloadMode mode, const std:
     {
 #pragma warning(push)
 #pragma warning(disable : 4191) // C4191: unsafe conversion from FARPROC
-        if (const auto retain =
-                reinterpret_cast<PluginRetainModuleUntilProcessExitExportFunc>(GetProcAddress(module.get(), "RedSalamanderPluginRetainModuleUntilProcessExit"));
+        if (const auto retain = reinterpret_cast<PluginRetainModuleUntilProcessExitExportFunc>(
+                GetProcAddress(module.get(), "RedSalamanderPluginRetainModuleUntilProcessExit"));
             retain != nullptr)
         {
             retainUntilProcessExit = retain() != FALSE;

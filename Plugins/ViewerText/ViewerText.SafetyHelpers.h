@@ -12,10 +12,10 @@
 
 namespace ViewerTextSafety
 {
-inline constexpr UINT kShiftJisCodePage         = 932u;
-inline constexpr UINT kGbkCodePage              = 936u;
-inline constexpr UINT kBig5CodePage             = 950u;
-inline constexpr uint64_t kHexBytesPerLine      = 16u;
+inline constexpr UINT kShiftJisCodePage       = 932u;
+inline constexpr UINT kGbkCodePage            = 936u;
+inline constexpr UINT kBig5CodePage           = 950u;
+inline constexpr uint64_t kHexBytesPerLine    = 16u;
 inline constexpr uint64_t kMaxHexClipboardBytes = 256u * 1024u;
 
 [[nodiscard]] inline HRESULT SeekExact(IFileReader* reader, const uint64_t offset) noexcept
@@ -38,7 +38,10 @@ inline constexpr uint64_t kMaxHexClipboardBytes = 256u * 1024u;
     return position == offset ? S_OK : HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
 }
 
-[[nodiscard]] inline HRESULT ReadBounded(IFileReader* reader, void* destination, const unsigned long requested, unsigned long& bytesRead) noexcept
+[[nodiscard]] inline HRESULT ReadBounded(IFileReader* reader,
+                                         void* destination,
+                                         const unsigned long requested,
+                                         unsigned long& bytesRead) noexcept
 {
     bytesRead = 0u;
     if (! reader || (requested != 0u && ! destination))
@@ -59,12 +62,12 @@ inline constexpr uint64_t kMaxHexClipboardBytes = 256u * 1024u;
     bytesRead = 0u;
     while (bytesRead < destination.size())
     {
-        const size_t remaining        = destination.size() - bytesRead;
+        const size_t remaining = destination.size() - bytesRead;
         const unsigned long requested = remaining > static_cast<size_t>((std::numeric_limits<unsigned long>::max)())
                                             ? (std::numeric_limits<unsigned long>::max)()
                                             : static_cast<unsigned long>(remaining);
-        unsigned long chunkBytesRead  = 0u;
-        const HRESULT hr              = ReadBounded(reader, destination.data() + bytesRead, requested, chunkBytesRead);
+        unsigned long chunkBytesRead = 0u;
+        const HRESULT hr = ReadBounded(reader, destination.data() + bytesRead, requested, chunkBytesRead);
         if (FAILED(hr))
         {
             return hr;
@@ -91,9 +94,9 @@ inline constexpr uint64_t kMaxHexClipboardBytes = 256u * 1024u;
 
 [[nodiscard]] inline HRESULT VerifyEndOfFile(IFileReader* reader) noexcept
 {
-    uint8_t trailingByte    = 0u;
-    unsigned long bytesRead = 0u;
-    const HRESULT readHr    = ReadBounded(reader, &trailingByte, 1u, bytesRead);
+    uint8_t trailingByte     = 0u;
+    unsigned long bytesRead  = 0u;
+    const HRESULT readHr     = ReadBounded(reader, &trailingByte, 1u, bytesRead);
     if (FAILED(readHr))
     {
         return readHr;
@@ -206,8 +209,8 @@ struct Utf8Scalar
         const bool validSecond = (b0 != 0xE0u || data[1] >= 0xA0u) && (b0 != 0xEDu || data[1] <= 0x9Fu);
         if (validSecond)
         {
-            const uint32_t codePoint =
-                (static_cast<uint32_t>(b0 & 0x0Fu) << 12u) | (static_cast<uint32_t>(data[1] & 0x3Fu) << 6u) | static_cast<uint32_t>(data[2] & 0x3Fu);
+            const uint32_t codePoint = (static_cast<uint32_t>(b0 & 0x0Fu) << 12u) | (static_cast<uint32_t>(data[1] & 0x3Fu) << 6u) |
+                                       static_cast<uint32_t>(data[2] & 0x3Fu);
             return Utf8Scalar{codePoint, 3u, true};
         }
     }
@@ -237,7 +240,9 @@ struct HexClipboardPlan
     bool truncated          = false;
 };
 
-[[nodiscard]] inline HexClipboardPlan ComputeHexClipboardPlan(const uint64_t fileSize, uint64_t firstLine, uint64_t lastLine) noexcept
+[[nodiscard]] inline HexClipboardPlan ComputeHexClipboardPlan(const uint64_t fileSize,
+                                                               uint64_t firstLine,
+                                                               uint64_t lastLine) noexcept
 {
     HexClipboardPlan plan{};
     if (fileSize == 0u)
@@ -252,8 +257,8 @@ struct HexClipboardPlan
     }
     lastLine = std::clamp(lastLine, firstLine, totalLines - 1u);
 
-    const uint64_t startOffset    = firstLine * kHexBytesPerLine;
-    const uint64_t requestedEnd   = lastLine == totalLines - 1u ? fileSize : (lastLine + 1u) * kHexBytesPerLine;
+    const uint64_t startOffset = firstLine * kHexBytesPerLine;
+    const uint64_t requestedEnd = lastLine == totalLines - 1u ? fileSize : (lastLine + 1u) * kHexBytesPerLine;
     const uint64_t requestedBytes = requestedEnd - startOffset;
     const uint64_t copiedBytes    = requestedBytes < kMaxHexClipboardBytes ? requestedBytes : kMaxHexClipboardBytes;
     const uint64_t copiedEnd      = startOffset + copiedBytes;

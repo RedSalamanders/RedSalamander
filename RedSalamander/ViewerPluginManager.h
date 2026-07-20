@@ -57,8 +57,8 @@ public:
         // plugin id to request via RedSalamanderCreate().
         std::wstring factoryPluginId;
 
-        bool loadable       = false;
-        bool disabled       = false;
+        bool loadable = false;
+        bool disabled = false;
         bool unloadDeferred = false;
         std::wstring loadError;
 

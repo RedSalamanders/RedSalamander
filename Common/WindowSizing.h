@@ -23,7 +23,7 @@ namespace Common::WindowSizing
 
 [[nodiscard]] inline LONG DipToPixelRounded(UINT dpi, int valueDip) noexcept
 {
-    const UINT resolvedDpi  = dpi == 0 ? USER_DEFAULT_SCREEN_DPI : dpi;
+    const UINT resolvedDpi = dpi == 0 ? USER_DEFAULT_SCREEN_DPI : dpi;
     const int64_t numerator = static_cast<int64_t>(valueDip) * static_cast<int64_t>(resolvedDpi);
     int64_t valuePx         = numerator / USER_DEFAULT_SCREEN_DPI;
     const int64_t remainder = numerator % USER_DEFAULT_SCREEN_DPI;
@@ -65,33 +65,38 @@ namespace Common::WindowSizing
     return DipToPixelRounded(dpi, valueDip);
 }
 
-[[nodiscard]] inline int ComputeBoundedListPopupHeightPx(size_t itemCount, size_t maxVisibleRows, int rowHeightDip, int fixedChromeHeightDip, UINT dpi) noexcept
+[[nodiscard]] inline int ComputeBoundedListPopupHeightPx(size_t itemCount,
+                                                         size_t maxVisibleRows,
+                                                         int rowHeightDip,
+                                                         int fixedChromeHeightDip,
+                                                         UINT dpi) noexcept
 {
-    const size_t visibleRows              = std::max<size_t>(1u, std::min(itemCount, std::max<size_t>(1u, maxVisibleRows)));
-    const int64_t rowHeight               = std::max<int64_t>(0, rowHeightDip);
-    const int64_t chrome                  = std::max<int64_t>(0, fixedChromeHeightDip);
-    const int64_t maxRowsBeforeSaturation = rowHeight == 0 ? (std::numeric_limits<int64_t>::max)() : ((std::numeric_limits<int>::max)() - chrome) / rowHeight;
+    const size_t visibleRows = std::max<size_t>(1u, std::min(itemCount, std::max<size_t>(1u, maxVisibleRows)));
+    const int64_t rowHeight  = std::max<int64_t>(0, rowHeightDip);
+    const int64_t chrome     = std::max<int64_t>(0, fixedChromeHeightDip);
+    const int64_t maxRowsBeforeSaturation =
+        rowHeight == 0 ? (std::numeric_limits<int64_t>::max)() : ((std::numeric_limits<int>::max)() - chrome) / rowHeight;
     if (visibleRows > static_cast<size_t>(std::max<int64_t>(0, maxRowsBeforeSaturation)))
     {
         return std::max(0L, DipToPixelRounded(dpi, (std::numeric_limits<int>::max)()));
     }
-    const int64_t heightDip    = chrome + rowHeight * static_cast<int64_t>(visibleRows);
-    const int boundedHeightDip = static_cast<int>(std::min<int64_t>(heightDip, (std::numeric_limits<int>::max)()));
+    const int64_t heightDip      = chrome + rowHeight * static_cast<int64_t>(visibleRows);
+    const int boundedHeightDip  = static_cast<int>(std::min<int64_t>(heightDip, (std::numeric_limits<int>::max)()));
     return std::max(0L, DipToPixelRounded(dpi, boundedHeightDip));
 }
 
 [[nodiscard]] inline RECT ClampRectOriginToBounds(const RECT& desired, const RECT& bounds) noexcept
 {
-    const int64_t width        = std::max<int64_t>(0, static_cast<int64_t>(desired.right) - desired.left);
-    const int64_t height       = std::max<int64_t>(0, static_cast<int64_t>(desired.bottom) - desired.top);
-    const int64_t boundsLeft   = std::min<int64_t>(bounds.left, bounds.right);
-    const int64_t boundsTop    = std::min<int64_t>(bounds.top, bounds.bottom);
-    const int64_t boundsRight  = std::max<int64_t>(bounds.left, bounds.right);
+    const int64_t width      = std::max<int64_t>(0, static_cast<int64_t>(desired.right) - desired.left);
+    const int64_t height     = std::max<int64_t>(0, static_cast<int64_t>(desired.bottom) - desired.top);
+    const int64_t boundsLeft = std::min<int64_t>(bounds.left, bounds.right);
+    const int64_t boundsTop  = std::min<int64_t>(bounds.top, bounds.bottom);
+    const int64_t boundsRight = std::max<int64_t>(bounds.left, bounds.right);
     const int64_t boundsBottom = std::max<int64_t>(bounds.top, bounds.bottom);
-    const int64_t maxLeft      = std::max(boundsLeft, boundsRight - width);
-    const int64_t maxTop       = std::max(boundsTop, boundsBottom - height);
-    const int64_t left         = std::clamp<int64_t>(desired.left, boundsLeft, maxLeft);
-    const int64_t top          = std::clamp<int64_t>(desired.top, boundsTop, maxTop);
+    const int64_t maxLeft    = std::max(boundsLeft, boundsRight - width);
+    const int64_t maxTop     = std::max(boundsTop, boundsBottom - height);
+    const int64_t left       = std::clamp<int64_t>(desired.left, boundsLeft, maxLeft);
+    const int64_t top        = std::clamp<int64_t>(desired.top, boundsTop, maxTop);
     return RECT{SaturateToLong(left), SaturateToLong(top), SaturateToLong(left + width), SaturateToLong(top + height)};
 }
 
@@ -149,7 +154,11 @@ namespace Common::WindowSizing
     return SetWindowPos(window, nullptr, centered.left, centered.top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE) != FALSE;
 }
 
-[[nodiscard]] inline LONG ResolveBoundedPopupTop(LONG anchorTop, LONG anchorBottom, LONG popupHeight, LONG gap, const RECT& workArea) noexcept
+[[nodiscard]] inline LONG ResolveBoundedPopupTop(LONG anchorTop,
+                                                 LONG anchorBottom,
+                                                 LONG popupHeight,
+                                                 LONG gap,
+                                                 const RECT& workArea) noexcept
 {
     const int64_t boundedHeight = std::max<int64_t>(0, popupHeight);
     const int64_t boundedGap    = std::max<int64_t>(0, gap);

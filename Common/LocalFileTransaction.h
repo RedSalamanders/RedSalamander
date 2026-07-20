@@ -69,7 +69,7 @@ inline void FailNextLocalFileTransactionFlush(HRESULT hr) noexcept
 class LocalFileTransaction final
 {
 public:
-    LocalFileTransaction() noexcept                              = default;
+    LocalFileTransaction() noexcept = default;
     LocalFileTransaction(const LocalFileTransaction&)            = delete;
     LocalFileTransaction& operator=(const LocalFileTransaction&) = delete;
 
@@ -210,7 +210,8 @@ public:
         return Write(bytes.data(), bytes.size());
     }
 
-    [[nodiscard]] HRESULT Commit(std::optional<uint64_t> expectedSize = std::nullopt, BY_HANDLE_FILE_INFORMATION* committedFileInformation = nullptr) noexcept
+    [[nodiscard]] HRESULT Commit(std::optional<uint64_t> expectedSize = std::nullopt,
+                                 BY_HANDLE_FILE_INFORMATION* committedFileInformation = nullptr) noexcept
     {
         if (! _file || _temporaryPath.empty() || _targetPath.empty() || _committed)
         {
@@ -249,8 +250,13 @@ public:
         wil::unique_hfile finalizedFile;
         if (committedFileInformation)
         {
-            finalizedFile.reset(CreateFileW(
-                _temporaryPath.c_str(), FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+            finalizedFile.reset(CreateFileW(_temporaryPath.c_str(),
+                                            FILE_READ_ATTRIBUTES,
+                                            FILE_SHARE_READ | FILE_SHARE_DELETE,
+                                            nullptr,
+                                            OPEN_EXISTING,
+                                            FILE_ATTRIBUTE_NORMAL,
+                                            nullptr));
             if (! finalizedFile)
             {
                 const DWORD error = GetLastError();
@@ -263,7 +269,8 @@ public:
             }
         }
 
-        const DWORD moveFlags = MOVEFILE_WRITE_THROUGH | (_policy == ExistingTargetPolicy::Replace ? static_cast<DWORD>(MOVEFILE_REPLACE_EXISTING) : 0u);
+        const DWORD moveFlags = MOVEFILE_WRITE_THROUGH |
+                                (_policy == ExistingTargetPolicy::Replace ? static_cast<DWORD>(MOVEFILE_REPLACE_EXISTING) : 0u);
         if (MoveFileExW(_temporaryPath.c_str(), _targetPath.c_str(), moveFlags) == FALSE)
         {
             const DWORD error = GetLastError();

@@ -29,8 +29,8 @@ void TestAccessibilityTargetPublishesImmutableSnapshotBeforeTreeTeardown()
             "accessibility unregister source block is found");
     const std::string unregisterBlock = source.substr(unregisterFunction, returnProvider - unregisterFunction);
 
-    const size_t publishEmpty      = unregisterBlock.find("PublishEmptyAccessibilitySnapshot(*target)");
-    const size_t clearHost         = unregisterBlock.find("target->host.store(nullptr");
+    const size_t publishEmpty = unregisterBlock.find("PublishEmptyAccessibilitySnapshot(*target)");
+    const size_t clearHost    = unregisterBlock.find("target->host.store(nullptr");
     const size_t retireProviderMap = unregisterBlock.find("UiaReturnRawElementProvider(hwnd, 0, 0, nullptr)");
     Require(publishEmpty != std::string::npos, "accessibility unregister publishes an empty snapshot");
     Require(clearHost != std::string::npos && publishEmpty < clearHost,
@@ -448,7 +448,8 @@ void TestAccessibilityGridPatternReadsUseSnapshots()
     const std::string rowHeadersBlock = source.substr(rowHeadersFunction, columnHeadersFunction - rowHeadersFunction);
     Require(rowHeadersBlock.find("CaptureAccessibilitySnapshot(_target, _hwnd)") != std::string::npos,
             "Accessibility GetRowHeaders reads an immutable published snapshot");
-    Require(rowHeadersBlock.find("ResolveSnapshotControlRecord") != std::string::npos, "Accessibility GetRowHeaders validates the grid from snapshot records");
+    Require(rowHeadersBlock.find("ResolveSnapshotControlRecord") != std::string::npos,
+            "Accessibility GetRowHeaders validates the grid from snapshot records");
     Require(rowHeadersBlock.find("ResolveControlPath(") == std::string::npos, "Accessibility GetRowHeaders does not resolve live control paths");
     Require(rowHeadersBlock.find("SupportsGridTablePattern(") == std::string::npos, "Accessibility GetRowHeaders does not re-resolve live table support");
 
@@ -1627,7 +1628,8 @@ void TestAccessibilityLabelOnlyRootDoesNotUseDirectSemanticRootCollapse()
     RequireSucceeded(rootProvider.query_to(rootFragment.put()), "label-only accessibility root exposes IRawElementProviderFragment");
 
     wil::com_ptr_nothrow<IRawElementProviderFragment> firstChildProvider;
-    RequireSucceeded(rootFragment->Navigate(NavigateDirection_FirstChild, firstChildProvider.put()), "label-only root first-child lookup succeeds");
+    RequireSucceeded(rootFragment->Navigate(NavigateDirection_FirstChild, firstChildProvider.put()),
+                     "label-only root first-child lookup succeeds");
     Require(firstChildProvider != nullptr, "label-only root exposes the label as a child instead of collapsing it into the root");
 
     wil::com_ptr_nothrow<IRawElementProviderSimple> childSimple;
@@ -1638,7 +1640,8 @@ void TestAccessibilityLabelOnlyRootDoesNotUseDirectSemanticRootCollapse()
             "label-only child provider exposes the label text");
 
     wil::com_ptr_nothrow<IRawElementProviderFragment> duplicateGrandchild;
-    RequireSucceeded(firstChildProvider->Navigate(NavigateDirection_FirstChild, duplicateGrandchild.put()), "label-only child first-child lookup succeeds");
+    RequireSucceeded(firstChildProvider->Navigate(NavigateDirection_FirstChild, duplicateGrandchild.put()),
+                     "label-only child first-child lookup succeeds");
     Require(duplicateGrandchild == nullptr, "label-only label child does not expose a duplicate nested label");
 }
 
@@ -1715,8 +1718,9 @@ void TestAccessibilityDirectSemanticRootTreeSelectionMatchesUiAutomationClientTr
     using namespace RedSalamander::DxUi;
 
     const HRESULT coinitHr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-    Require(coinitHr == S_OK || coinitHr == S_FALSE || coinitHr == RPC_E_CHANGED_MODE, "UIAutomation direct-root tree selection test initializes COM");
-    const bool uninitializeCom       = coinitHr == S_OK || coinitHr == S_FALSE;
+    Require(coinitHr == S_OK || coinitHr == S_FALSE || coinitHr == RPC_E_CHANGED_MODE,
+            "UIAutomation direct-root tree selection test initializes COM");
+    const bool uninitializeCom = coinitHr == S_OK || coinitHr == S_FALSE;
     const auto uninitializeComOnExit = wil::scope_exit([&]
     {
         if (uninitializeCom)
@@ -1776,7 +1780,8 @@ void TestAccessibilityDirectSemanticRootTreeSelectionMatchesUiAutomationClientTr
     Require(selectedElement != nullptr, "UIAutomation direct-root tree selected item is available");
 
     CONTROLTYPEID selectedControlType = 0;
-    RequireSucceeded(selectedElement->get_CurrentControlType(&selectedControlType), "UIAutomation direct-root tree selected item control type lookup succeeds");
+    RequireSucceeded(selectedElement->get_CurrentControlType(&selectedControlType),
+                     "UIAutomation direct-root tree selected item control type lookup succeeds");
     Require(selectedControlType == UIA_TreeItemControlTypeId, "UIAutomation direct-root tree selected element is a tree item");
 
     BSTR selectedName = nullptr;
@@ -1983,7 +1988,8 @@ void TestAccessibilityProviderExposesTextPatternForTextField()
     moved = 0;
     RequireSucceeded(enclosingCharacterRange->MoveEndpointByUnit(TextPatternRangeEndpoint_Start, TextUnit_Character, 2, &moved),
                      "text field character-expansion range moves inside the first word");
-    RequireSucceeded(enclosingCharacterRange->ExpandToEnclosingUnit(TextUnit_Character), "text field range expands to the enclosing character unit");
+    RequireSucceeded(enclosingCharacterRange->ExpandToEnclosingUnit(TextUnit_Character),
+                     "text field range expands to the enclosing character unit");
     Require(ReadTextRangeText(*enclosingCharacterRange.get(), -1, "text field character-expanded range exposes text") == L"p",
             "text field character expansion normalizes a longer range to the text element at its start");
     wil::com_ptr_nothrow<ITextRangeProvider> enclosingWordRange;
@@ -2073,7 +2079,8 @@ void TestAccessibilityProviderExposesTextPatternForTextField()
     moved = 0;
     RequireSucceeded(emojiEnclosingCharacterRange->MoveEndpointByUnit(TextPatternRangeEndpoint_Start, TextUnit_Character, 1, &moved),
                      "emoji character-expansion range moves to the ZWJ cluster");
-    RequireSucceeded(emojiEnclosingCharacterRange->ExpandToEnclosingUnit(TextUnit_Character), "emoji range expands to the enclosing character unit");
+    RequireSucceeded(emojiEnclosingCharacterRange->ExpandToEnclosingUnit(TextUnit_Character),
+                     "emoji range expands to the enclosing character unit");
     Require(ReadTextRangeText(*emojiEnclosingCharacterRange.get(), -1, "emoji character-expanded range exposes text") == emojiText.substr(1u, 5u),
             "character expansion keeps the complete ZWJ emoji cluster as one UIA character");
 
@@ -2160,7 +2167,8 @@ void TestAccessibilityProviderExposesTextPatternForTextField()
     Require(ReadTextRangeText(*multilineDocumentRange.get(), -1, "multiline text field document range restores after moved-line text") == L"red\ngreen\nblue",
             "multiline text field line endpoint movement restores the document text");
     wil::com_ptr_nothrow<ITextRangeProvider> enclosingLineRange;
-    RequireSucceeded(multilineTextPattern->get_DocumentRange(enclosingLineRange.put()), "multiline text field exposes a fresh range for line expansion");
+    RequireSucceeded(multilineTextPattern->get_DocumentRange(enclosingLineRange.put()),
+                     "multiline text field exposes a fresh range for line expansion");
     moved = 0;
     RequireSucceeded(enclosingLineRange->MoveEndpointByUnit(TextPatternRangeEndpoint_Start, TextUnit_Character, 6, &moved),
                      "multiline line-expansion range moves inside the second line");
@@ -2795,9 +2803,9 @@ void TestAccessibilityTextRangeEndpointLineMovementDispatchesToWindowThread()
     wil::com_ptr_nothrow<ITextRangeProvider> expandingRange;
     RequireSucceeded(textPattern->get_DocumentRange(expandingRange.put()), "cross-thread line expansion gets a fresh document range");
     int movedInsideLine = 0;
-    RequireSucceeded(
-        expandingRange->MoveEndpointByUnit(TextPatternRangeEndpoint_Start, TextUnit_Character, static_cast<int>(secondLineStart + 1u), &movedInsideLine),
-        "cross-thread line expansion moves the range start inside the second visual line");
+    RequireSucceeded(expandingRange->MoveEndpointByUnit(
+                         TextPatternRangeEndpoint_Start, TextUnit_Character, static_cast<int>(secondLineStart + 1u), &movedInsideLine),
+                     "cross-thread line expansion moves the range start inside the second visual line");
 
     constexpr HRESULT kPendingExpansion = E_PENDING;
     std::atomic<bool> expansionWorkerStarted{false};
@@ -3612,7 +3620,7 @@ void TestAccessibilityTextRangeBoundingRectanglesTimeoutKeepsLateHandlerStorageA
         DebugSetAccessibilityUiActionDispatchTimeoutForTest(0u);
     });
 
-    constexpr HRESULT kPendingBounds   = E_PENDING;
+    constexpr HRESULT kPendingBounds = E_PENDING;
     constexpr HRESULT kExpectedTimeout = HRESULT_FROM_WIN32(ERROR_TIMEOUT);
     std::atomic<bool> workerStarted{false};
     std::atomic<bool> handlerEnteredObserved{false};
@@ -3812,8 +3820,9 @@ void TestAccessibilityGridSnapshotRebuildMeetsTenThousandRowSelectionBudget()
     liveGrid->GetSelectionModel().SetRange(selectedRowIds, selectedRowIds.front(), selectedRowIds.back());
 
     DebugSetAccessibilityOffscreenSelectedRowMaterializationLimitForTest(kRowCount);
-    const auto resetMaterializationLimit = wil::scope_exit([]() noexcept { DebugSetAccessibilityOffscreenSelectedRowMaterializationLimitForTest(0u); });
-    const auto baselineStarted           = std::chrono::steady_clock::now();
+    const auto resetMaterializationLimit = wil::scope_exit([]() noexcept
+    { DebugSetAccessibilityOffscreenSelectedRowMaterializationLimitForTest(0u); });
+    const auto baselineStarted = std::chrono::steady_clock::now();
     liveGrid->RefreshAccessibilitySnapshot();
     const auto baselineElapsed = std::chrono::steady_clock::now() - baselineStarted;
 
@@ -3973,11 +3982,14 @@ void TestAccessibilityTreeItemProviderKeepsStableIdentityAcrossReorder()
     wil::com_ptr_nothrow<IRawElementProviderFragment> treeLabelProvider =
         GetProviderAtDipPoint(window.Hwnd(), window.Host(), *rootProvider.get(), 48.0f, 12.0f, "stable tree label provider is resolved by point");
     wil::com_ptr_nothrow<IRawElementProviderFragment> treeProvider;
-    RequireSucceeded(treeLabelProvider->Navigate(NavigateDirection_NextSibling, treeProvider.put()), "stable tree label provider navigates to the tree");
+    RequireSucceeded(treeLabelProvider->Navigate(NavigateDirection_NextSibling, treeProvider.put()),
+                     "stable tree label provider navigates to the tree");
     wil::com_ptr_nothrow<IRawElementProviderFragment> alphaProvider;
-    RequireSucceeded(treeProvider->Navigate(NavigateDirection_FirstChild, alphaProvider.put()), "stable tree provider navigates to the first item");
+    RequireSucceeded(treeProvider->Navigate(NavigateDirection_FirstChild, alphaProvider.put()),
+                     "stable tree provider navigates to the first item");
     wil::com_ptr_nothrow<IRawElementProviderFragment> retainedBetaProvider;
-    RequireSucceeded(alphaProvider->Navigate(NavigateDirection_NextSibling, retainedBetaProvider.put()), "stable tree first item navigates to Beta");
+    RequireSucceeded(alphaProvider->Navigate(NavigateDirection_NextSibling, retainedBetaProvider.put()),
+                     "stable tree first item navigates to Beta");
     Require(retainedBetaProvider != nullptr, "stable tree test retains the Beta provider");
 
     wil::com_ptr_nothrow<IRawElementProviderSimple> retainedBetaSimple;
@@ -4672,18 +4684,18 @@ void TestAccessibilityProviderExposesHorizontallyScrolledGridRowStructure()
             GridColumnDesc column;
             switch (columnIndex)
             {
-                case 0u:
-                    column.id    = L"name";
-                    column.title = L"Name";
-                    break;
-                case 1u:
-                    column.id    = L"status";
-                    column.title = L"Status";
-                    break;
-                default:
-                    column.id    = L"state";
-                    column.title = L"State";
-                    break;
+            case 0u:
+                column.id    = L"name";
+                column.title = L"Name";
+                break;
+            case 1u:
+                column.id    = L"status";
+                column.title = L"Status";
+                break;
+            default:
+                column.id    = L"state";
+                column.title = L"State";
+                break;
             }
             column.widthDip = 120.0f;
             return column;
@@ -4694,9 +4706,15 @@ void TestAccessibilityProviderExposesHorizontallyScrolledGridRowStructure()
             outCell.kind = GridCellKind::Text;
             switch (columnIndex)
             {
-                case 0u: outCell.text = L"Alpha"; break;
-                case 1u: outCell.text = L"Ready"; break;
-                default: outCell.text = L"Archived"; break;
+            case 0u:
+                outCell.text = L"Alpha";
+                break;
+            case 1u:
+                outCell.text = L"Ready";
+                break;
+            default:
+                outCell.text = L"Archived";
+                break;
             }
         }
 
@@ -4765,7 +4783,8 @@ void TestAccessibilityProviderExposesHorizontallyScrolledGridRowStructure()
     Require(rowProvider != nullptr, "scrolled grid structure exposes a row provider after visible headers");
     wil::com_ptr_nothrow<IRawElementProviderSimple> rowSimple;
     RequireSucceeded(rowProvider.query_to(rowSimple.put()), "scrolled grid row provider exposes IRawElementProviderSimple");
-    Require(ReadProviderStringProperty(*rowSimple.get(), UIA_NamePropertyId, "scrolled grid row exposes accessibility name") == L"Alpha | Ready | Archived",
+    Require(ReadProviderStringProperty(*rowSimple.get(), UIA_NamePropertyId, "scrolled grid row exposes accessibility name") ==
+                L"Alpha | Ready | Archived",
             "scrolled grid row name includes all model columns, including horizontally off-view cells");
 
     wil::com_ptr_nothrow<IRawElementProviderFragment> firstCellProvider;
@@ -4813,15 +4832,20 @@ void TestAccessibilityProviderPointHitsClipAndTranslateScrollPanelChildren()
 
     const POINT rawContentSpacePointPx = window.Host().DipPointToScreenPoint(D2D1::Point2F(24.0f, 24.0f));
     wil::com_ptr_nothrow<IRawElementProviderFragment> rawContentSpaceProvider;
-    RequireSucceeded(rootProvider->ElementProviderFromPoint(
-                         static_cast<double>(rawContentSpacePointPx.x), static_cast<double>(rawContentSpacePointPx.y), rawContentSpaceProvider.put()),
+    RequireSucceeded(rootProvider->ElementProviderFromPoint(static_cast<double>(rawContentSpacePointPx.x),
+                                                            static_cast<double>(rawContentSpacePointPx.y),
+                                                            rawContentSpaceProvider.put()),
                      "scrolled panel raw content-space point query succeeds");
     Require(rawContentSpaceProvider != nullptr, "scrolled panel empty viewport point resolves the root provider");
     wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> rawContentSpaceRoot;
     RequireSucceeded(rawContentSpaceProvider.query_to(rawContentSpaceRoot.put()), "scrolled panel empty viewport provider is the root provider");
 
-    wil::com_ptr_nothrow<IRawElementProviderFragment> visibleProvider =
-        GetProviderAtDipPoint(window.Hwnd(), window.Host(), *rootProvider.get(), 24.0f, 44.0f, "scrolled panel visible child point is queryable");
+    wil::com_ptr_nothrow<IRawElementProviderFragment> visibleProvider = GetProviderAtDipPoint(window.Hwnd(),
+                                                                                              window.Host(),
+                                                                                              *rootProvider.get(),
+                                                                                              24.0f,
+                                                                                              44.0f,
+                                                                                              "scrolled panel visible child point is queryable");
     Require(visibleProvider != nullptr, "scrolled ScrollPanel child is hit-testable at its viewport-translated position");
     wil::com_ptr_nothrow<IRawElementProviderSimple> visibleSimple;
     RequireSucceeded(visibleProvider.query_to(visibleSimple.put()), "scrolled panel visible provider exposes IRawElementProviderSimple");

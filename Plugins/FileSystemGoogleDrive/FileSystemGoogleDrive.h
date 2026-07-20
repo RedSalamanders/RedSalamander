@@ -5,9 +5,9 @@
 #include <windows.h>
 
 #include <atomic>
-#include <condition_variable>
 #include <cstddef>
 #include <cstdint>
+#include <condition_variable>
 #include <mutex>
 #include <string>
 #include <string_view>
@@ -21,13 +21,13 @@
 #include <wil/com.h>
 #pragma warning(pop)
 
-#include "Helpers.h"
-#include "PackedFileInfoBuffer.h"
 #include "PlugInterfaces/DriveInfo.h"
 #include "PlugInterfaces/FileSystem.h"
 #include "PlugInterfaces/Host.h"
 #include "PlugInterfaces/Informations.h"
 #include "PlugInterfaces/NavigationMenu.h"
+#include "Helpers.h"
+#include "PackedFileInfoBuffer.h"
 
 class FilesInformationGoogleDrive final : public IFilesInformation
 {
@@ -237,7 +237,9 @@ private:
         }
         AccessTokenCacheEntry(const AccessTokenCacheEntry&)            = delete;
         AccessTokenCacheEntry& operator=(const AccessTokenCacheEntry&) = delete;
-        AccessTokenCacheEntry(AccessTokenCacheEntry&& other) noexcept : token(std::move(other.token)), expiresAtTickMs(std::exchange(other.expiresAtTickMs, 0u))
+        AccessTokenCacheEntry(AccessTokenCacheEntry&& other) noexcept
+            : token(std::move(other.token)),
+              expiresAtTickMs(std::exchange(other.expiresAtTickMs, 0u))
         {
             SecureWipe::SecureClear(other.token);
         }

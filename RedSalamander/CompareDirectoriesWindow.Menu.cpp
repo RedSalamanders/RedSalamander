@@ -611,11 +611,11 @@ void CompareDirectoriesWindow::OpenDxMenuBarPopup(size_t index, POINT screenPoin
     }
 
     ContextMenuSessionCallbacks sessionCallbacks{};
-    sessionCallbacks.focusFirstNavigableItem    = keyboardInvocation;
+    sessionCallbacks.focusFirstNavigableItem   = keyboardInvocation;
     sessionCallbacks.ignoreInitialLeftButtonUp  = keyboardInvocation;
     sessionCallbacks.ignoreInitialRightButtonUp = keyboardInvocation;
-    size_t activeIndex                          = index;
-    sessionCallbacks.switchRootFromPointer      = [this, &activeIndex](POINT hoverScreenPoint) -> std::optional<ContextMenuRootSwitchRequest>
+    size_t activeIndex                       = index;
+    sessionCallbacks.switchRootFromPointer   = [this, &activeIndex](POINT hoverScreenPoint) -> std::optional<ContextMenuRootSwitchRequest>
     {
         const std::optional<size_t> hitIndex = HitTestDxMenuBarScreenPoint(hoverScreenPoint);
         if (! hitIndex.has_value() || hitIndex.value() == activeIndex || ! _chrome.menuBar)

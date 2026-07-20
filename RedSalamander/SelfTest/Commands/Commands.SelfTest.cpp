@@ -97,9 +97,9 @@ struct ForceWilTemplateInstantiations
 #include "Preferences.h"
 #include "RedSalamander.h"
 #include "SearchServiceBroker.h"
-#include "SelfTest/Common/SelfTestLatencyHooks.h"
 #include "SettingsHotReload.h"
 #include "SettingsSave.h"
+#include "SelfTest/Common/SelfTestLatencyHooks.h"
 #include "ShortcutDefaults.h"
 #include "ShortcutManager.h"
 #include "ShortcutText.h"
@@ -559,6 +559,7 @@ template <typename WorkerFunc> void RunChangeCasePromptModalCycle(HWND mainWindo
 // Keep Settings first: it currently owns shared UIA/window helper definitions consumed by
 // the other command selftest families.
 
+#include "Commands.SelfTest.Settings.cpp"
 #include "Commands.SelfTest.BatchRename.cpp"
 #include "Commands.SelfTest.CompareOptions.cpp"
 #include "Commands.SelfTest.Connections.cpp"
@@ -568,7 +569,6 @@ template <typename WorkerFunc> void RunChangeCasePromptModalCycle(HWND mainWindo
 #include "Commands.SelfTest.PluginConfig.cpp"
 #include "Commands.SelfTest.Preferences.cpp"
 #include "Commands.SelfTest.Search.cpp"
-#include "Commands.SelfTest.Settings.cpp"
 #include "Commands.SelfTest.ShellCommands.cpp"
 #include "Commands.SelfTest.Shortcuts.cpp"
 #include "Commands.SelfTest.ViewCommands.cpp"
@@ -628,7 +628,7 @@ bool CommandsSelfTest::Run(HWND mainWindow, const SelfTest::SelfTestOptions& opt
 
     if (SelfTest::ShouldUseExplicitCaseExecutionOrder(options))
     {
-        const std::vector<std::wstring> declaredCases                     = ListCases(options);
+        const std::vector<std::wstring> declaredCases = ListCases(options);
         const std::vector<SelfTest::SelfTestCaseExecution> executionOrder = SelfTest::BuildSelfTestCaseExecutionOrder(options, declaredCases);
         Trace(std::format(L"CommandsSelfTest: explicit execution order count={} repeat={} shuffleSeed={}",
                           executionOrder.size(),
@@ -636,7 +636,7 @@ bool CommandsSelfTest::Run(HWND mainWindow, const SelfTest::SelfTestOptions& opt
                           options.shuffleSeed.has_value() ? std::format(L"{}", options.shuffleSeed.value()) : std::wstring(L"none")));
         for (const SelfTest::SelfTestCaseExecution& execution : executionOrder)
         {
-            SelfTest::SelfTestOptions caseOptions     = options;
+            SelfTest::SelfTestOptions caseOptions = options;
             caseOptions.caseFilter                    = execution.name;
             caseOptions.repeatCount                   = 1u;
             caseOptions.repeatIndex                   = execution.repeatIndex;
@@ -653,12 +653,10 @@ bool CommandsSelfTest::Run(HWND mainWindow, const SelfTest::SelfTestOptions& opt
             const std::wstring isolationContext = std::format(L"Commands explicit-order case '{}'", execution.name);
             if (! PrepareMainWindowForIsolatedUiCase(mainWindow, isolationState, isolationContext))
             {
-                const std::wstring failure = isolationState.failure.empty() ? std::format(L"Failed to isolate the main window before {}.", isolationContext)
-                                                                            : std::move(isolationState.failure);
-                SelfTest::RunCase(caseOptions,
-                                  suite,
-                                  execution.name,
-                                  [&](CaseState& state) noexcept
+                const std::wstring failure = isolationState.failure.empty()
+                                                 ? std::format(L"Failed to isolate the main window before {}.", isolationContext)
+                                                 : std::move(isolationState.failure);
+                SelfTest::RunCase(caseOptions, suite, execution.name, [&](CaseState& state) noexcept
                 {
                     state.Require(false, failure);
                     return false;

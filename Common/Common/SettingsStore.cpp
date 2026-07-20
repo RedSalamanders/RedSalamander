@@ -97,7 +97,10 @@ constexpr wchar_t kSettingsStoreScratchDirName[] = L"settings-store";
         return false;
     }
 
-    return std::all_of(value.begin(), value.end(), [](const wchar_t ch) noexcept {
+    return std::all_of(value.begin(),
+                       value.end(),
+                       [](const wchar_t ch) noexcept
+    {
         return (ch >= L'0' && ch <= L'9') || (ch >= L'A' && ch <= L'Z') || (ch >= L'a' && ch <= L'z') || ch == L'-' || ch == L'_';
     });
 }
@@ -367,7 +370,7 @@ std::optional<std::filesystem::path> BackupBadSettingsFile(const std::filesystem
     {
         return std::nullopt;
     }
-    BOOL res = MoveFileExW(path.c_str(), backup.c_str(), MOVEFILE_COPY_ALLOWED);
+    BOOL res                           = MoveFileExW(path.c_str(), backup.c_str(), MOVEFILE_COPY_ALLOWED);
     if (! res)
     {
         Debug::ErrorWithLastError(L"Failed to back up bad settings file from '{}' to '{}'", path.c_str(), backup.c_str());
@@ -378,7 +381,9 @@ std::optional<std::filesystem::path> BackupBadSettingsFile(const std::filesystem
 
 [[nodiscard]] HRESULT GetFileStampByHandle(HANDLE file, Common::Settings::SettingsFileStamp& out) noexcept;
 
-HRESULT ReadFileBytes(const std::filesystem::path& path, std::string& out, std::optional<Common::Settings::SettingsFileStamp>* sourceStamp = nullptr) noexcept
+HRESULT ReadFileBytes(const std::filesystem::path& path,
+                      std::string& out,
+                      std::optional<Common::Settings::SettingsFileStamp>* sourceStamp = nullptr) noexcept
 {
     out.clear();
     if (sourceStamp)
@@ -439,7 +444,9 @@ HRESULT ReadFileBytes(const std::filesystem::path& path, std::string& out, std::
         const HRESULT stampHr = GetFileStampByHandle(file.get(), stamp);
         if (FAILED(stampHr))
         {
-            Debug::Error(L"Failed to capture settings source identity for '{}' (hr=0x{:08X})", path.c_str(), static_cast<unsigned long>(stampHr));
+            Debug::Error(L"Failed to capture settings source identity for '{}' (hr=0x{:08X})",
+                         path.c_str(),
+                         static_cast<unsigned long>(stampHr));
             return stampHr;
         }
         *sourceStamp = stamp;
@@ -500,7 +507,7 @@ HRESULT ReadFileBytes(const std::filesystem::path& path, std::string& out, std::
 class SettingsCommitLock final
 {
 public:
-    SettingsCommitLock()                                     = default;
+    SettingsCommitLock() = default;
     SettingsCommitLock(const SettingsCommitLock&)            = delete;
     SettingsCommitLock(SettingsCommitLock&&)                 = delete;
     SettingsCommitLock& operator=(const SettingsCommitLock&) = delete;
@@ -513,12 +520,12 @@ public:
         lockPath += L".lock";
 
         wil::unique_hfile file(CreateFileW(lockPath.c_str(),
-                                           GENERIC_READ | GENERIC_WRITE,
-                                           FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                                           nullptr,
-                                           OPEN_ALWAYS,
-                                           FILE_ATTRIBUTE_HIDDEN,
-                                           nullptr));
+                                          GENERIC_READ | GENERIC_WRITE,
+                                          FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                          nullptr,
+                                          OPEN_ALWAYS,
+                                          FILE_ATTRIBUTE_HIDDEN,
+                                          nullptr));
         if (! file)
         {
             const DWORD error = GetLastError();
@@ -527,7 +534,7 @@ public:
 
         OVERLAPPED overlapped{};
         constexpr ULONGLONG kTimeoutMs = 5000u;
-        const ULONGLONG startedAt      = GetTickCount64();
+        const ULONGLONG startedAt       = GetTickCount64();
         for (;;)
         {
             if (LockFileEx(file.get(), LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY, 0u, MAXDWORD, MAXDWORD, &overlapped) != FALSE)
@@ -554,7 +561,8 @@ private:
     wil::unique_hfile _file;
 };
 
-[[nodiscard]] HRESULT TryGetFileStampForPath(const std::filesystem::path& path, std::optional<Common::Settings::SettingsFileStamp>& out) noexcept
+[[nodiscard]] HRESULT TryGetFileStampForPath(const std::filesystem::path& path,
+                                             std::optional<Common::Settings::SettingsFileStamp>& out) noexcept
 {
     out.reset();
     wil::unique_hfile file(CreateFileW(
@@ -582,7 +590,7 @@ private:
 HRESULT WriteFileBytesAtomic(const std::filesystem::path& path,
                              std::string_view bytes,
                              const std::optional<Common::Settings::SettingsFileStamp>* expectedStamp = nullptr,
-                             Common::Settings::SettingsFileStamp* writtenStamp                       = nullptr) noexcept
+                             Common::Settings::SettingsFileStamp* writtenStamp = nullptr) noexcept
 {
     if (writtenStamp)
     {
@@ -1435,8 +1443,12 @@ void ParseTheme(yyjson_val* root, Common::Settings::Settings& out)
 
         Common::Settings::ThemeDefinition def;
         uint32_t skippedColorEntries = 0u;
-        if (FAILED(Common::Settings::ParseThemeDefinitionFromValue(
-                itemJson, def, Common::Settings::ThemeDefinitionParseMode::LenientInline, nullptr, nullptr, &skippedColorEntries)))
+        if (FAILED(Common::Settings::ParseThemeDefinitionFromValue(itemJson,
+                                                                   def,
+                                                                   Common::Settings::ThemeDefinitionParseMode::LenientInline,
+                                                                   nullptr,
+                                                                   nullptr,
+                                                                   &skippedColorEntries)))
         {
             ++unusableThemeEntryCount;
             out.theme.opaqueThemeEntries.push_back({.originalIndex = i, .value = std::move(itemJson)});
@@ -1444,7 +1456,8 @@ void ParseTheme(yyjson_val* root, Common::Settings::Settings& out)
         }
         skippedColorEntryCount += skippedColorEntries;
 
-        const auto duplicate = std::find_if(out.theme.themes.begin(), out.theme.themes.end(), [&](const Common::Settings::ThemeDefinition& existing) noexcept {
+        const auto duplicate = std::find_if(out.theme.themes.begin(), out.theme.themes.end(), [&](const Common::Settings::ThemeDefinition& existing) noexcept
+        {
             return existing.id == def.id;
         });
         if (duplicate != out.theme.themes.end())
@@ -2040,7 +2053,9 @@ void ParseExtensions(yyjson_val* root, Common::Settings::Settings& out)
     return ParseStringArray(appliesTo, "computerNames", action.appliesTo.computerNames);
 }
 
-[[nodiscard]] HRESULT ValidateFileActionDefinition(Common::Settings::FileActionDefinition& action, bool pluginIdPresent, bool executablePathPresent) noexcept
+[[nodiscard]] HRESULT ValidateFileActionDefinition(Common::Settings::FileActionDefinition& action,
+                                                   bool pluginIdPresent,
+                                                   bool executablePathPresent) noexcept
 {
     if (! IsValidFileActionId(action.id))
     {
@@ -3179,11 +3194,10 @@ void ParseMonitor(yyjson_val* root, Common::Settings::Settings& out)
         GetUInt64(retention, "maxRetainedTextBytes", settings.retention.maxRetainedTextBytes);
         GetUInt32(retention, "maxSearchMatches", settings.retention.maxSearchMatches);
 
-        settings.retention.maxQueuedEvents  = std::clamp(settings.retention.maxQueuedEvents, 200u, 1'000'000u);
-        settings.retention.maxRetainedLines = std::clamp(settings.retention.maxRetainedLines, 1'000u, 5'000'000u);
-        settings.retention.maxRetainedTextBytes =
-            std::clamp<uint64_t>(settings.retention.maxRetainedTextBytes, 1u * 1024u * 1024u, 4ull * 1024u * 1024u * 1024u);
-        settings.retention.maxSearchMatches = std::clamp(settings.retention.maxSearchMatches, 1'000u, 1'000'000u);
+        settings.retention.maxQueuedEvents      = std::clamp(settings.retention.maxQueuedEvents, 200u, 1'000'000u);
+        settings.retention.maxRetainedLines     = std::clamp(settings.retention.maxRetainedLines, 1'000u, 5'000'000u);
+        settings.retention.maxRetainedTextBytes = std::clamp<uint64_t>(settings.retention.maxRetainedTextBytes, 1u * 1024u * 1024u, 4ull * 1024u * 1024u * 1024u);
+        settings.retention.maxSearchMatches     = std::clamp(settings.retention.maxSearchMatches, 1'000u, 1'000'000u);
     }
 
     out.monitor = std::move(settings);
@@ -3481,8 +3495,9 @@ HRESULT ParseConnections(yyjson_val* root,
     {
         std::wstring canonicalId;
         const HRESULT normalizeHr = Common::Settings::NormalizeConnectionProfileId(profile.id, canonicalId);
-        const bool canonical      = SUCCEEDED(normalizeHr) && canonicalId == profile.id && canonicalId != Common::Settings::kQuickConnectConnectionId &&
-                                    normalizedIdCounts[canonicalId] == 1u && ! usedIds.contains(canonicalId);
+        const bool canonical = SUCCEEDED(normalizeHr) && canonicalId == profile.id &&
+                               canonicalId != Common::Settings::kQuickConnectConnectionId && normalizedIdCounts[canonicalId] == 1u &&
+                               ! usedIds.contains(canonicalId);
         if (canonical)
         {
             usedIds.insert(std::move(canonicalId));
@@ -3605,8 +3620,10 @@ void ParseFileOperations(yyjson_val* root, Common::Settings::Settings& out)
     }
     GetBool(fileOperations, "issuesPaneSortDescending", settings.issuesPaneSortDescending);
 
-    ParseGridColumnLayout(
-        fileOperations, "issuesPaneGridLayout", settings.issuesPaneGridLayout, [](std::string_view columnId) noexcept { return Utf16FromUtf8(columnId); });
+    ParseGridColumnLayout(fileOperations,
+                          "issuesPaneGridLayout",
+                          settings.issuesPaneGridLayout,
+                          [](std::string_view columnId) noexcept { return Utf16FromUtf8(columnId); });
 
     out.fileOperations = std::move(settings);
 }
@@ -3987,7 +4004,10 @@ void ParseSearchSettings(yyjson_val* root, Common::Settings::Settings& out)
     }
     GetBool(search, "sortDescending", settings.sortDescending);
 
-    ParseGridColumnLayout(search, "resultsGridLayout", settings.resultsGridLayout, [](std::string_view columnId) noexcept { return Utf16FromUtf8(columnId); });
+    ParseGridColumnLayout(search,
+                          "resultsGridLayout",
+                          settings.resultsGridLayout,
+                          [](std::string_view columnId) noexcept { return Utf16FromUtf8(columnId); });
 
     SanitizeSearchDialogSettings(settings);
 
@@ -4168,9 +4188,11 @@ void ParseBatchRenameSettings(yyjson_val* root, Common::Settings::Settings& out)
     }
     GetBool(batchRename, "previewSortDescending", settings.previewSortDescending);
 
-    ParseGridColumnLayout(batchRename, "previewGridLayout", settings.previewGridLayout, [](std::string_view columnId) noexcept {
-        return StripSearchSingleLineControlCharacters(Utf16FromUtf8(columnId));
-    });
+    ParseGridColumnLayout(batchRename,
+                          "previewGridLayout",
+                          settings.previewGridLayout,
+                          [](std::string_view columnId) noexcept
+    { return StripSearchSingleLineControlCharacters(Utf16FromUtf8(columnId)); });
 
     SanitizeBatchRenameSettings(settings);
 
@@ -4363,7 +4385,10 @@ HRESULT ParseShortcuts(yyjson_val* root, Common::Settings::Settings& out) noexce
     }
     GetBool(shortcuts, "sortDescending", settings.sortDescending);
 
-    ParseGridColumnLayout(shortcuts, "gridLayout", settings.gridLayout, [](std::string_view columnId) noexcept { return Utf16FromUtf8(columnId); });
+    ParseGridColumnLayout(shortcuts,
+                          "gridLayout",
+                          settings.gridLayout,
+                          [](std::string_view columnId) noexcept { return Utf16FromUtf8(columnId); });
 
     out.shortcuts = std::move(settings);
     return S_OK;
@@ -5009,7 +5034,7 @@ HRESULT NormalizeConnectionProfileId(std::wstring_view id, std::wstring& canonic
     canonicalIdOut.reserve(id.size());
     for (size_t index = 0u; index < id.size(); ++index)
     {
-        const wchar_t ch            = id[index];
+        const wchar_t ch = id[index];
         const bool isHyphenPosition = std::ranges::find(hyphenPositions, index) != hyphenPositions.end();
         if (isHyphenPosition)
         {
@@ -5069,15 +5094,15 @@ bool HasNonDefaultFileOperationsSettings(const FileOperationsSettings& fileOpera
     const FileOperationsSettings defaults{};
     return fileOperations.autoDismissSuccess != defaults.autoDismissSuccess || fileOperations.popupFooterOnly != defaults.popupFooterOnly ||
            fileOperations.popupCompactDensity != defaults.popupCompactDensity || fileOperations.preCalcEnabled != defaults.preCalcEnabled ||
-           fileOperations.preCalcMaxWorkers != defaults.preCalcMaxWorkers || fileOperations.crossFsBridgeBufferSizeKB != defaults.crossFsBridgeBufferSizeKB ||
+           fileOperations.preCalcMaxWorkers != defaults.preCalcMaxWorkers ||
+           fileOperations.crossFsBridgeBufferSizeKB != defaults.crossFsBridgeBufferSizeKB ||
            fileOperations.defaultBandwidthLimitBytesPerSecond != defaults.defaultBandwidthLimitBytesPerSecond ||
-           fileOperations.maxDiagnosticsLogFiles != defaults.maxDiagnosticsLogFiles ||
-           fileOperations.diagnosticsInfoEnabled != defaults.diagnosticsInfoEnabled ||
+           fileOperations.maxDiagnosticsLogFiles != defaults.maxDiagnosticsLogFiles || fileOperations.diagnosticsInfoEnabled != defaults.diagnosticsInfoEnabled ||
            fileOperations.diagnosticsDebugEnabled != defaults.diagnosticsDebugEnabled || fileOperations.maxIssueReportFiles.has_value() ||
            fileOperations.maxDiagnosticsInMemory.has_value() || fileOperations.maxDiagnosticsPerFlush.has_value() ||
-           fileOperations.diagnosticsFlushIntervalMs.has_value() || fileOperations.diagnosticsCleanupIntervalMs.has_value() ||
-           ! fileOperations.issuesPaneSortColumnId.empty() || fileOperations.issuesPaneSortDescending != defaults.issuesPaneSortDescending ||
-           ! fileOperations.issuesPaneGridLayout.empty();
+            fileOperations.diagnosticsFlushIntervalMs.has_value() || fileOperations.diagnosticsCleanupIntervalMs.has_value() ||
+            ! fileOperations.issuesPaneSortColumnId.empty() ||
+            fileOperations.issuesPaneSortDescending != defaults.issuesPaneSortDescending || ! fileOperations.issuesPaneGridLayout.empty();
 }
 
 namespace
@@ -5438,7 +5463,7 @@ void RecordSectionRecovery(SettingsLoadRecoveryInfo* recovery, SettingsLoadRecov
         return hr;
     }
 
-    out                               = Settings{};
+    out = Settings{};
     out.persistence.expectedFileStamp = sourceStamp;
     if (recovery)
     {
@@ -5486,14 +5511,8 @@ void RecordSectionRecovery(SettingsLoadRecoveryInfo* recovery, SettingsLoadRecov
     if (! doc)
     {
         LogJsonParseError(L"settings file", path, err);
-        return RecoverSettingsLoadFailure(path,
-                                          out,
-                                          SettingsLoadRecoveryReason::InvalidJson,
-                                          HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
-                                          backupBadFile,
-                                          fallbackToDefaults,
-                                          recovery,
-                                          sourceStamp);
+        return RecoverSettingsLoadFailure(
+            path, out, SettingsLoadRecoveryReason::InvalidJson, HRESULT_FROM_WIN32(ERROR_INVALID_DATA), backupBadFile, fallbackToDefaults, recovery, sourceStamp);
     }
 
     auto freeDoc = wil::scope_exit([&] { yyjson_doc_free(doc); });
@@ -5502,28 +5521,16 @@ void RecordSectionRecovery(SettingsLoadRecoveryInfo* recovery, SettingsLoadRecov
     if (! root || ! yyjson_is_obj(root))
     {
         Debug::Error(L"Failed to parse settings file '{}': expected object at root", path.c_str());
-        return RecoverSettingsLoadFailure(path,
-                                          out,
-                                          SettingsLoadRecoveryReason::InvalidRoot,
-                                          HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
-                                          backupBadFile,
-                                          fallbackToDefaults,
-                                          recovery,
-                                          sourceStamp);
+        return RecoverSettingsLoadFailure(
+            path, out, SettingsLoadRecoveryReason::InvalidRoot, HRESULT_FROM_WIN32(ERROR_INVALID_DATA), backupBadFile, fallbackToDefaults, recovery, sourceStamp);
     }
 
     yyjson_val* schema = yyjson_obj_get(root, "schemaVersion");
     if (! schema || ! yyjson_is_int(schema))
     {
         Debug::Error(L"Unsupported schema version in settings file '{}'", path.c_str());
-        return RecoverSettingsLoadFailure(path,
-                                          out,
-                                          SettingsLoadRecoveryReason::MissingSchemaVersion,
-                                          HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
-                                          backupBadFile,
-                                          fallbackToDefaults,
-                                          recovery,
-                                          sourceStamp);
+        return RecoverSettingsLoadFailure(
+            path, out, SettingsLoadRecoveryReason::MissingSchemaVersion, HRESULT_FROM_WIN32(ERROR_INVALID_DATA), backupBadFile, fallbackToDefaults, recovery, sourceStamp);
     }
 
     const int64_t schemaVersion = yyjson_get_int(schema);
@@ -5532,10 +5539,10 @@ void RecordSectionRecovery(SettingsLoadRecoveryInfo* recovery, SettingsLoadRecov
         Debug::Error(L"Unsupported schema version in settings file '{}'", path.c_str());
         if (schemaVersion > 16 && fallbackToDefaults)
         {
-            out                                 = Settings{};
-            out.persistence.expectedFileStamp   = sourceStamp;
-            out.persistence.savePermission      = SettingsSavePermission::ExplicitReplacementRequired;
-            out.persistence.sourceSchemaVersion = schemaVersion;
+            out = Settings{};
+            out.persistence.expectedFileStamp     = sourceStamp;
+            out.persistence.savePermission       = SettingsSavePermission::ExplicitReplacementRequired;
+            out.persistence.sourceSchemaVersion  = schemaVersion;
             if (recovery)
             {
                 recovery->reason                   = SettingsLoadRecoveryReason::UnsupportedSchemaVersion;
@@ -5558,8 +5565,8 @@ void RecordSectionRecovery(SettingsLoadRecoveryInfo* recovery, SettingsLoadRecov
     }
 
     Settings parsed{};
-    parsed.schemaVersion                   = static_cast<uint32_t>(schemaVersion);
-    parsed.persistence.expectedFileStamp   = sourceStamp;
+    parsed.schemaVersion                    = static_cast<uint32_t>(schemaVersion);
+    parsed.persistence.expectedFileStamp    = sourceStamp;
     parsed.persistence.sourceSchemaVersion = schemaVersion;
 
     const HRESULT preserveUnknownHr = PreserveUnknownTopLevelMembers(root, parsed);
@@ -5572,14 +5579,8 @@ void RecordSectionRecovery(SettingsLoadRecoveryInfo* recovery, SettingsLoadRecov
     if (yyjson_obj_get(root, "viewers") || yyjson_obj_get(root, "editors") || (extensions && yyjson_obj_get(extensions, "openWithViewerByExtension")))
     {
         Debug::Error(L"Settings v16 contains legacy viewer/editor action shape in '{}'", path.c_str());
-        return RecoverSettingsLoadFailure(path,
-                                          out,
-                                          SettingsLoadRecoveryReason::LegacyShape,
-                                          HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
-                                          backupBadFile,
-                                          fallbackToDefaults,
-                                          recovery,
-                                          sourceStamp);
+        return RecoverSettingsLoadFailure(
+            path, out, SettingsLoadRecoveryReason::LegacyShape, HRESULT_FROM_WIN32(ERROR_INVALID_DATA), backupBadFile, fallbackToDefaults, recovery, sourceStamp);
     }
 
     ParseWindows(root, parsed);
@@ -5593,7 +5594,7 @@ void RecordSectionRecovery(SettingsLoadRecoveryInfo* recovery, SettingsLoadRecov
     const HRESULT fileActionsHr = ParseFileActions(root, parsed);
     if (FAILED(fileActionsHr))
     {
-        parsed.fileActions       = DefaultFileActionsSettings();
+        parsed.fileActions = DefaultFileActionsSettings();
         const HRESULT preserveHr = PreserveOpaqueTopLevelMember(root, "fileActions", parsed);
         if (FAILED(preserveHr))
         {
@@ -5605,7 +5606,7 @@ void RecordSectionRecovery(SettingsLoadRecoveryInfo* recovery, SettingsLoadRecov
     const HRESULT userMenuHr = ParseUserMenuSettings(root, parsed.userMenu);
     if (FAILED(userMenuHr))
     {
-        parsed.userMenu          = UserMenuSettings{};
+        parsed.userMenu = UserMenuSettings{};
         const HRESULT preserveHr = PreserveOpaqueTopLevelMember(root, "userMenu", parsed);
         if (FAILED(preserveHr))
         {
@@ -5633,7 +5634,8 @@ void RecordSectionRecovery(SettingsLoadRecoveryInfo* recovery, SettingsLoadRecov
     ParseMainMenu(root, parsed);
     ParseStartup(root, parsed);
     ParseUi(root, parsed);
-    const HRESULT connectionsHr = ParseConnections(root, parsed, fallbackToDefaults, recovery ? &recovery->connectionProfileIdMigrations : nullptr);
+    const HRESULT connectionsHr = ParseConnections(
+        root, parsed, fallbackToDefaults, recovery ? &recovery->connectionProfileIdMigrations : nullptr);
     if (FAILED(connectionsHr))
     {
         return connectionsHr;
@@ -5695,7 +5697,9 @@ void RecordSectionRecovery(SettingsLoadRecoveryInfo* recovery, SettingsLoadRecov
     return S_OK;
 }
 
-void PrepareLoadedSettingsForSaveTarget(std::wstring_view appId, const std::filesystem::path& loadedPath, Settings& settings) noexcept
+void PrepareLoadedSettingsForSaveTarget(std::wstring_view appId,
+                                        const std::filesystem::path& loadedPath,
+                                        Settings& settings) noexcept
 {
     const std::filesystem::path saveTarget = GetSettingsPath(appId);
     if (saveTarget.empty() || Common::Paths::NormalizedWindowsPathEqualsNoCase(loadedPath.native(), saveTarget.native()))
@@ -5851,7 +5855,7 @@ namespace
             return E_OUTOFMEMORY;
         }
 
-        HRESULT valueHr        = S_OK;
+        HRESULT valueHr       = S_OK;
         yyjson_mut_val* member = NewYyjsonFromJsonValue(doc, value, valueHr);
         if (FAILED(valueHr) || ! member)
         {
@@ -5866,7 +5870,10 @@ namespace
 }
 } // namespace
 
-HRESULT SaveSettingsImpl(std::wstring_view appId, Settings& settings, bool writeBaseSchema, SettingsFileStamp* writtenStamp = nullptr) noexcept
+HRESULT SaveSettingsImpl(std::wstring_view appId,
+                         Settings& settings,
+                         bool writeBaseSchema,
+                         SettingsFileStamp* writtenStamp = nullptr) noexcept
 {
     if (settings.persistence.savePermission != SettingsSavePermission::Automatic)
     {
@@ -6041,7 +6048,8 @@ HRESULT SaveSettingsImpl(std::wstring_view appId, Settings& settings, bool write
                 {
                     opaqueEntries.push_back(&opaqueEntry);
                 }
-                std::stable_sort(opaqueEntries.begin(), opaqueEntries.end(), [](const auto* first, const auto* second) noexcept {
+                std::stable_sort(opaqueEntries.begin(), opaqueEntries.end(), [](const auto* first, const auto* second) noexcept
+                {
                     return first->originalIndex < second->originalIndex;
                 });
                 for (const ThemeSettings::OpaqueEntry* opaqueEntry : opaqueEntries)
@@ -6065,7 +6073,7 @@ HRESULT SaveSettingsImpl(std::wstring_view appId, Settings& settings, bool write
                     }
 
                     const ThemeDefinition* def = std::get<const ThemeDefinition*>(entry);
-                    yyjson_mut_val* defObj     = yyjson_mut_obj(doc);
+                    yyjson_mut_val* defObj = yyjson_mut_obj(doc);
                     if (! defObj)
                     {
                         return E_OUTOFMEMORY;
@@ -6087,7 +6095,8 @@ HRESULT SaveSettingsImpl(std::wstring_view appId, Settings& settings, bool write
                         return hr;
                     }
 
-                    const auto addSources = [&](const char* memberName, const std::unordered_map<std::wstring, ThemeColorSource>& sources) noexcept -> HRESULT
+                    const auto addSources = [&](const char* memberName,
+                                                const std::unordered_map<std::wstring, ThemeColorSource>& sources) noexcept -> HRESULT
                     {
                         yyjson_mut_val* object = yyjson_mut_obj(doc);
                         if (! object || ! yyjson_mut_obj_add_val(doc, defObj, memberName, object))
@@ -6113,7 +6122,7 @@ HRESULT SaveSettingsImpl(std::wstring_view appId, Settings& settings, bool write
                             {
                                 return conversionHr;
                             }
-                            yyjson_mut_val* key   = yyjson_mut_strncpy(doc, keyUtf8.data(), keyUtf8.size());
+                            yyjson_mut_val* key = yyjson_mut_strncpy(doc, keyUtf8.data(), keyUtf8.size());
                             yyjson_mut_val* value = nullptr;
                             if (! key)
                             {
@@ -8068,7 +8077,9 @@ HRESULT SaveSettingsValuesOnly(std::wstring_view appId, Settings& settings) noex
     return SaveSettingsImpl(appId, settings, false);
 }
 
-HRESULT SaveSettingsValuesOnlyWithStamp(std::wstring_view appId, Settings& settings, SettingsFileStamp& writtenStamp) noexcept
+HRESULT SaveSettingsValuesOnlyWithStamp(std::wstring_view appId,
+                                        Settings& settings,
+                                        SettingsFileStamp& writtenStamp) noexcept
 {
     return SaveSettingsImpl(appId, settings, false, &writtenStamp);
 }

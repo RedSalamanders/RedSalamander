@@ -237,12 +237,15 @@ public:
     [[nodiscard]] HRESULT DebugPerformFileDropForSelfTest(const std::vector<std::filesystem::path>& paths,
                                                           DWORD effect,
                                                           DWORD* performedEffect = nullptr,
-                                                          POINT clientPoint      = POINT{-1, -1},
-                                                          bool externalSource    = false,
-                                                          DWORD allowedEffects   = DROPEFFECT_NONE,
-                                                          DWORD keyState         = 0) noexcept;
-    [[nodiscard]] HRESULT DebugPerformDropFromDataObjectForSelfTest(
-        IDataObject* dataObject, DWORD effect, DWORD* performedEffect = nullptr, POINT clientPoint = POINT{-1, -1}, DWORD keyState = 0) noexcept;
+                                                          POINT clientPoint = POINT{-1, -1},
+                                                          bool externalSource = false,
+                                                          DWORD allowedEffects = DROPEFFECT_NONE,
+                                                          DWORD keyState = 0) noexcept;
+    [[nodiscard]] HRESULT DebugPerformDropFromDataObjectForSelfTest(IDataObject* dataObject,
+                                                                    DWORD effect,
+                                                                    DWORD* performedEffect = nullptr,
+                                                                    POINT clientPoint = POINT{-1, -1},
+                                                                    DWORD keyState = 0) noexcept;
 
     [[nodiscard]] uint64_t DebugGetForceRefreshCount() const noexcept
     {
@@ -435,18 +438,18 @@ public:
 
     struct RenderingDebugSnapshot
     {
-        float dpi                                  = 96.0f;
-        SIZE clientSizePx                          = {};
-        bool hasD2DTarget                          = false;
-        bool swapChainResizePending                = false;
-        bool forceFullRenderOnNextPaint            = false;
-        bool lastRenderWasFullClient               = false;
-        uint64_t dpiChangeCount                    = 0;
-        uint64_t fullClientRenderCount             = 0;
-        uint64_t deviceLossRecoveryCount           = 0;
+        float dpi                         = 96.0f;
+        SIZE clientSizePx                 = {};
+        bool hasD2DTarget                 = false;
+        bool swapChainResizePending       = false;
+        bool forceFullRenderOnNextPaint   = false;
+        bool lastRenderWasFullClient      = false;
+        uint64_t dpiChangeCount           = 0;
+        uint64_t fullClientRenderCount    = 0;
+        uint64_t deviceLossRecoveryCount  = 0;
         uint64_t deviceLossDiscardedResourcesCount = 0;
         uint64_t drawItemTransientBrushCreateCount = 0;
-        RECT lastRenderInvalidRectPx               = {};
+        RECT lastRenderInvalidRectPx      = {};
     };
 
     struct ThumbnailDebugSnapshot
@@ -821,7 +824,7 @@ private:
     struct PasteShortcutResult
     {
         wil::com_ptr<IFileSystem> fileSystem;
-        uint64_t requestId  = 0;
+        uint64_t requestId = 0;
         uint64_t generation = 0;
         std::filesystem::path targetFolder;
         std::vector<std::filesystem::path> createdLinks;
@@ -983,8 +986,8 @@ private:
     std::wstring _focusMemoryRootKey;
     std::unordered_map<std::wstring, std::wstring> _focusMemory;
 
-    bool _pasteShortcutInFlight            = false;
-    uint64_t _nextPasteShortcutRequestId   = 1u;
+    bool _pasteShortcutInFlight = false;
+    uint64_t _nextPasteShortcutRequestId = 1u;
     uint64_t _activePasteShortcutRequestId = 0u;
     std::chrono::steady_clock::time_point _pasteShortcutStartedAt{};
     std::deque<PasteShortcutRequest> _pendingPasteShortcutRequests;
@@ -1009,9 +1012,9 @@ private:
         std::wstring metricName;
         std::wstring detail;
         uint64_t generation = 0u;
-        uint64_t value0     = 0u;
-        uint64_t value1     = 0u;
-        bool resultReady    = true;
+        uint64_t value0 = 0u;
+        uint64_t value1 = 0u;
+        bool resultReady = true;
     };
     std::optional<PendingToPaintMetric> _pendingInputToPaintMetric;
     std::optional<PendingToPaintMetric> _pendingRefreshToPaintMetric;
@@ -1509,7 +1512,7 @@ private:
     uint64_t _pendingEnumerationGeneration = 0;
     std::atomic<uint64_t> _enumerationGeneration{0};
     ULONGLONG _lastDirectoryCacheRefreshTick = 0;
-    uint64_t _pendingRefreshDebounceDelayMs  = 0u;
+    uint64_t _pendingRefreshDebounceDelayMs   = 0u;
 #ifdef ENABLE_TESTS
     struct DebugRenderFailure final
     {
@@ -1525,15 +1528,15 @@ private:
     uint64_t _debugProcessIconQueueCallCount          = 0;
     uint64_t _debugBatchIconUpdateCallCount           = 0;
     uint64_t _debugIncrementalSearchEffectUpdateCount = 0;
-    uint64_t _debugDpiChangeCount                     = 0;
-    uint64_t _debugFullClientRenderCount              = 0;
-    uint64_t _debugDeviceLossRecoveryCount            = 0;
-    uint64_t _debugDeviceLossDiscardedResourcesCount  = 0;
+    uint64_t _debugDpiChangeCount                      = 0;
+    uint64_t _debugFullClientRenderCount               = 0;
+    uint64_t _debugDeviceLossRecoveryCount             = 0;
+    uint64_t _debugDeviceLossDiscardedResourcesCount   = 0;
     std::atomic<uint64_t> _debugDrawItemTransientBrushCreateCount{0};
     bool _debugDrawItemActive = false;
     std::optional<DebugRenderFailure> _debugNextRenderFailure;
-    RECT _debugLastRenderInvalidRectPx = {};
-    bool _debugLastRenderWasFullClient = false;
+    RECT _debugLastRenderInvalidRectPx                 = {};
+    bool _debugLastRenderWasFullClient                 = false;
     [[nodiscard]] std::optional<HRESULT> DebugConsumeNextRenderFailure(DebugRenderFailurePoint point) noexcept;
 #endif
 
@@ -1584,17 +1587,17 @@ private:
         uint64_t enumerationGeneration = 0;
         size_t itemIndex               = static_cast<size_t>(-1);
         std::filesystem::path fullPath;
-        uint32_t targetPx        = 0;
-        bool hasVisibleItem      = false;
+        uint32_t targetPx       = 0;
+        bool hasVisibleItem     = false;
         bool allowFileExtraction = false;
-        unsigned int retryCount  = 0;
+        unsigned int retryCount = 0;
         std::chrono::steady_clock::time_point enqueuedAt{};
     };
     std::deque<ThumbnailLoadRequest> _thumbnailLoadQueue;
     std::atomic<bool> _thumbnailLoadingActive{false};
     [[nodiscard]] HRESULT ExtractProviderAllowedThumbnailWithDeadline(const ThumbnailLoadRequest& request,
-                                                                      std::stop_token stopToken,
-                                                                      ThumbnailBitmapRequest& bitmapRequest) noexcept;
+                                                                       std::stop_token stopToken,
+                                                                       ThumbnailBitmapRequest& bitmapRequest) noexcept;
 
     // Icon loading performance telemetry
     struct IconLoadStats

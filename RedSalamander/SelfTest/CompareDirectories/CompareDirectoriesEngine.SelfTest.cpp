@@ -794,12 +794,12 @@ struct ResolvedRemoteProfile
     return {.status = SelfTest::SelfTestCaseResult::Status::passed};
 }
 
-using CreateFactoryFunc                = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const wchar_t*, void**);
-using GetConfigurationSchemaFunc       = HRESULT(__stdcall*)(REFIID, const wchar_t*, const char**);
-using CreateMtpForSelfTestFunc         = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const char*, void**);
+using CreateFactoryFunc          = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const wchar_t*, void**);
+using GetConfigurationSchemaFunc = HRESULT(__stdcall*)(REFIID, const wchar_t*, const char**);
+using CreateMtpForSelfTestFunc   = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const char*, void**);
 using CreateMtpWpdCacheForSelfTestFunc = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const char*, void**);
-using PluginShutdownFunc               = void(__stdcall*)();
-using PluginCanUnloadNowFunc           = BOOL(__stdcall*)();
+using PluginShutdownFunc         = void(__stdcall*)();
+using PluginCanUnloadNowFunc     = BOOL(__stdcall*)();
 
 struct CreatedFileSystemInstance
 {
@@ -1394,7 +1394,8 @@ struct NavigationMenuCallbackProbe final : INavigationMenuCallback
     }
 
     const std::filesystem::path parent = path.parent_path();
-    if (! parent.empty() && parent != path && ! ExtendedDirectoryExistsForCompareSelfTest(parent) && ! EnsureExtendedDirectoryForCompareSelfTest(parent))
+    if (! parent.empty() && parent != path && ! ExtendedDirectoryExistsForCompareSelfTest(parent) &&
+        ! EnsureExtendedDirectoryForCompareSelfTest(parent))
     {
         return false;
     }
@@ -1421,7 +1422,8 @@ struct NavigationMenuCallbackProbe final : INavigationMenuCallback
     }
 
     const std::wstring extendedPath = MakeExtendedPathForCompareSelfTest(path);
-    wil::unique_handle file(::CreateFileW(extendedPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
+    wil::unique_handle file(
+        ::CreateFileW(extendedPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
     if (! file)
     {
         return false;
@@ -1429,7 +1431,8 @@ struct NavigationMenuCallbackProbe final : INavigationMenuCallback
 
     DWORD written = 0u;
     if (! text.empty() &&
-        (text.size() > (std::numeric_limits<DWORD>::max)() || ::WriteFile(file.get(), text.data(), static_cast<DWORD>(text.size()), &written, nullptr) == 0 ||
+        (text.size() > (std::numeric_limits<DWORD>::max)() ||
+         ::WriteFile(file.get(), text.data(), static_cast<DWORD>(text.size()), &written, nullptr) == 0 ||
          static_cast<size_t>(written) != text.size()))
     {
         return false;
@@ -3970,16 +3973,19 @@ struct CapturedProcessResult final
     std::string output;
 };
 
-[[nodiscard]] bool RunProcessAndCaptureOutput(std::wstring_view executablePath,
-                                              const std::vector<std::wstring>& arguments,
-                                              DWORD timeoutMs,
-                                              CapturedProcessResult& outResult,
-                                              std::wstring& outError) noexcept
+[[nodiscard]] bool RunProcessAndCaptureOutput(
+    std::wstring_view executablePath,
+    const std::vector<std::wstring>& arguments,
+    DWORD timeoutMs,
+    CapturedProcessResult& outResult,
+    std::wstring& outError) noexcept
 {
     outResult = {};
     outError.clear();
     const RedSalamander::TestSupport::ChildProcessResult sharedResult = RedSalamander::TestSupport::RunChildProcess(
-        {.executablePath = std::filesystem::path(executablePath), .arguments = arguments, .timeout = std::chrono::milliseconds(timeoutMs)});
+        {.executablePath = std::filesystem::path(executablePath),
+         .arguments      = arguments,
+         .timeout        = std::chrono::milliseconds(timeoutMs)});
     if (! sharedResult.Completed())
     {
         outError = sharedResult.diagnostic;
@@ -4160,8 +4166,10 @@ public:
         _pipeName        = std::wstring(pipeName);
         _protocolVersion = protocolVersion;
 
-        std::wstring commandLine =
-            std::format(L"\"{}\" --run-foreground --pipe-name=\"{}\" --protocol-version={}", servicePath.wstring(), _pipeName, protocolVersion);
+        std::wstring commandLine = std::format(L"\"{}\" --run-foreground --pipe-name=\"{}\" --protocol-version={}",
+                                               servicePath.wstring(),
+                                               _pipeName,
+                                               protocolVersion);
         if (disconnectAfterBatches != 0u)
         {
             commandLine.append(std::format(L" --disconnect-after-batches={}", disconnectAfterBatches));
@@ -4206,9 +4214,16 @@ public:
         }
 
         PROCESS_INFORMATION processInfo{};
-        if (::CreateProcessW(
-                nullptr, commandLine.data(), nullptr, nullptr, captureOutput ? TRUE : FALSE, CREATE_SUSPENDED, nullptr, nullptr, &startupInfo, &processInfo) ==
-            0)
+        if (::CreateProcessW(nullptr,
+                             commandLine.data(),
+                             nullptr,
+                             nullptr,
+                             captureOutput ? TRUE : FALSE,
+                             CREATE_SUSPENDED,
+                             nullptr,
+                             nullptr,
+                             &startupInfo,
+                             &processInfo) == 0)
         {
             outError = std::format(L"CreateProcessW failed. error={}", GetLastError());
             _job.reset();
@@ -4253,7 +4268,7 @@ public:
     {
         if (_process)
         {
-            DWORD exitCode       = STILL_ACTIVE;
+            DWORD exitCode = STILL_ACTIVE;
             const bool hasExited = HasExited(exitCode);
             if (! hasExited && _protocolVersion == SearchServiceBroker::kProtocolVersion && ! _pipeName.empty())
             {
@@ -4304,9 +4319,10 @@ public:
         const DWORD waitResult            = ::WaitForSingleObject(_process.get(), remainingTimeoutMs);
         if (waitResult == WAIT_TIMEOUT)
         {
-            outError = FAILED(shutdownHr) ? std::format(L"Foreground search service graceful shutdown failed and the process did not exit. hr=0x{:08X}",
-                                                        static_cast<unsigned long>(shutdownHr))
-                                          : L"Timed out waiting for the foreground search service process to exit.";
+            outError = FAILED(shutdownHr)
+                           ? std::format(L"Foreground search service graceful shutdown failed and the process did not exit. hr=0x{:08X}",
+                                         static_cast<unsigned long>(shutdownHr))
+                           : L"Timed out waiting for the foreground search service process to exit.";
             return false;
         }
         if (waitResult != WAIT_OBJECT_0)
@@ -4449,8 +4465,8 @@ private:
 
         HRESULT lastHr = HRESULT_FROM_WIN32(ERROR_TIMEOUT);
         std::wstring lastPipeName;
-        const auto deadline =
-            std::chrono::steady_clock::now() + std::chrono::milliseconds{static_cast<std::chrono::milliseconds::rep>(SelfTest::ScaleTimeout(5'000))};
+        const auto deadline = std::chrono::steady_clock::now() +
+                              std::chrono::milliseconds{static_cast<std::chrono::milliseconds::rep>(SelfTest::ScaleTimeout(5'000))};
         while (std::chrono::steady_clock::now() < deadline)
         {
             DWORD exitCode = STILL_ACTIVE;
@@ -4536,7 +4552,8 @@ private:
     {
         DeleteCapturedOutputFile();
 
-        const SelfTest::TestSandbox sandbox = SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::CompareDirectories, L"foreground_search_service_stdout");
+        const SelfTest::TestSandbox sandbox =
+            SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::CompareDirectories, L"foreground_search_service_stdout");
         if (! sandbox.IsValid())
         {
             outError = L"Failed to acquire TestSandbox for foreground search service stdout capture.";
@@ -4626,7 +4643,7 @@ private:
     std::wstring _capturedOutputPath;
     std::wstring _pipeName;
     std::wstring _previousClientMissingPipeRetryOverride;
-    uint32_t _protocolVersion               = 0u;
+    uint32_t _protocolVersion = 0u;
     bool _clientMissingPipeRetryOverrideSet = false;
 };
 
@@ -5563,7 +5580,7 @@ static_assert(sizeof(SearchJunctionMountPointHeader) == 8u);
     header->tag       = IO_REPARSE_TAG_MOUNT_POINT;
     header->dataBytes = static_cast<USHORT>(payloadBytes);
 
-    auto* mountHeader             = reinterpret_cast<SearchJunctionMountPointHeader*>(buffer.data() + sizeof(SearchJunctionReparseHeader));
+    auto* mountHeader = reinterpret_cast<SearchJunctionMountPointHeader*>(buffer.data() + sizeof(SearchJunctionReparseHeader));
     mountHeader->substituteLength = static_cast<USHORT>(substituteBytes);
     mountHeader->printOffset      = static_cast<USHORT>(substituteBytes + sizeof(wchar_t));
     mountHeader->printLength      = static_cast<USHORT>(printBytes);
@@ -5580,8 +5597,14 @@ static_assert(sizeof(SearchJunctionMountPointHeader) == 8u);
     }
 
     DWORD bytesReturned = 0u;
-    return ::DeviceIoControl(
-               junctionHandle.get(), FSCTL_SET_REPARSE_POINT, buffer.data(), static_cast<DWORD>(buffer.size()), nullptr, 0u, &bytesReturned, nullptr) != 0;
+    return ::DeviceIoControl(junctionHandle.get(),
+                             FSCTL_SET_REPARSE_POINT,
+                             buffer.data(),
+                             static_cast<DWORD>(buffer.size()),
+                             nullptr,
+                             0u,
+                             &bytesReturned,
+                             nullptr) != 0;
 }
 
 [[nodiscard]] bool WriteFileFill(const std::filesystem::path& path, char ch, size_t sizeBytes) noexcept
@@ -6073,11 +6096,11 @@ void InvokeGetRootDecision(void* rawContext) noexcept
         return false;
     }
 
-    const auto deadline = std::chrono::steady_clock::now() + timeout;
-    size_t emptySamples = 0u;
+    const auto deadline  = std::chrono::steady_clock::now() + timeout;
+    size_t emptySamples  = 0u;
     while (std::chrono::steady_clock::now() < deadline)
     {
-        const bool morePending                  = session->FlushPendingSubdirUpdatesBudgeted(64);
+        const bool morePending = session->FlushPendingSubdirUpdatesBudgeted(64);
         const CompareDirectoriesPerfStats stats = session->GetPerfStats();
         if (! morePending && stats.pendingSubdirUpdates == 0u)
         {

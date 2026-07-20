@@ -358,8 +358,7 @@ namespace
 
     const auto navigateToThemesPage = [&]() noexcept
     {
-        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
-                      L"Failed to focus the Preferences category host for Themes retained-selection test.");
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Themes retained-selection test.");
         if (! state.failure.empty())
         {
             return false;
@@ -623,8 +622,7 @@ namespace
         return false;
     }
 
-    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
-                  L"Failed to focus the Preferences category host for Themes grid UIA selection test.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Themes grid UIA selection test.");
     state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes), L"Failed to select the Preferences Themes category for Themes grid UIA selection test.");
     PumpPendingMessages();
     SelfTest::AppendSuiteTrace(
@@ -765,8 +763,7 @@ namespace
             return false;
         }
 
-        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
-                      L"Failed to focus the Preferences category host for Themes tab-traversal validation.");
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Themes tab-traversal validation.");
 
         if (waitForSnapshot(
                 [&](const PreferencesDebugSnapshot& value) noexcept
@@ -1216,8 +1213,7 @@ namespace
             return false;
         }
 
-        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
-                      L"Failed to focus the Preferences category host for Themes header-reorder validation.");
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Themes header-reorder validation.");
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
                       L"Failed to select the Preferences Themes category for Themes header-reorder validation.");
         PumpPendingMessages();
@@ -1392,8 +1388,7 @@ namespace
             return false;
         }
 
-        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
-                      L"Failed to focus the Preferences category host for Themes reordered-copy validation.");
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Themes reordered-copy validation.");
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
                       L"Failed to select the Preferences Themes category for Themes reordered-copy validation.");
         PumpPendingMessages();
@@ -1681,15 +1676,19 @@ namespace
 
         PreferencesDebugSnapshot afterViewersClick{};
         static_cast<void>(DebugGetPreferencesDialogSnapshot(afterViewersClick));
-        SelfTest::AppendSelfTestTrace(std::format(L"Preferences General page Viewers-click snapshot during {}: {}",
-                                                  context,
-                                                  DescribePreferencesGeneralNavigationSnapshotForSelfTest(afterViewersClick)));
+        SelfTest::AppendSelfTestTrace(
+            std::format(L"Preferences General page Viewers-click snapshot during {}: {}",
+                        context,
+                        DescribePreferencesGeneralNavigationSnapshotForSelfTest(afterViewersClick)));
 
-        snapshot                = {};
-        const bool viewersReady = waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept {
+        snapshot = {};
+        const bool viewersReady = waitForSnapshot(
+            [](const PreferencesDebugSnapshot& value) noexcept
+        {
             return value.currentCategory == kPrefCategoryViewers && value.currentPageDxHostResizeFailureCount == 0u &&
                    value.shellDxHostResizeFailureCount == 0u;
-        }, snapshot);
+        },
+            snapshot);
         state.Require(viewersReady,
                       std::format(L"Failed to capture a settled Preferences Viewers snapshot after switching from General during {}; {}.",
                                   context,
@@ -2984,8 +2983,7 @@ namespace
         return pagePatternStats;
     };
 
-    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
-                  L"Failed to focus the Preferences category host for General round-trip test.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for General round-trip test.");
     PumpPendingMessages();
 
     state.Require(waitForSnapshot(
@@ -4555,8 +4553,7 @@ namespace
             return false;
         }
 
-        state.Require(DebugSelectPreferencesCategory(kPrefCategoryPanes),
-                      L"Failed to select the Preferences Panes category for Panes tab-traversal validation.");
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryPanes), L"Failed to select the Preferences Panes category for Panes tab-traversal validation.");
         PumpPendingMessages();
 
         state.Require(waitForSnapshot(
@@ -4802,8 +4799,7 @@ namespace
             return false;
         }
 
-        state.Require(DebugSelectPreferencesCategory(kPrefCategoryPanes),
-                      L"Failed to select the Preferences Panes category for Panes history-size validation.");
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryPanes), L"Failed to select the Preferences Panes category for Panes history-size validation.");
         PumpPendingMessages();
 
         state.Require(waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept
@@ -5031,8 +5027,7 @@ namespace
             return false;
         }
 
-        state.Require(DebugSelectPreferencesCategory(kPrefCategoryPanes),
-                      L"Failed to select the Preferences Panes category for Panes combo/toggle validation.");
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryPanes), L"Failed to select the Preferences Panes category for Panes combo/toggle validation.");
         PumpPendingMessages();
 
         state.Require(waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept

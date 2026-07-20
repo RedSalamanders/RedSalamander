@@ -22,7 +22,7 @@
     using SetPickerFakeBackendForSelfTestFunc = HRESULT(__stdcall*)(const char* fakeBackendJsonUtf8) noexcept;
     const std::string json(fakeBackendJsonUtf8);
     return SelfTest::CallMtpPluginExport<SetPickerFakeBackendForSelfTestFunc>("RedSalamanderMtpSetPickerFakeBackendForSelfTest",
-                                                                              json.empty() ? nullptr : json.c_str());
+                                                                             json.empty() ? nullptr : json.c_str());
 }
 
 [[nodiscard]] bool TestConnectionSecretPersistenceFailureKeepsSessionRotation(CaseState& state) noexcept
@@ -49,9 +49,9 @@
 
     wil::com_ptr<IHostConnections> hostConnections;
     const HRESULT queryHr = GetHostServices()->QueryInterface(IID_PPV_ARGS(hostConnections.put()));
-    state.Require(
-        SUCCEEDED(queryHr) && hostConnections,
-        std::format(L"Connection secret persistence-failure proof could not acquire IHostConnections (hr=0x{:08X}).", static_cast<unsigned long>(queryHr)));
+    state.Require(SUCCEEDED(queryHr) && hostConnections,
+                  std::format(L"Connection secret persistence-failure proof could not acquire IHostConnections (hr=0x{:08X}).",
+                              static_cast<unsigned long>(queryHr)));
 
     const auto cleanup = wil::scope_exit([&]() noexcept
     {
@@ -618,8 +618,9 @@ void ReplaceRuntimeConnectionsForSelfTest(const Common::Settings::ConnectionProf
 
     SelfTest::AppendSelfTestTrace(std::format(L"ConnectionManager modeless-connect-{}: begin", label));
 
-    const std::wstring sandboxCaseName  = std::format(L"connection_manager_modeless_connect_{}", label);
-    const SelfTest::TestSandbox sandbox = SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::Commands, sandboxCaseName);
+    const std::wstring sandboxCaseName = std::format(L"connection_manager_modeless_connect_{}", label);
+    const SelfTest::TestSandbox sandbox =
+        SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::Commands, sandboxCaseName);
     state.Require(sandbox.IsValid(), std::format(L"Connection Manager modeless-connect {} TestSandbox root should be available.", label));
     if (! state.failure.empty())
     {
@@ -631,7 +632,7 @@ void ReplaceRuntimeConnectionsForSelfTest(const Common::Settings::ConnectionProf
     const auto connectionsBefore                      = g_settings.connections;
     DebugResetConnectionManagerConnectNavigation();
     DebugSetConnectionManagerConnectNavigationSuppressed(true);
-    const auto restoreState = wil::scope_exit([&]() noexcept
+    const auto restoreState                           = wil::scope_exit([&]() noexcept
     {
         DebugSetConnectionManagerConnectNavigationSuppressed(false);
         static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(pane, L"builtin/file-system"));
@@ -707,10 +708,12 @@ void ReplaceRuntimeConnectionsForSelfTest(const Common::Settings::ConnectionProf
                   std::format(L"Connection Manager did not create a selected row before modeless-connect-{}.", label));
 
     const std::wstring expectedName = std::format(L"selftest-selectionless-connect-{}-{}", label, NewGuidText());
-    state.Require(DebugSetConnectionManagerNameText(expectedName), std::format(L"Failed to rename the edited row before modeless-connect-{}.", label));
+    state.Require(DebugSetConnectionManagerNameText(expectedName),
+                  std::format(L"Failed to rename the edited row before modeless-connect-{}.", label));
     state.Require(waitForSnapshot([&](const ConnectionManagerDebugSnapshot& value) noexcept { return value.currentNameText == expectedName; }, snapshot),
                   std::format(L"Connection Manager did not reflect the edited name before modeless-connect-{}.", label));
-    state.Require(DebugClearConnectionManagerListSelection(), std::format(L"Failed to clear the grid selection before modeless-connect-{}.", label));
+    state.Require(DebugClearConnectionManagerListSelection(),
+                  std::format(L"Failed to clear the grid selection before modeless-connect-{}.", label));
     state.Require(waitForSnapshot([&](const ConnectionManagerDebugSnapshot& value) noexcept
     { return value.selectedListIndex < 0 && value.currentNameText == expectedName; },
                                   snapshot),
@@ -2224,7 +2227,8 @@ template <typename Task> [[nodiscard]] auto RunUiaTaskWithMessagePump(Task&& tas
     const std::optional<bool> savedReadOnly        = Common::Settings::GetBool(savedProfile->extra, "readOnly");
     state.Require(savedFriendly.has_value() && savedFriendly.value() == "Fake Phone [devpuid:fake-device]",
                   L"Persisted MTP picker profile did not store the selected device friendlyName extra.");
-    state.Require(savedPuid.has_value() && savedPuid.value() == "dev-fake-phone", L"Persisted MTP picker profile did not store the selected devicePuid extra.");
+    state.Require(savedPuid.has_value() && savedPuid.value() == "dev-fake-phone",
+                  L"Persisted MTP picker profile did not store the selected devicePuid extra.");
     state.Require(savedReadOnly.value_or(false), L"Persisted MTP picker profile did not store readOnly=true by default.");
 
     Common::Settings::JsonValue malformedUtf8Value;
@@ -2233,7 +2237,8 @@ template <typename Task> [[nodiscard]] auto RunUiaTaskWithMessagePump(Task&& tas
     auto malformedMembers = std::make_shared<Common::Settings::JsonObject>();
     malformedMembers->members.emplace_back("value", std::move(malformedUtf8Value));
     malformedUtf8Object.value = std::move(malformedMembers);
-    state.Require(! Common::Settings::GetWString(malformedUtf8Object, "value").has_value(), L"Typed settings UTF-16 access must reject malformed UTF-8.");
+    state.Require(! Common::Settings::GetWString(malformedUtf8Object, "value").has_value(),
+                  L"Typed settings UTF-16 access must reject malformed UTF-8.");
     state.Require(! Common::Strings::Utf16FromUtf8ReplacingInvalid(std::string_view("\xC3\x28", 2u)).empty(),
                   L"General UTF-8 conversion must preserve malformed input through replacement characters.");
 
@@ -2343,7 +2348,8 @@ template <typename Task> [[nodiscard]] auto RunUiaTaskWithMessagePump(Task&& tas
     }
 
     state.Require(savedProfile->pluginId == kPluginId, L"Persisted cloud OAuth profile has the wrong plugin id.");
-    state.Require(savedProfile->authMode == Common::Settings::ConnectionAuthMode::OAuth2Pkce, L"Persisted cloud OAuth profile should use authMode=oauth2Pkce.");
+    state.Require(savedProfile->authMode == Common::Settings::ConnectionAuthMode::OAuth2Pkce,
+                  L"Persisted cloud OAuth profile should use authMode=oauth2Pkce.");
 
     SelfTest::AppendSelfTestTrace(L"ConnectionManager cloud-oauth-profile: complete");
     return state.failure.empty();
@@ -2589,10 +2595,11 @@ enum class ConnectionManagerCloseAction
 
     const ConnectionManagerDebugSnapshot baselineSnapshot = snapshot;
     const size_t baselineRowCount                         = snapshot.listRowCount;
-    SelfTest::AppendSelfTestTrace(std::format(L"ConnectionManager validation-{}: before New baselineProfileCount={} baselineSnapshot={}",
-                                              validationLabel,
-                                              baselineProfileCount,
-                                              DescribeConnectionManagerSnapshot(baselineSnapshot)));
+    SelfTest::AppendSelfTestTrace(
+        std::format(L"ConnectionManager validation-{}: before New baselineProfileCount={} baselineSnapshot={}",
+                    validationLabel,
+                    baselineProfileCount,
+                    DescribeConnectionManagerSnapshot(baselineSnapshot)));
     state.Require(ClickConnectionManagerCommandButton(IDC_CONNECTION_NEW), std::format(L"Failed to click New during validation-{}.", validationLabel));
     const bool newProfileReady = WaitForConnectionManagerSnapshot(
         [&](const ConnectionManagerDebugSnapshot& value) noexcept
@@ -2618,8 +2625,10 @@ enum class ConnectionManagerCloseAction
 
     state.Require(SetConnectionManagerNameValueForSelfTest(proposedName),
                   std::format(L"Failed to set the Name field to '{}' during validation-{}.", proposedName, validationLabel));
-    const bool reflectedProposedName = WaitForConnectionManagerSnapshot(
-        [&](const ConnectionManagerDebugSnapshot& value) noexcept { return value.currentNameText == proposedName; }, snapshot, SelfTest::Scale(3000ms));
+    const bool reflectedProposedName =
+        WaitForConnectionManagerSnapshot([&](const ConnectionManagerDebugSnapshot& value) noexcept { return value.currentNameText == proposedName; },
+                                         snapshot,
+                                         SelfTest::Scale(3000ms));
     state.Require(reflectedProposedName,
                   std::format(L"Connection Manager did not reflect the proposed invalid Name '{}' before validation-{}. actualName='{}' selectedRow={} "
                               L"selectedRowName='{}' pluginId='{}' focusKind='{}' focusLabel='{}'",
@@ -3381,7 +3390,8 @@ enum class ConnectionManagerCloseAction
         if (const HWND existing = GetConnectionManagerDialogHandle(); existing && IsWindow(existing) != FALSE)
         {
             PostMessageW(existing, WM_CLOSE, 0, 0);
-            state.Require(WaitForWindowClosed(existing, SelfTest::Scale(3000ms)), std::format(L"Connection Manager window did not close before {}.", context));
+            state.Require(WaitForWindowClosed(existing, SelfTest::Scale(3000ms)),
+                          std::format(L"Connection Manager window did not close before {}.", context));
         }
 
         const HWND current = GetConnectionManagerDialogHandle();
@@ -3431,7 +3441,7 @@ enum class ConnectionManagerCloseAction
         {
             ConnectionManagerDebugSnapshot diagnostic{};
             const bool capturedSnapshot = DebugGetConnectionManagerDialogSnapshot(diagnostic);
-            const HWND currentHandle    = GetConnectionManagerDialogHandle();
+            const HWND currentHandle     = GetConnectionManagerDialogHandle();
             state.Require(false,
                           std::format(L"Connection Manager window did not open during cycle {}. commandDispatched={} currentHandle=0x{:X} "
                                       L"currentIsWindow={} mainEnabled={} activePane={} focusedPane={} capturedSnapshot={} snapshot={}",
@@ -3860,49 +3870,49 @@ enum class ConnectionManagerCloseAction
             }
             if (outSnapshot.selectedListIndex != expectedRow || outSnapshot.currentPluginId != expectedPluginId || outSnapshot.currentNameText != expectedName)
             {
-                SelfTest::AppendSelfTestTrace(std::format(
-                    L"ConnectionManager tab traversal: stability drift expected row={} plugin='{}' name='{}'; actual row={} rowName='{}' plugin='{}' "
-                    L"name='{}' focusKind='{}' focusLabel='{}' rows={} visibleRows={} resizeCount={} resizeFailures={}",
-                    expectedRow,
-                    expectedPluginId,
-                    expectedName,
-                    outSnapshot.selectedListIndex,
-                    outSnapshot.selectedListRowName,
-                    outSnapshot.currentPluginId,
-                    outSnapshot.currentNameText,
-                    DescribeConnectionManagerFocusKind(outSnapshot.focusKind),
-                    outSnapshot.focusLabel,
-                    outSnapshot.listRowCount,
-                    outSnapshot.visibleListRowCount,
-                    outSnapshot.dxListResizeCount,
-                    outSnapshot.dxListResizeFailureCount));
+                SelfTest::AppendSelfTestTrace(
+                    std::format(L"ConnectionManager tab traversal: stability drift expected row={} plugin='{}' name='{}'; actual row={} rowName='{}' plugin='{}' "
+                                L"name='{}' focusKind='{}' focusLabel='{}' rows={} visibleRows={} resizeCount={} resizeFailures={}",
+                                expectedRow,
+                                expectedPluginId,
+                                expectedName,
+                                outSnapshot.selectedListIndex,
+                                outSnapshot.selectedListRowName,
+                                outSnapshot.currentPluginId,
+                                outSnapshot.currentNameText,
+                                DescribeConnectionManagerFocusKind(outSnapshot.focusKind),
+                                outSnapshot.focusLabel,
+                                outSnapshot.listRowCount,
+                                outSnapshot.visibleListRowCount,
+                                outSnapshot.dxListResizeCount,
+                                outSnapshot.dxListResizeFailureCount));
                 return false;
             }
             std::this_thread::sleep_for(20ms);
         }
 
         PumpPendingMessages();
-        outSnapshot       = {};
+        outSnapshot = {};
         const bool stable = DebugGetConnectionManagerDialogSnapshot(outSnapshot) && outSnapshot.selectedListIndex == expectedRow &&
                             outSnapshot.currentPluginId == expectedPluginId && outSnapshot.currentNameText == expectedName;
         if (! stable)
         {
-            SelfTest::AppendSelfTestTrace(std::format(
-                L"ConnectionManager tab traversal: final stability sample expected row={} plugin='{}' name='{}'; actual row={} rowName='{}' plugin='{}' "
-                L"name='{}' focusKind='{}' focusLabel='{}' rows={} visibleRows={} resizeCount={} resizeFailures={}",
-                expectedRow,
-                expectedPluginId,
-                expectedName,
-                outSnapshot.selectedListIndex,
-                outSnapshot.selectedListRowName,
-                outSnapshot.currentPluginId,
-                outSnapshot.currentNameText,
-                DescribeConnectionManagerFocusKind(outSnapshot.focusKind),
-                outSnapshot.focusLabel,
-                outSnapshot.listRowCount,
-                outSnapshot.visibleListRowCount,
-                outSnapshot.dxListResizeCount,
-                outSnapshot.dxListResizeFailureCount));
+            SelfTest::AppendSelfTestTrace(
+                std::format(L"ConnectionManager tab traversal: final stability sample expected row={} plugin='{}' name='{}'; actual row={} rowName='{}' plugin='{}' "
+                            L"name='{}' focusKind='{}' focusLabel='{}' rows={} visibleRows={} resizeCount={} resizeFailures={}",
+                            expectedRow,
+                            expectedPluginId,
+                            expectedName,
+                            outSnapshot.selectedListIndex,
+                            outSnapshot.selectedListRowName,
+                            outSnapshot.currentPluginId,
+                            outSnapshot.currentNameText,
+                            DescribeConnectionManagerFocusKind(outSnapshot.focusKind),
+                            outSnapshot.focusLabel,
+                            outSnapshot.listRowCount,
+                            outSnapshot.visibleListRowCount,
+                            outSnapshot.dxListResizeCount,
+                            outSnapshot.dxListResizeFailureCount));
         }
         return stable;
     };
@@ -4915,9 +4925,10 @@ template <typename Predicate>
     const HWND enterTarget = GetFocus();
     ConnectionManagerDebugSnapshot focusDiagnostic{};
     static_cast<void>(DebugGetConnectionManagerDialogSnapshot(focusDiagnostic));
-    const bool nativeFocusReady = enterTarget != nullptr && IsWindow(enterTarget) != FALSE && (enterTarget == dialog || IsChild(dialog, enterTarget) != FALSE);
-    const bool dxFocusReady     = nameFieldFocused(focusDiagnostic) && focusDiagnostic.focusControlPresent && focusDiagnostic.focusControlVisible &&
-                                  focusDiagnostic.focusControlEnabled && focusDiagnostic.focusControlFocusable;
+    const bool nativeFocusReady = enterTarget != nullptr && IsWindow(enterTarget) != FALSE &&
+                                  (enterTarget == dialog || IsChild(dialog, enterTarget) != FALSE);
+    const bool dxFocusReady = nameFieldFocused(focusDiagnostic) && focusDiagnostic.focusControlPresent && focusDiagnostic.focusControlVisible &&
+                              focusDiagnostic.focusControlEnabled && focusDiagnostic.focusControlFocusable;
     state.Require(nativeFocusReady || dxFocusReady,
                   std::format(L"Connection Manager did not keep keyboard focus on a live dialog descendant or the visible DX Name field before "
                               L"Enter/default-button validation. nativeFocusReady={} dxFocusReady={} enterTarget=0x{:X} dialog=0x{:X}; {}.",
@@ -6969,8 +6980,10 @@ template <typename Predicate>
         ConnectionCredentialPromptDebugSnapshot focusedMaskedSnapshot{};
     } workerResult{};
 
-    const auto clickCredentialToggleWithDiagnostics =
-        [](HWND host, const RECT& rect, ConnectionCredentialPromptDebugSnapshot& afterDown, ConnectionCredentialPromptDebugSnapshot* afterUp = nullptr) noexcept
+    const auto clickCredentialToggleWithDiagnostics = [](HWND host,
+                                                         const RECT& rect,
+                                                         ConnectionCredentialPromptDebugSnapshot& afterDown,
+                                                         ConnectionCredentialPromptDebugSnapshot* afterUp = nullptr) noexcept
     {
         afterDown = {};
         if (afterUp)
@@ -7085,53 +7098,58 @@ template <typename Predicate>
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds{static_cast<long long>(GetDoubleClickTime()) + 50ll});
-        toggleHost                            = nullptr;
-        toggleRect                            = {};
-        workerResult.capturedSecondToggleRect = DebugGetConnectionCredentialPromptToggleSecretButtonHostAndClientRect(toggleHost, toggleRect);
-        workerResult.secondToggleHost         = toggleHost;
-        workerResult.secondToggleRect         = toggleRect;
-        workerResult.sentSecondClick =
-            workerResult.capturedSecondToggleRect &&
-            clickCredentialToggleWithDiagnostics(toggleHost, toggleRect, workerResult.afterSecondDownSnapshot, &workerResult.afterSecondClickSnapshot);
-        workerResult.restoredMaskedState =
-            workerResult.sentSecondClick && WaitForConnectionCredentialPromptSnapshot([](const ConnectionCredentialPromptDebugSnapshot& snapshot) noexcept {
+        toggleHost                              = nullptr;
+        toggleRect                              = {};
+        workerResult.capturedSecondToggleRect   = DebugGetConnectionCredentialPromptToggleSecretButtonHostAndClientRect(toggleHost, toggleRect);
+        workerResult.secondToggleHost           = toggleHost;
+        workerResult.secondToggleRect           = toggleRect;
+        workerResult.sentSecondClick            = workerResult.capturedSecondToggleRect &&
+                                       clickCredentialToggleWithDiagnostics(toggleHost,
+                                                                            toggleRect,
+                                                                            workerResult.afterSecondDownSnapshot,
+                                                                            &workerResult.afterSecondClickSnapshot);
+        workerResult.restoredMaskedState        = workerResult.sentSecondClick &&
+                                           WaitForConnectionCredentialPromptSnapshot([](const ConnectionCredentialPromptDebugSnapshot& snapshot) noexcept {
             return ! snapshot.secretVisible;
         }, SelfTest::Scale(3000ms), &workerResult.maskedSnapshot);
-        workerResult.focusedAfterSecondClick =
-            workerResult.restoredMaskedState && WaitForConnectionCredentialPromptSnapshot([](const ConnectionCredentialPromptDebugSnapshot& snapshot) noexcept {
+        workerResult.focusedAfterSecondClick    = workerResult.restoredMaskedState &&
+                                               WaitForConnectionCredentialPromptSnapshot([](const ConnectionCredentialPromptDebugSnapshot& snapshot) noexcept {
             return ! snapshot.secretVisible && snapshot.focusTarget == ConnectionCredentialPromptDebugFocusTarget::ToggleSecretButton;
         }, SelfTest::Scale(3000ms), &workerResult.focusedMaskedSnapshot);
-        workerResult.toggledMasked = workerResult.restoredMaskedState && workerResult.focusedAfterSecondClick;
-        SelfTest::AppendSelfTestTrace(std::format(L"Credential prompt pointer-toggle: second click host=0x{:X} rect=({},{}-{}, {}) capturedRect={} clicked={}",
-                                                  reinterpret_cast<UINT_PTR>(toggleHost),
-                                                  toggleRect.left,
-                                                  toggleRect.top,
-                                                  toggleRect.right,
-                                                  toggleRect.bottom,
-                                                  workerResult.capturedSecondToggleRect ? 1 : 0,
-                                                  workerResult.sentSecondClick ? 1 : 0));
-        SelfTest::AppendSelfTestTrace(std::format(L"Credential prompt pointer-toggle: after second down visible={} checked={} pressed={} capture={} focus={}",
-                                                  workerResult.afterSecondDownSnapshot.secretVisible ? 1 : 0,
-                                                  workerResult.afterSecondDownSnapshot.toggleSecretChecked ? 1 : 0,
-                                                  workerResult.afterSecondDownSnapshot.toggleSecretPressed ? 1 : 0,
-                                                  workerResult.afterSecondDownSnapshot.hostHasCapture ? 1 : 0,
-                                                  static_cast<unsigned>(workerResult.afterSecondDownSnapshot.focusTarget)));
-        SelfTest::AppendSelfTestTrace(std::format(L"Credential prompt pointer-toggle: after second click visible={} checked={} pressed={} capture={} focus={}",
-                                                  workerResult.afterSecondClickSnapshot.secretVisible ? 1 : 0,
-                                                  workerResult.afterSecondClickSnapshot.toggleSecretChecked ? 1 : 0,
-                                                  workerResult.afterSecondClickSnapshot.toggleSecretPressed ? 1 : 0,
-                                                  workerResult.afterSecondClickSnapshot.hostHasCapture ? 1 : 0,
-                                                  static_cast<unsigned>(workerResult.afterSecondClickSnapshot.focusTarget)));
-        SelfTest::AppendSelfTestTrace(std::format(L"Credential prompt pointer-toggle: after second wait toggled={} maskedRestored={} focusRestored={} "
-                                                  L"visible={} checked={} pressed={} capture={} focus={}",
-                                                  workerResult.toggledMasked ? 1 : 0,
-                                                  workerResult.restoredMaskedState ? 1 : 0,
-                                                  workerResult.focusedAfterSecondClick ? 1 : 0,
-                                                  workerResult.maskedSnapshot.secretVisible ? 1 : 0,
-                                                  workerResult.maskedSnapshot.toggleSecretChecked ? 1 : 0,
-                                                  workerResult.maskedSnapshot.toggleSecretPressed ? 1 : 0,
-                                                  workerResult.maskedSnapshot.hostHasCapture ? 1 : 0,
-                                                  static_cast<unsigned>(workerResult.maskedSnapshot.focusTarget)));
+        workerResult.toggledMasked              = workerResult.restoredMaskedState && workerResult.focusedAfterSecondClick;
+        SelfTest::AppendSelfTestTrace(std::format(
+            L"Credential prompt pointer-toggle: second click host=0x{:X} rect=({},{}-{}, {}) capturedRect={} clicked={}",
+            reinterpret_cast<UINT_PTR>(toggleHost),
+            toggleRect.left,
+            toggleRect.top,
+            toggleRect.right,
+            toggleRect.bottom,
+            workerResult.capturedSecondToggleRect ? 1 : 0,
+            workerResult.sentSecondClick ? 1 : 0));
+        SelfTest::AppendSelfTestTrace(std::format(
+            L"Credential prompt pointer-toggle: after second down visible={} checked={} pressed={} capture={} focus={}",
+            workerResult.afterSecondDownSnapshot.secretVisible ? 1 : 0,
+            workerResult.afterSecondDownSnapshot.toggleSecretChecked ? 1 : 0,
+            workerResult.afterSecondDownSnapshot.toggleSecretPressed ? 1 : 0,
+            workerResult.afterSecondDownSnapshot.hostHasCapture ? 1 : 0,
+            static_cast<unsigned>(workerResult.afterSecondDownSnapshot.focusTarget)));
+        SelfTest::AppendSelfTestTrace(std::format(
+            L"Credential prompt pointer-toggle: after second click visible={} checked={} pressed={} capture={} focus={}",
+            workerResult.afterSecondClickSnapshot.secretVisible ? 1 : 0,
+            workerResult.afterSecondClickSnapshot.toggleSecretChecked ? 1 : 0,
+            workerResult.afterSecondClickSnapshot.toggleSecretPressed ? 1 : 0,
+            workerResult.afterSecondClickSnapshot.hostHasCapture ? 1 : 0,
+            static_cast<unsigned>(workerResult.afterSecondClickSnapshot.focusTarget)));
+        SelfTest::AppendSelfTestTrace(std::format(
+            L"Credential prompt pointer-toggle: after second wait toggled={} maskedRestored={} focusRestored={} visible={} checked={} pressed={} capture={} focus={}",
+            workerResult.toggledMasked ? 1 : 0,
+            workerResult.restoredMaskedState ? 1 : 0,
+            workerResult.focusedAfterSecondClick ? 1 : 0,
+            workerResult.maskedSnapshot.secretVisible ? 1 : 0,
+            workerResult.maskedSnapshot.toggleSecretChecked ? 1 : 0,
+            workerResult.maskedSnapshot.toggleSecretPressed ? 1 : 0,
+            workerResult.maskedSnapshot.hostHasCapture ? 1 : 0,
+            static_cast<unsigned>(workerResult.maskedSnapshot.focusTarget)));
         if (! workerResult.toggledMasked)
         {
             return;
@@ -7247,7 +7265,8 @@ template <typename Predicate>
     state.Require(! IsSecretAccessAuthorized(profileId, SecretKind::SshKeyPassphrase, SecretAccessPurpose::Background, 0u),
                   L"A password grant must not authorize a passphrase.");
 
-    RedSalamander::Connections::SetSecretAccessAuthorizationTickForTesting(profileId, SecretKind::Password, SecretAccessPurpose::Interactive, 0u);
+    RedSalamander::Connections::SetSecretAccessAuthorizationTickForTesting(
+        profileId, SecretKind::Password, SecretAccessPurpose::Interactive, 0u);
     state.Require(! IsSecretAccessAuthorized(profileId, SecretKind::Password, SecretAccessPurpose::Interactive, 1u),
                   L"An expired interactive grant should require another prompt.");
     state.Require(IsSecretAccessAuthorized(profileId, SecretKind::Password, SecretAccessPurpose::Background, 0u),
@@ -7274,8 +7293,9 @@ template <typename Predicate>
 
 void RunConnectionsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestOptions& options, SelfTest::SelfTestSuiteResult& suite) noexcept
 {
-    SelfTest::RunCase(
-        options, suite, L"connection_secret_authorization_scopes", [](CaseState& state) noexcept { return TestConnectionSecretAuthorizationScopes(state); });
+    SelfTest::RunCase(options, suite, L"connection_secret_authorization_scopes", [](CaseState& state) noexcept {
+        return TestConnectionSecretAuthorizationScopes(state);
+    });
     SelfTest::RunCase(options, suite, L"cmd_connection_manager_window_uses_dxui_command_buttons", [=](CaseState& state) noexcept {
         return TestConnectionManagerWindowUsesDxUiCommandButtonsOnly(mainWindow, state);
     });

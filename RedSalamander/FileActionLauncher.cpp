@@ -13,8 +13,8 @@
 #include <wil/resource.h>
 #pragma warning(pop)
 
-#include "HandleIo.h"
 #include "Helpers.h"
+#include "HandleIo.h"
 
 namespace
 {

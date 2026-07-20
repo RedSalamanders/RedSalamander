@@ -559,7 +559,7 @@ private:
     std::optional<EditSuggestQuery> _editSuggestPendingQuery;
     std::jthread _editSuggestThread;
     std::atomic<uint64_t> _editSuggestRequestId = 0;
-    uint64_t _editSuggestEditSessionId          = 0;
+    uint64_t _editSuggestEditSessionId           = 0;
 
     struct SiblingPrefetchQuery
     {
@@ -847,7 +847,7 @@ private:
 
         ID_SIBLING_BASE   = 600, // 600-698 for the bounded sibling list
         ID_SIBLING_SEARCH = 699,
-        ID_HISTORY_BASE   = 700, // 700-799 for history dropdown entries
-        ID_HISTORY_MAX    = 799,
+        ID_HISTORY_BASE = 700, // 700-799 for history dropdown entries
+        ID_HISTORY_MAX  = 799,
     };
 };

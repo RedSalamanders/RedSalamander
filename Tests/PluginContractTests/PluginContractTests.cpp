@@ -15,14 +15,14 @@
 #include "FileSystemPathIdentity.h"
 #include "Helpers.h"
 #include "PackedFileInfoBuffer.h"
+#include "YyjsonHelpers.h"
+#include "TestSupport.h"
 #include "PlugInterfaces/Factory.h"
-#include "PlugInterfaces/FactoryImpl.h"
 #include "PlugInterfaces/FileSystem.h"
 #include "PlugInterfaces/Host.h"
 #include "PlugInterfaces/Informations.h"
 #include "PlugInterfaces/Viewer.h"
-#include "TestSupport.h"
-#include "YyjsonHelpers.h"
+#include "PlugInterfaces/FactoryImpl.h"
 
 #include <wil/com.h>
 #include <wil/resource.h>
@@ -134,8 +134,9 @@ void TestPackedFileInfoBuffer(bool& success) noexcept
     Check(buffer.GetBuffer(&first) == S_OK && first == nullptr, L"packed FileInfo empty result exposes a null buffer", success);
     Check(buffer.GetBufferSize(&byteSize) == S_OK && byteSize == 0, L"packed FileInfo empty result has zero used bytes", success);
     Check(buffer.GetCount(&count) == S_OK && count == 0, L"packed FileInfo empty result has zero entries", success);
-    Check(
-        buffer.Get(0, &first) == HRESULT_FROM_WIN32(ERROR_NO_MORE_FILES) && first == nullptr, L"packed FileInfo empty result rejects indexed access", success);
+    Check(buffer.Get(0, &first) == HRESULT_FROM_WIN32(ERROR_NO_MORE_FILES) && first == nullptr,
+          L"packed FileInfo empty result rejects indexed access",
+          success);
 
     const std::vector<PackedFileInfoTestEntry> entries = {
         {L"a", 7u, FILE_ATTRIBUTE_NORMAL, 11u},
@@ -152,14 +153,15 @@ void TestPackedFileInfoBuffer(bool& success) noexcept
     });
     Check(buildHr == S_OK, L"packed FileInfo owner builds a multi-entry result", success);
     Check(buffer.GetBuffer(&first) == S_OK && first != nullptr, L"packed FileInfo multi-entry result exposes its buffer", success);
-    Check(
-        first != nullptr && (reinterpret_cast<uintptr_t>(first) % alignof(FileInfo)) == 0u, L"packed FileInfo buffer base honors FileInfo alignment", success);
+    Check(first != nullptr && (reinterpret_cast<uintptr_t>(first) % alignof(FileInfo)) == 0u,
+          L"packed FileInfo buffer base honors FileInfo alignment",
+          success);
     Check(buffer.GetCount(&count) == S_OK && count == entries.size(), L"packed FileInfo count matches the source entries", success);
 
     for (unsigned long index = 0; index < entries.size(); ++index)
     {
-        FileInfo* entry                    = nullptr;
-        const HRESULT getHr                = buffer.Get(index, &entry);
+        FileInfo* entry = nullptr;
+        const HRESULT getHr = buffer.Get(index, &entry);
         const std::wstring_view actualName = entry ? std::wstring_view(entry->FileName, entry->FileNameSize / sizeof(wchar_t)) : std::wstring_view{};
         Check(getHr == S_OK && entry != nullptr && actualName == entries[index].name && entry->FileIndex == entries[index].fileIndex &&
                   entry->FileAttributes == entries[index].attributes && entry->EndOfFile == static_cast<__int64>(entries[index].sizeBytes),
@@ -374,24 +376,24 @@ bool TestEnumerateAndSchema(std::wstring_view relPath, const IID& expectedIid, b
 void TestTransactionalConfiguration(IInformations& information, std::wstring_view relativePath, const wchar_t* pluginId, bool& success) noexcept
 {
     constexpr char kForwardConfiguration[] = R"json({"observatoryUnknown":{"value":17}})json";
-    const HRESULT forwardHr                = information.SetConfiguration(kForwardConfiguration);
-    const char* configuration              = nullptr;
-    const HRESULT getForwardHr             = information.GetConfiguration(&configuration);
-    const std::string preserved            = configuration != nullptr ? configuration : "";
+    const HRESULT forwardHr = information.SetConfiguration(kForwardConfiguration);
+    const char* configuration = nullptr;
+    const HRESULT getForwardHr = information.GetConfiguration(&configuration);
+    const std::string preserved = configuration != nullptr ? configuration : "";
     Check(forwardHr == S_OK && getForwardHr == S_OK && preserved.find("\"observatoryUnknown\"") != std::string::npos,
           std::format(L"{}: SetConfiguration(pluginId={}) preserves unknown members", relativePath, pluginId).c_str(),
           success);
 
-    const HRESULT malformedHr         = information.SetConfiguration("{");
-    configuration                     = nullptr;
+    const HRESULT malformedHr = information.SetConfiguration("{");
+    configuration = nullptr;
     const HRESULT getAfterMalformedHr = information.GetConfiguration(&configuration);
     Check(malformedHr == HRESULT_FROM_WIN32(ERROR_INVALID_DATA) && getAfterMalformedHr == S_OK && configuration != nullptr &&
               std::string_view(configuration) == preserved,
           std::format(L"{}: malformed configuration preserves live state for pluginId={}", relativePath, pluginId).c_str(),
           success);
 
-    const HRESULT wrongRootHr         = information.SetConfiguration("[]");
-    configuration                     = nullptr;
+    const HRESULT wrongRootHr = information.SetConfiguration("[]");
+    configuration = nullptr;
     const HRESULT getAfterWrongRootHr = information.GetConfiguration(&configuration);
     Check(wrongRootHr == HRESULT_FROM_WIN32(ERROR_INVALID_DATA) && getAfterWrongRootHr == S_OK && configuration != nullptr &&
               std::string_view(configuration) == preserved,
@@ -400,13 +402,14 @@ void TestTransactionalConfiguration(IInformations& information, std::wstring_vie
 
     if (relativePath == L"Plugins\\FileSystem7z.dll" || relativePath == L"Plugins\\FileSystemCurl.dll")
     {
-        constexpr char kLegacyPasswordConfiguration[] = R"json({"defaultPassword":"observatory-password-sentinel","observatoryUnknown":17})json";
+        constexpr char kLegacyPasswordConfiguration[] =
+            R"json({"defaultPassword":"observatory-password-sentinel","observatoryUnknown":17})json";
         constexpr char kLegacyCurlSecretConfiguration[] =
             R"json({"defaultPassword":"observatory-password-sentinel","sshKeyPassphrase":"observatory-passphrase-sentinel","observatoryUnknown":17})json";
-        const char* legacyConfiguration  = relativePath == L"Plugins\\FileSystemCurl.dll" ? kLegacyCurlSecretConfiguration : kLegacyPasswordConfiguration;
-        const HRESULT secretHr           = information.SetConfiguration(legacyConfiguration);
-        configuration                    = nullptr;
-        const HRESULT getSecretHr        = information.GetConfiguration(&configuration);
+        const char* legacyConfiguration = relativePath == L"Plugins\\FileSystemCurl.dll" ? kLegacyCurlSecretConfiguration : kLegacyPasswordConfiguration;
+        const HRESULT secretHr          = information.SetConfiguration(legacyConfiguration);
+        configuration          = nullptr;
+        const HRESULT getSecretHr = information.GetConfiguration(&configuration);
         const std::string_view sanitized = configuration != nullptr ? configuration : "";
         Check(secretHr == S_OK && getSecretHr == S_OK && sanitized.find("observatoryUnknown") != std::string_view::npos &&
                   sanitized.find("observatory-password-sentinel") == std::string_view::npos &&
@@ -454,11 +457,12 @@ void TestLocalWriterFlagContract(IFileSystem& fileSystem, bool& success) noexcep
     }
 
     std::error_code error;
-    const std::filesystem::path root = RedSalamander::TestSupport::AcquireTestDirectory({.harnessSegment      = L"PluginContractTests",
-                                                                                         .leafSegment         = L"observatory-track13-local-writer",
-                                                                                         .fallbackRunIdPrefix = L"plugin-contract",
-                                                                                         .kind = RedSalamander::TestSupport::TestDirectoryKind::Scratch},
-                                                                                        error);
+    const std::filesystem::path root = RedSalamander::TestSupport::AcquireTestDirectory(
+        {.harnessSegment     = L"PluginContractTests",
+         .leafSegment        = L"observatory-track13-local-writer",
+         .fallbackRunIdPrefix = L"plugin-contract",
+         .kind                = RedSalamander::TestSupport::TestDirectoryKind::Scratch},
+        error);
     Check(! error && ! root.empty(), L"local writer flag proof acquires TestSandbox scratch", success);
     if (error || root.empty())
     {
@@ -473,7 +477,9 @@ void TestLocalWriterFlagContract(IFileSystem& fileSystem, bool& success) noexcep
     Check(madeReadOnly, L"local writer flag proof seeds a read-only destination", success);
 
     wil::com_ptr_nothrow<IFileWriter> writer;
-    const HRESULT createHr = madeReadOnly ? io->CreateFileWriter(target.c_str(), FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY, writer.put()) : E_UNEXPECTED;
+    const HRESULT createHr = madeReadOnly
+                                 ? io->CreateFileWriter(target.c_str(), FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY, writer.put())
+                                 : E_UNEXPECTED;
     const DWORD attributes = ::GetFileAttributesW(target.c_str());
     Check(createHr == E_INVALIDARG && ! writer && attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_READONLY) != 0u,
           L"local writer rejects replace-readonly without overwrite and preserves destination attributes",
@@ -497,18 +503,28 @@ void TestDummyTransactionalMutationContracts(IFileSystem& fileSystem, bool& succ
         return;
     }
 
-    const std::wstring root  = std::format(L"/observatory-track13-{}", GetTickCount64());
+    const std::wstring root = std::format(L"/observatory-track13-{}", GetTickCount64());
     const auto makeDirectory = [&](std::wstring_view suffix) noexcept
-    { return directoryOperations->CreateDirectory((root + std::wstring(suffix)).c_str()) == S_OK; };
-    const auto makeFile = [&](std::wstring_view suffix) noexcept { return CreateEmptyProviderFile(*io.get(), root + std::wstring(suffix)); };
+    {
+        return directoryOperations->CreateDirectory((root + std::wstring(suffix)).c_str()) == S_OK;
+    };
+    const auto makeFile = [&](std::wstring_view suffix) noexcept
+    {
+        return CreateEmptyProviderFile(*io.get(), root + std::wstring(suffix));
+    };
 
     const bool copySeeded = makeDirectory(L"") && makeDirectory(L"/copy-source") && makeDirectory(L"/copy-destination") &&
-                            makeFile(L"/copy-source/first.txt") && makeFile(L"/copy-source/late.txt") && makeFile(L"/copy-destination/late.txt");
+                            makeFile(L"/copy-source/first.txt") && makeFile(L"/copy-source/late.txt") &&
+                            makeFile(L"/copy-destination/late.txt");
     Check(copySeeded, L"dummy copy rollback proof seeds source and late destination collision", success);
-    const HRESULT copyHr =
-        copySeeded
-            ? fileSystem.CopyItem((root + L"/copy-source").c_str(), (root + L"/copy-destination").c_str(), FILESYSTEM_FLAG_RECURSIVE, nullptr, nullptr, nullptr)
-            : E_UNEXPECTED;
+    const HRESULT copyHr = copySeeded
+                               ? fileSystem.CopyItem((root + L"/copy-source").c_str(),
+                                                     (root + L"/copy-destination").c_str(),
+                                                     FILESYSTEM_FLAG_RECURSIVE,
+                                                     nullptr,
+                                                     nullptr,
+                                                     nullptr)
+                               : E_UNEXPECTED;
     Check(copyHr == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS) && ! ProviderFileExists(*io.get(), root + L"/copy-destination/first.txt"),
           L"dummy directory copy preflights a late collision without partial destination mutation",
           success);
@@ -516,10 +532,14 @@ void TestDummyTransactionalMutationContracts(IFileSystem& fileSystem, bool& succ
     const bool moveSeeded = makeDirectory(L"/move-source") && makeDirectory(L"/move-destination") && makeFile(L"/move-source/first.txt") &&
                             makeFile(L"/move-source/late.txt") && makeFile(L"/move-destination/late.txt");
     Check(moveSeeded, L"dummy move rollback proof seeds source and late destination collision", success);
-    const HRESULT moveHr =
-        moveSeeded
-            ? fileSystem.MoveItem((root + L"/move-source").c_str(), (root + L"/move-destination").c_str(), FILESYSTEM_FLAG_RECURSIVE, nullptr, nullptr, nullptr)
-            : E_UNEXPECTED;
+    const HRESULT moveHr = moveSeeded
+                               ? fileSystem.MoveItem((root + L"/move-source").c_str(),
+                                                     (root + L"/move-destination").c_str(),
+                                                     FILESYSTEM_FLAG_RECURSIVE,
+                                                     nullptr,
+                                                     nullptr,
+                                                     nullptr)
+                               : E_UNEXPECTED;
     Check(moveHr == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS) && ProviderFileExists(*io.get(), root + L"/move-source/first.txt") &&
               ! ProviderFileExists(*io.get(), root + L"/move-destination/first.txt"),
           L"dummy directory move preflights a late collision without partial source or destination mutation",
@@ -528,14 +548,19 @@ void TestDummyTransactionalMutationContracts(IFileSystem& fileSystem, bool& succ
     const bool deleteSeeded = makeDirectory(L"/delete-source") && makeFile(L"/delete-source/readonly-child.txt") &&
                               SetProviderReadOnly(*io.get(), root + L"/delete-source/readonly-child.txt");
     Check(deleteSeeded, L"dummy recursive delete proof seeds a read-only descendant", success);
-    const HRESULT deleteHr =
-        deleteSeeded ? fileSystem.DeleteItem((root + L"/delete-source").c_str(), FILESYSTEM_FLAG_RECURSIVE, nullptr, nullptr, nullptr) : E_UNEXPECTED;
+    const HRESULT deleteHr = deleteSeeded
+                                 ? fileSystem.DeleteItem(
+                                       (root + L"/delete-source").c_str(), FILESYSTEM_FLAG_RECURSIVE, nullptr, nullptr, nullptr)
+                                 : E_UNEXPECTED;
     Check(deleteHr == HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED) && ProviderFileExists(*io.get(), root + L"/delete-source/readonly-child.txt"),
           L"dummy recursive delete applies read-only policy to descendants before mutation",
           success);
 
-    const FileSystemFlags cleanupFlags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY);
-    Check(fileSystem.DeleteItem(root.c_str(), cleanupFlags, nullptr, nullptr, nullptr) == S_OK, L"dummy Track 13 proof cleans its provider fixture", success);
+    const FileSystemFlags cleanupFlags =
+        static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY);
+    Check(fileSystem.DeleteItem(root.c_str(), cleanupFlags, nullptr, nullptr, nullptr) == S_OK,
+          L"dummy Track 13 proof cleans its provider fixture",
+          success);
 }
 
 void TestTrack13ProviderContracts(IFileSystem& fileSystem, std::wstring_view relativePath, bool& success) noexcept
@@ -738,7 +763,8 @@ bool TestBogusPluginId(bool& success) noexcept
     return false;
 }
 
-bool TestPluginDebugSelfTests(std::wstring_view relativeDllPath, const char* exportName, std::wstring_view label, bool exportRequired, bool& success) noexcept
+bool TestPluginDebugSelfTests(
+    std::wstring_view relativeDllPath, const char* exportName, std::wstring_view label, bool exportRequired, bool& success) noexcept
 {
     const std::wstring exeDir  = GetExeDir();
     const std::wstring absPath = exeDir + std::wstring(relativeDllPath);
@@ -764,7 +790,7 @@ bool TestPluginDebugSelfTests(std::wstring_view relativeDllPath, const char* exp
         std::format(L"{}: debug selftests pass (passed={}, failed={}, hr=0x{:08X})", label, passed, failed, static_cast<unsigned long>(hr));
     Check(SUCCEEDED(hr) && failed == 0 && passed > 0, passMessage.c_str(), success);
 
-    const auto shutdown  = reinterpret_cast<PfnPluginShutdown>(GetProcAddress(mod.get(), "RedSalamanderPluginShutdown"));
+    const auto shutdown = reinterpret_cast<PfnPluginShutdown>(GetProcAddress(mod.get(), "RedSalamanderPluginShutdown"));
     const auto canUnload = reinterpret_cast<PfnPluginCanUnloadNow>(GetProcAddress(mod.get(), "RedSalamanderPluginCanUnloadNow"));
     if (shutdown && canUnload)
     {
@@ -799,7 +825,7 @@ bool RunCapabilitiesPass(std::span<const std::wstring_view> dlls) noexcept
 
 void TestS3RuntimeUnloadContract(bool& success) noexcept
 {
-    const std::wstring absPath            = GetExeDir() + L"Plugins\\FileSystemS3.dll";
+    const std::wstring absPath = GetExeDir() + L"Plugins\\FileSystemS3.dll";
     constexpr unsigned int kRefreshCycles = 8u;
     for (unsigned int cycle = 0u; cycle < kRefreshCycles; ++cycle)
     {
@@ -810,8 +836,8 @@ void TestS3RuntimeUnloadContract(bool& success) noexcept
             return;
         }
 
-        const auto create    = reinterpret_cast<PfnCreate>(GetProcAddress(module.get(), "RedSalamanderCreate"));
-        const auto shutdown  = reinterpret_cast<PfnPluginShutdown>(GetProcAddress(module.get(), "RedSalamanderPluginShutdown"));
+        const auto create = reinterpret_cast<PfnCreate>(GetProcAddress(module.get(), "RedSalamanderCreate"));
+        const auto shutdown = reinterpret_cast<PfnPluginShutdown>(GetProcAddress(module.get(), "RedSalamanderPluginShutdown"));
         const auto canUnload = reinterpret_cast<PfnPluginCanUnloadNow>(GetProcAddress(module.get(), "RedSalamanderPluginCanUnloadNow"));
         Check(create != nullptr && shutdown != nullptr && canUnload != nullptr,
               std::format(L"FileSystemS3.dll: refresh cycle {} resolves lifecycle exports", cycle + 1u).c_str(),
@@ -825,22 +851,33 @@ void TestS3RuntimeUnloadContract(bool& success) noexcept
         const HRESULT createHr = create(__uuidof(IFileSystem), nullptr, &g_nullHost, L"builtin/file-system-s3", &raw);
         wil::com_ptr_nothrow<IFileSystem> fileSystem;
         fileSystem.attach(static_cast<IFileSystem*>(raw));
-        Check(createHr == S_OK && fileSystem, std::format(L"FileSystemS3.dll: refresh cycle {} creates an initialized owner", cycle + 1u).c_str(), success);
+        Check(createHr == S_OK && fileSystem,
+              std::format(L"FileSystemS3.dll: refresh cycle {} creates an initialized owner", cycle + 1u).c_str(),
+              success);
         if (FAILED(createHr) || ! fileSystem)
         {
             return;
         }
 
-        Check(canUnload() == FALSE, std::format(L"FileSystemS3.dll: refresh cycle {} is closed before the quiet point", cycle + 1u).c_str(), success);
+        Check(canUnload() == FALSE,
+              std::format(L"FileSystemS3.dll: refresh cycle {} is closed before the quiet point", cycle + 1u).c_str(),
+              success);
         shutdown();
-        Check(canUnload() == FALSE, std::format(L"FileSystemS3.dll: refresh cycle {} stays closed while an AWS owner is alive", cycle + 1u).c_str(), success);
+        Check(canUnload() == FALSE,
+              std::format(L"FileSystemS3.dll: refresh cycle {} stays closed while an AWS owner is alive", cycle + 1u).c_str(),
+              success);
         fileSystem.reset();
-        Check(canUnload() == TRUE, std::format(L"FileSystemS3.dll: refresh cycle {} opens after AWS shutdown", cycle + 1u).c_str(), success);
+        Check(canUnload() == TRUE,
+              std::format(L"FileSystemS3.dll: refresh cycle {} opens after AWS shutdown", cycle + 1u).c_str(),
+              success);
         shutdown();
-        Check(canUnload() == TRUE, std::format(L"FileSystemS3.dll: refresh cycle {} keeps shutdown idempotent", cycle + 1u).c_str(), success);
+        Check(canUnload() == TRUE,
+              std::format(L"FileSystemS3.dll: refresh cycle {} keeps shutdown idempotent", cycle + 1u).c_str(),
+              success);
         module.reset();
-        Check(
-            GetModuleHandleW(absPath.c_str()) == nullptr, std::format(L"FileSystemS3.dll: refresh cycle {} releases the module", cycle + 1u).c_str(), success);
+        Check(GetModuleHandleW(absPath.c_str()) == nullptr,
+              std::format(L"FileSystemS3.dll: refresh cycle {} releases the module", cycle + 1u).c_str(),
+              success);
     }
 }
 
@@ -848,7 +885,7 @@ void TestCrossPluginCurlRuntimeUnloadContract(bool& success) noexcept
 {
     struct RuntimeModule
     {
-        RuntimeModule()                                = default;
+        RuntimeModule() = default;
         RuntimeModule(const RuntimeModule&)            = delete;
         RuntimeModule& operator=(const RuntimeModule&) = delete;
         RuntimeModule(RuntimeModule&&)                 = default;
@@ -857,23 +894,23 @@ void TestCrossPluginCurlRuntimeUnloadContract(bool& success) noexcept
         std::wstring label;
         std::wstring path;
         wil::unique_hmodule module;
-        PfnPluginShutdown shutdown      = nullptr;
-        PfnPluginCanUnloadNow canUnload = nullptr;
-        PfnDebugCurlRuntimeProbe probe  = nullptr;
+        PfnPluginShutdown shutdown       = nullptr;
+        PfnPluginCanUnloadNow canUnload  = nullptr;
+        PfnDebugCurlRuntimeProbe probe   = nullptr;
     };
 
     const auto loadModule = [&](std::wstring_view fileName, std::wstring_view label) -> RuntimeModule
     {
         RuntimeModule loaded;
-        loaded.label = label;
-        loaded.path  = GetExeDir() + L"Plugins\\" + std::wstring(fileName);
+        loaded.label  = label;
+        loaded.path   = GetExeDir() + L"Plugins\\" + std::wstring(fileName);
         loaded.module.reset(LoadLibraryExW(loaded.path.c_str(), nullptr, 0));
         Check(static_cast<bool>(loaded.module), std::format(L"{}: loads for shared libcurl runtime proof", label).c_str(), success);
         if (loaded.module)
         {
-            loaded.shutdown  = reinterpret_cast<PfnPluginShutdown>(GetProcAddress(loaded.module.get(), "RedSalamanderPluginShutdown"));
+            loaded.shutdown = reinterpret_cast<PfnPluginShutdown>(GetProcAddress(loaded.module.get(), "RedSalamanderPluginShutdown"));
             loaded.canUnload = reinterpret_cast<PfnPluginCanUnloadNow>(GetProcAddress(loaded.module.get(), "RedSalamanderPluginCanUnloadNow"));
-            loaded.probe     = reinterpret_cast<PfnDebugCurlRuntimeProbe>(GetProcAddress(loaded.module.get(), "RedSalamanderDebugCurlRuntimeProbe"));
+            loaded.probe = reinterpret_cast<PfnDebugCurlRuntimeProbe>(GetProcAddress(loaded.module.get(), "RedSalamanderDebugCurlRuntimeProbe"));
             Check(loaded.shutdown && loaded.canUnload && loaded.probe,
                   std::format(L"{}: resolves shared libcurl lifecycle and probe exports", label).c_str(),
                   success);
@@ -888,7 +925,9 @@ void TestCrossPluginCurlRuntimeUnloadContract(bool& success) noexcept
               std::format(L"{}: refresh cycle {} reaches its quiet point while its peer survives", target.label, cycle).c_str(),
               success);
         target.module.reset();
-        Check(GetModuleHandleW(target.path.c_str()) == nullptr, std::format(L"{}: refresh cycle {} physically unloads", target.label, cycle).c_str(), success);
+        Check(GetModuleHandleW(target.path.c_str()) == nullptr,
+              std::format(L"{}: refresh cycle {} physically unloads", target.label, cycle).c_str(),
+              success);
     };
 
     constexpr unsigned int kRefreshCycles = 8u;
@@ -968,7 +1007,8 @@ int wmain(int argc, wchar_t** argv)
     const PluginMetaData* enumeratedMetaData = nullptr;
     unsigned int enumeratedCount             = 0u;
     Check(FactoryEnumeratePlugins<IViewer>(validFactoryEntries, __uuidof(IViewer), &enumeratedMetaData, &enumeratedCount) == S_OK &&
-              enumeratedMetaData == g_factoryContractMetaData.data() && enumeratedCount == static_cast<unsigned int>(std::size(validFactoryEntries)),
+              enumeratedMetaData == g_factoryContractMetaData.data() &&
+              enumeratedCount == static_cast<unsigned int>(std::size(validFactoryEntries)),
           L"factory enumeration accepts a valid contiguous bounded metadata array",
           success);
 
@@ -1018,13 +1058,23 @@ int wmain(int argc, wchar_t** argv)
         std::wcout << L"[ RUN      ] Step5: Configuration-gated plugin debug selftests\n";
         {
             bool debugSuccess = true;
-            Check(! IsDebugSelfTestExportPresenceAccepted(false, true), L"missing required debug selftest export turns the step red", debugSuccess);
-            Check(IsDebugSelfTestExportPresenceAccepted(false, false), L"missing configuration-gated debug selftest export is an explicit skip", debugSuccess);
+            Check(! IsDebugSelfTestExportPresenceAccepted(false, true),
+                  L"missing required debug selftest export turns the step red",
+                  debugSuccess);
+            Check(IsDebugSelfTestExportPresenceAccepted(false, false),
+                  L"missing configuration-gated debug selftest export is an explicit skip",
+                  debugSuccess);
 
-            TestPluginDebugSelfTests(
-                L"Plugins\\FileSystem.dll", "RedSalamanderFileSystemDebugSelfTests", L"FileSystem.dll", kDebugSelfTestExportsRequired, debugSuccess);
-            TestPluginDebugSelfTests(
-                L"Plugins\\FileSystem7z.dll", "RedSalamander7zDebugSelfTests", L"FileSystem7z.dll", kDebugSelfTestExportsRequired, debugSuccess);
+            TestPluginDebugSelfTests(L"Plugins\\FileSystem.dll",
+                                     "RedSalamanderFileSystemDebugSelfTests",
+                                     L"FileSystem.dll",
+                                     kDebugSelfTestExportsRequired,
+                                     debugSuccess);
+            TestPluginDebugSelfTests(L"Plugins\\FileSystem7z.dll",
+                                     "RedSalamander7zDebugSelfTests",
+                                     L"FileSystem7z.dll",
+                                     kDebugSelfTestExportsRequired,
+                                     debugSuccess);
             TestPluginDebugSelfTests(L"Plugins\\FileSystemMicrosoftDrive.dll",
                                      "RedSalamanderMicrosoftDriveDebugSelfTests",
                                      L"FileSystemMicrosoftDrive.dll",
@@ -1035,10 +1085,16 @@ int wmain(int argc, wchar_t** argv)
                                      L"FileSystemGoogleDrive.dll",
                                      kDebugSelfTestExportsRequired,
                                      debugSuccess);
-            TestPluginDebugSelfTests(
-                L"Plugins\\FileSystemS3.dll", "RedSalamanderS3DebugSelfTests", L"FileSystemS3.dll", kDebugSelfTestExportsRequired, debugSuccess);
-            TestPluginDebugSelfTests(
-                L"Plugins\\FileSystemCurl.dll", "RedSalamanderCurlDebugSelfTests", L"FileSystemCurl.dll", kDebugSelfTestExportsRequired, debugSuccess);
+            TestPluginDebugSelfTests(L"Plugins\\FileSystemS3.dll",
+                                     "RedSalamanderS3DebugSelfTests",
+                                     L"FileSystemS3.dll",
+                                     kDebugSelfTestExportsRequired,
+                                     debugSuccess);
+            TestPluginDebugSelfTests(L"Plugins\\FileSystemCurl.dll",
+                                     "RedSalamanderCurlDebugSelfTests",
+                                     L"FileSystemCurl.dll",
+                                     kDebugSelfTestExportsRequired,
+                                     debugSuccess);
             success = debugSuccess && success;
         }
 
@@ -1055,6 +1111,6 @@ int wmain(int argc, wchar_t** argv)
     }
 
     std::wcout << (success ? (packageSmoke ? L"PluginContractTests package smoke passed.\n" : L"PluginContractTests passed.\n")
-                           : L"PluginContractTests FAILED.\n");
+                            : L"PluginContractTests FAILED.\n");
     return success ? 0 : 1;
 }

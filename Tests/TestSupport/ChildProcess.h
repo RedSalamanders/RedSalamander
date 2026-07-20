@@ -105,7 +105,8 @@ struct ChildProcessResult final
     return quoted;
 }
 
-[[nodiscard]] inline std::wstring BuildWindowsCommandLine(const std::filesystem::path& executablePath, const std::vector<std::wstring>& arguments)
+[[nodiscard]] inline std::wstring BuildWindowsCommandLine(const std::filesystem::path& executablePath,
+                                                           const std::vector<std::wstring>& arguments)
 {
     std::wstring commandLine = QuoteWindowsCommandLineArgument(executablePath.wstring());
     for (const std::wstring& argument : arguments)
@@ -121,7 +122,7 @@ namespace ChildProcessDetail
 struct PipeDrainState final
 {
     std::string bytes;
-    DWORD error    = ERROR_SUCCESS;
+    DWORD error = ERROR_SUCCESS;
     bool truncated = false;
 };
 
@@ -228,8 +229,8 @@ inline void DrainPipe(HANDLE pipe, size_t maximumBytes, PipeDrainState& state) n
     SECURITY_ATTRIBUTES securityAttributes{};
     securityAttributes.nLength        = sizeof(securityAttributes);
     securityAttributes.bInheritHandle = TRUE;
-    wil::unique_hfile nullInput(
-        CreateFileW(L"NUL", GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, &securityAttributes, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+    wil::unique_hfile nullInput(CreateFileW(
+        L"NUL", GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, &securityAttributes, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
     if (! nullInput)
     {
         SetFailure(result, ChildProcessStatus::LaunchFailed, L"CreateFileW(NUL)", GetLastError());
@@ -267,8 +268,13 @@ inline void DrainPipe(HANDLE pipe, size_t maximumBytes, PipeDrainState& state) n
     const auto deleteAttributeList = wil::scope_exit([&] noexcept { DeleteProcThreadAttributeList(attributeList); });
 
     std::array<HANDLE, 3> inheritedHandles{nullInput.get(), stdoutWrite.get(), stderrWrite.get()};
-    if (UpdateProcThreadAttribute(attributeList, 0u, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, inheritedHandles.data(), sizeof(inheritedHandles), nullptr, nullptr) ==
-        FALSE)
+    if (UpdateProcThreadAttribute(attributeList,
+                                  0u,
+                                  PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
+                                  inheritedHandles.data(),
+                                  sizeof(inheritedHandles),
+                                  nullptr,
+                                  nullptr) == FALSE)
     {
         SetFailure(result, ChildProcessStatus::LaunchFailed, L"UpdateProcThreadAttribute(HANDLE_LIST)", GetLastError());
         return result;
@@ -282,7 +288,7 @@ inline void DrainPipe(HANDLE pipe, size_t maximumBytes, PipeDrainState& state) n
     startupInfo.StartupInfo.hStdError  = stderrWrite.get();
     startupInfo.lpAttributeList        = attributeList;
 
-    std::wstring executable  = options.executablePath.wstring();
+    std::wstring executable = options.executablePath.wstring();
     std::wstring commandLine = BuildWindowsCommandLine(options.executablePath, options.arguments);
     std::wstring workingDirectory;
     const wchar_t* workingDirectoryPointer = nullptr;
@@ -329,10 +335,12 @@ inline void DrainPipe(HANDLE pipe, size_t maximumBytes, PipeDrainState& state) n
     std::jthread stderrDrain;
     try
     {
-        stdoutDrain = std::jthread([pipe = stdoutRead.get(), maximumBytes = options.maxStdoutBytes, &stdoutState]() noexcept
-        { DrainPipe(pipe, maximumBytes, stdoutState); });
-        stderrDrain = std::jthread([pipe = stderrRead.get(), maximumBytes = options.maxStderrBytes, &stderrState]() noexcept
-        { DrainPipe(pipe, maximumBytes, stderrState); });
+        stdoutDrain = std::jthread([pipe = stdoutRead.get(), maximumBytes = options.maxStdoutBytes, &stdoutState]() noexcept {
+            DrainPipe(pipe, maximumBytes, stdoutState);
+        });
+        stderrDrain = std::jthread([pipe = stderrRead.get(), maximumBytes = options.maxStderrBytes, &stderrState]() noexcept {
+            DrainPipe(pipe, maximumBytes, stderrState);
+        });
     }
     catch (const std::system_error&)
     {
@@ -357,7 +365,7 @@ inline void DrainPipe(HANDLE pipe, size_t maximumBytes, PipeDrainState& state) n
     }
     else
     {
-        result.status       = ChildProcessStatus::Completed;
+        result.status = ChildProcessStatus::Completed;
         const auto deadline = startedAt + options.timeout;
         for (;;)
         {
@@ -388,8 +396,8 @@ inline void DrainPipe(HANDLE pipe, size_t maximumBytes, PipeDrainState& state) n
                 break;
             }
 
-            const auto remaining   = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now);
-            const DWORD waitSlice  = static_cast<DWORD>((std::max)(1ll, (std::min)(50ll, remaining.count())));
+            const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now);
+            const DWORD waitSlice = static_cast<DWORD>((std::max)(1ll, (std::min)(50ll, remaining.count())));
             const DWORD waitResult = WaitForSingleObject(process.get(), waitSlice);
             if (waitResult == WAIT_OBJECT_0)
             {

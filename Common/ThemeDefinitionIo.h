@@ -51,11 +51,11 @@ COMMON_API HRESULT ParseThemeDefinitionJson5(std::string_view jsonText,
                                              std::wstring* outMessage) noexcept;
 
 COMMON_API HRESULT ParseThemeDefinitionFromValue(const JsonValue& value,
-                                                 ThemeDefinition& outTheme,
-                                                 ThemeDefinitionParseMode mode,
-                                                 ThemeDefinitionIoError* outError,
-                                                 std::wstring* outMessage,
-                                                 uint32_t* outSkippedColorEntries = nullptr) noexcept;
+                                                  ThemeDefinition& outTheme,
+                                                  ThemeDefinitionParseMode mode,
+                                                  ThemeDefinitionIoError* outError,
+                                                  std::wstring* outMessage,
+                                                  uint32_t* outSkippedColorEntries = nullptr) noexcept;
 
 COMMON_API HRESULT BuildThemeDefinitionJson5(const ThemeDefinition& theme, std::string& outJson) noexcept;
 } // namespace Common::Settings

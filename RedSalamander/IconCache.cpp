@@ -46,7 +46,7 @@ constexpr std::chrono::milliseconds kLivePathIconFailureMaxBackoff{4000};
     constexpr uint32_t kMaxBackoffShift = 4u;
     const uint32_t failureIndex         = consecutiveFailureCount > 0u ? consecutiveFailureCount - 1u : 0u;
     const uint32_t shift                = std::min(failureIndex, kMaxBackoffShift);
-    const auto scaledCount              = kLivePathIconFailureInitialBackoff.count() * static_cast<int64_t>(uint64_t{1u} << shift);
+    const auto scaledCount = kLivePathIconFailureInitialBackoff.count() * static_cast<int64_t>(uint64_t{1u} << shift);
     return std::chrono::milliseconds{std::min(scaledCount, kLivePathIconFailureMaxBackoff.count())};
 }
 
@@ -1184,9 +1184,9 @@ std::optional<int> IconCache::QuerySysIconIndexForPath(const wchar_t* path, DWOR
         {
             if (it->second.lookupFailed)
             {
-                const auto now            = std::chrono::steady_clock::now();
+                const auto now = std::chrono::steady_clock::now();
                 const auto failureBackoff = useFileAttributes ? std::chrono::duration_cast<std::chrono::milliseconds>(kPathIconFailureTtl)
-                                                              : LivePathIconFailureBackoff(it->second.consecutiveFailureCount);
+                                                               : LivePathIconFailureBackoff(it->second.consecutiveFailureCount);
                 if (now - it->second.failureStamp < failureBackoff)
                 {
                     it->second.lastAccessTime = ++_pathQueryAccessCounter;
@@ -1274,7 +1274,8 @@ std::optional<int> IconCache::QuerySysIconIndexForPath(const wchar_t* path, DWOR
         const auto existing = _pathToIconIndex.find(cacheKey);
         if (existing == _pathToIconIndex.end())
         {
-            static_cast<void>(_pathToIconIndex.emplace(std::move(cacheKey), PathIconCacheEntry{-1, ++_pathQueryAccessCounter, true, failureStamp, 1u}));
+            static_cast<void>(_pathToIconIndex.emplace(
+                std::move(cacheKey), PathIconCacheEntry{-1, ++_pathQueryAccessCounter, true, failureStamp, 1u}));
             PerfEmitCounter(L"iconcache.path_failed_lookup_cached", 1u);
         }
         else if (existing->second.lookupFailed)
@@ -1303,12 +1304,12 @@ std::optional<int> IconCache::QuerySysIconIndexForPath(const wchar_t* path, DWOR
     auto [it, inserted] = _pathToIconIndex.emplace(std::move(cacheKey), PathIconCacheEntry{sfi.iIcon, ++_pathQueryAccessCounter, false, {}, 0u});
     if (! inserted)
     {
-        duplicateRace                      = true;
-        it->second.iconIndex               = sfi.iIcon;
-        it->second.lookupFailed            = false;
-        it->second.failureStamp            = {};
+        duplicateRace             = true;
+        it->second.iconIndex      = sfi.iIcon;
+        it->second.lookupFailed   = false;
+        it->second.failureStamp   = {};
         it->second.consecutiveFailureCount = 0u;
-        it->second.lastAccessTime          = ++_pathQueryAccessCounter;
+        it->second.lastAccessTime = ++_pathQueryAccessCounter;
     }
     if (duplicateRace)
     {

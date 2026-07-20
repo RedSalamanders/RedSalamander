@@ -45,12 +45,12 @@ MonitorFileReadResult ReadMonitorTextFile(const std::filesystem::path& path,
     }
 
     wil::unique_hfile file(CreateFileW(path.c_str(),
-                                       GENERIC_READ,
-                                       FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                                       nullptr,
-                                       OPEN_EXISTING,
-                                       FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN,
-                                       nullptr));
+                                      GENERIC_READ,
+                                      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                      nullptr,
+                                      OPEN_EXISTING,
+                                      FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN,
+                                      nullptr));
     if (! file)
     {
         return Failed(NormalizeCancelledIoError(GetLastError(), stopToken));

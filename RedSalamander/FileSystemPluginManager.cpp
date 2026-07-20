@@ -26,13 +26,11 @@
 
 namespace
 {
-using CreateFactoryFunc                 = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const wchar_t*, void**);
-using EnumeratePluginsFunc              = HRESULT(__stdcall*)(REFIID, const PluginMetaData**, unsigned int*);
-using GetConfigurationSchemaExportFunc  = HRESULT(__stdcall*)(REFIID, const wchar_t*, const char**);
-using BrowseConnectionTargetsExportFunc = HRESULT(__stdcall*)(REFIID,
-                                                              const wchar_t*,
-                                                              const FactoryConnectionBrowseRequest*,
-                                                              FactoryConnectionBrowseResult*) noexcept;
+using CreateFactoryFunc                            = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const wchar_t*, void**);
+using EnumeratePluginsFunc                         = HRESULT(__stdcall*)(REFIID, const PluginMetaData**, unsigned int*);
+using GetConfigurationSchemaExportFunc             = HRESULT(__stdcall*)(REFIID, const wchar_t*, const char**);
+using BrowseConnectionTargetsExportFunc =
+    HRESULT(__stdcall*)(REFIID, const wchar_t*, const FactoryConnectionBrowseRequest*, FactoryConnectionBrowseResult*) noexcept;
 
 bool IsDllPath(const std::filesystem::path& path) noexcept
 {
@@ -289,7 +287,9 @@ struct EnumeratedPluginSet
     if (! IsValidEnumeratedPluginRange(metaData, count))
     {
         result.hr        = HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
-        result.loadError = std::format(L"RedSalamanderEnumeratePlugins returned an invalid metadata range (pointer={}, count={}).", metaData != nullptr, count);
+        result.loadError = std::format(L"RedSalamanderEnumeratePlugins returned an invalid metadata range (pointer={}, count={}).",
+                                       metaData != nullptr,
+                                       count);
         return result;
     }
 
@@ -348,7 +348,8 @@ HRESULT FileSystemPluginManager::ConnectionBrowseWork::Execute(std::vector<Conne
         return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
 
-    return kind == Kind::Devices ? ParseConnectionBrowseDevicesJson(json.get(), outDevices) : ParseConnectionBrowseStoragesJson(json.get(), outStorages);
+    return kind == Kind::Devices ? ParseConnectionBrowseDevicesJson(json.get(), outDevices)
+                                 : ParseConnectionBrowseStoragesJson(json.get(), outStorages);
 }
 
 void FileSystemPluginManager::AssertUiThread() const noexcept

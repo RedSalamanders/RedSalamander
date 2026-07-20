@@ -1078,7 +1078,7 @@ void TestContextMenuDebugStateProbeBoundsWedgedWindowThread()
     std::thread driver([&]
     {
         const auto dismissPopup = wil::scope_exit([&]() noexcept { DismissOwnedContextMenuPopupChain(ownerWindow.Hwnd()); });
-        const HWND popupHwnd    = WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), L"State probe");
+        const HWND popupHwnd     = WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), L"State probe");
         if (! popupHwnd)
         {
             driverFailure = "menu debug-state timeout popup appears";
@@ -1101,7 +1101,7 @@ void TestContextMenuDebugStateProbeBoundsWedgedWindowThread()
     });
 
     const std::vector<MenuFlyoutItem> items{{.text = L"State probe", .enabled = true, .commandId = 91501}};
-    const POINT menuAnchor          = ClientScreenPointForTest(ownerWindow.Hwnd(), 24, 60, "menu debug-state timeout anchor converts to screen coordinates");
+    const POINT menuAnchor = ClientScreenPointForTest(ownerWindow.Hwnd(), 24, 60, "menu debug-state timeout anchor converts to screen coordinates");
     const std::optional<int> result = ContextMenu::Show(ownerWindow.Hwnd(), menuAnchor, items, ownerWindow.Host().GetTheme());
     driver.join();
     releaser.join();
@@ -2471,7 +2471,7 @@ void TestMenuBarHoverMessageSwitchesRootWhenCursorOutsidePopup()
     ContextMenuSessionCallbacks sessionCallbacks{};
     sessionCallbacks.switchRootFromMenuBarHover = [&](size_t hoverIndex, std::uintptr_t sequence) -> std::optional<ContextMenuRootSwitchRequest>
     {
-        const int expectedHoverIndex          = pendingMenuBarHoverRootSwitch.load(std::memory_order_acquire);
+        const int expectedHoverIndex = pendingMenuBarHoverRootSwitch.load(std::memory_order_acquire);
         const std::uintptr_t expectedSequence = pendingMenuBarHoverSequence.load(std::memory_order_acquire);
         if (expectedHoverIndex < 0 || static_cast<size_t>(expectedHoverIndex) != hoverIndex || expectedSequence != sequence)
         {
@@ -2589,7 +2589,7 @@ void TestMenuBarHoverMessageSwitchesRootWhilePopupOverlapsMenuBar()
     };
     sessionCallbacks.switchRootFromMenuBarHover = [&](size_t hoverIndex, std::uintptr_t sequence) -> std::optional<ContextMenuRootSwitchRequest>
     {
-        const int expectedHoverIndex          = pendingMenuBarHoverRootSwitch.load(std::memory_order_acquire);
+        const int expectedHoverIndex = pendingMenuBarHoverRootSwitch.load(std::memory_order_acquire);
         const std::uintptr_t expectedSequence = pendingMenuBarHoverSequence.load(std::memory_order_acquire);
         if (expectedHoverIndex < 0 || static_cast<size_t>(expectedHoverIndex) != hoverIndex || expectedSequence != sequence)
         {
@@ -3460,14 +3460,14 @@ constexpr UINT_PTR kDestroyNativeMenuBarSubclassId = 0x53Eu;
 
 struct DestroyNativeMenuBarHostState final
 {
-    DestroyNativeMenuBarHostState()                                                = default;
-    DestroyNativeMenuBarHostState(const DestroyNativeMenuBarHostState&)            = delete;
-    DestroyNativeMenuBarHostState(DestroyNativeMenuBarHostState&&)                 = delete;
-    DestroyNativeMenuBarHostState& operator=(const DestroyNativeMenuBarHostState&) = delete;
-    DestroyNativeMenuBarHostState& operator=(DestroyNativeMenuBarHostState&&)      = delete;
+    DestroyNativeMenuBarHostState()                                                   = default;
+    DestroyNativeMenuBarHostState(const DestroyNativeMenuBarHostState&)                = delete;
+    DestroyNativeMenuBarHostState(DestroyNativeMenuBarHostState&&)                     = delete;
+    DestroyNativeMenuBarHostState& operator=(const DestroyNativeMenuBarHostState&)     = delete;
+    DestroyNativeMenuBarHostState& operator=(DestroyNativeMenuBarHostState&&)          = delete;
 
     std::unique_ptr<RedSalamander::DxUi::NativeMenuBarHost>* menuBarHost = nullptr;
-    std::atomic_bool destroyed                                           = false;
+    std::atomic_bool destroyed = false;
 };
 
 LRESULT CALLBACK DestroyNativeMenuBarHostSubclassProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam, UINT_PTR, DWORD_PTR refData) noexcept
@@ -3515,17 +3515,19 @@ void TestNativeMenuBarNestedPopupCanDestroyHostSafely()
 
     DestroyNativeMenuBarHostState destroyState;
     destroyState.menuBarHost = &menuBarHost;
-    Require(SetWindowSubclass(
-                ownerWindow.Hwnd(), DestroyNativeMenuBarHostSubclassProc, kDestroyNativeMenuBarSubclassId, reinterpret_cast<DWORD_PTR>(&destroyState)) != FALSE,
+    Require(SetWindowSubclass(ownerWindow.Hwnd(), DestroyNativeMenuBarHostSubclassProc, kDestroyNativeMenuBarSubclassId,
+                              reinterpret_cast<DWORD_PTR>(&destroyState)) != FALSE,
             "native menu destruction proof subclasses the owner window");
     const auto removeSubclass = wil::scope_exit([&]() noexcept
-    { static_cast<void>(RemoveWindowSubclass(ownerWindow.Hwnd(), DestroyNativeMenuBarHostSubclassProc, kDestroyNativeMenuBarSubclassId)); });
+    {
+        static_cast<void>(RemoveWindowSubclass(ownerWindow.Hwnd(), DestroyNativeMenuBarHostSubclassProc, kDestroyNativeMenuBarSubclassId));
+    });
 
     std::string driverFailure;
     std::thread driver([&]
     {
         const auto dismissPopup = wil::scope_exit([&]() noexcept { DismissOwnedContextMenuPopupChain(ownerWindow.Hwnd()); });
-        const HWND popupHwnd    = WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), L"Open");
+        const HWND popupHwnd = WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), L"Open");
         if (! popupHwnd)
         {
             driverFailure = "native menu popup opens before destroying its menu-bar host";
@@ -5304,11 +5306,15 @@ void TestLargeMenuPaintsOnlyVisibleRowsWithCachedOffsets()
     callbacks.maxRootHeightDip        = 240.0f;
     callbacks.focusFirstNavigableItem = true;
 
-    bool callbackInvoked   = false;
-    const POINT menuPoint  = ClientScreenPointForTest(ownerWindow.Hwnd(), 64, 48, "large context menu anchor maps to screen coordinates");
+    bool callbackInvoked = false;
+    const POINT menuPoint = ClientScreenPointForTest(ownerWindow.Hwnd(), 64, 48, "large context menu anchor maps to screen coordinates");
     const auto openStarted = std::chrono::steady_clock::now();
-    const bool shown       = ContextMenu::ShowAsync(
-        ownerWindow.Hwnd(), menuPoint, items, ownerWindow.Host().GetTheme(), [&](std::optional<int>) noexcept { callbackInvoked = true; }, callbacks);
+    const bool shown = ContextMenu::ShowAsync(ownerWindow.Hwnd(),
+                                              menuPoint,
+                                              items,
+                                              ownerWindow.Host().GetTheme(),
+                                              [&](std::optional<int>) noexcept { callbackInvoked = true; },
+                                              callbacks);
     const uint64_t openToFirstPaintUs = Debug::Perf::ElapsedUs(openStarted);
     Require(shown, "large async context menu opens");
     Require(openToFirstPaintUs < 5'000'000u, "large context menu open-to-first-paint remains bounded");
@@ -5549,7 +5555,7 @@ void TestMenuGraphicalSliderSupportsClickDragAndAnimation()
     D2D1_RECT_F dragRowRectDip{};
     Require(DebugGetContextMenuPopupState(dragPopup, dragState) && DebugGetContextMenuPopupItemRect(dragPopup, 0u, dragRowRectDip),
             "graphical slider drag exposes state and row geometry");
-    const POINT smallPoint      = sliderPoint(dragPopup, dragState, dragRowRectDip, 0.0f);
+    const POINT smallPoint = sliderPoint(dragPopup, dragState, dragRowRectDip, 0.0f);
     const POINT extraLargePoint = sliderPoint(dragPopup, dragState, dragRowRectDip, 3.0f);
     static_cast<void>(SendCapturedMouseMessageForMenuSuite(dragPopup, WM_LBUTTONDOWN, MK_LBUTTON, smallPoint));
     static_cast<void>(SendCapturedMouseMessageForMenuSuite(dragPopup, WM_MOUSEMOVE, MK_LBUTTON, extraLargePoint));

@@ -1,13 +1,13 @@
 // MonitorTest.cpp : This file contains the 'main' function. Program execution begins and ends there.
 //
 
-#include <array>
 #include <atomic>
+#include <array>
 #include <chrono>
 #include <fcntl.h>
-#include <filesystem>
 #include <format>
 #include <fstream>
+#include <filesystem>
 #include <io.h>
 #include <iomanip>
 #include <iostream>
@@ -181,7 +181,7 @@ namespace
     byteBounded.AppendInfoLine(L"0123456789", MakeTestInfo(Debug::InfoParam::Type::Info, 20u));
     byteBounded.AppendInfoLine(L"abcdefghij", MakeTestInfo(Debug::InfoParam::Type::Info, 21u));
     byteBounded.AppendInfoLine(L"ABCDEFGHIJ", MakeTestInfo(Debug::InfoParam::Type::Info, 22u));
-    const uint64_t oneLineBytes                  = 10u * sizeof(wchar_t);
+    const uint64_t oneLineBytes = 10u * sizeof(wchar_t);
     const Document::RetentionResult byteEviction = byteBounded.EnforceRetentionLimits(10u, oneLineBytes);
     return byteEviction.linesEvicted == 2u && byteEviction.textBytesEvicted == 2u * oneLineBytes && byteBounded.TotalLineCount() == 1u &&
            byteBounded.RetainedTextBytes() == oneLineBytes && byteBounded.GetSourceLine(0u).text == L"ABCDEFGHIJ";
@@ -201,19 +201,7 @@ namespace
     {
         std::ofstream valid(validPath, std::ios::binary | std::ios::trunc);
         constexpr std::array<unsigned char, 13u> validBytes{{
-            0xEFu,
-            0xBBu,
-            0xBFu,
-            'a',
-            'l',
-            'p',
-            'h',
-            'a',
-            '\n',
-            'b',
-            'e',
-            't',
-            'a',
+            0xEFu, 0xBBu, 0xBFu, 'a', 'l', 'p', 'h', 'a', '\n', 'b', 'e', 't', 'a',
         }};
         valid.write(reinterpret_cast<const char*>(validBytes.data()), static_cast<std::streamsize>(validBytes.size()));
         if (! valid.good())
@@ -223,10 +211,11 @@ namespace
     }
 
     uint64_t reportedBytes = 0u;
-    const auto validResult = RedSalamanderMonitor::ReadMonitorTextFile(validPath,
-                                                                       std::stop_token{},
-                                                                       {.maxBytes = 1u * 1024u * 1024u, .maxLines = 10u},
-                                                                       [&reportedBytes](uint64_t bytesRead, uint64_t) noexcept { reportedBytes = bytesRead; });
+    const auto validResult = RedSalamanderMonitor::ReadMonitorTextFile(
+        validPath,
+        std::stop_token{},
+        {.maxBytes = 1u * 1024u * 1024u, .maxLines = 10u},
+        [&reportedBytes](uint64_t bytesRead, uint64_t) noexcept { reportedBytes = bytesRead; });
     if (FAILED(validResult.hr) || validResult.text != L"alpha\nbeta" || validResult.lineCount != 2u || reportedBytes != validResult.totalBytes)
     {
         return false;
@@ -264,9 +253,9 @@ namespace
         return false;
     }
     hugeFile.reset();
-    const auto hugeResult = RedSalamanderMonitor::ReadMonitorTextFile(hugePath, std::stop_token{}, {.maxBytes = 64u * 1024u * 1024u, .maxLines = 100'000u});
-    if (hugeResult.hr != HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE) || hugeResult.bytesRead != 0u ||
-        hugeResult.totalBytes != static_cast<uint64_t>(hugeSize.QuadPart))
+    const auto hugeResult = RedSalamanderMonitor::ReadMonitorTextFile(
+        hugePath, std::stop_token{}, {.maxBytes = 64u * 1024u * 1024u, .maxLines = 100'000u});
+    if (hugeResult.hr != HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE) || hugeResult.bytesRead != 0u || hugeResult.totalBytes != static_cast<uint64_t>(hugeSize.QuadPart))
     {
         return false;
     }
@@ -292,7 +281,7 @@ namespace
 
 struct EtwConsumerShutdownTestContext final
 {
-    EtwConsumerShutdownTestContext()                                                 = default;
+    EtwConsumerShutdownTestContext() = default;
     EtwConsumerShutdownTestContext(const EtwConsumerShutdownTestContext&)            = delete;
     EtwConsumerShutdownTestContext& operator=(const EtwConsumerShutdownTestContext&) = delete;
     EtwConsumerShutdownTestContext(EtwConsumerShutdownTestContext&&)                 = delete;
@@ -346,7 +335,7 @@ void CloseEtwConsumerForTest(void* rawContext, TRACEHANDLE traceHandle) noexcept
 
 [[nodiscard]] bool RunEtwConsumerShutdownSelfTest()
 {
-    constexpr TRACEHANDLE kJoinedHandle   = 0x1020u;
+    constexpr TRACEHANDLE kJoinedHandle  = 0x1020u;
     constexpr TRACEHANDLE kDetachedHandle = 0x3040u;
 
     EtwConsumerShutdownTestContext joinedContext;
@@ -356,7 +345,8 @@ void CloseEtwConsumerForTest(void* rawContext, TRACEHANDLE traceHandle) noexcept
     }
     {
         EtwListener listener;
-        listener.DebugStartConsumerForTesting(kJoinedHandle, ProcessEtwConsumerForTest, CloseEtwConsumerForTest, &joinedContext, 1'000u);
+        listener.DebugStartConsumerForTesting(
+            kJoinedHandle, ProcessEtwConsumerForTest, CloseEtwConsumerForTest, &joinedContext, 1'000u);
         if (WaitForSingleObject(joinedContext.started.get(), 1'000u) != WAIT_OBJECT_0)
         {
             return false;
@@ -377,7 +367,8 @@ void CloseEtwConsumerForTest(void* rawContext, TRACEHANDLE traceHandle) noexcept
         return false;
     }
     EtwListener listener;
-    listener.DebugStartConsumerForTesting(kDetachedHandle, ProcessEtwConsumerForTest, CloseEtwConsumerForTest, &detachedContext, 20u);
+    listener.DebugStartConsumerForTesting(
+        kDetachedHandle, ProcessEtwConsumerForTest, CloseEtwConsumerForTest, &detachedContext, 20u);
     if (WaitForSingleObject(detachedContext.started.get(), 1'000u) != WAIT_OBJECT_0)
     {
         return false;
@@ -489,7 +480,8 @@ void CloseEtwConsumerForTest(void* rawContext, TRACEHANDLE traceHandle) noexcept
 
     {
         Common::Files::LocalFileTransaction transaction;
-        if (FAILED(Common::Files::LocalFileTransaction::Create(target, Common::Files::ExistingTargetPolicy::Replace, false, transaction)) ||
+        if (FAILED(Common::Files::LocalFileTransaction::Create(
+                target, Common::Files::ExistingTargetPolicy::Replace, false, transaction)) ||
             FAILED(transaction.Write(std::string_view("abandoned"))))
         {
             return false;
@@ -503,7 +495,8 @@ void CloseEtwConsumerForTest(void* rawContext, TRACEHANDLE traceHandle) noexcept
     const HRESULT diskFull = HRESULT_FROM_WIN32(ERROR_DISK_FULL);
     {
         Common::Files::LocalFileTransaction transaction;
-        if (FAILED(Common::Files::LocalFileTransaction::Create(target, Common::Files::ExistingTargetPolicy::Replace, false, transaction)))
+        if (FAILED(Common::Files::LocalFileTransaction::Create(
+                target, Common::Files::ExistingTargetPolicy::Replace, false, transaction)))
         {
             return false;
         }
@@ -522,7 +515,8 @@ void CloseEtwConsumerForTest(void* rawContext, TRACEHANDLE traceHandle) noexcept
     {
         Common::Files::LocalFileTransaction transaction;
         constexpr std::string_view replacement = "replacement";
-        if (FAILED(Common::Files::LocalFileTransaction::Create(target, Common::Files::ExistingTargetPolicy::Replace, false, transaction)) ||
+        if (FAILED(Common::Files::LocalFileTransaction::Create(
+                target, Common::Files::ExistingTargetPolicy::Replace, false, transaction)) ||
             FAILED(transaction.Write(replacement)))
         {
             return false;
@@ -541,8 +535,10 @@ void CloseEtwConsumerForTest(void* rawContext, TRACEHANDLE traceHandle) noexcept
     {
         Common::Files::LocalFileTransaction transaction;
         constexpr std::string_view replacement = "replacement";
-        if (FAILED(Common::Files::LocalFileTransaction::Create(target, Common::Files::ExistingTargetPolicy::Replace, false, transaction)) ||
-            FAILED(transaction.Write(replacement)) || transaction.Commit(replacement.size() + 1u) != HRESULT_FROM_WIN32(ERROR_INVALID_DATA))
+        if (FAILED(Common::Files::LocalFileTransaction::Create(
+                target, Common::Files::ExistingTargetPolicy::Replace, false, transaction)) ||
+            FAILED(transaction.Write(replacement)) ||
+            transaction.Commit(replacement.size() + 1u) != HRESULT_FROM_WIN32(ERROR_INVALID_DATA))
         {
             return false;
         }
@@ -801,6 +797,7 @@ static int RunMonitorTest()
         std::wcerr << L"Monitor document batch/filter self-test failed\n";
         return 2;
     }
+
 
     if (! RunMonitorDocumentRetentionSelfTest())
     {

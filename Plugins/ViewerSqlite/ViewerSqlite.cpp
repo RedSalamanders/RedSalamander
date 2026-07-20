@@ -19,8 +19,8 @@
 #pragma comment(lib, "Dwmapi.lib")
 
 #include "Helpers.h"
-#include "ViewerTitleBarTheme.h"
 #include "WindowMessages.h"
+#include "ViewerTitleBarTheme.h"
 #include "WindowSizing.h"
 #include "resource.h"
 
@@ -194,9 +194,11 @@ struct ViewerSqliteAsyncWorkItem final
         g_hInstance, page.hasMore ? IDS_VIEWERSQLITE_STATUS_TABLE_PAGE_MORE_FMT : IDS_VIEWERSQLITE_STATUS_TABLE_PAGE_FMT, tableName, firstRow, lastRow);
 }
 
-[[nodiscard]] std::wstring_view FindTableDisplayName(const std::vector<ViewerSqliteEngine::TableInfo>& tables, const std::wstring_view tableName) noexcept
+[[nodiscard]] std::wstring_view FindTableDisplayName(const std::vector<ViewerSqliteEngine::TableInfo>& tables,
+                                                     const std::wstring_view tableName) noexcept
 {
-    const auto match = std::find_if(tables.begin(), tables.end(), [&](const ViewerSqliteEngine::TableInfo& table) noexcept { return table.name == tableName; });
+    const auto match = std::find_if(tables.begin(), tables.end(),
+                                    [&](const ViewerSqliteEngine::TableInfo& table) noexcept { return table.name == tableName; });
     return match != tables.end() ? std::wstring_view(match->displayName) : std::wstring_view{};
 }
 
@@ -334,8 +336,9 @@ private:
             }
             else
             {
-                column.title = (columnCount == 1u) ? LoadStringResource(g_hInstance, IDS_VIEWERSQLITE_COLUMN_RESULT)
-                                                   : FormatStringResource(g_hInstance, IDS_VIEWERSQLITE_COLUMN_FORMAT, columnIndex + 1u);
+                column.title = (columnCount == 1u)
+                                   ? LoadStringResource(g_hInstance, IDS_VIEWERSQLITE_COLUMN_RESULT)
+                                   : FormatStringResource(g_hInstance, IDS_VIEWERSQLITE_COLUMN_FORMAT, columnIndex + 1u);
             }
 
             column.widthDip    = (columnIndex == 0u) ? 180.0f : 160.0f;
@@ -1681,7 +1684,7 @@ void ViewerSqlite::QueueOpenCurrentPath() noexcept
         result->path      = path;
 
         const ViewerSqliteEngine::QueryCancellation cancellation{&_requestId, requestId};
-        auto opened       = ViewerSqliteEngine::OpenFromViewerContext(fileSystem.get(), path, config.directOpenLocalFiles, cancellation);
+        auto opened = ViewerSqliteEngine::OpenFromViewerContext(fileSystem.get(), path, config.directOpenLocalFiles, cancellation);
         result->hr        = opened.hr;
         result->errorText = std::move(opened.errorText);
 
@@ -1701,8 +1704,12 @@ void ViewerSqlite::QueueOpenCurrentPath() noexcept
                 }
 
                 result->initialTable = selectedTableIt->name;
-                auto page            = result->source->LoadTablePage(
-                    result->initialTable, config.pageSize, 0, ViewerSqliteEngine::kNoSortColumn, ViewerSqliteEngine::TableSortDirection::None, cancellation);
+                auto page = result->source->LoadTablePage(result->initialTable,
+                                                          config.pageSize,
+                                                          0,
+                                                          ViewerSqliteEngine::kNoSortColumn,
+                                                          ViewerSqliteEngine::TableSortDirection::None,
+                                                          cancellation);
                 if (FAILED(page.hr))
                 {
                     result->hr        = page.hr;
@@ -1800,7 +1807,7 @@ void ViewerSqlite::QueueTablePreview(std::wstring tableName, uint64_t rowOffset)
         result->rowOffset    = rowOffset;
 
         const ViewerSqliteEngine::QueryCancellation cancellation{&_requestId, requestId};
-        auto page         = source->LoadTablePage(result->tableName, pageSize, rowOffset, sortColumnIndex, sortDirection, cancellation);
+        auto page = source->LoadTablePage(result->tableName, pageSize, rowOffset, sortColumnIndex, sortDirection, cancellation);
         result->hr        = page.hr;
         result->errorText = std::move(page.errorText);
         result->page      = std::move(page.page);
@@ -1891,7 +1898,7 @@ void ViewerSqlite::QueueCustomQuery(std::wstring sql) noexcept
         result->sql          = sql;
 
         const ViewerSqliteEngine::QueryCancellation cancellation{&_requestId, requestId};
-        auto query        = source->ExecuteReadOnlyQuery(result->sql, rowCap, cancellation);
+        auto query = source->ExecuteReadOnlyQuery(result->sql, rowCap, cancellation);
         result->hr        = query.hr;
         result->errorText = std::move(query.errorText);
         result->page      = std::move(query.page);

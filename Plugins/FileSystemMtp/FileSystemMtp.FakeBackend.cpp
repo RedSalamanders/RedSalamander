@@ -693,10 +693,10 @@ public:
             return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
         }
 
-        const std::string nameUtf8                                      = Utf8FromUtf16(LeafName(normalized));
-        const std::string puidUtf8                                      = Utf8FromUtf16(node->persistentId);
+        const std::string nameUtf8 = Utf8FromUtf16(LeafName(normalized));
+        const std::string puidUtf8 = Utf8FromUtf16(node->persistentId);
         const auto [backendThreadIdsObserved, backendThreadIdsOverflow] = BackendThreadStats();
-        jsonUtf8                                                        = std::format(
+        jsonUtf8                   = std::format(
             R"json({{"version":1,"backend":"fake","name":"{}","persistentId":"{}","streamable":{},"sizeBytes":{},"instrumentation":{{"activeBackendCalls":{},"maxConcurrentBackendCalls":{},"backendThreadIdsObserved":{},"backendThreadIdsOverflow":{},"operationDelayMs":{},"cancelRequests":{},"writeFileCalls":{},"readFileCalls":{},"lastReadBytes":{},"fileSizeCalls":{},"copyItemCalls":{},"lastCopyBytes":{},"lastMoveFallbackBytes":{},"propertyBatchCalls":{},"propertyPerItemCalls":{}}}}})json",
             JsonEscapeUtf8(nameUtf8),
             JsonEscapeUtf8(puidUtf8),

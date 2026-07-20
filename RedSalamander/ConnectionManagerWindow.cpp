@@ -821,10 +821,10 @@ struct MtpPickerResultPayload
 
 struct MtpPickerWorkerContext
 {
-    MtpPickerWorkerContext()                                             = default;
-    MtpPickerWorkerContext(const MtpPickerWorkerContext&)                = delete;
-    MtpPickerWorkerContext& operator=(const MtpPickerWorkerContext&)     = delete;
-    MtpPickerWorkerContext(MtpPickerWorkerContext&&) noexcept            = default;
+    MtpPickerWorkerContext() = default;
+    MtpPickerWorkerContext(const MtpPickerWorkerContext&) = delete;
+    MtpPickerWorkerContext& operator=(const MtpPickerWorkerContext&) = delete;
+    MtpPickerWorkerContext(MtpPickerWorkerContext&&) noexcept = default;
     MtpPickerWorkerContext& operator=(MtpPickerWorkerContext&&) noexcept = default;
 
     HWND hwnd                 = nullptr;
@@ -867,9 +867,9 @@ struct OwnedMtpPickerWork
           work(std::move(ownedWork))
     {
     }
-    OwnedMtpPickerWork(const OwnedMtpPickerWork&)                = delete;
-    OwnedMtpPickerWork& operator=(const OwnedMtpPickerWork&)     = delete;
-    OwnedMtpPickerWork(OwnedMtpPickerWork&&) noexcept            = default;
+    OwnedMtpPickerWork(const OwnedMtpPickerWork&) = delete;
+    OwnedMtpPickerWork& operator=(const OwnedMtpPickerWork&) = delete;
+    OwnedMtpPickerWork(OwnedMtpPickerWork&&) noexcept = default;
     OwnedMtpPickerWork& operator=(OwnedMtpPickerWork&&) noexcept = default;
 
     std::unique_ptr<MtpPickerWorkerContext> context;
@@ -1089,7 +1089,7 @@ private:
 
     wil::unique_hwnd _hwnd;
     FolderWindow* _applicationFolderWindow = nullptr;
-    HWND _closingHwnd                      = nullptr;
+    HWND _closingHwnd = nullptr;
     WindowHost _dxHost;
     HWND _restoreFolderViewWindow = nullptr;
 
@@ -2315,11 +2315,11 @@ void WindowImpl::RequestMtpDevicePickerRefresh(bool manual) noexcept
         return;
     }
 
-    auto work               = std::make_unique<MtpPickerWorkerContext>();
-    work->hwnd              = _hwnd.get();
-    work->requestId         = ++_mtpPickerDeviceRequestId;
-    work->kind              = MtpPickerRequestKind::Devices;
-    work->manual            = manual;
+    auto work       = std::make_unique<MtpPickerWorkerContext>();
+    work->hwnd      = _hwnd.get();
+    work->requestId = ++_mtpPickerDeviceRequestId;
+    work->kind      = MtpPickerRequestKind::Devices;
+    work->manual    = manual;
     const HRESULT prepareHr = FileSystemPluginManager::GetInstance().PrepareConnectionBrowseDevices(_connections[*modelIndex].pluginId, work->browseWork);
     if (FAILED(prepareHr) || ! QueueMtpPickerWork(std::move(work)))
     {
@@ -2336,6 +2336,7 @@ void WindowImpl::RequestMtpDevicePickerRefresh(bool manual) noexcept
         ShowConnectionManagerAlert(_hwnd.get(), HOST_ALERT_WARNING, title, message);
         return;
     }
+
 }
 
 void WindowImpl::RequestMtpStoragePickerRefresh(std::wstring pnpId, bool manual) noexcept
@@ -2362,13 +2363,14 @@ void WindowImpl::RequestMtpStoragePickerRefresh(std::wstring pnpId, bool manual)
     work->kind      = MtpPickerRequestKind::Storages;
     work->manual    = manual;
     work->pnpId     = std::move(pnpId);
-    const HRESULT prepareHr =
-        FileSystemPluginManager::GetInstance().PrepareConnectionBrowseStorages(_connections[*modelIndex].pluginId, work->pnpId, work->browseWork);
+    const HRESULT prepareHr = FileSystemPluginManager::GetInstance().PrepareConnectionBrowseStorages(
+        _connections[*modelIndex].pluginId, work->pnpId, work->browseWork);
     if (FAILED(prepareHr) || ! QueueMtpPickerWork(std::move(work)))
     {
         Debug::Warning(L"ConnectionManagerWindow: failed to queue MTP storage picker refresh.");
         return;
     }
+
 }
 
 bool WindowImpl::QueueMtpPickerWork(std::unique_ptr<MtpPickerWorkerContext> context) noexcept
@@ -2393,7 +2395,9 @@ bool WindowImpl::QueueMtpPickerWork(std::unique_ptr<MtpPickerWorkerContext> cont
 void WindowImpl::CompleteMtpPickerWork(MtpPickerRequestKind kind, uint64_t requestId) noexcept
 {
     const auto match = [kind, requestId](const OwnedMtpPickerWork& owned) noexcept
-    { return owned.context && owned.context->kind == kind && owned.context->requestId == requestId; };
+    {
+        return owned.context && owned.context->kind == kind && owned.context->requestId == requestId;
+    };
     const auto it = std::find_if(_mtpPickerWork.begin(), _mtpPickerWork.end(), match);
     if (it == _mtpPickerWork.end())
     {
@@ -2732,7 +2736,7 @@ HRESULT WindowImpl::VerifySecretRevealForProfile(const Common::Settings::Connect
         return S_OK;
     }
 
-    const uint64_t reauthTimeoutMs                          = static_cast<uint64_t>(reauthTimeoutMinute) * 60'000ull;
+    const uint64_t reauthTimeoutMs = static_cast<uint64_t>(reauthTimeoutMinute) * 60'000ull;
     const RedSalamander::Connections::SecretKind secretKind = EditableSecretKindForProfile(profile);
     if (RedSalamander::Connections::IsSecretAccessAuthorized(
             profile.id, secretKind, RedSalamander::Connections::SecretAccessPurpose::Interactive, reauthTimeoutMs))
@@ -2938,7 +2942,7 @@ HRESULT WindowImpl::CommitSecretsForProfile(const Common::Settings::ConnectionPr
     const std::wstring passwordTarget   = BuildCredentialTargetName(profile.id, SecretKind::Password);
     const std::wstring passphraseTarget = BuildCredentialTargetName(profile.id, SecretKind::SshKeyPassphrase);
     const std::wstring refreshTarget    = BuildCredentialTargetName(profile.id, SecretKind::RefreshToken);
-    const auto deleteStoredSecret       = [&](const std::wstring& targetName, SecretKind kind, std::wstring_view kindLabel) noexcept
+    const auto deleteStoredSecret = [&](const std::wstring& targetName, SecretKind kind, std::wstring_view kindLabel) noexcept
     {
         RedSalamander::Connections::ClearSecretAccessAuthorization(profile.id, kind);
         if (targetName.empty())
@@ -3229,7 +3233,7 @@ bool WindowImpl::SaveConnectionsSettings() noexcept
         connSettings.allowInsecureTlsInAutomation    = _settings->connections->allowInsecureTlsInAutomation;
         connSettings.windowsHelloReauthTimeoutMinute = _settings->connections->windowsHelloReauthTimeoutMinute;
     }
-    connSettings.items       = _connections;
+    connSettings.items = _connections;
     const HRESULT identityHr = Common::Settings::ValidateConnectionProfileIds(connSettings);
     if (FAILED(identityHr))
     {
@@ -4349,8 +4353,8 @@ bool ShowWindow(HWND owner,
         }
     }
 
-    auto impl =
-        std::make_unique<WindowImpl>(applicationFolderWindow, std::wstring(appId), settings, theme, std::wstring(filterPluginId), targetPane, effectiveOwner);
+    auto impl = std::make_unique<WindowImpl>(
+        applicationFolderWindow, std::wstring(appId), settings, theme, std::wstring(filterPluginId), targetPane, effectiveOwner);
     if (! impl->Create())
     {
         return false;
@@ -4649,7 +4653,7 @@ void WindowImpl::DebugFillSnapshot(::ConnectionManagerDebugSnapshot& out) const 
     {
         out.selectedListRowName.clear();
         const auto editedModelIndex = ResolveEditedModelIndexForValidation();
-        out.currentPluginId         = editedModelIndex && *editedModelIndex < _connections.size() ? _connections[*editedModelIndex].pluginId : std::wstring{};
+        out.currentPluginId = editedModelIndex && *editedModelIndex < _connections.size() ? _connections[*editedModelIndex].pluginId : std::wstring{};
     }
     out.authSectionVisible        = _authCard && _authCard->IsVisible();
     out.userFieldVisible          = _editUser && _editUser->IsVisible();
@@ -5779,7 +5783,8 @@ bool ShowConnectionManagerWindow(HWND owner,
                                  std::wstring_view filterPluginId,
                                  uint8_t targetPane) noexcept
 {
-    return RedSalamander::ConnectionManager::SingleCanvas::ShowWindow(owner, applicationFolderWindow, appId, settings, theme, filterPluginId, targetPane);
+    return RedSalamander::ConnectionManager::SingleCanvas::ShowWindow(
+        owner, applicationFolderWindow, appId, settings, theme, filterPluginId, targetPane);
 }
 
 HWND GetConnectionManagerDialogHandle() noexcept

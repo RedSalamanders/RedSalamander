@@ -25,9 +25,8 @@ enum class EmptyUnicodeTextPolicy
     Reject,
 };
 
-[[nodiscard]] inline bool TrySetUnicodeText(HWND ownerWindow,
-                                            std::wstring_view text,
-                                            EmptyUnicodeTextPolicy emptyPolicy = EmptyUnicodeTextPolicy::Allow) noexcept
+[[nodiscard]] inline bool TrySetUnicodeText(
+    HWND ownerWindow, std::wstring_view text, EmptyUnicodeTextPolicy emptyPolicy = EmptyUnicodeTextPolicy::Allow) noexcept
 {
     if (text.empty() && emptyPolicy == EmptyUnicodeTextPolicy::Reject)
     {

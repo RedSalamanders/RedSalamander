@@ -284,7 +284,8 @@ bool CompareDirectoriesPane::EnsureDxHosts(HWND parent, PreferencesDialogState& 
             if (_pageHostDx && _dxState)
             {
                 const RedSalamander::DxUi::Control* const focused = _pageHostDx->GetFocusControl();
-                if (commandId == IDC_PREFS_ADV_COMPARE_IGNORE_FILES_TOGGLE && focused == _dxState->page.toggleCards[kCompareIgnoreFilesIndex].toggle)
+                if (commandId == IDC_PREFS_ADV_COMPARE_IGNORE_FILES_TOGGLE &&
+                    focused == _dxState->page.toggleCards[kCompareIgnoreFilesIndex].toggle)
                 {
                     focusAfterLayout = DeferredFocusTarget::IgnoreFilesToggle;
                 }
@@ -1048,7 +1049,7 @@ bool CompareDirectoriesPane::HandleDeferredAction(HWND host, PreferencesDialogSt
 void CompareDirectoriesPane::RestoreDeferredFocusAfterLayout() noexcept
 {
     const DeferredFocusTarget target = _deferredFocusAfterLayout;
-    _deferredFocusAfterLayout        = DeferredFocusTarget::None;
+    _deferredFocusAfterLayout       = DeferredFocusTarget::None;
     RestoreDeferredFocusTarget(target);
 }
 

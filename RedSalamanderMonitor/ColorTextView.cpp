@@ -484,7 +484,7 @@ void ColorTextView::SetText(const std::wstring& text)
     _caretPos         = 0;
     _scrollY          = 0.0f;
     _matches.clear();
-    _matchIndex            = -1;
+    _matchIndex                  = -1;
     _pendingScrollToBottom = false;
     _pendingAppendToVisibleStartedAt.reset();
 
@@ -561,8 +561,8 @@ void ColorTextView::QueueEtwEvent(const Debug::InfoParam& info, std::wstring mes
 
     bool shouldPost = false;
     {
-        auto lock                    = _etwQueueCS.lock();
-        const bool wasEmpty          = _etwEventQueue.empty();
+        auto lock           = _etwQueueCS.lock();
+        const bool wasEmpty = _etwEventQueue.empty();
         const size_t maxQueuedEvents = _maxQueuedEvents.load(std::memory_order_acquire);
         while (_etwEventQueue.size() >= maxQueuedEvents)
         {
@@ -570,7 +570,7 @@ void ColorTextView::QueueEtwEvent(const Debug::InfoParam& info, std::wstring mes
             _queueDroppedEvents.fetch_add(1u, std::memory_order_relaxed);
         }
         _etwEventQueue.push_back({info, std::move(message)});
-        const uint64_t queueDepth  = static_cast<uint64_t>(_etwEventQueue.size());
+        const uint64_t queueDepth = static_cast<uint64_t>(_etwEventQueue.size());
         uint64_t previousHighWater = _queueHighWaterMark.load(std::memory_order_relaxed);
         while (queueDepth > previousHighWater &&
                ! _queueHighWaterMark.compare_exchange_weak(previousHighWater, queueDepth, std::memory_order_relaxed, std::memory_order_relaxed))
@@ -691,15 +691,15 @@ void ColorTextView::ClearText()
     _sliceFilteredRuns.clear();
     _fallbackFilteredRuns.clear();
     _lineMetrics.clear();
-    _tailLayoutValid       = false;
-    _fallbackValid         = false;
-    _scrollY               = 0.0f;
-    _contentHeight         = 0;
-    _approxContentWidth    = 0;
-    _sliceFirstLine        = 0;
-    _sliceLastLine         = 0;
-    _sliceFirstDisplayRow  = 0;
-    _sliceIsFiltered       = false;
+    _tailLayoutValid      = false;
+    _fallbackValid        = false;
+    _scrollY              = 0.0f;
+    _contentHeight        = 0;
+    _approxContentWidth   = 0;
+    _sliceFirstLine       = 0;
+    _sliceLastLine        = 0;
+    _sliceFirstDisplayRow = 0;
+    _sliceIsFiltered      = false;
     _sliceStartPos         = 0;
     _sliceEndPos           = 0;
     _pendingScrollToBottom = false;
@@ -719,7 +719,9 @@ void ColorTextView::HandleDocumentEviction(const Document::RetentionResult& evic
 
     _retainedDroppedEvents.fetch_add(static_cast<uint64_t>(eviction.linesEvicted), std::memory_order_relaxed);
     const auto shiftPosition = [evicted = eviction.characterPositionsEvicted](UINT32 position) noexcept
-    { return evicted >= position ? 0u : static_cast<UINT32>(static_cast<uint64_t>(position) - evicted); };
+    {
+        return evicted >= position ? 0u : static_cast<UINT32>(static_cast<uint64_t>(position) - evicted);
+    };
     _selStart = shiftPosition(_selStart);
     _selEnd   = shiftPosition(_selEnd);
     _caretPos = shiftPosition(_caretPos);
@@ -731,14 +733,14 @@ void ColorTextView::HandleDocumentEviction(const Document::RetentionResult& evic
     _matches.erase(std::remove_if(_matches.begin(),
                                   _matches.end(),
                                   [evictedPositions](Line::ColorSpan& match) noexcept
-    {
-        if (static_cast<uint64_t>(match.start) < evictedPositions)
-        {
-            return true;
-        }
-        match.start = static_cast<UINT32>(static_cast<uint64_t>(match.start) - evictedPositions);
-        return false;
-    }),
+                                  {
+                                      if (static_cast<uint64_t>(match.start) < evictedPositions)
+                                      {
+                                          return true;
+                                      }
+                                      match.start = static_cast<UINT32>(static_cast<uint64_t>(match.start) - evictedPositions);
+                                      return false;
+                                  }),
                    _matches.end());
     _matchIndex = -1;
     _lineWidthCache.assign(_document.TotalLineCount(), 0.0f);
@@ -4506,14 +4508,14 @@ void ColorTextView::EnsureWidthAsync()
     };
 #pragma warning(pop)
 
-    auto ctx           = std::make_unique<WidthCtx>();
-    ctx->targetWindow  = _hWndAtomic.load(std::memory_order_acquire);
+    auto ctx          = std::make_unique<WidthCtx>();
+    ctx->targetWindow = _hWndAtomic.load(std::memory_order_acquire);
     ctx->dwriteFactory = _dwriteFactory;
     ctx->textFormat    = _textFormat;
-    ctx->seq           = seq;
-    ctx->indices       = std::move(indices);
-    ctx->texts         = std::move(texts);
-    auto rawCtx        = ctx.release();
+    ctx->seq            = seq;
+    ctx->indices = std::move(indices);
+    ctx->texts   = std::move(texts);
+    auto rawCtx  = ctx.release();
 
     auto worker = [](PTP_CALLBACK_INSTANCE, PVOID param) noexcept
     {
@@ -4794,7 +4796,7 @@ void ColorTextView::AppendMatchesForRange(size_t firstSourceLine)
         }
     };
 
-    const bool filterActive     = _document.GetFilterMask() != Debug::InfoParam::Type::All;
+    const bool filterActive = _document.GetFilterMask() != Debug::InfoParam::Type::All;
     const size_t totalLineCount = _document.TotalLineCount();
     for (size_t i = std::min(firstSourceLine, totalLineCount); i < totalLineCount; ++i)
     {

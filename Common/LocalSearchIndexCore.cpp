@@ -2656,7 +2656,8 @@ HRESULT HydrateDirectorySubtreeImpl(VolumeIndex& volume,
             }
             if (isAlias && IsDirectoryAttributes(child.fileAttributes))
             {
-                hr = HydrateDirectorySubtreeImpl(volume, childId, child.fullPath, cancelCheck, cancelCookie, stats, progress, visitedDirectoryIds);
+                hr = HydrateDirectorySubtreeImpl(
+                    volume, childId, child.fullPath, cancelCheck, cancelCookie, stats, progress, visitedDirectoryIds);
                 if (FAILED(hr) && hr != HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND) && hr != HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND))
                 {
                     return hr;
@@ -4446,13 +4447,14 @@ PersistentStoreInfo Repository::GetValidatedCachedPersistentStoreInfoForQuery() 
             ! cachedStoreInfo.primaryPath.empty())
         {
             PersistentStoreFileStamp currentFileStamp{};
-            const bool currentFileStampValid      = TryCapturePersistentStoreFileStamp(cachedStoreInfo, currentFileStamp);
-            const bool databaseStampUnchanged     = cachedFileStamp.databaseExists == currentFileStamp.databaseExists &&
-                                                    cachedFileStamp.databaseLastWriteTime == currentFileStamp.databaseLastWriteTime &&
-                                                    cachedFileStamp.databaseBytes == currentFileStamp.databaseBytes;
-            const bool emptyReadOnlyWalTransition = cachedFileStampValid && currentFileStampValid && databaseStampUnchanged &&
-                                                    ((! cachedFileStamp.walExists && currentFileStamp.walExists && currentFileStamp.walBytes == 0u) ||
-                                                     (cachedFileStamp.walExists && cachedFileStamp.walBytes == 0u && ! currentFileStamp.walExists));
+            const bool currentFileStampValid = TryCapturePersistentStoreFileStamp(cachedStoreInfo, currentFileStamp);
+            const bool databaseStampUnchanged = cachedFileStamp.databaseExists == currentFileStamp.databaseExists &&
+                                                cachedFileStamp.databaseLastWriteTime == currentFileStamp.databaseLastWriteTime &&
+                                                cachedFileStamp.databaseBytes == currentFileStamp.databaseBytes;
+            const bool emptyReadOnlyWalTransition =
+                cachedFileStampValid && currentFileStampValid && databaseStampUnchanged &&
+                ((! cachedFileStamp.walExists && currentFileStamp.walExists && currentFileStamp.walBytes == 0u) ||
+                 (cachedFileStamp.walExists && cachedFileStamp.walBytes == 0u && ! currentFileStamp.walExists));
             if (cachedFileStampValid && currentFileStampValid && (currentFileStamp == cachedFileStamp || emptyReadOnlyWalTransition))
             {
                 EmitPerfCount(L"search.backend.sqlite.store_generation_probe_skips");
@@ -4680,8 +4682,8 @@ void Repository::RefreshCachedPersistentStoreInfo() noexcept
 void Repository::InvalidateCachedPersistentStoreInfo() noexcept
 {
     std::lock_guard guard(_mutex);
-    _cachedPersistentStoreInfo           = {};
-    _cachedPersistentStoreInfo.kind      = _options.persistentStoreKind;
+    _cachedPersistentStoreInfo      = {};
+    _cachedPersistentStoreInfo.kind = _options.persistentStoreKind;
     _cachedPersistentStoreFileStamp      = {};
     _cachedPersistentStoreInfoValid      = false;
     _cachedPersistentStoreFileStampValid = false;
@@ -4833,7 +4835,7 @@ HRESULT Repository::Enumerate(const QueryPlan& plan,
             const auto directSqliteStart = std::chrono::steady_clock::now();
             validatedStoreInfo           = GetValidatedCachedPersistentStoreInfoForQuery();
             hasValidatedStoreInfo        = true;
-            hr                           = TryEnumerateFromConfiguredSqliteStore(
+            hr = TryEnumerateFromConfiguredSqliteStore(
                 validatedStoreInfo, sqlitePlan, cancelCheck, cancelCookie, candidateCallback, candidateCookie, stats, progress);
             if (hr == S_OK)
             {
@@ -4910,9 +4912,9 @@ HRESULT Repository::Enumerate(const QueryPlan& plan,
             return hr;
         }
 
-        const auto executeStart                   = std::chrono::steady_clock::now();
+        const auto executeStart = std::chrono::steady_clock::now();
         const PersistentStoreInfo cachedStoreInfo = hasValidatedStoreInfo ? validatedStoreInfo : GetValidatedCachedPersistentStoreInfoForQuery();
-        hr                                        = TryEnumerateFromConfiguredSqliteStore(
+        hr = TryEnumerateFromConfiguredSqliteStore(
             cachedStoreInfo, effectivePlan, cancelCheck, cancelCookie, candidateCallback, candidateCookie, stats, progress);
         if (hr == S_FALSE)
         {
@@ -5557,13 +5559,13 @@ HRESULT Repository::HydrateRootAndQueryForTests(const QueryPlan& plan, std::vect
         PopulateStatsFromVolume(*volume, stats);
         QueryPlan effectivePlan = plan;
         effectivePlan.rootPath  = volume->normalizedRootPath;
-        hr                      = ExecuteQueryImpl(*volume,
-                                                   effectivePlan,
-                                                   nullptr,
-                                                   nullptr,
-                                                   stats,
-                                                   progress,
-                                                   [&](Candidate&& candidate) noexcept -> HRESULT
+        hr = ExecuteQueryImpl(*volume,
+                              effectivePlan,
+                              nullptr,
+                              nullptr,
+                              stats,
+                              progress,
+                              [&](Candidate&& candidate) noexcept -> HRESULT
         {
             try
             {

@@ -46,11 +46,11 @@ struct HotReloadState
     std::unordered_set<HWND> participants;
     std::optional<Common::Settings::SettingsFileStamp> lastAppliedStamp;
     std::optional<Common::Settings::SettingsFileStamp> lastRejectedStamp;
-    uint64_t sessionGeneration            = 0;
-    uint64_t internalSaveEpoch            = 0;
-    uint32_t internalSaveDepth            = 0;
+    uint64_t sessionGeneration = 0;
+    uint64_t internalSaveEpoch = 0;
+    uint32_t internalSaveDepth = 0;
     bool internalSaveNotificationDeferred = false;
-    bool invalidAlertVisible              = false;
+    bool invalidAlertVisible = false;
 
     HotReloadState()                                 = default;
     HotReloadState(const HotReloadState&)            = delete;
@@ -81,7 +81,8 @@ std::atomic_bool g_debugSettingsReloadPostStampDelayActive{false};
     uint32_t remaining = g_debugChangeNotificationOpenFailureCount.load(std::memory_order_acquire);
     while (remaining != 0u)
     {
-        if (g_debugChangeNotificationOpenFailureCount.compare_exchange_weak(remaining, remaining - 1u, std::memory_order_acq_rel, std::memory_order_acquire))
+        if (g_debugChangeNotificationOpenFailureCount.compare_exchange_weak(
+                remaining, remaining - 1u, std::memory_order_acq_rel, std::memory_order_acquire))
         {
             lastError = g_debugChangeNotificationOpenFailureLastError.load(std::memory_order_acquire);
             if (lastError == ERROR_SUCCESS)
@@ -145,7 +146,9 @@ struct InternalSaveToken final
     return InternalSaveToken{.sessionGeneration = g_state.sessionGeneration, .active = true};
 }
 
-void CompleteInternalSave(std::wstring_view appId, InternalSaveToken token, const Common::Settings::SettingsFileStamp* appliedStamp) noexcept
+void CompleteInternalSave(std::wstring_view appId,
+                          InternalSaveToken token,
+                          const Common::Settings::SettingsFileStamp* appliedStamp) noexcept
 {
     if (! token.active)
     {
@@ -155,7 +158,8 @@ void CompleteInternalSave(std::wstring_view appId, InternalSaveToken token, cons
     HWND deferredTarget = nullptr;
     {
         std::scoped_lock lock(g_state.mutex);
-        if (token.sessionGeneration != g_state.sessionGeneration || g_state.internalSaveDepth == 0u || ! OrdinalString::EqualsNoCase(g_state.appId, appId))
+        if (token.sessionGeneration != g_state.sessionGeneration || g_state.internalSaveDepth == 0u ||
+            ! OrdinalString::EqualsNoCase(g_state.appId, appId))
         {
             return;
         }
@@ -221,8 +225,9 @@ void WatchSettingsDirectoryThread(HWND targetWindow,
             static_cast<void>(std::filesystem::create_directories(directoryPath, directoryError));
             if (directoryError)
             {
-                Debug::Warning(
-                    L"SettingsHotReload: settings directory is unavailable; watcher will retry '{}' (error={})", directoryText, directoryError.value());
+                Debug::Warning(L"SettingsHotReload: settings directory is unavailable; watcher will retry '{}' (error={})",
+                               directoryText,
+                               directoryError.value());
                 if (WaitForSingleObject(stopEventHandle, 1000) == WAIT_OBJECT_0)
                 {
                     return;
@@ -347,7 +352,7 @@ enum class SettingsSaveShutdownState : uint8_t
 
     const InternalSaveToken internalSave = shutdownAtStart ? InternalSaveToken{} : BeginInternalSave(appId);
     bool internalSaveCompleted           = false;
-    const auto endInternalSave           = wil::scope_exit([&]() noexcept
+    const auto endInternalSave = wil::scope_exit([&]() noexcept
     {
         if (! internalSaveCompleted && ! IsProcessShutdownStarted(shutdownState))
         {
@@ -373,7 +378,9 @@ enum class SettingsSaveShutdownState : uint8_t
     }
 
 #ifdef ENABLE_TESTS
-    const DWORD postWriteDelayMs = IsProcessShutdownStarted(shutdownState) ? 0u : g_debugSettingsSavePostWriteDelayMs.load(std::memory_order_acquire);
+    const DWORD postWriteDelayMs = IsProcessShutdownStarted(shutdownState)
+                                       ? 0u
+                                       : g_debugSettingsSavePostWriteDelayMs.load(std::memory_order_acquire);
     if (postWriteDelayMs != 0u)
     {
         Sleep(postWriteDelayMs);
@@ -427,11 +434,11 @@ public:
         std::wstring telemetryContext;
         std::shared_ptr<Completion> completion;
         std::chrono::steady_clock::time_point readyAt{};
-        uint64_t generation             = 0;
-        bool writeSchema                = true;
-        bool asynchronous               = false;
+        uint64_t generation = 0;
+        bool writeSchema    = true;
+        bool asynchronous   = false;
         bool allowDuringProcessShutdown = false;
-        bool processFinalSave           = false;
+        bool processFinalSave            = false;
     };
 
     SerializedSettingsSaveCoordinator() = default;
@@ -483,7 +490,7 @@ public:
         {
             std::scoped_lock lock(_mutex);
             request.generation = ++_lastQueuedGeneration;
-            request.readyAt    = std::chrono::steady_clock::now() + kDebounceDelay;
+            request.readyAt     = std::chrono::steady_clock::now() + kDebounceDelay;
             requestThreadId();
             if (! _requests.empty() && _requests.back().asynchronous && _requests.back().appId == request.appId)
             {
@@ -537,15 +544,16 @@ public:
                 request.settings = settings;
                 if (options.writeSchema)
                 {
-                    request.pluginSchemas = pluginSchemas.empty() ? CollectPluginConfigurationSchemas(request.settings)
-                                                                  : std::vector<PluginConfigurationSchemaSource>(pluginSchemas.begin(), pluginSchemas.end());
+                    request.pluginSchemas = pluginSchemas.empty()
+                                                ? CollectPluginConfigurationSchemas(request.settings)
+                                                : std::vector<PluginConfigurationSchemaSource>(pluginSchemas.begin(), pluginSchemas.end());
                 }
                 request.completion                 = completion;
                 request.readyAt                    = std::chrono::steady_clock::now();
                 request.writeSchema                = options.writeSchema;
                 request.asynchronous               = false;
                 request.allowDuringProcessShutdown = options.beginProcessShutdown;
-                request.processFinalSave           = options.beginProcessShutdown;
+                request.processFinalSave            = options.beginProcessShutdown;
 
                 {
                     std::scoped_lock lock(_mutex);
@@ -581,7 +589,7 @@ public:
 
         std::unique_lock completionLock(completion->mutex);
         const auto completed = [&]() noexcept { return completion->done; };
-        bool finished        = false;
+        bool finished = false;
         if (timeoutMs == INFINITE)
         {
             completion->cv.wait(completionLock, completed);
@@ -627,7 +635,7 @@ public:
         _cv.notify_all();
         submissionLock.unlock();
         const auto complete = [&]() noexcept { return _requests.empty() && ! _saveInProgress; };
-        bool flushed        = false;
+        bool flushed = false;
         if (timeoutMs == INFINITE)
         {
             _cv.wait(lock, complete);
@@ -709,8 +717,8 @@ private:
                 {
                     const uint64_t generation = _requests.front().generation;
                     const auto readyAt        = _requests.front().readyAt;
-                    const bool interrupted    = _cv.wait_until(
-                        lock, readyAt, [&]() noexcept { return _forceFlush || _requests.empty() || _requests.front().generation != generation; });
+                    const bool interrupted = _cv.wait_until(lock, readyAt, [&]() noexcept
+                    { return _forceFlush || _requests.empty() || _requests.front().generation != generation; });
                     if (interrupted && ! _forceFlush)
                     {
                         continue;
@@ -733,7 +741,7 @@ private:
 #endif
             }
 
-            Request& current                                                           = request.value();
+            Request& current = request.value();
             const std::optional<Common::Settings::SettingsFileStamp> saveExpectedStamp = current.settings.persistence.expectedFileStamp;
 #ifdef ENABLE_TESTS
             if (debugSaveDelayMs != 0)
@@ -741,12 +749,16 @@ private:
                 Sleep(debugSaveDelayMs);
             }
 #endif
-            const uint64_t saveStart =
-                static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
-            const HRESULT saveHr = SavePreparedSettingsAndSchema(
-                current.appId, current.settings, current.pluginSchemas, current.writeSchema, _shutdownState, current.allowDuringProcessShutdown);
-            const uint64_t saveEnd =
-                static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
+            const uint64_t saveStart = static_cast<uint64_t>(
+                std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
+            const HRESULT saveHr = SavePreparedSettingsAndSchema(current.appId,
+                                                                 current.settings,
+                                                                 current.pluginSchemas,
+                                                                 current.writeSchema,
+                                                                 _shutdownState,
+                                                                 current.allowDuringProcessShutdown);
+            const uint64_t saveEnd = static_cast<uint64_t>(
+                std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
             const bool processShuttingDown = IsProcessShutdownStarted(_shutdownState);
             if (! processShuttingDown && current.asynchronous && FAILED(saveHr))
             {
@@ -793,7 +805,8 @@ private:
                     if (lineage == _stampLineage.end())
                     {
                         _stampLineage.emplace(current.appId,
-                                              StampLineage{.source = saveExpectedStamp, .committed = current.settings.persistence.expectedFileStamp});
+                                              StampLineage{.source = saveExpectedStamp,
+                                                           .committed = current.settings.persistence.expectedFileStamp});
                     }
                     else
                     {
@@ -820,11 +833,11 @@ private:
     std::unordered_map<std::wstring, StampLineage> _stampLineage;
     uint64_t _lastQueuedGeneration    = 0;
     uint64_t _lastCompletedGeneration = 0;
-    uint64_t _totalCoalescedCount     = 0;
-    DWORD _lastQueueThreadId          = 0;
-    DWORD _lastSaveThreadId           = 0;
-    bool _saveInProgress              = false;
-    bool _forceFlush                  = false;
+    uint64_t _totalCoalescedCount      = 0;
+    DWORD _lastQueueThreadId           = 0;
+    DWORD _lastSaveThreadId            = 0;
+    bool _saveInProgress               = false;
+    bool _forceFlush                   = false;
     std::atomic<SettingsSaveShutdownState> _shutdownState{SettingsSaveShutdownState::Running};
     std::shared_ptr<Completion> _finalSaveCompletion;
 #ifdef ENABLE_TESTS
@@ -834,7 +847,8 @@ private:
 
 SerializedSettingsSaveCoordinator& GetSettingsSaveCoordinator()
 {
-    static const std::shared_ptr<SerializedSettingsSaveCoordinator> coordinator = SerializedSettingsSaveCoordinator::CreateProcessLifetime();
+    static const std::shared_ptr<SerializedSettingsSaveCoordinator> coordinator =
+        SerializedSettingsSaveCoordinator::CreateProcessLifetime();
     return *coordinator;
 }
 
@@ -1032,20 +1046,20 @@ HRESULT Start(HWND targetWindow, std::wstring_view appId) noexcept
         ++g_state.internalSaveEpoch;
         g_state.internalSaveDepth                = 0u;
         g_state.internalSaveNotificationDeferred = false;
-        g_state.invalidAlertVisible              = false;
+        g_state.invalidAlertVisible = false;
     }
 
-    HANDLE stopHandle  = nullptr;
+    HANDLE stopHandle = nullptr;
     HANDLE readyHandle = nullptr;
     {
         std::scoped_lock lock(g_state.mutex);
-        stopHandle  = g_state.stopEvent.get();
+        stopHandle = g_state.stopEvent.get();
         readyHandle = g_state.readyEvent.get();
     }
 
-    g_state.watchThread =
-        std::jthread([targetWindow, stopHandle, readyHandle, settingsDirectory, watchedAppId = std::wstring(appId), initialStamp](std::stop_token) noexcept
-    { WatchSettingsDirectoryThread(targetWindow, stopHandle, readyHandle, settingsDirectory, watchedAppId, initialStamp); });
+    g_state.watchThread = std::jthread(
+        [targetWindow, stopHandle, readyHandle, settingsDirectory, watchedAppId = std::wstring(appId), initialStamp](std::stop_token) noexcept
+        { WatchSettingsDirectoryThread(targetWindow, stopHandle, readyHandle, settingsDirectory, watchedAppId, initialStamp); });
 
     return S_OK;
 }
@@ -1123,7 +1137,8 @@ HRESULT SaveSettingsAndSchema(std::wstring_view appId, Common::Settings::Setting
 {
     try
     {
-        return GetSettingsSaveCoordinator().SaveSynchronously(appId, settings, {}, INFINITE, {.writeSchema = true, .beginProcessShutdown = false});
+        return GetSettingsSaveCoordinator().SaveSynchronously(
+            appId, settings, {}, INFINITE, {.writeSchema = true, .beginProcessShutdown = false});
     }
     catch (const std::bad_alloc&)
     {
@@ -1143,7 +1158,8 @@ HRESULT SaveSettingsAndSchema(std::wstring_view appId,
 {
     try
     {
-        return GetSettingsSaveCoordinator().SaveSynchronously(appId, settings, pluginSchemas, INFINITE, {.writeSchema = true, .beginProcessShutdown = false});
+        return GetSettingsSaveCoordinator().SaveSynchronously(
+            appId, settings, pluginSchemas, INFINITE, {.writeSchema = true, .beginProcessShutdown = false});
     }
     catch (const std::bad_alloc&)
     {
@@ -1157,7 +1173,9 @@ HRESULT SaveSettingsAndSchema(std::wstring_view appId,
     }
 }
 
-HRESULT SaveSettingsForSessionEnd(std::wstring_view appId, const Common::Settings::Settings& settings, const DWORD timeoutMs) noexcept
+HRESULT SaveSettingsForSessionEnd(std::wstring_view appId,
+                                  const Common::Settings::Settings& settings,
+                                  const DWORD timeoutMs) noexcept
 {
     try
     {
@@ -1165,7 +1183,8 @@ HRESULT SaveSettingsForSessionEnd(std::wstring_view appId, const Common::Setting
         // snapshot. Session end has already captured an immutable snapshot, so keep that
         // caller-owned state unchanged while the coordinator owns this final copy.
         Common::Settings::Settings sessionEndSettings = settings;
-        return GetSettingsSaveCoordinator().SaveSynchronously(appId, sessionEndSettings, {}, timeoutMs, {.writeSchema = false, .beginProcessShutdown = true});
+        return GetSettingsSaveCoordinator().SaveSynchronously(
+            appId, sessionEndSettings, {}, timeoutMs, {.writeSchema = false, .beginProcessShutdown = true});
     }
     catch (const std::bad_alloc&)
     {
@@ -1179,7 +1198,9 @@ HRESULT SaveSettingsForSessionEnd(std::wstring_view appId, const Common::Setting
     }
 }
 
-HRESULT SaveSettingsAndSchemaForProcessShutdown(std::wstring_view appId, Common::Settings::Settings& settings, DWORD timeoutMs) noexcept
+HRESULT SaveSettingsAndSchemaForProcessShutdown(std::wstring_view appId,
+                                                Common::Settings::Settings& settings,
+                                                DWORD timeoutMs) noexcept
 {
     return SaveSettingsAndSchemaForProcessShutdown(appId, settings, {}, timeoutMs);
 }
@@ -1191,7 +1212,8 @@ HRESULT SaveSettingsAndSchemaForProcessShutdown(std::wstring_view appId,
 {
     try
     {
-        return GetSettingsSaveCoordinator().SaveSynchronously(appId, settings, pluginSchemas, timeoutMs, {.writeSchema = true, .beginProcessShutdown = true});
+        return GetSettingsSaveCoordinator().SaveSynchronously(
+            appId, settings, pluginSchemas, timeoutMs, {.writeSchema = true, .beginProcessShutdown = true});
     }
     catch (const std::bad_alloc&)
     {
@@ -1205,7 +1227,9 @@ HRESULT SaveSettingsAndSchemaForProcessShutdown(std::wstring_view appId,
     }
 }
 
-HRESULT ReplaceBlockedSettingsAndSchema(std::wstring_view appId, Common::Settings::Settings& settings, std::filesystem::path& backupPath) noexcept
+HRESULT ReplaceBlockedSettingsAndSchema(std::wstring_view appId,
+                                        Common::Settings::Settings& settings,
+                                        std::filesystem::path& backupPath) noexcept
 {
     backupPath.clear();
     if (settings.persistence.savePermission != Common::Settings::SettingsSavePermission::ExplicitReplacementRequired)

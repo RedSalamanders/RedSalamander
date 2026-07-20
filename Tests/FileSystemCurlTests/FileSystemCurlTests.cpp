@@ -76,14 +76,15 @@ void AppendCodePoint(std::wstring& out, uint32_t codePoint)
     ok = Require(FileSystemCurlInternal::BuildImapMessageLeafName(L"", L"", 777u, 7u) == L"(no subject) [777-7].eml",
                  L"Empty IMAP subjects should use a stable message fallback.") &&
          ok;
-    ok = Require(FileSystemCurlInternal::BuildImapMessageLeafName(L"Q4: plan/report", L"boss@example.test", 777u, 12u) == L"Q4_ plan_report [777-12].eml",
+    ok = Require(FileSystemCurlInternal::BuildImapMessageLeafName(L"Q4: plan/report", L"boss@example.test", 777u, 12u) ==
+                     L"Q4_ plan_report [777-12].eml",
                  L"IMAP subject display text should be Windows-filename safe.") &&
          ok;
 
     const std::wstring longSubject(100u, L'A');
     const std::wstring expectedLong = std::wstring(93u, L'A') + L"... [777-42].eml";
     ok                              = Require(FileSystemCurlInternal::BuildImapMessageLeafName(longSubject, L"boss@example.test", 777u, 42u) == expectedLong,
-                                              L"Long IMAP subjects should truncate with ASCII ellipsis before the uid suffix.") &&
+                                               L"Long IMAP subjects should truncate with ASCII ellipsis before the uid suffix.") &&
                                       ok;
 
     return ok;
@@ -238,19 +239,19 @@ void AppendCodePoint(std::wstring& out, uint32_t codePoint)
     bool ok = true;
     FileSystemCurlInternal::ImapCapabilities capabilities;
 
-    ok = Require(FileSystemCurlInternal::TryParseImapCapabilities("* CAPABILITY IMAP4rev1 STARTTLS AUTH=PLAIN UIDPLUS MOVE\r\nA OK CAPABILITY completed\r\n",
-                                                                  capabilities) &&
-                     capabilities.uidPlus,
+    ok = Require(FileSystemCurlInternal::TryParseImapCapabilities(
+                     "* CAPABILITY IMAP4rev1 STARTTLS AUTH=PLAIN UIDPLUS MOVE\r\nA OK CAPABILITY completed\r\n", capabilities) && capabilities.uidPlus,
                  L"IMAP CAPABILITY parser should recognize UIDPLUS as an exact case-insensitive token.") &&
          ok;
-    ok = Require(FileSystemCurlInternal::TryParseImapCapabilities("* CAPABILITY IMAP4rev1 XUIDPLUS-TEST MOVE\r\nA OK CAPABILITY completed\r\n", capabilities) &&
-                     ! capabilities.uidPlus,
+    ok = Require(FileSystemCurlInternal::TryParseImapCapabilities(
+                     "* CAPABILITY IMAP4rev1 XUIDPLUS-TEST MOVE\r\nA OK CAPABILITY completed\r\n", capabilities) && ! capabilities.uidPlus,
                  L"IMAP CAPABILITY parser should not accept a token that merely contains UIDPLUS.") &&
          ok;
     ok = Require(FileSystemCurlInternal::ValidateImapMessageUidValidity(777u, std::optional<uint64_t>(777u)) == S_OK,
                  L"IMAP message identity should accept the same UIDVALIDITY epoch.") &&
          ok;
-    ok = Require(FileSystemCurlInternal::ValidateImapMessageUidValidity(777u, std::optional<uint64_t>(778u)) == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH),
+    ok = Require(FileSystemCurlInternal::ValidateImapMessageUidValidity(777u, std::optional<uint64_t>(778u)) ==
+                     HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH),
                  L"IMAP message identity should report a stale-object error after UIDVALIDITY rollover.") &&
          ok;
     ok = Require(FileSystemCurlInternal::ValidateImapMessageUidValidity(777u, std::nullopt) == HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
@@ -262,17 +263,19 @@ void AppendCodePoint(std::wstring& out, uint32_t codePoint)
 
 struct FakeImapMailbox
 {
-    uint64_t targetUid    = 42u;
-    bool targetPresent    = true;
-    bool targetDeleted    = false;
-    bool unrelatedPresent = true;
-    bool unrelatedDeleted = true;
-    HRESULT uidExpungeHr  = S_OK;
-    HRESULT rollbackHr    = S_OK;
-    size_t commandCount   = 0u;
+    uint64_t targetUid          = 42u;
+    bool targetPresent          = true;
+    bool targetDeleted          = false;
+    bool unrelatedPresent       = true;
+    bool unrelatedDeleted       = true;
+    HRESULT uidExpungeHr        = S_OK;
+    HRESULT rollbackHr          = S_OK;
+    size_t commandCount         = 0u;
 };
 
-[[nodiscard]] HRESULT ExecuteFakeImapDeleteCommand(void* opaqueContext, FileSystemCurlInternal::ImapDeleteCommand command, uint64_t uid) noexcept
+[[nodiscard]] HRESULT ExecuteFakeImapDeleteCommand(void* opaqueContext,
+                                                   FileSystemCurlInternal::ImapDeleteCommand command,
+                                                   uint64_t uid) noexcept
 {
     if (opaqueContext == nullptr)
     {
@@ -287,7 +290,9 @@ struct FakeImapMailbox
 
     switch (command)
     {
-        case FileSystemCurlInternal::ImapDeleteCommand::AddDeletedFlag: mailbox.targetDeleted = true; return S_OK;
+        case FileSystemCurlInternal::ImapDeleteCommand::AddDeletedFlag:
+            mailbox.targetDeleted = true;
+            return S_OK;
         case FileSystemCurlInternal::ImapDeleteCommand::UidExpunge:
             if (FAILED(mailbox.uidExpungeHr))
             {
@@ -316,24 +321,26 @@ struct FakeImapMailbox
 
     FakeImapMailbox unsupported;
     FileSystemCurlInternal::ImapDeleteOutcome outcome;
-    HRESULT hr = FileSystemCurlInternal::ExecuteImapSingleMessageDelete(false, unsupported.targetUid, ExecuteFakeImapDeleteCommand, &unsupported, outcome);
-    ok = Require(hr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) && unsupported.commandCount == 0u && unsupported.targetPresent && ! unsupported.targetDeleted &&
-                     unsupported.unrelatedPresent && unsupported.unrelatedDeleted,
+    HRESULT hr = FileSystemCurlInternal::ExecuteImapSingleMessageDelete(
+        false, unsupported.targetUid, ExecuteFakeImapDeleteCommand, &unsupported, outcome);
+    ok = Require(hr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) && unsupported.commandCount == 0u && unsupported.targetPresent &&
+                     ! unsupported.targetDeleted && unsupported.unrelatedPresent && unsupported.unrelatedDeleted,
                  L"A server without UIDPLUS should be refused before the target is marked deleted.") &&
          ok;
 
     FakeImapMailbox rejected;
     rejected.uidExpungeHr = E_ACCESSDENIED;
-    hr                    = FileSystemCurlInternal::ExecuteImapSingleMessageDelete(true, rejected.targetUid, ExecuteFakeImapDeleteCommand, &rejected, outcome);
-    ok = Require(hr == E_ACCESSDENIED && outcome.rollbackAttempted && outcome.rollbackHr == S_OK && ! outcome.targetMarkedDeleted && rejected.targetPresent &&
-                     ! rejected.targetDeleted && rejected.unrelatedPresent && rejected.unrelatedDeleted,
+    hr = FileSystemCurlInternal::ExecuteImapSingleMessageDelete(true, rejected.targetUid, ExecuteFakeImapDeleteCommand, &rejected, outcome);
+    ok = Require(hr == E_ACCESSDENIED && outcome.rollbackAttempted && outcome.rollbackHr == S_OK && ! outcome.targetMarkedDeleted &&
+                     rejected.targetPresent && ! rejected.targetDeleted && rejected.unrelatedPresent && rejected.unrelatedDeleted,
                  L"Rejected UID EXPUNGE should restore the target flag and leave unrelated deleted mail untouched.") &&
          ok;
 
     FakeImapMailbox rollbackFailed;
     rollbackFailed.uidExpungeHr = E_ACCESSDENIED;
     rollbackFailed.rollbackHr   = HRESULT_FROM_WIN32(ERROR_CONNECTION_ABORTED);
-    hr = FileSystemCurlInternal::ExecuteImapSingleMessageDelete(true, rollbackFailed.targetUid, ExecuteFakeImapDeleteCommand, &rollbackFailed, outcome);
+    hr = FileSystemCurlInternal::ExecuteImapSingleMessageDelete(
+        true, rollbackFailed.targetUid, ExecuteFakeImapDeleteCommand, &rollbackFailed, outcome);
     ok = Require(hr == E_ACCESSDENIED && outcome.rollbackAttempted && outcome.rollbackHr == HRESULT_FROM_WIN32(ERROR_CONNECTION_ABORTED) &&
                      outcome.targetMarkedDeleted && rollbackFailed.targetPresent && rollbackFailed.targetDeleted && rollbackFailed.unrelatedPresent &&
                      rollbackFailed.unrelatedDeleted,
@@ -355,9 +362,9 @@ struct FakeImapMailbox
     for (const uint64_t mailboxMessages : std::vector<uint64_t>{0u, 1u, 200u, 10000u})
     {
         static_cast<void>(mailboxMessages);
-        constexpr uint64_t listingStatusCommands    = 1u;
-        constexpr uint64_t fetchStatusCommands      = 1u;
-        constexpr uint64_t deleteStatusCommands     = 1u;
+        constexpr uint64_t listingStatusCommands = 1u;
+        constexpr uint64_t fetchStatusCommands   = 1u;
+        constexpr uint64_t deleteStatusCommands  = 1u;
         constexpr uint64_t deleteCapabilityCommands = 1u;
         ok = Require(listingStatusCommands == 1u && fetchStatusCommands == 1u && deleteStatusCommands == 1u && deleteCapabilityCommands == 1u,
                      L"IMAP security validation command overhead must stay constant with mailbox size.") &&

@@ -41,8 +41,8 @@
 #include <shellapi.h>
 #include <shlobj_core.h>
 #include <strsafe.h>
-#include <winnetwk.h>
 #include <wtsapi32.h>
+#include <winnetwk.h>
 
 #pragma comment(lib, "Mpr.lib")
 #pragma comment(lib, "Wtsapi32.lib")
@@ -108,11 +108,11 @@ namespace
 {
 struct ApplicationContext final
 {
-    ApplicationContext()                                     = default;
-    ApplicationContext(const ApplicationContext&)            = delete;
+    ApplicationContext()                                   = default;
+    ApplicationContext(const ApplicationContext&)          = delete;
     ApplicationContext& operator=(const ApplicationContext&) = delete;
-    ApplicationContext(ApplicationContext&&)                 = delete;
-    ApplicationContext& operator=(ApplicationContext&&)      = delete;
+    ApplicationContext(ApplicationContext&&)               = delete;
+    ApplicationContext& operator=(ApplicationContext&&)    = delete;
 
     HINSTANCE instance = nullptr;
     FolderWindow folderWindow;
@@ -130,7 +130,7 @@ FolderWindow& g_folderWindow           = g_applicationContext.folderWindow;
 std::atomic<HWND>& g_hFolderWindow     = g_applicationContext.folderWindowHandle;
 ThemeMode& g_themeMode                 = g_applicationContext.themeMode;
 Common::Settings::Settings& g_settings = g_applicationContext.settings;
-} // namespace
+}
 
 #ifdef ENABLE_TESTS
 FolderWindow& GetApplicationFolderWindowForSelfTest() noexcept
@@ -302,13 +302,13 @@ struct SelfTestTimeoutMultiplierParseResult final
 
 struct SelfTestRepeatCountParseResult final
 {
-    bool valid     = false;
+    bool valid    = false;
     uint32_t value = kSelfTestRepeatDefault;
 };
 
 struct SelfTestShuffleSeedParseResult final
 {
-    bool valid     = false;
+    bool valid    = false;
     uint64_t value = 0u;
 };
 
@@ -343,21 +343,28 @@ struct SelfTestShuffleSeedParseResult final
 [[nodiscard]] SelfTestRepeatCountParseResult ParseSelfTestRepeatCount(std::wstring_view value) noexcept
 {
     std::wstring valueCopy(value);
-    wchar_t* end               = nullptr;
-    errno                      = 0;
-    const unsigned long parsed = wcstoul(valueCopy.c_str(), &end, 10);
-    const bool parseFailure    = valueCopy.empty() || end == valueCopy.c_str() || (end && *end != L'\0') || errno != 0;
-    const bool rangeFailure    = parsed < static_cast<unsigned long>(kSelfTestRepeatDefault);
+    wchar_t* end                = nullptr;
+    errno                       = 0;
+    const unsigned long parsed  = wcstoul(valueCopy.c_str(), &end, 10);
+    const bool parseFailure     = valueCopy.empty() || end == valueCopy.c_str() || (end && *end != L'\0') || errno != 0;
+    const bool rangeFailure     = parsed < static_cast<unsigned long>(kSelfTestRepeatDefault);
     if (parseFailure || rangeFailure)
     {
-        Debug::Error(L"Invalid --selftest-repeat value '{}'. Expected an integer in [{}, {}].", valueCopy, kSelfTestRepeatDefault, kSelfTestRepeatMax);
+        Debug::Error(L"Invalid --selftest-repeat value '{}'. Expected an integer in [{}, {}].",
+                     valueCopy,
+                     kSelfTestRepeatDefault,
+                     kSelfTestRepeatMax);
         return {};
     }
 
     const uint32_t clamped = static_cast<uint32_t>(std::min<unsigned long>(parsed, kSelfTestRepeatMax));
     if (clamped != parsed)
     {
-        Debug::Warning(L"Clamped --selftest-repeat from {} to {}. Supported range is [{}, {}].", parsed, clamped, kSelfTestRepeatDefault, kSelfTestRepeatMax);
+        Debug::Warning(L"Clamped --selftest-repeat from {} to {}. Supported range is [{}, {}].",
+                       parsed,
+                       clamped,
+                       kSelfTestRepeatDefault,
+                       kSelfTestRepeatMax);
     }
 
     return {.valid = true, .value = clamped};
@@ -366,10 +373,10 @@ struct SelfTestShuffleSeedParseResult final
 [[nodiscard]] SelfTestShuffleSeedParseResult ParseSelfTestShuffleSeed(std::wstring_view value) noexcept
 {
     std::wstring valueCopy(value);
-    wchar_t* end                    = nullptr;
-    errno                           = 0;
-    const unsigned long long parsed = wcstoull(valueCopy.c_str(), &end, 0);
-    const bool parseFailure         = valueCopy.empty() || end == valueCopy.c_str() || (end && *end != L'\0') || errno != 0;
+    wchar_t* end                      = nullptr;
+    errno                             = 0;
+    const unsigned long long parsed   = wcstoull(valueCopy.c_str(), &end, 0);
+    const bool parseFailure           = valueCopy.empty() || end == valueCopy.c_str() || (end && *end != L'\0') || errno != 0;
     if (parseFailure)
     {
         Debug::Error(L"Invalid --selftest-shuffle value '{}'. Expected a deterministic unsigned seed, decimal or 0x-prefixed hex.", valueCopy);
@@ -561,12 +568,12 @@ public:
         const std::wstring caption = LoadStringResource(nullptr, IDS_ABOUT_WINDOW_CAPTION);
         Common::ModalWindowShell modalShell(_ownerWindow);
         Common::ModalWindowCreateOptions createOptions;
-        createOptions.instance        = g_hInstance;
-        createOptions.className       = kAboutDialogWindowClassName;
-        createOptions.caption         = caption.c_str();
-        createOptions.clientWidthDip  = 420;
-        createOptions.clientHeightDip = 170;
-        createOptions.createParameter = this;
+        createOptions.instance         = g_hInstance;
+        createOptions.className        = kAboutDialogWindowClassName;
+        createOptions.caption          = caption.c_str();
+        createOptions.clientWidthDip   = 420;
+        createOptions.clientHeightDip  = 170;
+        createOptions.createParameter  = this;
 
         HWND hwnd{};
         const HRESULT createHr = modalShell.CreateCentered(createOptions, hwnd);
@@ -842,12 +849,12 @@ public:
         const std::wstring caption = _caption.empty() ? LoadEmbeddedStringResource(nullptr, IDS_APP_TITLE) : _caption;
         Common::ModalWindowShell modalShell(_ownerWindow);
         Common::ModalWindowCreateOptions createOptions;
-        createOptions.instance        = g_hInstance;
-        createOptions.className       = kFatalErrorDialogWindowClassName;
-        createOptions.caption         = caption.c_str();
-        createOptions.clientWidthDip  = 480;
-        createOptions.clientHeightDip = 220;
-        createOptions.createParameter = this;
+        createOptions.instance         = g_hInstance;
+        createOptions.className        = kFatalErrorDialogWindowClassName;
+        createOptions.caption          = caption.c_str();
+        createOptions.clientWidthDip   = 480;
+        createOptions.clientHeightDip  = 220;
+        createOptions.createParameter  = this;
 
         HWND hwnd{};
         const HRESULT createHr = modalShell.CreateCentered(createOptions, hwnd);
@@ -1677,8 +1684,8 @@ void MergeRepeatedSelfTestCase(SelfTest::SelfTestCaseResult& target, const SelfT
     return plan;
 }
 
-[[nodiscard]] std::vector<SelfTest::SelfTestCaseExecution> BuildFileOpsRepeatedExpectedCases(std::span<const std::wstring> baseExpectedCases,
-                                                                                             uint32_t repeatCount)
+[[nodiscard]] std::vector<SelfTest::SelfTestCaseExecution> BuildFileOpsRepeatedExpectedCases(
+    std::span<const std::wstring> baseExpectedCases, uint32_t repeatCount)
 {
     const uint32_t boundedRepeatCount = std::max(1u, repeatCount);
     std::vector<SelfTest::SelfTestCaseExecution> expected;
@@ -1751,19 +1758,18 @@ void MergeRepeatedSelfTestCase(SelfTest::SelfTestCaseResult& target, const SelfT
         plan.expectedCases.push_back(SelfTest::SelfTestCaseExecution{.name = L"Cleanup_RestorePluginConfig", .repeatIndex = repeatIndex});
     }
 
-    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::FileOperations,
-                               std::format(L"FileOpsSelfTest: explicit execution order count={} repeat={} shuffleSeed={}",
-                                           executionOrder.size(),
-                                           options.repeatCount,
-                                           options.shuffleSeed.has_value() ? std::format(L"{}", options.shuffleSeed.value()) : std::wstring(L"none")));
+    SelfTest::AppendSuiteTrace(
+        SelfTest::SelfTestSuite::FileOperations,
+        std::format(L"FileOpsSelfTest: explicit execution order count={} repeat={} shuffleSeed={}",
+                    executionOrder.size(),
+                    options.repeatCount,
+                    options.shuffleSeed.has_value() ? std::format(L"{}", options.shuffleSeed.value()) : std::wstring(L"none")));
 
     return plan;
 }
 
-void MergeRepeatedSelfTestSuite(SelfTest::SelfTestSuiteResult& aggregate,
-                                SelfTest::SelfTestSuite suite,
-                                const SelfTest::SelfTestSuiteResult& current,
-                                uint32_t repeatIndex) noexcept
+void MergeRepeatedSelfTestSuite(
+    SelfTest::SelfTestSuiteResult& aggregate, SelfTest::SelfTestSuite suite, const SelfTest::SelfTestSuiteResult& current, uint32_t repeatIndex) noexcept
 {
     aggregate.suite = suite;
     aggregate.durationMs += current.durationMs;
@@ -1775,9 +1781,10 @@ void MergeRepeatedSelfTestSuite(SelfTest::SelfTestSuiteResult& aggregate,
     for (auto item : current.cases)
     {
         item.repeatIndex = repeatIndex;
-        const auto it    = std::find_if(aggregate.cases.begin(), aggregate.cases.end(), [&](const SelfTest::SelfTestCaseResult& existing) noexcept {
-            return existing.name == item.name && existing.repeatIndex == item.repeatIndex;
-        });
+        const auto it = std::find_if(
+            aggregate.cases.begin(),
+            aggregate.cases.end(),
+            [&](const SelfTest::SelfTestCaseResult& existing) noexcept { return existing.name == item.name && existing.repeatIndex == item.repeatIndex; });
         if (it == aggregate.cases.end())
         {
             aggregate.cases.push_back(item);
@@ -1788,9 +1795,8 @@ void MergeRepeatedSelfTestSuite(SelfTest::SelfTestSuiteResult& aggregate,
     }
 }
 
-void FinalizeRepeatedSelfTestAggregateResult(SelfTest::SelfTestSuiteResult& aggregate,
-                                             const std::vector<SelfTest::SelfTestCaseExecution>& expectedCases,
-                                             bool stoppedEarly) noexcept
+void FinalizeRepeatedSelfTestAggregateResult(
+    SelfTest::SelfTestSuiteResult& aggregate, const std::vector<SelfTest::SelfTestCaseExecution>& expectedCases, bool stoppedEarly) noexcept
 {
     std::vector<SelfTest::SelfTestCaseResult> orderedCases;
     orderedCases.reserve(expectedCases.size());
@@ -1846,20 +1852,21 @@ bool RunCompareDirectoriesSelfTestPlan(const SelfTest::SelfTestOptions& options,
         return CompareDirectoriesSelfTest::Run(options, outResult);
     }
 
-    const std::vector<std::wstring> declaredCases                     = CompareDirectoriesSelfTest::ListCases(options);
-    const std::vector<SelfTest::SelfTestCaseExecution> executionOrder = SelfTest::BuildSelfTestCaseExecutionOrder(options, declaredCases);
+    const std::vector<std::wstring> declaredCases                         = CompareDirectoriesSelfTest::ListCases(options);
+    const std::vector<SelfTest::SelfTestCaseExecution> executionOrder     = SelfTest::BuildSelfTestCaseExecutionOrder(options, declaredCases);
     SelfTest::SelfTestSuiteResult aggregate{};
     aggregate.suite = SelfTest::SelfTestSuite::CompareDirectories;
-    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::CompareDirectories,
-                               std::format(L"CompareSelfTest: explicit execution order count={} repeat={} shuffleSeed={}",
-                                           executionOrder.size(),
-                                           options.repeatCount,
-                                           options.shuffleSeed.has_value() ? std::format(L"{}", options.shuffleSeed.value()) : std::wstring(L"none")));
+    SelfTest::AppendSuiteTrace(
+        SelfTest::SelfTestSuite::CompareDirectories,
+        std::format(L"CompareSelfTest: explicit execution order count={} repeat={} shuffleSeed={}",
+                    executionOrder.size(),
+                    options.repeatCount,
+                    options.shuffleSeed.has_value() ? std::format(L"{}", options.shuffleSeed.value()) : std::wstring(L"none")));
 
     bool stoppedEarly = false;
     for (const SelfTest::SelfTestCaseExecution& execution : executionOrder)
     {
-        SelfTest::SelfTestOptions caseOptions     = options;
+        SelfTest::SelfTestOptions caseOptions = options;
         caseOptions.caseFilter                    = execution.name;
         caseOptions.repeatCount                   = 1u;
         caseOptions.repeatIndex                   = execution.repeatIndex;
@@ -1898,7 +1905,7 @@ bool RunCompareDirectoriesSelfTestPlan(const SelfTest::SelfTestOptions& options,
 
 SelfTest::SelfTestOptions MakeFileOpsRunOptions(std::wstring_view runFilter, uint32_t repeatIndex)
 {
-    SelfTest::SelfTestOptions options     = g_selfTestOptions;
+    SelfTest::SelfTestOptions options = g_selfTestOptions;
     options.caseFilter                    = std::wstring(runFilter);
     options.repeatCount                   = 1u;
     options.repeatIndex                   = repeatIndex;
@@ -1922,8 +1929,9 @@ void StartNextFileOpsSelfTestRun(HWND hWnd) noexcept
         SelfTest::SelfTestSuite::FileOperations,
         std::format(
             L"FileOpsSelfTest: family {}/{} repeat {} -> {}", g_fileOpsSelfTestRunIndex + 1, g_fileOpsSelfTestRunFilters.size(), repeatIndex, runFilter));
-    SelfTest::AppendSelfTestTrace(std::format(
-        L"FileOpsSelfTest: family {}/{} repeat {} -> {}", g_fileOpsSelfTestRunIndex + 1, g_fileOpsSelfTestRunFilters.size(), repeatIndex, runFilter));
+    SelfTest::AppendSelfTestTrace(
+        std::format(
+            L"FileOpsSelfTest: family {}/{} repeat {} -> {}", g_fileOpsSelfTestRunIndex + 1, g_fileOpsSelfTestRunFilters.size(), repeatIndex, runFilter));
     FileOperationsSelfTest::Start(hWnd, MakeFileOpsRunOptions(runFilter, repeatIndex));
     ++g_fileOpsSelfTestRunIndex;
 }
@@ -2121,8 +2129,9 @@ LRESULT OnMainWindowTimer(HWND hWnd, UINT_PTR timerId) noexcept
             const bool currentRunFailed                          = FileOperationsSelfTest::DidFail();
             const SelfTest::SelfTestSuiteResult currentRunResult = FileOperationsSelfTest::GetSuiteResult();
             const size_t completedRunIndex                       = g_fileOpsSelfTestRunIndex == 0u ? 0u : g_fileOpsSelfTestRunIndex - 1u;
-            const uint32_t currentRepeatIndex =
-                completedRunIndex < g_fileOpsSelfTestRunRepeatIndexes.size() ? g_fileOpsSelfTestRunRepeatIndexes[completedRunIndex] : 1u;
+            const uint32_t currentRepeatIndex = completedRunIndex < g_fileOpsSelfTestRunRepeatIndexes.size()
+                                                  ? g_fileOpsSelfTestRunRepeatIndexes[completedRunIndex]
+                                                  : 1u;
             MergeRepeatedSelfTestSuite(g_fileOpsSelfTestAggregateResult, SelfTest::SelfTestSuite::FileOperations, currentRunResult, currentRepeatIndex);
             g_selfTestExitCode |= currentRunFailed ? 1 : 0;
 
@@ -2394,13 +2403,10 @@ struct CustomThemeGroups
 bool IsConfiguredThemeResolvable(const Common::Settings::Settings& settings) noexcept
 {
     const std::wstring_view themeId = settings.theme.currentThemeId;
-    if (! themeId.starts_with(L"user/"))
-        return true;
-    const auto custom = std::find_if(settings.theme.themes.begin(),
-                                     settings.theme.themes.end(),
-                                     [&](const Common::Settings::ThemeDefinition& candidate) noexcept { return candidate.id == themeId; });
-    if (custom == settings.theme.themes.end())
-        return false;
+    if (! themeId.starts_with(L"user/")) return true;
+    const auto custom = std::find_if(settings.theme.themes.begin(), settings.theme.themes.end(), [&](const Common::Settings::ThemeDefinition& candidate) noexcept
+    { return candidate.id == themeId; });
+    if (custom == settings.theme.themes.end()) return false;
     return ResolveAppThemeSelection(themeId, &*custom, L"RedSalamander").customDefinitionResolved;
 }
 
@@ -2651,7 +2657,7 @@ void CaptureAndSaveRuntimeSettingsForSessionEnd(HWND hWnd) noexcept
     CaptureRuntimeSettings(hWnd);
     const Common::Settings::Settings settingsToSave = SettingsSave::PrepareForSave(g_settings);
     const HRESULT saveHr                            = WriteSessionEndSettings(settingsToSave);
-    const uint64_t durationUs                       = Debug::Perf::ElapsedUs(startedAt);
+    const uint64_t durationUs                        = Debug::Perf::ElapsedUs(startedAt);
     Debug::Perf::Emit(L"App.Shutdown.SessionEndSettingsSave", L"confirmed-session-end", durationUs, 1u, 0u, saveHr);
 
 #ifdef ENABLE_TESTS
@@ -2675,7 +2681,7 @@ void SaveAppSettings(HWND hWnd) noexcept
 {
     constexpr DWORD kFinalSettingsSaveTimeoutMs = 5000u;
     RuntimeSettingsSaveOwner expected           = RuntimeSettingsSaveOwner::None;
-    const bool saveSettings                     = g_runtimeSettingsSaveOwner.compare_exchange_strong(
+    const bool saveSettings = g_runtimeSettingsSaveOwner.compare_exchange_strong(
         expected, RuntimeSettingsSaveOwner::NormalShutdown, std::memory_order_acq_rel, std::memory_order_acquire);
     if (saveSettings)
     {
@@ -2702,7 +2708,8 @@ void SaveAppSettings(HWND hWnd) noexcept
         return;
     }
 
-    const HRESULT saveHr = SettingsHotReload::SaveSettingsAndSchemaForProcessShutdown(kAppId, g_settings, pluginSchemas, kFinalSettingsSaveTimeoutMs);
+    const HRESULT saveHr =
+        SettingsHotReload::SaveSettingsAndSchemaForProcessShutdown(kAppId, g_settings, pluginSchemas, kFinalSettingsSaveTimeoutMs);
     if (SUCCEEDED(saveHr))
     {
         return;
@@ -5340,9 +5347,9 @@ private:
             return;
         }
 
-        _pendingHoverRootSwitchIndex         = hoverIndex;
+        _pendingHoverRootSwitchIndex = hoverIndex;
         const std::uintptr_t pendingSequence = ++_pendingHoverRootSwitchSequence;
-        HWND target                          = GetCapture();
+        HWND target                  = GetCapture();
         if (! target || IsWindow(target) == FALSE)
         {
             target = _ownerWindow;
@@ -5421,7 +5428,7 @@ private:
 
         const auto flyoutItems = ConvertHMenuToDxFlyoutItems(popupMenu);
         RedSalamander::DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
-        sessionCallbacks.focusFirstNavigableItem    = keyboardInvocation;
+        sessionCallbacks.focusFirstNavigableItem   = keyboardInvocation;
         sessionCallbacks.ignoreInitialLeftButtonUp  = keyboardInvocation;
         sessionCallbacks.ignoreInitialRightButtonUp = keyboardInvocation;
 
@@ -5499,13 +5506,12 @@ private:
             }
             if (hoverIndex.value() != postedHoverIndex || postedSequence != _pendingHoverRootSwitchSequence)
             {
-                Debug::Info(
-                    L"RedSalamander::MenuTrace MainMenu root-switch menu-bar-hover stale-message posted={} sequence={} pending={} pendingSequence={} active={}",
-                    postedHoverIndex,
-                    postedSequence,
-                    hoverIndex.value(),
-                    _pendingHoverRootSwitchSequence,
-                    _activePopupIndex.value_or(static_cast<size_t>(-1)));
+                Debug::Info(L"RedSalamander::MenuTrace MainMenu root-switch menu-bar-hover stale-message posted={} sequence={} pending={} pendingSequence={} active={}",
+                            postedHoverIndex,
+                            postedSequence,
+                            hoverIndex.value(),
+                            _pendingHoverRootSwitchSequence,
+                            _activePopupIndex.value_or(static_cast<size_t>(-1)));
                 return std::nullopt;
             }
 
@@ -7380,9 +7386,11 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
     if (hasArg(L"--selftest") || hasArg(L"--compare-selftest") || hasArg(L"--commands-selftest") || hasArg(L"--fileops-selftest") ||
         hasArg(L"--selftest-fail-fast") || hasArg(L"--selftest-list-cases") || getArgValue(L"--selftest-case=", unsupportedSelfTestArg) ||
         getArgValue(L"--selftest-crash-case=", unsupportedSelfTestArg) || getArgValue(L"--selftest-repeat=", unsupportedSelfTestArg) ||
-        getArgValue(L"--selftest-shuffle=", unsupportedSelfTestArg) || getArgValue(L"--selftest-flaky-proof-case=", unsupportedSelfTestArg) ||
-        getArgValue(L"--selftest-order-proof-case=", unsupportedSelfTestArg) || getArgValue(L"--selftest-perf-budget=", unsupportedSelfTestArg) ||
-        hasArg(L"--selftest-require-perf-budgets") || getArgValue(L"--selftest-timeout-multiplier=", unsupportedSelfTestArg))
+        getArgValue(L"--selftest-shuffle=", unsupportedSelfTestArg) ||
+        getArgValue(L"--selftest-flaky-proof-case=", unsupportedSelfTestArg) ||
+        getArgValue(L"--selftest-order-proof-case=", unsupportedSelfTestArg) ||
+        getArgValue(L"--selftest-perf-budget=", unsupportedSelfTestArg) || hasArg(L"--selftest-require-perf-budgets") ||
+        getArgValue(L"--selftest-timeout-multiplier=", unsupportedSelfTestArg))
     {
         Debug::Error(L"Self-test command-line arguments require ENABLE_TESTS.");
         return 2;
@@ -7401,7 +7409,7 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
     g_selfTestOptions.crashCaseName.clear();
     g_selfTestOptions.flakyProofCaseName.clear();
     g_selfTestOptions.orderProofCaseName.clear();
-    g_selfTestOptions.classifierProofSuiteContext   = false;
+    g_selfTestOptions.classifierProofSuiteContext = false;
     g_selfTestOptions.classifierProofShuffleContext = false;
     g_selfTestOptions.perfBudgetPath.clear();
     g_selfTestOptions.requirePerfBudgets = hasArg(L"--selftest-require-perf-budgets");
@@ -7518,7 +7526,8 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
     const bool selfTestShuffleSupported = g_runCommandsSelfTest || g_runCompareDirectoriesSelfTest || g_runFileOpsSelfTest;
     if (g_selfTestOptions.shuffleSeed.has_value() && ! selfTestShuffleSupported)
     {
-        Debug::Error(L"--selftest-shuffle is currently supported for --commands-selftest, --compare-selftest, and --fileops-selftest.");
+        Debug::Error(
+            L"--selftest-shuffle is currently supported for --commands-selftest, --compare-selftest, and --fileops-selftest.");
         return 2;
     }
 
@@ -7652,25 +7661,30 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
         if (! anySelfTest)
         {
             const std::wstring title = LoadStringResource(nullptr, IDS_CAPTION_CONNECTION_PROFILE_IDS_MIGRATED);
-            std::wstring message     = FormatStringResource(nullptr,
-                                                            IDS_FMT_CONNECTION_PROFILE_IDS_MIGRATED,
-                                                            settingsRecovery.connectionProfileIdMigrations.size(),
-                                                            settingsRecovery.settingsPath.wstring());
+            std::wstring message = FormatStringResource(nullptr,
+                                                        IDS_FMT_CONNECTION_PROFILE_IDS_MIGRATED,
+                                                        settingsRecovery.connectionProfileIdMigrations.size(),
+                                                        settingsRecovery.settingsPath.wstring());
             if (FAILED(migrationSaveHr))
             {
                 message.append(L"\r\n\r\n");
-                message.append(FormatStringResource(
-                    nullptr, IDS_FMT_SETTINGS_SAVE_FAILED, settingsRecovery.settingsPath.wstring(), static_cast<unsigned long>(migrationSaveHr)));
+                message.append(FormatStringResource(nullptr,
+                                                    IDS_FMT_SETTINGS_SAVE_FAILED,
+                                                    settingsRecovery.settingsPath.wstring(),
+                                                    static_cast<unsigned long>(migrationSaveHr)));
             }
             MessageBoxCenteredText(nullptr, message, title, MB_OK | MB_ICONWARNING);
         }
     }
 
-    if (! anySelfTest && g_settings.persistence.savePermission == Common::Settings::SettingsSavePermission::ExplicitReplacementRequired)
+    if (! anySelfTest &&
+        g_settings.persistence.savePermission == Common::Settings::SettingsSavePermission::ExplicitReplacementRequired)
     {
-        const std::wstring title   = LoadStringResource(nullptr, IDS_CAPTION_SETTINGS_NEWER_VERSION_PRESERVED);
-        const std::wstring message = FormatStringResource(
-            nullptr, IDS_FMT_SETTINGS_NEWER_VERSION_PRESERVED, settingsRecovery.unsupportedSchemaVersion, settingsRecovery.settingsPath.wstring());
+        const std::wstring title = LoadStringResource(nullptr, IDS_CAPTION_SETTINGS_NEWER_VERSION_PRESERVED);
+        const std::wstring message = FormatStringResource(nullptr,
+                                                          IDS_FMT_SETTINGS_NEWER_VERSION_PRESERVED,
+                                                          settingsRecovery.unsupportedSchemaVersion,
+                                                          settingsRecovery.settingsPath.wstring());
         const int choice = MessageBoxCenteredText(nullptr, message, title, MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2);
         if (choice == IDYES)
         {
@@ -7678,8 +7692,10 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
             const HRESULT replaceHr = SettingsHotReload::ReplaceBlockedSettingsAndSchema(kAppId, g_settings, backupPath);
             if (FAILED(replaceHr))
             {
-                const std::wstring failure =
-                    FormatStringResource(nullptr, IDS_FMT_SETTINGS_SAVE_FAILED, settingsRecovery.settingsPath.wstring(), static_cast<unsigned long>(replaceHr));
+                const std::wstring failure = FormatStringResource(nullptr,
+                                                                  IDS_FMT_SETTINGS_SAVE_FAILED,
+                                                                  settingsRecovery.settingsPath.wstring(),
+                                                                  static_cast<unsigned long>(replaceHr));
                 MessageBoxCenteredText(nullptr, failure, title, MB_OK | MB_ICONERROR);
             }
         }
@@ -8816,7 +8832,7 @@ void RereadAssociations(HWND hWnd) noexcept
         Debug::Warning(L"RereadAssociations: rejected settings because the selected theme graph is invalid.");
         SettingsHotReload::ShowInvalidReloadAlert(Common::Settings::GetSettingsPath(kAppId));
 #ifdef ENABLE_TESTS
-        snapshot.hr     = themeHr;
+        snapshot.hr = themeHr;
         snapshot.loaded = false;
         DebugPublishRereadAssociationsSnapshot(snapshot);
 #endif
@@ -8927,8 +8943,7 @@ LRESULT OnMainWindowSettingsFileChanged(HWND hWnd, LPARAM lParam) noexcept
         SettingsHotReload::MergeDiskSettingsWithRuntimeSession(loadResult.settings, runtimeSettings, CollectRuntimeSettingsWindowIds());
     if (! IsConfiguredThemeResolvable(mergedSettings))
     {
-        if (loadResult.stamp.has_value())
-            SettingsHotReload::MarkRejectedStamp(loadResult.stamp.value());
+        if (loadResult.stamp.has_value()) SettingsHotReload::MarkRejectedStamp(loadResult.stamp.value());
         Debug::Warning(L"SettingsHotReload: rejected settings because the selected theme graph is invalid.");
         SettingsHotReload::ShowInvalidReloadAlert(Common::Settings::GetSettingsPath(kAppId));
         return 0;
@@ -9367,12 +9382,12 @@ LRESULT OnMainWindowCreate(HWND hWnd, [[maybe_unused]] const CREATESTRUCTW* crea
         const std::vector<std::wstring> baseFileOpsRunFilters    = FileOperationsSelfTest::BuildRunFilters(g_selfTestOptions);
         const std::vector<std::wstring> baseFileOpsExpectedCases = FileOperationsSelfTest::BuildExpectedCaseNames(g_selfTestOptions);
         FileOpsExecutionPlan fileOpsExecutionPlan = BuildFileOpsExecutionPlan(baseFileOpsRunFilters, baseFileOpsExpectedCases, g_selfTestOptions);
-        g_fileOpsSelfTestRunFilters               = std::move(fileOpsExecutionPlan.filters);
-        g_fileOpsSelfTestRunRepeatIndexes         = std::move(fileOpsExecutionPlan.repeatIndexes);
-        g_fileOpsSelfTestExpectedCases            = std::move(fileOpsExecutionPlan.expectedCases);
-        g_fileOpsSelfTestRunIndex                 = 0;
-        g_fileOpsSelfTestAggregateResult          = {};
-        g_fileOpsSelfTestAggregateResult.suite    = SelfTest::SelfTestSuite::FileOperations;
+        g_fileOpsSelfTestRunFilters              = std::move(fileOpsExecutionPlan.filters);
+        g_fileOpsSelfTestRunRepeatIndexes        = std::move(fileOpsExecutionPlan.repeatIndexes);
+        g_fileOpsSelfTestExpectedCases           = std::move(fileOpsExecutionPlan.expectedCases);
+        g_fileOpsSelfTestRunIndex              = 0;
+        g_fileOpsSelfTestAggregateResult       = {};
+        g_fileOpsSelfTestAggregateResult.suite = SelfTest::SelfTestSuite::FileOperations;
 
         if (g_fileOpsSelfTestRunFilters.empty() || g_fileOpsSelfTestExpectedCases.empty())
         {

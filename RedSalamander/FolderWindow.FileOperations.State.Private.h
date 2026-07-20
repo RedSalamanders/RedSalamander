@@ -50,7 +50,7 @@ struct SelfTestPausePoint final
         }
 
         entered.store(true, std::memory_order_release);
-        const auto clearEntered   = wil::scope_exit([&]() noexcept { entered.store(false, std::memory_order_release); });
+        const auto clearEntered = wil::scope_exit([&]() noexcept { entered.store(false, std::memory_order_release); });
         const ULONGLONG startTick = GetTickCount64();
         while (! releaseRequested.load(std::memory_order_acquire) && enabled.load(std::memory_order_acquire))
         {
@@ -211,4 +211,4 @@ void CleanupDiagnosticsFilesInDirectory(const std::filesystem::path& directory,
                                         std::wstring_view filePrefix,
                                         std::wstring_view fileExtension,
                                         size_t maxFilesToKeep) noexcept;
-} // namespace FolderWindowFileOperationsStateInternal
+}

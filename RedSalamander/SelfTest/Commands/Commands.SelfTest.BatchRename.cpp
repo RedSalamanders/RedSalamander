@@ -27,7 +27,7 @@ void SettleBatchRenameWindowBeforeFilesystemExecution() noexcept
 [[nodiscard]] bool AcquireBatchRenameCommandsSandboxRoot(CaseState& state, std::wstring_view caseName, std::filesystem::path& root) noexcept
 {
     const SelfTest::TestSandbox sandbox = SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::Commands, caseName);
-    root                                = sandbox.root;
+    root = sandbox.root;
     return state.Require(sandbox.IsValid(), L"Batch Rename TestSandbox root should be available.");
 }
 
@@ -627,8 +627,8 @@ private:
 }
 
 [[nodiscard]] wil::com_ptr<IFileSystem> CreateBatchRenameGatedReadDirectoryFileSystem(const wil::com_ptr<IFileSystem>& base,
-                                                                                      std::atomic_uint32_t* counter,
-                                                                                      const HANDLE gate) noexcept
+                                                                                       std::atomic_uint32_t* counter,
+                                                                                       const HANDLE gate) noexcept
 {
     wil::com_ptr<IFileSystem> wrapped;
     auto* wrapper = new (std::nothrow) BatchRenameCountingReadDirectoryFileSystem(base, counter);
@@ -1087,8 +1087,8 @@ struct BatchRenameLocalStampParts final
         return false;
     }
 
-    const uint64_t collectDurationBefore        = CountBatchRenamePerfRowsWithMetric("batchrename.collect.us");
-    const uint64_t collectTargetsBefore         = CountBatchRenamePerfRowsWithMetric("batchrename.collect.targets");
+    const uint64_t collectDurationBefore = CountBatchRenamePerfRowsWithMetric("batchrename.collect.us");
+    const uint64_t collectTargetsBefore  = CountBatchRenamePerfRowsWithMetric("batchrename.collect.targets");
     const uint64_t destinationListingRowsBefore = CountBatchRenamePerfRowsWithMetric("batchrename.preview.destination_directory_listings");
 
     context.fileSystem      = countingFileSystem;
@@ -1156,8 +1156,8 @@ struct BatchRenameLocalStampParts final
     state.Require(readDirectoryInfoCalls.load(std::memory_order_relaxed) > 0u,
                   L"Batch Rename folder-scope collection should enumerate through IFileSystem::ReadDirectoryInfo when a provider is available.");
 
-    const uint64_t collectDurationAfter        = CountBatchRenamePerfRowsWithMetric("batchrename.collect.us");
-    const uint64_t collectTargetsAfter         = CountBatchRenamePerfRowsWithMetric("batchrename.collect.targets");
+    const uint64_t collectDurationAfter = CountBatchRenamePerfRowsWithMetric("batchrename.collect.us");
+    const uint64_t collectTargetsAfter  = CountBatchRenamePerfRowsWithMetric("batchrename.collect.targets");
     const uint64_t destinationListingRowsAfter = CountBatchRenamePerfRowsWithMetric("batchrename.preview.destination_directory_listings");
     state.Require(collectDurationAfter > collectDurationBefore,
                   std::format(L"Batch Rename folder-scope collection should emit batchrename.collect.us; before={} after={}.",
@@ -1169,8 +1169,8 @@ struct BatchRenameLocalStampParts final
                               collectTargetsAfter));
     state.Require(destinationListingRowsAfter > destinationListingRowsBefore,
                   L"Batch Rename preview should emit cached destination-directory listing metrics.");
-    const std::optional<uint64_t> maxDirectoryListings =
-        TryReadMaxBatchRenamePerfUintField("batchrename.preview.destination_directory_listings", "value0", destinationListingRowsBefore);
+    const std::optional<uint64_t> maxDirectoryListings = TryReadMaxBatchRenamePerfUintField(
+        "batchrename.preview.destination_directory_listings", "value0", destinationListingRowsBefore);
     state.Require(maxDirectoryListings.has_value() && maxDirectoryListings.value() <= 2u,
                   std::format(L"Each preview refresh should enumerate at most once for each of the fixture's two distinct parent directories; listings={}.",
                               maxDirectoryListings.value_or((std::numeric_limits<uint64_t>::max)())));
@@ -1211,9 +1211,9 @@ struct BatchRenameLocalStampParts final
     context.instanceContext = L"batch-rename-async-provider-collection";
     context.rootPluginPath  = root;
 
-    const AppTheme theme          = ResolveAppTheme(ThemeMode::Dark, L"batch-rename-async-provider-collection");
-    const ULONGLONG started       = GetTickCount64();
-    const bool shown              = ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context));
+    const AppTheme theme = ResolveAppTheme(ThemeMode::Dark, L"batch-rename-async-provider-collection");
+    const ULONGLONG started = GetTickCount64();
+    const bool shown = ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context));
     const ULONGLONG showElapsedMs = GetTickCount64() - started;
     state.Require(shown, L"Batch Rename should open while provider enumeration is blocked.");
     state.Require(showElapsedMs < SelfTest::ScaleTimeout(1000u),
@@ -1225,8 +1225,10 @@ struct BatchRenameLocalStampParts final
         PumpPendingMessages();
         std::this_thread::yield();
     }
-    state.Require(readDirectoryInfoCalls.load(std::memory_order_acquire) > 0u, L"The provider collection worker should enter ReadDirectoryInfo off-thread.");
-    state.Require(GetBatchRenameWindowHandle() != nullptr, L"The Batch Rename window should remain available while provider collection is blocked.");
+    state.Require(readDirectoryInfoCalls.load(std::memory_order_acquire) > 0u,
+                  L"The provider collection worker should enter ReadDirectoryInfo off-thread.");
+    state.Require(GetBatchRenameWindowHandle() != nullptr,
+                  L"The Batch Rename window should remain available while provider collection is blocked.");
 
     static_cast<void>(SetEvent(gate.get()));
     BatchRenameDebugSnapshot snapshot{};
@@ -1236,7 +1238,7 @@ struct BatchRenameLocalStampParts final
     CloseBatchRenameWindowIfOpen();
 
     state.Require(ResetEvent(gate.get()) != FALSE, L"Async collection teardown fixture should reset its provider gate.");
-    const uint32_t callsBeforeBlockedClose       = readDirectoryInfoCalls.load(std::memory_order_acquire);
+    const uint32_t callsBeforeBlockedClose = readDirectoryInfoCalls.load(std::memory_order_acquire);
     const uint64_t collectRowsBeforeBlockedClose = CountBatchRenamePerfRowsWithMetric("batchrename.collect.us");
 
     BatchRenamePaneContext blockedCloseContext{};
@@ -1249,7 +1251,8 @@ struct BatchRenameLocalStampParts final
                   L"Batch Rename should reopen for blocked-provider teardown testing.");
 
     const ULONGLONG blockedCloseEnteredDeadline = GetTickCount64() + SelfTest::ScaleTimeout(2000u);
-    while (readDirectoryInfoCalls.load(std::memory_order_acquire) == callsBeforeBlockedClose && GetTickCount64() < blockedCloseEnteredDeadline)
+    while (readDirectoryInfoCalls.load(std::memory_order_acquire) == callsBeforeBlockedClose &&
+           GetTickCount64() < blockedCloseEnteredDeadline)
     {
         PumpPendingMessages();
         std::this_thread::yield();
@@ -1262,11 +1265,13 @@ struct BatchRenameLocalStampParts final
     const ULONGLONG closeElapsedMs = GetTickCount64() - closeStarted;
     state.Require(closeElapsedMs < SelfTest::ScaleTimeout(1000u),
                   std::format(L"Closing Batch Rename must not wait for a blocked provider worker; elapsedMs={}.", closeElapsedMs));
-    state.Require(GetBatchRenameWindowHandle() == nullptr, L"Batch Rename should be destroyed while its provider collection worker remains blocked.");
+    state.Require(GetBatchRenameWindowHandle() == nullptr,
+                  L"Batch Rename should be destroyed while its provider collection worker remains blocked.");
 
     static_cast<void>(SetEvent(gate.get()));
     const ULONGLONG workerCompletionDeadline = GetTickCount64() + SelfTest::ScaleTimeout(3000u);
-    while (CountBatchRenamePerfRowsWithMetric("batchrename.collect.us") == collectRowsBeforeBlockedClose && GetTickCount64() < workerCompletionDeadline)
+    while (CountBatchRenamePerfRowsWithMetric("batchrename.collect.us") == collectRowsBeforeBlockedClose &&
+           GetTickCount64() < workerCompletionDeadline)
     {
         PumpPendingMessages();
         std::this_thread::yield();
@@ -5629,10 +5634,10 @@ private:
         targets.push_back(std::move(target));
     }
 
-    const uint64_t buildPerfRowsBefore    = CountBatchRenamePerfRowsWithMetric("batchrename.preview.build_plan_us");
-    const uint64_t countPerfRowsBefore    = CountBatchRenamePerfRowsWithMetric("batchrename.preview.rows");
-    const uint64_t changedPerfRowsBefore  = CountBatchRenamePerfRowsWithMetric("batchrename.preview.changed");
-    const uint64_t errorPerfRowsBefore    = CountBatchRenamePerfRowsWithMetric("batchrename.preview.errors");
+    const uint64_t buildPerfRowsBefore   = CountBatchRenamePerfRowsWithMetric("batchrename.preview.build_plan_us");
+    const uint64_t countPerfRowsBefore   = CountBatchRenamePerfRowsWithMetric("batchrename.preview.rows");
+    const uint64_t changedPerfRowsBefore = CountBatchRenamePerfRowsWithMetric("batchrename.preview.changed");
+    const uint64_t errorPerfRowsBefore   = CountBatchRenamePerfRowsWithMetric("batchrename.preview.errors");
     const uint64_t fallbackPerfRowsBefore = CountBatchRenamePerfRowsWithMetric("batchrename.preview.duplicate_fallback_rows");
 
     Rules rules{};
@@ -5672,10 +5677,10 @@ private:
                       L"Large preview last row should keep deterministic counter and local-time expansion.");
     }
 
-    const uint64_t buildPerfRowsAfter    = CountBatchRenamePerfRowsWithMetric("batchrename.preview.build_plan_us");
-    const uint64_t countPerfRowsAfter    = CountBatchRenamePerfRowsWithMetric("batchrename.preview.rows");
-    const uint64_t changedPerfRowsAfter  = CountBatchRenamePerfRowsWithMetric("batchrename.preview.changed");
-    const uint64_t errorPerfRowsAfter    = CountBatchRenamePerfRowsWithMetric("batchrename.preview.errors");
+    const uint64_t buildPerfRowsAfter   = CountBatchRenamePerfRowsWithMetric("batchrename.preview.build_plan_us");
+    const uint64_t countPerfRowsAfter   = CountBatchRenamePerfRowsWithMetric("batchrename.preview.rows");
+    const uint64_t changedPerfRowsAfter = CountBatchRenamePerfRowsWithMetric("batchrename.preview.changed");
+    const uint64_t errorPerfRowsAfter   = CountBatchRenamePerfRowsWithMetric("batchrename.preview.errors");
     const uint64_t fallbackPerfRowsAfter = CountBatchRenamePerfRowsWithMetric("batchrename.preview.duplicate_fallback_rows");
     state.Require(buildPerfRowsAfter > buildPerfRowsBefore,
                   std::format(L"Large Batch Rename preview should emit batchrename.preview.build_plan_us perf metrics; before={} after={}.",
