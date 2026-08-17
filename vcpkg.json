@@ -52,7 +52,7 @@
     },
     {
       "name": "ftxui",
-      "version>=": "6.1.9"
+      "version>=": "7.0.3"
     },
     {
       "name": "aws-sdk-cpp",
