@@ -2,7 +2,6 @@
 #include "AnimationDispatcher.h"
 #include "Win32CallbackHelpers.h"
 
-#include <UIAutomation.h>
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -10,8 +9,11 @@
 #include <cwctype>
 #include <format>
 #include <new>
-#include <oleauto.h>
 #include <vector>
+
+#include <oleauto.h>
+
+#include <UIAutomation.h>
 #include <windowsx.h>
 
 #pragma comment(lib, "uiautomationcore.lib")

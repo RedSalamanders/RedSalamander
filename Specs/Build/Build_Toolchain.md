@@ -86,6 +86,12 @@ inside one include block, so `#include <bcrypt.h>` sorts before
 block (a blank line after `windows.h`) so auto-format cannot compile-break
 translation units that include that header first.
 
+`WIN32_LEAN_AND_MEAN` also omits OLE/COM. `UIAutomation.h` and `XmlLite.h` need
+`interface` / `IUnknown` from `objbase.h` or `objidl.h`. Those COM headers must
+occupy an earlier include block than `UIAutomation.h` / `XmlLite.h`, because
+`SortIncludes` places `UIAutomation.h` and `XmlLite.h` before `objbase.h` /
+`objidl.h` inside one block.
+
 ## Terminal-engine checkout-invariant text inputs
 
 Terminal-engine governance and reproducible-runtime tooling use byte-exact SHA-256

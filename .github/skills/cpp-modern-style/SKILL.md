@@ -144,6 +144,10 @@ regression could silently recreate prior copies.
   `bcrypt.h`, `wincodec.h`, or other SDK headers that need `ULONG`/`NTSTATUS`.
   clang-format `SortIncludes` is alphabetical inside a block and will otherwise
   put `bcrypt.h` first, which fails to compile.
+- After `WIN32_LEAN_AND_MEAN` + `windows.h`, include `objbase.h` / `objidl.h` in
+  their own block before `UIAutomation.h` or `XmlLite.h`. Those headers need
+  COM `interface` types that lean Windows does not provide, and `SortIncludes`
+  puts `UIAutomation.h` / `XmlLite.h` before `objbase.h` / `objidl.h`.
 
 ## Comments and Documentation
 

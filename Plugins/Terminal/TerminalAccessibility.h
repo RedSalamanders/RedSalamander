@@ -4,6 +4,8 @@
 #define NOMINMAX
 #include <windows.h>
 
+#include <objbase.h>
+
 #include <memory>
 #include <string>
 

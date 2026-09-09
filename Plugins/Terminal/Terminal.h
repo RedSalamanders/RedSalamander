@@ -4,6 +4,8 @@
 #define NOMINMAX
 #include <windows.h>
 
+#include <objbase.h>
+
 #include <atomic>
 #include <chrono>
 #include <condition_variable>

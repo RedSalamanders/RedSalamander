@@ -11,9 +11,10 @@
 #include <new>
 #include <string_view>
 
-#include <UIAutomation.h>
 #include <objbase.h>
 #include <oleauto.h>
+
+#include <UIAutomation.h>
 
 #pragma warning(push)
 #pragma warning(disable : 4625 4626 5026 5027 4820 28182)

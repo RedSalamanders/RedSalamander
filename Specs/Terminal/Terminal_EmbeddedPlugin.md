@@ -943,6 +943,9 @@ SHA-256, and `TerminalRuntimeLoader.cpp` compiles those values into
 `NOMINMAX`) in its own include block before `bcrypt.h` and `wincodec.h`. clang-format
 `SortIncludes` is alphabetical inside a block, so those SDK headers must not share a
 block with `windows.h` or a TU that includes the loader header first fails to compile.
+`Terminal.h` and `TerminalAccessibility.h` include `objbase.h` in their own block after
+`windows.h` so `WIN32_LEAN_AND_MEAN` cannot starve `UIAutomation.h` of COM `interface`
+types after clang-format sorts `UIAutomation.h` before `objbase.h`.
 The shipped `Terminal.dll` and `ghostty-vt.dll` are consequently
 an atomic byte-exact pair even when a later clean build produces another valid
 hash. `terminal-runtime-identity.json` schema 5 records the pair's raw hash,

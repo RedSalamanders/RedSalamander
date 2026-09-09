@@ -6,6 +6,8 @@
 #define NOMINMAX
 #include <windows.h>
 
+#include <objbase.h>
+
 #include <cstdint>
 #include <string>
 #include <string_view>
