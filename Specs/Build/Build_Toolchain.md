@@ -76,6 +76,16 @@ explicit stderr presentation retains its red fallback. An unavailable log is
 reported as unavailable, not as zero diagnostics. This presentation does not change
 MSBuild's exit status or turn a warning-bearing run into zero-warning qualification.
 
+## Windows SDK headers versus clang-format include sorting
+
+Official CI runs `format-all.ps1` with the repository `.clang-format`
+(`IncludeBlocks: Preserve`, `SortIncludes` enabled). Sorting is alphabetical
+inside one include block, so `#include <bcrypt.h>` sorts before
+`#include <windows.h>`. `bcrypt.h` and `wincodec.h` require the SDK types from
+`windows.h`; a header that includes them must put `windows.h` in an earlier
+block (a blank line after `windows.h`) so auto-format cannot compile-break
+translation units that include that header first.
+
 ## Terminal-engine checkout-invariant text inputs
 
 Terminal-engine governance and reproducible-runtime tooling use byte-exact SHA-256

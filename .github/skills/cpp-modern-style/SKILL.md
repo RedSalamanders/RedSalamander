@@ -137,6 +137,14 @@ ownership, failure handling, or hot-path constraints; name and document that dif
 shared helper, update the catalog and its authoritative domain spec, and add a source-contract guard when a
 regression could silently recreate prior copies.
 
+## Win32 includes
+
+- Define `WIN32_LEAN_AND_MEAN` and `NOMINMAX` before `#include <windows.h>`.
+- Put `windows.h` in its own include block (blank line after it) before
+  `bcrypt.h`, `wincodec.h`, or other SDK headers that need `ULONG`/`NTSTATUS`.
+  clang-format `SortIncludes` is alphabetical inside a block and will otherwise
+  put `bcrypt.h` first, which fails to compile.
+
 ## Comments and Documentation
 
 - Write self-documenting code with meaningful names
