@@ -18799,7 +18799,7 @@ struct FolderViewEnvironmentMatrix
     result.skippedMatrixReason = warpForced ? L"RDP and alternate hardware refresh/scale variants require matching external sessions."
                                             : L"WARP can be covered with REDSALAMANDER_FOLDERVIEW_FORCE_WARP=1; RDP and alternate hardware refresh/scale "
                                               L"variants require matching external sessions.";
-    result.matrixComment = L"Selftest archive captures the active environment. Debug and test-enabled Release variants are separate runs.";
+    result.matrixComment       = L"Selftest archive captures the active environment. Debug and test-enabled Release variants are separate runs.";
     return result;
 }
 
